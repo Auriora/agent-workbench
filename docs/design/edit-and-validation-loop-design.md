@@ -10,51 +10,55 @@ last_reviewed: 2026-05-07
 
 ## Purpose
 
-Define the safe coding workflow for agent edits, post-edit feedback, and
-targeted validation.
+Define the safe MVP coding workflow for scoped context, bounded edits, and
+validation planning.
 
 ## Scope
 
-This design covers the normal coding workflow, exploration workflow, edit
-contracts, validation routing, fallback evidence, and prioritization of IDE
-capabilities.
+This design covers the normal coding workflow, bounded edit contracts,
+validation planning, deferred refactors, and prioritization of IDE capabilities.
 
 ## Design Summary
 
 The runtime should let agents use IDE-like capabilities without hiding risk.
-Edits must be previewable, drift-checked, and rollbackable. Validation should be
-planned from touched files, graph impact, diagnostics, and nearest tests rather
-than broad scans by default.
+MVP edits must be previewable and drift-checked. Rollback, command execution,
+import mutation, and semantic refactors are post-MVP unless fixture-proven.
+Validation should be planned from touched files, graph impact, diagnostics, and
+known test hints rather than broad scans by default.
 
 ## Coding Workflow
 
 ```text
-repo_preflight
+repo:///status and repo:///scope
 -> context_for_task
 -> direct source read only for selected edit targets or low-confidence context
 -> preview/apply edits
--> post_edit_feedback
 -> verification_plan
--> run_nearest_tests
+-> manual or future allowlisted command execution
 ```
 
-## Exploration Workflow
+## Branch Gates
 
-```text
-repo:///overview
--> repo:///graph/report
--> symbol_search, graph_query, shortest_path, or community
--> exact files only when graph confidence needs verification
-```
+- If freshness is `stale` or `refreshing`, do not mutate until a fresh preview
+  is created.
+- If capability is below the requested operation's required level, return a
+  warning and require direct source verification.
+- If validation commands are unavailable or unsafe to execute, return a
+  `blocked` validation plan instead of pretending validation is done.
+- If a target path violates the workspace safety contract, refuse the edit.
 
 ## Edit Contracts
 
 | Operation | Required Behavior | Evidence |
 | --- | --- | --- |
-| Preview | Show targeted file/range changes before mutation | Preview token and affected scope |
-| Apply | Apply only if preview still matches current files | Applied token and touched files |
-| Concurrent modification check | Detect drift between preview and apply | Stale preview attention item |
-| Rollback | Revert known applied mutation when possible | Rollback token |
+| Preview | Show targeted file/range changes before mutation | Preview token, base hashes, affected files |
+| Apply | Apply only if preview still matches current files and paths are allowed | Applied token, touched files, drift result |
+| Drift check | Built into apply, based on file identity and base hash | Stale preview blocker |
+| Rollback | Post-MVP unless bounded token storage is fixture-proven | Rollback token |
+
+Preview/apply token shape is owned by
+[Runtime contracts](../reference/runtime-contracts.md). Path containment and
+write rules are owned by [Workspace safety contract](../reference/workspace-safety-contract.md).
 
 ## Validation Routing
 
@@ -68,19 +72,22 @@ Validation planning should consider:
 - capability level and degraded tooling
 - public/exported API surface
 
+MVP validation is plan-only by default. Command execution requires a post-MVP
+allowlist and command runner safety contract.
+
 ## Fallback Evidence
 
 Fallback to `rg`, `find`, broad file reads, or ad hoc validation is useful
-product evidence. The runtime should record repeated fallback as usage gaps for
-future ranking, contracts, index coverage, or trust metadata improvements.
+product evidence. MVP may note these as local warnings; persisted usage-gap
+analytics are post-MVP.
 
 ## Capability Priority
 
 1. Indexing, FTS, file tree, generated/vendor awareness.
 2. Symbol search, definitions, references, callers, callees, impact.
 3. Context builder with source section packing.
-4. Diagnostics, type checking, formatting, nearest tests.
-5. Import maintenance and simple semantic edits with preview/apply/rollback.
+4. Validation planning for diagnostics, type checking, formatting, and tests.
+5. Bounded edit preview/apply with drift checks.
 6. TODO, docs, project config, dependency context.
 7. Safe rename and change signature for mature language backends.
 8. Dead code, security, and framework-specific inspections.
@@ -88,6 +95,10 @@ future ranking, contracts, index coverage, or trust metadata improvements.
 
 ## Deferred Capabilities
 
+- Command execution beyond planning until allowlisted command safety exists.
+- Rollback unless bounded token storage is fixture-proven.
+- Import maintenance and formatting mutation unless previewed and explicitly
+  applied.
 - Broad quick fixes and intention actions until each action has preconditions,
   preview, and validation.
 - Advanced refactors such as pull up, push down, extract interface, broad move,
@@ -101,3 +112,6 @@ future ranking, contracts, index coverage, or trust metadata improvements.
 - [MCP surface design](mcp-surface-design.md)
 - [Attention layer design](attention-layer-design.md)
 - [Runtime requirements](../requirements/runtime-requirements.md)
+- [Runtime contracts](../reference/runtime-contracts.md)
+- [Workspace safety contract](../reference/workspace-safety-contract.md)
+- [MVP proof matrix](../reference/mvp-proof-matrix.md)

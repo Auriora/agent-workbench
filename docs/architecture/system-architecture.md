@@ -20,10 +20,10 @@ In scope:
 
 - repo-scoped runtime lifecycle
 - SQLite-backed graph and index storage
-- language and infrastructure adapters
+- initial language and configuration adapters
 - MCP resources, tools, prompts, and workflow contracts
-- context, attention, validation, and edit-loop services
-- knowledge reporting and audit evidence
+- context, validation planning, and bounded edit-loop services
+- workspace safety and runtime contract enforcement
 
 Out of scope:
 
@@ -36,25 +36,26 @@ Out of scope:
 
 The runtime owns one analyzed repository. It watches files and config, extracts
 language-specific evidence into a graph store, exposes compact MCP resources and
-tools, and helps agents choose source reads, edits, and validation commands.
+tools, and helps agents choose source reads, bounded edits, and validation
+plans.
 
-Source files, repo config, parser/LSP/tool output, and executed tests remain
-authoritative. SQLite is an acceleration and evidence store.
+Source files and repo config are canonical truth. Parser/LSP/tool output and
+executed tests are derived evidence tied to a snapshot. SQLite is an
+acceleration and evidence store.
 
 ## Major Components
 
 | Component | Responsibility | Boundary |
 | --- | --- | --- |
 | Repo runtime | Bind to one repository, coordinate indexing, watch changes, expose MCP | Owns runtime state and orchestration, not source truth |
-| Graph store | Persist files, symbols, edges, unresolved refs, docs, tests, snapshots, attention, and usage events | Stores evidence and indexes for fast reads |
+| Graph store | Persist files, symbols, edges, unresolved refs, snapshots, and FTS rows | Stores evidence and indexes for fast reads |
 | Extractor registry | Dispatch language, config, and infra adapters | Normalizes adapter outputs into graph records |
 | Reference resolver | Resolve imports, symbols, framework bindings, and infra links | Produces graph edges with provenance and confidence |
-| Context engine | Build agent-ready task context | Ranks relevant files, symbols, docs, and validation hints |
+| Workflow service | Build task context, surface blockers/warnings, and plan validation | Keeps early context, attention, and validation ranking in one place until seams are proven |
 | MCP surface | Expose resources and tools to agents | Keeps client contracts stable and machine-readable |
-| Attention layer | Surface scoped facts that change the next action | Emits blockers, warnings, nudges, and context items |
-| Edit manager | Preview, apply, drift-check, and roll back edits | Owns mutation contracts and rollback tokens |
-| Validation engine | Plan or run diagnostics, formatting, lint, and tests | Converts touched files and impact into evidence |
-| Knowledge layer | Produce onboarding, graph report, communities, gaps, and audit views | Supports orientation and broad exploration |
+| Edit manager | Preview, apply, and drift-check bounded edits | Owns workspace mutation contracts |
+| Command runner | Plan commands in MVP and execute allowlisted commands post-MVP | Owns process execution safety |
+| Knowledge layer | Produce graph reports and communities after the hot path is proven | Post-MVP orientation surface |
 
 ## Key Flows
 
@@ -63,7 +64,7 @@ authoritative. SQLite is an acceleration and evidence store.
 ```text
 scan files
 -> detect language or infra type
--> extract nodes, edges, unresolved references, docs, and test hints
+-> extract nodes, edges, and unresolved references
 -> store graph/index rows
 -> resolve references
 -> answer targeted MCP queries
@@ -72,21 +73,19 @@ scan files
 ### Agent Edit Loop
 
 ```text
-repo_preflight
+repo status and scope
 -> context_for_task
 -> direct source reads for selected targets or low-confidence context
 -> preview/apply edits
--> post_edit_feedback
 -> verification_plan
--> run_nearest_tests
+-> manual or future allowlisted command execution
 ```
 
 ### Exploration
 
 ```text
 repo overview/resource reads
--> graph report or community lookup
--> bounded symbol/graph follow-up
+-> bounded symbol/reference/impact follow-up
 -> exact source verification when graph confidence requires it
 ```
 
@@ -102,8 +101,12 @@ repo overview/resource reads
 
 - Hot-path tools must use targeted indexed queries.
 - Broad topology and community analysis must be explicit orientation work.
-- Results must carry freshness, scope, trust, verification, and evidence labels.
-- Mutating operations need preview, drift checks, and rollback support.
+- Results must use the shared runtime response envelope and enums.
+- Mutating operations need preview and drift checks in MVP; rollback is
+  post-MVP unless proven cheap and bounded.
+- Commands are plan-only by default until allowlisted execution is designed.
+- Workspace safety covers path containment, generated writes, redaction, and
+  command execution.
 - Parser and LSP failures must degrade explicitly instead of pretending to be
   semantic proof.
 
@@ -117,6 +120,8 @@ repo overview/resource reads
 ## Related Docs
 
 - [Runtime requirements](../requirements/runtime-requirements.md)
+- [Runtime contracts](../reference/runtime-contracts.md)
+- [Workspace safety contract](../reference/workspace-safety-contract.md)
 - [Graph store design](../design/graph-store-design.md)
 - [Language adapter design](../design/language-adapter-design.md)
 - [MCP surface design](../design/mcp-surface-design.md)

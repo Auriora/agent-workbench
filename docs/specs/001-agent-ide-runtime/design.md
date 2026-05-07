@@ -10,9 +10,10 @@ last_reviewed: 2026-05-07
 
 ## Overview
 
-The MVP is a thin vertical runtime slice across graph storage, adapters, MCP
-tools, attention, edits, validation, and reporting. It should prove the durable
-contracts without pretending every language backend is complete.
+The MVP is a thin vertical runtime slice across graph storage, one adapter path,
+MCP read tools, bounded edits, validation planning, and workspace safety. It
+should prove the durable contracts without pretending any language backend is
+semantic before promotion fixtures pass.
 
 ## Components And Changes
 
@@ -23,40 +24,41 @@ contracts without pretending every language backend is complete.
 - Adapter registry:
   adapter discovery, capability levels, extraction output, and degraded modes.
 - MCP surface:
-  first-read resources, workflow tools, graph tools, edit tools, and attention
-  tools.
-- Context engine:
-  task context packing, confidence labels, direct-read prompts, and validation
-  hints.
-- Attention layer:
-  blockers, warnings, nudges, context items, and next-action suggestions.
+  status, scope, overview, context, symbol search, references, bounded impact,
+  preview/apply, and validation plan.
+- Workflow service:
+  task context packing, confidence labels, direct-read prompts, blockers,
+  warnings, and validation hints.
 - Edit manager:
-  preview, apply, drift check, and rollback contracts.
-- Validation engine:
-  diagnostics, formatting, lint, and nearest-test planning.
-- Knowledge layer:
-  graph report, communities, god nodes, gaps, and caveats.
+  preview, apply, drift check, and path containment.
+- Validation planner:
+  diagnostics, formatting, lint, and test planning without command execution by
+  default.
+- Workspace safety:
+  path containment, command planning gates, redaction, and generated-write
+  policy.
 
 ## Data And Contract Impact
 
-- SQLite schema for files, nodes, edges, unresolved refs, snapshots, docs,
-  tests, attention items, and usage events.
-- MCP schemas for resources and tools.
+- SQLite schema for files, nodes, edges, unresolved refs, snapshots, and FTS.
+- MCP schemas for MVP resources and tools.
 - Adapter output schema with capability, provenance, confidence, source ranges,
   diagnostics hints, and test hints.
-- Attention item schema with severity, kind, scope, evidence, and next action.
+- Shared response envelope, attention item shape, and edit token shape from
+  [Runtime contracts](../../reference/runtime-contracts.md).
 
 ## Operational Considerations
 
 - Generated runtime caches must stay outside tracked source.
 - Rebuilds must use temporary databases and atomic replace.
 - Missing parser/LSP/tooling must degrade explicitly.
-- Broad graph reports should be explicit, budgeted operations.
+- Broad graph reports are post-MVP.
+- Validation command execution is post-MVP unless explicitly allowlisted.
+- Workspace safety must reject unsafe paths and redact secret-like values.
 - Runtime status should expose freshness and indexing health.
 
 ## Open Questions
 
 - Should tree-sitter or LSP be primary where both are available?
-- Should generated graph reports be committed, generated on demand, or both?
 - What minimum MCP/client surface is needed for the first supported agents?
-- Should vector search wait until after FTS and graph traversal are proven?
+- Which language path should be the first partial-semantic fixture?

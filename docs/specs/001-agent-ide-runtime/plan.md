@@ -10,39 +10,37 @@ last_reviewed: 2026-05-07
 
 ## Summary
 
-Build a TypeScript MCP runtime with SQLite graph storage, language adapter
-contracts, targeted graph/context tools, attention items, edit contracts, and
-validation routing.
+Build a narrow TypeScript MCP runtime slice: repo binding, minimal SQLite graph
+store, Markdown/config routing, one partial-semantic language adapter, a small
+MCP contract, bounded preview/apply edits, and validation planning.
 
 ## Technical Context
 
 - **Language/Version**: TypeScript on Node.js.
-- **Primary Dependencies**: MCP server framework, SQLite, FTS, tree-sitter,
-  language services and ecosystem tools per adapter.
+- **Primary Dependencies**: MCP server framework, SQLite with FTS, parser/LSP
+  tooling for one initial language path.
 - **Storage**: Local SQLite database under generated runtime cache.
-- **Testing**: Unit, contract, fixture, integration, and command-routing tests.
+- **Testing**: Contract, fixture, schema migration, degraded-mode, workspace
+  safety, and query-budget tests.
 - **Target Platform**: Local developer workstations and agent workspaces.
 - **Project Type**: Local-first MCP runtime.
-- **Performance Goals**: Hot-path tools use targeted indexed queries; broad
-  topology work is explicit.
-- **Constraints**: Source files remain authoritative; results carry trust and
-  freshness metadata.
+- **Performance Goals**: Hot-path tools use targeted indexed queries with
+  explicit row, traversal, source-byte, and timeout budgets.
+- **Constraints**: Source files and repo config remain canonical; commands are
+  plan-only by default; workspace safety is enforced.
 - **Scale/Scope**: One repository per runtime instance.
 
 ## Governance Check
 
 Complete before implementation and re-check after design changes.
 
-- [ ] SOLID boundaries defined for runtime, graph store, adapters, MCP,
-  attention, edits, validation, and reports.
-- [ ] DRY plan defined for response metadata, graph edge provenance, and adapter
-  capability labels.
-- [ ] Test strategy maps fixture repos to graph, adapter, MCP, edit, and
-  validation behavior.
-- [ ] UX consistency impact assessed for agent-facing response shapes and
-  attention items.
-- [ ] Performance budgets defined for hot-path query latency and explicit broad
-  report generation.
+- [ ] SOLID boundaries defined for runtime binding, graph store, adapter
+  extraction, MCP adapter, workflow service, edit manager, and command planner.
+- [ ] DRY plan defined through [Runtime contracts](../../reference/runtime-contracts.md).
+- [ ] Test strategy maps fixtures to graph rows, MCP responses, edits, safety,
+  degraded modes, and budgets.
+- [ ] Agent workflow consistency assessed against the MVP proof matrix.
+- [ ] Performance budgets defined for every MVP hot-path surface.
 
 ## Project Structure
 
@@ -68,41 +66,46 @@ tests/
 docs/
 ```
 
-**Structure Decision**: Keep runtime, adapters, graph schema, MCP contracts,
-attention, edits, validation, and reports in separately testable modules.
+**Structure Decision**: Keep MCP as a thin adapter over application use cases.
+Keep context, blockers/warnings, and validation planning in one workflow service
+until real seams emerge.
 
 ## Phases
 
-1. Define schema, adapter output, MCP metadata, and fixture strategy.
-2. Implement runtime binding, SQLite schema, scan, watcher, and graph writes.
-3. Implement Markdown/config, Python, TypeScript/JavaScript, C#, and
-   CloudFormation/SAM thin slices.
-4. Implement targeted MCP resources and tools.
-5. Implement edit preview/apply/rollback and validation planning.
-6. Implement graph report, attention, and usage-gap evidence.
-7. Validate performance, freshness, degraded modes, and docs.
+1. Define runtime contracts, workspace safety, graph schema invariants, and MVP
+   proof fixtures.
+2. Implement repo binding, scope detection, SQLite schema, FTS, scan, and
+   freshness state.
+3. Implement Markdown/config routing and one partial-semantic language adapter.
+4. Implement MVP MCP resources and tools.
+5. Implement bounded preview/apply with drift checks and validation planning.
+6. Validate query budgets, degraded modes, safety negatives, and golden
+   responses.
 
 ## Dependencies
 
 - MCP server framework.
 - SQLite library with FTS support.
-- Tree-sitter and language-specific parsers/services.
-- Representative fixture repositories.
+- Parser/LSP/tooling for the selected first language.
+- Fixture repositories defined in [MVP proof matrix](../../reference/mvp-proof-matrix.md).
 
 ## Risks
 
-- Parser/LSP reliability varies by language; mitigate with capability levels and
+- Parser/LSP reliability varies; mitigate with capability levels and
   degraded-mode tests.
-- Hidden broad scans can creep into compact tools; mitigate with query budgets.
-- Edit contracts can become unsafe without drift checks; mitigate with preview
-  tokens and rollback tests.
-- Graph confidence can be overclaimed; mitigate with ADR-0004 gates.
+- Hidden broad scans can creep into compact tools; mitigate with query budgets
+  and trace assertions.
+- Edit contracts can become unsafe; mitigate with preview tokens, path
+  containment, base hashes, and stale-apply tests.
+- Command execution can become unsafe; keep MVP validation plan-only.
+- Contract drift can break clients; mitigate with one response envelope and
+  canonical enum registry.
 
 ## Validation Strategy
 
-Use fixture repositories to test schema migration, extraction, reference
-resolution, MCP schemas, hot-path query budgets, edit contracts, attention
-items, and validation planning.
+Use the [MVP proof matrix](../../reference/mvp-proof-matrix.md) as the minimum
+acceptance gate. Every MVP resource/tool needs golden responses, budget tests,
+degraded-mode behavior, and safety negatives where applicable.
 
 ## Complexity Tracking
 

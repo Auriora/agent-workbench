@@ -4,7 +4,7 @@ doc_type: adr
 status: draft
 owner: platform
 last_reviewed: 2026-05-07
-decision_date: 2026-05-07
+decision_date:
 deciders:
   - platform
 supersedes:
@@ -29,12 +29,8 @@ Do not mark a language adapter `semantic` unless exact-symbol lookup,
 references, impact, diagnostics/test routing, cache freshness, and degraded
 tooling behavior are trustworthy on representative repositories.
 
-Adapters must report one of the supported capability levels:
-
-- `semantic`
-- `partial_semantic`
-- `resource_backed`
-- `unsupported`
+Adapters must report one of the supported capability levels defined in
+[Runtime contracts](../reference/runtime-contracts.md).
 
 Results must expose trust, freshness, scope, verification, and evidence source
 metadata.
@@ -62,8 +58,20 @@ responses become more verbose but safer. The system can still expose partial
 evidence while clearly telling agents when direct source reads or validation are
 required.
 
+## Semantic Promotion Fixture Requirements
+
+Promotion to `semantic` requires fixtures for duplicate names, imports and
+aliases, generated/vendor boundaries, dynamic references, stale indexes, config
+changes, missing tooling, parser/LSP failures, validation planning, and blocked
+validation states.
+
+Mutating refactors require operation-level gates beyond adapter capability.
+Safe rename, change signature, safe delete, move symbol, and import mutation are
+post-MVP until those gates are specified and fixture-proven.
+
 ## Related Artifacts
 
 - Related design docs: [Language adapter design](../design/language-adapter-design.md)
 - Related reference docs: [Language capability matrix](../reference/language-capability-matrix.md)
+- Related contract docs: [Runtime contracts](../reference/runtime-contracts.md)
 - Related code or config:

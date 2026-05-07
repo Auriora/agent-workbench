@@ -19,10 +19,11 @@ behavior, and performance constraints for graph-backed runtime queries.
 
 ## Design Summary
 
-The graph store is an acceleration and evidence store. It supports fast MCP
-tools, context building, impact analysis, validation routing, knowledge reports,
-and attention items. It is not the canonical source of truth; source files, repo
-config, parser/LSP/tool output, and executed tests remain authoritative.
+The graph store is an acceleration and evidence store. In the MVP, it supports
+status, scope, context, symbol search, references, bounded impact, and
+validation planning. It is not the canonical source of truth; source files and
+repo config are canonical, while parser/LSP/tool output and executed tests are
+derived evidence tied to a snapshot.
 
 SQLite with FTS is the initial storage substrate because it supports local-first
 deployment, transactional updates, predictable query plans, and simple
@@ -34,11 +35,11 @@ distribution.
 | --- | --- | --- | --- |
 | Schema manager | Create, migrate, validate, and atomically replace databases | schema version, migrations | validated SQLite database |
 | File indexer | Track file identity, hashes, mtimes, language, and indexing errors | workspace files, watcher events | `files` rows and freshness signals |
-| Node writer | Persist symbols, docs, tests, resources, and infra nodes | adapter output | `nodes` rows |
+| Node writer | Persist symbols, file outlines, and resource-backed nodes | adapter output | `nodes` rows |
 | Edge writer | Persist relationships with confidence and provenance | resolver output | `edges` rows |
 | Reference store | Retain unresolved references for later resolution and caveats | adapter output | `unresolved_refs` rows |
 | Snapshot manager | Track repo/config identity and freshness | sync events, config | `snapshots` rows |
-| FTS indexer | Index names, qualified names, signatures, docstrings, and docs text | selected graph rows | FTS tables and search results |
+| FTS indexer | Index names, qualified names, signatures, and selected non-secret text | selected graph rows | FTS tables and search results |
 
 ## Data And Control Flow
 
@@ -58,14 +59,14 @@ watcher or scan event
 
 | Contract | Location | Producer | Consumer | Compatibility Notes |
 | --- | --- | --- | --- | --- |
-| Graph schema | `docs/design/graph-store-design.md` until implementation adds migrations | Runtime | Graph queries, context, validation, reports | Schema changes require migrations and fixture updates |
+| Graph schema | `docs/design/graph-store-design.md` until implementation adds migrations | Runtime | Graph queries, context, validation planning | Schema changes require migrations and fixture updates |
 | Adapter output | [language-adapter-design.md](language-adapter-design.md) | Adapters | Graph writer, resolver | Must include provenance and capability metadata |
 | MCP query responses | [mcp-surface-design.md](mcp-surface-design.md) | Graph-backed tools | Agents | Must expose trust and freshness labels |
 
-## Core Tables
+## MVP Core Tables
 
 - `files`: repo-relative path, language, content hash, size, mtime, indexed_at,
-  node count, and indexing errors.
+  node count, indexing errors, and snapshot id.
 - `nodes`: stable id, kind, name, qualified name, file path, language, source
   range, signature, docstring, visibility, and metadata.
 - `edges`: source node, target node, kind, source range, provenance,
@@ -73,12 +74,24 @@ watcher or scan event
 - `unresolved_refs`: source node, reference name, reference kind, file, range,
   and candidate metadata.
 - `snapshots`: repo/config identity, created_at, freshness, and schema version.
-- `docs`: markdown/doc paths, headings, links, path mentions, and source
-  identity.
-- `tests`: test files, test cases, nearest-code links, and command hints.
-- `attention_items`: severity, kind, source, scope, evidence, next action, and
-  lifecycle state.
-- `usage_events`: tool/resource usage, fallback reasons, and validation gaps.
+
+Post-MVP tables such as `docs`, `tests`, `attention_items`, `usage_events`, and
+report caches should be added only when a concrete query requires relational
+storage.
+
+## Schema Invariants
+
+- Every table has an integer primary key or stable text id.
+- Stable node ids are derived from repo identity, file path, node kind,
+  qualified name, and source range where available.
+- `files.path` is unique within a snapshot.
+- `nodes.file_id` references `files`.
+- `edges.source_node_id` and `edges.target_node_id` reference `nodes` when both
+  endpoints are resolved.
+- Deletes and renames remove stale file, node, edge, FTS, and unresolved-ref
+  rows in the same transaction.
+- Metadata fields must be typed JSON with schema-versioned interpretation.
+- FTS rows are refreshed in the same transaction as node writes when possible.
 
 ## Indexes
 
@@ -91,6 +104,21 @@ The initial schema must support:
 - incoming and outgoing edge traversal
 - FTS over names, qualified names, signatures, docstrings, docs headings, and
   selected text
+
+## Query Budgets
+
+MVP hot-path tools must publish and enforce draft budgets:
+
+| Query | Warm Budget | Limits |
+| --- | --- | --- |
+| status/scope | 50 ms | no source scan |
+| symbol search | 100 ms | max 100 rows |
+| reference lookup | 150 ms | max depth 1 unless requested |
+| context build | 250 ms | max 5 files and source-byte cap |
+| impact | 250 ms | max depth 2 and 100 nodes |
+
+Budget tests should use SQL tracing, query-plan assertions, row-count caps, or
+traversal-depth caps.
 
 ## Configuration Model
 
@@ -107,6 +135,12 @@ The initial schema must support:
   replacement.
 - Watcher-clean snapshots are the freshness authority for hot reads.
 - Stale rows must be labeled in downstream MCP responses.
+- A watcher-clean snapshot means the event queue is drained, no refresh is in
+  progress, and config scope has not changed since the snapshot began.
+- Rename, delete, and config-change events invalidate affected rows before new
+  evidence is considered fresh.
+- Readers during rebuild must either see the previous valid database or a
+  `refreshing`/`cold` state, never a partial replacement.
 
 ## Security And Access
 
@@ -114,11 +148,18 @@ The graph store is local runtime state. It must not write into tracked source
 paths unless explicitly configured for generated reports. Generated caches under
 `.cache/` must remain untracked.
 
+The graph store must apply the [Workspace safety contract](../reference/workspace-safety-contract.md):
+skip or redact secret-like values, avoid indexing `.env` files by default, and
+store infrastructure environment variable names rather than values.
+
 ## Observability And Operations
 
 The runtime should expose graph size, schema version, freshness, indexing
 errors, adapter coverage, skipped roots, rebuild status, and query budget
 violations.
+
+It should also expose stale row cleanup counts, watcher overflow recovery, FTS
+refresh failures, and blocked query-budget violations.
 
 ## Tradeoffs And Constraints
 
@@ -140,3 +181,6 @@ contracts.
 - [ADR-0002](../adr/0002-sqlite-graph-evidence-store.md)
 - [Language adapter design](language-adapter-design.md)
 - [MCP surface design](mcp-surface-design.md)
+- [Runtime contracts](../reference/runtime-contracts.md)
+- [Workspace safety contract](../reference/workspace-safety-contract.md)
+- [MVP proof matrix](../reference/mvp-proof-matrix.md)

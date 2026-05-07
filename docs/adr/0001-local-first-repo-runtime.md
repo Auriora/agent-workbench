@@ -4,7 +4,7 @@ doc_type: adr
 status: draft
 owner: platform
 last_reviewed: 2026-05-07
-decision_date: 2026-05-07
+decision_date:
 deciders:
   - platform
 supersedes:

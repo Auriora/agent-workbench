@@ -15,40 +15,20 @@ next action.
 
 ## Scope
 
-This design covers attention item shape, severity, kinds, injection points, and
-refactoring-specific examples.
+This design covers MVP blocker/warning attention, lifecycle, ranking,
+deduplication, and post-MVP attention expansion.
 
 ## Design Summary
 
 Human IDEs guide attention with visual cues. Agents need the underlying facts as
-machine-readable guidance. The runtime should emit attention items only when the
-information changes the safe or efficient next action. Clean edits with complete
-validation should remain quiet.
+machine-readable guidance. The MVP should emit only blockers and warnings when
+the information changes the safe next action. Clean edits with complete
+validation plans should remain quiet.
 
 ## Attention Item Shape
 
-```json
-{
-  "severity": "blocker|warning|nudge|context",
-  "kind": "syntax_error|rename_risk|verification_gap|scope_change",
-  "scope": {
-    "files": ["src/auth/session.ts"],
-    "symbols": ["UserSession"],
-    "ranges": [{"file": "src/auth/session.ts", "line": 84}]
-  },
-  "message": "Edited file no longer parses.",
-  "why_this_matters": "Later symbol and test results are unreliable until syntax is fixed.",
-  "evidence": {
-    "source": "parser",
-    "freshness": "fresh",
-    "trust_level": "semantic"
-  },
-  "next_action": {
-    "tool": "diagnostics_for_files",
-    "args": {"files": ["src/auth/session.ts"]}
-  }
-}
-```
+Attention item shape is owned by
+[Runtime contracts](../reference/runtime-contracts.md).
 
 ## Severities
 
@@ -56,38 +36,44 @@ validation should remain quiet.
   stale edit preview, or unresolved required target.
 - `warning`: continuing is possible, but the result needs caveats or
   validation, such as heuristic references or unresolved dynamic usage.
+Post-MVP severities:
+
 - `nudge`: low-cost repair or cleanup, such as import cleanup or formatting.
 - `context`: a relevant planning fact, such as generated-source ownership or
   public API surface.
 
 ## Kinds
 
-- `ambiguity`: multiple plausible files, symbols, commands, or test targets.
-- `blocker`: syntax errors, parse failures, stale previews, or missing required
-  tooling.
-- `risk_flag`: dynamic references, framework bindings, generated source,
-  exported/public API changes, or non-semantic language coverage.
-- `scope_change`: touched files or affected files expanded beyond the planned
-  validation slice.
-- `staleness`: index, diagnostics, test discovery, or preview state is stale.
-- `verification_gap`: diagnostics, tests, or dependency checks have not proven
-  the current change.
-- `rollback_available`: a mutation can be reverted with a known token.
+- `stale_preview`
+- `syntax_error`
+- `missing_tool`
+- `low_confidence`
+- `validation_blocked`
+- `path_refused`
+- `command_refused`
+
+Post-MVP kinds include ambiguity, broad scope changes, nudges, rollback
+availability, and refactoring-specific risks.
+
+## Lifecycle And Noise Control
+
+- Emit an item only when it changes the next safe action.
+- Deduplicate by severity, kind, scope, and next action.
+- Expire stale preview items when a new preview is created.
+- Expire missing-tool and validation-blocked items when the validation plan is
+  regenerated.
+- Do not emit attention for clean edits with complete validation plans.
+- Keep default MVP visibility to blockers and warnings.
 
 ## Injection Points
 
-- `context_for_task`: planning ambiguity, generated/vendor boundaries, missing
-  language support, risky files, likely tests, and required direct reads.
-- `preview_workspace_edit`: missed rename surfaces, dynamic references, public
-  API changes, stale targets, or broad replacement fallbacks.
-- `apply_workspace_edit`: drift, unexpected touched files, parse errors, and
-  rollback tokens.
-- `post_edit_feedback`: syntax errors, diagnostics, import cleanup, formatting
-  changes, test gaps, and repair order.
-- `verification_plan`: what is proven, what is planned, and which validation
-  command gives the cheapest useful evidence.
-- Pre-final response checks: unvalidated touched files, blocked tests, stale
-  diagnostics, or caveats the agent should mention.
+- `context_for_task`: missing language support, low confidence, generated/vendor
+  boundaries, and required direct reads.
+- `preview_workspace_edit`: unsafe paths, generated/vendor writes, or broad
+  replacement fallbacks.
+- `apply_workspace_edit`: drift, refused paths, and parse blockers.
+- `verification_plan`: blocked validation, missing tools, and commands that are
+  planned but not executed.
 
 ## Refactoring Examples
 
@@ -105,3 +91,5 @@ validation should remain quiet.
 - [MCP surface design](mcp-surface-design.md)
 - [Edit and validation loop design](edit-and-validation-loop-design.md)
 - [Runtime requirements](../requirements/runtime-requirements.md)
+- [Runtime contracts](../reference/runtime-contracts.md)
+- [MVP proof matrix](../reference/mvp-proof-matrix.md)

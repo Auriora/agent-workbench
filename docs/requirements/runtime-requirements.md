@@ -10,13 +10,15 @@ last_reviewed: 2026-05-07
 
 ## Purpose
 
-Define the current accepted requirements for the Agent IDE restart runtime.
+Define the target requirements for the Agent IDE restart runtime. These are
+draft target-state requirements until implementation evidence exists.
 
 ## Scope
 
 These requirements cover the repo-scoped runtime, graph/index storage, adapter
-capability reporting, MCP surface, context building, attention, edit management,
-validation routing, trust metadata, performance behavior, and MVP scope.
+capability reporting, MCP surface, context building, bounded edit management,
+validation planning, trust metadata, performance behavior, workspace safety, and
+MVP scope.
 
 ## Audiences
 
@@ -28,23 +30,23 @@ workflow designers.
 | ID | Requirement | Applies To | Source Of Truth | Verification |
 | --- | --- | --- | --- | --- |
 | REQ-001 | The runtime must bind to one analyzed repository at a time. | Repo runtime | Architecture, ADR-0001 | Runtime startup tests |
-| REQ-002 | Source files, repo config, parser/LSP output, and executed tests must remain authoritative over cached graph rows. | Graph store | ADR-0002, graph design | Unit tests for stale/cold states |
-| REQ-003 | The graph store must persist files, nodes, edges, unresolved refs, snapshots, docs, tests, attention items, and usage events. | Graph store | Graph design | Schema migration tests |
+| REQ-002 | Source files and repo config must remain canonical truth; parser/LSP/tool output and executed tests are derived evidence tied to a snapshot. | Graph store | ADR-0002, graph design | Unit tests for stale/cold states |
+| REQ-003 | The MVP graph store must persist files, nodes, edges, unresolved refs, snapshots, and FTS rows. | Graph store | Graph design | Schema migration tests |
 | REQ-004 | Hot-path lookup tools must use targeted indexed queries instead of hidden whole-repo scans. | MCP tools, graph store | Architecture, performance principles | Query budget tests and traces |
 | REQ-005 | Broad topology, community, and report generation must be explicit orientation operations. | Knowledge layer | Architecture, knowledge design | Tool contract review |
-| REQ-006 | Each adapter must report a capability level: `semantic`, `partial_semantic`, `resource_backed`, or `unsupported`. | Language adapters | Language adapter design | Adapter contract tests |
+| REQ-006 | Each adapter must report a capability level from the canonical runtime contracts. | Language adapters | Runtime contracts, language adapter design | Adapter contract tests |
 | REQ-007 | A language must not be marked `semantic` until references, impact, diagnostics/test routing, freshness, and degraded behavior are trustworthy. | Language adapters | ADR-0004 | Capability promotion checklist |
-| REQ-008 | MCP responses must label analysis validity, freshness, scope, trust level, verification status, and evidence sources. | MCP surface | MCP design, trust model | Schema tests |
+| REQ-008 | MCP responses must use the shared response envelope for analysis validity, freshness, scope, capability, verification, evidence, budgets, warnings, and errors. | MCP surface | Runtime contracts | Schema tests |
 | REQ-009 | Graph edges must carry confidence, provenance, and source range or explanation where available. | Graph store, resolver | Graph design | Resolver tests |
-| REQ-010 | Mutating edits must support preview, apply, concurrent modification checks, and rollback tokens. | Edit manager | Edit and validation design | Edit contract tests |
-| REQ-011 | Validation planning must choose diagnostics, formatting, lint, and tests based on touched files and graph impact. | Validation engine | Edit and validation design | Test targeting fixtures |
-| REQ-012 | Attention items must interrupt only when they change the safe or efficient next action. | Attention layer | Attention design | Attention ranking tests |
+| REQ-010 | MVP mutating edits must support preview, apply, path containment, and drift checks; rollback is post-MVP unless fixture-proven. | Edit manager | Edit and validation design, workspace safety contract | Edit contract tests |
+| REQ-011 | Validation planning must identify diagnostics, formatting, lint, and tests without executing commands by default. | Workflow service | Edit and validation design, workspace safety contract | Validation planner fixtures |
+| REQ-012 | MVP attention must be limited to blockers and warnings that change the next safe action. | Workflow service | Attention design, runtime contracts | Attention fixture tests |
 | REQ-013 | Watcher-clean snapshots must be the freshness authority for hot reads. | Repo runtime, graph store | Graph design | Watcher freshness tests |
 | REQ-014 | Parser work must run with timeouts, isolation, and recovery behavior. | Extractor registry | Language adapter design | Worker failure tests |
 | REQ-015 | Large result caches must live in SQLite or compact row stores, not unbounded JSON files. | Graph store | Performance principles | Storage review |
-| REQ-016 | The MVP must include Markdown/config, Python, TypeScript/JavaScript, C#, and CloudFormation/SAM thin vertical slices. | MVP | Spec package | MVP acceptance tests |
-| REQ-017 | CloudFormation/SAM support must connect infrastructure resources to handlers, routes, environment variables, permissions, and tests where evidence allows. | Infra adapter | CloudFormation/SAM design | SAM fixture tests |
-| REQ-018 | Agent fallback to broad shell search, broad file reads, or ad hoc validation must be captured as usage-gap evidence. | Usage events, knowledge layer | Architecture | Usage event tests |
+| REQ-016 | The MVP must include Markdown/config routing plus one partial-semantic language path; TypeScript/JavaScript, C#, and CloudFormation/SAM are post-MVP unless scoped as resource-backed fixtures. | MVP | Spec package, MVP proof matrix | MVP acceptance tests |
+| REQ-017 | MVP tool surfaces must fit the contract MVP: status, scope, overview, context, symbol search, references, bounded impact, preview/apply, and validation plan. | MCP surface | Runtime contracts, MCP design | MCP contract tests |
+| REQ-018 | Workspace safety must cover path containment, generated/vendor write policy, command planning/execution gates, environment handling, redaction, and generated writes. | Runtime, MCP, edit manager, command runner | Workspace safety contract | Negative safety tests |
 
 ## Configuration Requirements
 
@@ -52,7 +54,7 @@ workflow designers.
 | --- | --- | --- | --- |
 | Repo runtime config | analyzed roots and skipped roots | Defines the analysis scope and skipped/generated/vendor boundaries. | Startup and scope tests |
 | Adapter registry config | adapter enablement and capability overrides | Controls language and infra adapters without changing core contracts. | Adapter registration tests |
-| Validation config | command discovery and command budgets | Controls diagnostics, formatting, lint, and nearest-test execution. | Validation planner tests |
+| Validation config | command discovery and command budgets | Controls diagnostics, formatting, lint, and test planning. Execution requires post-MVP allowlisting. | Validation planner tests |
 | MCP schema config | resource and tool schema generation | Keeps agent-facing contracts stable and machine-readable. | Schema generation tests |
 
 ## Operational Requirements
@@ -64,12 +66,19 @@ workflow designers.
   capability with explicit next actions.
 - Runtime output must be compact by default and include source sections only
   when requested or clearly high value.
+- Command execution is plan-only by default until the command runner and
+  allowlist policy are implemented.
+- Generated reports and usage analytics are post-MVP.
 
 ## Non-Requirements
 
 - The first implementation does not need a graphical IDE UI.
 - The first implementation does not need cloud-hosted multi-user orchestration.
 - The MVP does not need vector search.
+- The MVP does not need graph reports, communities, god nodes, or usage-gap
+  analytics.
+- The MVP does not need C# or CloudFormation/SAM semantic support.
+- The MVP does not run validation commands by default.
 - Advanced refactors and coverage reporting are deferred until foundational
   semantic evidence is reliable.
 
@@ -80,11 +89,15 @@ workflow designers.
 - Tests:
 - Runbooks:
 - Technical designs:
+- Proof matrix: [MVP proof matrix](../reference/mvp-proof-matrix.md)
 
 ## Related Docs
 
 - [System architecture](../architecture/system-architecture.md)
 - [Graph store design](../design/graph-store-design.md)
+- [Runtime contracts](../reference/runtime-contracts.md)
+- [Workspace safety contract](../reference/workspace-safety-contract.md)
+- [MVP proof matrix](../reference/mvp-proof-matrix.md)
 - [MCP surface design](../design/mcp-surface-design.md)
 - [Language adapter design](../design/language-adapter-design.md)
 - [MVP spec](../specs/001-agent-ide-runtime/spec.md)

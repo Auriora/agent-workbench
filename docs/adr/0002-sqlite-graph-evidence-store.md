@@ -4,7 +4,7 @@ doc_type: adr
 status: draft
 owner: platform
 last_reviewed: 2026-05-07
-decision_date: 2026-05-07
+decision_date:
 deciders:
   - platform
 supersedes:
@@ -25,13 +25,14 @@ local-first deployment with minimal infrastructure.
 
 ## Decision
 
-Use SQLite with FTS as the initial graph evidence store. Persist files, nodes,
-edges, unresolved refs, docs, tests, snapshots, attention items, and usage
-events in SQLite.
+Use SQLite with FTS as the initial graph evidence store. The MVP persists files,
+nodes, edges, unresolved refs, snapshots, and FTS rows. Docs, tests, attention
+items, usage events, and report caches are post-MVP unless a concrete query
+requires relational storage.
 
-Source files, repo config, parser/LSP output, and executed tests remain
-authoritative. SQLite is an acceleration and evidence store, not canonical
-truth.
+Source files and repo config remain canonical truth. Parser/LSP/tool output and
+executed tests are derived evidence tied to a snapshot. SQLite is an
+acceleration and evidence store, not canonical truth.
 
 ## Alternatives Considered
 
@@ -59,10 +60,11 @@ truth.
 
 ## Consequences
 
-The implementation needs migrations, schema validation, query budgets, locked
-rebuilds, temporary databases, and atomic replacement. The durable MCP and
-adapter contracts should remain storage-neutral enough to allow future hot-path
-optimization.
+The implementation needs schema invariants, migrations, schema validation,
+query budgets, locked rebuilds, temporary databases, reader-safe atomic
+replacement, FTS sync tests, stale-row cleanup, and freshness state tests. The
+durable MCP and adapter contracts should remain storage-neutral enough to allow
+future hot-path optimization.
 
 ## Related Artifacts
 

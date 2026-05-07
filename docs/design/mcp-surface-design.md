@@ -14,8 +14,9 @@ Define the agent-facing MCP resources and tools for the Agent IDE runtime.
 
 ## Scope
 
-This design covers first-read resources, workflow tools, graph exploration
-tools, edit tools, attention tools, response metadata, and tool budget behavior.
+This design covers MVP resources/tools, post-MVP resources/tools, tool
+capability classes, and tool budget behavior. Shared response envelopes and enum
+definitions are owned by [Runtime contracts](../reference/runtime-contracts.md).
 
 ## Design Summary
 
@@ -26,35 +27,46 @@ coding, and invoke broad graph analysis only when intentionally exploring.
 Responses must label trust, freshness, scope, verification, and evidence so
 agents know when direct source verification or additional validation is needed.
 
-## First-Read Resources
+## MVP Resources
 
 - `repo:///overview`
 - `repo:///status`
 - `repo:///scope`
+
+These resources must be cheap, bounded, and backed by current snapshot metadata.
+They must not trigger broad graph analysis.
+
+## MVP Tools
+
+- `context_for_task`
+- `symbol_search`
+- `find_references`
+- `impact` with explicit traversal and result caps
+- `verification_plan`
+- `preview_workspace_edit`
+- `apply_workspace_edit`
+
+Drift checking is part of `apply_workspace_edit`; it is not a separate MVP
+tool.
+
+## Post-MVP Resources And Tools
+
 - `repo:///mcp-surface`
+- `repo:///graph/summary`
 - `repo:///graph/report`
 - `repo:///graph/communities`
 - `repo:///docs/overview`
 - `repo:///validation-surface`
 - `repo:///attention/current`
 - `repo:///usage/gaps`
-
-## Primary Workflow Tools
-
-- `repo_preflight`
-- `context_for_task`
-- `symbol_search`
 - `symbol_context`
-- `find_references`
 - `callers`
 - `callees`
-- `impact`
 - `diagnostics_for_files`
 - `post_edit_feedback`
-- `verification_plan`
 - `run_nearest_tests`
 
-## Graph Exploration Tools
+Post-MVP graph exploration tools:
 
 - `graph_query`
 - `shortest_path`
@@ -64,31 +76,25 @@ agents know when direct source verification or additional validation is needed.
 - `surprising_connections`
 - `graph_stats`
 
-## Edit Tools
+Post-MVP edit and attention tools:
 
-- `preview_workspace_edit`
-- `apply_workspace_edit`
-- `check_concurrent_modifications`
 - `rollback_workspace_edit`
-
-## Attention Tools
-
 - `attention_current`
 - `attention_acknowledge`
 - `attention_for_files`
 
+## Tool Capability Classes
+
+Tool capability classes are defined in
+[Runtime contracts](../reference/runtime-contracts.md). MVP includes
+`read_only`, `planning`, and `workspace_write`. `process_execute` and
+`generated_write` are post-MVP unless explicitly approved by the workspace
+safety contract.
+
 ## Response Metadata
 
-Every result should label:
-
-- `analysis_validity`: valid, partial, invalid, or invalid_due_to_environment
-- `freshness`: fresh, stale, cold, refreshing, or unknown
-- `scope`: analyzed repo, indexed roots, language coverage, skipped roots
-- `trust_level`: semantic, partial_semantic, resource_only, routing_evidence,
-  unsupported
-- `verification_status`: done, planned, needed, blocked
-- `evidence_sources`: parser, LSP, SQLite, FTS, docs, tests, direct read,
-  inferred topology, text fallback
+Every result must use the shared response envelope from
+[Runtime contracts](../reference/runtime-contracts.md).
 
 ## Data And Control Flow
 
@@ -97,7 +103,7 @@ agent request
 -> MCP schema validation
 -> runtime state and graph freshness check
 -> targeted graph/context/validation operation
--> attention and trust metadata merge
+-> blocker/warning metadata merge
 -> compact response with optional source sections
 ```
 
@@ -109,10 +115,15 @@ agent request
 - Heavy exploration tools have project-size-aware budgets.
 - Hot-path tools must use targeted SQLite queries.
 - Broad topology/community reports are explicit orientation calls.
+- MVP `verification_plan` does not execute commands by default.
+- MVP tools must publish row limits, traversal limits, source-byte caps, and
+  timeout behavior through response metadata.
 
 ## Related Docs
 
 - [System architecture](../architecture/system-architecture.md)
 - [Runtime requirements](../requirements/runtime-requirements.md)
+- [Runtime contracts](../reference/runtime-contracts.md)
+- [Workspace safety contract](../reference/workspace-safety-contract.md)
 - [Attention layer design](attention-layer-design.md)
 - [Edit and validation loop design](edit-and-validation-loop-design.md)

@@ -20,12 +20,17 @@ start.
 
 This concept has been fanned out into focused architecture, requirements,
 design, ADR, reference, and spec documents. Use this document for the narrative
-through-line and the fanned-out documents for ongoing changes.
+through-line and the fanned-out documents for ongoing changes. Contract details,
+MVP scope, schemas, and enum definitions belong in the fanned-out docs, not in
+this concept note.
 
 Primary fanned-out docs:
 
+- [Documentation map](../reference/documentation-map.md)
 - [System architecture](../architecture/system-architecture.md)
 - [Runtime requirements](../requirements/runtime-requirements.md)
+- [Runtime contracts](../reference/runtime-contracts.md)
+- [Workspace safety contract](../reference/workspace-safety-contract.md)
 - [Graph store design](graph-store-design.md)
 - [Language adapter design](language-adapter-design.md)
 - [MCP surface design](mcp-surface-design.md)
@@ -33,6 +38,7 @@ Primary fanned-out docs:
 - [Edit and validation loop design](edit-and-validation-loop-design.md)
 - [Knowledge layer design](knowledge-layer-design.md)
 - [Language capability matrix](../reference/language-capability-matrix.md)
+- [MVP proof matrix](../reference/mvp-proof-matrix.md)
 - [MVP spec package](../specs/001-agent-ide-runtime/spec.md)
 
 ## Scope
@@ -41,9 +47,10 @@ In scope:
 
 - repo-scoped runtime architecture for coding agents
 - local graph/index storage
-- cross-language extraction and reference resolution
+- initial language/config extraction and reference evidence
 - agent-facing MCP tools, resources, prompts, and workflow contracts
-- graph-based onboarding, exploration, impact analysis, and validation routing
+- scoped context, symbol/reference evidence, bounded edits, and validation
+  planning
 - trust, freshness, provenance, and audit semantics
 
 Out of scope for the first implementation:
@@ -52,6 +59,7 @@ Out of scope for the first implementation:
 - cloud-hosted multi-user orchestration
 - LLM-generated code understanding as the default source of truth
 - full semantic support for every language at launch
+- broad graph reports, communities, and analytics in the MVP
 
 ## Source Projects
 
@@ -126,14 +134,13 @@ community analysis should be explicit orientation/reporting operations.
 | Component | Responsibility | Owned Inputs | Owned Outputs |
 | --- | --- | --- | --- |
 | Repo runtime | Own one analyzed repo, coordinate indexing, watch changes, expose MCP | repo path, config, watcher events, client requests | resources, tool responses, runtime state |
-| Graph store | Persist files, symbols, edges, references, docs, tests, snapshots, freshness metadata | extraction results, resolution results, docs index, validation hints | SQLite rows, FTS indexes, query results |
+| Graph store | Persist files, symbols, edges, unresolved refs, snapshots, and freshness metadata | extraction results, resolution results, validation hints | SQLite rows, FTS indexes, query results |
 | Extractor registry | Dispatch parser/LSP/tree-sitter adapters by language | files, language config, parser backends | nodes, edges, unresolved references, diagnostics hints |
 | Reference resolver | Resolve extracted references into graph edges | unresolved refs, imports, symbols, framework rules | resolved edges with provenance and confidence |
-| Context engine | Build agent-ready context for tasks | query, symbols, files, graph store, docs, tests | entry points, related symbols, source sections, validation plan |
-| Knowledge layer | Produce orientation and audit views | graph communities, edge provenance, docs, source metadata | repo report, god nodes, communities, surprising links, gaps |
-| Attention layer | Surface scoped signals that should change the agent's next action | diagnostics, graph changes, edit previews, validation gaps, stale state | blockers, warnings, nudges, next actions |
-| Edit manager | Preview, apply, drift-check, and roll back edits | workspace edits, file identities | preview tokens, applied edits, rollback records |
-| Validation engine | Run or plan diagnostics, formatting, lint, and tests | touched files, graph impact, project commands | executed results, evidence tiers, next actions |
+| Workflow service | Build task context, blockers/warnings, and validation plans | query, symbols, files, graph store, safety state | entry points, source sections, validation plan |
+| Knowledge layer | Produce post-MVP orientation and audit views | graph communities, edge provenance, docs, source metadata | repo report, god nodes, communities, surprising links, gaps |
+| Edit manager | Preview, apply, and drift-check bounded edits | workspace edits, file identities | preview tokens, applied edits |
+| Command runner | Plan commands in MVP and execute allowlisted commands post-MVP | touched files, graph impact, project commands | planned or executed validation evidence |
 | MCP surface | Present resources, tools, templates, and prompts to agents | runtime APIs | client-neutral contracts |
 
 ## Core Data Model
@@ -151,11 +158,8 @@ Core tables:
 - `unresolved_refs`: source node, reference name, reference kind, file, range,
   candidate metadata
 - `snapshots`: repo/config identity, created_at, freshness, schema version
-- `docs`: markdown/doc paths, headings, links, path mentions, source identity
-- `tests`: test files, test cases, nearest-code links, command hints
-- `attention_items`: severity, kind, source, scope, evidence, next action,
-  lifecycle state
-- `usage_events`: tool/resource usage, fallback reasons, validation gaps
+- optional post-MVP tables: docs, tests, attention items, report summaries, and
+  usage events, added only when a concrete query needs relational storage
 
 Indexes should support exact lookup, lower-name lookup, qualified-name lookup,
 file/range lookup, incoming/outgoing edge traversal, and FTS over names,
@@ -178,12 +182,14 @@ Every language adapter must report capability level:
 Initial recommended language scope:
 
 - Markdown/config: shared routing and project-context substrate from day one.
-- Python: first semantic target, using the existing PoC learnings.
-- TypeScript/JavaScript: first cross-language semantic target, borrowing from
-  `codegraph`.
-- C#: early priority with Roslyn/LSP-backed semantics after the initial slice.
-- CloudFormation/SAM: early infra-semantic adapter for resource and handler
-  relationships.
+- Python: first partial-semantic target, with promotion to `semantic` only after
+  fixture-proven references, impact, diagnostics, validation routing,
+  freshness, and degraded behavior.
+- TypeScript/JavaScript: second partial-semantic target, borrowing from
+  `codegraph`, after the first language path proves the contracts.
+- C#: post-MVP resource-backed or partial-semantic target.
+- CloudFormation/SAM: post-MVP infrastructure/resource-backed target for
+  resource and handler relationships.
 - Go: next language after Python, TypeScript/JavaScript, C#, and SAM are stable.
 - C/C++: later priority because strong semantics require compile metadata and
   clangd/libclang readiness.
@@ -197,19 +203,19 @@ Initial capability targets:
 
 | Area | Initial level | Backend direction |
 | --- | --- | --- |
-| Markdown/config | `resource_backed` / `routing_evidence` | deterministic parsers, path/link extraction, project config discovery |
-| Python | `semantic` | Python AST or tree-sitter, Pyright/LSP, Ruff, pytest |
-| TypeScript/JavaScript | `semantic` | tree-sitter plus TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
+| Markdown/config | `resource_backed` | deterministic parsers, path/link extraction, project config discovery |
+| Python | `partial_semantic`, then `semantic` | Python AST or tree-sitter, Pyright/LSP, Ruff, pytest |
+| TypeScript/JavaScript | `partial_semantic`, then `semantic` | tree-sitter plus TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
 | C# | `partial_semantic`, then `semantic` | Roslyn or C# LSP, `.sln`/`.csproj`, NuGet and test project discovery |
-| CloudFormation/SAM | `infra_semantic` with caveats | YAML/JSON parser plus intrinsic resolver and source handler linking |
+| CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser plus intrinsic resolver and source handler linking |
 | Go | `partial_semantic`, then `semantic` | Go parser, `gopls`, `go list`, `go test` |
 | C/C++ | `resource_backed`, then `partial_semantic` | tree-sitter, clangd/libclang when `compile_commands.json` exists |
 | Rust | `partial_semantic`, then `semantic` | tree-sitter or Rust parser, Cargo metadata, `rust-analyzer`, `cargo test` |
 | SQL | `resource_backed`, then `partial_semantic` | dialect-aware parser, migration-tool integration, schema/table/column references |
 | Bash/Shell | `partial_semantic` | shell parser, ShellCheck, sourced-file and command/function references |
 | Terraform/HCL | `partial_semantic` | HCL parser, provider/module/resource/variable/output graph |
-| Docker/Compose | `resource_backed` / `routing_evidence` | Dockerfile and Compose parsers, service/env/port/volume graph |
-| CI YAML | `resource_backed` / `routing_evidence` | GitHub Actions and workflow parsers, jobs, steps, validation commands |
+| Docker/Compose | `resource_backed` | Dockerfile and Compose parsers, service/env/port/volume graph |
+| CI YAML | `resource_backed` | GitHub Actions and workflow parsers, jobs, steps, validation commands |
 | Kubernetes/Helm | `resource_backed`, then `partial_semantic` | Kubernetes YAML and Helm chart parsing, resource/service/config relationships |
 | Vue/Svelte | `partial_semantic`, then `semantic` | framework language services, SFC parsing, route/component/template links |
 | PowerShell | `partial_semantic` | PowerShell parser, script/function/module references |
@@ -246,10 +252,11 @@ scan files
 -> expose through MCP
 ```
 
-The first cross-cutting slice should include Markdown/config, Python,
-TypeScript/JavaScript, a thin C# project/symbol slice, and a CloudFormation/SAM
-resource slice. That proves the core contracts are truly language-neutral and
-also covers the repository types that matter most.
+The first cross-cutting slice should include Markdown/config plus one
+partial-semantic language path. TypeScript/JavaScript should be the next
+language once the first fixture-backed path proves the runtime contracts. C# and
+CloudFormation/SAM should remain post-MVP unless reduced to resource-backed
+discovery fixtures.
 
 After the slice works, deepen support one area at a time:
 
@@ -257,17 +264,20 @@ After the slice works, deepen support one area at a time:
    change signature, and import cleanup.
 2. TypeScript/JavaScript: `tsconfig` path aliases, JSX/TSX, package metadata,
    Jest/Vitest/Playwright discovery, safe rename, and import maintenance.
-3. CloudFormation/SAM: handler/resource linking, API routes, events, env vars,
+3. TypeScript/JavaScript: `tsconfig` path aliases, JSX/TSX, package metadata,
+   Jest/Vitest/Playwright discovery, and import maintenance after preview
+   contracts are safe.
+4. CloudFormation/SAM: handler/resource linking, API routes, events, env vars,
    IAM relationships, and affected-handler/test mapping.
-4. C#: Roslyn/LSP semantic resolution, solution/project graph, NuGet context,
+5. C#: Roslyn/LSP semantic resolution, solution/project graph, NuGet context,
    partial classes, extension methods, xUnit/NUnit/MSTest targeting.
-5. Go: `gopls`, package graph, build tags, references, callers/callees, and
+6. Go: `gopls`, package graph, build tags, references, callers/callees, and
    `go test` targeting.
-6. C/C++: clangd/libclang integration, include graph, compile-unit readiness,
+7. C/C++: clangd/libclang integration, include graph, compile-unit readiness,
    callers/callees, and test routing where project metadata supports it.
-7. Rust: Cargo metadata, module graph, `rust-analyzer` references, macro caveats,
+8. Rust: Cargo metadata, module graph, `rust-analyzer` references, macro caveats,
    callers/callees, and `cargo test` targeting.
-8. Extended backlog in priority order: SQL; Bash/Shell; Terraform/HCL;
+9. Extended backlog in priority order: SQL; Bash/Shell; Terraform/HCL;
    Dockerfile/Compose; GitHub Actions/CI YAML; Kubernetes/Helm; Vue/Svelte;
    PowerShell; Ruby/PHP; Swift/Kotlin/Dart; Java last.
 
@@ -326,35 +336,23 @@ Agent questions this should support:
 
 The runtime should expose resources for cheap state and tools for computation.
 
-First-read resources:
+MVP first-read resources:
 
 - `repo:///overview`
 - `repo:///status`
 - `repo:///scope`
-- `repo:///mcp-surface`
-- `repo:///graph/report`
-- `repo:///graph/communities`
-- `repo:///docs/overview`
-- `repo:///validation-surface`
-- `repo:///attention/current`
-- `repo:///usage/gaps`
 
-Primary workflow tools:
+MVP workflow tools:
 
-- `repo_preflight`
 - `context_for_task`
 - `symbol_search`
-- `symbol_context`
 - `find_references`
-- `callers`
-- `callees`
-- `impact`
-- `diagnostics_for_files`
-- `post_edit_feedback`
+- bounded `impact`
 - `verification_plan`
-- `run_nearest_tests`
+- `preview_workspace_edit`
+- `apply_workspace_edit`
 
-Graph exploration tools:
+Post-MVP graph exploration tools:
 
 - `graph_query`
 - `shortest_path`
@@ -364,14 +362,7 @@ Graph exploration tools:
 - `surprising_connections`
 - `graph_stats`
 
-Edit tools:
-
-- `preview_workspace_edit`
-- `apply_workspace_edit`
-- `check_concurrent_modifications`
-- `rollback_workspace_edit`
-
-Attention tools:
+Post-MVP attention tools:
 
 - `attention_current`
 - `attention_acknowledge`
@@ -385,22 +376,20 @@ when requested or when the task context engine decides they are high value.
 
 Normal coding work should follow this loop:
 
-1. `repo_preflight`
+1. read `repo:///status` and `repo:///scope`
 2. `context_for_task`
 3. direct source read only for selected edit targets or when context reports
    low confidence
 4. preview/apply edits
-5. `post_edit_feedback`
-6. `verification_plan`
-7. `run_nearest_tests`
+5. `verification_plan`
+6. run commands manually or through a future allowlisted command runner
 
 Exploration work should follow this loop:
 
 1. read `repo:///overview`
-2. read `repo:///graph/report`
-3. use `symbol_search`, `graph_query`, `shortest_path`, or `community` for
+2. use `symbol_search`, `find_references`, or bounded `impact` for
    bounded follow-up
-4. read exact files only when the graph says source verification is needed
+3. read exact files only when the graph says source verification is needed
 
 The runtime should treat agent fallback to `rg`, `find`, broad file reads, or
 ad hoc validation as a product signal. Repeated fallback should become backlog
@@ -418,54 +407,12 @@ The runtime should emit attention items only when the information changes the
 safe or efficient next action. The default path should remain quiet when an edit
 is clean and validation is complete.
 
-Attention item shape:
+Attention item shape and enum values are owned by
+[Runtime contracts](../reference/runtime-contracts.md).
 
-```json
-{
-  "severity": "blocker|warning|nudge|context",
-  "kind": "syntax_error|rename_risk|verification_gap|scope_change",
-  "scope": {
-    "files": ["src/auth/session.ts"],
-    "symbols": ["UserSession"],
-    "ranges": [{"file": "src/auth/session.ts", "line": 84}]
-  },
-  "message": "Edited file no longer parses.",
-  "why_this_matters": "Later symbol and test results are unreliable until syntax is fixed.",
-  "evidence": {
-    "source": "parser",
-    "freshness": "fresh",
-    "trust_level": "semantic"
-  },
-  "next_action": {
-    "tool": "diagnostics_for_files",
-    "args": {"files": ["src/auth/session.ts"]}
-  }
-}
-```
-
-Recommended attention severities:
-
-- `blocker`: continuing would be unsafe or misleading, such as syntax failure,
-  stale edit preview, or unresolved required target.
-- `warning`: continuing is possible, but the result needs caveats or validation,
-  such as heuristic references or unresolved dynamic usage.
-- `nudge`: low-cost repair or cleanup, such as import cleanup or formatting.
-- `context`: a relevant planning fact, such as generated-source ownership or
-  public API surface.
-
-Recommended attention kinds:
-
-- `ambiguity`: multiple plausible files, symbols, commands, or test targets.
-- `blocker`: syntax errors, parse failures, stale previews, or missing required
-  tooling.
-- `risk_flag`: dynamic references, framework bindings, generated source,
-  exported/public API changes, or non-semantic language coverage.
-- `scope_change`: touched files or affected files expanded beyond the planned
-  validation slice.
-- `staleness`: index, diagnostics, test discovery, or preview state is stale.
-- `verification_gap`: diagnostics, tests, or dependency checks have not proven
-  the current change.
-- `rollback_available`: a mutation can be reverted with a known token.
+MVP attention is limited to blockers and warnings defined in
+[Runtime contracts](../reference/runtime-contracts.md). Nudges, context items,
+rollback availability, and refactoring-specific risks are post-MVP.
 
 High-value injection points:
 
@@ -475,9 +422,7 @@ High-value injection points:
 - `preview_workspace_edit`: surface missed rename surfaces, dynamic references,
   public API changes, stale targets, or broad replacement fallbacks.
 - `apply_workspace_edit`: surface drift, unexpected touched files, parse errors,
-  and rollback tokens.
-- `post_edit_feedback`: surface syntax errors, diagnostics, import cleanup,
-  formatting changes, test gaps, and recommended repair order.
+  and refused paths.
 - `verification_plan`: surface what is proven, what is only planned, and which
   validation command is cheapest with useful evidence.
 - pre-final response checks: surface unvalidated touched files, blocked tests,
@@ -514,9 +459,8 @@ Highest-value capabilities:
   to act without broad file reads.
 - Diagnostics, type checking, formatting, and nearest-test routing: these close
   the edit loop with concrete evidence.
-- Previewable simple edits and refactors: rename, import maintenance, change
-  signature, and safe delete are valuable only with preview, drift checks, and
-  rollback.
+- Previewable bounded edits are valuable only with preview, drift checks, path
+  containment, and validation planning. Semantic refactors are post-MVP.
 
 Medium-value capabilities:
 
@@ -551,7 +495,7 @@ The practical priority is:
 2. Symbol search, definitions, references, callers, callees, impact.
 3. Context builder with source section packing.
 4. Diagnostics, type checking, formatting, nearest tests.
-5. Import maintenance and simple semantic edits with preview/apply/rollback.
+5. Bounded edits with preview/apply and drift checks.
 6. TODO, docs, project config, dependency context.
 7. Safe rename and change signature for mature language backends.
 8. Dead code, security, and framework-specific inspections.
@@ -559,16 +503,8 @@ The practical priority is:
 
 ## Trust And Provenance
 
-Every result should label:
-
-- `analysis_validity`: valid, partial, invalid, or invalid_due_to_environment
-- `freshness`: fresh, stale, cold, refreshing, or unknown
-- `scope`: analyzed repo, indexed roots, language coverage, skipped roots
-- `trust_level`: semantic, partial_semantic, resource_only, routing_evidence,
-  unsupported
-- `verification_status`: done, planned, needed, blocked
-- `evidence_sources`: parser, LSP, SQLite, FTS, docs, tests, direct read,
-  inferred topology, text fallback
+Every result should use the shared response envelope and enums in
+[Runtime contracts](../reference/runtime-contracts.md).
 
 Every graph edge should carry:
 
@@ -682,34 +618,39 @@ attention items should remain implementation-neutral.
 The first useful version should include:
 
 - explicit repo initialization and binding
-- SQLite graph store with FTS
-- Markdown/config, Python, TypeScript/JavaScript, C#, and CloudFormation/SAM
-  thin vertical slices
-- unresolved-reference storage and basic resolver
+- minimal SQLite graph store with files, nodes, edges, unresolved refs, and FTS
+- Markdown/config routing and one partial-semantic language path
+- fixture-backed promotion gates before any adapter is labeled `semantic`
 - file watcher with debounced incremental sync
-- symbol search, node details, callers, callees, impact, shortest path
+- status, scope, overview, context, symbol search, references, and bounded
+  impact
 - task context builder with source section packing
-- graph report with god nodes, communities, gaps, and ambiguous edges
-- attention layer with blockers, warnings, nudges, and verification gaps
-- MCP resources and tools for the primary workflow
-- preview/apply/rollback edit contracts
-- conservative import maintenance and formatting hooks
-- Python and TypeScript diagnostics/test-routing hooks where project config
-  supports them
-- C# project detection and partial symbol/reference support
-- SAM resource, route, handler, environment, and IAM relationship extraction
+- MCP response envelope with canonical capability, freshness, trust, and
+  evidence metadata
+- preview/apply edit contracts with built-in drift checks
+- validation planning without command execution by default
+- workspace safety policy for path containment, generated writes, redaction, and
+  command planning
+- MVP proof matrix with fixtures, golden responses, budget tests, and degraded
+  modes
+
+Post-MVP capabilities include graph reports, communities, god nodes,
+surprising connections, usage-gap analytics, nearest-test execution, C# semantic
+support, CloudFormation/SAM relationship extraction, import maintenance, safe
+rename, change signature, safe delete, and broad graph exploration tools.
 
 ## Open Questions
 
 - Should tree-sitter be the primary semantic substrate, with LSP as enrichment,
   or should LSP be primary for languages where it is reliable?
-- Should graph reports be committed to repos, generated on demand, or both?
+- When graph reports are added, should they remain generated cache artifacts or
+  have an explicit tracked export workflow?
 - What is the minimum supported MCP/client surface for Codex, Claude Code, Kiro,
   and other agents?
 - How much of docs/media corpus support belongs in the core product versus an
   optional knowledge extension?
-- Should the graph store support vector search in the MVP, or should FTS plus
-  graph traversal come first?
+- When should vector search be considered after FTS plus graph traversal are
+  proven?
 - Which attention items should be visible by default, and which should require
   explicit expansion to avoid alert fatigue?
 - What minimum semantic evidence is required before enabling each mutating
