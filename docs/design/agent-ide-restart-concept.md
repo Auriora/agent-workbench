@@ -18,6 +18,23 @@ The goal is to define the project shape before creating a new repository: what
 to keep, what to change, and which capabilities should be first-class from the
 start.
 
+This concept has been fanned out into focused architecture, requirements,
+design, ADR, reference, and spec documents. Use this document for the narrative
+through-line and the fanned-out documents for ongoing changes.
+
+Primary fanned-out docs:
+
+- [System architecture](../architecture/system-architecture.md)
+- [Runtime requirements](../requirements/runtime-requirements.md)
+- [Graph store design](graph-store-design.md)
+- [Language adapter design](language-adapter-design.md)
+- [MCP surface design](mcp-surface-design.md)
+- [Attention layer design](attention-layer-design.md)
+- [Edit and validation loop design](edit-and-validation-loop-design.md)
+- [Knowledge layer design](knowledge-layer-design.md)
+- [Language capability matrix](../reference/language-capability-matrix.md)
+- [MVP spec package](../specs/001-agent-ide-runtime/spec.md)
+
 ## Scope
 
 In scope:
@@ -702,6 +719,22 @@ The first useful version should include:
 
 ## Related Local References
 
+- Architecture: [System architecture](../architecture/system-architecture.md)
+- Requirements: [Runtime requirements](../requirements/runtime-requirements.md)
+- ADRs:
+  - [Use a local-first repo runtime](../adr/0001-local-first-repo-runtime.md)
+  - [Use SQLite as the graph evidence store](../adr/0002-sqlite-graph-evidence-store.md)
+  - [Start with a TypeScript runtime](../adr/0003-typescript-runtime.md)
+  - [Require semantic evidence before semantic capability](../adr/0004-semantic-evidence-gates.md)
+- Designs:
+  - [Graph store design](graph-store-design.md)
+  - [Language adapter design](language-adapter-design.md)
+  - [MCP surface design](mcp-surface-design.md)
+  - [Attention layer design](attention-layer-design.md)
+  - [Edit and validation loop design](edit-and-validation-loop-design.md)
+  - [Knowledge layer design](knowledge-layer-design.md)
+- Reference: [Language capability matrix](../reference/language-capability-matrix.md)
+- Spec: [Agent IDE runtime MVP](../specs/001-agent-ide-runtime/spec.md)
 - Existing PoC: `/home/bcherrington/Projects/Auriora/agent-ide`
 - Graph product/reference workflow: `/home/bcherrington/Projects/Webstorm/graphify`
 - Cross-language code graph reference: `/home/bcherrington/Projects/Webstorm/codegraph`
