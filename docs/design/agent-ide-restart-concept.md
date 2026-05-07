@@ -160,11 +160,45 @@ Every language adapter must report capability level:
 
 Initial recommended language scope:
 
-- Python: semantic baseline from the existing PoC.
+- Markdown/config: shared routing and project-context substrate from day one.
+- Python: first semantic target, using the existing PoC learnings.
 - TypeScript/JavaScript: first cross-language semantic target, borrowing from
   `codegraph`.
-- Markdown/docs: indexed routing evidence, direct reads required for precise
-  claims.
+- C#: early priority with Roslyn/LSP-backed semantics after the initial slice.
+- CloudFormation/SAM: early infra-semantic adapter for resource and handler
+  relationships.
+- Go: next language after Python, TypeScript/JavaScript, C#, and SAM are stable.
+- C/C++: later priority because strong semantics require compile metadata and
+  clangd/libclang readiness.
+- Rust: add after C/C++ as repo-language support using Cargo and
+  `rust-analyzer`; keep distinct from any future Rust implementation core.
+- Extended backlog, in order: SQL, Bash/Shell, Terraform/HCL,
+  Dockerfile/Compose, GitHub Actions/CI YAML, Kubernetes/Helm, Vue/Svelte,
+  PowerShell, Ruby/PHP, Swift/Kotlin/Dart, Java last.
+
+Initial capability targets:
+
+| Area | Initial level | Backend direction |
+| --- | --- | --- |
+| Markdown/config | `resource_backed` / `routing_evidence` | deterministic parsers, path/link extraction, project config discovery |
+| Python | `semantic` | Python AST or tree-sitter, Pyright/LSP, Ruff, pytest |
+| TypeScript/JavaScript | `semantic` | tree-sitter plus TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
+| C# | `partial_semantic`, then `semantic` | Roslyn or C# LSP, `.sln`/`.csproj`, NuGet and test project discovery |
+| CloudFormation/SAM | `infra_semantic` with caveats | YAML/JSON parser plus intrinsic resolver and source handler linking |
+| Go | `partial_semantic`, then `semantic` | Go parser, `gopls`, `go list`, `go test` |
+| C/C++ | `resource_backed`, then `partial_semantic` | tree-sitter, clangd/libclang when `compile_commands.json` exists |
+| Rust | `partial_semantic`, then `semantic` | tree-sitter or Rust parser, Cargo metadata, `rust-analyzer`, `cargo test` |
+| SQL | `resource_backed`, then `partial_semantic` | dialect-aware parser, migration-tool integration, schema/table/column references |
+| Bash/Shell | `partial_semantic` | shell parser, ShellCheck, sourced-file and command/function references |
+| Terraform/HCL | `partial_semantic` | HCL parser, provider/module/resource/variable/output graph |
+| Docker/Compose | `resource_backed` / `routing_evidence` | Dockerfile and Compose parsers, service/env/port/volume graph |
+| CI YAML | `resource_backed` / `routing_evidence` | GitHub Actions and workflow parsers, jobs, steps, validation commands |
+| Kubernetes/Helm | `resource_backed`, then `partial_semantic` | Kubernetes YAML and Helm chart parsing, resource/service/config relationships |
+| Vue/Svelte | `partial_semantic`, then `semantic` | framework language services, SFC parsing, route/component/template links |
+| PowerShell | `partial_semantic` | PowerShell parser, script/function/module references |
+| Ruby/PHP | `resource_backed`, then `partial_semantic` | parser/LSP where project demand exists |
+| Swift/Kotlin/Dart | `resource_backed`, then `partial_semantic` | mobile/client parser or LSP adapters when relevant repos appear |
+| Java | `resource_backed`, then `partial_semantic` | Maven/Gradle and Java LSP support, deferred until last |
 
 Backend promotion gates:
 
@@ -175,6 +209,101 @@ Backend promotion gates:
 - cache freshness after add, modify, delete, rename, and config changes
 - cold/warm latency on representative repositories
 - degraded behavior when parser/LSP/tooling is missing or slow
+
+## Language Implementation Plan
+
+Implementation should start with a cross-cutting slice rather than completing
+one language in isolation. The first slice must exercise the full runtime path
+for the priority areas:
+
+```text
+scan files
+-> detect language or infra type
+-> extract nodes, edges, and unresolved references
+-> store graph/index rows
+-> resolve references
+-> query symbols/resources/usages/callers/callees
+-> build task context
+-> emit attention items
+-> plan or run diagnostics/tests
+-> expose through MCP
+```
+
+The first cross-cutting slice should include Markdown/config, Python,
+TypeScript/JavaScript, a thin C# project/symbol slice, and a CloudFormation/SAM
+resource slice. That proves the core contracts are truly language-neutral and
+also covers the repository types that matter most.
+
+After the slice works, deepen support one area at a time:
+
+1. Python: imports, references, diagnostics, pytest targeting, safe rename,
+   change signature, and import cleanup.
+2. TypeScript/JavaScript: `tsconfig` path aliases, JSX/TSX, package metadata,
+   Jest/Vitest/Playwright discovery, safe rename, and import maintenance.
+3. CloudFormation/SAM: handler/resource linking, API routes, events, env vars,
+   IAM relationships, and affected-handler/test mapping.
+4. C#: Roslyn/LSP semantic resolution, solution/project graph, NuGet context,
+   partial classes, extension methods, xUnit/NUnit/MSTest targeting.
+5. Go: `gopls`, package graph, build tags, references, callers/callees, and
+   `go test` targeting.
+6. C/C++: clangd/libclang integration, include graph, compile-unit readiness,
+   callers/callees, and test routing where project metadata supports it.
+7. Rust: Cargo metadata, module graph, `rust-analyzer` references, macro caveats,
+   callers/callees, and `cargo test` targeting.
+8. Extended backlog in priority order: SQL; Bash/Shell; Terraform/HCL;
+   Dockerfile/Compose; GitHub Actions/CI YAML; Kubernetes/Helm; Vue/Svelte;
+   PowerShell; Ruby/PHP; Swift/Kotlin/Dart; Java last.
+
+Do not mark a language `semantic` because a parser can extract declarations.
+Semantic support requires trustworthy references, impact, diagnostics/test
+routing, freshness behavior, and degraded-mode reporting.
+
+## CloudFormation And SAM Support
+
+CloudFormation and SAM should be treated as an infra adapter, not generic YAML.
+It should add graph evidence that connects infrastructure resources to source
+code, tests, configuration, and security posture.
+
+Recommended nodes:
+
+- `stack`
+- `template`
+- `resource`
+- `lambda_function`
+- `api_route`
+- `event_source`
+- `iam_policy`
+- `env_var`
+- `output`
+- `parameter`
+- `condition`
+- `handler_symbol`
+
+Recommended edges:
+
+- `defines`
+- `references`
+- `depends_on`
+- `invokes`
+- `routes_to`
+- `uses_env`
+- `grants_permission`
+- `exports`
+- `imports_value`
+- `handler_resolves_to`
+
+The adapter should understand common intrinsic functions and SAM conventions:
+`Ref`, `Fn::GetAtt`, `Fn::Sub`, `Fn::Join`, `Fn::ImportValue`, `DependsOn`,
+Lambda events, API routes, environment variables, policies, outputs, and
+handler strings.
+
+Agent questions this should support:
+
+- Which Lambda handles this API route?
+- What environment variables does this handler rely on?
+- What permissions does this function have?
+- Which template resources are affected by changing this handler?
+- What tests should run if this Lambda handler or route changes?
 
 ## MCP Surface
 
@@ -517,7 +646,9 @@ TypeScript runtime
 Language adapters
   - TypeScript/JavaScript tree-sitter and language-service integration
   - Python parser/LSP/tooling integration
-  - future Go/Rust/PHP/C# and other adapters
+  - C# Roslyn/LSP integration
+  - CloudFormation/SAM infra adapter
+  - future Go, C/C++, Rust, SQL, shell, infra, frontend, and other adapters
 
 Optional future Rust core
   - high-volume parsing
@@ -535,7 +666,8 @@ The first useful version should include:
 
 - explicit repo initialization and binding
 - SQLite graph store with FTS
-- tree-sitter extraction for Python and TypeScript/JavaScript
+- Markdown/config, Python, TypeScript/JavaScript, C#, and CloudFormation/SAM
+  thin vertical slices
 - unresolved-reference storage and basic resolver
 - file watcher with debounced incremental sync
 - symbol search, node details, callers, callees, impact, shortest path
@@ -547,6 +679,8 @@ The first useful version should include:
 - conservative import maintenance and formatting hooks
 - Python and TypeScript diagnostics/test-routing hooks where project config
   supports them
+- C# project detection and partial symbol/reference support
+- SAM resource, route, handler, environment, and IAM relationship extraction
 
 ## Open Questions
 
