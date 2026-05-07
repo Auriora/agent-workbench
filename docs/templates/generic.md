@@ -15,8 +15,8 @@ it supports.
 
 ## Audience
 
-List the primary readers, such as developers, data engineers, business
-analysts, BI specialists, support engineers, or operators.
+List the primary readers, such as runtime engineers, plugin authors, language
+adapter maintainers, support engineers, or agent workflow designers.
 
 ## Scope
 

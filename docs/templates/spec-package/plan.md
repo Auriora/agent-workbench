@@ -26,7 +26,7 @@ Summarize the primary requirement and the technical approach.
 
 ## Governance Check
 
-Complete this before implementation and re-check after design changes. Use `docs/reference/engineering-governance.md` for the full governance principles.
+Complete this before implementation and re-check after design changes.
 
 - [ ] SOLID boundaries defined: responsibilities, abstractions, and extension points are explicit for each planned module.
 - [ ] DRY plan defined: shared validation, business rules, and contracts are centralized, with any approved duplication documented.
@@ -54,7 +54,7 @@ docs/specs/[###-feature]/
 Replace this with the real paths touched by the feature.
 
 ```text
-infra/
+src/
 tests/
 docs/
 ```

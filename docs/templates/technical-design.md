@@ -27,18 +27,19 @@ implementation history.
 
 | Component | Responsibility | Owned Inputs | Owned Outputs |
 | --- | --- | --- | --- |
-| Component name | Boundary and behavior | Source data, events, config, or calls | Artifacts, API responses, tables, events, or side effects |
+| Component name | Boundary and behavior | Workspace files, graph records, requests, config, commands, or calls | Tool responses, resources, diagnostics, index updates, edit previews, or side effects |
 
 ## Data And Control Flow
 
-Describe the important sequence of calls, events, queue hops, writes, reads,
-and retries.
+Describe the important sequence of calls, workspace events, graph/index reads
+or writes, command executions, cache refreshes, retries, and agent-visible
+responses.
 
 ## Contracts And Schemas
 
 | Contract | Location | Producer | Consumer | Compatibility Notes |
 | --- | --- | --- | --- | --- |
-| API, event, table, payload, or config schema | Path or service | Producer | Consumer | Versioning, migration, or fallback expectations |
+| MCP tool/resource schema, API, storage table, parser output, command output, or config schema | Path or service | Producer | Consumer | Versioning, migration, or fallback expectations |
 
 ## Configuration Model
 
@@ -46,22 +47,23 @@ Document how runtime and deploy-time settings shape behavior.
 
 | Config Source | Key Or Parameter | Applied By | Effect | Failure Mode |
 | --- | --- | --- | --- | --- |
-| AppConfig, SSM, Secrets Manager, template parameter, or env var | Key path | Code or deployment path | Behavior controlled | Reject, default, degrade, alarm, or manual recovery |
+| Repo config, runtime config, environment variable, CLI flag, plugin metadata, or code constant | Key path | Code path or runtime component | Behavior controlled | Reject, default, degrade, diagnostic, or manual recovery |
 
 ## Validation And Error Handling
 
-Describe validation rules, rejected inputs, failure routing, retries,
-quarantine behavior, and operator-visible errors.
+Describe validation rules, rejected inputs, failure routing, retries, stale
+state behavior, fallback paths, and agent-visible errors.
 
 ## Security And Access
 
-Document IAM, auth, network, encryption, secret ownership, and least-privilege
-constraints that are part of the design.
+Document workspace access, process execution, network use, credential handling,
+sandbox assumptions, and least-privilege constraints that are part of the
+design.
 
 ## Observability And Operations
 
-Document logs, metrics, alarms, diagnostics, replay, rollback, and support
-entrypoints.
+Document logs, metrics, diagnostics, freshness signals, edit rollback,
+validation routing, and support entrypoints.
 
 ## Tradeoffs And Constraints
 
@@ -74,7 +76,7 @@ Link to ADRs for durable decisions.
 - Config:
 - Tests:
 - Runbooks:
-- Data-flow docs:
+- Requirements:
 
 ## Related Docs
 

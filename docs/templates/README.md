@@ -16,7 +16,7 @@ This directory defines the standard document classes for this repository, the te
 2. If a document mixes multiple classes, split it instead of stretching one template too far.
 3. Current-state operator guidance belongs in active docs folders such as `getting-started/`, `runbooks/`, `architecture/`, `integrations/`, `api/`, and `reference/`.
 4. Historical rationale, superseded material, and design history should be captured in ADRs, current-state docs, active specs, or archived docs only when the context is still useful.
-5. API contracts should remain in OpenAPI or equivalent machine-readable formats where possible, with companion prose only when needed.
+5. Runtime contracts should remain in machine-readable formats where possible, with companion prose only when needed.
 6. Generated documents may use a simplified structure when a script owns most of their content, but they should still be clearly identified as generated and linked from the appropriate class folder.
 
 ## Required Metadata
@@ -59,8 +59,8 @@ Store ADRs under `docs/adr/` using `NNNN-short-title.md`.
 
 Use [generic.md](generic.md) when none of the specific document classes below
 fit cleanly. Prefer a specific template when the document is an operational
-procedure, integration guide, architecture overview, ADR, data-flow document,
-reference, checklist, history note, or feature spec.
+procedure, integration guide, architecture overview, ADR, reference, checklist,
+history note, or feature spec.
 
 ### Architecture Overview
 
@@ -72,7 +72,7 @@ Store architecture overviews under `docs/architecture/`.
 Use [requirements.md](requirements.md) for current-state requirements that
 describe implemented or accepted behavior without organizing the content as an
 implementation backlog. Requirements should link to source code, config,
-schemas, tests, runbooks, data-flow docs, and ADRs as evidence.
+schemas, tests, runbooks, technical designs, and ADRs as evidence.
 Store requirements under `docs/requirements/`.
 
 ### Technical Design
@@ -83,15 +83,6 @@ a feature implementation spec. Technical designs should explain components,
 data/control flow, contracts, configuration, validation, security, and
 operations.
 Store technical designs under `docs/design/`.
-
-### Data Flow
-
-Use these templates as a linked documentation set for tracing data from raw sources to final processed outputs:
-
-- [data-flow-index.md](data-flow-index.md): architecture hub that summarizes source-to-curated and curated-to-processed fan-out.
-- [raw-to-curated-flow.md](raw-to-curated-flow.md): reference template for one provider/contract raw source through validation, dataset resolution, curation, and curated table outputs.
-- [curated-to-processed-flow.md](curated-to-processed-flow.md): reference template for one logical processed data group from curated inputs through joins, transformations, aggregations, and processed outputs.
-- [field-dictionary.md](field-dictionary.md): reference template for source, curated, or processed field names and business descriptions.
 
 ### Getting Started Guide
 
@@ -104,17 +95,20 @@ Runbooks that change or investigate implementation behavior should include linke
 
 ### Integration Guide
 
-Use [integration-guide.md](integration-guide.md) for external-system integration behavior, contracts, configuration, and failure handling.
-For a new provider, contract, source, or MQTT/file/API entry point, start with [provider-contract-integration-guide.md](provider-contract-integration-guide.md) and use [../runbooks/data-flow/add-provider-contract.md](../runbooks/data-flow/add-provider-contract.md) as the implementation procedure.
+Use [integration-guide.md](integration-guide.md) for MCP surface, language
+adapter, parser/LSP, validation tool, plugin, or local runtime integration
+behavior, contracts, configuration, and failure handling.
 
 ### API Contract Guide
 
-Use [api-contract-guide.md](api-contract-guide.md) for prose that explains how to read or apply a machine-readable contract such as an OpenAPI file.
+Use [api-contract-guide.md](api-contract-guide.md) for prose that explains how
+to read or apply a machine-readable contract such as an MCP tool schema,
+resource schema, JSON schema, or API definition.
 
 ### Reference
 
-Use [reference.md](reference.md) for factual reference material, assumptions, limits, naming rules, or data dictionaries.
-Use [field-dictionary.md](field-dictionary.md) when the reference is primarily a structured field-name dictionary.
+Use [reference.md](reference.md) for factual reference material, assumptions,
+limits, naming rules, capability matrices, or runtime dictionaries.
 
 ### Checklist
 

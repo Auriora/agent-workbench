@@ -36,7 +36,7 @@ Describe the trigger conditions or scenarios for using it.
 
 | Area | Path Or Setting | How It Is Used | Required Validation |
 | --- | --- | --- | --- |
-| Config, code, data contract, script, or service | Repository path, AppConfig key, SSM parameter, secret, AWS resource, or command | Explain whether it is read, changed, deployed, or verified | State the check that proves the touchpoint still works. |
+| Config, code, runtime contract, script, schema, index, cache, or command | Repository path, config key, environment variable, SQLite table, generated cache path, or command | Explain whether it is read, changed, regenerated, executed, or verified | State the check that proves the touchpoint still works. |
 
 ## Procedure
 
@@ -55,7 +55,3 @@ Describe how to safely back out or recover if the procedure fails.
 ## Escalation
 
 State when to stop and escalate, and to whom.
-
-## Related Docs
-
-- Related guides, architecture docs, or references.

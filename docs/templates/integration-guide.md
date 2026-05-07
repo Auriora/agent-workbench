@@ -10,56 +10,63 @@ last_reviewed: YYYY-MM-DD
 
 ## Purpose
 
-Describe the external integration and why it exists.
+Describe the runtime integration and why it exists.
 
-## External System
+## Integration Surface
 
-Summarize the system being integrated, including the relevant domain concepts.
+Summarize the local or external surface being integrated, such as an MCP tool
+or resource, language adapter, parser, LSP, validation command, plugin, editor
+client, or storage component.
 
 ## Contract Summary
 
-Describe the key endpoints, payload shapes, events, or files involved.
+Describe the tool/resource schemas, request and response shapes, config files,
+workspace files, commands, or storage records involved.
 
-## External Spec Status
+## Contract Status
 
 | Artifact | Status | Notes |
 | --- | --- | --- |
-| External API, file, payload, MQTT, or source schema | available, repo-owned, captured in tests, pending provider, or not applicable | State where the source contract lives and whether it is authoritative. |
+| MCP schema, JSON schema, CLI contract, parser output, LSP capability, or storage schema | available, repo-owned, captured in tests, pending design, or not applicable | State where the authoritative contract lives. |
 
-## Provider And Contract Identity
+## Runtime Identity
 
 | Identity | Value | Notes |
 | --- | --- | --- |
-| Provider | provider-name | Canonical provider segment used in routes, raw keys, metadata, or config. |
-| Contract | contract-name | Canonical contract segment or event family. |
-| Source | source-name | Trusted source identity used for auth, lineage, or upload metadata. |
-| Channel | push, poller, upload, mqtt, or other | Delivery channel used in raw keys and operational traces. |
+| Integration name | integration-name | Stable name used in docs, config, logs, and diagnostics. |
+| Runtime area | mcp, language-adapter, parser, lsp, validation, plugin, storage, or client | Primary subsystem that owns the integration. |
+| Entry point | tool, resource, command, watcher event, adapter method, schema, or table | How the runtime invokes or observes this integration. |
+| Capability level | semantic, partial_semantic, resource_backed, unsupported, or custom | Capability reported to agents when applicable. |
 
-## Auth And Secrets
+## Trust And Access
 
-Describe how credentials are managed and where they live.
+Describe local trust boundaries, workspace permissions, process execution,
+network use, credential handling, or sandbox assumptions.
 
 ## Configuration
 
-List the config files, environment settings, or runtime settings that control the integration.
+List repo config files, runtime settings, environment variables, command-line
+flags, plugin metadata, or adapter registration settings that control the
+integration.
 
 ## Linked Docs
 
 | Document | Why It Matters |
 | --- | --- |
-| Related data-flow doc | Links the external contract to raw, curated, and processed data behavior. |
-| Related runbook | Describes operations, change, validation, or troubleshooting procedure. |
-| Related config or schema doc | Explains runtime keys and schema constraints. |
+| Related architecture or design doc | Explains the subsystem boundary and runtime behavior. |
+| Related runbook | Describes validation, refresh, recovery, or troubleshooting procedure. |
+| Related contract, schema, or reference doc | Explains request, response, storage, config, or capability constraints. |
 
-## Data Flow
+## Runtime Flow
 
-Describe how data moves through the integration.
+Describe how requests, workspace events, indexed facts, diagnostics, or command
+results move through the integration.
 
-## Source-To-Data-Flow Mapping
+## Surface Mapping
 
-| External Input | Provider/Contract Or Topic | Raw Location | Curated Output | Processed Output |
+| Input Or Trigger | Runtime Entry Point | State Read | Output Or Side Effect | Validation |
 | --- | --- | --- | --- | --- |
-| Endpoint, event, file, or MQTT topic | Canonical identity used by the platform | Raw S3 prefix or message route | Curated table or dataset | Processed table, mart, or n/a |
+| MCP request, file change, command invocation, or adapter call | Tool, resource, watcher, parser, LSP, or validator | Files, graph store, cache, config, or process output | Tool response, graph update, diagnostics, edit preview, or validation result | Test, fixture, command, or manual check |
 
 ## Failure Modes
 
@@ -72,14 +79,17 @@ Summarize normal operator or support tasks for this integration.
 
 ## Validation Evidence
 
-Describe the tests, commands, sample payloads, or deployed checks that prove the integration still works.
+Describe the tests, commands, fixtures, schema checks, or runtime smoke checks
+that prove the integration still works.
 
 ## Change Process
 
-Describe which runbook to use when adding providers, contracts, source fields, config keys, credentials, or downstream outputs.
+Describe which runbook or checklist to use when changing schemas, adapter
+capabilities, parser behavior, commands, config keys, storage shape, or agent
+visible responses.
 
 ## References
 
-- External specs:
+- External or upstream specs:
 - Internal runbooks:
 - Related architecture docs:

@@ -1,5 +1,5 @@
 ---
-title: API contract guide title
+title: Runtime contract guide title
 doc_type: reference
 status: draft
 owner: team-or-person
@@ -10,27 +10,32 @@ last_reviewed: YYYY-MM-DD
 
 ## Purpose
 
-Explain what contract this guide accompanies.
+Explain what runtime, MCP, API, schema, or command contract this guide
+accompanies.
 
 ## Canonical Spec
 
-Identify the machine-readable contract file that acts as the source of truth.
+Identify the machine-readable contract file or generated schema that acts as
+the source of truth.
 
 ## Versioning
 
 Explain the versioning approach and compatibility expectations.
 
-## Auth
+## Access Model
 
-Summarize the authentication and authorization model.
+Summarize workspace permissions, process execution, authentication,
+authorization, or sandbox assumptions.
 
 ## Compatibility Notes
 
-Call out aliases, transitional routes, or deprecated behaviors if they still matter.
+Call out aliases, transitional names, deprecated fields, fallback behavior, or
+capability-level differences if they still matter.
 
-## Operational Caveats
+## Runtime Caveats
 
-Summarize rate limits, idempotency, retries, or rollout concerns.
+Summarize freshness, idempotency, retries, cache invalidation, latency,
+compatibility, or rollout concerns.
 
 ## Testing
 
