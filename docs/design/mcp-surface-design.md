@@ -27,6 +27,39 @@ coding, and invoke broad graph analysis only when intentionally exploring.
 Responses must label trust, freshness, scope, verification, and evidence so
 agents know when direct source verification or additional validation is needed.
 
+MCP is an interface adapter, not the presentation layer and not an application
+service. Each MCP handler validates transport input, calls one application use
+case, and delegates output construction to presenters.
+
+Tools, resources, and prompts are declared through registries. A registry
+definition owns the input schema, shared argument parser, use-case binding,
+presenter binding, budget policy, and capability policy.
+
+Shared argument parsers must handle repo paths, file paths, line/column pairs,
+booleans, enums, limits, payload modes, and usage context. Invalid input returns
+structured contract errors before any use case runs.
+
+MCP is also the primary cross-agent integration contract. Agent-specific
+plugins, skills, hooks, commands, steering files, rules, guidelines, extensions,
+and ACP packaging should be generated around MCP definitions, not implemented as
+parallel tool surfaces. The canonical integration guidance lives in
+[Coding agent integration design](coding-agent-integration-design.md).
+
+## Presentation Boundary
+
+Presenters own response consistency across every MCP resource and tool:
+
+- shared response envelope construction
+- metadata composition for freshness, capability, evidence, verification,
+  budgets, and truncation
+- warning, blocker, and error formatting
+- source section packing and stable ordering
+- retryable `next_action` mapping
+
+Use cases must return application result objects, not MCP envelopes. MCP
+handlers must not query SQLite, parse source, or assemble warnings/errors
+directly.
+
 ## MVP Resources
 
 - `repo:///overview`
@@ -35,6 +68,9 @@ agents know when direct source verification or additional validation is needed.
 
 These resources must be cheap, bounded, and backed by current snapshot metadata.
 They must not trigger broad graph analysis.
+`repo:///status` must expose cold, refreshing, fresh, stale, and degraded
+warm-up state, including queued work counts and indexing blockers where
+available.
 
 ## MVP Tools
 
@@ -57,11 +93,17 @@ tool.
 - `repo:///graph/communities`
 - `repo:///docs/overview`
 - `repo:///validation-surface`
+- `repo:///agent-integration-profile`
 - `repo:///attention/current`
 - `repo:///usage/gaps`
 - `symbol_context`
 - `callers`
 - `callees`
+- `check_markdown_document`
+- `check_markdown_set`
+- `plan_markdown_format`
+- `preview_markdown_format`
+- `apply_markdown_format`
 - `diagnostics_for_files`
 - `post_edit_feedback`
 - `run_nearest_tests`
@@ -103,8 +145,8 @@ agent request
 -> MCP schema validation
 -> runtime state and graph freshness check
 -> targeted graph/context/validation operation
--> blocker/warning metadata merge
--> compact response with optional source sections
+-> presentation layer metadata and warning/error composition
+-> compact response envelope with optional source sections
 ```
 
 ## Tool Budget Rules
@@ -124,6 +166,8 @@ agent request
 - [System architecture](../architecture/system-architecture.md)
 - [Runtime requirements](../requirements/runtime-requirements.md)
 - [Runtime contracts](../reference/runtime-contracts.md)
+- [Coding agent integration design](coding-agent-integration-design.md)
+- [Markdown document quality design](markdown-document-quality-design.md)
 - [Workspace safety contract](../reference/workspace-safety-contract.md)
 - [Attention layer design](attention-layer-design.md)
 - [Edit and validation loop design](edit-and-validation-loop-design.md)

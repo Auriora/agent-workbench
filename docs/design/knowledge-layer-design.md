@@ -50,8 +50,9 @@ markdown under a tracked docs/wiki directory is deferred until an explicit expor
 workflow is approved.
 
 Generated exports must be clearly marked as generated and should not be treated
-as source truth. Source files and repo config remain canonical; parser/LSP/tool
-output and executed tests are derived evidence tied to a snapshot.
+as source truth. Source files and repo config remain canonical; `tree-sitter`
+extraction, optional enrichment output, and executed tests are derived evidence
+tied to a snapshot.
 
 ## Query Surfaces
 

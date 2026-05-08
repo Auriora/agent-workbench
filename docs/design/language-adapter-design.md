@@ -20,10 +20,25 @@ gates, implementation order, and post-MVP infrastructure support.
 
 ## Design Summary
 
-Adapters convert workspace files and tool output into graph nodes, edges,
-unresolved references, diagnostics hints, test hints, and capability metadata.
-The runtime must distinguish semantic evidence from routing evidence so agents
-do not mistake useful context for proof.
+Adapters convert workspace files and optional tool output into graph nodes,
+edges, unresolved references, diagnostics hints, test hints, and capability
+metadata. The runtime must distinguish semantic evidence from routing evidence so
+agents do not mistake useful context for proof.
+
+The `tree-sitter` parse pipeline is the canonical extraction path for all
+supported code languages. Native AST and LSP outputs are optional enrichers only:
+they can add metadata and confidence context, but must not replace parser
+output for symbol or reference extraction.
+
+Adapters are infrastructure providers behind extraction ports. A syntax
+extractor parses files and emits an `ExtractionBatch` containing declarations,
+outlines, imports, unresolved references, diagnostics hints, test hints,
+provenance, confidence, and capability metadata. It must not resolve cross-file
+references, write graph rows, construct MCP responses, or decide attention
+items.
+
+Optional enrichers emit enrichment records against existing extracted entities.
+They do not become alternate primary parsers.
 
 ## Capability Levels
 
@@ -39,14 +54,14 @@ routing, freshness behavior, and degraded-mode reporting.
 
 | Area | Initial level | Backend direction |
 | --- | --- | --- |
-| Markdown/config | `resource_backed` | deterministic parsers, path/link extraction, project config discovery |
-| Python | `partial_semantic`, then `semantic` | Python AST or tree-sitter, Pyright/LSP, Ruff, pytest |
-| TypeScript/JavaScript | `partial_semantic`, then `semantic` | tree-sitter plus TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
-| C# | `partial_semantic`, then `semantic` | Roslyn or C# LSP, `.sln`/`.csproj`, NuGet and test project discovery |
+| Markdown/config | `resource_backed` | deterministic parsers, path/link extraction, project config discovery, documentation-quality structure checks |
+| Python | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Python AST enrichment, Pyright/LSP, Ruff, pytest |
+| TypeScript/JavaScript | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
+| C# | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional C# LSP, `.sln`/`.csproj`, NuGet and test project discovery |
 | CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser plus intrinsic resolver and source handler linking |
 | Go | `partial_semantic`, then `semantic` | Go parser, `gopls`, `go list`, `go test` |
-| C/C++ | `resource_backed`, then `partial_semantic` | tree-sitter, clangd/libclang when `compile_commands.json` exists |
-| Rust | `partial_semantic`, then `semantic` | tree-sitter or Rust parser, Cargo metadata, `rust-analyzer`, `cargo test` |
+| C/C++ | `resource_backed`, then `partial_semantic` | `tree-sitter` (mandatory), clangd/libclang when `compile_commands.json` exists |
+| Rust | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Rust parser/enrichment, Cargo metadata, `rust-analyzer`, `cargo test` |
 | SQL | `resource_backed`, then `partial_semantic` | dialect-aware parser, migration-tool integration, schema/table/column references |
 | Bash/Shell | `partial_semantic` | shell parser, ShellCheck, sourced-file and command/function references |
 | Terraform/HCL | `partial_semantic` | HCL parser, provider/module/resource/variable/output graph |
@@ -55,9 +70,9 @@ routing, freshness behavior, and degraded-mode reporting.
 | Kubernetes/Helm | `resource_backed`, then `partial_semantic` | Kubernetes YAML and Helm chart parsing, resource/service/config relationships |
 | Vue/Svelte | `partial_semantic`, then `semantic` | framework language services, SFC parsing, route/component/template links |
 | PowerShell | `partial_semantic` | PowerShell parser, script/function/module references |
-| Ruby/PHP | `resource_backed`, then `partial_semantic` | parser/LSP where project demand exists |
-| Swift/Kotlin/Dart | `resource_backed`, then `partial_semantic` | mobile/client parser or LSP adapters when relevant repos appear |
-| Java | `resource_backed`, then `partial_semantic` | Maven/Gradle and Java LSP support, deferred until last |
+| Ruby/PHP | `resource_backed`, then `partial_semantic` | `tree-sitter` parser, optional LSP where project demand exists |
+| Swift/Kotlin/Dart | `resource_backed`, then `partial_semantic` | `tree-sitter` parser, optional LSP adapters when relevant repos appear |
+| Java | `resource_backed`, then `partial_semantic` | `tree-sitter` parser plus Maven/Gradle, optional Java LSP support, deferred until last |
 
 ## Implementation Sequence
 
@@ -70,6 +85,7 @@ post-MVP unless reduced to resource-backed discovery fixtures.
 scan files
 -> detect language or infra type
 -> extract nodes, edges, and unresolved references
+-> normalize extraction result
 -> store graph/index rows
 -> resolve references
 -> query symbols/resources/references
@@ -87,6 +103,37 @@ After the MVP slice works, deepen support in this order:
 4. CloudFormation/SAM resource-backed discovery
 5. C# project/symbol discovery
 6. Go, C/C++, Rust, then the extended backlog
+
+## Adapter Roles
+
+- `SyntaxExtractor`: mandatory `tree-sitter` parser path for supported code
+  languages.
+- `ProjectModelProvider`: optional project/config model for imports, packages,
+  modules, or framework routing.
+- `SemanticEnricher`: optional AST/LSP/compiler/tool evidence attached to
+  existing extraction results.
+- `ImportPlanner`: post-MVP language-specific import maintenance planning.
+- `ValidationProvider`: discovers diagnostics, formatters, linters, and tests
+  for validation planning.
+
+Reference resolution remains outside these roles so every language feeds a
+common resolver and confidence policy.
+
+## Markdown Document Quality
+
+Markdown/config extraction and Markdown document quality are related but
+separate capabilities. Extraction emits routing evidence such as headings,
+links, document outlines, and config references. Document quality checks inspect
+the Markdown structure for authoring problems such as inconsistent numbering,
+skipped heading levels, broken links, frontmatter violations, and tables that
+are unreadable in plain text.
+
+The Markdown quality subsystem is defined in
+[Markdown document quality design](markdown-document-quality-design.md). It may
+reuse extracted outlines and links, but it must have its own parser-aware ports
+for structure checks, compliance policy, link resolution, and formatting
+planning. It must not be implemented as regex-only extraction or hidden inside
+the generic Markdown/config adapter.
 
 ## CloudFormation And SAM Adapter
 
@@ -139,7 +186,8 @@ handler strings.
 - diagnostics and nearest-test routing
 - cache freshness after add, modify, delete, rename, and config changes
 - cold/warm latency on representative repositories
-- degraded behavior when parser/LSP/tooling is missing or slow
+- degraded behavior when the primary parser or optional enrichers/tooling are
+  missing or slow
 
 ## Semantic Promotion Fixture Requirements
 
@@ -151,8 +199,8 @@ An adapter can move to `semantic` only when representative fixtures cover:
 - dynamic or unresolved references
 - stale index behavior
 - config changes that alter resolution
-- missing parser, LSP, compiler, or test tooling
-- parser/LSP timeout or crash
+- missing parser, enrichers, compiler, or test tooling
+- tree-sitter parser timeout or parser/enricher timeout or crash
 - validation planning and blocked validation states
 
 Mutating semantic refactors require operation-level gates in addition to adapter
@@ -167,3 +215,4 @@ signature, safe delete, or import mutation.
 - [Language capability matrix](../reference/language-capability-matrix.md)
 - [Runtime contracts](../reference/runtime-contracts.md)
 - [MVP proof matrix](../reference/mvp-proof-matrix.md)
+- [Markdown document quality design](markdown-document-quality-design.md)

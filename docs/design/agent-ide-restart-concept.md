@@ -31,6 +31,7 @@ Primary fanned-out docs:
 - [Runtime requirements](../requirements/runtime-requirements.md)
 - [Runtime contracts](../reference/runtime-contracts.md)
 - [Workspace safety contract](../reference/workspace-safety-contract.md)
+- [Layered runtime architecture](layered-runtime-architecture.md)
 - [Graph store design](graph-store-design.md)
 - [Language adapter design](language-adapter-design.md)
 - [MCP surface design](mcp-surface-design.md)
@@ -112,7 +113,8 @@ model, while preserving Agent IDE's stronger edit-loop and validation semantics.
   entry point
 
 The restart should borrow these reporting and audit concepts, but keep
-deterministic parser/LSP evidence as the default for coding workflows.
+`tree-sitter` as the mandatory deterministic parser evidence for coding
+workflows. LSP and AST are optional enrichers, never replacement parsers.
 
 ## Design Summary
 
@@ -135,9 +137,10 @@ community analysis should be explicit orientation/reporting operations.
 | --- | --- | --- | --- |
 | Repo runtime | Own one analyzed repo, coordinate indexing, watch changes, expose MCP | repo path, config, watcher events, client requests | resources, tool responses, runtime state |
 | Graph store | Persist files, symbols, edges, unresolved refs, snapshots, and freshness metadata | extraction results, resolution results, validation hints | SQLite rows, FTS indexes, query results |
-| Extractor registry | Dispatch parser/LSP/tree-sitter adapters by language | files, language config, parser backends | nodes, edges, unresolved references, diagnostics hints |
+| Extractor registry | Dispatch mandatory `tree-sitter` adapters by language; enrichers (AST/LSP) remain optional | files, language config, parser backends | nodes, edges, unresolved references, diagnostics hints |
 | Reference resolver | Resolve extracted references into graph edges | unresolved refs, imports, symbols, framework rules | resolved edges with provenance and confidence |
-| Workflow service | Build task context, blockers/warnings, and validation plans | query, symbols, files, graph store, safety state | entry points, source sections, validation plan |
+| Application use cases | Orchestrate status, scope, context, search, references, impact, edit, and validation operations | domain policies, graph/file/extraction ports, request models | application results for presenters |
+| Presentation layer | Assemble envelopes, metadata, warnings/errors, source sections, truncation, budgets, and stable ordering | application results, runtime contracts | agent-facing response payloads |
 | Knowledge layer | Produce post-MVP orientation and audit views | graph communities, edge provenance, docs, source metadata | repo report, god nodes, communities, surprising links, gaps |
 | Edit manager | Preview, apply, and drift-check bounded edits | workspace edits, file identities | preview tokens, applied edits |
 | Command runner | Plan commands in MVP and execute allowlisted commands post-MVP | touched files, graph impact, project commands | planned or executed validation evidence |
@@ -166,14 +169,17 @@ file/range lookup, incoming/outgoing edge traversal, and FTS over names,
 qualified names, signatures, docstrings, docs headings, and selected text.
 
 SQLite is an acceleration and evidence store, not canonical truth. Source files,
-parser/LSP responses, repo docs, and executed tests remain authoritative.
+`tree-sitter` extraction, repo docs, and executed tests remain authoritative.
+AST and LSP outputs can add evidence with provenance but never replace parser
+authority.
 
 ## Language Capability Model
 
 Every language adapter must report capability level:
 
 - `semantic`: symbols, references, diagnostics, test routing, freshness, and
-  fallback behavior are backed by parser/LSP/tool evidence.
+  fallback behavior are backed by `tree-sitter` extraction plus optional
+  enrichment evidence (AST/LSP/tooling).
 - `partial_semantic`: conservative declarations or config extraction exist, but
   references or flow claims need direct verification.
 - `resource_backed`: files and project signals are available for routing only.
@@ -204,13 +210,13 @@ Initial capability targets:
 | Area | Initial level | Backend direction |
 | --- | --- | --- |
 | Markdown/config | `resource_backed` | deterministic parsers, path/link extraction, project config discovery |
-| Python | `partial_semantic`, then `semantic` | Python AST or tree-sitter, Pyright/LSP, Ruff, pytest |
+| Python | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Python AST enrichment, Pyright/LSP, Ruff, pytest |
 | TypeScript/JavaScript | `partial_semantic`, then `semantic` | tree-sitter plus TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
-| C# | `partial_semantic`, then `semantic` | Roslyn or C# LSP, `.sln`/`.csproj`, NuGet and test project discovery |
+| C# | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), C# LSP as optional enrichment, `.sln`/`.csproj`, NuGet and test project discovery |
 | CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser plus intrinsic resolver and source handler linking |
 | Go | `partial_semantic`, then `semantic` | Go parser, `gopls`, `go list`, `go test` |
 | C/C++ | `resource_backed`, then `partial_semantic` | tree-sitter, clangd/libclang when `compile_commands.json` exists |
-| Rust | `partial_semantic`, then `semantic` | tree-sitter or Rust parser, Cargo metadata, `rust-analyzer`, `cargo test` |
+| Rust | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Rust parser/enrichment, Cargo metadata, `rust-analyzer`, `cargo test` |
 | SQL | `resource_backed`, then `partial_semantic` | dialect-aware parser, migration-tool integration, schema/table/column references |
 | Bash/Shell | `partial_semantic` | shell parser, ShellCheck, sourced-file and command/function references |
 | Terraform/HCL | `partial_semantic` | HCL parser, provider/module/resource/variable/output graph |
@@ -219,9 +225,9 @@ Initial capability targets:
 | Kubernetes/Helm | `resource_backed`, then `partial_semantic` | Kubernetes YAML and Helm chart parsing, resource/service/config relationships |
 | Vue/Svelte | `partial_semantic`, then `semantic` | framework language services, SFC parsing, route/component/template links |
 | PowerShell | `partial_semantic` | PowerShell parser, script/function/module references |
-| Ruby/PHP | `resource_backed`, then `partial_semantic` | parser/LSP where project demand exists |
-| Swift/Kotlin/Dart | `resource_backed`, then `partial_semantic` | mobile/client parser or LSP adapters when relevant repos appear |
-| Java | `resource_backed`, then `partial_semantic` | Maven/Gradle and Java LSP support, deferred until last |
+| Ruby/PHP | `resource_backed`, then `partial_semantic` | `tree-sitter` parser, optional LSP where project demand exists |
+| Swift/Kotlin/Dart | `resource_backed`, then `partial_semantic` | `tree-sitter` parser, optional LSP adapters when relevant repos appear |
+| Java | `resource_backed`, then `partial_semantic` | `tree-sitter` parser plus Maven/Gradle, optional Java LSP support, deferred until last |
 
 Backend promotion gates:
 
@@ -231,7 +237,7 @@ Backend promotion gates:
 - diagnostics and nearest-test routing
 - cache freshness after add, modify, delete, rename, and config changes
 - cold/warm latency on representative repositories
-- degraded behavior when parser/LSP/tooling is missing or slow
+- degraded behavior when primary parser or enrichers/tooling are missing or slow
 
 ## Language Implementation Plan
 
@@ -509,7 +515,7 @@ Every result should use the shared response envelope and enums in
 Every graph edge should carry:
 
 - `confidence`: `EXTRACTED`, `INFERRED`, or `AMBIGUOUS`
-- `provenance`: parser, LSP, import resolver, framework resolver, docs link,
+- `provenance`: `tree-sitter` parser, AST enrich, LSP enrich, import resolver, framework resolver, docs link,
   test relation, heuristic, semantic extraction
 - source range or explanation where available
 
@@ -598,8 +604,8 @@ TypeScript runtime
 
 Language adapters
   - TypeScript/JavaScript tree-sitter and language-service integration
-  - Python parser/LSP/tooling integration
-  - C# Roslyn/LSP integration
+  - Python tree-sitter extraction with optional AST/LSP/tooling enrichment
+  - C# tree-sitter extraction with optional LSP enrichment
   - CloudFormation/SAM infra adapter
   - future Go, C/C++, Rust, SQL, shell, infra, frontend, and other adapters
 
@@ -641,8 +647,8 @@ rename, change signature, safe delete, and broad graph exploration tools.
 
 ## Open Questions
 
-- Should tree-sitter be the primary semantic substrate, with LSP as enrichment,
-  or should LSP be primary for languages where it is reliable?
+- Decision: `tree-sitter` is the mandatory primary extraction path.
+  AST and LSP are optional enrichers and must never replace parser ownership.
 - When graph reports are added, should they remain generated cache artifacts or
   have an explicit tracked export workflow?
 - What is the minimum supported MCP/client surface for Codex, Claude Code, Kiro,

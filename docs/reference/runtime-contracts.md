@@ -188,6 +188,15 @@ Allowed MVP kinds:
 - `path_refused`
 - `command_refused`
 
+Post-MVP documentation-quality kinds:
+
+- `markdown_heading_level`
+- `markdown_numbering`
+- `markdown_table_readability`
+- `markdown_frontmatter`
+- `markdown_link`
+- `markdown_format_preview`
+
 ## Edit Token Shape
 
 Preview/apply tokens must include enough identity to reject stale mutations.

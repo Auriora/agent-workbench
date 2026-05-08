@@ -17,8 +17,8 @@ draft target-state requirements until implementation evidence exists.
 
 These requirements cover the repo-scoped runtime, graph/index storage, adapter
 capability reporting, MCP surface, context building, bounded edit management,
-validation planning, trust metadata, performance behavior, workspace safety, and
-MVP scope.
+validation planning, trust metadata, performance behavior, workspace safety,
+coding-agent integration, Markdown document quality, and MVP scope.
 
 ## Audiences
 
@@ -47,6 +47,11 @@ workflow designers.
 | REQ-016 | The MVP must include Markdown/config routing plus one partial-semantic language path; TypeScript/JavaScript, C#, and CloudFormation/SAM are post-MVP unless scoped as resource-backed fixtures. | MVP | Spec package, MVP proof matrix | MVP acceptance tests |
 | REQ-017 | MVP tool surfaces must fit the contract MVP: status, scope, overview, context, symbol search, references, bounded impact, preview/apply, and validation plan. | MCP surface | Runtime contracts, MCP design | MCP contract tests |
 | REQ-018 | Workspace safety must cover path containment, generated/vendor write policy, command planning/execution gates, environment handling, redaction, and generated writes. | Runtime, MCP, edit manager, command runner | Workspace safety contract | Negative safety tests |
+| REQ-019 | MCP must be the authoritative executable integration surface for coding agents. Agent-specific plugins, hooks, commands, skills, rules, steering, guidelines, extensions, and ACP packaging must be generated or configured around MCP definitions, not implemented as parallel runtime behavior. | Agent integration | Coding agent integration design, MCP design | Integration contract tests |
+| REQ-020 | The runtime must define common integration specs for instruction packs, skill packs, hook intents, command specs, MCP binding specs, integration manifests, and agent capability metadata before adding vendor-specific emitters. | Agent integration | Coding agent integration design, layered architecture | Architecture boundary tests |
+| REQ-021 | Vendor-specific integration emitters must not depend on SQLite, tree-sitter, filesystem watchers, process execution, or application/domain internals. They may depend on runtime contracts, MCP definitions, and common integration specs. | Agent integration | Layered architecture | Dependency boundary tests |
+| REQ-022 | Markdown document quality must distinguish parser-backed structure checks, repository compliance linting, and readability formatting. Formatting must be planned or previewed before mutation. | Documentation quality | Markdown document quality design | Documentation fixture tests |
+| REQ-023 | Markdown readability formatting must preserve rendered meaning, protect fenced code by default, explain non-trivial rewrites, and use the bounded edit preview/apply safety path. | Documentation quality, edit manager | Markdown document quality design, edit and validation design | Formatter preview and stale-apply tests |
 
 ## Configuration Requirements
 
@@ -56,6 +61,8 @@ workflow designers.
 | Adapter registry config | adapter enablement and capability overrides | Controls language and infra adapters without changing core contracts. | Adapter registration tests |
 | Validation config | command discovery and command budgets | Controls diagnostics, formatting, lint, and test planning. Execution requires post-MVP allowlisting. | Validation planner tests |
 | MCP schema config | resource and tool schema generation | Keeps agent-facing contracts stable and machine-readable. | Schema generation tests |
+| Agent integration config | target agent profiles and artifact output policy | Controls generated instruction, skill, hook, command, plugin, extension, and ACP-aware artifacts without changing runtime behavior. | Integration artifact tests |
+| Documentation policy config | frontmatter fields, heading policy, numbering policy, link policy, table readability budget, formatter policy | Controls Markdown structure checks, compliance linting, and readability formatting without hard-coding repo conventions. | Documentation policy tests |
 
 ## Operational Requirements
 
@@ -69,6 +76,10 @@ workflow designers.
 - Command execution is plan-only by default until the command runner and
   allowlist policy are implemented.
 - Generated reports and usage analytics are post-MVP.
+- Agent-specific plugin/extension packaging is post-MVP unless a
+  fixture-backed integration test requires it.
+- Markdown formatting must not silently mutate documentation; it is preview/apply
+  only.
 
 ## Non-Requirements
 
@@ -81,6 +92,10 @@ workflow designers.
 - The MVP does not run validation commands by default.
 - Advanced refactors and coverage reporting are deferred until foundational
   semantic evidence is reliable.
+- The MVP does not need to package plugins/extensions for every supported
+  coding agent.
+- The MVP does not need prose rewriting or cross-document semantic contradiction
+  detection.
 
 ## Evidence
 
@@ -99,5 +114,7 @@ workflow designers.
 - [Workspace safety contract](../reference/workspace-safety-contract.md)
 - [MVP proof matrix](../reference/mvp-proof-matrix.md)
 - [MCP surface design](../design/mcp-surface-design.md)
+- [Coding agent integration design](../design/coding-agent-integration-design.md)
+- [Markdown document quality design](../design/markdown-document-quality-design.md)
 - [Language adapter design](../design/language-adapter-design.md)
 - [MVP spec](../specs/001-agent-ide-runtime/spec.md)

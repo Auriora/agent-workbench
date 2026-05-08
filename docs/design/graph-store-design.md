@@ -22,12 +22,18 @@ behavior, and performance constraints for graph-backed runtime queries.
 The graph store is an acceleration and evidence store. In the MVP, it supports
 status, scope, context, symbol search, references, bounded impact, and
 validation planning. It is not the canonical source of truth; source files and
-repo config are canonical, while parser/LSP/tool output and executed tests are
-derived evidence tied to a snapshot.
+repo config are canonical, while `tree-sitter` extraction, optional enrichment
+output, and executed tests are derived evidence tied to a snapshot.
 
 SQLite with FTS is the initial storage substrate because it supports local-first
 deployment, transactional updates, predictable query plans, and simple
 distribution.
+
+The graph store is an infrastructure adapter behind graph ports. Application
+use cases depend on graph read/write ports and graph read models, not SQLite
+tables, SQL, or FTS implementation details. Language extractors never write
+SQLite rows directly; they emit extraction batches that ingestion use cases
+validate and persist through graph ports.
 
 ## Components And Responsibilities
 
@@ -40,6 +46,23 @@ distribution.
 | Reference store | Retain unresolved references for later resolution and caveats | adapter output | `unresolved_refs` rows |
 | Snapshot manager | Track repo/config identity and freshness | sync events, config | `snapshots` rows |
 | FTS indexer | Index names, qualified names, signatures, and selected non-secret text | selected graph rows | FTS tables and search results |
+
+## Ports And Read Models
+
+MVP graph ports:
+
+- `GraphWritePort`: persists files, nodes, edges, unresolved refs, and FTS
+  content through transactional updates.
+- `GraphQueryPort`: supports exact lookup, FTS lookup, file/range lookup,
+  incoming/outgoing edges, and bounded traversal.
+- `SnapshotPort`: reports and updates cold, refreshing, stale, and fresh
+  snapshot state.
+- `GraphTransactionPort`: commits stale cleanup, extraction writes, reference
+  resolution writes, FTS refresh, and snapshot updates atomically.
+
+Application-facing read models must use domain vocabulary such as file identity,
+source range, node, edge, evidence, confidence, and freshness. They must not
+expose SQL row shapes.
 
 ## Data And Control Flow
 
@@ -133,6 +156,9 @@ traversal-depth caps.
 - Corrupt or incompatible databases must be rebuilt from source.
 - SQLite rebuilds must use locks, temporary databases, validation, and atomic
   replacement.
+- Graph writes must be serialized per repository through `GraphTransactionPort`.
+- Reads may continue against the last valid snapshot while warm-up or
+  incremental refresh work is running.
 - Watcher-clean snapshots are the freshness authority for hot reads.
 - Stale rows must be labeled in downstream MCP responses.
 - A watcher-clean snapshot means the event queue is drained, no refresh is in
@@ -155,11 +181,12 @@ store infrastructure environment variable names rather than values.
 ## Observability And Operations
 
 The runtime should expose graph size, schema version, freshness, indexing
-errors, adapter coverage, skipped roots, rebuild status, and query budget
-violations.
+errors, adapter coverage, skipped roots, rebuild status, warm-up phase, queue
+depths, active worker counts, and query budget violations.
 
-It should also expose stale row cleanup counts, watcher overflow recovery, FTS
-refresh failures, and blocked query-budget violations.
+It should also expose cache hit/miss counters where useful, stale row cleanup
+counts, watcher overflow recovery, FTS refresh failures, and blocked
+query-budget violations.
 
 ## Tradeoffs And Constraints
 

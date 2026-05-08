@@ -25,6 +25,14 @@ MVP edits must be previewable and drift-checked. Rollback, command execution,
 import mutation, and semantic refactors are post-MVP unless fixture-proven.
 Validation should be planned from touched files, graph impact, diagnostics, and
 known test hints rather than broad scans by default.
+Documentation validation should also plan Markdown structure, compliance, link,
+and readability checks when Markdown files or documentation policy files are
+touched.
+
+Edit and validation behavior is implemented through named use cases and
+policies, not a shared workflow service. `PreviewWorkspaceEdit`,
+`ApplyWorkspaceEdit`, and `PlanVerification` coordinate domain policies and
+ports; presenters convert their results into MCP envelopes.
 
 ## Coding Workflow
 
@@ -71,9 +79,26 @@ Validation planning should consider:
 - formatting and import cleanup
 - capability level and degraded tooling
 - public/exported API surface
+- Markdown heading/list/table/link/frontmatter quality for touched
+  documentation
 
 MVP validation is plan-only by default. Command execution requires a post-MVP
 allowlist and command runner safety contract.
+
+Validation architecture is split from the start:
+
+- validation discovery identifies available diagnostics, formatters, linters,
+  and tests
+- validation planning chooses commands/checks and blocked reasons
+- command safety policy classifies whether execution is allowed
+- validation execution and result capture are post-MVP
+- validation presentation reports planned, blocked, done, or not-applicable
+  status consistently
+
+Markdown formatting is handled through the same preview/apply safety path as
+code edits. A formatter may plan or preview improvements for plain-text
+readability, such as table alignment or table-to-list rewrites, but it must not
+mutate files without a preview token and stale-preview checks.
 
 ## Fallback Evidence
 
@@ -99,6 +124,8 @@ analytics are post-MVP.
 - Rollback unless bounded token storage is fixture-proven.
 - Import maintenance and formatting mutation unless previewed and explicitly
   applied.
+- Refactor planning interfaces may exist before implementation; refactor
+  semantics must not live in the edit apply path.
 - Broad quick fixes and intention actions until each action has preconditions,
   preview, and validation.
 - Advanced refactors such as pull up, push down, extract interface, broad move,
@@ -115,3 +142,4 @@ analytics are post-MVP.
 - [Runtime contracts](../reference/runtime-contracts.md)
 - [Workspace safety contract](../reference/workspace-safety-contract.md)
 - [MVP proof matrix](../reference/mvp-proof-matrix.md)
+- [Markdown document quality design](markdown-document-quality-design.md)
