@@ -14,7 +14,7 @@ export interface FileIdentity {
   indexed_at?: string;
 }
 
-export interface GraphNode {
+export interface GraphNodeReadModel {
   id: string;
   kind: string;
   name: string;
@@ -27,7 +27,11 @@ export interface GraphNode {
   metadata: Record<string, unknown>;
 }
 
-export interface GraphEdge {
+export type GraphNode = GraphNodeReadModel;
+
+export interface GraphNodeWriteModel extends GraphNodeReadModel {}
+
+export interface GraphEdgeReadModel {
   id: string;
   source_node_id: string;
   target_node_id?: string;
@@ -38,7 +42,11 @@ export interface GraphEdge {
   metadata: Record<string, unknown>;
 }
 
-export interface UnresolvedReference {
+export type GraphEdge = GraphEdgeReadModel;
+
+export interface GraphEdgeWriteModel extends GraphEdgeReadModel {}
+
+export interface UnresolvedReferenceReadModel {
   id: string;
   source_node_id: string;
   source_file_path: string;
@@ -48,7 +56,11 @@ export interface UnresolvedReference {
   candidate_metadata: Record<string, unknown>;
 }
 
-export interface ResolvedReference {
+export type UnresolvedReference = UnresolvedReferenceReadModel;
+
+export interface UnresolvedReferenceWriteModel extends UnresolvedReferenceReadModel {}
+
+export interface ResolvedReferenceReadModel {
   source_node_id: string;
   target_node_id: string;
   target_file_path: string;
@@ -56,6 +68,8 @@ export interface ResolvedReference {
   confidence: number;
   provenance: string;
 }
+
+export type ResolvedReference = ResolvedReferenceReadModel;
 
 export interface GraphTraversalRequest {
   start_node_ids: readonly string[];
@@ -90,9 +104,9 @@ export interface ExtractionBatch {
   extractor_id: string;
   language: string;
   file_identity: FileIdentity;
-  nodes: readonly GraphNode[];
-  edges: readonly GraphEdge[];
-  unresolved_references: readonly UnresolvedReference[];
+  nodes: readonly GraphNodeWriteModel[];
+  edges: readonly GraphEdgeWriteModel[];
+  unresolved_references: readonly UnresolvedReferenceWriteModel[];
   diagnostics_hints: readonly Record<string, unknown>[];
   test_hints: readonly Record<string, unknown>[];
   extracted_at: string;

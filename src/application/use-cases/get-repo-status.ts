@@ -16,7 +16,9 @@ export type RuntimeStatusResult = {
   meta: ResponseMetadata;
 };
 
-export function getColdRepoStatus(repoRoot: string): RuntimeStatusResult {
+export type GetRepoStatusResult = RuntimeStatusResult;
+
+export function getColdRepoStatus(repoRoot: string): GetRepoStatusResult {
   return {
     status: {
       repo_root: repoRoot,
