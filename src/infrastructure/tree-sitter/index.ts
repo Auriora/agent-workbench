@@ -1,1 +1,1 @@
-export * from "./python-parser";
+export * from "./python-parser.js";

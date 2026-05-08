@@ -95,6 +95,25 @@ documentation, prefer updating existing design sections over adding duplicate
 notes. Preserve the distinction between accepted direction, draft concepts, and
 open questions.
 
+For coding work, prefer delegating bounded implementation chunks to
+GPT-5.3-Codex-Spark sub-agents where practical. Give each sub-agent explicit
+file or module ownership, keep write sets disjoint, and state that other agents
+may be editing the codebase in parallel. Use sub-agents for implementation,
+focused refactors, architecture-boundary tests, and validation runs when the
+work can proceed independently. Keep tightly coupled integration decisions,
+scope tradeoffs, and final review in the parent agent.
+
+When delegating, ask sub-agents to:
+
+- avoid reverting changes they did not make
+- follow the layered architecture boundaries
+- keep MCP adapters thin
+- avoid adding parser, semantic, validation, or command-execution fallbacks
+- report files changed, commands run, validation status, and limitations
+
+Run `pnpm typecheck` and targeted or full `pnpm test` after implementation
+chunks unless the user explicitly asks to skip validation.
+
 The first language implementation path is Python using tree-sitter. Do not add
 AST, LSP, Pyright, Ruff, pytest, or other alternate parser/semantic fallbacks
 until a design document or fixture-backed test justifies the specific

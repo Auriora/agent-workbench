@@ -20,47 +20,47 @@ const repositoryRoot = path.resolve(testDir, "..", "..");
 const rules = {
   mcpSdk: {
     name: "MCP SDK",
-    check: (specifier) => specifier.startsWith("@modelcontextprotocol/sdk/")
+    check: (specifier: string) => specifier.startsWith("@modelcontextprotocol/sdk/")
   },
   betterSqlite3: {
     name: "better-sqlite3",
-    check: (specifier) => specifier.startsWith("better-sqlite3")
+    check: (specifier: string) => specifier.startsWith("better-sqlite3")
   },
   treeSitter: {
     name: "tree-sitter",
-    check: (specifier) => specifier.startsWith("tree-sitter")
+    check: (specifier: string) => specifier.startsWith("tree-sitter")
   },
   nodeFs: {
     name: "node:fs",
-    check: (specifier) => specifier.startsWith("node:fs")
+    check: (specifier: string) => specifier.startsWith("node:fs")
   },
   nodePath: {
     name: "node:path",
-    check: (specifier) => specifier.startsWith("node:path")
+    check: (specifier: string) => specifier.startsWith("node:path")
   },
   nodeChildProcess: {
     name: "node:child_process",
-    check: (specifier) => specifier.startsWith("node:child_process")
+    check: (specifier: string) => specifier.startsWith("node:child_process")
   },
   interfaceAdapterInfrastructure: {
     name: "src/infrastructure/interface-adapters",
-    check: (specifier) => specifier.includes("infrastructure/interface-adapters")
+    check: (specifier: string) => specifier.includes("infrastructure/interface-adapters")
   },
   concreteInfrastructure: {
     name: "src/infrastructure",
-    check: (specifier) => /^\.+\//.test(specifier) && /\/infrastructure\//.test(specifier)
+    check: (specifier: string) => /^\.+\//.test(specifier) && /\/infrastructure\//.test(specifier)
   },
   sqliteInfrastructure: {
     name: "src/infrastructure/sqlite",
-    check: (specifier) => specifier.includes("infrastructure/sqlite")
+    check: (specifier: string) => specifier.includes("infrastructure/sqlite")
   },
   treeSitterInfrastructure: {
     name: "src/infrastructure/tree-sitter",
-    check: (specifier) => specifier.includes("infrastructure/tree-sitter")
+    check: (specifier: string) => specifier.includes("infrastructure/tree-sitter")
   },
   filesystemInfrastructure: {
     name: "src/infrastructure/filesystem",
-    check: (specifier) => specifier.includes("infrastructure/filesystem")
+    check: (specifier: string) => specifier.includes("infrastructure/filesystem")
   }
 };
 
@@ -150,8 +150,8 @@ function listTypeScriptFiles(directory: string): string[] {
 }
 
 function extractModuleSpecifiers(fileContents: string): string[] {
-  const lines = fileContents.split(/\r?\n/);
-  const importLines = lines.filter((line) => line.trim().length > 0);
+  const lines: string[] = fileContents.split(/\r?\n/);
+  const importLines = lines.filter((line: string) => line.trim().length > 0);
   const specifiers: string[] = [];
   const importFrom = /^\s*(?:import|export)\s+[^"']*?\s+from\s+["']([^"']+)["']/;
   const importBare = /^\s*import\s+["']([^"']+)["']/;
@@ -163,19 +163,19 @@ function extractModuleSpecifiers(fileContents: string): string[] {
       continue;
     }
 
-    const [, fromMatch] = trimmed.match(importFrom) ?? [];
+    const [, fromMatch] = trimmed.match(importFrom) as RegExpMatchArray | null ?? [];
     if (fromMatch) {
       specifiers.push(fromMatch);
       continue;
     }
 
-    const [, bareMatch] = trimmed.match(importBare) ?? [];
+    const [, bareMatch] = trimmed.match(importBare) as RegExpMatchArray | null ?? [];
     if (bareMatch) {
       specifiers.push(bareMatch);
       continue;
     }
 
-    const [, dynamicMatch] = trimmed.match(importDynamic) ?? [];
+    const [, dynamicMatch] = trimmed.match(importDynamic) as RegExpMatchArray | null ?? [];
     if (dynamicMatch) {
       specifiers.push(dynamicMatch);
     }

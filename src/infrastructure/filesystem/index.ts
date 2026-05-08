@@ -1,1 +1,1 @@
-export * from "./workspace-safety";
+export * from "./workspace-safety.js";

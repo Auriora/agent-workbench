@@ -1,11 +1,33 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 import {
+  applicationContracts,
+  domainContracts,
+  presentationContracts,
   capabilityLevelSchema,
   CONTRACT_VERSION,
   makeEnvelope,
   responseEnvelopeSchema
 } from "../../src/contracts/index.js";
+import { capabilityLevelSchema as domainCapabilityLevelSchema } from "../../src/contracts/domain-contracts.js";
+
+describe("runtime contract categories", () => {
+  it("re-export canonical contracts by category", () => {
+    expect(applicationContracts.responseMetadataSchema).toBeDefined();
+    expect(domainContracts.capabilityLevelSchema).toBeDefined();
+    expect(domainContracts.capabilityLevelSchema).toBe(capabilityLevelSchema);
+    expect(presentationContracts.attentionItemSchema).toBeDefined();
+  });
+
+  it("keeps capability levels canonical in the domain contracts", () => {
+    expect(domainContracts.capabilityLevelSchema.parse("partial_semantic")).toBe(
+      "partial_semantic"
+    );
+    expect(domainContracts.capabilityLevelSchema.parse("unsupported")).toBe("unsupported");
+    expect(() => domainCapabilityLevelSchema.parse("resource_only")).toThrow();
+    expect(() => domainCapabilityLevelSchema.parse("routing_evidence")).toThrow();
+  });
+});
 
 describe("runtime contracts", () => {
   it("accepts only canonical capability levels", () => {

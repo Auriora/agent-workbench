@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { EditToken } from "../contracts/index.js";
+import type { EditToken } from "../../contracts/index.js";
 
 export function sha256Text(value: string): string {
   return `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`;

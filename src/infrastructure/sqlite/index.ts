@@ -1,1 +1,1 @@
-export * from "./graph-store";
+export * from "./graph-store.js";
