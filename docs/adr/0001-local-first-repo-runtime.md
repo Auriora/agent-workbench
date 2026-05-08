@@ -1,10 +1,10 @@
 ---
 title: Use a local-first repo runtime
 doc_type: adr
-status: draft
+status: accepted
 owner: platform
-last_reviewed: 2026-05-07
-decision_date:
+last_reviewed: 2026-05-08
+decision_date: 2026-05-08
 deciders:
   - platform
 supersedes:
@@ -15,7 +15,7 @@ superseded_by:
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 

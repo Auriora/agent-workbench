@@ -73,7 +73,13 @@ export const attentionKindSchema = z.enum([
   "low_confidence",
   "validation_blocked",
   "path_refused",
-  "command_refused"
+  "command_refused",
+  "markdown_heading_level",
+  "markdown_numbering",
+  "markdown_table_readability",
+  "markdown_frontmatter",
+  "markdown_link",
+  "markdown_format_preview"
 ]);
 export type AttentionKind = z.infer<typeof attentionKindSchema>;
 
@@ -181,6 +187,108 @@ export type ResponseEnvelope<T> = {
   warnings: AttentionItem[];
   errors: RuntimeError[];
 };
+
+export const agentIntegrationSurfaceSchema = z.enum([
+  "mcp",
+  "instructions",
+  "skills",
+  "hooks",
+  "commands",
+  "plugins",
+  "extensions",
+  "subagents",
+  "acp"
+]);
+export type AgentIntegrationSurface = z.infer<typeof agentIntegrationSurfaceSchema>;
+
+export const agentTargetSchema = z.enum([
+  "codex",
+  "claude_code",
+  "kiro",
+  "augment",
+  "gemini",
+  "junie",
+  "generic"
+]);
+export type AgentTarget = z.infer<typeof agentTargetSchema>;
+
+export const integrationArtifactSchema = z.object({
+  target_agent: agentTargetSchema,
+  surface: agentIntegrationSurfaceSchema,
+  path: z.string().optional(),
+  status: z.enum(["supported", "unsupported", "deferred"]),
+  provenance: z.string(),
+  regeneration_safe: z.boolean(),
+  notes: z.array(z.string()).default([])
+});
+export type IntegrationArtifact = z.infer<typeof integrationArtifactSchema>;
+
+export const integrationProfileSchema = z.object({
+  runtime_version: z.string(),
+  target_agents: z.array(agentTargetSchema),
+  mcp_bindings: z.array(
+    z.object({
+      name: z.string(),
+      kind: z.enum(["tool", "resource", "prompt"]),
+      capability_class: toolCapabilityClassSchema
+    })
+  ),
+  artifacts: z.array(integrationArtifactSchema),
+  unsupported_surfaces: z.array(
+    z.object({
+      target_agent: agentTargetSchema,
+      surface: agentIntegrationSurfaceSchema,
+      reason: z.string()
+    })
+  )
+});
+export type IntegrationProfile = z.infer<typeof integrationProfileSchema>;
+
+export const markdownQualityCategorySchema = z.enum([
+  "heading_structure",
+  "numbering",
+  "table_readability",
+  "frontmatter",
+  "link",
+  "formatting"
+]);
+export type MarkdownQualityCategory = z.infer<typeof markdownQualityCategorySchema>;
+
+export const markdownQualityFindingSchema = z.object({
+  category: markdownQualityCategorySchema,
+  severity: attentionSeveritySchema,
+  code: z.string(),
+  path: z.string(),
+  start_line: z.number().int().positive(),
+  start_column: z.number().int().nonnegative(),
+  end_line: z.number().int().positive(),
+  end_column: z.number().int().nonnegative(),
+  message: z.string(),
+  suggested_action: z.string().optional(),
+  evidence_kinds: z.array(evidenceKindSchema)
+});
+export type MarkdownQualityFinding = z.infer<typeof markdownQualityFindingSchema>;
+
+export const markdownFormatStrategySchema = z.enum([
+  "align_table",
+  "split_table",
+  "table_to_definition_list",
+  "renumber_list",
+  "frontmatter_fix",
+  "preserve"
+]);
+export type MarkdownFormatStrategy = z.infer<typeof markdownFormatStrategySchema>;
+
+export const markdownFormatPlanSchema = z.object({
+  path: z.string(),
+  strategy: markdownFormatStrategySchema,
+  rationale: z.string(),
+  preserves_rendered_meaning: z.boolean(),
+  requires_preview: z.literal(true),
+  findings: z.array(markdownQualityFindingSchema),
+  preview_token: z.string().optional()
+});
+export type MarkdownFormatPlan = z.infer<typeof markdownFormatPlanSchema>;
 
 export function makeEnvelope<T>(input: {
   data: T;

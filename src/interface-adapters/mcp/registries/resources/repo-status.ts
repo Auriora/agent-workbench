@@ -1,0 +1,31 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { getColdRepoStatus } from "../../../../application/use-cases/get-repo-status.js";
+import { buildColdStatusEnvelope } from "../../../../presentation/status-presenter.js";
+import type { McpResourceDeclaration } from "../index.js";
+import { parseRepoStatusArguments } from "../../arguments/repo-status.js";
+
+export const repoStatusResource: McpResourceDeclaration = {
+  kind: "resource",
+  name: "status",
+  uri: "repo:///status",
+  register(server: McpServer, context) {
+    server.resource("status", "repo:///status", async (request: unknown) => {
+      const args = parseRepoStatusArguments(
+        typeof request === "object" && request !== null ? request : undefined
+      );
+      const repoRoot = args.repo_root ?? context.repoRoot;
+      const result = getColdRepoStatus(repoRoot);
+      const envelope = buildColdStatusEnvelope(result);
+
+      return {
+        contents: [
+          {
+            uri: "repo:///status",
+            mimeType: "application/json",
+            text: JSON.stringify(envelope, null, 2)
+          }
+        ]
+      };
+    });
+  }
+};

@@ -257,7 +257,7 @@ Presenter tests should cover golden response shape before MCP transport wiring.
 | Preview/apply | `PreviewWorkspaceEdit`, `ApplyWorkspaceEdit` | workspace safety, freshness, edit drift policy | workspace files, preview store |
 | Verification plan | `PlanVerification` | validation policy, command safety policy | validation catalog, command discovery |
 | Refactors | future refactor use cases | refactor preconditions, import planning, operation gates | graph query, workspace files |
-| Markdown document quality | `CheckMarkdownDocument`, `CheckMarkdownSet`, `PlanMarkdownFormat`, `PreviewMarkdownFormat`, `ApplyMarkdownFormat` | documentation policy, readability policy, formatter safety | markdown parser, link resolver, edit preview store |
+| Markdown document quality | post-MVP `CheckMarkdownDocument`, `CheckMarkdownSet`, `PlanMarkdownFormat`, `PreviewMarkdownFormat`, `ApplyMarkdownFormat` | documentation policy, readability policy, formatter safety | markdown parser, link resolver, edit preview store |
 | Reports | future reporting use cases | report caveat and redaction policies | graph query, report store |
 | Coding-agent integrations | `DescribeIntegrationProfile`, future artifact generation use cases | integration capability, provenance, regeneration safety | integration emitters, config writers |
 

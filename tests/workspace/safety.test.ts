@@ -2,7 +2,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { redactSecretLikeText, resolveWorkspacePath } from "../../src/workspace/safety.js";
+import {
+  redactSecretLikeText,
+  resolveWorkspacePath
+} from "../../src/infrastructure/filesystem/workspace-safety.js";
 
 describe("workspace safety", () => {
   let repoRoot: string;

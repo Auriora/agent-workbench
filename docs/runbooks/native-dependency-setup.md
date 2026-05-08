@@ -46,8 +46,8 @@ Common failure signatures:
 | --- | --- | --- | --- |
 | Package scripts | `package.json` `rebuild:native` | Rebuilds tree-sitter native bindings with `CXXFLAGS=-std=c++20`. | `pnpm rebuild:native` exits successfully. |
 | Approved build scripts | `package.json` `pnpm.onlyBuiltDependencies` | Allows known native packages to run install scripts. | `pnpm install` does not report unapproved native scripts for listed packages. |
-| Python parser adapter | `src/adapters/python/parser.ts` | Uses `tree-sitter` and `tree-sitter-python`. | `pnpm test -- tests/adapters/python-parser.test.ts` passes. |
-| SQLite graph store | `src/graph/store.ts` | Uses `better-sqlite3` native bindings. | `pnpm test -- tests/graph/store.test.ts` passes. |
+| Python parser adapter | `src/infrastructure/tree-sitter/python-parser.ts` | Uses `tree-sitter` and `tree-sitter-python`. | `pnpm test -- tests/adapters/python-parser.test.ts` passes. |
+| SQLite graph store | `src/infrastructure/sqlite/graph-store.ts` | Uses `better-sqlite3` native bindings. | `pnpm test -- tests/graph/store.test.ts` passes. |
 
 ## Procedure
 

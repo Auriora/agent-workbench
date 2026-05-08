@@ -17,6 +17,10 @@ Markdown quality is not just lint compliance. The runtime should also detect
 structural consistency issues and offer formatting that improves text-only
 readability without damaging semantic content.
 
+Executable Markdown quality tools are post-MVP. MVP architecture work defines
+contracts, ports, fixture shape, and preview/apply safety requirements so the
+capability can be added without changing the runtime layering.
+
 ## Scope
 
 This design covers Markdown documents in repo documentation, specs, ADRs,

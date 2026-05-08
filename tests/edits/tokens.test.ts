@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createPreviewToken, sha256Text } from "../../src/edits/tokens.js";
+import { createPreviewToken, sha256Text } from "../../src/application/use-cases/preview-edit-token.js";
 
 describe("edit preview tokens", () => {
   it("captures base and after hashes without mutating files", () => {

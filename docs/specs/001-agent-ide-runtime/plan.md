@@ -39,8 +39,9 @@ are not allowed.
   instructions, hooks, commands, plugins, extensions, and ACP-aware artifacts
   are generated or configured around common integration specs.
 - **Documentation Quality**: Markdown structure checks, compliance linting, and
-  readability formatting are separate parser-backed capabilities; formatter
-  mutation uses preview/apply.
+  readability formatting are architecture-defined post-MVP executable
+  capabilities; contracts and fixture shape are defined now, and formatter
+  mutation must use preview/apply when implemented.
 - **Performance Goals**: Hot-path tools use targeted indexed queries with
   explicit row, traversal, source-byte, and timeout budgets.
 - **Constraints**: Source files and repo config remain canonical; commands are
@@ -126,7 +127,8 @@ named use cases and policies rather than a generic coordination service.
 10. Define common coding-agent integration profiles and keep vendor-specific
    emitters outside core application/domain behavior.
 11. Define Markdown document quality ports, policies, checker result contracts,
-   and formatter preview/apply behavior.
+   and formatter preview/apply behavior as post-MVP executable capability
+   foundations.
 12. Instrument runtime boundaries with OTEL and validate architecture
    boundaries, cache invalidation, warm-up, concurrency, query budgets,
    degraded modes, safety negatives, and golden responses.
@@ -189,9 +191,10 @@ of the minimum acceptance gate for cache invalidation, warm-up, and concurrency.
 Integration boundary checks from
 [Coding agent integration design](../../design/coding-agent-integration-design.md)
 are part of the acceptance gate before vendor-specific artifacts are generated.
-Markdown document quality checks from
+Markdown document quality contract checks from
 [Markdown document quality design](../../design/markdown-document-quality-design.md)
-are part of the acceptance gate before formatter mutation is enabled.
+are part of the acceptance gate before formatter mutation is enabled; executable
+Markdown tools remain post-MVP unless explicitly promoted.
 
 ## Complexity Tracking
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractPythonSymbols } from "../../src/adapters/python/parser.js";
+import { extractPythonSymbols } from "../../src/infrastructure/tree-sitter/python-parser.js";
 
 describe("python tree-sitter adapter", () => {
   it("extracts classes and functions without alternate parser fallbacks", () => {

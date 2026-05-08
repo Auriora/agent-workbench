@@ -50,8 +50,8 @@ workflow designers.
 | REQ-019 | MCP must be the authoritative executable integration surface for coding agents. Agent-specific plugins, hooks, commands, skills, rules, steering, guidelines, extensions, and ACP packaging must be generated or configured around MCP definitions, not implemented as parallel runtime behavior. | Agent integration | Coding agent integration design, MCP design | Integration contract tests |
 | REQ-020 | The runtime must define common integration specs for instruction packs, skill packs, hook intents, command specs, MCP binding specs, integration manifests, and agent capability metadata before adding vendor-specific emitters. | Agent integration | Coding agent integration design, layered architecture | Architecture boundary tests |
 | REQ-021 | Vendor-specific integration emitters must not depend on SQLite, tree-sitter, filesystem watchers, process execution, or application/domain internals. They may depend on runtime contracts, MCP definitions, and common integration specs. | Agent integration | Layered architecture | Dependency boundary tests |
-| REQ-022 | Markdown document quality must distinguish parser-backed structure checks, repository compliance linting, and readability formatting. Formatting must be planned or previewed before mutation. | Documentation quality | Markdown document quality design | Documentation fixture tests |
-| REQ-023 | Markdown readability formatting must preserve rendered meaning, protect fenced code by default, explain non-trivial rewrites, and use the bounded edit preview/apply safety path. | Documentation quality, edit manager | Markdown document quality design, edit and validation design | Formatter preview and stale-apply tests |
+| REQ-022 | Markdown document quality contracts must distinguish parser-backed structure checks, repository compliance linting, and readability formatting. Executable tools are post-MVP unless promoted by fixture-backed scope decision. | Documentation quality | Markdown document quality design | Documentation contract fixture tests |
+| REQ-023 | Markdown readability formatting contracts must require rendered meaning preservation, fenced-code protection by default, non-trivial rewrite rationale, and the bounded edit preview/apply safety path before any future mutation support. | Documentation quality, edit manager | Markdown document quality design, edit and validation design | Formatter contract and stale-apply tests |
 
 ## Configuration Requirements
 
@@ -78,8 +78,9 @@ workflow designers.
 - Generated reports and usage analytics are post-MVP.
 - Agent-specific plugin/extension packaging is post-MVP unless a
   fixture-backed integration test requires it.
-- Markdown formatting must not silently mutate documentation; it is preview/apply
-  only.
+- Markdown quality executable tools and formatting mutation are post-MVP unless
+  promoted by fixture-backed scope decision; any future formatting mutation is
+  preview/apply only.
 
 ## Non-Requirements
 

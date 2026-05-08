@@ -1,0 +1,145 @@
+export interface SourceRange {
+  start_line: number;
+  start_column: number;
+  end_line: number;
+  end_column: number;
+}
+
+export interface FileIdentity {
+  path: string;
+  language: string;
+  content_hash: string;
+  size_bytes: number;
+  mtime_ms: number;
+  indexed_at?: string;
+}
+
+export interface GraphNode {
+  id: string;
+  kind: string;
+  name: string;
+  qualified_name?: string;
+  file_path: string;
+  language: string;
+  source_range: SourceRange;
+  signature?: string;
+  docstring?: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface GraphEdge {
+  id: string;
+  source_node_id: string;
+  target_node_id?: string;
+  kind: string;
+  source_range?: SourceRange;
+  provenance: string;
+  confidence: number;
+  metadata: Record<string, unknown>;
+}
+
+export interface UnresolvedReference {
+  id: string;
+  source_node_id: string;
+  source_file_path: string;
+  reference_name: string;
+  reference_kind: string;
+  source_range: SourceRange;
+  candidate_metadata: Record<string, unknown>;
+}
+
+export interface ResolvedReference {
+  source_node_id: string;
+  target_node_id: string;
+  target_file_path: string;
+  edge_id: string;
+  confidence: number;
+  provenance: string;
+}
+
+export interface GraphTraversalRequest {
+  start_node_ids: readonly string[];
+  max_depth: number;
+  max_nodes: number;
+  direction: "incoming" | "outgoing" | "both";
+}
+
+export interface GraphTraversalResult {
+  start_node_ids: readonly string[];
+  nodes: readonly GraphNode[];
+  edges: readonly GraphEdge[];
+  reached_depth: number;
+  truncated: boolean;
+}
+
+export interface GraphQueryHit {
+  score: number;
+  node: GraphNode;
+}
+
+export interface ExtractionRequest {
+  snapshot_id: string;
+  path: string;
+  language: string;
+  content: string;
+}
+
+export interface ExtractionBatch {
+  snapshot_id: string;
+  source_path: string;
+  extractor_id: string;
+  language: string;
+  file_identity: FileIdentity;
+  nodes: readonly GraphNode[];
+  edges: readonly GraphEdge[];
+  unresolved_references: readonly UnresolvedReference[];
+  diagnostics_hints: readonly Record<string, unknown>[];
+  test_hints: readonly Record<string, unknown>[];
+  extracted_at: string;
+}
+
+export interface ValidationCommandPlan {
+  command: string;
+  args: readonly string[];
+  reason: string;
+}
+
+export interface ValidationPlan {
+  status: "planned" | "blocked";
+  commands: readonly ValidationCommandPlan[];
+  reason: string;
+}
+
+export interface ValidationPlanRequest {
+  snapshot_id: string;
+  repo_root: string;
+  paths: readonly string[];
+  max_items?: number;
+}
+
+export interface FileCatalogEntry {
+  path: string;
+  file_identity: FileIdentity;
+  indexed: boolean;
+  skipped_reason?: string;
+}
+
+export interface WorkspaceFileEvent {
+  kind: "created" | "modified" | "deleted" | "renamed";
+  path: string;
+  old_path?: string;
+  snapshot_id?: string;
+  recorded_at: string;
+}
+
+export interface WorkspaceWatchRequest {
+  repo_root: string;
+  paths?: readonly string[];
+  recursive?: boolean;
+  debounce_ms?: number;
+}
+
+export interface WorkspaceWatchHandle {
+  id: string;
+  started_at: string;
+}

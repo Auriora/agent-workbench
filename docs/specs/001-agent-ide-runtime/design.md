@@ -85,9 +85,11 @@ application, domain policy, and infrastructure behavior in temporary services.
   depending on concrete MCP, SQLite, tree-sitter, filesystem, or process
   implementations.
 
-## Open Questions
+## Resolved Decisions
 
 - `tree-sitter` is the mandatory primary extraction path; AST and LSP are optional
   enrichers only.
-- What minimum MCP/client surface is needed for the first supported agents?
-- Which language path should be the first partial-semantic fixture?
+- MVP MCP/client surface is the status, scope, overview, context, symbol,
+  reference, impact, preview/apply, and verification planning set from the MVP
+  spec.
+- Python is the first partial-semantic fixture path.

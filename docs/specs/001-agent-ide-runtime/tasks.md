@@ -252,9 +252,9 @@ budgets through the presentation layer.
   runtime core dependencies on vendor-specific emitters.
 - [ ] T089 Validate docs links and metadata.
 
-## Deferred Work
+## Post-MVP Task Backlog
 
-## Phase 8: Markdown Document Quality
+### Markdown Document Quality
 
 - [ ] T090 Define Markdown document quality contracts for structure findings,
   compliance findings, link findings, table-readability findings, and formatter
@@ -276,8 +276,6 @@ budgets through the presentation layer.
   formatter rationale, source ranges, and preview-token metadata.
 - [ ] T097 Add documentation-quality boundary tests proving the checker and
   formatter do not bypass workspace safety or edit preview/apply.
-
-## Deferred Work
 
 - C# semantic support.
 - CloudFormation/SAM relationship extraction.

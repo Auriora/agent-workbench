@@ -229,6 +229,79 @@ Preview/apply tokens must include enough identity to reject stale mutations.
   contract.
 - `generated_write`: writes generated cache or report artifacts only.
 
+## Integration Profile Shape
+
+Integration profiles describe how common runtime capabilities map to coding
+agent surfaces. MCP bindings are the executable source of truth; plugins,
+commands, hooks, instructions, skills, extensions, and ACP packaging are
+artifacts around those bindings.
+
+```json
+{
+  "runtime_version": "0.1",
+  "target_agents": ["codex", "claude_code", "kiro"],
+  "mcp_bindings": [
+    {
+      "name": "context_for_task",
+      "kind": "tool",
+      "capability_class": "read_only"
+    }
+  ],
+  "artifacts": [
+    {
+      "target_agent": "codex",
+      "surface": "skills",
+      "path": ".agents/skills/runtime-context/SKILL.md",
+      "status": "supported",
+      "provenance": "generated_from_runtime_contracts",
+      "regeneration_safe": true,
+      "notes": []
+    }
+  ],
+  "unsupported_surfaces": [
+    {
+      "target_agent": "junie",
+      "surface": "hooks",
+      "reason": "No hook emitter is defined for MVP."
+    }
+  ]
+}
+```
+
+## Markdown Quality Shapes
+
+Markdown quality findings are post-MVP executable tool outputs, but their
+contract shape is defined up front so checker and formatter work remains
+previewable and presentation-compatible.
+
+```json
+{
+  "category": "table_readability",
+  "severity": "warning",
+  "code": "markdown_table_readability",
+  "path": "docs/design/example.md",
+  "start_line": 12,
+  "start_column": 0,
+  "end_line": 20,
+  "end_column": 0,
+  "message": "The table is hard to read as plain text.",
+  "suggested_action": "Preview a table-to-definition-list rewrite.",
+  "evidence_kinds": ["parser", "docs"]
+}
+```
+
+```json
+{
+  "path": "docs/design/example.md",
+  "strategy": "table_to_definition_list",
+  "rationale": "The table contains definition-style rows and exceeds the text readability budget.",
+  "preserves_rendered_meaning": true,
+  "requires_preview": true,
+  "findings": [],
+  "preview_token": "optional-preview-token"
+}
+```
+
 ## MVP Tool Classes
 
 | Surface | Class | MVP |

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { planCommand } from "../../src/workspace/command.js";
+import { planCommand } from "../../src/domain/policies/command-safety.js";
 
 describe("command planning safety", () => {
   it("keeps validation commands as structured argv", () => {

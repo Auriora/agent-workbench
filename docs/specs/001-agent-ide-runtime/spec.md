@@ -104,12 +104,14 @@ uncertainty, broad scans, or unsafe workspace behavior.
 - **FR-019**: Vendor-specific integration emitters MUST stay outside
   application/domain behavior and MUST NOT depend on concrete SQLite,
   tree-sitter, filesystem watcher, or process execution implementations.
-- **FR-020**: Markdown document quality MUST distinguish parser-backed
-  structure checks, repository compliance linting, and readability formatting.
-  Formatting MUST be planned or previewed before mutation.
-- **FR-021**: Markdown readability formatting MUST preserve rendered meaning,
-  protect fenced code blocks by default, explain non-trivial rewrites, and use
-  the bounded edit preview/apply safety path.
+- **FR-020**: The architecture MUST define Markdown document quality contracts
+  for parser-backed structure checks, repository compliance linting, and
+  readability formatting. Executable Markdown quality tools are post-MVP unless
+  promoted by fixture-backed scope decision.
+- **FR-021**: Markdown readability formatting contracts MUST require rendered
+  meaning preservation, fenced-code protection by default, non-trivial rewrite
+  rationale, and the bounded edit preview/apply safety path before any future
+  mutation support.
 
 ### Key Entities
 

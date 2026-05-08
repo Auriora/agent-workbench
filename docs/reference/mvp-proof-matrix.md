@@ -29,6 +29,8 @@ plan without hidden broad scans or unsafe workspace behavior.
 | `fixture-workspace-safety` | Prove path and command refusal | symlink escape, generated root, `.env`, shell-looking command args |
 | `fixture-runtime-operations` | Prove cache, warm-up, and concurrency behavior | cold start, watcher update, queued extraction, parser timeout, obsolete result, concurrent read |
 | `fixture-runtime-boundaries` | Prove runtime context, registries, argument parsing, and OTEL boundaries | malformed MCP inputs, registry entries, runtime context fields, OTEL span/metric assertions |
+| `fixture-agent-integration-profile` | Prove common integration contract shape | Codex, Claude Code, Kiro, Augment, Gemini, and Junie target surfaces; unsupported-surface reasons; MCP binding metadata |
+| `fixture-markdown-quality` | Prove post-MVP Markdown quality contract shape | skipped heading levels, inconsistent numbering, ambiguous nested lists, wide tables, frontmatter violations, broken links, unchanged documents |
 
 TypeScript/JavaScript may be added as the second language fixture after the
 Python path passes the MVP gates. C#, CloudFormation/SAM, graph reports, and
@@ -52,6 +54,8 @@ resource-backed discovery fixtures.
 | `verification_plan` | `fixture-basic-python` | planned diagnostics/tests with blocked states | plan names expected commands without executing by default |
 | MCP registry | `fixture-runtime-boundaries` | tool/resource definitions, typed parsers, use-case binding, presenter binding | handlers do not hand-coerce raw MCP input |
 | OTEL instrumentation | `fixture-runtime-boundaries` | dispatch, use-case, graph/query, worker, cache, presentation spans or metrics | operational telemetry exists without durable usage records |
+| Integration profile contract | `fixture-agent-integration-profile` | target agents, MCP bindings, artifacts, unsupported surfaces, provenance | executable behavior remains MCP-first and vendor emitters stay outside core runtime |
+| Markdown quality contract | `fixture-markdown-quality` | finding shape, formatter plan shape, source ranges, preview/apply safety metadata | executable tools remain post-MVP unless explicitly promoted |
 
 ## Initial Budgets
 
@@ -106,6 +110,9 @@ The MVP docs are implementation-ready when:
   single-writer graph transactions have fixture-backed tests
 - registry, typed argument parser, runtime context, and OTEL boundary behavior
   have fixture-backed tests
+- integration profile and Markdown quality contract shapes have fixture-backed
+  tests when those architecture contracts are included in the implementation
+  slice
 - durable usage records are absent from MVP unless a fixture-backed workflow
   history query is added
 - no MVP requirement depends on graph reports, usage analytics, C#, or
