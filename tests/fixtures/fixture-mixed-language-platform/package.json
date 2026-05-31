@@ -1,6 +1,7 @@
 {
   "name": "fixture-mixed-language-platform",
   "scripts": {
+    "typecheck": "tsc --noEmit",
     "test": "node --test"
   }
 }

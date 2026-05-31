@@ -409,7 +409,7 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
 
 ### Gap 4: Edit And Validation Loop
 
-- [ ] T203 [US3] Complete the bounded edit and validation planning loop without
+- [x] T203 [US3] Complete the bounded edit and validation planning loop without
   executing commands by default.
   - [x] T203.1 Implement shared file identity and base-hash services used by
     graph indexing, preview tokens, apply drift checks, and stale snapshot
@@ -420,12 +420,12 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [x] T203.3 Implement `ApplyWorkspaceEditUseCase` with preview-token lookup,
     expiration, single-use semantics, stale preview rejection, path refusal,
     concurrent modification checks, and atomic write ordering.
-  - [ ] T203.4 Implement `PlanVerificationUseCase` with planned diagnostics,
+  - [x] T203.4 Implement `PlanVerificationUseCase` with planned diagnostics,
     formatter, lint, and test commands, plus blocked states for missing,
     unsafe, too-broad, or low-confidence checks.
   - [x] T203.5 Keep `verification_plan` read-only: do not execute diagnostics,
     lint, formatting, tests, or hooks in the MVP planning path.
-  - [ ] T203.6 Add next-action metadata when verification discovery is
+  - [x] T203.6 Add next-action metadata when verification discovery is
     incomplete, including direct-read, symbol/reference/impact, or manual
     command-confirmation follow-up.
   - [x] T203.7 Add workspace-safety negative tests for traversal, symlink
@@ -438,7 +438,7 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
     as optional `verification_plan.static_feedback` with actionable findings
     only, silent clean results, and silent non-blocking optional analyzer
     failures.
-  - [ ] T203.10 Add tests proving file-change feedback does not distract the
+  - [x] T203.10 Add tests proving file-change feedback does not distract the
     agent with no-issue files, optional analyzer failures, backend tool names,
     or raw diagnostic output, and proving no separate public MCP tool/resource
     is registered for static feedback in MVP.

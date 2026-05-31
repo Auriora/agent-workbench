@@ -253,7 +253,7 @@ describe("stdio MCP entrypoint", () => {
     expect(parsedVerificationPlan.data.planned_commands).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          display: "pnpm typecheck",
+          display: "pnpm run typecheck",
           execution: "not_executed"
         })
       ])

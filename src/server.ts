@@ -99,6 +99,7 @@ export function createAgentWorkbenchServer(repoRoot: string) {
       planVerification({
         request,
         scanner,
+        workspace,
         default_repo_root: absoluteRepoRoot
       })
   });
