@@ -232,6 +232,12 @@ describe("stdio MCP entrypoint", () => {
         }),
         expect.objectContaining({
           name: "verification_plan"
+        }),
+        expect.objectContaining({
+          name: "preview_workspace_edit"
+        }),
+        expect.objectContaining({
+          name: "apply_workspace_edit"
         })
       ])
     );

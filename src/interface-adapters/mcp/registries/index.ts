@@ -1,12 +1,15 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type {
   CodexIntegrationProfile,
+  ApplyWorkspaceEditRequest,
   FindReferencesRequest,
   ImpactRequest,
+  PreviewWorkspaceEditRequest,
   SymbolSearchRequest,
   TaskContextRequest,
   VerificationPlanRequest
 } from "../../../contracts/index.js";
+import type { ApplyWorkspaceEditUseCaseResult } from "../../../application/use-cases/apply-workspace-edit.js";
 import type { ComputeImpactResult } from "../../../application/use-cases/compute-impact.js";
 import type { FindReferencesUseCaseResult } from "../../../application/use-cases/find-references.js";
 import type { GetRepoOverviewResult } from "../../../application/use-cases/get-repo-overview.js";
@@ -14,14 +17,17 @@ import type { GetRepoScopeResult } from "../../../application/use-cases/get-repo
 import type { GetTaskContextResult } from "../../../application/use-cases/get-task-context.js";
 import type { GetRepoStatusResult } from "../../../application/use-cases/get-repo-status.js";
 import type { PlanVerificationResult } from "../../../application/use-cases/plan-verification.js";
+import type { PreviewWorkspaceEditUseCaseResult } from "../../../application/use-cases/preview-workspace-edit.js";
 import type { SearchSymbolsResult } from "../../../application/use-cases/search-symbols.js";
 import { codexIntegrationProfileResource } from "./resources/codex-integration-profile.js";
 import { repoOverviewResource } from "./resources/repo-overview.js";
 import { repoScopeResource } from "./resources/repo-scope.js";
 import { repoStatusResource } from "./resources/repo-status.js";
 import { contextForTaskTool } from "./tools/context-for-task.js";
+import { applyWorkspaceEditTool } from "./tools/apply-workspace-edit.js";
 import { findReferencesTool } from "./tools/find-references.js";
 import { impactTool } from "./tools/impact.js";
+import { previewWorkspaceEditTool } from "./tools/preview-workspace-edit.js";
 import { symbolSearchTool } from "./tools/symbol-search.js";
 import { verificationPlanTool } from "./tools/verification-plan.js";
 
@@ -34,6 +40,8 @@ export type McpRegistryContext = {
   searchSymbols?: (input: { request: SymbolSearchRequest }) => Promise<SearchSymbolsResult> | SearchSymbolsResult;
   findReferences?: (input: { request: FindReferencesRequest }) => Promise<FindReferencesUseCaseResult> | FindReferencesUseCaseResult;
   computeImpact?: (input: { request: ImpactRequest }) => Promise<ComputeImpactResult> | ComputeImpactResult;
+  previewWorkspaceEdit?: (input: { request: PreviewWorkspaceEditRequest }) => Promise<PreviewWorkspaceEditUseCaseResult> | PreviewWorkspaceEditUseCaseResult;
+  applyWorkspaceEdit?: (input: { request: ApplyWorkspaceEditRequest }) => Promise<ApplyWorkspaceEditUseCaseResult> | ApplyWorkspaceEditUseCaseResult;
   planVerification?: (input: { request: VerificationPlanRequest }) => Promise<PlanVerificationResult> | PlanVerificationResult;
   describeCodexIntegrationProfile?: () => CodexIntegrationProfile;
 };
@@ -69,6 +77,8 @@ export const mcpTools: McpToolDeclaration[] = [
   symbolSearchTool,
   findReferencesTool,
   impactTool,
+  previewWorkspaceEditTool,
+  applyWorkspaceEditTool,
   verificationPlanTool
 ];
 

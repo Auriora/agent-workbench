@@ -163,6 +163,11 @@ export interface WorkspaceFilePort {
   ensureDirectory(input: { path: string }): Promise<void>;
 }
 
+export interface WorkspaceSafetyPort {
+  isReadOnlyPath(requestedPath: string): boolean;
+  redactSecretLikeText(value: string): string;
+}
+
 export interface WorkspaceWatcherPort {
   start(input: WorkspaceWatchRequest): Promise<WorkspaceWatchHandle>;
   stop(input: { watch_id: string }): Promise<void>;

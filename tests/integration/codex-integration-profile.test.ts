@@ -87,6 +87,16 @@ describe("Codex integration profile", () => {
           capability_class: "read_only"
         }),
         expect.objectContaining({
+          name: "preview_workspace_edit",
+          kind: "tool",
+          capability_class: "workspace_write"
+        }),
+        expect.objectContaining({
+          name: "apply_workspace_edit",
+          kind: "tool",
+          capability_class: "workspace_write"
+        }),
+        expect.objectContaining({
           name: "scope",
           uri: "repo:///scope",
           kind: "resource",

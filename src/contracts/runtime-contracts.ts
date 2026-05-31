@@ -466,6 +466,53 @@ export const editTokenSchema = z.object({
 });
 export type EditToken = z.infer<typeof editTokenSchema>;
 
+export const workspaceEditFileSchema = z
+  .object({
+    path: z.string().min(1),
+    replacement_text: z.string()
+  })
+  .strict();
+export type WorkspaceEditFile = z.infer<typeof workspaceEditFileSchema>;
+
+export const previewWorkspaceEditRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    edits: z.array(workspaceEditFileSchema).min(1).max(20),
+    expires_in_ms: z.number().int().positive().max(3_600_000).default(600_000)
+  })
+  .strict();
+export type PreviewWorkspaceEditRequest = z.infer<typeof previewWorkspaceEditRequestSchema>;
+
+export const previewWorkspaceEditResultSchema = z
+  .object({
+    repo_root: z.string(),
+    preview: editTokenSchema,
+    changed_files: z.array(fileReferenceSchema),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type PreviewWorkspaceEditResult = z.infer<typeof previewWorkspaceEditResultSchema>;
+
+export const applyWorkspaceEditRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    preview_token: z.string().min(1),
+    edits: z.array(workspaceEditFileSchema).min(1).max(20)
+  })
+  .strict();
+export type ApplyWorkspaceEditRequest = z.infer<typeof applyWorkspaceEditRequestSchema>;
+
+export const applyWorkspaceEditResultSchema = z
+  .object({
+    repo_root: z.string(),
+    preview_token: z.string(),
+    applied_files: z.array(fileReferenceSchema),
+    status: z.enum(["applied", "blocked"]),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type ApplyWorkspaceEditResult = z.infer<typeof applyWorkspaceEditResultSchema>;
+
 export const responseEnvelopeSchema = <T extends z.ZodTypeAny>(dataSchema: T) =>
   z.object({
     contract_version: z.literal(CONTRACT_VERSION),

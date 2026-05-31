@@ -8,10 +8,14 @@ import {
   capabilityLevelSchema,
   CONTRACT_VERSION,
   makeEnvelope,
+  applyWorkspaceEditRequestSchema,
+  applyWorkspaceEditResultSchema,
   findReferencesRequestSchema,
   findReferencesResultSchema,
   impactRequestSchema,
   impactResultSchema,
+  previewWorkspaceEditRequestSchema,
+  previewWorkspaceEditResultSchema,
   repoOverviewSchema,
   repoScopeSchema,
   responseEnvelopeSchema,
@@ -384,6 +388,130 @@ describe("runtime contracts", () => {
       })
     ).toMatchObject({
       start_node_ids: ["node-1"]
+    });
+  });
+
+  it("models bounded workspace edit preview and apply contracts", () => {
+    expect(
+      previewWorkspaceEditRequestSchema.parse({
+        edits: [
+          {
+            path: "src/app.ts",
+            replacement_text: "export const value = 1;\n"
+          }
+        ]
+      })
+    ).toMatchObject({
+      edits: [
+        {
+          path: "src/app.ts",
+          replacement_text: "export const value = 1;\n"
+        }
+      ],
+      expires_in_ms: 600_000
+    });
+    expect(() => previewWorkspaceEditRequestSchema.parse({ edits: [] })).toThrow();
+    expect(() =>
+      previewWorkspaceEditRequestSchema.parse({
+        edits: Array.from({ length: 21 }, (_, index) => ({
+          path: `src/file-${index}.ts`,
+          replacement_text: ""
+        }))
+      })
+    ).toThrow();
+
+    expect(
+      previewWorkspaceEditResultSchema.parse({
+        repo_root: "/repo",
+        preview: {
+          preview_token: "token",
+          created_at: "2026-05-31T00:00:00.000Z",
+          expires_at: "2026-05-31T00:10:00.000Z",
+          files: [
+            {
+              path: "src/app.ts",
+              base_hash: "base",
+              after_hash: "after",
+              change_count: 1
+            }
+          ],
+          operation: "bounded_text_edit",
+          mutation_class: "workspace_write"
+        },
+        changed_files: [
+          {
+            path: "src/app.ts",
+            language: "typescript",
+            exists: true,
+            capability_level: "unsupported",
+            evidence_kinds: [],
+            reason: "Edit preview requested."
+          }
+        ],
+        next_actions: [
+          {
+            tool: "apply_workspace_edit",
+            args: {
+              preview_token: "token"
+            }
+          }
+        ]
+      })
+    ).toMatchObject({
+      preview: {
+        operation: "bounded_text_edit",
+        mutation_class: "workspace_write"
+      }
+    });
+
+    expect(
+      applyWorkspaceEditRequestSchema.parse({
+        preview_token: "token",
+        edits: [
+          {
+            path: "src/app.ts",
+            replacement_text: "export const value = 2;\n"
+          }
+        ]
+      })
+    ).toMatchObject({
+      preview_token: "token",
+      edits: [
+        {
+          path: "src/app.ts",
+          replacement_text: "export const value = 2;\n"
+        }
+      ]
+    });
+    expect(() => applyWorkspaceEditRequestSchema.parse({ preview_token: "", edits: [] })).toThrow();
+
+    expect(
+      applyWorkspaceEditResultSchema.parse({
+        repo_root: "/repo",
+        preview_token: "token",
+        applied_files: [
+          {
+            path: "src/app.ts",
+            language: "typescript",
+            exists: true,
+            capability_level: "unsupported",
+            evidence_kinds: [],
+            reason: "Edit applied."
+          }
+        ],
+        status: "applied",
+        next_actions: [
+          {
+            tool: "verification_plan",
+            args: {
+              changed_files: ["src/app.ts"]
+            }
+          }
+        ]
+      })
+    ).toMatchObject({
+      status: "applied",
+      next_actions: [expect.objectContaining({ tool: "verification_plan" })]
     });
   });
 });

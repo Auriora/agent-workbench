@@ -144,6 +144,18 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         description: "Bounded graph impact traversal for indexed symbols and affected files."
       },
       {
+        name: "preview_workspace_edit",
+        kind: "tool",
+        capability_class: "workspace_write",
+        description: "Previews bounded workspace edits with file hashes and no mutation."
+      },
+      {
+        name: "apply_workspace_edit",
+        kind: "tool",
+        capability_class: "workspace_write",
+        description: "Applies a previewed workspace edit after token, hash, and safety checks."
+      },
+      {
         name: "verification_plan",
         kind: "tool",
         capability_class: "planning",

@@ -222,19 +222,19 @@ references, and report status/scope without adapter-to-SQLite coupling.
 - [ ] T048 Implement `BuildTaskContextUseCase` with context ranking and
   direct-read caveats, complete-enough markers, skipped-work metadata, and
   exact next actions for symbol/reference/impact or direct-read verification.
-- [ ] T049 Implement `SearchSymbolsUseCase`.
-- [ ] T050 Implement `FindReferencesUseCase`.
-- [ ] T051 Implement `ComputeImpactUseCase`.
-- [ ] T052 Implement shared file identity/base-hash service for graph indexing
+- [x] T049 Implement `SearchSymbolsUseCase`.
+- [x] T050 Implement `FindReferencesUseCase`.
+- [x] T051 Implement `ComputeImpactUseCase`.
+- [x] T052 Implement shared file identity/base-hash service for graph indexing
   and edit preview/apply.
-- [ ] T053 [US3] Implement `PreviewWorkspaceEditUseCase` with base hashes.
-- [ ] T054 [US3] Implement `ApplyWorkspaceEditUseCase` with path containment
+- [x] T053 [US3] Implement `PreviewWorkspaceEditUseCase` with base hashes.
+- [x] T054 [US3] Implement `ApplyWorkspaceEditUseCase` with path containment
   and stale-preview rejection.
 - [x] T055 Implement `PlanVerificationUseCase` without command execution,
   distinguishing planned checks from proven runnable checks and routing
   low-confidence discovery to exact follow-up actions. Touched-file static
   feedback is represented as an optional, read-only `static_feedback` section.
-- [ ] T056 Implement `DescribeIntegrationProfileUseCase` for common coding-agent
+- [x] T056 Implement `DescribeIntegrationProfileUseCase` for common coding-agent
   integration metadata without generating vendor-specific artifacts.
 - [x] T056A Implement Codex integration profile output that reports which Codex
   features are active in MVP, which wrappers are available, and why MCP remains
@@ -294,9 +294,9 @@ handlers or use cases.
   presenter.
 - [x] T075 [US2] Wire bounded `impact` through MCP schema, use case, and
   presenter.
-- [ ] T076 [US3] Wire `preview_workspace_edit` through MCP schema, use case, and
+- [x] T076 [US3] Wire `preview_workspace_edit` through MCP schema, use case, and
   presenter.
-- [ ] T077 [US3] Wire `apply_workspace_edit` through MCP schema, use case, and
+- [x] T077 [US3] Wire `apply_workspace_edit` through MCP schema, use case, and
   presenter.
 - [x] T078 [US3] Wire `verification_plan` through MCP schema, use case, and
   presenter, including optional quiet `static_feedback` for touched files.
@@ -411,13 +411,13 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
 
 - [ ] T203 [US3] Complete the bounded edit and validation planning loop without
   executing commands by default.
-  - [ ] T203.1 Implement shared file identity and base-hash services used by
+  - [x] T203.1 Implement shared file identity and base-hash services used by
     graph indexing, preview tokens, apply drift checks, and stale snapshot
     detection.
-  - [ ] T203.2 Implement `PreviewWorkspaceEditUseCase` with path containment,
+  - [x] T203.2 Implement `PreviewWorkspaceEditUseCase` with path containment,
     generated/vendor read-only policy, secret/redaction checks, base hashes,
     preview token persistence, and no file mutation.
-  - [ ] T203.3 Implement `ApplyWorkspaceEditUseCase` with preview-token lookup,
+  - [x] T203.3 Implement `ApplyWorkspaceEditUseCase` with preview-token lookup,
     expiration, single-use semantics, stale preview rejection, path refusal,
     concurrent modification checks, and atomic write ordering.
   - [ ] T203.4 Implement `PlanVerificationUseCase` with planned diagnostics,
@@ -428,10 +428,10 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T203.6 Add next-action metadata when verification discovery is
     incomplete, including direct-read, symbol/reference/impact, or manual
     command-confirmation follow-up.
-  - [ ] T203.7 Add workspace-safety negative tests for traversal, symlink
+  - [x] T203.7 Add workspace-safety negative tests for traversal, symlink
     escape, generated/vendor mutation, `.env` or secret-like content, shell
     injection, output caps, and command refusal.
-  - [ ] T203.8 Add presenter golden responses for preview, apply success,
+  - [x] T203.8 Add presenter golden responses for preview, apply success,
     stale apply rejection, unsafe path rejection, blocked validation, and
     planned validation.
   - [x] T203.9 Implement quiet file-change static feedback for touched files
@@ -517,10 +517,10 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [x] T205.5 Wire tools `context_for_task`, `symbol_search`,
     `find_references`, and bounded `impact` through typed parsers, use cases,
     presenters, budgets, truncation, and next-action metadata.
-  - [ ] T205.6 Wire tools `preview_workspace_edit`,
+  - [x] T205.6 Wire tools `preview_workspace_edit`,
     `apply_workspace_edit`, and `verification_plan` through typed parsers, use
     cases, presenters, safety policy metadata, and read/write capability
-    classes. `verification_plan` is complete; preview/apply remain open.
+    classes.
   - [ ] T205.7 Add MCP registry tests proving handlers do not import concrete
     SQLite, tree-sitter, filesystem watcher, or process-execution
     infrastructure.
