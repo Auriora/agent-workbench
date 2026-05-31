@@ -24,6 +24,18 @@ const applyWorkspaceEditRawShape = {
 export const applyWorkspaceEditTool: McpToolDeclaration = {
   kind: "tool",
   name: "apply_workspace_edit",
+  metadata: {
+    capability_class: "workspace_write",
+    mutation_class: "workspace_write",
+    budget_policy: "Bounded to 20 full-file replacement edits and requires a matching preview token.",
+    description: "Apply a previously previewed bounded workspace edit after hash and safety checks.",
+    parameters: [
+      { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
+      { name: "preview_token", description: "Preview token returned by preview_workspace_edit.", required: true },
+      { name: "edits", description: "Bounded full-file replacement edits matching the preview.", required: true }
+    ],
+    returns: "ResponseEnvelope<ApplyWorkspaceEditResult>"
+  },
   register(server: McpServer, context) {
     server.tool(
       "apply_workspace_edit",

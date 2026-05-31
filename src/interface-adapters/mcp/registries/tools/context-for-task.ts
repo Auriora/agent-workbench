@@ -22,6 +22,21 @@ const contextForTaskRawShape = {
 export const contextForTaskTool: McpToolDeclaration = {
   kind: "tool",
   name: "context_for_task",
+  metadata: {
+    capability_class: "read_only",
+    mutation_class: "none",
+    budget_policy: "Bounded by max_files and max_docs; scans local file catalog only.",
+    description: "Gather compact task context from local repository evidence before editing.",
+    parameters: [
+      { name: "task", description: "Implementation, review, or planning task to gather context for.", required: true },
+      { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
+      { name: "files", description: "Known repo-relative files relevant to the task.", required: false },
+      { name: "symbols", description: "Known symbols or identifiers relevant to the task.", required: false },
+      { name: "max_files", description: "Maximum related file candidates to return.", required: false },
+      { name: "max_docs", description: "Maximum governing documentation files to return.", required: false }
+    ],
+    returns: "ResponseEnvelope<TaskContext>"
+  },
   register(server: McpServer, context) {
     server.tool(
       "context_for_task",

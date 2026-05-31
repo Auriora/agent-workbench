@@ -505,13 +505,13 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
     payload modes, usage context, edit operations, and validation targets.
   - [ ] T205.2 Implement structured invalid-input responses that fail before
     use-case execution and still use the shared response envelope shape.
-  - [ ] T205.3 Implement registry definitions for each MCP resource, tool, and
+  - [x] T205.3 Implement registry definitions for each MCP resource, tool, and
     prompt with schema, argument parser, use-case binding, presenter binding,
     budget policy, capability class, and mutation class.
-  - [ ] T205.3A Add registry metadata tests proving every public MCP surface has
+  - [x] T205.3A Add registry metadata tests proving every public MCP surface has
     a clear agent-facing name, description, parameter descriptions, expected
     return structure, capability class, and budget policy.
-  - [ ] T205.4 Wire resources `repo:///status`, `repo:///scope`, and
+  - [x] T205.4 Wire resources `repo:///status`, `repo:///scope`, and
     `repo:///overview` through typed parsers, use cases, presenters, and golden
     MCP response tests.
   - [x] T205.5 Wire tools `context_for_task`, `symbol_search`,
@@ -521,10 +521,10 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
     `apply_workspace_edit`, and `verification_plan` through typed parsers, use
     cases, presenters, safety policy metadata, and read/write capability
     classes.
-  - [ ] T205.7 Add MCP registry tests proving handlers do not import concrete
+  - [x] T205.7 Add MCP registry tests proving handlers do not import concrete
     SQLite, tree-sitter, filesystem watcher, or process-execution
     infrastructure.
-  - [ ] T205.8 Add malformed-input fixture tests for invalid repo roots, file
+  - [x] T205.8 Add malformed-input fixture tests for invalid repo roots, file
     paths, ranges, enums, limits, payload modes, edit operations, and
     validation targets.
   - [ ] T205.9 Add end-to-end MCP fixture tests proving all MVP responses match

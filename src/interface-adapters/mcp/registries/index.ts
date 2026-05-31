@@ -7,6 +7,7 @@ import type {
   PreviewWorkspaceEditRequest,
   SymbolSearchRequest,
   TaskContextRequest,
+  ToolCapabilityClass,
   VerificationPlanRequest
 } from "../../../contracts/index.js";
 import type { ApplyWorkspaceEditUseCaseResult } from "../../../application/use-cases/apply-workspace-edit.js";
@@ -50,19 +51,39 @@ export type McpResourceDeclaration = {
   kind: "resource";
   name: string;
   uri: string;
+  metadata: McpSurfaceMetadata;
   register: (server: McpServer, context: McpRegistryContext) => void;
 };
 
 export type McpToolDeclaration = {
   kind: "tool";
   name: string;
+  metadata: McpSurfaceMetadata;
   register: (server: McpServer, context: McpRegistryContext) => void;
 };
 
 export type McpPromptDeclaration = {
   kind: "prompt";
   name: string;
+  metadata: McpSurfaceMetadata;
   register: (server: McpServer, context: McpRegistryContext) => void;
+};
+
+export type McpMutationClass = "none" | "workspace_write" | "planning";
+
+export type McpSurfaceParameterMetadata = {
+  name: string;
+  description: string;
+  required: boolean;
+};
+
+export type McpSurfaceMetadata = {
+  capability_class: ToolCapabilityClass;
+  mutation_class: McpMutationClass;
+  budget_policy: string;
+  description: string;
+  parameters: readonly McpSurfaceParameterMetadata[];
+  returns: string;
 };
 
 export const mcpResources: McpResourceDeclaration[] = [

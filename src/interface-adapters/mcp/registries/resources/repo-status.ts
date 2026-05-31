@@ -11,6 +11,20 @@ export const repoStatusResource: McpResourceDeclaration = {
   kind: "resource",
   name: "status",
   uri: "repo:///status",
+  metadata: {
+    capability_class: "read_only",
+    mutation_class: "none",
+    budget_policy: "Scans bounded repository file catalog evidence; no source mutation.",
+    description: "Compact repository status, freshness, scope, and adapter coverage.",
+    parameters: [
+      {
+        name: "repo_root",
+        description: "Optional repository root. Defaults to the MCP server repo root.",
+        required: false
+      }
+    ],
+    returns: "ResponseEnvelope<RepoStatus>"
+  },
   register(server: McpServer, context) {
     server.resource("status", "repo:///status", async (request: unknown) => {
       let args;

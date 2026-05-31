@@ -22,6 +22,21 @@ const findReferencesRawShape = {
 export const findReferencesTool: McpToolDeclaration = {
   kind: "tool",
   name: "find_references",
+  metadata: {
+    capability_class: "read_only",
+    mutation_class: "none",
+    budget_policy: "Bounded by max_depth and max_results.",
+    description: "Find resolved and unresolved references for an indexed graph node or exact symbol.",
+    parameters: [
+      { name: "node_id", description: "Indexed graph node id to inspect.", required: false },
+      { name: "symbol", description: "Exact symbol name to resolve before finding references.", required: false },
+      { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
+      { name: "snapshot_id", description: "Optional snapshot id. Defaults to latest snapshot for the repository.", required: false },
+      { name: "max_depth", description: "Maximum reference depth to inspect.", required: false },
+      { name: "max_results", description: "Maximum reference rows to return.", required: false }
+    ],
+    returns: "ResponseEnvelope<FindReferencesResult>"
+  },
   register(server: McpServer, context) {
     server.tool(
       "find_references",

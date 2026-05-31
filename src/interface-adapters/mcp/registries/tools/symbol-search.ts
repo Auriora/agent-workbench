@@ -23,6 +23,22 @@ const symbolSearchRawShape = {
 export const symbolSearchTool: McpToolDeclaration = {
   kind: "tool",
   name: "symbol_search",
+  metadata: {
+    capability_class: "read_only",
+    mutation_class: "none",
+    budget_policy: "Bounded by max_results and source_byte_limit.",
+    description: "Search indexed graph symbols with bounded row and optional source-byte budgets.",
+    parameters: [
+      { name: "query", description: "Symbol name or text to search for in the indexed graph.", required: true },
+      { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
+      { name: "snapshot_id", description: "Optional snapshot id. Defaults to latest snapshot for the repository.", required: false },
+      { name: "exact", description: "When true, match exact symbol names only.", required: false },
+      { name: "languages", description: "Optional language filters.", required: false },
+      { name: "max_results", description: "Maximum symbol rows to return.", required: false },
+      { name: "source_byte_limit", description: "Maximum source bytes per symbol; zero omits source text.", required: false }
+    ],
+    returns: "ResponseEnvelope<SymbolSearchResult>"
+  },
   register(server: McpServer, context) {
     server.tool(
       "symbol_search",

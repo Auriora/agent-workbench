@@ -22,6 +22,21 @@ const verificationPlanRawShape = {
 export const verificationPlanTool: McpToolDeclaration = {
   kind: "tool",
   name: "verification_plan",
+  metadata: {
+    capability_class: "planning",
+    mutation_class: "planning",
+    budget_policy: "Bounded by max_commands; never executes validation commands.",
+    description: "Plan validation commands and quiet static feedback without executing commands.",
+    parameters: [
+      { name: "task", description: "Optional task description for the validation plan.", required: false },
+      { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
+      { name: "files", description: "Repo-relative files that should guide validation planning.", required: false },
+      { name: "changed_files", description: "Repo-relative changed files for optional static feedback.", required: false },
+      { name: "include_static_feedback", description: "Whether to include actionable static feedback when present.", required: false },
+      { name: "max_commands", description: "Maximum planned commands to return.", required: false }
+    ],
+    returns: "ResponseEnvelope<VerificationPlan>"
+  },
   register(server: McpServer, context) {
     server.tool(
       "verification_plan",

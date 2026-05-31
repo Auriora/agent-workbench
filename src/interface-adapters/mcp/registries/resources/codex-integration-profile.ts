@@ -7,6 +7,14 @@ export const codexIntegrationProfileResource: McpResourceDeclaration = {
   kind: "resource",
   name: "codex-integration-profile",
   uri: "integration:///profiles/codex",
+  metadata: {
+    capability_class: "read_only",
+    mutation_class: "none",
+    budget_policy: "Bounded static integration profile metadata; no repository scan.",
+    description: "Codex feature, plugin, skill, hook, and update-path profile.",
+    parameters: [],
+    returns: "ResponseEnvelope<CodexIntegrationProfile>"
+  },
   register(server: McpServer, context) {
     server.resource("codex-integration-profile", "integration:///profiles/codex", async () => {
       const profile = context.describeCodexIntegrationProfile?.() ?? describeCodexIntegrationProfile();

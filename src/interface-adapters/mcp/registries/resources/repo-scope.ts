@@ -11,6 +11,20 @@ export const repoScopeResource: McpResourceDeclaration = {
   kind: "resource",
   name: "scope",
   uri: "repo:///scope",
+  metadata: {
+    capability_class: "read_only",
+    mutation_class: "none",
+    budget_policy: "Scans bounded repository file catalog evidence; no source mutation.",
+    description: "Indexed roots, skipped roots, language counts, capability counts, and generated/vendor scope.",
+    parameters: [
+      {
+        name: "repo_root",
+        description: "Optional repository root. Defaults to the MCP server repo root.",
+        required: false
+      }
+    ],
+    returns: "ResponseEnvelope<RepoScope>"
+  },
   register(server: McpServer, context) {
     server.resource("scope", "repo:///scope", async (request: unknown) => {
       let args;

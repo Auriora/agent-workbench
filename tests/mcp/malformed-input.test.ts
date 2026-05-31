@@ -1,0 +1,94 @@
+import { describe, expect, it } from "vitest";
+import { createAgentWorkbenchServer } from "../../src/interface-adapters/mcp/server.js";
+
+describe("MCP malformed input handling", () => {
+  it.each([
+    ["context_for_task", { task: "" }],
+    ["symbol_search", { query: "" }],
+    ["find_references", {}],
+    ["impact", { node_id: "node-1", direction: "sideways" }],
+    ["preview_workspace_edit", { edits: [] }],
+    ["apply_workspace_edit", { preview_token: "", edits: [] }],
+    ["verification_plan", { max_commands: 100 }]
+  ])("blocks malformed tool input before provider execution for %s", async (toolName, args) => {
+    const server = createAgentWorkbenchServer("/repo", providerContextThatThrows()) as unknown as {
+      _registeredTools: Record<
+        string,
+        {
+          handler: (args: unknown) => Promise<{
+            content: Array<{ text: string }>;
+          }>;
+        }
+      >;
+    };
+
+    const response = await server._registeredTools[toolName].handler(args);
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; retryable: boolean }>;
+    };
+
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "invalid_input",
+        retryable: false
+      })
+    ]);
+  });
+
+  it.each([
+    ["repo:///status", { repo_root: 42 }],
+    ["repo:///scope", { repo_root: 42 }],
+    ["repo:///overview", { repo_root: 42 }]
+  ])("blocks malformed resource input before provider execution for %s", async (uri, args) => {
+    const server = createAgentWorkbenchServer("/repo", providerContextThatThrows()) as unknown as {
+      _registeredResources: Record<
+        string,
+        {
+          readCallback: (args: unknown) => Promise<{
+            contents: Array<{ text: string }>;
+          }>;
+        }
+      >;
+    };
+
+    const response = await server._registeredResources[uri].readCallback(args);
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; retryable: boolean }>;
+    };
+
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "invalid_input",
+        retryable: false
+      })
+    ]);
+  });
+});
+
+function providerContextThatThrows() {
+  const fail = () => {
+    throw new Error("provider should not run for malformed input");
+  };
+  return {
+    getRepoStatus: fail,
+    getRepoScope: fail,
+    getRepoOverview: fail,
+    getTaskContext: fail,
+    searchSymbols: fail,
+    findReferences: fail,
+    computeImpact: fail,
+    previewWorkspaceEdit: fail,
+    applyWorkspaceEdit: fail,
+    planVerification: fail
+  };
+}

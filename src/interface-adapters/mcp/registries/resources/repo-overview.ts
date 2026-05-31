@@ -11,6 +11,20 @@ export const repoOverviewResource: McpResourceDeclaration = {
   kind: "resource",
   name: "overview",
   uri: "repo:///overview",
+  metadata: {
+    capability_class: "read_only",
+    mutation_class: "none",
+    budget_policy: "Scans bounded repository file catalog and docs evidence; no source mutation.",
+    description: "Compact repository overview with platforms, key files, docs, validation hints, and first-call guidance.",
+    parameters: [
+      {
+        name: "repo_root",
+        description: "Optional repository root. Defaults to the MCP server repo root.",
+        required: false
+      }
+    ],
+    returns: "ResponseEnvelope<RepoOverview>"
+  },
   register(server: McpServer, context) {
     server.resource("overview", "repo:///overview", async (request: unknown) => {
       let args;

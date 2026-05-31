@@ -19,6 +19,21 @@ const impactRawShape = {
 export const impactTool: McpToolDeclaration = {
   kind: "tool",
   name: "impact",
+  metadata: {
+    capability_class: "read_only",
+    mutation_class: "none",
+    budget_policy: "Bounded by max_depth and max_nodes.",
+    description: "Compute bounded graph impact for an indexed symbol without broad source scans.",
+    parameters: [
+      { name: "node_id", description: "Indexed graph node id to start bounded traversal from.", required: true },
+      { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
+      { name: "snapshot_id", description: "Optional snapshot id. Defaults to latest snapshot for the repository.", required: false },
+      { name: "max_depth", description: "Maximum traversal depth.", required: false },
+      { name: "max_nodes", description: "Maximum graph nodes to return.", required: false },
+      { name: "direction", description: "Traversal direction.", required: false }
+    ],
+    returns: "ResponseEnvelope<ImpactResult>"
+  },
   register(server: McpServer, context) {
     server.tool(
       "impact",
