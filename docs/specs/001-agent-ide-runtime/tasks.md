@@ -370,6 +370,36 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
     stale apply rejection, unsafe path rejection, blocked validation, and
     planned validation.
 
+### Gap 5: Runtime And Degraded Behavior
+
+- [ ] T204 [US1] Complete runtime state, cache, degraded-mode, concurrency, and
+  observability proof for MVP surfaces.
+  - [ ] T204.1 Implement cold, refreshing, fresh, stale, partial, invalid, and
+    invalid-due-to-environment status transitions through snapshot/runtime
+    ports.
+  - [ ] T204.2 Implement runtime owner/observer coordination, heartbeat,
+    stale/dead owner recovery, isolated-worker mode, and duplicate warm-up
+    refusal.
+  - [ ] T204.3 Implement warm-up orchestration for migration, scan, extraction,
+    reference resolution, FTS refresh, cache publication, and fresh snapshot
+    publication.
+  - [ ] T204.4 Implement cache invalidation for file identity, graph evidence,
+    query results, source sections, validation discovery, and report caches.
+  - [ ] T204.5 Implement obsolete-result rejection for parser/indexing work
+    when snapshot id, file hash, or config identity no longer matches.
+  - [ ] T204.6 Implement degraded responses for missing tree-sitter parser or
+    grammar, parser timeout/crash, missing optional enrichment, unsupported
+    language/platform, missing test runner, and stale watcher snapshots.
+  - [ ] T204.7 Add concurrency tests proving bounded reads use the last valid
+    snapshot or explicit refreshing/stale metadata while graph writes are
+    serialized per repository.
+  - [ ] T204.8 Add OTEL contract tests for dispatch, use case, graph/query,
+    worker, cache, presentation, degraded state, and error boundaries without
+    adding durable usage records.
+  - [ ] T204.9 Add fixture-runtime-operations and fixture-runtime-boundaries
+    coverage for warm-up, cache reuse, invalidation, owner state, parser
+    timeout, malformed inputs, and operational metadata.
+
 ## Phase 7: Cross-Cutting Validation
 
 - [ ] T080 Add produced-response assertions against the expected golden
