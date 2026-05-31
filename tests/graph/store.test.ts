@@ -224,4 +224,179 @@ describe("graph store", () => {
       store.close();
     }
   });
+
+  it("replaces stale file graph evidence and refreshes search rows", async () => {
+    const store = openGraphStore(path.join(dir, "replace.sqlite"));
+    const snapshot = snapshotState("45");
+
+    try {
+      await store.upsertSnapshot({ snapshot });
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: snapshot.id,
+          source_path: "src/service.py",
+          node_id: "old-node",
+          name: "OldName"
+        }),
+        replace: true
+      });
+      expect(await store.findNodesByName({ snapshot_id: snapshot.id, query: "OldName", exact: true })).toHaveLength(1);
+
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: snapshot.id,
+          source_path: "src/service.py",
+          node_id: "new-node",
+          name: "NewName"
+        }),
+        replace: true
+      });
+
+      expect(await store.findNodesByName({ snapshot_id: snapshot.id, query: "OldName", exact: true })).toEqual([]);
+      expect(await store.searchNodes({ snapshot_id: snapshot.id, query: "OldName" })).toEqual([]);
+      expect(await store.findNodesByName({ snapshot_id: snapshot.id, query: "NewName", exact: true })).toEqual([
+        expect.objectContaining({
+          id: "new-node",
+          name: "NewName"
+        })
+      ]);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("cleans deleted and renamed file evidence through graph ports", async () => {
+    const store = openGraphStore(path.join(dir, "cleanup.sqlite"));
+    const snapshot = snapshotState("46");
+
+    try {
+      await store.upsertSnapshot({ snapshot });
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: snapshot.id,
+          source_path: "src/old.py",
+          node_id: "old-path-node",
+          name: "MovedSymbol"
+        }),
+        replace: true
+      });
+
+      await store.clearFile({ snapshot_id: snapshot.id, file_path: "src/old.py" });
+      expect(await store.findNodesByName({ snapshot_id: snapshot.id, query: "MovedSymbol", exact: true })).toEqual([]);
+
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: snapshot.id,
+          source_path: "src/new.py",
+          node_id: "new-path-node",
+          name: "MovedSymbol"
+        }),
+        replace: true
+      });
+
+      expect(await store.findNodesByName({ snapshot_id: snapshot.id, query: "MovedSymbol", exact: true })).toEqual([
+        expect.objectContaining({
+          id: "new-path-node",
+          file_path: "src/new.py"
+        })
+      ]);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("applies graph read budgets and keeps failed edge transactions atomic", async () => {
+    const store = openGraphStore(path.join(dir, "budget.sqlite"));
+    const snapshot = snapshotState("47");
+
+    try {
+      await store.upsertSnapshot({ snapshot });
+      for (let index = 0; index < 5; index += 1) {
+        await store.replaceSnapshotExtraction({
+          batch: extractionBatch({
+            snapshot_id: snapshot.id,
+            source_path: `src/file_${index}.py`,
+            node_id: `node-${index}`,
+            name: `Shared${index}`
+          }),
+          replace: true
+        });
+      }
+
+      expect(await store.searchNodes({ snapshot_id: snapshot.id, query: "Shared", max_rows: 2 })).toHaveLength(2);
+      await expect(
+        store.insertEdges({
+          snapshot_id: snapshot.id,
+          file_path: "src/missing.py",
+          edges: [
+            {
+              id: "bad-edge",
+              source_node_id: "node-0",
+              target_node_id: "node-1",
+              kind: "call",
+              provenance: "unit",
+              confidence: 1,
+              metadata: {}
+            }
+          ]
+        })
+      ).rejects.toThrow("Unknown file for edge insertion");
+      expect(await store.getReferences({ snapshot_id: snapshot.id, node_id: "node-0" })).toEqual([]);
+    } finally {
+      store.close();
+    }
+  });
 });
+
+function snapshotState(id: string): SnapshotState {
+  return {
+    id,
+    repo_root: "/tmp/repo",
+    workspace_root: "/tmp/repo",
+    repo_identity: "/tmp/repo",
+    config_identity: "default",
+    schema_version: SCHEMA_VERSION,
+    freshness: "fresh",
+    owner_state: "owner",
+    created_at: "2026-05-08T00:00:00.000Z",
+    updated_at: "2026-05-08T00:00:00.000Z"
+  };
+}
+
+function extractionBatch(input: {
+  snapshot_id: string;
+  source_path: string;
+  node_id: string;
+  name: string;
+}): ExtractionBatch {
+  return {
+    snapshot_id: input.snapshot_id,
+    source_path: input.source_path,
+    extractor_id: "unit",
+    language: "python",
+    file_identity: {
+      path: input.source_path,
+      language: "python",
+      content_hash: `hash:${input.node_id}`,
+      size_bytes: 120,
+      mtime_ms: 1234
+    },
+    nodes: [
+      {
+        id: input.node_id,
+        kind: "function",
+        name: input.name,
+        qualified_name: input.name,
+        file_path: input.source_path,
+        language: "python",
+        source_range: { start_line: 1, start_column: 0, end_line: 3, end_column: 8 },
+        metadata: { type: "symbol" }
+      }
+    ],
+    edges: [],
+    unresolved_references: [],
+    diagnostics_hints: [],
+    test_hints: [],
+    extracted_at: "2026-05-08T00:00:00.000Z"
+  };
+}

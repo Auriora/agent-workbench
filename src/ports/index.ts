@@ -79,6 +79,11 @@ export interface GraphWritePort {
     batch: ExtractionBatch;
     replace: boolean;
   }): Promise<void>;
+  insertEdges(input: {
+    snapshot_id: string;
+    file_path: string;
+    edges: readonly GraphEdge[];
+  }): Promise<void>;
   upsertFileIdentity(input: { snapshot_id: string; file_identity: FileIdentity }): Promise<void>;
   clearFile(input: { snapshot_id: string; file_path: string }): Promise<void>;
   clearSnapshot(input: { snapshot_id: string }): Promise<void>;

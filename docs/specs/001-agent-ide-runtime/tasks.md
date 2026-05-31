@@ -193,19 +193,19 @@ executable without application code depending on SQLite.
 - [ ] T037 Implement bounded priority work queue, worker pool, timeout,
   cancellation, and
   obsolete-result rejection for parser/indexing work.
-- [ ] T038 Define `ExtractionBatch` normalization for capability, provenance,
+- [x] T038 Define `ExtractionBatch` normalization for capability, provenance,
   confidence, source ranges, diagnostics hints, and test hints.
-- [ ] T038A Define common adapter/provider contracts for language, framework,
+- [x] T038A Define common adapter/provider contracts for language, framework,
   config, infrastructure, documentation, test, and tooling domains.
-- [ ] T039 Implement Markdown/config resource-backed extraction behind
+- [x] T039 Implement Markdown/config resource-backed extraction behind
   `ExtractorPort`.
-- [ ] T040 Configure canonical `tree-sitter` parser and grammar loading behind
+- [x] T040 Configure canonical `tree-sitter` parser and grammar loading behind
   extraction infrastructure.
-- [ ] T041 Implement first-language node and unresolved-reference extraction
+- [x] T041 Implement first-language node and unresolved-reference extraction
   using canonical `tree-sitter`.
-- [ ] T042 Implement extraction ingestion use case that validates
+- [x] T042 Implement extraction ingestion use case that validates
   `ExtractionBatch` and writes through graph ports.
-- [ ] T043 Implement reference resolution use case for imports, duplicate-name
+- [x] T043 Implement reference resolution use case for imports, duplicate-name
   ambiguity, resolved edges, and unresolved refs.
 - [ ] T044 Implement degraded-mode behavior for missing `tree-sitter`
   parser/grammar, parser failure, missing future optional enrichment evidence,
@@ -348,30 +348,30 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
 
 ### Gap 2: Graph Extraction Pipeline
 
-- [ ] T201 [US2] Complete the graph extraction pipeline from repository scan to
+- [x] T201 [US2] Complete the graph extraction pipeline from repository scan to
   queryable SQLite evidence.
-  - [ ] T201.1 Implement snapshot creation, freshness transitions, and repo
+  - [x] T201.1 Implement snapshot creation, freshness transitions, and repo
     identity/config identity checks before extraction writes.
-  - [ ] T201.2 Normalize scanned files into `ExtractionRequest` batches with
+  - [x] T201.2 Normalize scanned files into `ExtractionRequest` batches with
     file identity, adapter capability, provenance, confidence, and source range
     conventions.
-  - [ ] T201.3 Implement Markdown/config resource-backed extraction through
+  - [x] T201.3 Implement Markdown/config resource-backed extraction through
     `ExtractorPort` without claiming semantic language support.
-  - [ ] T201.4 Implement canonical tree-sitter Python extraction for symbols,
+  - [x] T201.4 Implement canonical tree-sitter Python extraction for symbols,
     imports, calls, source ranges, signatures, docstrings, diagnostics hints,
     and unresolved references.
-  - [ ] T201.5 Implement extraction ingestion that validates
+  - [x] T201.5 Implement extraction ingestion that validates
     `ExtractionBatch`, writes files/nodes/edges/unresolved refs through graph
     ports, and keeps SQLite row models isolated in infrastructure.
-  - [ ] T201.6 Implement reference resolution for imports, duplicate names,
+  - [x] T201.6 Implement reference resolution for imports, duplicate names,
     ambiguous references, resolved edges, unresolved refs, confidence, and
     provenance.
-  - [ ] T201.7 Add add/modify/delete/rename cleanup tests that prove stale graph
+  - [x] T201.7 Add add/modify/delete/rename cleanup tests that prove stale graph
     evidence is removed or marked stale by snapshot/file identity.
-  - [ ] T201.8 Add fixture-backed tests proving non-Python files remain
+  - [x] T201.8 Add fixture-backed tests proving non-Python files remain
     `unsupported` or `resource_backed` while Python is the only
     partial-semantic extraction path.
-  - [ ] T201.9 Add query-budget and transaction tests for extraction ingestion,
+  - [x] T201.9 Add query-budget and transaction tests for extraction ingestion,
     FTS refresh, and graph reads used by MVP hot paths.
 
 ### Gap 3: Query Tools

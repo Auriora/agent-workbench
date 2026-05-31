@@ -822,6 +822,70 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       });
   }
 
+  public async insertEdges(input: {
+    snapshot_id: string;
+    file_path: string;
+    edges: readonly GraphEdgeReadModel[];
+  }): Promise<void> {
+    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "insertEdges");
+    if (snapshotId == null || input.edges.length === 0) {
+      return;
+    }
+
+    const fileRow = this.getFileRow(snapshotId, input.file_path);
+    if (!fileRow) {
+      throw new Error(`Unknown file for edge insertion: ${input.file_path}`);
+    }
+
+    const insertEdge = this.db.prepare(`
+      INSERT INTO edges (
+        source_node_id,
+        target_node_id,
+        kind,
+        file_id,
+        start_line,
+        start_column,
+        end_line,
+        end_column,
+        provenance,
+        confidence,
+        metadata_json
+      ) VALUES (
+        @sourceNodeId,
+        @targetNodeId,
+        @kind,
+        @fileId,
+        @startLine,
+        @startColumn,
+        @endLine,
+        @endColumn,
+        @provenance,
+        @confidence,
+        @metadata
+      )
+    `);
+
+    const tx = this.db.transaction(() => {
+      for (const edge of input.edges) {
+        insertEdge.run({
+          sourceNodeId: edge.source_node_id,
+          targetNodeId: edge.target_node_id ?? null,
+          kind: edge.kind,
+          fileId: fileRow.id,
+          startLine: edge.source_range?.start_line ?? null,
+          startColumn: edge.source_range?.start_column ?? null,
+          endLine: edge.source_range?.end_line ?? null,
+          endColumn: edge.source_range?.end_column ?? null,
+          provenance: edge.provenance,
+          confidence: edge.confidence,
+          metadata: JSON.stringify(edge.metadata)
+        });
+      }
+    });
+
+    tx();
+  }
+
   public async clearFile(input: { snapshot_id: string; file_path: string }): Promise<void> {
     const snapshotId = this.resolveSnapshotId(input.snapshot_id, "clearFile");
     if (snapshotId == null) {
@@ -1055,10 +1119,26 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       return;
     }
 
-    await this.upsertFileIdentity({
-      snapshot_id: String(snapshotId),
-      file_identity: input.entry.file_identity
-    });
+    this.db
+      .prepare(`
+        INSERT INTO files (snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at)
+        VALUES (@snapshotId, @path, @language, @contentHash, @sizeBytes, @mtimeMs, @indexedAt)
+        ON CONFLICT(snapshot_id, path) DO UPDATE SET
+          language = excluded.language,
+          content_hash = excluded.content_hash,
+          size_bytes = excluded.size_bytes,
+          mtime_ms = excluded.mtime_ms,
+          indexed_at = excluded.indexed_at
+      `)
+      .run({
+        snapshotId,
+        path: input.entry.path,
+        language: input.entry.file_identity.language,
+        contentHash: input.entry.file_identity.content_hash,
+        sizeBytes: input.entry.file_identity.size_bytes,
+        mtimeMs: input.entry.file_identity.mtime_ms,
+        indexedAt: input.entry.indexed ? (input.entry.file_identity.indexed_at ?? null) : null
+      });
   }
 
   public async removeEntry(input: { snapshot_id: string; path: string }): Promise<void> {
@@ -1155,7 +1235,13 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     });
 
     this.db
-      .prepare("DELETE FROM edges WHERE source_node_id IN (SELECT id FROM nodes WHERE file_id = @fileId)")
+      .prepare(
+        `
+        DELETE FROM edges
+        WHERE source_node_id IN (SELECT id FROM nodes WHERE file_id = @fileId)
+           OR target_node_id IN (SELECT id FROM nodes WHERE file_id = @fileId)
+      `
+      )
       .run({ fileId: input.fileId });
 
     this.db.prepare("DELETE FROM nodes WHERE file_id = @fileId").run({
