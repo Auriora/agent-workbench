@@ -115,6 +115,18 @@ describe("stdio MCP entrypoint", () => {
             files: ["package.json"]
           }
         }
+      },
+      {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: {
+          name: "verification_plan",
+          arguments: {
+            files: ["package.json"],
+            changed_files: ["package.json"]
+          }
+        }
       }
     ]);
     const listedResources = messages.find((message) => message.id === 2) as {
@@ -129,11 +141,17 @@ describe("stdio MCP entrypoint", () => {
     const taskContext = messages.find((message) => message.id === 5) as {
       result: { content: Array<{ text: string }> };
     };
+    const verificationPlan = messages.find((message) => message.id === 6) as {
+      result: { content: Array<{ text: string }> };
+    };
     const parsed = JSON.parse(statusResource.result.contents[0]?.text ?? "{}") as {
       data: { adapter_coverage: Array<{ domain: string; name: string }> };
     };
     const parsedTaskContext = JSON.parse(taskContext.result.content[0]?.text ?? "{}") as {
       data: { task: string; requested_files: Array<{ path: string; exists: boolean }> };
+    };
+    const parsedVerificationPlan = JSON.parse(verificationPlan.result.content[0]?.text ?? "{}") as {
+      data: { planned_commands: Array<{ display: string; execution: string }>; static_feedback?: unknown };
     };
 
     expect(listedResources.result.resources).toEqual(
@@ -160,6 +178,9 @@ describe("stdio MCP entrypoint", () => {
       expect.arrayContaining([
         expect.objectContaining({
           name: "context_for_task"
+        }),
+        expect.objectContaining({
+          name: "verification_plan"
         })
       ])
     );
@@ -172,6 +193,15 @@ describe("stdio MCP entrypoint", () => {
         })
       ]
     });
+    expect(parsedVerificationPlan.data.planned_commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          display: "pnpm typecheck",
+          execution: "not_executed"
+        })
+      ])
+    );
+    expect(parsedVerificationPlan.data.static_feedback).toBeUndefined();
   });
 });
 

@@ -230,7 +230,7 @@ references, and report status/scope without adapter-to-SQLite coupling.
 - [ ] T053 [US3] Implement `PreviewWorkspaceEditUseCase` with base hashes.
 - [ ] T054 [US3] Implement `ApplyWorkspaceEditUseCase` with path containment
   and stale-preview rejection.
-- [ ] T055 Implement `PlanVerificationUseCase` without command execution,
+- [x] T055 Implement `PlanVerificationUseCase` without command execution,
   distinguishing planned checks from proven runnable checks and routing
   low-confidence discovery to exact follow-up actions. Touched-file static
   feedback is represented as an optional, read-only `static_feedback` section.
@@ -298,7 +298,7 @@ handlers or use cases.
   presenter.
 - [ ] T077 [US3] Wire `apply_workspace_edit` through MCP schema, use case, and
   presenter.
-- [ ] T078 [US3] Wire `verification_plan` through MCP schema, use case, and
+- [x] T078 [US3] Wire `verification_plan` through MCP schema, use case, and
   presenter, including optional quiet `static_feedback` for touched files.
 - [ ] T079 Wire `repo:///agent-integration-profile` through MCP schema, use
   case, and presenter as a read-only post-MVP-discovery resource. MVP requires
@@ -423,7 +423,7 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T203.4 Implement `PlanVerificationUseCase` with planned diagnostics,
     formatter, lint, and test commands, plus blocked states for missing,
     unsafe, too-broad, or low-confidence checks.
-  - [ ] T203.5 Keep `verification_plan` read-only: do not execute diagnostics,
+  - [x] T203.5 Keep `verification_plan` read-only: do not execute diagnostics,
     lint, formatting, tests, or hooks in the MVP planning path.
   - [ ] T203.6 Add next-action metadata when verification discovery is
     incomplete, including direct-read, symbol/reference/impact, or manual
@@ -434,7 +434,7 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T203.8 Add presenter golden responses for preview, apply success,
     stale apply rejection, unsafe path rejection, blocked validation, and
     planned validation.
-  - [ ] T203.9 Implement quiet file-change static feedback for touched files
+  - [x] T203.9 Implement quiet file-change static feedback for touched files
     as optional `verification_plan.static_feedback` with actionable findings
     only, silent clean results, and silent non-blocking optional analyzer
     failures.
@@ -520,7 +520,7 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T205.6 Wire tools `preview_workspace_edit`,
     `apply_workspace_edit`, and `verification_plan` through typed parsers, use
     cases, presenters, safety policy metadata, and read/write capability
-    classes.
+    classes. `verification_plan` is complete; preview/apply remain open.
   - [ ] T205.7 Add MCP registry tests proving handlers do not import concrete
     SQLite, tree-sitter, filesystem watcher, or process-execution
     infrastructure.

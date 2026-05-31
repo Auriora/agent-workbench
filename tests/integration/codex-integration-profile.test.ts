@@ -65,6 +65,11 @@ describe("Codex integration profile", () => {
           name: "context_for_task",
           kind: "tool",
           capability_class: "read_only"
+        }),
+        expect.objectContaining({
+          name: "verification_plan",
+          kind: "tool",
+          capability_class: "planning"
         })
       ])
     );
@@ -185,6 +190,15 @@ describe("Codex plugin artifacts", () => {
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )
     ).toContain("The hook did not run analysis and did not produce partial results.");
+    expect(
+      postEdit.buildPostEditContext(
+        {
+          tool_name: "write_file",
+          tool_input: { path: "src/app.ts" }
+        },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toContain("verification_plan tool");
     expect(
       sessionStart.buildSessionStartContext(
         { cwd: "/repo" },

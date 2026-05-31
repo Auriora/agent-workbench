@@ -110,6 +110,12 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         kind: "tool",
         capability_class: "read_only",
         description: "Task-context MCP workflow for status, files, docs, risks, and validation hints."
+      },
+      {
+        name: "verification_plan",
+        kind: "tool",
+        capability_class: "planning",
+        description: "Plans validation commands and quiet static feedback without executing commands."
       }
     ],
     plugin: {

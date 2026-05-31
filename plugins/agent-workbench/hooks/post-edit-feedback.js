@@ -50,7 +50,7 @@ export function buildPostEditContext(payload, env = process.env) {
   const suffix = files.length > 5 ? `, and ${files.length - 5} more` : "";
   return [
     `Agent Workbench noticed changed files: ${preview}${suffix}.`,
-    "Use the MCP verification_plan/static_feedback path for these files.",
+    "Use the MCP verification_plan tool with changed_files for quiet static feedback.",
     "The hook did not run analysis and did not produce partial results."
   ].join(" ");
 }

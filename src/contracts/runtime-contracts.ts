@@ -175,6 +175,63 @@ export const taskContextSchema = z
   .strict();
 export type TaskContext = z.infer<typeof taskContextSchema>;
 
+export const verificationPlanRequestSchema = z
+  .object({
+    task: z.string().optional(),
+    repo_root: z.string().optional(),
+    files: z.array(z.string()).default([]),
+    changed_files: z.array(z.string()).default([]),
+    include_static_feedback: z.boolean().default(true),
+    max_commands: z.number().int().positive().max(20).default(10)
+  })
+  .strict();
+export type VerificationPlanRequest = z.infer<typeof verificationPlanRequestSchema>;
+
+export const plannedValidationCommandSchema = z
+  .object({
+    command: z.string(),
+    args: z.array(z.string()),
+    display: z.string(),
+    reason: z.string(),
+    status: z.literal("planned"),
+    execution: z.literal("not_executed")
+  })
+  .strict();
+export type PlannedValidationCommand = z.infer<typeof plannedValidationCommandSchema>;
+
+export const staticFeedbackFindingSchema = z
+  .object({
+    path: z.string(),
+    severity: attentionSeveritySchema,
+    message: z.string(),
+    suggested_action: z.string()
+  })
+  .strict();
+export type StaticFeedbackFinding = z.infer<typeof staticFeedbackFindingSchema>;
+
+export const staticFeedbackSchema = z
+  .object({
+    status: z.enum(["silent", "actionable"]),
+    checked_files: z.array(z.string()),
+    findings: z.array(staticFeedbackFindingSchema)
+  })
+  .strict();
+export type StaticFeedback = z.infer<typeof staticFeedbackSchema>;
+
+export const verificationPlanSchema = z
+  .object({
+    task: z.string().optional(),
+    repo_root: z.string(),
+    status: verificationStatusSchema,
+    summary: z.string(),
+    planned_commands: z.array(plannedValidationCommandSchema),
+    static_feedback: staticFeedbackSchema.optional(),
+    risks: z.array(contextRiskSchema),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type VerificationPlan = z.infer<typeof verificationPlanSchema>;
+
 export const scopeMetadataSchema = z.object({
   repo_root: z.string(),
   indexed_roots: z.array(z.string()),

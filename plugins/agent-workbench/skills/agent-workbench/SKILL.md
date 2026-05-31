@@ -18,7 +18,7 @@ local scripts.
 2. Use `context_for_task` before broad file reads.
 3. Use targeted symbol, reference, and impact surfaces for implementation work.
 4. Use preview/apply surfaces for workspace writes when available.
-5. Use `verification_plan` semantics for validation and post-edit feedback.
+5. Use `verification_plan` for validation planning and quiet post-edit static feedback.
 
 ## Codex Integration
 

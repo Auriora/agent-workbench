@@ -1,18 +1,22 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type {
   CodexIntegrationProfile,
-  TaskContextRequest
+  TaskContextRequest,
+  VerificationPlanRequest
 } from "../../../contracts/index.js";
 import type { GetTaskContextResult } from "../../../application/use-cases/get-task-context.js";
 import type { GetRepoStatusResult } from "../../../application/use-cases/get-repo-status.js";
+import type { PlanVerificationResult } from "../../../application/use-cases/plan-verification.js";
 import { codexIntegrationProfileResource } from "./resources/codex-integration-profile.js";
 import { repoStatusResource } from "./resources/repo-status.js";
 import { contextForTaskTool } from "./tools/context-for-task.js";
+import { verificationPlanTool } from "./tools/verification-plan.js";
 
 export type McpRegistryContext = {
   repoRoot: string;
   getRepoStatus?: (input: { repo_root: string }) => Promise<GetRepoStatusResult> | GetRepoStatusResult;
   getTaskContext?: (input: { request: TaskContextRequest }) => Promise<GetTaskContextResult> | GetTaskContextResult;
+  planVerification?: (input: { request: VerificationPlanRequest }) => Promise<PlanVerificationResult> | PlanVerificationResult;
   describeCodexIntegrationProfile?: () => CodexIntegrationProfile;
 };
 
@@ -40,7 +44,7 @@ export const mcpResources: McpResourceDeclaration[] = [
   codexIntegrationProfileResource
 ];
 
-export const mcpTools: McpToolDeclaration[] = [contextForTaskTool];
+export const mcpTools: McpToolDeclaration[] = [contextForTaskTool, verificationPlanTool];
 
 export const mcpPrompts: McpPromptDeclaration[] = [];
 

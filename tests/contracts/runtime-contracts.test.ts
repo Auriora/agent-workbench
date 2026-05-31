@@ -10,7 +10,9 @@ import {
   makeEnvelope,
   responseEnvelopeSchema,
   taskContextRequestSchema,
-  taskContextSchema
+  taskContextSchema,
+  verificationPlanRequestSchema,
+  verificationPlanSchema
 } from "../../src/contracts/index.js";
 import { capabilityLevelSchema as domainCapabilityLevelSchema } from "../../src/contracts/domain-contracts.js";
 
@@ -159,6 +161,59 @@ describe("runtime contracts", () => {
     ).toMatchObject({
       task: "Update the Codex MCP profile",
       requested_files: [expect.objectContaining({ path: "src/server.ts" })]
+    });
+  });
+
+  it("models verification plans as planned, not executed, validation", () => {
+    const request = verificationPlanRequestSchema.parse({
+      files: ["src/server.ts"],
+      changed_files: ["src/server.ts"]
+    });
+
+    expect(request).toEqual({
+      files: ["src/server.ts"],
+      changed_files: ["src/server.ts"],
+      include_static_feedback: true,
+      max_commands: 10
+    });
+    expect(() =>
+      verificationPlanRequestSchema.parse({
+        max_commands: 100
+      })
+    ).toThrow();
+
+    expect(
+      verificationPlanSchema.parse({
+        repo_root: "/repo",
+        status: "planned",
+        summary: "Planned 1 validation command.",
+        planned_commands: [
+          {
+            command: "pnpm",
+            args: ["test"],
+            display: "pnpm test",
+            reason: "package.json indicates tests are available.",
+            status: "planned",
+            execution: "not_executed"
+          }
+        ],
+        risks: [],
+        next_actions: [
+          {
+            tool: "manual_command",
+            args: {
+              command: "pnpm test"
+            }
+          }
+        ]
+      })
+    ).toMatchObject({
+      status: "planned",
+      planned_commands: [
+        expect.objectContaining({
+          execution: "not_executed"
+        })
+      ]
     });
   });
 });
