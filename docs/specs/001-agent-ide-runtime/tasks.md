@@ -284,6 +284,34 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T200.7 Add budget tests proving default orientation responses stay
     bounded and do not perform hidden broad source reads.
 
+### Gap 2: Graph Extraction Pipeline
+
+- [ ] T201 [US2] Complete the graph extraction pipeline from repository scan to
+  queryable SQLite evidence.
+  - [ ] T201.1 Implement snapshot creation, freshness transitions, and repo
+    identity/config identity checks before extraction writes.
+  - [ ] T201.2 Normalize scanned files into `ExtractionRequest` batches with
+    file identity, adapter capability, provenance, confidence, and source range
+    conventions.
+  - [ ] T201.3 Implement Markdown/config resource-backed extraction through
+    `ExtractorPort` without claiming semantic language support.
+  - [ ] T201.4 Implement canonical tree-sitter Python extraction for symbols,
+    imports, calls, source ranges, signatures, docstrings, diagnostics hints,
+    and unresolved references.
+  - [ ] T201.5 Implement extraction ingestion that validates
+    `ExtractionBatch`, writes files/nodes/edges/unresolved refs through graph
+    ports, and keeps SQLite row models isolated in infrastructure.
+  - [ ] T201.6 Implement reference resolution for imports, duplicate names,
+    ambiguous references, resolved edges, unresolved refs, confidence, and
+    provenance.
+  - [ ] T201.7 Add add/modify/delete/rename cleanup tests that prove stale graph
+    evidence is removed or marked stale by snapshot/file identity.
+  - [ ] T201.8 Add fixture-backed tests proving non-Python files remain
+    `unsupported` or `resource_backed` while Python is the only
+    partial-semantic extraction path.
+  - [ ] T201.9 Add query-budget and transaction tests for extraction ingestion,
+    FTS refresh, and graph reads used by MVP hot paths.
+
 ## Phase 7: Cross-Cutting Validation
 
 - [ ] T080 Add produced-response assertions against the expected golden
