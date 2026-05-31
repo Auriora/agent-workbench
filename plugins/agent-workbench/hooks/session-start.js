@@ -21,7 +21,7 @@ export function buildSessionStartContext(payload, env = process.env) {
   return [
     "Agent Workbench MCP is available for this Codex session.",
     `Repo root candidate: ${cwd}`,
-    "Start with repo:///status, then use integration:///profiles/codex when you need Codex surface details."
+    "Start with repo:///status, repo:///scope, and repo:///overview; use integration:///profiles/codex when you need Codex surface details."
   ].join(" ");
 }
 

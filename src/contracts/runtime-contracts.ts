@@ -175,6 +175,33 @@ export const taskContextSchema = z
   .strict();
 export type TaskContext = z.infer<typeof taskContextSchema>;
 
+export const repoScopeSchema = z
+  .object({
+    repo_root: z.string(),
+    indexed_roots: z.array(z.string()),
+    skipped_roots: z.array(z.string()),
+    languages: z.array(z.string()),
+    file_counts: z.record(z.string(), z.number().int().nonnegative()),
+    capability_counts: z.record(capabilityLevelSchema, z.number().int().nonnegative()),
+    generated_or_vendor_roots: z.array(z.string())
+  })
+  .strict();
+export type RepoScope = z.infer<typeof repoScopeSchema>;
+
+export const repoOverviewSchema = z
+  .object({
+    repo_root: z.string(),
+    summary: z.string(),
+    languages: z.array(z.string()),
+    platforms: z.array(z.string()),
+    key_files: z.array(fileReferenceSchema),
+    key_docs: z.array(documentReferenceSchema),
+    validation_hints: z.array(validationHintSchema),
+    recommended_first_calls: z.array(nextActionSchema)
+  })
+  .strict();
+export type RepoOverview = z.infer<typeof repoOverviewSchema>;
+
 export const verificationPlanRequestSchema = z
   .object({
     task: z.string().optional(),

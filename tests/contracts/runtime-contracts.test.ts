@@ -8,6 +8,8 @@ import {
   capabilityLevelSchema,
   CONTRACT_VERSION,
   makeEnvelope,
+  repoOverviewSchema,
+  repoScopeSchema,
   responseEnvelopeSchema,
   taskContextRequestSchema,
   taskContextSchema,
@@ -161,6 +163,71 @@ describe("runtime contracts", () => {
     ).toMatchObject({
       task: "Update the Codex MCP profile",
       requested_files: [expect.objectContaining({ path: "src/server.ts" })]
+    });
+  });
+
+  it("models repo scope and overview resources", () => {
+    expect(
+      repoScopeSchema.parse({
+        repo_root: "/repo",
+        indexed_roots: ["."],
+        skipped_roots: ["node_modules"],
+        languages: ["python", "typescript"],
+        file_counts: {
+          python: 1,
+          typescript: 2
+        },
+        capability_counts: {
+          semantic: 0,
+          partial_semantic: 1,
+          resource_backed: 1,
+          unsupported: 1
+        },
+        generated_or_vendor_roots: ["node_modules"]
+      })
+    ).toMatchObject({
+      languages: ["python", "typescript"],
+      capability_counts: {
+        partial_semantic: 1
+      }
+    });
+
+    expect(
+      repoOverviewSchema.parse({
+        repo_root: "/repo",
+        summary: "Repository has indexed files.",
+        languages: ["python", "typescript"],
+        platforms: ["node"],
+        key_files: [
+          {
+            path: "src/app.ts",
+            language: "typescript",
+            exists: true,
+            capability_level: "unsupported",
+            evidence_kinds: [],
+            reason: "Recognized source file."
+          }
+        ],
+        key_docs: [],
+        validation_hints: [
+          {
+            command: "pnpm test",
+            reason: "package.json indicates tests may be available.",
+            status: "needed"
+          }
+        ],
+        recommended_first_calls: [
+          {
+            tool: "read_resource",
+            args: {
+              uri: "repo:///status"
+            }
+          }
+        ]
+      })
+    ).toMatchObject({
+      platforms: ["node"],
+      key_files: [expect.objectContaining({ path: "src/app.ts" })]
     });
   });
 

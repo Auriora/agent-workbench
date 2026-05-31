@@ -70,6 +70,18 @@ describe("Codex integration profile", () => {
           name: "verification_plan",
           kind: "tool",
           capability_class: "planning"
+        }),
+        expect.objectContaining({
+          name: "scope",
+          uri: "repo:///scope",
+          kind: "resource",
+          capability_class: "read_only"
+        }),
+        expect.objectContaining({
+          name: "overview",
+          uri: "repo:///overview",
+          kind: "resource",
+          capability_class: "read_only"
         })
       ])
     );
@@ -111,13 +123,15 @@ describe("Codex integration profile", () => {
     expect(parsed.data.plugin.update_model.copied_runtime_allowed).toBe(false);
   });
 
-  it("is exposed by the composed server alongside repo status", () => {
+  it("is exposed by the composed server alongside repo resources", () => {
     const server = createAgentWorkbenchServer(".") as unknown as {
       _registeredResources: Record<string, unknown>;
     };
 
     expect(Object.keys(server._registeredResources).sort()).toEqual([
       "integration:///profiles/codex",
+      "repo:///overview",
+      "repo:///scope",
       "repo:///status"
     ]);
   });
@@ -205,6 +219,18 @@ describe("Codex plugin artifacts", () => {
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )
     ).toContain("repo:///status");
+    expect(
+      sessionStart.buildSessionStartContext(
+        { cwd: "/repo" },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toContain("repo:///scope");
+    expect(
+      sessionStart.buildSessionStartContext(
+        { cwd: "/repo" },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toContain("repo:///overview");
   });
 
   it("keeps plugin wrappers out of concrete runtime implementation paths", () => {

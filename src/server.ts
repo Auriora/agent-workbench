@@ -1,4 +1,6 @@
 import { getTaskContext } from "./application/use-cases/get-task-context.js";
+import { getRepoOverview } from "./application/use-cases/get-repo-overview.js";
+import { getRepoScope } from "./application/use-cases/get-repo-scope.js";
 import { getScannedRepoStatus } from "./application/use-cases/get-repo-status.js";
 import { planVerification } from "./application/use-cases/plan-verification.js";
 import { FileCatalogScannerAdapter } from "./infrastructure/filesystem/index.js";
@@ -9,6 +11,16 @@ export function createAgentWorkbenchServer(repoRoot: string) {
   return createAgentWorkbenchMcpServer(repoRoot, {
     getRepoStatus: ({ repo_root }) =>
       getScannedRepoStatus({
+        repo_root,
+        scanner
+      }),
+    getRepoScope: ({ repo_root }) =>
+      getRepoScope({
+        repo_root,
+        scanner
+      }),
+    getRepoOverview: ({ repo_root }) =>
+      getRepoOverview({
         repo_root,
         scanner
       }),

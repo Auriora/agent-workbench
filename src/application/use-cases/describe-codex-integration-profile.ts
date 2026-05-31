@@ -99,6 +99,20 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         description: "Compact repository status, scope, freshness, and adapter coverage."
       },
       {
+        name: "scope",
+        uri: "repo:///scope",
+        kind: "resource",
+        capability_class: "read_only",
+        description: "Indexed roots, skipped roots, language counts, capability counts, and generated/vendor scope."
+      },
+      {
+        name: "overview",
+        uri: "repo:///overview",
+        kind: "resource",
+        capability_class: "read_only",
+        description: "Compact repository overview with platforms, key files, key docs, validation hints, and first-call guidance."
+      },
+      {
         name: "codex-integration-profile",
         uri: "integration:///profiles/codex",
         kind: "resource",
@@ -136,7 +150,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         path: "plugins/agent-workbench/skills/agent-workbench/SKILL.md",
         purpose: "Use Agent Workbench as the MCP-backed IDE runtime for coding tasks.",
         workflow: [
-          "Read repo status before trusting runtime results.",
+          "Read repo status, scope, and overview before trusting runtime results.",
           "Gather task context before broad file reads.",
           "Use targeted symbol, reference, impact, edit, and verification surfaces for implementation work."
         ],

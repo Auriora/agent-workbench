@@ -14,7 +14,7 @@ local scripts.
 
 ## Default Workflow
 
-1. Read `repo:///status` before relying on runtime output.
+1. Read `repo:///status`, `repo:///scope`, and `repo:///overview` before relying on runtime output.
 2. Use `context_for_task` before broad file reads.
 3. Use targeted symbol, reference, and impact surfaces for implementation work.
 4. Use preview/apply surfaces for workspace writes when available.

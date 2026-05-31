@@ -64,7 +64,7 @@ describe("stdio MCP entrypoint", () => {
     expect(fs.existsSync(path.resolve("src/mcp/stdio-launch.ts"))).toBe(true);
   });
 
-  it("connects over stdio and exposes repo:///status", async () => {
+  it("connects over stdio and exposes repo resources", async () => {
     const messages = await runStdioSmoke([
       {
         jsonrpc: "2.0",
@@ -101,12 +101,28 @@ describe("stdio MCP entrypoint", () => {
       {
         jsonrpc: "2.0",
         id: 4,
+        method: "resources/read",
+        params: {
+          uri: "repo:///scope"
+        }
+      },
+      {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "resources/read",
+        params: {
+          uri: "repo:///overview"
+        }
+      },
+      {
+        jsonrpc: "2.0",
+        id: 6,
         method: "tools/list",
         params: {}
       },
       {
         jsonrpc: "2.0",
-        id: 5,
+        id: 7,
         method: "tools/call",
         params: {
           name: "context_for_task",
@@ -118,7 +134,7 @@ describe("stdio MCP entrypoint", () => {
       },
       {
         jsonrpc: "2.0",
-        id: 6,
+        id: 8,
         method: "tools/call",
         params: {
           name: "verification_plan",
@@ -135,17 +151,29 @@ describe("stdio MCP entrypoint", () => {
     const statusResource = messages.find((message) => message.id === 3) as {
       result: { contents: Array<{ text: string }> };
     };
-    const listedTools = messages.find((message) => message.id === 4) as {
+    const scopeResource = messages.find((message) => message.id === 4) as {
+      result: { contents: Array<{ text: string }> };
+    };
+    const overviewResource = messages.find((message) => message.id === 5) as {
+      result: { contents: Array<{ text: string }> };
+    };
+    const listedTools = messages.find((message) => message.id === 6) as {
       result: { tools: Array<{ name: string; description: string }> };
     };
-    const taskContext = messages.find((message) => message.id === 5) as {
+    const taskContext = messages.find((message) => message.id === 7) as {
       result: { content: Array<{ text: string }> };
     };
-    const verificationPlan = messages.find((message) => message.id === 6) as {
+    const verificationPlan = messages.find((message) => message.id === 8) as {
       result: { content: Array<{ text: string }> };
     };
     const parsed = JSON.parse(statusResource.result.contents[0]?.text ?? "{}") as {
       data: { adapter_coverage: Array<{ domain: string; name: string }> };
+    };
+    const parsedScope = JSON.parse(scopeResource.result.contents[0]?.text ?? "{}") as {
+      data: { languages: string[]; capability_counts: Record<string, number> };
+    };
+    const parsedOverview = JSON.parse(overviewResource.result.contents[0]?.text ?? "{}") as {
+      data: { platforms: string[]; key_files: Array<{ path: string }> };
     };
     const parsedTaskContext = JSON.parse(taskContext.result.content[0]?.text ?? "{}") as {
       data: { task: string; requested_files: Array<{ path: string; exists: boolean }> };
@@ -159,6 +187,14 @@ describe("stdio MCP entrypoint", () => {
         expect.objectContaining({
           uri: "repo:///status",
           name: "status"
+        }),
+        expect.objectContaining({
+          uri: "repo:///scope",
+          name: "scope"
+        }),
+        expect.objectContaining({
+          uri: "repo:///overview",
+          name: "overview"
         })
       ])
     );
@@ -172,6 +208,21 @@ describe("stdio MCP entrypoint", () => {
           domain: "package_manager",
           name: "npm"
         })
+      ])
+    );
+    expect(parsedScope.data.languages).toEqual(
+      expect.arrayContaining(["python", "typescript", "json", "infrastructure", "yaml"])
+    );
+    expect(parsedScope.data.capability_counts).toMatchObject({
+      partial_semantic: 1,
+      resource_backed: 3,
+      unsupported: 1
+    });
+    expect(parsedOverview.data.platforms).toEqual(["docker", "github_actions", "node"]);
+    expect(parsedOverview.data.key_files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "package.json" }),
+        expect.objectContaining({ path: "Dockerfile" })
       ])
     );
     expect(listedTools.result.tools).toEqual(
