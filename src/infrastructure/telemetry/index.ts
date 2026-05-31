@@ -49,6 +49,34 @@ export function createNoopTelemetryAdapter(): NoopTelemetryAdapter {
   return new NoopTelemetryAdapter();
 }
 
+export class InMemoryTelemetryAdapter implements TelemetryAdapter {
+  public readonly records: TelemetryRecord[] = [];
+
+  public record(name: string, properties?: Record<string, unknown>): void {
+    this.records.push({
+      name,
+      properties,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  public recordError(error: unknown, properties?: Record<string, unknown>): void {
+    this.record("error", {
+      ...properties,
+      error_name: error instanceof Error ? error.name : "Error",
+      error_message: error instanceof Error ? error.message : String(error)
+    });
+  }
+
+  public flush(): void {
+    return undefined;
+  }
+
+  public shutdown(): void {
+    return undefined;
+  }
+}
+
 export class OpenTelemetryAdapter implements TelemetryAdapter {
   private readonly provider: NodeTracerProvider;
   private readonly tracer: Tracer;
@@ -86,8 +114,8 @@ export class OpenTelemetryAdapter implements TelemetryAdapter {
     span.end();
   }
 
-  public flush(): void {
-    return undefined;
+  public async flush(): Promise<void> {
+    await this.provider.forceFlush();
   }
 
   public async shutdown(): Promise<void> {

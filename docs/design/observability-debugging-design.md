@@ -32,6 +32,10 @@ implementation supports:
 - disabled no-op adapter by default
 - console trace exporter for local debugging
 - OTLP HTTP trace exporter for Jaeger or an OpenTelemetry Collector
+- MCP tool/resource dispatch events with low-cardinality surface names,
+  duration, outcome, validity, verification status, warning/error counts, and
+  budget attributes when present
+- an in-memory adapter for contract tests only; it is not a durable usage store
 
 Configuration is environment driven:
 
@@ -97,6 +101,15 @@ These are useful and should remain opt-in:
   failures.
 - MCP invalid-input counters by schema name.
 - Validation-plan confidence counters.
+
+MVP dispatch instrumentation currently emits the following stable event names:
+
+- `mcp.tool.dispatch`
+- `mcp.resource.dispatch`
+- `error` for thrown boundary failures
+
+These events are opt-in when using OpenTelemetry exporters and must not change
+MCP response schemas or add visible feedback to agents.
 
 Avoid durable usage records for operational telemetry. Durable usage tables are
 only justified when there is a product query that cannot be answered by OTEL,

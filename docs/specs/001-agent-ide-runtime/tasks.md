@@ -470,7 +470,7 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T204.8 Add OTEL contract tests for dispatch, use case, graph/query,
     worker, cache, presentation, degraded state, and error boundaries without
     adding durable usage records.
-  - [ ] T204.8A Implement configurable OTEL setup with disabled-by-default
+  - [x] T204.8A Implement configurable OTEL setup with disabled-by-default
     behavior, console export, OTLP HTTP export for Jaeger/collectors,
     environment configuration, and shutdown/flush handling.
   - [ ] T204.8B Add low-impact performance monitoring for tool latency,

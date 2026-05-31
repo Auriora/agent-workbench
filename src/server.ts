@@ -17,6 +17,10 @@ import {
   WorkspaceSafetyAdapter
 } from "./infrastructure/filesystem/index.js";
 import { openGraphStore } from "./infrastructure/sqlite/index.js";
+import {
+  createTelemetryAdapter,
+  telemetryConfigFromEnv
+} from "./infrastructure/telemetry/index.js";
 import { SystemClockAdapter } from "./infrastructure/time/index.js";
 import { createAgentWorkbenchServer as createAgentWorkbenchMcpServer } from "./interface-adapters/mcp/server.js";
 
@@ -28,7 +32,9 @@ export function createAgentWorkbenchServer(repoRoot: string) {
   const clock = new SystemClockAdapter();
   const previews = new InMemoryEditPreviewStoreAdapter();
   const graphStore = openGraphStore(graphStorePath(absoluteRepoRoot));
+  const telemetry = createTelemetryAdapter(telemetryConfigFromEnv());
   return createAgentWorkbenchMcpServer(absoluteRepoRoot, {
+    telemetry,
     getRepoStatus: ({ repo_root }) =>
       getScannedRepoStatus({
         repo_root,

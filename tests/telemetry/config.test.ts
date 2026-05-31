@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   createTelemetryAdapter,
+  InMemoryTelemetryAdapter,
   telemetryConfigFromEnv
 } from "../../src/infrastructure/telemetry/index.js";
 
@@ -44,5 +45,37 @@ describe("telemetry configuration", () => {
     });
 
     expect(adapter.constructor.name).toBe("NoopTelemetryAdapter");
+  });
+
+  it("supports an in-memory adapter for contract tests without durable usage records", () => {
+    const adapter = new InMemoryTelemetryAdapter();
+
+    adapter.record("mcp.tool.dispatch", {
+      surface_name: "context_for_task",
+      duration_ms: 3,
+      row_limit: 10
+    });
+    adapter.recordError(new Error("boom"), {
+      surface_name: "context_for_task"
+    });
+
+    expect(adapter.records).toEqual([
+      expect.objectContaining({
+        name: "mcp.tool.dispatch",
+        properties: expect.objectContaining({
+          surface_name: "context_for_task",
+          duration_ms: 3,
+          row_limit: 10
+        })
+      }),
+      expect.objectContaining({
+        name: "error",
+        properties: expect.objectContaining({
+          surface_name: "context_for_task",
+          error_name: "Error",
+          error_message: "boom"
+        })
+      })
+    ]);
   });
 });
