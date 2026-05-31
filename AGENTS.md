@@ -119,10 +119,13 @@ AST, LSP, Pyright, Ruff, pytest, or other alternate parser/semantic fallbacks
 until a design document or fixture-backed test justifies the specific
 capability.
 
-Prefer one explicit implementation path for each capability. Avoid hidden
-fallbacks, compatibility workarounds, extra mode switches, or parallel
-implementations unless a design document or fixture-backed test justifies them.
-When something fails, perform root-cause analysis and fix the underlying cause
-rather than masking it with retry logic, alternate tooling, or special-case
-branches. If a workaround is temporarily unavoidable, document why it exists,
-what root cause remains, and what evidence will allow its removal.
+Prefer one explicit implementation path for each capability. Do not implement
+primary-plus-fallback routes, hidden fallbacks, compatibility workarounds, extra
+mode switches, or parallel implementations unless a design document and
+fixture-backed test explicitly require them. Do not return partial results as a
+guard for timeouts, crashes, or other failures; return a structured degraded or
+blocked state that makes the missing evidence clear. When something fails,
+perform root-cause analysis and fix the underlying cause rather than masking it
+with retry logic, alternate tooling, partial output, or special-case branches. If
+a workaround is temporarily unavoidable, document why it exists, what root cause
+remains, and what evidence will allow its removal.

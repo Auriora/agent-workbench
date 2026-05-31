@@ -34,6 +34,51 @@ Describe the expected first smoke path once runtime implementation exists.
    default, with planned versus proven runnable checks clearly distinguished.
 8. Run workspace-safety negative checks from the MVP proof matrix.
 
+## Codex Host-Level MCP Launch
+
+For local replacement testing, configure Codex to launch the MCP server from
+this repository checkout rather than from a copied plugin package. Restarting
+Codex picks up source changes. Dependency changes require `pnpm install`.
+
+Example `~/.codex/config.toml` entry:
+
+```toml
+[mcp_servers.agent-workbench]
+enabled = true
+command = "/home/bcherrington/.config/nvm/versions/node/v24.8.0/bin/node"
+args = [
+  "--import",
+  "tsx",
+  "/home/bcherrington/Projects/Auriora/agent-workbench/src/mcp/stdio.ts"
+]
+```
+
+Optional default repo root:
+
+```toml
+[mcp_servers.agent-workbench.env]
+AGENT_WORKBENCH_DEFAULT_REPO_ROOT = "/path/to/target/repo"
+```
+
+The MCP resources and tools should still accept explicit `repo_root` arguments
+where defined. This matters when Codex starts global MCP servers from a
+directory that is not the target repository.
+
+Optional OpenTelemetry export:
+
+```toml
+[mcp_servers.agent-workbench.env]
+AGENT_WORKBENCH_OTEL_ENABLED = "true"
+AGENT_WORKBENCH_OTEL_DESTINATION = "otlp_http"
+AGENT_WORKBENCH_OTEL_ENDPOINT = "http://localhost:4318/v1/traces"
+```
+
+For a direct local launch outside Codex:
+
+```bash
+pnpm mcp -- --repo-root tests/fixtures/fixture-mixed-language-platform
+```
+
 ## Expected Results
 
 The runtime returns compact MCP responses using the shared response envelope.

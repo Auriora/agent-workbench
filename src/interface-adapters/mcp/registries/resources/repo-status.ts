@@ -16,9 +16,7 @@ export const repoStatusResource: McpResourceDeclaration = {
     server.resource("status", "repo:///status", async (request: unknown) => {
       let args;
       try {
-        args = parseRepoStatusArguments(
-          typeof request === "object" && request !== null ? request : undefined
-        );
+        args = parseRepoStatusArguments(getRepoStatusArgumentInput(request));
       } catch (error) {
         const message = error instanceof ZodError ? error.issues.map((issue) => issue.message).join("; ") : "Invalid status resource arguments.";
         const envelope = buildInvalidStatusInputEnvelope({
@@ -51,3 +49,17 @@ export const repoStatusResource: McpResourceDeclaration = {
     });
   }
 };
+
+function getRepoStatusArgumentInput(request: unknown): unknown {
+  if (typeof request !== "object" || request === null) {
+    return undefined;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(request, "repo_root")) {
+    return {
+      repo_root: (request as { repo_root?: unknown }).repo_root
+    };
+  }
+
+  return undefined;
+}

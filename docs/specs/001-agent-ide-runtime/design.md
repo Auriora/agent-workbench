@@ -56,6 +56,11 @@ exact next actions.
   budgets, and stable output ordering.
 - MCP surface:
   transport registration and schema binding for resources and tools.
+- Codex integration profile:
+  `AGENTS.md` guidance, host-level MCP configuration, stdio live-checkout
+  launch, repo-local debug CLI commands, optional skill guidance, optional
+  plugin packaging, and optional quiet hooks mapped from common integration
+  contracts.
 - Observability and profiling:
   disabled-by-default OpenTelemetry setup, configurable OTLP HTTP export for
   Jaeger or collectors, debug harnesses, profiling hooks, and low-overhead
@@ -136,6 +141,20 @@ exact next actions.
   this repository checkout with absolute paths. Normal source changes are picked
   up by restarting Codex; dependency changes require `pnpm install`, not
   reinstalling a copied plugin/runtime package.
+- `AGENTS.md` remains the MVP repository-guidance mechanism for Codex. It should
+  tell agents how to work in this repo, while MCP remains the executable runtime
+  surface.
+- Codex skills are useful after the MCP tools stabilize. A skill should teach
+  the preferred workflow, such as status -> context -> targeted symbol/reference
+  or verification planning, but it must not restate schemas or execute hidden
+  behavior.
+- Codex plugin packaging is worth considering for distribution after the
+  live-checkout path is proven. The plugin may bundle config, skills, hook
+  declarations, and setup metadata, but local development must keep this
+  repository checkout as the runtime source of truth.
+- Codex hooks are post-MVP and opt-in. If added, they should only emit quiet
+  changed-file or post-edit feedback through `verification_plan.static_feedback`
+  semantics and must not be required for core MCP behavior.
 
 ## Resolved Decisions
 
@@ -143,6 +162,10 @@ exact next actions.
   Ruff, pytest, and other language tools are future fixture-backed enrichers or
   validation planners only; they are not parser/semantic fallbacks and must not
   create alternate implementation paths.
+- Failure handling must not use partial results as guards for timeouts, crashes,
+  or provider failures. The runtime either fixes the root cause or reports
+  structured degraded/blocked state with explicit missing evidence; primary and
+  fallback routes require a spec-backed, fixture-tested exception.
 - MVP MCP/client surface is the status, scope, overview, context, symbol,
   reference, impact, preview/apply, and verification planning set from the MVP
   spec.
@@ -160,3 +183,7 @@ exact next actions.
   requires them, and debug harnesses remain repo-local.
 - Host-level Codex live-checkout launch is supported through the stdio MCP
   entrypoint, while vendor-specific plugin packaging remains outside MVP.
+- Codex replacement readiness requires explicit feature mapping: MVP uses
+  `AGENTS.md`, host-level MCP config, stdio live-checkout launch, and repo-local
+  debug CLI commands; skills, plugin packaging, and hooks are planned wrappers
+  around MCP rather than parallel runtime paths.

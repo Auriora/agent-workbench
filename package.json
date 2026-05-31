@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "tsx src/index.ts",
+    "mcp": "node --import tsx src/mcp/stdio.ts",
     "debug:mcp-status": "tsx src/debug/mcp-status.ts",
     "rebuild:native": "CXXFLAGS=-std=c++20 pnpm rebuild tree-sitter tree-sitter-python"
   },

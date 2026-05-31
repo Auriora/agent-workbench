@@ -43,6 +43,19 @@ by the MCP schema. Backend provider output must be translated into that schema.
 No-finding feedback and non-blocking optional analyzer failures should stay
 silent or minimal to avoid distracting agents from the task at hand.
 
+**Single-Path Failure Priority**: Do not add primary-plus-fallback routes unless
+the spec and fixture-backed tests explicitly require them. Do not return partial
+results as timeout or failure guards. Failures must drive root-cause analysis and
+either a root-cause fix or a structured degraded/blocked response that clearly
+names the missing evidence.
+
+**Codex Replacement Priority**: MVP must be close enough to replace
+`agent-ide` for Codex usage. Codex MVP surfaces are `AGENTS.md`, host-level MCP
+configuration, stdio live-checkout launch, and repo-local debug CLI commands.
+Codex skills, plugin packaging, and hooks are planned wrappers around MCP and
+must not duplicate runtime behavior or require reinstall for local source
+updates.
+
 **Execution Sequencing**: Use the MVP Gap Closure Backlog (`T200`-`T205`) as
 the commit-sized implementation stream. Use Phase 0 through Phase 8 as coverage
 gates; a gap task is not complete unless the relevant phase-level architecture,
@@ -95,6 +108,13 @@ satisfied.
   `HookIntent`, `CommandSpec`, `McpBindingSpec`, and `AgentCapability`.
 - [ ] T010 Define integration profile registry and emitter boundary rules for
   Codex, Claude Code, Kiro, Augment, Gemini, Junie, and future agents.
+- [ ] T010A Define the Codex replacement profile with explicit MVP surfaces:
+  `AGENTS.md`, host-level MCP config, stdio live-checkout launch, repo-local
+  debug CLI commands, optional workflow skills, optional plugin packaging, and
+  optional quiet hooks.
+- [ ] T010B Define Codex skill, plugin, and hook wrapper rules: artifacts may
+  guide or configure MCP usage but must not duplicate schemas, backend output,
+  runtime logic, or quiet-feedback behavior.
 - [ ] T011 Define application use-case interfaces and result types for every MVP
   resource and tool.
 - [ ] T012 Define presentation contracts for envelope assembly, metadata,
@@ -217,6 +237,9 @@ references, and report status/scope without adapter-to-SQLite coupling.
   feedback is represented as an optional, read-only `static_feedback` section.
 - [ ] T056 Implement `DescribeIntegrationProfileUseCase` for common coding-agent
   integration metadata without generating vendor-specific artifacts.
+- [ ] T056A Implement Codex integration profile output that reports which Codex
+  features are active in MVP, which wrappers are deferred, and why MCP remains
+  the executable source of truth.
 - [ ] T057 Implement freshness, capability, confidence, budget, attention,
   validation, and workspace safety policies used by the use cases.
 - [ ] T058 Implement cache validity and snapshot validity policies used by the
@@ -243,6 +266,9 @@ MCP transport is wired.
 - [ ] T064 Implement source section presenter with byte and row budgets.
 - [ ] T065 Implement integration profile presenter for agent target surfaces,
   unsupported capabilities, provenance, and regeneration safety.
+- [ ] T065A Implement Codex profile presentation for `AGENTS.md`, MCP config,
+  stdio live-checkout launch, debug CLI, optional skill guidance, optional
+  plugin packaging, optional hooks, and update/restart behavior.
 - [ ] T066 Add presenter-level golden response tests for all MVP resources and
   tools.
 
@@ -279,13 +305,16 @@ handlers or use cases.
   case, and presenter as a read-only post-MVP-discovery resource. MVP requires
   common integration contracts and boundary tests; this resource is included
   only if the first integration slice explicitly promotes it.
-- [ ] T079A Add a stdio MCP process entrypoint that composes the production
+- [ ] T079D Add Codex integration profile schema coverage proving MVP feature
+  mapping is explicit and no skill, plugin, or hook artifact is treated as a
+  second executable runtime path.
+- [x] T079A Add a stdio MCP process entrypoint that composes the production
   server from repository source code, connects `StdioServerTransport`, and
   keeps transport setup separate from registry/resource/tool implementation.
-- [ ] T079B Add a host-level Codex MCP install/runbook task that documents how
+- [x] T079B Add a host-level Codex MCP install/runbook task that documents how
   to point Codex at this checkout with absolute paths so all Codex sessions on
   the host use the latest repo code after restart without reinstalling.
-- [ ] T079C Define default repo-root behavior for host-level MCP launches,
+- [x] T079C Define default repo-root behavior for host-level MCP launches,
   including explicit `repo_root` arguments, `AGENT_WORKBENCH_DEFAULT_REPO_ROOT`,
   and tests for launch directories that are not the target project.
 
@@ -504,16 +533,46 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T205.10 Add backend translation-boundary tests proving raw parser,
     diagnostic, validation, test-discovery, and worker payloads never pass
     through to MCP responses unless modeled by the public schema.
-  - [ ] T205.11 Implement and test `src/mcp/stdio.ts` as the canonical
+  - [x] T205.11 Implement and test `src/mcp/stdio.ts` as the canonical
     production MCP entrypoint over `createAgentWorkbenchServer`, with no
     duplicated server registration logic.
-  - [ ] T205.12 Add package script and documentation for host-level Codex
-    configuration using absolute `tsx` and source-file paths, with OTEL env vars
-    remaining optional and disabled by default.
-  - [ ] T205.13 Add MCP launch tests or smoke checks proving the stdio
+  - [x] T205.12 Add package script and documentation for host-level Codex
+    configuration using an absolute Node command, the `tsx` loader, and an
+    absolute source-file path, with OTEL env vars remaining optional and
+    disabled by default.
+  - [x] T205.13 Add MCP launch tests or smoke checks proving the stdio
     entrypoint starts cleanly, exposes the registered public MCP surfaces, and
     handles explicit `repo_root` arguments when the process cwd is not the
     target repository.
+  - [ ] T205.14 Add Codex integration profile fixture tests proving the profile
+    lists `AGENTS.md`, host-level MCP config, stdio live-checkout launch, and
+    repo-local debug CLI as MVP surfaces, with skills, plugin packaging, and
+    hooks marked as optional wrappers around MCP.
+
+### Gap 7: Codex Replacement Readiness
+
+- [ ] T206 [US1] [US3] Complete Codex replacement readiness so the MVP can
+  replace predecessor `agent-ide` usage without depending on copied plugin
+  runtime code.
+  - [x] T206.1 Document the host-level Codex MCP config snippet with absolute
+    paths to this checkout and optional OTEL environment variables.
+  - [ ] T206.2 Add a Codex workflow skill draft that teaches status -> context
+    -> targeted symbol/reference/impact -> edit preview/apply ->
+    `verification_plan`, without restating MCP schemas or duplicating runtime
+    logic.
+  - [ ] T206.3 Add a plugin feasibility note that defines what a future Codex
+    plugin may package: MCP config, skills, hook declarations, setup metadata,
+    and docs, but not copied runtime logic for local development.
+  - [ ] T206.4 Add hook feasibility notes and tests for optional quiet
+    changed-file/post-edit feedback that reuses
+    `verification_plan.static_feedback` and stays silent for no findings.
+  - [ ] T206.5 Add replacement-readiness checks comparing predecessor
+    high-frequency workflows against the new MVP surfaces: first-pass context,
+    docs/config routing, validation planning, test planning, and post-edit
+    static feedback.
+  - [x] T206.6 Add documentation proving restarting Codex is the expected update
+    path for source changes, while dependency changes require `pnpm install`
+    and not plugin reinstall.
 
 ## Phase 7: Cross-Cutting Validation
 
@@ -539,6 +598,9 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
 - [ ] T088 Add integration boundary tests proving common integration specs can
   describe Codex, Claude Code, Kiro, Augment, Gemini, and Junie targets without
   runtime core dependencies on vendor-specific emitters.
+- [ ] T088A Add Codex feature-wrapper boundary tests proving skills, plugin
+  manifests, hooks, and host MCP config cannot import or call concrete runtime
+  infrastructure except through MCP launch/config metadata.
 - [ ] T089 Validate docs links and metadata.
 
 ## Phase 8: Usage-Informed MVP Validation
@@ -560,6 +622,9 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
 - [ ] T102A Add multi-language/platform coverage tests proving non-Python files
   are surfaced with `unsupported` or `resource_backed` capability metadata and
   do not depend on Python adapter behavior.
+- [ ] T102B Add Codex replacement-readiness golden checks proving the
+  predecessor high-frequency workflows are discoverable through the MVP Codex
+  feature mix without using predecessor tool names or backend pass-throughs.
 
 ## Post-MVP Task Backlog
 
@@ -593,9 +658,11 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
 - Graph reports, communities, god nodes, surprising connections, and generated
   docs/wiki export.
 - Usage-gap analytics.
-- Agent-specific plugin/extension packaging for Codex, Claude Code, Kiro,
-  Augment, Gemini, and Junie beyond common integration profiles.
-- Agent-specific hook generation beyond vendor-neutral hook intents.
+- Production-grade agent-specific plugin/extension packaging for Claude Code,
+  Kiro, Augment, Gemini, and Junie beyond common integration profiles.
+- Production-grade Codex plugin publishing beyond the local feasibility wrapper.
+- Agent-specific hook generation beyond Codex feasibility notes and
+  vendor-neutral hook intents.
 - ACP adapter implementation.
 - `run_nearest_tests` execution.
 - Rollback, safe rename, change signature, safe delete, move symbol, and import

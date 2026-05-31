@@ -72,6 +72,10 @@ impact tools.
 - Support a host-level Codex MCP launch mode that points at this repository
   checkout so runtime code updates are picked up after restarting Codex without
   reinstalling a packaged copy.
+- Define the Codex-facing MVP integration mix explicitly: `AGENTS.md` guidance,
+  host-level MCP configuration, stdio launch from this checkout, repo-local
+  debug CLI commands, and future skill/plugin/hook artifacts that wrap the MCP
+  contract without duplicating runtime behavior.
 
 ## Non-Goals
 
@@ -85,6 +89,10 @@ impact tools.
   analytics.
 - Post-apply hooks, diagnostics execution, lint execution, docs search as a
   standalone broad surface, and durable usage analytics in the MVP.
+- Required Codex plugin installation for local development. The MVP must work
+  through host-level MCP configuration that points at this repository checkout;
+  plugin packaging is optional distribution work after the live-checkout path is
+  proven.
 - Command execution by default.
 - Safe rename, change signature, safe delete, move symbol, or broad refactors.
 - Vector search.
@@ -215,6 +223,31 @@ impact tools.
   checkout. Restarting Codex MUST be sufficient to pick up normal source changes;
   dependency changes may require `pnpm install` but MUST NOT require reinstalling
   a plugin or copied runtime package.
+- **FR-036**: The MVP MUST define a Codex integration profile that states which
+  Codex features are used for replacement readiness: `AGENTS.md` for repository
+  guidance, host-level MCP config for executable tools/resources, stdio launch
+  from this checkout for live runtime updates, and repo-local CLI/debug commands
+  for profiling and MCP-use-case testing.
+- **FR-037**: Codex skills SHOULD be planned as guidance artifacts that teach
+  agents when to call the MCP resources/tools, including status, task context,
+  symbol/reference/impact, edit preview/apply, and `verification_plan`. Skills
+  MUST NOT reimplement runtime logic or bypass MCP schemas.
+- **FR-038**: Codex plugin packaging MAY be considered after the stdio
+  live-checkout path is proven. A plugin MUST package configuration, skills,
+  optional hooks, and setup metadata only; it MUST NOT introduce a second
+  copied runtime path that requires reinstalling to pick up local source
+  changes.
+- **FR-039**: Codex hooks MAY be considered after MVP for quiet changed-file or
+  post-edit feedback, but only as opt-in emitters of existing
+  `verification_plan.static_feedback` semantics. Hooks MUST be silent for clean
+  files, no-op states, and non-blocking optional analyzer failures.
+- **FR-040**: Runtime capabilities MUST use one explicit implementation path
+  unless the spec and fixture-backed tests explicitly require a primary and
+  fallback route. Timeout, crash, parser, provider, or validation failures MUST
+  NOT be hidden by returning partial results as though they were successful
+  evidence. Failure handling MUST perform root-cause analysis, fix the
+  underlying cause where possible, and otherwise return structured degraded or
+  blocked state that names the missing evidence.
 
 ### Key Entities
 
@@ -259,6 +292,15 @@ impact tools.
   runtime capabilities without duplicating runtime logic.
 - **Hook Intent**: vendor-neutral lifecycle intent that can be emitted as an
   agent-specific hook only at the integration boundary.
+- **Codex Integration Profile**: Codex-specific mapping from common integration
+  contracts to `AGENTS.md`, host-level MCP config, stdio launch, optional
+  skills, optional plugin packaging, optional hooks, and repo-local debug
+  commands.
+- **Codex Skill**: optional guidance package that teaches preferred MCP
+  workflows without duplicating runtime logic.
+- **Codex Plugin Package**: optional distribution artifact that may bundle MCP
+  config, skills, hook declarations, and setup metadata while preserving the
+  repository-checkout runtime as the update source during local development.
 - **Markdown Quality Finding**: structured documentation finding with source
   range, severity, check category, evidence, and suggested action.
 - **Markdown Format Plan**: proposed documentation rewrite for text readability
@@ -352,6 +394,15 @@ impact tools.
    from this repository checkout, **When** runtime source code changes and Codex
    is restarted, **Then** the launched MCP process uses the updated repository
    code without requiring plugin or package reinstall.
+22. **Given** the Codex integration profile is generated or inspected, **When**
+   the profile lists Codex features, **Then** it identifies `AGENTS.md`,
+   host-level MCP config, stdio live-checkout launch, repo-local debug CLI,
+   optional skills, optional plugin packaging, and optional hooks with clear
+   MVP/post-MVP status and no parallel runtime behavior.
+23. **Given** a Codex skill or plugin artifact is generated in a later slice,
+   **When** architecture checks run, **Then** the artifact points agents to MCP
+   schemas and does not duplicate tool logic, backend provider output, or static
+   feedback behavior outside the runtime presenters.
 
 ## User Scenarios And Testing
 
@@ -403,6 +454,14 @@ blocked validation status.
   failure blocks the current edit or validation plan, the `verification_plan`
   `static_feedback` section should be omitted or summarized without
   interrupting the agent.
+- Codex plugin packaging may cache copied files by design; local development
+  must keep the host-level MCP live-checkout path authoritative so runtime
+  source changes do not require reinstall.
+- Codex skills can become stale if they duplicate schemas or tool behavior; they
+  should describe workflows and cite MCP surfaces instead of restating contract
+  details.
+- Codex hooks can distract agents if they emit noisy lifecycle state; they must
+  reuse quiet-feedback policy and never become required for core MCP behavior.
 - Backend provider output may be verbose, unstable, or provider-specific; it
   must be normalized before crossing the MCP boundary.
 
@@ -466,6 +525,13 @@ blocked validation status.
   entrypoint runs from this repository checkout, supports explicit `repo_root`
   arguments when cwd is not the target repo, and can be updated by restarting
   Codex after source changes.
+- **SC-024**: Codex integration profile tests prove MVP feature usage is
+  explicit: `AGENTS.md`, host-level MCP config, stdio live-checkout launch, and
+  repo-local debug CLI are in scope, while skills, plugin packaging, and hooks
+  are optional wrappers around MCP with no duplicated runtime behavior.
+- **SC-025**: Future Codex skill/plugin/hook artifact tests prove generated
+  guidance points to MCP schemas, stays quiet by default, and preserves the
+  live-checkout update path for local development.
 
 ## Related Artifacts
 

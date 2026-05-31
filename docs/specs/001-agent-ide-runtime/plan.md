@@ -44,6 +44,11 @@ are not allowed.
   tooling may be added only as fixture-backed enrichers or validation planners.
   They are not parser or semantic fallbacks for the canonical `tree-sitter`
   path.
+- **Single-Path Failure Policy**: Capabilities use one explicit implementation
+  path. Primary-plus-fallback routes, timeout-guard partial results, and
+  workaround branches are not allowed unless the spec and fixture-backed tests
+  explicitly require them. Failures should drive root-cause fixes or structured
+  degraded/blocked state that names the missing evidence.
 - **Adapter Model**: Language, framework, config, infrastructure,
   documentation, test, and tooling providers feed a common extraction and
   validation-provider contract.
@@ -60,6 +65,13 @@ are not allowed.
 - **Agent Integration**: MCP is the authoritative executable surface; skills,
   instructions, hooks, commands, plugins, extensions, and ACP-aware artifacts
   are generated or configured around common integration specs.
+- **Codex MVP Features**: Codex uses `AGENTS.md` for repository guidance,
+  host-level MCP config for executable runtime access, stdio live-checkout
+  launch for update-with-restart behavior, and repo-local debug CLI commands for
+  profiling and MCP-use-case testing.
+- **Codex Future Wrappers**: Skills, plugin packaging, and hooks are considered
+  after the MCP surface is stable. They must wrap the MCP contract rather than
+  duplicate runtime logic or backend provider output.
 - **Host Codex Launch**: Codex can be configured at host level to run the stdio
   MCP entrypoint from this repository checkout with absolute paths. Restarting
   Codex picks up source changes; dependency changes require `pnpm install`.
@@ -106,6 +118,9 @@ tracks this as T000.
   evidence is limited to adapter metadata.
 - [ ] Coding-agent integration specs and emitter boundaries are defined before
   vendor-specific plugin, hook, command, skill, or extension packaging.
+- [ ] Codex feature mapping is explicit: `AGENTS.md`, host MCP config, stdio
+  live-checkout launch, and repo-local debug CLI are MVP; skill, plugin, and
+  hook artifacts are wrappers around MCP and remain optional until promoted.
 - [ ] Markdown document quality ports and policies are defined before adding
   structure checks, compliance linting, or formatter mutation.
 
@@ -189,7 +204,8 @@ implementation expands.
    presenters, including the stdio process entrypoint for host-level Codex
    launch from this repository checkout.
 10. Define common coding-agent integration profiles and keep vendor-specific
-   emitters outside core application/domain behavior.
+   emitters outside core application/domain behavior. The Codex profile must
+   document MVP feature usage and the future skill/plugin/hook wrapper path.
 11. Define Markdown document quality ports, policies, checker result contracts,
    and formatter preview/apply behavior as post-MVP executable capability
    foundations.
@@ -252,6 +268,12 @@ semantic fallback paths.
 - Agent-specific integration formats can leak into core runtime design;
   mitigate with common integration specs, emitter boundaries, and dependency
   tests.
+- Codex plugins can make local iteration slower if they copy runtime code;
+  mitigate by making host-level MCP live-checkout launch the development path
+  and treating plugin packaging as an optional distribution wrapper.
+- Codex skills and hooks can distract agents if they duplicate schemas or emit
+  noisy lifecycle state; mitigate by keeping skills workflow-only and hooks
+  opt-in, quiet, and backed by existing MCP presenter semantics.
 - Documentation formatting can become destructive or style-only churn; mitigate
   with parser-backed checks, explicit policies, formatter rationale, preview
   tokens, and stale-apply tests.
@@ -281,6 +303,10 @@ checkout.
 Integration boundary checks from
 [Coding agent integration design](../../design/coding-agent-integration-design.md)
 are part of the acceptance gate before vendor-specific artifacts are generated.
+Codex integration acceptance must prove the MVP feature mapping and update path:
+`AGENTS.md`, host-level MCP config, stdio live-checkout launch, and repo-local
+debug CLI are active surfaces, while skills, plugin packaging, and hooks are
+optional generated wrappers around MCP.
 Markdown document quality contract checks from
 [Markdown document quality design](../../design/markdown-document-quality-design.md)
 are part of the acceptance gate before formatter mutation is enabled; executable
