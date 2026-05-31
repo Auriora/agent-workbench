@@ -92,6 +92,20 @@ export async function getTaskContext(input: {
       validation_hints: validationHints,
       risks,
       next_actions: [
+        ...input.request.symbols.map((symbol) => ({
+          tool: "symbol_search",
+          args: {
+            query: symbol,
+            repo_root: scanned.repo_root
+          }
+        })),
+        ...input.request.symbols.map((symbol) => ({
+          tool: "find_references",
+          args: {
+            symbol,
+            repo_root: scanned.repo_root
+          }
+        })),
         {
           tool: "verification_plan",
           args: {

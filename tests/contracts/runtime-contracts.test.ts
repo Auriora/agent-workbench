@@ -8,9 +8,15 @@ import {
   capabilityLevelSchema,
   CONTRACT_VERSION,
   makeEnvelope,
+  findReferencesRequestSchema,
+  findReferencesResultSchema,
+  impactRequestSchema,
+  impactResultSchema,
   repoOverviewSchema,
   repoScopeSchema,
   responseEnvelopeSchema,
+  symbolSearchRequestSchema,
+  symbolSearchResultSchema,
   taskContextRequestSchema,
   taskContextSchema,
   verificationPlanRequestSchema,
@@ -281,6 +287,103 @@ describe("runtime contracts", () => {
           execution: "not_executed"
         })
       ]
+    });
+  });
+
+  it("models graph query requests and bounded responses", () => {
+    expect(symbolSearchRequestSchema.parse({ query: "Runner" })).toMatchObject({
+      query: "Runner",
+      exact: false,
+      languages: [],
+      max_results: 20,
+      source_byte_limit: 0
+    });
+    expect(() => symbolSearchRequestSchema.parse({ query: "", max_results: 500 })).toThrow();
+
+    expect(
+      symbolSearchResultSchema.parse({
+        query: "Runner",
+        repo_root: "/repo",
+        snapshot_id: "1",
+        symbols: [
+          {
+            node_id: "node-1",
+            kind: "class",
+            name: "Runner",
+            qualified_name: "Runner",
+            path: "src/service.py",
+            language: "python",
+            source_range: {
+              start_line: 1,
+              start_column: 0,
+              end_line: 3,
+              end_column: 0
+            },
+            capability_level: "partial_semantic",
+            evidence_kinds: ["parser"],
+            source_section: {
+              path: "src/service.py",
+              start_line: 1,
+              end_line: 3,
+              byte_count: 20,
+              truncated: false,
+              text: "class Runner:"
+            }
+          }
+        ],
+        next_actions: [{ tool: "find_references", args: { symbol: "Runner" } }]
+      })
+    ).toMatchObject({
+      symbols: [expect.objectContaining({ name: "Runner" })]
+    });
+
+    expect(findReferencesRequestSchema.parse({ symbol: "Runner" })).toMatchObject({
+      symbol: "Runner",
+      max_depth: 1,
+      max_results: 50
+    });
+    expect(() => findReferencesRequestSchema.parse({ max_results: 200 })).toThrow();
+    expect(
+      findReferencesResultSchema.parse({
+        repo_root: "/repo",
+        snapshot_id: "1",
+        references: [
+          {
+            source_node_id: "a",
+            target_node_id: "b",
+            target_file_path: "src/service.py",
+            reference_kind: "call",
+            confidence: 0.8,
+            provenance: "tree-sitter-reference-resolution",
+            status: "resolved"
+          }
+        ],
+        next_actions: [{ tool: "impact", args: { node_id: "a" } }]
+      })
+    ).toMatchObject({
+      references: [expect.objectContaining({ status: "resolved" })]
+    });
+
+    expect(impactRequestSchema.parse({ node_id: "node-1" })).toMatchObject({
+      node_id: "node-1",
+      max_depth: 2,
+      max_nodes: 50,
+      direction: "both"
+    });
+    expect(
+      impactResultSchema.parse({
+        repo_root: "/repo",
+        snapshot_id: "1",
+        start_node_ids: ["node-1"],
+        affected_symbols: [],
+        affected_files: [],
+        edge_count: 0,
+        reached_depth: 0,
+        traversal_truncated: false,
+        next_actions: []
+      })
+    ).toMatchObject({
+      start_node_ids: ["node-1"]
     });
   });
 });

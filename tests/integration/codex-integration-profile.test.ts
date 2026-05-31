@@ -72,6 +72,21 @@ describe("Codex integration profile", () => {
           capability_class: "planning"
         }),
         expect.objectContaining({
+          name: "symbol_search",
+          kind: "tool",
+          capability_class: "read_only"
+        }),
+        expect.objectContaining({
+          name: "find_references",
+          kind: "tool",
+          capability_class: "read_only"
+        }),
+        expect.objectContaining({
+          name: "impact",
+          kind: "tool",
+          capability_class: "read_only"
+        }),
+        expect.objectContaining({
           name: "scope",
           uri: "repo:///scope",
           kind: "resource",

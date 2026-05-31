@@ -76,12 +76,35 @@ export async function planVerification(input: {
     planned_commands: commands,
     ...(staticFeedback?.status === "actionable" ? { static_feedback: staticFeedback } : {}),
     risks,
-    next_actions: commands.map((command) => ({
-      tool: "manual_command",
-      args: {
-        command: command.display
-      }
-    }))
+    next_actions: [
+      ...selectedEntries
+        .filter((entry) => entry.file_identity.language === "python")
+        .map((entry) => ({
+          tool: "symbol_search",
+          args: {
+            query: symbolQueryFromPath(entry.path),
+            repo_root: scanned.repo_root
+          }
+        })),
+      ...commands.map((command) => ({
+        tool: "manual_command",
+        args: {
+          command: command.display
+        }
+      })),
+      ...(commands.length === 0
+        ? [
+            {
+              tool: "context_for_task",
+              args: {
+                task: input.request.task ?? "Gather more repository context for validation planning.",
+                repo_root: scanned.repo_root,
+                files: selectedPaths
+              }
+            }
+          ]
+        : [])
+    ]
   };
 
   return {
@@ -205,4 +228,9 @@ function uniqueSorted(values: readonly string[]): string[] {
 
 function normalizeRepoPath(value: string): string {
   return value.replaceAll("\\", "/").replace(/^\.\/+/, "");
+}
+
+function symbolQueryFromPath(filePath: string): string {
+  const basename = filePath.slice(filePath.lastIndexOf("/") + 1);
+  return basename.replace(/\.[^.]+$/u, "");
 }

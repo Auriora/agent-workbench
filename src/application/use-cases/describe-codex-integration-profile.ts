@@ -126,6 +126,24 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         description: "Task-context MCP workflow for status, files, docs, risks, and validation hints."
       },
       {
+        name: "symbol_search",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Bounded indexed graph symbol search with optional source-byte snippets."
+      },
+      {
+        name: "find_references",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Bounded resolved and unresolved reference lookup for indexed symbols."
+      },
+      {
+        name: "impact",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Bounded graph impact traversal for indexed symbols and affected files."
+      },
+      {
         name: "verification_plan",
         kind: "tool",
         capability_class: "planning",

@@ -82,6 +82,16 @@ describe("verification_plan use case", () => {
         ]
       })
     );
+    expect(result.plan.next_actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tool: "symbol_search",
+          args: expect.objectContaining({
+            query: "service"
+          })
+        })
+      ])
+    );
   });
 });
 
@@ -193,6 +203,9 @@ describe("verification_plan MCP tool", () => {
 
     expect(Object.keys(server._registeredTools).sort()).toEqual([
       "context_for_task",
+      "find_references",
+      "impact",
+      "symbol_search",
       "verification_plan"
     ]);
   });

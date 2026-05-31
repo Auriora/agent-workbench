@@ -99,6 +99,77 @@ describe("context_for_task use case", () => {
       expect.arrayContaining(["python", "typescript", "json"])
     );
   });
+
+  it("routes symbol-oriented work to graph query tools through next actions", async () => {
+    const result = await getTaskContext({
+      request: {
+        task: "Change Runner behavior",
+        repo_root: "tests/fixtures/fixture-basic-python",
+        files: ["src/sample_pkg/service.py"],
+        symbols: ["Runner"],
+        max_files: 5,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+
+    expect(result.context.next_actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tool: "symbol_search",
+          args: expect.objectContaining({
+            query: "Runner"
+          })
+        }),
+        expect.objectContaining({
+          tool: "find_references",
+          args: expect.objectContaining({
+            symbol: "Runner"
+          })
+        }),
+        expect.objectContaining({
+          tool: "verification_plan"
+        })
+      ])
+    );
+  });
+
+  it("routes docs/config and test planning without predecessor backend names", async () => {
+    const result = await getTaskContext({
+      request: {
+        task: "Update architecture docs and package validation",
+        repo_root: "tests/fixtures/fixture-markdown-config",
+        files: ["README.md", "package.json"],
+        symbols: [],
+        max_files: 5,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+
+    expect(result.context.governing_docs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "README.md",
+          evidence_kinds: ["docs"]
+        }),
+        expect.objectContaining({
+          path: "docs/architecture.md",
+          evidence_kinds: ["docs"]
+        })
+      ])
+    );
+    expect(result.context.validation_hints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ command: "pnpm typecheck" }),
+        expect.objectContaining({ command: "pnpm test" })
+      ])
+    );
+    expect(JSON.stringify(result.context)).not.toContain("python-agent-ide");
+    expect(JSON.stringify(result.context)).not.toContain("agent-ide");
+  });
 });
 
 describe("context_for_task MCP tool", () => {

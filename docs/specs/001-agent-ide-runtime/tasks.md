@@ -288,11 +288,11 @@ handlers or use cases.
   presenter.
 - [x] T072 [US1] Wire `context_for_task` through MCP schema, use case, and
   presenter.
-- [ ] T073 [US2] Wire `symbol_search` through MCP schema, use case, and
+- [x] T073 [US2] Wire `symbol_search` through MCP schema, use case, and
   presenter.
-- [ ] T074 [US2] Wire `find_references` through MCP schema, use case, and
+- [x] T074 [US2] Wire `find_references` through MCP schema, use case, and
   presenter.
-- [ ] T075 [US2] Wire bounded `impact` through MCP schema, use case, and
+- [x] T075 [US2] Wire bounded `impact` through MCP schema, use case, and
   presenter.
 - [ ] T076 [US3] Wire `preview_workspace_edit` through MCP schema, use case, and
   presenter.
@@ -381,29 +381,29 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T202.1 Implement `BuildTaskContextUseCase` with ranked files, ranked
     symbols, docs/config routing evidence, direct-read caveats,
     complete-enough markers, skipped-work metadata, and exact next actions.
-  - [ ] T202.2 Implement `SearchSymbolsUseCase` with exact and fuzzy lookup,
+  - [x] T202.2 Implement `SearchSymbolsUseCase` with exact and fuzzy lookup,
     stable ordering, language/platform filtering, row limits, and no broad
     source scan.
-  - [ ] T202.3 Implement `FindReferencesUseCase` with resolved references,
+  - [x] T202.3 Implement `FindReferencesUseCase` with resolved references,
     unresolved references, ambiguity labels, confidence, provenance, and
     bounded depth.
-  - [ ] T202.4 Implement `ComputeImpactUseCase` with bounded graph traversal,
+  - [x] T202.4 Implement `ComputeImpactUseCase` with bounded graph traversal,
     max-depth/max-node limits, truncation metadata, and affected file/symbol
     grouping.
-  - [ ] T202.5 Add source-section presentation with byte budgets and explicit
+  - [x] T202.5 Add source-section presentation with byte budgets and explicit
     caveats when context contains routing evidence rather than verified source
     evidence.
-  - [ ] T202.6 Add adoption-oriented tests proving `context_for_task` and
+  - [x] T202.6 Add adoption-oriented tests proving `context_for_task` and
     `verification_plan` route ambiguous work to `symbol_search`,
     `find_references`, `impact`, or direct reads through structured
     `next_action` metadata.
-  - [ ] T202.7 Add fixture-backed budget tests for `context_for_task`,
+  - [x] T202.7 Add fixture-backed budget tests for `context_for_task`,
     `symbol_search`, `find_references`, and `impact`, including row limits,
     traversal depth, and source-byte caps.
   - [x] T202.8 Add mixed-language/platform context tests proving unsupported
     and resource-backed files appear as routing evidence only, with no
     Python-specific shared fields.
-  - [ ] T202.9 Add docs/config and test-planning routing tests that preserve
+  - [x] T202.9 Add docs/config and test-planning routing tests that preserve
     the useful predecessor workflows through new schemas without duplicating
     predecessor tool names or backend output.
 
@@ -514,7 +514,7 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T205.4 Wire resources `repo:///status`, `repo:///scope`, and
     `repo:///overview` through typed parsers, use cases, presenters, and golden
     MCP response tests.
-  - [ ] T205.5 Wire tools `context_for_task`, `symbol_search`,
+  - [x] T205.5 Wire tools `context_for_task`, `symbol_search`,
     `find_references`, and bounded `impact` through typed parsers, use cases,
     presenters, budgets, truncation, and next-action metadata.
   - [ ] T205.6 Wire tools `preview_workspace_edit`,
