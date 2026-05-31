@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "node plugins/agent-workbench/hooks/session-start.js"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^(apply_patch|write_file|create_file|rename_file)$",
+        "command": "node plugins/agent-workbench/hooks/post-edit-feedback.js"
+      }
+    ]
+  }
+}

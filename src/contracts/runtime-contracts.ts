@@ -108,6 +108,73 @@ export const runtimeErrorSchema = z.object({
 });
 export type RuntimeError = z.infer<typeof runtimeErrorSchema>;
 
+export const fileReferenceSchema = z
+  .object({
+    path: z.string(),
+    language: z.string(),
+    exists: z.boolean(),
+    capability_level: capabilityLevelSchema,
+    evidence_kinds: z.array(evidenceKindSchema),
+    reason: z.string()
+  })
+  .strict();
+export type FileReference = z.infer<typeof fileReferenceSchema>;
+
+export const documentReferenceSchema = z
+  .object({
+    path: z.string(),
+    title: z.string(),
+    reason: z.string(),
+    evidence_kinds: z.array(evidenceKindSchema)
+  })
+  .strict();
+export type DocumentReference = z.infer<typeof documentReferenceSchema>;
+
+export const validationHintSchema = z
+  .object({
+    command: z.string(),
+    reason: z.string(),
+    status: verificationStatusSchema
+  })
+  .strict();
+export type ValidationHint = z.infer<typeof validationHintSchema>;
+
+export const contextRiskSchema = z
+  .object({
+    severity: attentionSeveritySchema,
+    message: z.string(),
+    why_this_matters: z.string()
+  })
+  .strict();
+export type ContextRisk = z.infer<typeof contextRiskSchema>;
+
+export const taskContextRequestSchema = z
+  .object({
+    task: z.string().min(1),
+    repo_root: z.string().optional(),
+    files: z.array(z.string()).default([]),
+    symbols: z.array(z.string()).default([]),
+    max_files: z.number().int().positive().max(50).default(10),
+    max_docs: z.number().int().positive().max(20).default(5)
+  })
+  .strict();
+export type TaskContextRequest = z.infer<typeof taskContextRequestSchema>;
+
+export const taskContextSchema = z
+  .object({
+    task: z.string(),
+    repo_root: z.string(),
+    summary: z.string(),
+    requested_files: z.array(fileReferenceSchema),
+    related_files: z.array(fileReferenceSchema),
+    governing_docs: z.array(documentReferenceSchema),
+    validation_hints: z.array(validationHintSchema),
+    risks: z.array(contextRiskSchema),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type TaskContext = z.infer<typeof taskContextSchema>;
+
 export const scopeMetadataSchema = z.object({
   repo_root: z.string(),
   indexed_roots: z.array(z.string()),
@@ -238,6 +305,95 @@ export const integrationArtifactSchema = z.object({
   notes: z.array(z.string()).default([])
 });
 export type IntegrationArtifact = z.infer<typeof integrationArtifactSchema>;
+
+export const codexIntegrationFeatureStatusSchema = z.enum([
+  "active",
+  "available",
+  "deferred",
+  "unsupported"
+]);
+export type CodexIntegrationFeatureStatus = z.infer<typeof codexIntegrationFeatureStatusSchema>;
+
+export const codexIntegrationFeatureSchema = z
+  .object({
+    surface: agentIntegrationSurfaceSchema,
+    status: codexIntegrationFeatureStatusSchema,
+    artifact_path: z.string().optional(),
+    purpose: z.string(),
+    behavior: z.array(z.string()).default([]),
+    constraints: z.array(z.string()).default([])
+  })
+  .strict();
+export type CodexIntegrationFeature = z.infer<typeof codexIntegrationFeatureSchema>;
+
+export const codexHookSpecSchema = z
+  .object({
+    name: z.string(),
+    event: z.string(),
+    matcher: z.string().optional(),
+    path: z.string(),
+    default_mode: z.enum(["silent", "basic_feedback"]),
+    blocks_workflow: z.literal(false),
+    emits_when: z.array(z.string()),
+    quiet_when: z.array(z.string()),
+    schema_mapping: z.string()
+  })
+  .strict();
+export type CodexHookSpec = z.infer<typeof codexHookSpecSchema>;
+
+export const codexSkillSpecSchema = z
+  .object({
+    name: z.string(),
+    path: z.string(),
+    purpose: z.string(),
+    workflow: z.array(z.string()),
+    constraints: z.array(z.string())
+  })
+  .strict();
+export type CodexSkillSpec = z.infer<typeof codexSkillSpecSchema>;
+
+export const codexPluginSpecSchema = z
+  .object({
+    name: z.string(),
+    manifest_path: z.string(),
+    mcp_config_path: z.string(),
+    runtime_source: z.string(),
+    packaging_model: z.string(),
+    update_model: z.object({
+      source_changes: z.string(),
+      dependency_changes: z.string(),
+      copied_runtime_allowed: z.literal(false)
+    })
+  })
+  .strict();
+export type CodexPluginSpec = z.infer<typeof codexPluginSpecSchema>;
+
+export const codexIntegrationProfileSchema = z
+  .object({
+    target_agent: z.literal("codex"),
+    profile_name: z.string(),
+    runtime_version: z.string(),
+    mcp_server_id: z.string(),
+    runtime_source: z.string(),
+    active_surfaces: z.array(codexIntegrationFeatureSchema),
+    wrapper_surfaces: z.array(codexIntegrationFeatureSchema),
+    mcp_bindings: z.array(
+      z.object({
+        name: z.string(),
+        uri: z.string().optional(),
+        kind: z.enum(["tool", "resource", "prompt"]),
+        capability_class: toolCapabilityClassSchema,
+        description: z.string()
+      })
+    ),
+    plugin: codexPluginSpecSchema,
+    skills: z.array(codexSkillSpecSchema),
+    hooks: z.array(codexHookSpecSchema),
+    guardrails: z.array(z.string()),
+    artifacts: z.array(integrationArtifactSchema)
+  })
+  .strict();
+export type CodexIntegrationProfile = z.infer<typeof codexIntegrationProfileSchema>;
 
 export const integrationProfileSchema = z.object({
   runtime_version: z.string(),

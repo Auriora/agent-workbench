@@ -1,0 +1,41 @@
+{
+  "name": "agent-workbench",
+  "version": "0.1.0",
+  "description": "Codex wrapper for the Agent Workbench MCP runtime, skills, and quiet hooks.",
+  "author": {
+    "name": "Auriora",
+    "email": "noreply@example.com",
+    "url": "https://github.com/bcherrington"
+  },
+  "homepage": "https://github.com/bcherrington/agent-workbench/tree/main/plugins/agent-workbench",
+  "repository": "https://github.com/bcherrington/agent-workbench",
+  "license": "MIT",
+  "keywords": [
+    "agents",
+    "ide",
+    "mcp",
+    "codex",
+    "analysis"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Agent Workbench",
+    "shortDescription": "MCP-backed IDE runtime wrapper for Codex.",
+    "longDescription": "Packages Codex guidance, MCP launch configuration, and quiet hook scripts around the Agent Workbench repository checkout runtime without copying runtime code.",
+    "developerName": "Auriora",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Interactive"
+    ],
+    "websiteURL": "https://github.com/bcherrington/agent-workbench/tree/main/plugins/agent-workbench",
+    "privacyPolicyURL": "https://opensource.org/licenses/MIT",
+    "termsOfServiceURL": "https://opensource.org/licenses/MIT",
+    "defaultPrompt": [
+      "Check Agent Workbench status for this repo.",
+      "Plan context and validation with Agent Workbench.",
+      "Show the Codex integration profile."
+    ],
+    "brandColor": "#2563EB"
+  }
+}

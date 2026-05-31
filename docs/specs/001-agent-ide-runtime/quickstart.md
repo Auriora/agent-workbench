@@ -64,6 +64,10 @@ The MCP resources and tools should still accept explicit `repo_root` arguments
 where defined. This matters when Codex starts global MCP servers from a
 directory that is not the target repository.
 
+The first coding workflow tool is `context_for_task`. Use it before broad file
+reads when you have a task prompt, known files, or symbols and need compact
+status, file, docs/config, risk, and validation routing evidence.
+
 Optional OpenTelemetry export:
 
 ```toml
@@ -78,6 +82,24 @@ For a direct local launch outside Codex:
 ```bash
 pnpm mcp -- --repo-root tests/fixtures/fixture-mixed-language-platform
 ```
+
+## Codex Plugin Wrapper
+
+The repo-local Codex plugin wrapper lives at `plugins/agent-workbench/`.
+
+It includes:
+
+- `.codex-plugin/plugin.json`
+- `.mcp.json`
+- `skills/agent-workbench/SKILL.md`
+- `hooks/hooks.json`
+- `hooks/session-start.js`
+- `hooks/post-edit-feedback.js`
+
+The plugin is a wrapper only. It points at the repository checkout runtime and
+does not copy implementation code. Hook scripts are silent by default. Set
+`AGENT_WORKBENCH_HOOK_FEEDBACK=basic` only when concise MCP follow-up guidance is
+useful during local testing.
 
 ## Expected Results
 

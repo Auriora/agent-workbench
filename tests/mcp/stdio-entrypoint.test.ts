@@ -97,6 +97,24 @@ describe("stdio MCP entrypoint", () => {
         params: {
           uri: "repo:///status"
         }
+      },
+      {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/list",
+        params: {}
+      },
+      {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: {
+          name: "context_for_task",
+          arguments: {
+            task: "Update package validation",
+            files: ["package.json"]
+          }
+        }
       }
     ]);
     const listedResources = messages.find((message) => message.id === 2) as {
@@ -105,8 +123,17 @@ describe("stdio MCP entrypoint", () => {
     const statusResource = messages.find((message) => message.id === 3) as {
       result: { contents: Array<{ text: string }> };
     };
+    const listedTools = messages.find((message) => message.id === 4) as {
+      result: { tools: Array<{ name: string; description: string }> };
+    };
+    const taskContext = messages.find((message) => message.id === 5) as {
+      result: { content: Array<{ text: string }> };
+    };
     const parsed = JSON.parse(statusResource.result.contents[0]?.text ?? "{}") as {
       data: { adapter_coverage: Array<{ domain: string; name: string }> };
+    };
+    const parsedTaskContext = JSON.parse(taskContext.result.content[0]?.text ?? "{}") as {
+      data: { task: string; requested_files: Array<{ path: string; exists: boolean }> };
     };
 
     expect(listedResources.result.resources).toEqual(
@@ -129,6 +156,22 @@ describe("stdio MCP entrypoint", () => {
         })
       ])
     );
+    expect(listedTools.result.tools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "context_for_task"
+        })
+      ])
+    );
+    expect(parsedTaskContext.data).toMatchObject({
+      task: "Update package validation",
+      requested_files: [
+        expect.objectContaining({
+          path: "package.json",
+          exists: true
+        })
+      ]
+    });
   });
 });
 

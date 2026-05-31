@@ -69,9 +69,8 @@ are not allowed.
   host-level MCP config for executable runtime access, stdio live-checkout
   launch for update-with-restart behavior, and repo-local debug CLI commands for
   profiling and MCP-use-case testing.
-- **Codex Future Wrappers**: Skills, plugin packaging, and hooks are considered
-  after the MCP surface is stable. They must wrap the MCP contract rather than
-  duplicate runtime logic or backend provider output.
+- **Codex Wrappers**: Skills, plugin packaging, and quiet hooks wrap the MCP
+  contract rather than duplicate runtime logic or backend provider output.
 - **Host Codex Launch**: Codex can be configured at host level to run the stdio
   MCP entrypoint from this repository checkout with absolute paths. Restarting
   Codex picks up source changes; dependency changes require `pnpm install`.
@@ -304,9 +303,9 @@ Integration boundary checks from
 [Coding agent integration design](../../design/coding-agent-integration-design.md)
 are part of the acceptance gate before vendor-specific artifacts are generated.
 Codex integration acceptance must prove the MVP feature mapping and update path:
-`AGENTS.md`, host-level MCP config, stdio live-checkout launch, and repo-local
-debug CLI are active surfaces, while skills, plugin packaging, and hooks are
-optional generated wrappers around MCP.
+`AGENTS.md`, host-level MCP config, stdio live-checkout launch, repo-local debug
+CLI, skills, plugin packaging, and quiet hooks are active surfaces, while every
+wrapper remains MCP-owned and avoids copied runtime behavior.
 Markdown document quality contract checks from
 [Markdown document quality design](../../design/markdown-document-quality-design.md)
 are part of the acceptance gate before formatter mutation is enabled; executable

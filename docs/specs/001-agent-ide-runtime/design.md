@@ -144,17 +144,18 @@ exact next actions.
 - `AGENTS.md` remains the MVP repository-guidance mechanism for Codex. It should
   tell agents how to work in this repo, while MCP remains the executable runtime
   surface.
-- Codex skills are useful after the MCP tools stabilize. A skill should teach
-  the preferred workflow, such as status -> context -> targeted symbol/reference
-  or verification planning, but it must not restate schemas or execute hidden
+- Codex skills are implemented as workflow guidance. A skill teaches the
+  preferred workflow, such as status -> context -> targeted symbol/reference or
+  verification planning, but it must not restate schemas or execute hidden
   behavior.
-- Codex plugin packaging is worth considering for distribution after the
-  live-checkout path is proven. The plugin may bundle config, skills, hook
-  declarations, and setup metadata, but local development must keep this
-  repository checkout as the runtime source of truth.
-- Codex hooks are post-MVP and opt-in. If added, they should only emit quiet
-  changed-file or post-edit feedback through `verification_plan.static_feedback`
-  semantics and must not be required for core MCP behavior.
+- Codex plugin packaging is implemented as a wrapper around the live-checkout
+  path. The plugin bundles config, skills, hook declarations, and setup
+  metadata, but local development keeps this repository checkout as the runtime
+  source of truth.
+- Codex hooks are implemented as optional quiet wrappers. They default to
+  silence and, when basic feedback is explicitly enabled, emit only concise MCP
+  follow-up guidance for session start or changed-file/post-edit events. They do
+  not run analysis or produce timeout/failure partial results.
 
 ## Resolved Decisions
 
@@ -185,5 +186,5 @@ exact next actions.
   entrypoint, while vendor-specific plugin packaging remains outside MVP.
 - Codex replacement readiness requires explicit feature mapping: MVP uses
   `AGENTS.md`, host-level MCP config, stdio live-checkout launch, and repo-local
-  debug CLI commands; skills, plugin packaging, and hooks are planned wrappers
-  around MCP rather than parallel runtime paths.
+  debug CLI commands; skills, plugin packaging, and hooks are implemented
+  wrappers around MCP rather than parallel runtime paths.

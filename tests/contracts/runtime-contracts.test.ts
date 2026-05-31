@@ -8,7 +8,9 @@ import {
   capabilityLevelSchema,
   CONTRACT_VERSION,
   makeEnvelope,
-  responseEnvelopeSchema
+  responseEnvelopeSchema,
+  taskContextRequestSchema,
+  taskContextSchema
 } from "../../src/contracts/index.js";
 import { capabilityLevelSchema as domainCapabilityLevelSchema } from "../../src/contracts/domain-contracts.js";
 
@@ -98,5 +100,65 @@ describe("runtime contracts", () => {
     expect(responseEnvelopeSchema(z.object({ ok: z.literal(true) })).parse(envelope)).toEqual(
       envelope
     );
+  });
+
+  it("models bounded task context requests and responses", () => {
+    const request = taskContextRequestSchema.parse({
+      task: "Update the Codex MCP profile",
+      files: ["src/server.ts"]
+    });
+
+    expect(request).toEqual({
+      task: "Update the Codex MCP profile",
+      files: ["src/server.ts"],
+      symbols: [],
+      max_files: 10,
+      max_docs: 5
+    });
+    expect(() =>
+      taskContextRequestSchema.parse({
+        task: "too broad",
+        max_files: 500
+      })
+    ).toThrow();
+
+    expect(
+      taskContextSchema.parse({
+        task: request.task,
+        repo_root: "/repo",
+        summary: "Task context found local evidence.",
+        requested_files: [
+          {
+            path: "src/server.ts",
+            language: "typescript",
+            exists: true,
+            capability_level: "unsupported",
+            evidence_kinds: [],
+            reason: "Requested explicitly by the caller."
+          }
+        ],
+        related_files: [],
+        governing_docs: [],
+        validation_hints: [
+          {
+            command: "pnpm test",
+            reason: "package.json indicates a testable TypeScript/JavaScript project.",
+            status: "needed"
+          }
+        ],
+        risks: [],
+        next_actions: [
+          {
+            tool: "verification_plan",
+            args: {
+              files: ["src/server.ts"]
+            }
+          }
+        ]
+      })
+    ).toMatchObject({
+      task: "Update the Codex MCP profile",
+      requested_files: [expect.objectContaining({ path: "src/server.ts" })]
+    });
   });
 });

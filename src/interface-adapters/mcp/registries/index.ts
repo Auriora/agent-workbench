@@ -1,10 +1,19 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type {
+  CodexIntegrationProfile,
+  TaskContextRequest
+} from "../../../contracts/index.js";
+import type { GetTaskContextResult } from "../../../application/use-cases/get-task-context.js";
 import type { GetRepoStatusResult } from "../../../application/use-cases/get-repo-status.js";
+import { codexIntegrationProfileResource } from "./resources/codex-integration-profile.js";
 import { repoStatusResource } from "./resources/repo-status.js";
+import { contextForTaskTool } from "./tools/context-for-task.js";
 
 export type McpRegistryContext = {
   repoRoot: string;
   getRepoStatus?: (input: { repo_root: string }) => Promise<GetRepoStatusResult> | GetRepoStatusResult;
+  getTaskContext?: (input: { request: TaskContextRequest }) => Promise<GetTaskContextResult> | GetTaskContextResult;
+  describeCodexIntegrationProfile?: () => CodexIntegrationProfile;
 };
 
 export type McpResourceDeclaration = {
@@ -26,9 +35,12 @@ export type McpPromptDeclaration = {
   register: (server: McpServer, context: McpRegistryContext) => void;
 };
 
-export const mcpResources: McpResourceDeclaration[] = [repoStatusResource];
+export const mcpResources: McpResourceDeclaration[] = [
+  repoStatusResource,
+  codexIntegrationProfileResource
+];
 
-export const mcpTools: McpToolDeclaration[] = [];
+export const mcpTools: McpToolDeclaration[] = [contextForTaskTool];
 
 export const mcpPrompts: McpPromptDeclaration[] = [];
 

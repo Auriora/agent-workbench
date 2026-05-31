@@ -228,19 +228,19 @@ impact tools.
   guidance, host-level MCP config for executable tools/resources, stdio launch
   from this checkout for live runtime updates, and repo-local CLI/debug commands
   for profiling and MCP-use-case testing.
-- **FR-037**: Codex skills SHOULD be planned as guidance artifacts that teach
+- **FR-037**: Codex skills MUST be implemented as guidance artifacts that teach
   agents when to call the MCP resources/tools, including status, task context,
   symbol/reference/impact, edit preview/apply, and `verification_plan`. Skills
   MUST NOT reimplement runtime logic or bypass MCP schemas.
-- **FR-038**: Codex plugin packaging MAY be considered after the stdio
-  live-checkout path is proven. A plugin MUST package configuration, skills,
-  optional hooks, and setup metadata only; it MUST NOT introduce a second
-  copied runtime path that requires reinstalling to pick up local source
-  changes.
-- **FR-039**: Codex hooks MAY be considered after MVP for quiet changed-file or
-  post-edit feedback, but only as opt-in emitters of existing
-  `verification_plan.static_feedback` semantics. Hooks MUST be silent for clean
-  files, no-op states, and non-blocking optional analyzer failures.
+- **FR-038**: Codex plugin packaging MUST be available as a wrapper around the
+  stdio live-checkout path. The plugin MUST package MCP configuration, skills,
+  optional hooks, and setup metadata only; it MUST NOT introduce a second copied
+  runtime path that requires reinstalling to pick up local source changes.
+- **FR-039**: Codex hooks MUST be implemented as optional quiet wrappers for
+  session-start and changed-file/post-edit feedback. They MUST be silent by
+  default, MUST emit only concise MCP follow-up guidance when explicitly enabled,
+  and MUST NOT run analysis, hide failures, or return partial results for
+  timeout/failure cases.
 - **FR-040**: Runtime capabilities MUST use one explicit implementation path
   unless the spec and fixture-backed tests explicitly require a primary and
   fallback route. Timeout, crash, parser, provider, or validation failures MUST
@@ -528,10 +528,10 @@ blocked validation status.
 - **SC-024**: Codex integration profile tests prove MVP feature usage is
   explicit: `AGENTS.md`, host-level MCP config, stdio live-checkout launch, and
   repo-local debug CLI are in scope, while skills, plugin packaging, and hooks
-  are optional wrappers around MCP with no duplicated runtime behavior.
-- **SC-025**: Future Codex skill/plugin/hook artifact tests prove generated
-  guidance points to MCP schemas, stays quiet by default, and preserves the
-  live-checkout update path for local development.
+  are implemented wrappers around MCP with no duplicated runtime behavior.
+- **SC-025**: Codex skill/plugin/hook artifact tests prove generated guidance
+  points to MCP schemas, stays quiet by default, and preserves the live-checkout
+  update path for local development.
 
 ## Related Artifacts
 

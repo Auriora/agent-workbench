@@ -52,9 +52,8 @@ names the missing evidence.
 **Codex Replacement Priority**: MVP must be close enough to replace
 `agent-ide` for Codex usage. Codex MVP surfaces are `AGENTS.md`, host-level MCP
 configuration, stdio live-checkout launch, and repo-local debug CLI commands.
-Codex skills, plugin packaging, and hooks are planned wrappers around MCP and
-must not duplicate runtime behavior or require reinstall for local source
-updates.
+Codex skills, plugin packaging, and quiet hooks are wrappers around MCP and must
+not duplicate runtime behavior or require reinstall for local source updates.
 
 **Execution Sequencing**: Use the MVP Gap Closure Backlog (`T200`-`T205`) as
 the commit-sized implementation stream. Use Phase 0 through Phase 8 as coverage
@@ -108,11 +107,11 @@ satisfied.
   `HookIntent`, `CommandSpec`, `McpBindingSpec`, and `AgentCapability`.
 - [ ] T010 Define integration profile registry and emitter boundary rules for
   Codex, Claude Code, Kiro, Augment, Gemini, Junie, and future agents.
-- [ ] T010A Define the Codex replacement profile with explicit MVP surfaces:
+- [x] T010A Define the Codex replacement profile with explicit MVP surfaces:
   `AGENTS.md`, host-level MCP config, stdio live-checkout launch, repo-local
-  debug CLI commands, optional workflow skills, optional plugin packaging, and
-  optional quiet hooks.
-- [ ] T010B Define Codex skill, plugin, and hook wrapper rules: artifacts may
+  debug CLI commands, workflow skills, plugin packaging, and optional quiet
+  hooks.
+- [x] T010B Define Codex skill, plugin, and hook wrapper rules: artifacts may
   guide or configure MCP usage but must not duplicate schemas, backend output,
   runtime logic, or quiet-feedback behavior.
 - [ ] T011 Define application use-case interfaces and result types for every MVP
@@ -237,8 +236,8 @@ references, and report status/scope without adapter-to-SQLite coupling.
   feedback is represented as an optional, read-only `static_feedback` section.
 - [ ] T056 Implement `DescribeIntegrationProfileUseCase` for common coding-agent
   integration metadata without generating vendor-specific artifacts.
-- [ ] T056A Implement Codex integration profile output that reports which Codex
-  features are active in MVP, which wrappers are deferred, and why MCP remains
+- [x] T056A Implement Codex integration profile output that reports which Codex
+  features are active in MVP, which wrappers are available, and why MCP remains
   the executable source of truth.
 - [ ] T057 Implement freshness, capability, confidence, budget, attention,
   validation, and workspace safety policies used by the use cases.
@@ -266,9 +265,9 @@ MCP transport is wired.
 - [ ] T064 Implement source section presenter with byte and row budgets.
 - [ ] T065 Implement integration profile presenter for agent target surfaces,
   unsupported capabilities, provenance, and regeneration safety.
-- [ ] T065A Implement Codex profile presentation for `AGENTS.md`, MCP config,
-  stdio live-checkout launch, debug CLI, optional skill guidance, optional
-  plugin packaging, optional hooks, and update/restart behavior.
+- [x] T065A Implement Codex profile presentation for `AGENTS.md`, MCP config,
+  stdio live-checkout launch, debug CLI, skill guidance, plugin packaging,
+  optional hooks, and update/restart behavior.
 - [ ] T066 Add presenter-level golden response tests for all MVP resources and
   tools.
 
@@ -287,7 +286,7 @@ handlers or use cases.
   presenter.
 - [ ] T071 [P] [US1] Wire `repo:///overview` through MCP schema, use case, and
   presenter.
-- [ ] T072 [US1] Wire `context_for_task` through MCP schema, use case, and
+- [x] T072 [US1] Wire `context_for_task` through MCP schema, use case, and
   presenter.
 - [ ] T073 [US2] Wire `symbol_search` through MCP schema, use case, and
   presenter.
@@ -305,7 +304,7 @@ handlers or use cases.
   case, and presenter as a read-only post-MVP-discovery resource. MVP requires
   common integration contracts and boundary tests; this resource is included
   only if the first integration slice explicitly promotes it.
-- [ ] T079D Add Codex integration profile schema coverage proving MVP feature
+- [x] T079D Add Codex integration profile schema coverage proving MVP feature
   mapping is explicit and no skill, plugin, or hook artifact is treated as a
   second executable runtime path.
 - [x] T079A Add a stdio MCP process entrypoint that composes the production
@@ -401,7 +400,7 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T202.7 Add fixture-backed budget tests for `context_for_task`,
     `symbol_search`, `find_references`, and `impact`, including row limits,
     traversal depth, and source-byte caps.
-  - [ ] T202.8 Add mixed-language/platform context tests proving unsupported
+  - [x] T202.8 Add mixed-language/platform context tests proving unsupported
     and resource-backed files appear as routing evidence only, with no
     Python-specific shared fields.
   - [ ] T202.9 Add docs/config and test-planning routing tests that preserve
@@ -544,10 +543,10 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
     entrypoint starts cleanly, exposes the registered public MCP surfaces, and
     handles explicit `repo_root` arguments when the process cwd is not the
     target repository.
-  - [ ] T205.14 Add Codex integration profile fixture tests proving the profile
+  - [x] T205.14 Add Codex integration profile fixture tests proving the profile
     lists `AGENTS.md`, host-level MCP config, stdio live-checkout launch, and
     repo-local debug CLI as MVP surfaces, with skills, plugin packaging, and
-    hooks marked as optional wrappers around MCP.
+    hooks marked as wrappers around MCP.
 
 ### Gap 7: Codex Replacement Readiness
 
@@ -556,14 +555,14 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   runtime code.
   - [x] T206.1 Document the host-level Codex MCP config snippet with absolute
     paths to this checkout and optional OTEL environment variables.
-  - [ ] T206.2 Add a Codex workflow skill draft that teaches status -> context
+  - [x] T206.2 Add a Codex workflow skill draft that teaches status -> context
     -> targeted symbol/reference/impact -> edit preview/apply ->
     `verification_plan`, without restating MCP schemas or duplicating runtime
     logic.
-  - [ ] T206.3 Add a plugin feasibility note that defines what a future Codex
-    plugin may package: MCP config, skills, hook declarations, setup metadata,
-    and docs, but not copied runtime logic for local development.
-  - [ ] T206.4 Add hook feasibility notes and tests for optional quiet
+  - [x] T206.3 Add a plugin wrapper note that defines what the Codex plugin may
+    package: MCP config, skills, hook declarations, setup metadata, and docs,
+    but not copied runtime logic for local development.
+  - [x] T206.4 Add hook feasibility notes and tests for optional quiet
     changed-file/post-edit feedback that reuses
     `verification_plan.static_feedback` and stays silent for no findings.
   - [ ] T206.5 Add replacement-readiness checks comparing predecessor
@@ -598,7 +597,7 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
 - [ ] T088 Add integration boundary tests proving common integration specs can
   describe Codex, Claude Code, Kiro, Augment, Gemini, and Junie targets without
   runtime core dependencies on vendor-specific emitters.
-- [ ] T088A Add Codex feature-wrapper boundary tests proving skills, plugin
+- [x] T088A Add Codex feature-wrapper boundary tests proving skills, plugin
   manifests, hooks, and host MCP config cannot import or call concrete runtime
   infrastructure except through MCP launch/config metadata.
 - [ ] T089 Validate docs links and metadata.
