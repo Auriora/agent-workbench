@@ -29,8 +29,8 @@ copying tables, schemas, or enum definitions.
 | Accepted target requirements | [Runtime requirements](../requirements/runtime-requirements.md) | Requirements are target-state until implementation evidence exists. |
 | Runtime response envelope, enums, and MCP contract rules | [Runtime contracts](runtime-contracts.md) | Single source for capability, trust, freshness, evidence, attention, edit-token, and error-shape vocabulary. |
 | SQLite graph schema and freshness model | [Graph store design](../design/graph-store-design.md) | Owns storage invariants, FTS, rebuilds, and query budgets. |
-| Cache, warm-up, and concurrency | [Runtime operations design](../design/runtime-operations-design.md) | Owns cache tiers, invalidation, warm-up, work queues, worker pools, and async/snapshot rules. |
-| Observability and usage history | [Runtime operations design](../design/runtime-operations-design.md) | Owns OTEL as default telemetry and the rule that durable usage records need fixture-backed workflow-history queries. |
+| Cache, warm-up, and concurrency | [Runtime operations design](../design/runtime-operations-design.md) | Owns cache tiers, invalidation, warm-up, work queues, worker pools, async/snapshot rules, and runtime signals exposed to observability. |
+| Observability, Jaeger export, debug harnesses, and profiling | [Observability and debugging design](../design/observability-debugging-design.md) | Owns disabled-by-default OpenTelemetry configuration, OTLP HTTP export, repo-local debug harnesses, profiler guidance, low-impact monitoring candidates, and usage-record boundaries. |
 | Adapter capability model and promotion gates | [Language adapter design](../design/language-adapter-design.md) | Owns adapter lifecycle and semantic promotion rules. |
 | Language priority table | [Language capability matrix](language-capability-matrix.md) | Reference view only; uses enums from runtime contracts. |
 | MCP resources and tools | [MCP surface design](../design/mcp-surface-design.md) | Owns MVP/non-MVP tool split and schema examples through runtime contracts. |
@@ -51,6 +51,9 @@ copying tables, schemas, or enum definitions.
 - Do not duplicate the language priority table outside [Language capability matrix](language-capability-matrix.md).
 - Do not add MVP scope in design docs unless it matches [Agent IDE runtime MVP spec](../specs/001-agent-ide-runtime/spec.md).
 - Do not add graph storage requirements outside [Graph store design](../design/graph-store-design.md) unless they are summarized requirements.
+- Do not add observability configuration, Jaeger export rules, repo-local
+  debug harness rules, or profiler guidance outside
+  [Observability and debugging design](../design/observability-debugging-design.md).
 - Do not change source layout, dependency direction, port ownership, or
   presentation ownership outside [Layered runtime architecture](../design/layered-runtime-architecture.md).
 - Do not make vendor-specific coding-agent plugin, hook, command, rules,
@@ -67,3 +70,4 @@ copying tables, schemas, or enum definitions.
 - [Workspace safety contract](workspace-safety-contract.md)
 - [MVP proof matrix](mvp-proof-matrix.md)
 - [Native dependency setup](../runbooks/native-dependency-setup.md)
+- [Observability and debugging design](../design/observability-debugging-design.md)

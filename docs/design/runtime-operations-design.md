@@ -17,8 +17,10 @@ optimizations.
 ## Scope
 
 This design covers cache ownership, invalidation, startup warm-up, async job
-coordination, worker isolation, SQLite concurrency, runtime ownership, and
-observability.
+coordination, worker isolation, SQLite concurrency, runtime ownership, and the
+runtime signals that observability should report. OpenTelemetry configuration,
+Jaeger export, repo-local debug harnesses, and profiling guidance are owned by
+[Observability and debugging design](observability-debugging-design.md).
 
 ## Cache Architecture
 
@@ -174,31 +176,27 @@ Infrastructure implementations may use Node async tasks, worker threads,
 SQLite transactions, filesystem watchers, and in-memory maps behind these
 ports.
 
-## Observability And Usage Records
+## Observability Signals
 
-OpenTelemetry is the default observability mechanism for runtime operations.
-Use OTEL for:
+OpenTelemetry is the default observability mechanism for runtime operations,
+but it must stay disabled by default. The canonical configuration, Jaeger/OTLP
+export rules, repo-local debug harness rules, profiling guidance, and
+low-impact monitoring candidates live in
+[Observability and debugging design](observability-debugging-design.md).
 
-- traces across MCP dispatch, use cases, graph queries, parser workers, and
-  presenters
-- metrics such as latency, queue depth, cache hit/miss counts, parser timeouts,
-  graph write duration, and snapshot freshness age
-- structured logs for operational debugging
+Runtime operations should expose signals that observability can record:
+
+- MCP dispatch, use-case, graph-query, parser-worker, and presenter spans
+- latency, queue depth, cache hit/miss counts, parser timeouts, graph write
+  duration, and snapshot freshness age
+- structured operational errors with stable codes and redacted paths
+- quiet-feedback suppression counters when they help tune agent-facing output
 
 Usage records are not a substitute for OTEL. They are optional durable product
-events for runtime features that need local query history, such as fallback
-analysis, repeated low-confidence results, validation gaps, or usage-gap
-reports. Do not add a `UsageRecorderPort` in MVP unless a fixture-backed query
-requires persisted workflow history.
-
-If usage records are added later:
-
-- record compact event summaries, not full payloads or source text
-- write through `StateStorePort` or a future usage table
-- use stable event types and redacted paths
-- keep correlation ids aligned with OTEL trace ids where available
-- do not use usage records for operational latency or error telemetry that
-  belongs in OTEL
+events for runtime features that need local query history, such as repeated
+low-confidence results, validation gaps, or usage-gap reports. Do not add a
+`UsageRecorderPort` in MVP unless a fixture-backed query requires persisted
+workflow history.
 
 ## Boundary Rules
 

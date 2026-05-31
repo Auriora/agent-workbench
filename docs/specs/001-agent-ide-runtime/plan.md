@@ -40,14 +40,19 @@ are not allowed.
 - **Language/Version**: TypeScript on Node.js.
 - **Primary Dependencies**: MCP server framework, SQLite with FTS,
   `tree-sitter`, and the selected first-language grammar.
-- **Optional Enrichment Dependencies**: AST, LSP, formatter, linter, and test
-  tooling for the selected first language.
+- **Future Enrichment Dependencies**: AST, LSP, formatter, linter, and test
+  tooling may be added only as fixture-backed enrichers or validation planners.
+  They are not parser or semantic fallbacks for the canonical `tree-sitter`
+  path.
 - **Adapter Model**: Language, framework, config, infrastructure,
   documentation, test, and tooling providers feed a common extraction and
   validation-provider contract.
 - **Storage**: Local SQLite database and generated runtime cache.
-- **Observability**: OpenTelemetry for traces, metrics, and logs. Durable usage
-  records are optional and only for queryable workflow history.
+- **Observability**: OpenTelemetry for traces and low-impact performance
+  signals. Metrics and structured operational log events may start as OTEL span
+  attributes or stable instrumentation events until a dedicated metrics/logging
+  pipeline is promoted. Durable usage records are optional and only for
+  queryable workflow history.
 - **Testing**: Contract, fixture, schema migration, degraded-mode, workspace
   safety, and query-budget tests.
 - **Target Platform**: Local developer workstations and agent workspaces.
@@ -55,6 +60,9 @@ are not allowed.
 - **Agent Integration**: MCP is the authoritative executable surface; skills,
   instructions, hooks, commands, plugins, extensions, and ACP-aware artifacts
   are generated or configured around common integration specs.
+- **Host Codex Launch**: Codex can be configured at host level to run the stdio
+  MCP entrypoint from this repository checkout with absolute paths. Restarting
+  Codex picks up source changes; dependency changes require `pnpm install`.
 - **Documentation Quality**: Markdown structure checks, compliance linting, and
   readability formatting are architecture-defined post-MVP executable
   capabilities; contracts and fixture shape are defined now, and formatter
@@ -119,23 +127,27 @@ docs/specs/001-agent-ide-runtime/
 
 ```text
 src/
-|-- adapters/
+|-- application/
 |-- contracts/
-|-- edits/
-|-- graph/
+|-- debug/
+|-- domain/
+|-- infrastructure/
+|-- interface-adapters/
 |-- mcp/
-|-- runtime/
-|-- workflow/
+|-- ports/
+|-- presentation/
+|-- server.ts
 `-- workspace/
 
 tests/
-|-- adapters/
+|-- application/
 |-- contracts/
-|-- edits/
 |-- fixtures/
 |-- golden/
 |-- graph/
+|-- mcp/
 |-- runtime/
+|-- telemetry/
 `-- workspace/
 
 docs/
@@ -174,38 +186,44 @@ implementation expands.
 8. Implement presentation layer for envelopes, metadata, errors, warnings,
    source sections, budgets, and truncation.
 9. Implement MCP registration as a thin transport binding over use cases and
-   presenters.
+   presenters, including the stdio process entrypoint for host-level Codex
+   launch from this repository checkout.
 10. Define common coding-agent integration profiles and keep vendor-specific
    emitters outside core application/domain behavior.
 11. Define Markdown document quality ports, policies, checker result contracts,
    and formatter preview/apply behavior as post-MVP executable capability
    foundations.
-12. Instrument runtime boundaries with OTEL and validate architecture
-   boundaries, cache invalidation, warm-up, concurrency, query budgets,
-   degraded modes, safety negatives, and golden responses.
+12. Instrument runtime boundaries with OTEL traces and low-impact performance
+   signals, then validate architecture boundaries, cache invalidation, warm-up,
+   concurrency, query budgets, degraded modes, safety negatives, host-level MCP
+   launch, and golden responses.
 
 ## Dependencies
 
 - MCP server framework.
 - SQLite library with FTS support.
 - `tree-sitter` and grammar package for the selected first language.
-- Optional AST/LSP/tooling enrichers for the selected first language.
+- Future fixture-backed AST/LSP/tooling enrichers for the selected first
+  language. These must not become fallbacks or parallel semantic paths.
 - Fixture repositories defined in [MVP proof matrix](../../reference/mvp-proof-matrix.md).
 - Node async runtime and worker-thread support for bounded background work.
-- OpenTelemetry API/SDK for runtime traces, metrics, and structured logs.
+- OpenTelemetry API/SDK for runtime traces, low-impact performance signals, and
+  structured operational instrumentation events.
 - Coding-agent integration artifact model from
   [Coding agent integration design](../../design/coding-agent-integration-design.md).
 - Markdown document quality model from
   [Markdown document quality design](../../design/markdown-document-quality-design.md).
 
-MVP implementation does not require optional enrichment to be available. Missing
-enrichment must be represented as degraded or absent enrichment evidence without
-invalidating canonical `tree-sitter` extraction.
+MVP implementation does not require future enrichment to be available. Missing
+enrichment must be represented as absent optional evidence without invalidating
+canonical `tree-sitter` extraction, and must not trigger alternate parser or
+semantic fallback paths.
 
 ## Risks
 
-- Primary parser and optional enrichment reliability varies; mitigate with
-  capability levels and degraded-mode tests.
+- Primary parser and future enrichment reliability varies; mitigate with
+  capability levels, degraded-mode tests, and a strict rule that future
+  enrichers do not become parser or semantic fallbacks.
 - Python-first implementation can accidentally bake Python assumptions into the
   core; mitigate with language-neutral contract tests, adapter-domain metadata,
   and unsupported/resource-backed fixture files.
@@ -228,8 +246,9 @@ invalidating canonical `tree-sitter` extraction.
 - Contract drift can break clients; mitigate with one response envelope and
   canonical enum registry.
 - Observability and usage history can overlap; keep OTEL as the default
-  operational telemetry path and add durable usage records only for explicit
-  queryable workflow-history features.
+  operational telemetry path, start low-impact performance signals as spans,
+  attributes, or instrumentation events, and add durable usage records only for
+  explicit queryable workflow-history features.
 - Agent-specific integration formats can leak into core runtime design;
   mitigate with common integration specs, emitter boundaries, and dependency
   tests.
@@ -254,6 +273,11 @@ are also part of the minimum acceptance gate.
 Runtime operation tests from
 [Runtime operations design](../../design/runtime-operations-design.md) are part
 of the minimum acceptance gate for cache invalidation, warm-up, and concurrency.
+Observability and launch checks from
+[Observability and debugging design](../../design/observability-debugging-design.md)
+are part of the minimum acceptance gate for OTEL configuration, debug harnesses,
+profiling support, and host-level Codex stdio launch from this repository
+checkout.
 Integration boundary checks from
 [Coding agent integration design](../../design/coding-agent-integration-design.md)
 are part of the acceptance gate before vendor-specific artifacts are generated.

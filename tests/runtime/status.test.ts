@@ -124,7 +124,7 @@ describe("runtime status", () => {
         }),
         expect.objectContaining({
           domain: "package_manager",
-          name: "json",
+          name: "npm",
           capability_level: "resource_backed",
           paths: ["package.json"]
         }),
@@ -174,7 +174,7 @@ describe("runtime status", () => {
       max_files: 1
     });
 
-    expect(result.status.freshness).toBe("fresh");
+    expect(result.status.freshness).toBe("unknown");
     expect(result.meta.truncated).toBe(true);
     expect(result.meta.budget).toEqual({ row_limit: 1 });
     expect(result.status.adapter_coverage).toEqual([

@@ -97,7 +97,7 @@ export async function getScannedRepoStatus(input: {
     indexed_roots: scanned.indexed_roots,
     skipped_roots: scanned.skipped_roots,
     files: scanned.files,
-    freshness: "fresh"
+    freshness: "unknown"
   });
 
   return {

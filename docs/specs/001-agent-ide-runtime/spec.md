@@ -58,6 +58,20 @@ impact tools.
   planning, and edit safety metadata.
 - Surface symbol, reference, and impact tools as exact next actions from context
   and validation responses when they would reduce direct file reads.
+- Keep agent-facing feedback quiet by default. Tool responses should return
+  detailed state only when it is directly actionable for the current agent task,
+  while no-op, no-issue, unavailable, or backend-internal results should be
+  silent or summarized as minimal metadata.
+- Define every MCP resource/tool by a stable agent-facing schema, including
+  clear names, descriptions, parameters, and return structure. Backend tools,
+  internal workers, diagnostics providers, or parser outputs must be translated
+  into that schema rather than passed through.
+- Support opt-in OpenTelemetry traces for runtime debugging and performance
+  work, including OTLP HTTP export to Jaeger or a collector, while keeping
+  telemetry disabled by default.
+- Support a host-level Codex MCP launch mode that points at this repository
+  checkout so runtime code updates are picked up after restarting Codex without
+  reinstalling a packaged copy.
 
 ## Non-Goals
 
@@ -119,9 +133,12 @@ impact tools.
 - **FR-015**: The runtime MUST define `RuntimeContext`, MCP registry, shared
   argument parsing, state-store, and OTEL telemetry boundaries before MCP tools
   are implemented.
-- **FR-016**: OpenTelemetry MUST be the default mechanism for traces, metrics,
-  and logs. Durable usage records MUST NOT be added unless a fixture-backed
-  workflow-history query requires persisted usage events.
+- **FR-016**: OpenTelemetry MUST be the default operational telemetry mechanism.
+  MVP instrumentation MUST cover traces and low-impact performance signals;
+  metrics and structured operational log events may be emitted as OTEL metrics,
+  span attributes, or stable instrumentation events until a dedicated metrics
+  pipeline is promoted. Durable usage records MUST NOT be added unless a
+  fixture-backed workflow-history query requires persisted usage events.
 - **FR-017**: The runtime MUST treat MCP as the authoritative executable
   integration surface for coding agents. Agent-specific plugins, hooks,
   commands, skills, rules, steering, guidelines, extensions, and ACP packaging
@@ -160,6 +177,44 @@ impact tools.
   unsupported non-Python language or platform file is reported with explicit
   `unsupported` or `resource_backed` capability rather than being silently
   ignored or coerced into Python semantics.
+- **FR-027**: MCP tools MUST be named and described for agent task use rather
+  than backend implementation names. Each public tool/resource definition MUST
+  include a schema-owned description, parameter descriptions, capability class,
+  budget policy, and expected return structure.
+- **FR-028**: MCP responses MUST NOT expose raw backend tool names, internal
+  worker output, parser payloads, linter output, or diagnostics provider output
+  unless an MCP schema explicitly models that field. Backend results MUST be
+  mapped into the public schema by use cases and presenters.
+- **FR-029**: Agent-facing feedback MUST be quiet by default. Successful
+  no-op results, files with no findings, unsupported optional analyzers, or
+  per-file processing failures that do not affect the current task MUST be
+  omitted or summarized as minimal metadata instead of producing noisy warnings.
+- **FR-030**: The MVP MUST preserve the useful predecessor workflows without
+  duplicating predecessor tool names or backend surfaces: docs/config routing,
+  validation planning, test planning, and file-change static feedback must be
+  represented through this runtime's MCP schemas.
+- **FR-031**: File-change static feedback MUST be modeled as a read-only,
+  optional `static_feedback` section of `verification_plan` for touched files.
+  It MUST prefer silence when there are no actionable findings or when optional
+  analysis cannot process a file. It MUST report only actionable findings,
+  blockers, or concise next actions that help the agent continue the current
+  task.
+- **FR-032**: Runtime telemetry MUST be configurable and disabled by default.
+  When enabled, it MUST support OpenTelemetry trace export to a configurable
+  destination, including OTLP HTTP endpoints suitable for Jaeger or an
+  OpenTelemetry Collector.
+- **FR-033**: Debug harnesses that run MCP use cases against arbitrary target
+  repositories MUST be repo-local development tools for `agent-workbench` only.
+  They MUST NOT be exposed as public MCP tools/resources or emitted to other
+  projects.
+- **FR-034**: Profiling support MUST be considered in runtime boundaries and
+  debug harnesses so slow MCP paths can be identified through spans, budgets,
+  counters, and profiler runs without changing public MCP schemas.
+- **FR-035**: The runtime MUST provide a stdio MCP entrypoint suitable for
+  host-level Codex configuration with absolute paths to this repository
+  checkout. Restarting Codex MUST be sufficient to pick up normal source changes;
+  dependency changes may require `pnpm install` but MUST NOT require reinstalling
+  a plugin or copied runtime package.
 
 ### Key Entities
 
@@ -174,6 +229,9 @@ impact tools.
 - **Preview Token**: bounded edit proposal with file identity and base hashes.
 - **Validation Plan**: planned diagnostics, formatting, lint, or test commands
   with blocked/unsafe states.
+- **Static Feedback**: optional `verification_plan` section for touched files
+  that reports actionable static findings or blockers while omitting clean files
+  and non-blocking optional analyzer failures.
 - **Presenter**: response assembler that applies envelopes, metadata,
   warnings/errors, source sections, truncation, budgets, and next actions.
 - **Use Case**: application operation that orchestrates domain policies and
@@ -213,6 +271,12 @@ impact tools.
 - **Platform Model**: resource-backed or partial-semantic evidence about
   package managers, build systems, test runners, CI, containers, infrastructure,
   framework routing, or project configuration.
+- **Quiet Feedback Policy**: presentation rule that suppresses no-op,
+  no-finding, unsupported optional analyzer, and backend-internal details unless
+  the information is actionable for the current task.
+- **Schema Translation Boundary**: MCP contract rule that maps all backend
+  provider output into public tool/resource schemas and prevents raw backend
+  payloads from leaking to agents.
 
 ## Acceptance Criteria
 
@@ -229,9 +293,10 @@ impact tools.
 5. **Given** a stale preview, **When** `apply_workspace_edit` runs, **Then** the
    edit is rejected with a `stale_preview` blocker.
 6. **Given** missing `tree-sitter` parser/grammar, parser failure, missing
-   optional enrichment, or missing test tooling, **When** context or validation
-   is requested, **Then** the response reports the affected capability and
-   blocked validation instead of semantic proof.
+   future optional enrichment evidence, or missing test tooling, **When**
+   context or validation is requested, **Then** the response reports the
+   affected capability and blocked validation instead of semantic proof or an
+   alternate parser fallback.
 7. **Given** unsafe paths, symlink escapes, generated/vendor targets, or
    secret-like content, **When** a tool attempts to index, report, or mutate
    them, **Then** the workspace safety contract is enforced.
@@ -248,9 +313,10 @@ impact tools.
 11. **Given** malformed MCP arguments, **When** a tool or resource handler is
    called, **Then** shared argument parsing returns a structured invalid-input
    response before any use case executes.
-12. **Given** runtime operations execute, **When** traces and metrics are
-   inspected, **Then** OTEL spans and metrics cover dispatch, use case,
-   graph/query, worker, cache, and presentation boundaries.
+12. **Given** runtime operations execute with telemetry enabled, **When** traces
+   and performance signals are inspected, **Then** OTEL spans and low-impact
+   metrics or instrumentation events cover dispatch, use case, graph/query,
+   worker, cache, and presentation boundaries.
 13. **Given** coding-agent integration artifacts are generated or described,
    **When** the integration profile is inspected, **Then** MCP bindings are the
    executable source of truth and unsupported agent-specific surfaces are
@@ -274,6 +340,18 @@ impact tools.
    context are requested, **Then** every language/platform area is represented
    with explicit capability metadata and no Python-specific contract fields leak
    into shared response shapes.
+19. **Given** a backend diagnostic, parser, validation, or worker provider
+   returns raw implementation output, **When** an MCP response is produced,
+   **Then** the response contains only fields defined by the public MCP schema
+   and no backend tool names or raw provider payloads leak through.
+20. **Given** file-change feedback has no actionable findings, or optional
+   analysis cannot process a file without affecting the current task, **When**
+   `verification_plan` presents `static_feedback`, **Then** the response is
+   silent or minimal rather than distracting the agent with backend state.
+21. **Given** host-level Codex is configured to launch the stdio MCP entrypoint
+   from this repository checkout, **When** runtime source code changes and Codex
+   is restarted, **Then** the launched MCP process uses the updated repository
+   code without requiring plugin or package reinstall.
 
 ## User Scenarios And Testing
 
@@ -321,6 +399,12 @@ blocked validation status.
 - Usage-heavy paths from the predecessor runtime, especially context,
   docs/config routing, validation planning, and edit safety metadata, must stay
   bounded even before post-MVP diagnostics or hooks exist.
+- Static feedback hooks may fail to process a subset of files; unless that
+  failure blocks the current edit or validation plan, the `verification_plan`
+  `static_feedback` section should be omitted or summarized without
+  interrupting the agent.
+- Backend provider output may be verbose, unstable, or provider-specific; it
+  must be normalized before crossing the MCP boundary.
 
 ## Success Criteria
 
@@ -342,7 +426,8 @@ blocked validation status.
 - **SC-010**: Registry and argument-parser tests prove tool/resource definitions
   use shared parsing and do not hand-coerce raw MCP input.
 - **SC-011**: OTEL instrumentation tests or contract checks prove runtime
-  boundary spans/metrics exist without adding durable usage records to MVP.
+  boundary spans and low-impact performance signals exist without adding durable
+  usage records to MVP.
 - **SC-012**: Integration boundary tests prove common integration specs can
   describe target agent surfaces without core runtime dependencies on
   vendor-specific emitters. Concrete vendor emitters remain post-MVP.
@@ -363,6 +448,24 @@ blocked validation status.
   Python adapter or namespaced metadata.
 - **SC-017**: Fixture tests prove unsupported or resource-backed non-Python
   language/platform files are reported explicitly with capability metadata.
+- **SC-018**: MCP schema tests prove every public tool/resource has an
+  agent-facing name, description, parameter descriptions, expected return
+  structure, capability class, and budget policy.
+- **SC-019**: Translation-boundary tests prove backend diagnostic/parser/worker
+  outputs are mapped into public schemas and raw backend names or payloads do
+  not appear in MCP responses.
+- **SC-020**: Quiet-feedback tests prove no-finding static feedback and
+  non-blocking optional analyzer failures produce silent or minimal responses.
+- **SC-021**: Telemetry tests prove OTEL export is disabled by default,
+  configurable by environment, and can target console or OTLP HTTP endpoints
+  without changing MCP responses.
+- **SC-022**: Debug harness tests prove repo-local debug commands can target
+  external repos only when launched from this project and are not registered as
+  MCP surfaces.
+- **SC-023**: Host-level Codex launch tests or smoke checks prove the stdio MCP
+  entrypoint runs from this repository checkout, supports explicit `repo_root`
+  arguments when cwd is not the target repo, and can be updated by restarting
+  Codex after source changes.
 
 ## Related Artifacts
 

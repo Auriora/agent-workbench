@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { repoStatusResource } from "../../src/interface-adapters/mcp/registries/resources/repo-status.js";
 import type { GetRepoStatusResult } from "../../src/application/use-cases/get-repo-status.js";
+import { createAgentWorkbenchServer } from "../../src/server.js";
 
 type RegisteredResource = {
   name: string;
@@ -80,5 +81,76 @@ describe("repo status MCP resource", () => {
 
     expect(parsed.data.repo_root).toBe("/requested");
     expect(parsed.data.adapter_coverage).toEqual(result.status.adapter_coverage);
+  });
+
+  it("returns a structured invalid-input envelope before provider execution", async () => {
+    let registered: RegisteredResource | undefined;
+    let providerCalled = false;
+    const server = {
+      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
+        registered = { name, uri, handler };
+      }
+    };
+
+    repoStatusResource.register(server as never, {
+      repoRoot: "/repo",
+      getRepoStatus: () => {
+        providerCalled = true;
+        throw new Error("provider should not run");
+      }
+    });
+
+    const response = await registered?.handler({ repo_root: 42 });
+    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; retryable: boolean }>;
+    };
+
+    expect(providerCalled).toBe(false);
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "invalid_input",
+        retryable: false
+      })
+    ]);
+  });
+
+  it("uses scanned status coverage from the default composed server", async () => {
+    const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform") as unknown as {
+      _registeredResources: Record<
+        string,
+        {
+          readCallback: (request: unknown) => Promise<{
+            contents: Array<{
+              text: string;
+            }>;
+          }>;
+        }
+      >;
+    };
+
+    const response = await server._registeredResources["repo:///status"].readCallback({});
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
+      data: GetRepoStatusResult["status"];
+    };
+
+    expect(parsed.data.adapter_coverage).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domain: "language",
+          name: "typescript",
+          capability_level: "unsupported"
+        }),
+        expect.objectContaining({
+          domain: "package_manager",
+          name: "npm",
+          capability_level: "resource_backed"
+        })
+      ])
+    );
   });
 });

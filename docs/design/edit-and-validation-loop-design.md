@@ -28,6 +28,10 @@ known test hints rather than broad scans by default.
 Documentation validation should also plan Markdown structure, compliance, link,
 and readability checks when Markdown files or documentation policy files are
 touched.
+Agent-facing feedback should stay quiet unless it is actionable. Static
+analysis on file change is valuable because it catches issues early, but
+no-finding results should be silent and optional analyzer failures should not
+interrupt the agent unless they block the requested edit or validation plan.
 
 Edit and validation behavior is implemented through named use cases and
 policies, not a shared workflow service. `PreviewWorkspaceEdit`,
@@ -94,6 +98,29 @@ Validation architecture is split from the start:
 - validation execution and result capture are post-MVP
 - validation presentation reports planned, blocked, done, or not-applicable
   status consistently
+- feedback presentation suppresses no-op/no-finding results and non-blocking
+  optional analyzer failures
+
+## File-Change Feedback
+
+File-change feedback is a retained post-edit workflow from the predecessor
+runtime, but the restart should make it less distracting:
+
+- Run static checks only through explicit provider contracts.
+- Translate provider output into the public feedback schema; do not pass through
+  backend tool names or raw output.
+- Return actionable findings, blockers, concise next actions, and affected
+  paths only.
+- Return nothing, or minimal metadata, when all checked files are clean.
+- Fail quietly for files an optional analyzer cannot process unless the current
+  tool promised analysis for those files.
+- Keep check selection focused on touched files and known impact; do not expand
+  into broad diagnostics or test execution without an explicit tool call.
+
+Candidate checks include parser syntax checks, formatter/lint planning,
+type-check routing, documentation structure checks, config validation, and
+future framework-specific analyzers. Each check must declare whether it is
+blocking, advisory, optional, or unavailable.
 
 Markdown formatting is handled through the same preview/apply safety path as
 code edits. A formatter may plan or preview improvements for plain-text
@@ -112,11 +139,12 @@ analytics are post-MVP.
 2. Symbol search, definitions, references, callers, callees, impact.
 3. Context builder with source section packing.
 4. Validation planning for diagnostics, type checking, formatting, and tests.
-5. Bounded edit preview/apply with drift checks.
-6. TODO, docs, project config, dependency context.
-7. Safe rename and change signature for mature language backends.
-8. Dead code, security, and framework-specific inspections.
-9. Coverage and advanced refactors.
+5. Quiet file-change static feedback for touched files.
+6. Bounded edit preview/apply with drift checks.
+7. TODO, docs, project config, dependency context.
+8. Safe rename and change signature for mature language backends.
+9. Dead code, security, and framework-specific inspections.
+10. Coverage and advanced refactors.
 
 ## Deferred Capabilities
 

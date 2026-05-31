@@ -56,6 +56,10 @@ exact next actions.
   budgets, and stable output ordering.
 - MCP surface:
   transport registration and schema binding for resources and tools.
+- Observability and profiling:
+  disabled-by-default OpenTelemetry setup, configurable OTLP HTTP export for
+  Jaeger or collectors, debug harnesses, profiling hooks, and low-overhead
+  performance counters.
 - Domain services and policies:
   task context packing, confidence labels, direct-read prompts, blockers,
   warnings, freshness, capability, budget, validation, skipped-work reporting,
@@ -64,7 +68,9 @@ exact next actions.
   preview, apply, drift check, and path containment.
 - Validation planner:
   diagnostics, formatting, lint, and test planning without command execution by
-  default.
+  default. Touched-file static feedback is an optional `verification_plan`
+  section and must stay silent for clean files or non-blocking optional analyzer
+  failures.
 - Workspace safety:
   path containment, command planning gates, redaction, and generated-write
   policy.
@@ -113,14 +119,35 @@ exact next actions.
   adapter metadata.
 - Unsupported or resource-backed non-Python files must be visible in status,
   scope, and context as explicit capability coverage.
+- OTEL export must be disabled by default and configurable by environment.
+  Jaeger/collector destinations must be selected without changing runtime code
+  or MCP schemas.
+- MVP observability is trace-first but must reserve stable low-impact
+  performance signals for metrics or instrumentation events. Latency, row count,
+  traversal depth, source-byte caps, cache hit/miss state, degraded counts,
+  invalid-input counts, and quiet-feedback suppression counts should be emitted
+  without changing public MCP responses.
+- Debug/profiling harnesses may run use cases against external target repos only
+  from this repository. They must not be registered as public MCP tools.
+- Profiling should rely on debug harnesses, OTEL spans, query budgets, row
+  counts, traversal depth, source-byte caps, cache hit/miss counters, and
+  degraded-mode counters before adding heavier product analytics.
+- Host-level Codex configuration should launch the stdio MCP entrypoint from
+  this repository checkout with absolute paths. Normal source changes are picked
+  up by restarting Codex; dependency changes require `pnpm install`, not
+  reinstalling a copied plugin/runtime package.
 
 ## Resolved Decisions
 
-- `tree-sitter` is the mandatory primary extraction path; AST and LSP are optional
-  enrichers only.
+- `tree-sitter` is the mandatory primary extraction path. AST, LSP, Pyright,
+  Ruff, pytest, and other language tools are future fixture-backed enrichers or
+  validation planners only; they are not parser/semantic fallbacks and must not
+  create alternate implementation paths.
 - MVP MCP/client surface is the status, scope, overview, context, symbol,
   reference, impact, preview/apply, and verification planning set from the MVP
   spec.
+- File-change static feedback is represented by `verification_plan`
+  `static_feedback`; it is not a separate public MCP resource/tool in MVP.
 - Python is the first partial-semantic fixture path.
 - Multi-language and multi-platform support is a core runtime requirement, not
   a post-MVP redesign. The MVP proves this through language-neutral contracts
@@ -128,3 +155,8 @@ exact next actions.
 - Predecessor usage evidence prioritizes status/scope, context, docs/config
   routing, validation planning, and edit safety metadata before broad
   diagnostics execution, hooks, usage analytics, or graph reports.
+- Observability is an opt-in runtime concern: OTEL is the operational telemetry
+  path, durable usage records are deferred until a concrete product query
+  requires them, and debug harnesses remain repo-local.
+- Host-level Codex live-checkout launch is supported through the stdio MCP
+  entrypoint, while vendor-specific plugin packaging remains outside MVP.

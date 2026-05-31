@@ -46,6 +46,23 @@ function isPackageManifest(filePath: string): boolean {
   return filename === "package.json" || filename === "pyproject.toml" || filename === "go.mod" || filename === "cargo.toml";
 }
 
+function packageManifestName(filePath: string): string {
+  const filename = lowerBasename(filePath);
+  if (filename === "package.json") {
+    return "npm";
+  }
+  if (filename === "pyproject.toml") {
+    return "python";
+  }
+  if (filename === "go.mod") {
+    return "go";
+  }
+  if (filename === "cargo.toml") {
+    return "cargo";
+  }
+  return "package_manager";
+}
+
 function isInfrastructureFile(filePath: string): boolean {
   const filename = lowerBasename(filePath);
   const ext = extension(filePath);
@@ -80,7 +97,10 @@ function evidence(
 
 export function describeFileCapability(input: FileCapabilityInput): AdapterEvidence {
   if (isPackageManifest(input.path)) {
-    return evidence(input, "package_manager", "resource_backed", ["config"], "high");
+    return {
+      ...evidence(input, "package_manager", "resource_backed", ["config"], "high"),
+      name: packageManifestName(input.path)
+    };
   }
 
   if (isInfrastructureFile(input.path)) {

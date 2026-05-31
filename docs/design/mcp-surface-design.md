@@ -26,6 +26,10 @@ coding, and invoke broad graph analysis only when intentionally exploring.
 
 Responses must label trust, freshness, scope, verification, and evidence so
 agents know when direct source verification or additional validation is needed.
+They must not make MCP tool state the center of the interaction. The default
+presentation should be quiet and task-focused: return only actionable blockers,
+warnings, next actions, or compact metadata that helps the agent continue the
+current work.
 
 Predecessor `agent-ide` usage showed that agents most often used first-pass
 context, docs/search style routing, diagnostics/lint/validation planning, and
@@ -41,11 +45,20 @@ case, and delegates output construction to presenters.
 
 Tools, resources, and prompts are declared through registries. A registry
 definition owns the input schema, shared argument parser, use-case binding,
-presenter binding, budget policy, and capability policy.
+presenter binding, budget policy, and capability policy. It also owns the
+public name, description, parameter descriptions, and expected return
+structure. Names should describe the action in agent terms, not backend
+implementation terms.
 
 Shared argument parsers must handle repo paths, file paths, line/column pairs,
 booleans, enums, limits, payload modes, and usage context. Invalid input returns
 structured contract errors before any use case runs.
+
+Backend tools and workers are not part of the MCP contract. Parser payloads,
+diagnostic provider output, lint output, test discovery records, worker state,
+or internal tool names must be translated into the MCP resource/tool schema by
+application use cases and presenters. If a backend result has no schema-owned
+field, it is not returned.
 
 MCP is also the primary cross-agent integration contract. Agent-specific
 plugins, skills, hooks, commands, steering files, rules, guidelines, extensions,
@@ -63,10 +76,17 @@ Presenters own response consistency across every MCP resource and tool:
 - warning, blocker, and error formatting
 - source section packing and stable ordering
 - retryable `next_action` mapping
+- quiet-feedback suppression for no-op, no-finding, and non-blocking optional
+  backend failures
 
 Use cases must return application result objects, not MCP envelopes. MCP
 handlers must not query SQLite, parse source, or assemble warnings/errors
 directly.
+
+Presenters decide whether a backend result is actionable enough to show. A file
+with no findings should normally produce no feedback. A backend that cannot
+process an optional file should be silent unless the current tool promised that
+analysis or the failure changes the recommended next action.
 
 ## MVP Resources
 
@@ -101,6 +121,11 @@ skipped-work metadata, and exact next actions.
 `verification_plan` plans checks but does not execute them. It must distinguish
 planned checks from proven runnable checks and route low-confidence test
 discovery to explicit follow-up instead of implying nearest-test proof.
+
+Documentation/config routing and test/validation planning are usage-proven
+workflows from the predecessor system and must remain first-class. The MVP
+should replicate their useful behavior through this runtime's schemas rather
+than duplicating predecessor tool names or backend payloads.
 
 ## Post-MVP Resources And Tools
 
@@ -182,6 +207,26 @@ agent request
 - MVP `verification_plan` does not execute commands by default.
 - MVP tools must publish row limits, traversal limits, source-byte caps, and
   timeout behavior through response metadata.
+- MVP responses should fail quietly for non-essential backend failures. Only
+  task-blocking failures, actionable findings, or required follow-up should be
+  promoted to warnings or errors.
+- Backend provider names, command names, and raw outputs are debug evidence, not
+  MCP response fields, unless the public schema explicitly defines them.
+
+## Tool Naming And Descriptions
+
+Public MCP names must be stable, obvious, and task-oriented. Descriptions should
+answer:
+
+- when the agent should call the tool
+- what parameters are required or optional
+- what the tool will not do
+- what shape the agent should expect in the response
+- what follow-up actions may be returned
+
+Avoid names inherited from internal backend workers, caches, parsers, or
+diagnostic providers. If an internal component is replaced, the public name and
+schema should not change unless the agent-facing capability changes.
 
 ## Related Docs
 

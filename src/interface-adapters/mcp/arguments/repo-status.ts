@@ -3,9 +3,9 @@ import { parseMcpArguments, type McpArgumentParser } from "./index.js";
 
 const repoStatusArgumentSchema = z
   .object({
-    repo_root: z.string().optional()
+    repo_root: z.string().min(1).optional()
   })
-  .passthrough();
+  .strict();
 
 export type RepoStatusArguments = z.infer<typeof repoStatusArgumentSchema>;
 

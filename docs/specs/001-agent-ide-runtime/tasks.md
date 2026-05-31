@@ -36,6 +36,19 @@ multiple coding languages, frameworks, project systems, test runners, CI,
 containers, infrastructure platforms, and documentation surfaces through common
 adapter/provider contracts.
 
+**Quiet Schema-Owned Surface Priority**: Public MCP resources and tools must be
+agent-facing contracts, not backend pass-throughs. Tool names, descriptions,
+parameters, return structures, capability classes, and budgets must be defined
+by the MCP schema. Backend provider output must be translated into that schema.
+No-finding feedback and non-blocking optional analyzer failures should stay
+silent or minimal to avoid distracting agents from the task at hand.
+
+**Execution Sequencing**: Use the MVP Gap Closure Backlog (`T200`-`T205`) as
+the commit-sized implementation stream. Use Phase 0 through Phase 8 as coverage
+gates; a gap task is not complete unless the relevant phase-level architecture,
+contract, presenter, MCP, validation, and documentation checks are also
+satisfied.
+
 ## Format: `[ID] [P?] [Story] Description`
 
 - **[P]**: Can run in parallel because it touches different files and has no
@@ -55,7 +68,7 @@ adapter/provider contracts.
 - [ ] T003 Define domain value objects and policy ownership for repo paths,
   source ranges, file identity, snapshots, evidence, capability, confidence,
   attention, validation, budgets, and workspace safety.
-- [ ] T003A Define language-neutral adapter evidence value objects for adapter
+- [x] T003A Define language-neutral adapter evidence value objects for adapter
   domain, language/platform id, capability level, provenance, confidence, and
   namespaced metadata.
 - [ ] T004 Define core ports: `GraphQueryPort`, `GraphWritePort`,
@@ -74,6 +87,9 @@ adapter/provider contracts.
 - [ ] T008 Define shared typed argument parser contracts for repo paths, file
   paths, line/column pairs, booleans, enums, limits, payload modes, and usage
   context.
+- [ ] T008A Define MCP schema metadata requirements for public names,
+  descriptions, parameter descriptions, expected return structures, capability
+  classes, budget policies, and examples.
 - [ ] T009 Define common coding-agent integration specs:
   `IntegrationManifest`, `IntegrationArtifact`, `InstructionPack`, `SkillPack`,
   `HookIntent`, `CommandSpec`, `McpBindingSpec`, and `AgentCapability`.
@@ -84,6 +100,9 @@ adapter/provider contracts.
 - [ ] T012 Define presentation contracts for envelope assembly, metadata,
   warnings, blockers, errors, source sections, budgets, truncation, and stable
   output ordering.
+- [ ] T012A Define quiet-feedback presentation policy for suppressing
+  no-finding results, no-op results, and non-blocking optional analyzer
+  failures.
 - [ ] T013 Define architecture ADRs or design notes for ports/adapters,
   presentation, policy ownership, canonical `tree-sitter` extraction, and graph
   store as derived evidence, and coding-agent integration as generated adapter
@@ -170,8 +189,8 @@ executable without application code depending on SQLite.
 - [ ] T043 Implement reference resolution use case for imports, duplicate-name
   ambiguity, resolved edges, and unresolved refs.
 - [ ] T044 Implement degraded-mode behavior for missing `tree-sitter`
-  parser/grammar, parser failure, missing optional enrichers, and missing test
-  tooling.
+  parser/grammar, parser failure, missing future optional enrichment evidence,
+  and missing test tooling without adding parser or semantic fallbacks.
 
 **Checkpoint**: runtime can bind to fixture repos, extract evidence, resolve
 references, and report status/scope without adapter-to-SQLite coupling.
@@ -194,13 +213,17 @@ references, and report status/scope without adapter-to-SQLite coupling.
   and stale-preview rejection.
 - [ ] T055 Implement `PlanVerificationUseCase` without command execution,
   distinguishing planned checks from proven runnable checks and routing
-  low-confidence discovery to exact follow-up actions.
+  low-confidence discovery to exact follow-up actions. Touched-file static
+  feedback is represented as an optional, read-only `static_feedback` section.
 - [ ] T056 Implement `DescribeIntegrationProfileUseCase` for common coding-agent
   integration metadata without generating vendor-specific artifacts.
 - [ ] T057 Implement freshness, capability, confidence, budget, attention,
   validation, and workspace safety policies used by the use cases.
 - [ ] T058 Implement cache validity and snapshot validity policies used by the
   use cases.
+- [ ] T058A Implement schema translation policies that map backend parser,
+  diagnostic, validation, test-discovery, and worker outputs into public MCP
+  schemas without leaking backend names or raw payloads.
 
 **Checkpoint**: MVP behavior is available through application use cases before
 MCP transport is wired.
@@ -215,7 +238,8 @@ MCP transport is wired.
 - [ ] T062 Implement warning/blocker attention presenter.
 - [ ] T063 Implement error and next-action presenter support with retryable
   `next_action` shape for direct reads, `symbol_search`, `find_references`,
-  `impact`, preview/apply, and validation follow-up actions.
+  `impact`, preview/apply, and validation follow-up actions, plus quiet
+  `static_feedback` presentation for `verification_plan`.
 - [ ] T064 Implement source section presenter with byte and row budgets.
 - [ ] T065 Implement integration profile presenter for agent target surfaces,
   unsupported capabilities, provenance, and regeneration safety.
@@ -250,10 +274,20 @@ handlers or use cases.
 - [ ] T077 [US3] Wire `apply_workspace_edit` through MCP schema, use case, and
   presenter.
 - [ ] T078 [US3] Wire `verification_plan` through MCP schema, use case, and
-  presenter.
+  presenter, including optional quiet `static_feedback` for touched files.
 - [ ] T079 Wire `repo:///agent-integration-profile` through MCP schema, use
-  case, and presenter as a read-only post-MVP-discovery resource if included in
-  the first integration slice.
+  case, and presenter as a read-only post-MVP-discovery resource. MVP requires
+  common integration contracts and boundary tests; this resource is included
+  only if the first integration slice explicitly promotes it.
+- [ ] T079A Add a stdio MCP process entrypoint that composes the production
+  server from repository source code, connects `StdioServerTransport`, and
+  keeps transport setup separate from registry/resource/tool implementation.
+- [ ] T079B Add a host-level Codex MCP install/runbook task that documents how
+  to point Codex at this checkout with absolute paths so all Codex sessions on
+  the host use the latest repo code after restart without reinstalling.
+- [ ] T079C Define default repo-root behavior for host-level MCP launches,
+  including explicit `repo_root` arguments, `AGENT_WORKBENCH_DEFAULT_REPO_ROOT`,
+  and tests for launch directories that are not the target project.
 
 **Checkpoint**: MVP read/write/planning surfaces match golden responses and
 budgets through the presentation layer.
@@ -341,6 +375,9 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T202.8 Add mixed-language/platform context tests proving unsupported
     and resource-backed files appear as routing evidence only, with no
     Python-specific shared fields.
+  - [ ] T202.9 Add docs/config and test-planning routing tests that preserve
+    the useful predecessor workflows through new schemas without duplicating
+    predecessor tool names or backend output.
 
 ### Gap 4: Edit And Validation Loop
 
@@ -369,6 +406,14 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T203.8 Add presenter golden responses for preview, apply success,
     stale apply rejection, unsafe path rejection, blocked validation, and
     planned validation.
+  - [ ] T203.9 Implement quiet file-change static feedback for touched files
+    as optional `verification_plan.static_feedback` with actionable findings
+    only, silent clean results, and silent non-blocking optional analyzer
+    failures.
+  - [ ] T203.10 Add tests proving file-change feedback does not distract the
+    agent with no-issue files, optional analyzer failures, backend tool names,
+    or raw diagnostic output, and proving no separate public MCP tool/resource
+    is registered for static feedback in MVP.
 
 ### Gap 5: Runtime And Degraded Behavior
 
@@ -388,17 +433,40 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T204.5 Implement obsolete-result rejection for parser/indexing work
     when snapshot id, file hash, or config identity no longer matches.
   - [ ] T204.6 Implement degraded responses for missing tree-sitter parser or
-    grammar, parser timeout/crash, missing optional enrichment, unsupported
-    language/platform, missing test runner, and stale watcher snapshots.
+    grammar, parser timeout/crash, missing future optional enrichment evidence,
+    unsupported language/platform, missing test runner, and stale watcher
+    snapshots without adding parser or semantic fallbacks.
   - [ ] T204.7 Add concurrency tests proving bounded reads use the last valid
     snapshot or explicit refreshing/stale metadata while graph writes are
     serialized per repository.
   - [ ] T204.8 Add OTEL contract tests for dispatch, use case, graph/query,
     worker, cache, presentation, degraded state, and error boundaries without
     adding durable usage records.
+  - [ ] T204.8A Implement configurable OTEL setup with disabled-by-default
+    behavior, console export, OTLP HTTP export for Jaeger/collectors,
+    environment configuration, and shutdown/flush handling.
+  - [ ] T204.8B Add low-impact performance monitoring for tool latency,
+    row-count caps, traversal depth, source-byte caps, cache hit/miss state,
+    degraded-mode counts, quiet-feedback suppression counts, and invalid-input
+    counts. Define whether each signal is emitted as an OTEL metric, span
+    attribute, or stable instrumentation event.
+  - [ ] T204.8C Add profiling guidance and harness support so MCP paths can be
+    run under Node CPU profiling or external profilers without changing public
+    MCP schemas.
+  - [ ] T204.8D Add structured operational log-event contract tests for
+    startup, shutdown, exporter failures, degraded runtime state, and invalid
+    input, using OTEL-compatible instrumentation without writing durable usage
+    records.
   - [ ] T204.9 Add fixture-runtime-operations and fixture-runtime-boundaries
     coverage for warm-up, cache reuse, invalidation, owner state, parser
     timeout, malformed inputs, and operational metadata.
+  - [ ] T204.10 Add repo-local debug harnesses for testing MCP use cases against
+    arbitrary target repos from this project only; prove they are not registered
+    as public MCP tools/resources.
+  - [ ] T204.11 Add host-level Codex runtime-update validation proving the MCP
+    process is launched from this repository checkout, code changes are picked
+    up after Codex restart, and dependency changes require only `pnpm install`
+    rather than plugin/package reinstall.
 
 ### Gap 6: MCP Completion
 
@@ -412,6 +480,9 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T205.3 Implement registry definitions for each MCP resource, tool, and
     prompt with schema, argument parser, use-case binding, presenter binding,
     budget policy, capability class, and mutation class.
+  - [ ] T205.3A Add registry metadata tests proving every public MCP surface has
+    a clear agent-facing name, description, parameter descriptions, expected
+    return structure, capability class, and budget policy.
   - [ ] T205.4 Wire resources `repo:///status`, `repo:///scope`, and
     `repo:///overview` through typed parsers, use cases, presenters, and golden
     MCP response tests.
@@ -430,6 +501,19 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
     validation targets.
   - [ ] T205.9 Add end-to-end MCP fixture tests proving all MVP responses match
     presenter goldens and no handler hand-coerces raw MCP inputs.
+  - [ ] T205.10 Add backend translation-boundary tests proving raw parser,
+    diagnostic, validation, test-discovery, and worker payloads never pass
+    through to MCP responses unless modeled by the public schema.
+  - [ ] T205.11 Implement and test `src/mcp/stdio.ts` as the canonical
+    production MCP entrypoint over `createAgentWorkbenchServer`, with no
+    duplicated server registration logic.
+  - [ ] T205.12 Add package script and documentation for host-level Codex
+    configuration using absolute `tsx` and source-file paths, with OTEL env vars
+    remaining optional and disabled by default.
+  - [ ] T205.13 Add MCP launch tests or smoke checks proving the stdio
+    entrypoint starts cleanly, exposes the registered public MCP surfaces, and
+    handles explicit `repo_root` arguments when the process cwd is not the
+    target repository.
 
 ## Phase 7: Cross-Cutting Validation
 
@@ -439,7 +523,8 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
 - [ ] T082 Add registry and shared argument-parser tests for valid input,
   invalid input, paths, positions, enums, limits, and payload modes.
 - [ ] T083 Add OTEL instrumentation tests or contract checks for dispatch,
-  use-case, graph/query, worker, cache, and presentation boundaries.
+  use-case, graph/query, worker, cache, presentation boundaries, low-impact
+  performance signals, and structured operational log events.
 - [ ] T084 Add runtime owner/observer, prewarm, cache invalidation,
   cold-to-fresh warm-up, stale-to-refreshing-to-fresh update, obsolete-result
   rejection, concurrent-read, and single-writer graph transaction tests.
@@ -447,7 +532,8 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   generated/vendor mutation, shell injection, env handling, output caps, and
   redaction.
 - [ ] T086 Add degraded-mode tests for missing `tree-sitter` parser/grammar,
-  parser timeout/crash, missing optional enricher, and missing test runner.
+  parser timeout/crash, missing future optional enrichment evidence, and missing
+  test runner.
 - [ ] T087 Add query budget tests for status, scope, context, symbol search,
   references, impact, preview/apply, and verification plan.
 - [ ] T088 Add integration boundary tests proving common integration specs can

@@ -5,7 +5,7 @@ import { buildFileCatalogEntry } from "../../domain/policies/index.js";
 import type { FileCatalogScanPort, FileCatalogScanResult, FileIdentityPort } from "../../ports/index.js";
 import { FileIdentityAdapter } from "./file-identity.js";
 
-const DEFAULT_SKIPPED_DIRECTORY_NAMES = new Set([
+export const DEFAULT_SKIPPED_ROOTS = [
   ".cache",
   ".git",
   ".pytest_cache",
@@ -14,7 +14,9 @@ const DEFAULT_SKIPPED_DIRECTORY_NAMES = new Set([
   "coverage",
   "dist",
   "node_modules"
-]);
+] as const;
+
+const DEFAULT_SKIPPED_DIRECTORY_NAMES = new Set<string>(DEFAULT_SKIPPED_ROOTS);
 
 function normalizePath(value: string): string {
   return value.split(path.sep).join("/");
@@ -82,7 +84,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     return {
       repo_root: repoRoot,
       indexed_roots: indexedRoots,
-      skipped_roots: input.skipped_roots,
+      skipped_roots: mergeSkippedRoots(input.skipped_roots),
       files: entries,
       truncated
     };
@@ -126,16 +128,16 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
         continue;
       }
 
-      const content = fs.readFileSync(absolutePath, "utf8");
-      const fileIdentity = await this.fileIdentity.compute({
-        path: absolutePath,
-        content
-      });
+      const stats = fs.statSync(absolutePath);
+      const language = await this.fileIdentity.inferLanguage({ path: absolutePath });
       input.entries.push(
         buildFileCatalogEntry({
           file_identity: {
-            ...fileIdentity,
-            path: relativePath
+            path: relativePath,
+            language,
+            content_hash: `stat:${stats.size}:${Math.trunc(stats.mtimeMs)}`,
+            size_bytes: stats.size,
+            mtime_ms: stats.mtimeMs
           }
         })
       );
@@ -146,4 +148,8 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
 function isInsideRepo(repoRoot: string, absolutePath: string): boolean {
   const relative = path.relative(repoRoot, absolutePath);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function mergeSkippedRoots(skippedRoots: readonly string[]): string[] {
+  return Array.from(new Set([...DEFAULT_SKIPPED_ROOTS, ...skippedRoots])).sort();
 }

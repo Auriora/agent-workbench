@@ -36,6 +36,16 @@ describe("file catalog scanner", () => {
     });
 
     expect(result.truncated).toBe(false);
+    expect(result.skipped_roots).toEqual([
+      ".cache",
+      ".git",
+      ".pytest_cache",
+      ".ruff_cache",
+      "__pycache__",
+      "coverage",
+      "dist",
+      "node_modules"
+    ]);
     expect(result.files.map((file) => file.path)).toEqual([
       ".github/workflows/ci.yml",
       "Dockerfile",
@@ -84,5 +94,39 @@ describe("file catalog scanner", () => {
 
     expect(result.truncated).toBe(true);
     expect(result.files).toHaveLength(2);
+  });
+
+  it("does not read file contents while building status catalog evidence", async () => {
+    const scanner = new FileCatalogScannerAdapter({
+      fileIdentity: {
+        async compute() {
+          throw new Error("content hashing should not run during catalog scan");
+        },
+        async inferLanguage({ path: filePath }) {
+          return filePath.endsWith(".py") ? "python" : "text";
+        },
+        async isSkipped() {
+          return false;
+        }
+      }
+    });
+
+    const result = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["src"],
+      skipped_roots: [],
+      max_files: 100
+    });
+
+    expect(result.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "src/service.py",
+          file_identity: expect.objectContaining({
+            content_hash: expect.stringMatching(/^stat:/)
+          })
+        })
+      ])
+    );
   });
 });
