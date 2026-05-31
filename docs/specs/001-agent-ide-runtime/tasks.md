@@ -342,6 +342,34 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
     and resource-backed files appear as routing evidence only, with no
     Python-specific shared fields.
 
+### Gap 4: Edit And Validation Loop
+
+- [ ] T203 [US3] Complete the bounded edit and validation planning loop without
+  executing commands by default.
+  - [ ] T203.1 Implement shared file identity and base-hash services used by
+    graph indexing, preview tokens, apply drift checks, and stale snapshot
+    detection.
+  - [ ] T203.2 Implement `PreviewWorkspaceEditUseCase` with path containment,
+    generated/vendor read-only policy, secret/redaction checks, base hashes,
+    preview token persistence, and no file mutation.
+  - [ ] T203.3 Implement `ApplyWorkspaceEditUseCase` with preview-token lookup,
+    expiration, single-use semantics, stale preview rejection, path refusal,
+    concurrent modification checks, and atomic write ordering.
+  - [ ] T203.4 Implement `PlanVerificationUseCase` with planned diagnostics,
+    formatter, lint, and test commands, plus blocked states for missing,
+    unsafe, too-broad, or low-confidence checks.
+  - [ ] T203.5 Keep `verification_plan` read-only: do not execute diagnostics,
+    lint, formatting, tests, or hooks in the MVP planning path.
+  - [ ] T203.6 Add next-action metadata when verification discovery is
+    incomplete, including direct-read, symbol/reference/impact, or manual
+    command-confirmation follow-up.
+  - [ ] T203.7 Add workspace-safety negative tests for traversal, symlink
+    escape, generated/vendor mutation, `.env` or secret-like content, shell
+    injection, output caps, and command refusal.
+  - [ ] T203.8 Add presenter golden responses for preview, apply success,
+    stale apply rejection, unsafe path rejection, blocked validation, and
+    planned validation.
+
 ## Phase 7: Cross-Cutting Validation
 
 - [ ] T080 Add produced-response assertions against the expected golden
