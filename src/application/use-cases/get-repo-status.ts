@@ -6,6 +6,7 @@ import type {
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import { summarizeAdapterEvidence } from "../../domain/policies/index.js";
+import type { FileCatalogScanPort } from "../../ports/index.js";
 
 export type RuntimeStatus = {
   repo_root: string;
@@ -74,6 +75,39 @@ export function getCatalogRepoStatus(input: {
       evidence_kinds: evidenceKinds,
       verification_status: "needed",
       truncated: false
+    }
+  };
+}
+
+export async function getScannedRepoStatus(input: {
+  repo_root: string;
+  scanner: FileCatalogScanPort;
+  indexed_roots?: readonly string[];
+  skipped_roots?: readonly string[];
+  max_files?: number;
+}): Promise<GetRepoStatusResult> {
+  const scanned = await input.scanner.scan({
+    repo_root: input.repo_root,
+    indexed_roots: input.indexed_roots ?? ["."],
+    skipped_roots: input.skipped_roots ?? [],
+    max_files: input.max_files ?? 2000
+  });
+  const result = getCatalogRepoStatus({
+    repo_root: scanned.repo_root,
+    indexed_roots: scanned.indexed_roots,
+    skipped_roots: scanned.skipped_roots,
+    files: scanned.files,
+    freshness: "fresh"
+  });
+
+  return {
+    status: result.status,
+    meta: {
+      ...result.meta,
+      truncated: scanned.truncated,
+      budget: {
+        row_limit: input.max_files ?? 2000
+      }
     }
   };
 }

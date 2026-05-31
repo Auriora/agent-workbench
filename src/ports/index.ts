@@ -111,6 +111,23 @@ export interface FileCatalogPort {
   removeEntry(input: { snapshot_id: string; path: string }): Promise<void>;
 }
 
+export type FileCatalogScanResult = {
+  repo_root: string;
+  indexed_roots: readonly string[];
+  skipped_roots: readonly string[];
+  files: readonly FileCatalogEntry[];
+  truncated: boolean;
+};
+
+export interface FileCatalogScanPort {
+  scan(input: {
+    repo_root: string;
+    indexed_roots: readonly string[];
+    skipped_roots: readonly string[];
+    max_files: number;
+  }): Promise<FileCatalogScanResult>;
+}
+
 export interface FileIdentityPort {
   compute(input: { path: string; content: string }): Promise<FileIdentity>;
   inferLanguage(input: { path: string; content?: string }): Promise<string>;

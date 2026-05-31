@@ -3,7 +3,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   getCatalogRepoStatus,
-  getColdRepoStatus
+  getColdRepoStatus,
+  getScannedRepoStatus
 } from "../../src/application/use-cases/get-repo-status.js";
 import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
 import {
@@ -144,6 +145,45 @@ describe("runtime status", () => {
 
     const keys = collectObjectKeys(result);
     expect(keys.filter((key) => key.startsWith("python_"))).toEqual([]);
+  });
+
+  it("builds scanned status from a file catalog scan port", async () => {
+    const result = await getScannedRepoStatus({
+      repo_root: "/repo",
+      scanner: {
+        async scan() {
+          return {
+            repo_root: "/repo",
+            indexed_roots: ["."],
+            skipped_roots: ["node_modules"],
+            truncated: true,
+            files: [
+              buildFileCatalogEntry({
+                file_identity: {
+                  path: "src/app.ts",
+                  language: "typescript",
+                  content_hash: "sha256:ts",
+                  size_bytes: 10,
+                  mtime_ms: 1
+                }
+              })
+            ]
+          };
+        }
+      },
+      max_files: 1
+    });
+
+    expect(result.status.freshness).toBe("fresh");
+    expect(result.meta.truncated).toBe(true);
+    expect(result.meta.budget).toEqual({ row_limit: 1 });
+    expect(result.status.adapter_coverage).toEqual([
+      expect.objectContaining({
+        domain: "language",
+        name: "typescript",
+        capability_level: "unsupported"
+      })
+    ]);
   });
 });
 

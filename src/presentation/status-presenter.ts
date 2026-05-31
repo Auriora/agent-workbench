@@ -27,3 +27,5 @@ export function buildColdStatusEnvelope(
     meta: payload.meta
   });
 }
+
+export const buildStatusEnvelope = buildColdStatusEnvelope;
