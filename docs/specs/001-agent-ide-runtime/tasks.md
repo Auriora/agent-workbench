@@ -400,6 +400,37 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
     coverage for warm-up, cache reuse, invalidation, owner state, parser
     timeout, malformed inputs, and operational metadata.
 
+### Gap 6: MCP Completion
+
+- [ ] T205 [US1] [US2] [US3] Complete MCP bindings for every MVP resource and
+  tool as thin transport adapters over use cases and presenters.
+  - [ ] T205.1 Implement shared MCP argument parser helpers for repo roots,
+    paths, source ranges, positions, enums, row limits, traversal depth,
+    payload modes, usage context, edit operations, and validation targets.
+  - [ ] T205.2 Implement structured invalid-input responses that fail before
+    use-case execution and still use the shared response envelope shape.
+  - [ ] T205.3 Implement registry definitions for each MCP resource, tool, and
+    prompt with schema, argument parser, use-case binding, presenter binding,
+    budget policy, capability class, and mutation class.
+  - [ ] T205.4 Wire resources `repo:///status`, `repo:///scope`, and
+    `repo:///overview` through typed parsers, use cases, presenters, and golden
+    MCP response tests.
+  - [ ] T205.5 Wire tools `context_for_task`, `symbol_search`,
+    `find_references`, and bounded `impact` through typed parsers, use cases,
+    presenters, budgets, truncation, and next-action metadata.
+  - [ ] T205.6 Wire tools `preview_workspace_edit`,
+    `apply_workspace_edit`, and `verification_plan` through typed parsers, use
+    cases, presenters, safety policy metadata, and read/write capability
+    classes.
+  - [ ] T205.7 Add MCP registry tests proving handlers do not import concrete
+    SQLite, tree-sitter, filesystem watcher, or process-execution
+    infrastructure.
+  - [ ] T205.8 Add malformed-input fixture tests for invalid repo roots, file
+    paths, ranges, enums, limits, payload modes, edit operations, and
+    validation targets.
+  - [ ] T205.9 Add end-to-end MCP fixture tests proving all MVP responses match
+    presenter goldens and no handler hand-coerces raw MCP inputs.
+
 ## Phase 7: Cross-Cutting Validation
 
 - [ ] T080 Add produced-response assertions against the expected golden
