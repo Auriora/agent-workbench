@@ -312,6 +312,36 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T201.9 Add query-budget and transaction tests for extraction ingestion,
     FTS refresh, and graph reads used by MVP hot paths.
 
+### Gap 3: Query Tools
+
+- [ ] T202 [US1] [US2] Complete the read/query tools that turn indexed
+  evidence into bounded coding-agent context.
+  - [ ] T202.1 Implement `BuildTaskContextUseCase` with ranked files, ranked
+    symbols, docs/config routing evidence, direct-read caveats,
+    complete-enough markers, skipped-work metadata, and exact next actions.
+  - [ ] T202.2 Implement `SearchSymbolsUseCase` with exact and fuzzy lookup,
+    stable ordering, language/platform filtering, row limits, and no broad
+    source scan.
+  - [ ] T202.3 Implement `FindReferencesUseCase` with resolved references,
+    unresolved references, ambiguity labels, confidence, provenance, and
+    bounded depth.
+  - [ ] T202.4 Implement `ComputeImpactUseCase` with bounded graph traversal,
+    max-depth/max-node limits, truncation metadata, and affected file/symbol
+    grouping.
+  - [ ] T202.5 Add source-section presentation with byte budgets and explicit
+    caveats when context contains routing evidence rather than verified source
+    evidence.
+  - [ ] T202.6 Add adoption-oriented tests proving `context_for_task` and
+    `verification_plan` route ambiguous work to `symbol_search`,
+    `find_references`, `impact`, or direct reads through structured
+    `next_action` metadata.
+  - [ ] T202.7 Add fixture-backed budget tests for `context_for_task`,
+    `symbol_search`, `find_references`, and `impact`, including row limits,
+    traversal depth, and source-byte caps.
+  - [ ] T202.8 Add mixed-language/platform context tests proving unsupported
+    and resource-backed files appear as routing evidence only, with no
+    Python-specific shared fields.
+
 ## Phase 7: Cross-Cutting Validation
 
 - [ ] T080 Add produced-response assertions against the expected golden
