@@ -3,7 +3,7 @@ title: Agent IDE runtime MVP tasks
 doc_type: spec
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-31
 ---
 
 # Tasks
@@ -21,6 +21,20 @@ last_reviewed: 2026-05-07
 
 **Tests**: Add contract and fixture tests for every MVP surface before expanding
 adapters or graph features.
+
+**Usage-Informed Priority**: The predecessor `agent-ide` traces showed agents
+most frequently using first-pass context, docs/search style routing,
+diagnostics/lint/validation planning, and post-edit feedback. MVP tasks should
+therefore optimize status/scope, `context_for_task`, docs/config routing
+evidence, validation planning, and edit safety metadata before broad
+orientation, diagnostics execution, hooks, usage analytics, or expanded public
+surface area.
+
+**Language-Neutral Priority**: Python is the first partial-semantic adapter for
+comparison with the predecessor PoC. The runtime core must still support
+multiple coding languages, frameworks, project systems, test runners, CI,
+containers, infrastructure platforms, and documentation surfaces through common
+adapter/provider contracts.
 
 ## Format: `[ID] [P?] [Story] Description`
 
@@ -41,6 +55,9 @@ adapters or graph features.
 - [ ] T003 Define domain value objects and policy ownership for repo paths,
   source ranges, file identity, snapshots, evidence, capability, confidence,
   attention, validation, budgets, and workspace safety.
+- [ ] T003A Define language-neutral adapter evidence value objects for adapter
+  domain, language/platform id, capability level, provenance, confidence, and
+  namespaced metadata.
 - [ ] T004 Define core ports: `GraphQueryPort`, `GraphWritePort`,
   `SnapshotPort`, `FileCatalogPort`, `FileIdentityPort`, `WorkspaceFilePort`,
   `WorkspaceWatcherPort`, `ExtractorPort`, `ExtractorRegistryPort`,
@@ -85,10 +102,16 @@ port before implementation begins.
   `docs/reference/runtime-contracts.md`.
 - [ ] T017 Split implementation contract categories into domain contracts,
   application result contracts, and presentation response contracts.
+- [ ] T017A Add contract tests proving shared graph, context, validation, edit,
+  and MCP response contracts contain no Python-specific fields outside
+  namespaced adapter metadata.
 - [ ] T018 Define workspace safety, generated/vendor mutation, and command
   safety policy contracts with fixtures.
 - [x] T019 Define `fixture-basic-python`, `fixture-markdown-config`,
   `fixture-degraded-tools`, and `fixture-workspace-safety`.
+- [ ] T019A Add mixed-language/platform fixture files that prove unsupported or
+  resource-backed non-Python areas are reported explicitly in status, scope, and
+  context.
 - [ ] T020 Define expected golden response snapshots through presenter
   contracts for all MVP resources and tools.
 
@@ -134,6 +157,8 @@ executable without application code depending on SQLite.
   obsolete-result rejection for parser/indexing work.
 - [ ] T038 Define `ExtractionBatch` normalization for capability, provenance,
   confidence, source ranges, diagnostics hints, and test hints.
+- [ ] T038A Define common adapter/provider contracts for language, framework,
+  config, infrastructure, documentation, test, and tooling domains.
 - [ ] T039 Implement Markdown/config resource-backed extraction behind
   `ExtractorPort`.
 - [ ] T040 Configure canonical `tree-sitter` parser and grammar loading behind
@@ -157,7 +182,8 @@ references, and report status/scope without adapter-to-SQLite coupling.
 - [ ] T046 Implement `GetRepoScopeUseCase`.
 - [ ] T047 Implement `GetRepoOverviewUseCase`.
 - [ ] T048 Implement `BuildTaskContextUseCase` with context ranking and
-  direct-read caveats.
+  direct-read caveats, complete-enough markers, skipped-work metadata, and
+  exact next actions for symbol/reference/impact or direct-read verification.
 - [ ] T049 Implement `SearchSymbolsUseCase`.
 - [ ] T050 Implement `FindReferencesUseCase`.
 - [ ] T051 Implement `ComputeImpactUseCase`.
@@ -166,7 +192,9 @@ references, and report status/scope without adapter-to-SQLite coupling.
 - [ ] T053 [US3] Implement `PreviewWorkspaceEditUseCase` with base hashes.
 - [ ] T054 [US3] Implement `ApplyWorkspaceEditUseCase` with path containment
   and stale-preview rejection.
-- [ ] T055 Implement `PlanVerificationUseCase` without command execution.
+- [ ] T055 Implement `PlanVerificationUseCase` without command execution,
+  distinguishing planned checks from proven runnable checks and routing
+  low-confidence discovery to exact follow-up actions.
 - [ ] T056 Implement `DescribeIntegrationProfileUseCase` for common coding-agent
   integration metadata without generating vendor-specific artifacts.
 - [ ] T057 Implement freshness, capability, confidence, budget, attention,
@@ -185,7 +213,9 @@ MCP transport is wired.
 - [ ] T061 Implement warm-up/cache/concurrency metadata presentation for status
   and degraded responses.
 - [ ] T062 Implement warning/blocker attention presenter.
-- [ ] T063 Implement error presenter with retryable `next_action` shape.
+- [ ] T063 Implement error and next-action presenter support with retryable
+  `next_action` shape for direct reads, `symbol_search`, `find_references`,
+  `impact`, preview/apply, and validation follow-up actions.
 - [ ] T064 Implement source section presenter with byte and row budgets.
 - [ ] T065 Implement integration profile presenter for agent target surfaces,
   unsupported capabilities, provenance, and regeneration safety.
@@ -252,29 +282,49 @@ budgets through the presentation layer.
   runtime core dependencies on vendor-specific emitters.
 - [ ] T089 Validate docs links and metadata.
 
+## Phase 8: Usage-Informed MVP Validation
+
+- [ ] T098 Add regression fixtures proving broad task prompts route to expected
+  implementation files and do not drift to unrelated high-frequency files.
+- [ ] T099 Add response tests proving `context_for_task` and
+  `verification_plan` include complete-enough markers, skipped-work metadata,
+  and exact next actions for targeted symbol/reference/impact follow-up.
+- [ ] T100 Add negative budget tests proving compact/default first-pass
+  responses do not invoke broad orientation, full topology, diagnostics
+  execution, or high-cardinality cache validation paths.
+- [ ] T101 Add adoption-oriented golden checks showing targeted
+  `symbol_search`, `find_references`, and `impact` calls are discoverable from
+  first-pass context or validation responses.
+- [ ] T102 Add docs/config routing tests for Markdown/config evidence as
+  routing evidence only, including direct-read caveats before precise
+  documentation claims.
+- [ ] T102A Add multi-language/platform coverage tests proving non-Python files
+  are surfaced with `unsupported` or `resource_backed` capability metadata and
+  do not depend on Python adapter behavior.
+
 ## Post-MVP Task Backlog
 
 ### Markdown Document Quality
 
-- [ ] T090 Define Markdown document quality contracts for structure findings,
+- [ ] T103 Define Markdown document quality contracts for structure findings,
   compliance findings, link findings, table-readability findings, and formatter
   plans.
-- [ ] T091 Define documentation quality ports: `MarkdownParserPort`,
+- [ ] T104 Define documentation quality ports: `MarkdownParserPort`,
   `MarkdownStructureCheckPort`, `MarkdownCompliancePolicyPort`,
   `MarkdownFormatPlannerPort`, `MarkdownLinkResolverPort`, and
   `DocumentationPolicyPort`.
-- [ ] T092 Add Markdown quality fixtures for skipped heading levels,
+- [ ] T105 Add Markdown quality fixtures for skipped heading levels,
   inconsistent numbering, ambiguous nested lists, wide tables, definition-like
   tables, frontmatter violations, broken links, and unchanged documents.
-- [ ] T093 Implement read-only `CheckMarkdownDocument` and `CheckMarkdownSet`
+- [ ] T106 Implement read-only `CheckMarkdownDocument` and `CheckMarkdownSet`
   use-case contracts behind documentation quality ports.
-- [ ] T094 Implement `PlanMarkdownFormat` and `PreviewMarkdownFormat` contracts
+- [ ] T107 Implement `PlanMarkdownFormat` and `PreviewMarkdownFormat` contracts
   so readability rewrites are explainable and previewable before mutation.
-- [ ] T095 Integrate Markdown quality checks into `verification_plan` for
+- [ ] T108 Integrate Markdown quality checks into `verification_plan` for
   touched documentation without running hidden formatting.
-- [ ] T096 Add documentation-quality presenter golden outputs for findings,
+- [ ] T109 Add documentation-quality presenter golden outputs for findings,
   formatter rationale, source ranges, and preview-token metadata.
-- [ ] T097 Add documentation-quality boundary tests proving the checker and
+- [ ] T110 Add documentation-quality boundary tests proving the checker and
   formatter do not bypass workspace safety or edit preview/apply.
 
 - C# semantic support.

@@ -3,7 +3,7 @@ title: Language capability matrix
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-31
 ---
 
 # Language Capability Matrix
@@ -28,6 +28,10 @@ promotion gates are owned by [Language adapter design](../design/language-adapte
   explicitly changes this policy.
 - Initial support should prove language-neutral runtime contracts before
   deepening every adapter.
+- Python is the first partial-semantic path for comparison with the predecessor
+  PoC, not a runtime-core assumption.
+- Mixed-language repositories should expose unsupported and resource-backed
+  areas explicitly while semantic support matures adapter by adapter.
 - Later priorities can change when representative repositories demand them.
 
 ## Reference Data

@@ -3,7 +3,7 @@ title: MCP surface design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-31
 ---
 
 # MCP Surface Design
@@ -26,6 +26,14 @@ coding, and invoke broad graph analysis only when intentionally exploring.
 
 Responses must label trust, freshness, scope, verification, and evidence so
 agents know when direct source verification or additional validation is needed.
+
+Predecessor `agent-ide` usage showed that agents most often used first-pass
+context, docs/search style routing, diagnostics/lint/validation planning, and
+post-edit feedback, while symbol/reference tools were rarely selected without
+workflow guidance. The MVP surface therefore stays small and makes
+`context_for_task` and `verification_plan` responsible for routing agents to
+`symbol_search`, `find_references`, `impact`, direct reads, or follow-up
+validation when that evidence would reduce broad shell fallback.
 
 MCP is an interface adapter, not the presentation layer and not an application
 service. Each MCP handler validates transport input, calls one application use
@@ -84,6 +92,15 @@ available.
 
 Drift checking is part of `apply_workspace_edit`; it is not a separate MVP
 tool.
+
+`context_for_task` is a bounded router over indexed evidence. It must not run
+full topology, diagnostics execution, broad docs reports, or high-cardinality
+cache validation as hidden work. It should return complete-enough markers,
+skipped-work metadata, and exact next actions.
+
+`verification_plan` plans checks but does not execute them. It must distinguish
+planned checks from proven runnable checks and route low-confidence test
+discovery to explicit follow-up instead of implying nearest-test proof.
 
 ## Post-MVP Resources And Tools
 
@@ -156,6 +173,11 @@ agent request
   them as high value.
 - Heavy exploration tools have project-size-aware budgets.
 - Hot-path tools must use targeted SQLite queries.
+- Compact/default tools must not hide broad orientation, full topology,
+  diagnostics execution, or high-cardinality cache validation behind small
+  payloads.
+- Responses that skip expensive evidence must report the skipped work and the
+  exact follow-up call that would recover it.
 - Broad topology/community reports are explicit orientation calls.
 - MVP `verification_plan` does not execute commands by default.
 - MVP tools must publish row limits, traversal limits, source-byte caps, and

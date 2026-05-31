@@ -3,7 +3,7 @@ title: Agent IDE runtime MVP plan
 doc_type: spec
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-31
 ---
 
 # Implementation Plan
@@ -13,6 +13,20 @@ last_reviewed: 2026-05-07
 Build a narrow TypeScript MCP runtime slice: repo binding, minimal SQLite graph
 store, Markdown/config routing, one partial-semantic language adapter, a small
 MCP contract, bounded preview/apply edits, and validation planning.
+
+The core runtime is language-, framework-, and platform-neutral. Python is the
+first partial-semantic adapter because it gives a direct comparison to the
+predecessor PoC, but the implementation must avoid Python-shaped graph rows,
+context results, validation assumptions, and MCP contracts.
+
+The implementation order is informed by the predecessor `agent-ide` usage and
+performance review: agents most frequently used first-pass context, docs/search
+style routing, diagnostics/lint/validation planning, and post-edit feedback,
+while symbol/reference tools were underused unless the workflow routed agents
+toward them. The MVP therefore optimizes status/scope, `context_for_task`,
+docs/config routing evidence, validation planning, and edit safety metadata
+first, then uses structured next actions to drive targeted symbol/reference/
+impact calls.
 
 The first implementation establishes the long-term layered architecture:
 interface adapters, presentation, application use cases, domain policies, ports,
@@ -28,6 +42,9 @@ are not allowed.
   `tree-sitter`, and the selected first-language grammar.
 - **Optional Enrichment Dependencies**: AST, LSP, formatter, linter, and test
   tooling for the selected first language.
+- **Adapter Model**: Language, framework, config, infrastructure,
+  documentation, test, and tooling providers feed a common extraction and
+  validation-provider contract.
 - **Storage**: Local SQLite database and generated runtime cache.
 - **Observability**: OpenTelemetry for traces, metrics, and logs. Durable usage
   records are optional and only for queryable workflow history.
@@ -44,11 +61,18 @@ are not allowed.
   mutation must use preview/apply when implemented.
 - **Performance Goals**: Hot-path tools use targeted indexed queries with
   explicit row, traversal, source-byte, and timeout budgets.
+- **Usage-Informed Priority**: First-pass status/scope, context, docs/config
+  routing, validation planning, and edit safety paths get budget and golden
+  coverage before broad orientation, diagnostics execution, hooks, or usage
+  analytics.
 - **Constraints**: Source files and repo config remain canonical; commands are
   plan-only by default; workspace safety is enforced; dependencies point inward
   through ports and presenters; graph writes are serialized per repo while reads
   use the last valid snapshot.
 - **Scale/Scope**: One repository per runtime instance.
+- **Portability Goal**: Mixed-language and mixed-platform repositories are
+  first-class. Unsupported areas are reported explicitly with capability and
+  degraded-mode metadata rather than ignored.
 
 ## Governance Check
 
@@ -62,11 +86,16 @@ tracks this as T000.
   degraded modes, and budgets.
 - [ ] Agent workflow consistency assessed against the MVP proof matrix.
 - [ ] Performance budgets defined for every MVP hot-path surface.
+- [ ] Predecessor `agent-ide` usage evidence is mapped to MVP priority:
+  first-pass context, docs/config routing, validation planning, and edit safety
+  before broader or lower-adoption surfaces.
 - [ ] Architecture boundary tests prevent forbidden dependencies.
 - [ ] Runtime operation model defined for cache tiers, warm-up, queues, workers,
   cancellation, and snapshot publication.
 - [ ] Runtime context, MCP registries, typed argument parsing, state store, and
   OTEL boundaries are defined.
+- [ ] Shared contracts are checked for language neutrality; Python-specific
+  evidence is limited to adapter metadata.
 - [ ] Coding-agent integration specs and emitter boundaries are defined before
   vendor-specific plugin, hook, command, skill, or extension packaging.
 - [ ] Markdown document quality ports and policies are defined before adding
@@ -88,11 +117,27 @@ docs/specs/001-agent-ide-runtime/
 
 ### Source Code
 
-Replace with concrete implementation paths when source exists.
-
 ```text
 src/
+|-- adapters/
+|-- contracts/
+|-- edits/
+|-- graph/
+|-- mcp/
+|-- runtime/
+|-- workflow/
+`-- workspace/
+
 tests/
+|-- adapters/
+|-- contracts/
+|-- edits/
+|-- fixtures/
+|-- golden/
+|-- graph/
+|-- runtime/
+`-- workspace/
+
 docs/
 ```
 
@@ -101,6 +146,10 @@ and keep presentation separate from transport. Context building, attention,
 validation, impact, capability, freshness, budget, and safety behavior belong to
 named use cases and policies rather than a generic coordination service.
 
+The current scaffold is intentionally minimal and will be moved toward the
+layered ownership model through Phase 0 and Phase 1 tasks before feature
+implementation expands.
+
 ## Phases
 
 1. Establish layered source layout, dependency rules, feature ownership, ports,
@@ -108,8 +157,8 @@ named use cases and policies rather than a generic coordination service.
    tests.
 2. Define runtime context, MCP registries, typed argument parsing, runtime
    contracts, application result contracts, presentation contracts, workspace
-   safety, graph invariants, coding-agent integration contracts, and MVP proof
-   fixtures.
+   safety, language-neutral adapter contracts, graph invariants, coding-agent
+   integration contracts, and MVP proof fixtures.
 3. Implement SQLite graph persistence behind graph ports.
 4. Implement file scan, identity, language detection, warm-up, watcher
    ingestion, cache invalidation, worker scheduling, and snapshot freshness
@@ -120,6 +169,8 @@ named use cases and policies rather than a generic coordination service.
    and capability/confidence policies.
 7. Implement application use cases for status, scope, overview, context,
    symbols, references, impact, preview/apply, and verification planning.
+   Context and verification must emit exact next actions for symbol/reference/
+   impact or direct-read verification when evidence is partial or ambiguous.
 8. Implement presentation layer for envelopes, metadata, errors, warnings,
    source sections, budgets, and truncation.
 9. Implement MCP registration as a thin transport binding over use cases and
@@ -155,8 +206,17 @@ invalidating canonical `tree-sitter` extraction.
 
 - Primary parser and optional enrichment reliability varies; mitigate with
   capability levels and degraded-mode tests.
+- Python-first implementation can accidentally bake Python assumptions into the
+  core; mitigate with language-neutral contract tests, adapter-domain metadata,
+  and unsupported/resource-backed fixture files.
 - Hidden broad scans can creep into compact tools; mitigate with query budgets
   and trace assertions.
+- Usage-heavy first-pass paths can become composite slow paths; mitigate by
+  forbidding hidden broad orientation, full topology, diagnostics execution, and
+  high-cardinality cache validation inside compact/default reads.
+- Targeted symbol/reference tools can remain underused even when useful;
+  mitigate by including executable next-action guidance in status/context/
+  validation responses rather than adding more overlapping public tools.
 - Cache invalidation or async refresh can serve stale evidence as proof;
   mitigate with snapshot-scoped cache keys, stale metadata, and obsolete-result
   rejection tests.
@@ -182,6 +242,12 @@ invalidating canonical `tree-sitter` extraction.
 Use the [MVP proof matrix](../../reference/mvp-proof-matrix.md) as the minimum
 acceptance gate. Every MVP resource/tool needs golden responses, budget tests,
 degraded-mode behavior, and safety negatives where applicable.
+Language-neutral acceptance requires fixture evidence that non-Python files and
+platform artifacts are surfaced through capability metadata even before semantic
+support exists.
+Usage-informed acceptance also requires golden responses for complete-enough
+markers, skipped-work metadata, and exact next-action routing from first-pass
+context and validation surfaces to targeted symbol/reference/impact tools.
 Architecture boundary tests from
 [Layered runtime architecture](../../design/layered-runtime-architecture.md)
 are also part of the minimum acceptance gate.

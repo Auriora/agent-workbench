@@ -3,7 +3,7 @@ title: Runtime requirements
 doc_type: requirements
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-31
 ---
 
 # Runtime Requirements
@@ -19,6 +19,9 @@ These requirements cover the repo-scoped runtime, graph/index storage, adapter
 capability reporting, MCP surface, context building, bounded edit management,
 validation planning, trust metadata, performance behavior, workspace safety,
 coding-agent integration, Markdown document quality, and MVP scope.
+Multi-language, multi-framework, and multi-platform support is a core target
+requirement even though the MVP implements only one partial-semantic language
+adapter.
 
 ## Audiences
 
@@ -45,6 +48,8 @@ workflow designers.
 | REQ-014 | Parser work must run with timeouts, isolation, and recovery behavior. | Extractor registry | Language adapter design | Worker failure tests |
 | REQ-015 | Large result caches must live in SQLite or compact row stores, not unbounded JSON files. | Graph store | Performance principles | Storage review |
 | REQ-016 | The MVP must include Markdown/config routing plus one partial-semantic language path; TypeScript/JavaScript, C#, and CloudFormation/SAM are post-MVP unless scoped as resource-backed fixtures. | MVP | Spec package, MVP proof matrix | MVP acceptance tests |
+| REQ-016A | Runtime core contracts must be language-, framework-, and platform-neutral. Python-specific evidence must stay inside the Python adapter or namespaced adapter metadata. | Runtime core, adapters | Language adapter design, capability matrix | Contract and boundary tests |
+| REQ-016B | Unsupported or resource-backed non-Python languages, frameworks, and platform artifacts must be surfaced explicitly with capability metadata rather than silently ignored. | Repo runtime, adapters, MCP surface | Language adapter design, MVP proof matrix | Mixed-language fixture tests |
 | REQ-017 | MVP tool surfaces must fit the contract MVP: status, scope, overview, context, symbol search, references, bounded impact, preview/apply, and validation plan. | MCP surface | Runtime contracts, MCP design | MCP contract tests |
 | REQ-018 | Workspace safety must cover path containment, generated/vendor write policy, command planning/execution gates, environment handling, redaction, and generated writes. | Runtime, MCP, edit manager, command runner | Workspace safety contract | Negative safety tests |
 | REQ-019 | MCP must be the authoritative executable integration surface for coding agents. Agent-specific plugins, hooks, commands, skills, rules, steering, guidelines, extensions, and ACP packaging must be generated or configured around MCP definitions, not implemented as parallel runtime behavior. | Agent integration | Coding agent integration design, MCP design | Integration contract tests |
@@ -73,6 +78,8 @@ workflow designers.
   capability with explicit next actions.
 - Runtime output must be compact by default and include source sections only
   when requested or clearly high value.
+- Mixed-language repositories must report per-language and per-platform
+  capability coverage even when only one adapter has partial-semantic support.
 - Command execution is plan-only by default until the command runner and
   allowlist policy are implemented.
 - Generated reports and usage analytics are post-MVP.
@@ -90,6 +97,7 @@ workflow designers.
 - The MVP does not need graph reports, communities, god nodes, or usage-gap
   analytics.
 - The MVP does not need C# or CloudFormation/SAM semantic support.
+- The MVP does not need semantic support for every language or platform.
 - The MVP does not run validation commands by default.
 - Advanced refactors and coverage reporting are deferred until foundational
   semantic evidence is reliable.

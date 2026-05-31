@@ -3,7 +3,7 @@ title: Language adapter design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-31
 ---
 
 # Language Adapter Design
@@ -25,6 +25,12 @@ edges, unresolved references, diagnostics hints, test hints, and capability
 metadata. The runtime must distinguish semantic evidence from routing evidence so
 agents do not mistake useful context for proof.
 
+This is a core restart difference from `agent-ide`: the runtime must support
+multiple coding languages, frameworks, project systems, test runners, CI,
+containers, infrastructure platforms, and documentation surfaces through common
+adapter contracts. Python is the first fixture-backed adapter, not a privileged
+runtime model.
+
 The `tree-sitter` parse pipeline is the canonical extraction path for all
 supported code languages. Native AST and LSP outputs are optional enrichers only:
 they can add metadata and confidence context, but must not replace parser
@@ -39,6 +45,10 @@ items.
 
 Optional enrichers emit enrichment records against existing extracted entities.
 They do not become alternate primary parsers.
+
+Shared graph rows, context packets, validation plans, edit contracts, and MCP
+responses must not gain language-specific fields. Language-specific details
+belong in adapter-domain metadata with explicit provenance and capability.
 
 ## Capability Levels
 

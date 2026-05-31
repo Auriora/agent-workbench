@@ -3,7 +3,7 @@ title: Agent IDE runtime MVP design
 doc_type: spec
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-05-31
 ---
 
 # Design
@@ -19,6 +19,19 @@ The MVP must establish the long-term layered architecture from the first
 implementation tasks. It is not acceptable to combine presentation,
 application, domain policy, and infrastructure behavior in temporary services.
 
+The runtime core must stay language-, framework-, and platform-neutral. Python
+is the first proof adapter, but adapter output, graph storage, context ranking,
+validation planning, edit safety, and MCP presentation must be reusable for
+TypeScript/JavaScript, C#, Go, Rust, C/C++, infrastructure, CI, containers,
+documentation, and other platform evidence.
+
+The MVP is usage-informed by the predecessor `agent-ide` traces. First-pass
+context, docs/config routing, validation planning, and edit safety need to be
+fast and trusted before the runtime adds broader diagnostics, hooks, usage
+analytics, or graph orientation surfaces. Symbol/reference/impact remain MVP
+tools, but context and validation responses should route agents to them through
+exact next actions.
+
 ## Components And Changes
 
 - Architecture rails:
@@ -33,8 +46,8 @@ application, domain policy, and infrastructure behavior in temporary services.
   SQLite schema, FTS indexes, migrations, snapshots, freshness, and query APIs
   behind graph ports.
 - Adapter registry:
-  adapter discovery, capability levels, extraction output, and degraded modes
-  behind extraction ports.
+  adapter discovery, adapter domains, capability levels, extraction output,
+  platform evidence, and degraded modes behind extraction ports.
 - Application use cases:
   status, scope, overview, context, symbol search, references, impact,
   preview/apply, and verification planning.
@@ -45,7 +58,8 @@ application, domain policy, and infrastructure behavior in temporary services.
   transport registration and schema binding for resources and tools.
 - Domain services and policies:
   task context packing, confidence labels, direct-read prompts, blockers,
-  warnings, freshness, capability, budget, validation, and safety gates.
+  warnings, freshness, capability, budget, validation, skipped-work reporting,
+  exact next-action routing, and safety gates.
 - Edit manager:
   preview, apply, drift check, and path containment.
 - Validation planner:
@@ -58,6 +72,8 @@ application, domain policy, and infrastructure behavior in temporary services.
 ## Data And Contract Impact
 
 - SQLite schema for files, nodes, edges, unresolved refs, snapshots, and FTS.
+- Adapter evidence schema for language, framework, config, infrastructure,
+  documentation, test, and tooling domains.
 - MCP schemas for MVP resources and tools.
 - Adapter output schema with capability, provenance, confidence, source ranges,
   diagnostics hints, and test hints.
@@ -79,11 +95,24 @@ application, domain policy, and infrastructure behavior in temporary services.
 - Runtime status should expose freshness and indexing health.
 - Runtime status should expose warm-up phase, queued work, active workers,
   degraded background work, and cache/indexing health.
+- Compact/default read tools must not call broad orientation, full topology,
+  diagnostics execution, or high-cardinality cache validation paths.
+- `context_for_task` must act as a bounded router over indexed evidence, not a
+  hidden work engine. It should report complete-enough state, skipped expensive
+  evidence, and exact next actions for symbol/reference/impact or direct source
+  reads.
+- `verification_plan` must distinguish planned checks from proven runnable
+  checks and must not imply test execution or nearest-test proof when discovery
+  confidence is low.
 - Background refresh must allow concurrent reads against the last valid
   snapshot, while graph writes remain serialized per repository.
 - Boundary tests must prevent domain/application/presentation code from
   depending on concrete MCP, SQLite, tree-sitter, filesystem, or process
   implementations.
+- Shared contracts must not contain Python-specific fields except in namespaced
+  adapter metadata.
+- Unsupported or resource-backed non-Python files must be visible in status,
+  scope, and context as explicit capability coverage.
 
 ## Resolved Decisions
 
@@ -93,3 +122,9 @@ application, domain policy, and infrastructure behavior in temporary services.
   reference, impact, preview/apply, and verification planning set from the MVP
   spec.
 - Python is the first partial-semantic fixture path.
+- Multi-language and multi-platform support is a core runtime requirement, not
+  a post-MVP redesign. The MVP proves this through language-neutral contracts
+  and explicit unsupported/resource-backed coverage for non-Python files.
+- Predecessor usage evidence prioritizes status/scope, context, docs/config
+  routing, validation planning, and edit safety metadata before broad
+  diagnostics execution, hooks, usage analytics, or graph reports.
