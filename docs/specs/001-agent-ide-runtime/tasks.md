@@ -258,6 +258,32 @@ handlers or use cases.
 **Checkpoint**: MVP read/write/planning surfaces match golden responses and
 budgets through the presentation layer.
 
+## MVP Gap Closure Backlog
+
+The following groups convert the current MVP gaps into an execution checklist.
+They do not replace the phase tasks above; they group the remaining work into
+commit-sized implementation streams tied to the feature spec and proof matrix.
+
+### Gap 1: Repo Orientation Surfaces
+
+- [ ] T200 [US1] Complete the first-pass repo orientation surfaces:
+  `repo:///status`, `repo:///scope`, and `repo:///overview`.
+  - [ ] T200.1 Keep `repo:///status` backed by repository scanning, adapter
+    coverage, freshness, scope, budgets, and shared envelope presentation.
+  - [ ] T200.2 Implement `GetRepoScopeUseCase` over the same repo binding and
+    file catalog evidence used by status.
+  - [ ] T200.3 Implement `GetRepoOverviewUseCase` with compact summary,
+    language/platform coverage, fixture counts, and no source dump.
+  - [ ] T200.4 Add presenter-level golden responses for status, scope, and
+    overview across `fixture-basic-python`, `fixture-markdown-config`, and
+    `fixture-mixed-language-platform`.
+  - [ ] T200.5 Wire `repo:///scope` and `repo:///overview` through MCP
+    resources using typed argument parsing and thin handlers.
+  - [ ] T200.6 Add proof that mixed-language/platform scope is represented
+    without Python-specific shared response fields.
+  - [ ] T200.7 Add budget tests proving default orientation responses stay
+    bounded and do not perform hidden broad source reads.
+
 ## Phase 7: Cross-Cutting Validation
 
 - [ ] T080 Add produced-response assertions against the expected golden
