@@ -119,6 +119,40 @@ describe("repo status MCP resource", () => {
     ]);
   });
 
+  it("returns structured provider-not-configured state without synthesizing status", async () => {
+    let registered: RegisteredResource | undefined;
+    const server = {
+      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
+        registered = { name, uri, handler };
+      }
+    };
+
+    repoStatusResource.register(server as never, {
+      repoRoot: "/repo"
+    });
+
+    const response = await registered?.handler({});
+    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+      data: { freshness: string; adapter_coverage: unknown[] };
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; message: string; retryable: boolean }>;
+    };
+
+    expect(parsed.data.freshness).toBe("unknown");
+    expect(parsed.data.adapter_coverage).toEqual([]);
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "invalid_input",
+        message: "repo:///status provider is not configured.",
+        retryable: false
+      })
+    ]);
+  });
+
   it("uses scanned status coverage from the default composed server", async () => {
     const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform") as unknown as {
       _registeredResources: Record<

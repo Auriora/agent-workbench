@@ -216,7 +216,7 @@ references, and report status/scope without adapter-to-SQLite coupling.
 
 ## Phase 4: Application Use Cases And Policies
 
-- [ ] T045 Implement `GetRepoStatusUseCase`.
+- [x] T045 Implement `GetRepoStatusUseCase`.
 - [x] T046 Implement `GetRepoScopeUseCase`.
 - [x] T047 Implement `GetRepoOverviewUseCase`.
 - [ ] T048 Implement `BuildTaskContextUseCase` with context ranking and
@@ -280,7 +280,7 @@ handlers or use cases.
   invalid-input responses.
 - [ ] T068 Implement MCP server/resource/tool/prompt registration and schema
   binding as a thin adapter over use cases and presenters.
-- [ ] T069 [P] [US1] Wire `repo:///status` through MCP schema, use case, and
+- [x] T069 [P] [US1] Wire `repo:///status` through MCP schema, use case, and
   presenter.
 - [x] T070 [P] [US1] Wire `repo:///scope` through MCP schema, use case, and
   presenter.
@@ -328,22 +328,22 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
 
 ### Gap 1: Repo Orientation Surfaces
 
-- [ ] T200 [US1] Complete the first-pass repo orientation surfaces:
+- [x] T200 [US1] Complete the first-pass repo orientation surfaces:
   `repo:///status`, `repo:///scope`, and `repo:///overview`.
-  - [ ] T200.1 Keep `repo:///status` backed by repository scanning, adapter
+  - [x] T200.1 Keep `repo:///status` backed by repository scanning, adapter
     coverage, freshness, scope, budgets, and shared envelope presentation.
   - [x] T200.2 Implement `GetRepoScopeUseCase` over the same repo binding and
     file catalog evidence used by status.
   - [x] T200.3 Implement `GetRepoOverviewUseCase` with compact summary,
     language/platform coverage, fixture counts, and no source dump.
-  - [ ] T200.4 Add presenter-level golden responses for status, scope, and
+  - [x] T200.4 Add presenter-level golden responses for status, scope, and
     overview across `fixture-basic-python`, `fixture-markdown-config`, and
     `fixture-mixed-language-platform`.
   - [x] T200.5 Wire `repo:///scope` and `repo:///overview` through MCP
     resources using typed argument parsing and thin handlers.
   - [x] T200.6 Add proof that mixed-language/platform scope is represented
     without Python-specific shared response fields.
-  - [ ] T200.7 Add budget tests proving default orientation responses stay
+  - [x] T200.7 Add budget tests proving default orientation responses stay
     bounded and do not perform hidden broad source reads.
 
 ### Gap 2: Graph Extraction Pipeline

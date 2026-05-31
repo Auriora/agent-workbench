@@ -1,6 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ZodError } from "zod";
-import { getColdRepoStatus } from "../../../../application/use-cases/get-repo-status.js";
 import {
   buildInvalidStatusInputEnvelope,
   buildStatusEnvelope
@@ -34,7 +33,23 @@ export const repoStatusResource: McpResourceDeclaration = {
         };
       }
       const repoRoot = args.repo_root ?? context.repoRoot;
-      const result = await (context.getRepoStatus?.({ repo_root: repoRoot }) ?? getColdRepoStatus(repoRoot));
+      if (context.getRepoStatus === undefined) {
+        const envelope = buildInvalidStatusInputEnvelope({
+          repoRoot: context.repoRoot,
+          message: "repo:///status provider is not configured."
+        });
+        return {
+          contents: [
+            {
+              uri: "repo:///status",
+              mimeType: "application/json",
+              text: JSON.stringify(envelope, null, 2)
+            }
+          ]
+        };
+      }
+
+      const result = await context.getRepoStatus({ repo_root: repoRoot });
       const envelope = buildStatusEnvelope(result);
 
       return {

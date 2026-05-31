@@ -111,32 +111,3 @@ export async function getScannedRepoStatus(input: {
     }
   };
 }
-
-export function getColdRepoStatus(repoRoot: string): GetRepoStatusResult {
-  return {
-    status: {
-      repo_root: repoRoot,
-      freshness: "cold",
-      indexed_roots: [],
-      skipped_roots: [],
-      adapter_coverage: []
-    },
-    meta: {
-      analysis_validity: "partial",
-      freshness: "cold",
-      scope: {
-        repo_root: repoRoot,
-        indexed_roots: [],
-        skipped_roots: [],
-        languages: []
-      },
-      capability_level: "unsupported",
-      evidence_kinds: [],
-      verification_status: "needed",
-      truncated: false,
-      budget: {
-        time_ms: 50
-      }
-    }
-  };
-}

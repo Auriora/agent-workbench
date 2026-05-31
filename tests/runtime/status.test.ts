@@ -3,19 +3,22 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   getCatalogRepoStatus,
-  getColdRepoStatus,
   getScannedRepoStatus
 } from "../../src/application/use-cases/get-repo-status.js";
 import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
 import {
-  buildColdStatusEnvelope,
-  toColdStatusPresentationPayload
+  buildStatusEnvelope,
+  toStatusPresentationPayload
 } from "../../src/presentation/status-presenter.js";
-import coldStatusGolden from "../golden/repo-status-cold.json" with { type: "json" };
 
 describe("runtime status", () => {
   it("returns raw status result data without response envelope fields", () => {
-    const result = getColdRepoStatus("/repo");
+    const result = getCatalogRepoStatus({
+      repo_root: "/repo",
+      indexed_roots: ["."],
+      skipped_roots: [],
+      files: []
+    });
 
     expect(Object.keys(result)).toEqual(["status", "meta"]);
     expect(result).not.toHaveProperty("contract_version");
@@ -24,8 +27,13 @@ describe("runtime status", () => {
   });
 
   it("maps application status result to a presentation payload", () => {
-    const result = getColdRepoStatus("/repo");
-    const payload = toColdStatusPresentationPayload(result);
+    const result = getCatalogRepoStatus({
+      repo_root: "/repo",
+      indexed_roots: ["."],
+      skipped_roots: [],
+      files: []
+    });
+    const payload = toStatusPresentationPayload(result);
 
     expect(payload).toEqual({
       status: result.status,
@@ -33,11 +41,29 @@ describe("runtime status", () => {
     });
   });
 
-  it("reports a cold status using the shared envelope", () => {
-    const result = getColdRepoStatus("/repo");
-    const status = buildColdStatusEnvelope(result);
+  it("reports status using the shared envelope", () => {
+    const result = getCatalogRepoStatus({
+      repo_root: "/repo",
+      indexed_roots: ["."],
+      skipped_roots: [],
+      files: []
+    });
+    const status = buildStatusEnvelope(result);
 
-    expect(status).toEqual(coldStatusGolden);
+    expect(status).toMatchObject({
+      contract_version: "0.1",
+      data: {
+        repo_root: "/repo",
+        indexed_roots: ["."]
+      },
+      meta: {
+        scope: {
+          repo_root: "/repo"
+        }
+      },
+      warnings: [],
+      errors: []
+    });
   });
 
   it("reports mixed-language and platform coverage without Python-shaped fields", () => {

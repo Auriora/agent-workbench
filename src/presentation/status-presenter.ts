@@ -4,31 +4,29 @@ import {
   type RuntimeStatusResult
 } from "../application/use-cases/get-repo-status.js";
 
-export type ColdStatusPresentationPayload = {
+export type StatusPresentationPayload = {
   status: RuntimeStatus;
   meta: RuntimeStatusResult["meta"];
 };
 
-export function toColdStatusPresentationPayload(
+export function toStatusPresentationPayload(
   result: RuntimeStatusResult
-): ColdStatusPresentationPayload {
+): StatusPresentationPayload {
   return {
     status: result.status,
     meta: result.meta
   };
 }
 
-export function buildColdStatusEnvelope(
+export function buildStatusEnvelope(
   result: RuntimeStatusResult
 ): ResponseEnvelope<RuntimeStatus> {
-  const payload = toColdStatusPresentationPayload(result);
+  const payload = toStatusPresentationPayload(result);
   return makeEnvelope({
     data: payload.status,
     meta: payload.meta
   });
 }
-
-export const buildStatusEnvelope = buildColdStatusEnvelope;
 
 export function buildInvalidStatusInputEnvelope(input: {
   repoRoot: string;
