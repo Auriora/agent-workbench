@@ -450,13 +450,13 @@ commit-sized implementation streams tied to the feature spec and proof matrix.
   - [ ] T204.1 Implement cold, refreshing, fresh, stale, partial, invalid, and
     invalid-due-to-environment status transitions through snapshot/runtime
     ports.
-  - [ ] T204.2 Implement runtime owner/observer coordination, heartbeat,
+  - [x] T204.2 Implement runtime owner/observer coordination, heartbeat,
     stale/dead owner recovery, isolated-worker mode, and duplicate warm-up
     refusal.
   - [ ] T204.3 Implement warm-up orchestration for migration, scan, extraction,
     reference resolution, FTS refresh, cache publication, and fresh snapshot
     publication.
-  - [ ] T204.4 Implement cache invalidation for file identity, graph evidence,
+  - [x] T204.4 Implement cache invalidation for file identity, graph evidence,
     query results, source sections, validation discovery, and report caches.
   - [ ] T204.5 Implement obsolete-result rejection for parser/indexing work
     when snapshot id, file hash, or config identity no longer matches.

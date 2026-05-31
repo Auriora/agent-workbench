@@ -228,6 +228,7 @@ export interface CachePort {
     value: T;
     ttl_ms?: number;
     depends_on_snapshot_id?: string;
+    depends_on_file_paths?: readonly string[];
   }): Promise<void>;
   delete(input: { namespace: string; key: string }): Promise<boolean>;
 }
