@@ -45,6 +45,50 @@ export class FileIdentityAdapter implements FileIdentityPort {
       return "python";
     }
 
+    if (ext === ".ts" || ext === ".tsx") {
+      return "typescript";
+    }
+
+    if (ext === ".js" || ext === ".jsx" || ext === ".mjs" || ext === ".cjs") {
+      return "javascript";
+    }
+
+    if (ext === ".cs") {
+      return "csharp";
+    }
+
+    if (ext === ".go") {
+      return "go";
+    }
+
+    if (ext === ".rs") {
+      return "rust";
+    }
+
+    if (ext === ".java") {
+      return "java";
+    }
+
+    if (ext === ".c") {
+      return "c";
+    }
+
+    if (ext === ".cc" || ext === ".cpp" || ext === ".cxx" || ext === ".hpp" || ext === ".hxx") {
+      return "cpp";
+    }
+
+    if (ext === ".sh" || filename === "bashrc" || filename === "zshrc") {
+      return "shell";
+    }
+
+    if (filename === "dockerfile" || ext === ".tf" || ext === ".tfvars") {
+      return "infrastructure";
+    }
+
+    if (ext === ".yaml" || ext === ".yml") {
+      return "yaml";
+    }
+
     if (ext === ".md" || ext === ".markdown" || ext === ".mdx") {
       return "markdown";
     }

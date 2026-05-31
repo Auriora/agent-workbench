@@ -29,6 +29,8 @@ export type EvidenceKind = z.infer<typeof evidenceKindSchema>;
 
 export const adapterDomainSchema = z.enum([
   "language",
+  "framework",
+  "package_manager",
   "config",
   "infrastructure",
   "documentation",
@@ -113,6 +115,20 @@ export const scopeMetadataSchema = z.object({
   languages: z.array(z.string())
 });
 export type ScopeMetadata = z.infer<typeof scopeMetadataSchema>;
+
+export const adapterEvidenceSchema = z
+  .object({
+    domain: adapterDomainSchema,
+    name: z.string(),
+    capability_level: capabilityLevelSchema,
+    evidence_kinds: z.array(evidenceKindSchema),
+    paths: z.array(z.string()),
+    provenance: z.string(),
+    confidence: z.enum(["high", "medium", "low"]),
+    metadata: z.record(z.string(), z.unknown()).default({})
+  })
+  .strict();
+export type AdapterEvidence = z.infer<typeof adapterEvidenceSchema>;
 
 export const budgetMetadataSchema = z
   .object({

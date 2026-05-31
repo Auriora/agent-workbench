@@ -1,0 +1,6 @@
+{
+  "name": "fixture-mixed-language-platform",
+  "scripts": {
+    "test": "node --test"
+  }
+}

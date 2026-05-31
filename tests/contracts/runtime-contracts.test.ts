@@ -4,6 +4,7 @@ import {
   applicationContracts,
   domainContracts,
   presentationContracts,
+  adapterEvidenceSchema,
   capabilityLevelSchema,
   CONTRACT_VERSION,
   makeEnvelope,
@@ -34,6 +35,40 @@ describe("runtime contracts", () => {
     expect(capabilityLevelSchema.parse("partial_semantic")).toBe("partial_semantic");
     expect(() => capabilityLevelSchema.parse("resource_only")).toThrow();
     expect(() => capabilityLevelSchema.parse("routing_evidence")).toThrow();
+  });
+
+  it("models adapter evidence without language-specific contract fields", () => {
+    const parsed = adapterEvidenceSchema.parse({
+      domain: "language",
+      name: "typescript",
+      capability_level: "unsupported",
+      evidence_kinds: [],
+      paths: ["src/app.ts"],
+      provenance: "file_identity",
+      confidence: "high",
+      metadata: {
+        adapter: "future-typescript"
+      }
+    });
+
+    expect(parsed).toEqual({
+      domain: "language",
+      name: "typescript",
+      capability_level: "unsupported",
+      evidence_kinds: [],
+      paths: ["src/app.ts"],
+      provenance: "file_identity",
+      confidence: "high",
+      metadata: {
+        adapter: "future-typescript"
+      }
+    });
+    expect(() =>
+      adapterEvidenceSchema.parse({
+        ...parsed,
+        python_module: "src.app"
+      })
+    ).toThrow();
   });
 
   it("builds the shared response envelope", () => {

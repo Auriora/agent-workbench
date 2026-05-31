@@ -1,14 +1,18 @@
-import type { ResponseMetadata } from "../../contracts/index.js";
+import type {
+  AdapterEvidence,
+  EvidenceKind,
+  Freshness,
+  ResponseMetadata
+} from "../../contracts/index.js";
+import type { FileCatalogEntry } from "../../domain/models/index.js";
+import { summarizeAdapterEvidence } from "../../domain/policies/index.js";
 
 export type RuntimeStatus = {
   repo_root: string;
-  freshness: "cold";
+  freshness: Freshness;
   indexed_roots: string[];
   skipped_roots: string[];
-  adapter_coverage: Array<{
-    language: string;
-    capability_level: "partial_semantic" | "resource_backed" | "unsupported";
-  }>;
+  adapter_coverage: AdapterEvidence[];
 };
 
 export type RuntimeStatusResult = {
@@ -17,6 +21,62 @@ export type RuntimeStatusResult = {
 };
 
 export type GetRepoStatusResult = RuntimeStatusResult;
+
+function uniqueSorted<T extends string>(values: readonly T[]): T[] {
+  return Array.from(new Set(values)).sort();
+}
+
+function strongestCapabilityLevel(
+  coverage: readonly AdapterEvidence[]
+): ResponseMetadata["capability_level"] {
+  if (coverage.some((item) => item.capability_level === "semantic")) {
+    return "semantic";
+  }
+  if (coverage.some((item) => item.capability_level === "partial_semantic")) {
+    return "partial_semantic";
+  }
+  if (coverage.some((item) => item.capability_level === "resource_backed")) {
+    return "resource_backed";
+  }
+  return "unsupported";
+}
+
+export function getCatalogRepoStatus(input: {
+  repo_root: string;
+  indexed_roots: readonly string[];
+  skipped_roots: readonly string[];
+  files: readonly FileCatalogEntry[];
+  freshness?: Freshness;
+}): GetRepoStatusResult {
+  const coverage = summarizeAdapterEvidence(input.files);
+  const languages = uniqueSorted(input.files.map((file) => file.file_identity.language));
+  const evidenceKinds = uniqueSorted<EvidenceKind>(coverage.flatMap((item) => item.evidence_kinds));
+  const freshness = input.freshness ?? "fresh";
+
+  return {
+    status: {
+      repo_root: input.repo_root,
+      freshness,
+      indexed_roots: [...input.indexed_roots],
+      skipped_roots: [...input.skipped_roots],
+      adapter_coverage: [...coverage]
+    },
+    meta: {
+      analysis_validity: coverage.length > 0 ? "valid" : "partial",
+      freshness,
+      scope: {
+        repo_root: input.repo_root,
+        indexed_roots: [...input.indexed_roots],
+        skipped_roots: [...input.skipped_roots],
+        languages
+      },
+      capability_level: strongestCapabilityLevel(coverage),
+      evidence_kinds: evidenceKinds,
+      verification_status: "needed",
+      truncated: false
+    }
+  };
+}
 
 export function getColdRepoStatus(repoRoot: string): GetRepoStatusResult {
   return {

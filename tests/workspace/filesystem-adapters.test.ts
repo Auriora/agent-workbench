@@ -131,8 +131,16 @@ describe("file identity adapter", () => {
 
   it("infers language from file path", async () => {
     expect(await fileIdentityAdapter.inferLanguage({ path: "/x/src/main.py" })).toBe("python");
+    expect(await fileIdentityAdapter.inferLanguage({ path: "/x/src/app.ts" })).toBe("typescript");
+    expect(await fileIdentityAdapter.inferLanguage({ path: "/x/src/app.jsx" })).toBe("javascript");
+    expect(await fileIdentityAdapter.inferLanguage({ path: "/x/src/main.go" })).toBe("go");
+    expect(await fileIdentityAdapter.inferLanguage({ path: "/x/src/lib.rs" })).toBe("rust");
+    expect(await fileIdentityAdapter.inferLanguage({ path: "/x/src/App.cs" })).toBe("csharp");
     expect(await fileIdentityAdapter.inferLanguage({ path: "/x/docs/notes.md" })).toBe("markdown");
     expect(await fileIdentityAdapter.inferLanguage({ path: "/x/config.json" })).toBe("json");
+    expect(await fileIdentityAdapter.inferLanguage({ path: "/x/.github/workflows/ci.yml" })).toBe("yaml");
+    expect(await fileIdentityAdapter.inferLanguage({ path: "/x/Dockerfile" })).toBe("infrastructure");
+    expect(await fileIdentityAdapter.inferLanguage({ path: "/x/infra/main.tf" })).toBe("infrastructure");
     expect(await fileIdentityAdapter.inferLanguage({ path: "/x/pyproject.toml" })).toBe("toml");
     expect(await fileIdentityAdapter.inferLanguage({ path: "/x/README.config" })).toBe("config");
     expect(await fileIdentityAdapter.inferLanguage({ path: "/x/notes.txt" })).toBe("text");

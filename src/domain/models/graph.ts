@@ -1,3 +1,5 @@
+import type { AdapterEvidence } from "../../contracts/index.js";
+
 export interface SourceRange {
   start_line: number;
   start_column: number;
@@ -136,6 +138,7 @@ export interface FileCatalogEntry {
   file_identity: FileIdentity;
   indexed: boolean;
   skipped_reason?: string;
+  adapter_evidence?: AdapterEvidence;
 }
 
 export interface WorkspaceFileEvent {

@@ -5,6 +5,8 @@ export {
   type EvidenceKind,
   adapterDomainSchema,
   type AdapterDomain,
+  adapterEvidenceSchema,
+  type AdapterEvidence,
   freshnessSchema,
   type Freshness,
   analysisValiditySchema,

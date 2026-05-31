@@ -11,5 +11,7 @@ export {
   scopeMetadataSchema,
   type ScopeMetadata,
   budgetMetadataSchema,
-  type BudgetMetadata
+  type BudgetMetadata,
+  adapterEvidenceSchema,
+  type AdapterEvidence
 } from "./runtime-contracts.js";
