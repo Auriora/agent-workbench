@@ -13,6 +13,11 @@ from `../../src/mcp/stdio.ts`, so local development should use this plugin from 
 checkout-linked location. Restart Codex after source changes. Run `pnpm install`
 after dependency changes, then restart Codex.
 
+For normal Codex workspace sessions, do not set
+`AGENT_WORKBENCH_DEFAULT_REPO_ROOT`; the MCP server should default to Codex's
+active working directory. Use that environment variable or `--repo-root` only
+for fixed-target launches outside the active workspace.
+
 ## Hook Behavior
 
 Hooks are silent by default. Set `AGENT_WORKBENCH_HOOK_FEEDBACK=basic` to emit

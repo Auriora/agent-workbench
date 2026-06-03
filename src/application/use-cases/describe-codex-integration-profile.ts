@@ -28,7 +28,8 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         purpose: "Executable runtime surface for Codex through stdio MCP.",
         behavior: [
           "Launches the production MCP server from this repository checkout.",
-          "Supports explicit repo roots through arguments or AGENT_WORKBENCH_DEFAULT_REPO_ROOT."
+          "Defaults omitted repo roots to the Codex session working directory.",
+          "Supports explicit repo roots through arguments or AGENT_WORKBENCH_DEFAULT_REPO_ROOT for fixed-target launches."
         ],
         constraints: [
           "No copied runtime path.",

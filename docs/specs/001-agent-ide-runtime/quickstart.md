@@ -53,16 +53,23 @@ args = [
 ]
 ```
 
-Optional default repo root:
+Do not set `AGENT_WORKBENCH_DEFAULT_REPO_ROOT` for normal Codex use. With no
+explicit default, the MCP server uses Codex's active working directory as the
+default repo root, so `repo:///status`, `repo:///scope`, `repo:///overview`, and
+tool calls without `repo_root` bind to the current workspace.
+
+Use an explicit override only for a fixed target repo or non-Codex launch
+environment:
 
 ```toml
 [mcp_servers.agent-workbench.env]
 AGENT_WORKBENCH_DEFAULT_REPO_ROOT = "/path/to/target/repo"
 ```
 
-The MCP resources and tools should still accept explicit `repo_root` arguments
-where defined. This matters when Codex starts global MCP servers from a
-directory that is not the target repository.
+The MCP resources and tools also accept explicit `repo_root` arguments where
+defined. This matters when a client starts global MCP servers from a directory
+that is not the target repository, but it should not be required for ordinary
+Codex workspace sessions.
 
 The first coding workflow tool is `context_for_task`. Use it before broad file
 reads when you have a task prompt, known files, or symbols and need compact

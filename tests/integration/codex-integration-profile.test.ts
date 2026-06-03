@@ -151,7 +151,10 @@ describe("Codex integration profile", () => {
       expect.arrayContaining(["Source edits in this repository are picked up on Codex restart."])
     );
     expect(mcpSurface?.behavior).toEqual(
-      expect.arrayContaining(["Launches the production MCP server from this repository checkout."])
+      expect.arrayContaining([
+        "Launches the production MCP server from this repository checkout.",
+        "Defaults omitted repo roots to the Codex session working directory."
+      ])
     );
     expect(sourceDependencyArtifact).toMatchObject({
       target_agent: "codex",
