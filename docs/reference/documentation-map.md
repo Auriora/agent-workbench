@@ -41,7 +41,7 @@ copying tables, schemas, or enum definitions.
 | Edit preview/apply/rollback behavior | [Edit and validation loop design](../design/edit-and-validation-loop-design.md) | Owns bounded mutation workflow; schema vocabulary comes from runtime contracts. |
 | Attention lifecycle and ranking | [Attention layer design](../design/attention-layer-design.md) | Owns minimal blocker/warning behavior; full workflow guidance is post-MVP. |
 | Knowledge reports and graph communities | [Knowledge layer design](../design/knowledge-layer-design.md) | Post-MVP unless explicitly reduced to cheap persisted summaries. |
-| MVP scope and implementation plan | [Agent IDE runtime MVP spec](../specs/001-agent-ide-runtime/spec.md) | Must stay narrower than the concept roadmap. |
+| MVP scope and implementation plan | [Agent IDE runtime MVP requirements](../specs/001-agent-ide-runtime/requirements.md) | Must stay narrower than the concept roadmap. |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) | Owns fixture, budget, degraded-mode, and acceptance evidence. |
 | Architectural decisions | [ADRs](../adr/) | ADR status must match frontmatter and body text. |
 
@@ -49,7 +49,7 @@ copying tables, schemas, or enum definitions.
 
 - Do not duplicate enum definitions outside [Runtime contracts](runtime-contracts.md).
 - Do not duplicate the language priority table outside [Language capability matrix](language-capability-matrix.md).
-- Do not add MVP scope in design docs unless it matches [Agent IDE runtime MVP spec](../specs/001-agent-ide-runtime/spec.md).
+- Do not add MVP scope in design docs unless it matches [Agent IDE runtime MVP requirements](../specs/001-agent-ide-runtime/requirements.md).
 - Do not add graph storage requirements outside [Graph store design](../design/graph-store-design.md) unless they are summarized requirements.
 - Do not add observability configuration, Jaeger export rules, repo-local
   debug harness rules, or profiler guidance outside

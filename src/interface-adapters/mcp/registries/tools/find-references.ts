@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ZodError, z } from "zod";
+import { z } from "zod";
 import {
   findReferencesRequestSchema,
   type FindReferencesRequest
@@ -8,6 +8,10 @@ import {
   buildFindReferencesEnvelope,
   buildInvalidFindReferencesInputEnvelope
 } from "../../../../presentation/find-references-presenter.js";
+import {
+  formatMcpArgumentError,
+  parseMcpArguments
+} from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
 
 const findReferencesRawShape = {
@@ -45,9 +49,9 @@ export const findReferencesTool: McpToolDeclaration = {
       async (args: unknown) => {
         let request: FindReferencesRequest;
         try {
-          request = findReferencesRequestSchema.parse(args);
+          request = parseMcpArguments(findReferencesRequestSchema, args);
         } catch (error) {
-          const message = error instanceof ZodError ? error.issues.map((issue) => issue.message).join("; ") : "Invalid find_references arguments.";
+          const message = formatMcpArgumentError(error, "Invalid find_references arguments.");
           return textResponse(buildInvalidFindReferencesInputEnvelope({ repoRoot: context.repoRoot, message }));
         }
 

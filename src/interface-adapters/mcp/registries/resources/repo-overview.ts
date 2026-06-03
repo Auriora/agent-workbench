@@ -1,10 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ZodError } from "zod";
 import {
   buildInvalidRepoOverviewInputEnvelope,
   buildRepoOverviewEnvelope
 } from "../../../../presentation/repo-overview-presenter.js";
 import type { McpResourceDeclaration } from "../index.js";
+import { formatMcpArgumentError } from "../../arguments/index.js";
 import { parseRepoStatusArguments } from "../../arguments/repo-status.js";
 
 export const repoOverviewResource: McpResourceDeclaration = {
@@ -31,10 +31,10 @@ export const repoOverviewResource: McpResourceDeclaration = {
       try {
         args = parseRepoStatusArguments(getRepoResourceArgumentInput(request));
       } catch (error) {
-        const message =
-          error instanceof ZodError
-            ? error.issues.map((issue) => issue.message).join("; ")
-            : "Invalid overview resource arguments.";
+        const message = formatMcpArgumentError(
+          error,
+          "Invalid overview resource arguments."
+        );
         const envelope = buildInvalidRepoOverviewInputEnvelope({
           repoRoot: context.repoRoot,
           message

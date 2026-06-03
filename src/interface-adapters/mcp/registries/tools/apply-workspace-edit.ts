@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ZodError, z } from "zod";
+import { z } from "zod";
 import {
   applyWorkspaceEditRequestSchema,
   type ApplyWorkspaceEditRequest
@@ -8,6 +8,10 @@ import {
   buildApplyWorkspaceEditEnvelope,
   buildInvalidApplyWorkspaceEditInputEnvelope
 } from "../../../../presentation/workspace-edit-presenter.js";
+import {
+  formatMcpArgumentError,
+  parseMcpArguments
+} from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
 
 const editFileShape = z.object({
@@ -44,9 +48,9 @@ export const applyWorkspaceEditTool: McpToolDeclaration = {
       async (args: unknown) => {
         let request: ApplyWorkspaceEditRequest;
         try {
-          request = applyWorkspaceEditRequestSchema.parse(args);
+          request = parseMcpArguments(applyWorkspaceEditRequestSchema, args);
         } catch (error) {
-          const message = error instanceof ZodError ? error.issues.map((issue) => issue.message).join("; ") : "Invalid apply_workspace_edit arguments.";
+          const message = formatMcpArgumentError(error, "Invalid apply_workspace_edit arguments.");
           return textResponse(buildInvalidApplyWorkspaceEditInputEnvelope({ repoRoot: context.repoRoot, message }));
         }
 

@@ -123,6 +123,45 @@ describe("Codex integration profile", () => {
     });
   });
 
+  it("documents host-level runtime update semantics for source and dependency changes", () => {
+    const profile = codexIntegrationProfileSchema.parse(describeCodexIntegrationProfile());
+    const mcpSurface = profile.active_surfaces.find((entry) => entry.surface === "mcp");
+    const sourceDependencyArtifact = profile.artifacts.find(
+      (artifact) => artifact.surface === "mcp" && artifact.path === "src/mcp/stdio.ts"
+    );
+
+    expect(profile.runtime_source).toBe("repository_checkout");
+    expect(profile.plugin.runtime_source).toBe("repository_checkout");
+    expect(profile.plugin.packaging_model).toBe("wrapper_only");
+    expect(profile.plugin.update_model.source_changes).toMatch(/Restart Codex/i);
+    expect(profile.plugin.update_model.source_changes).toContain("updated repository source");
+    expect(profile.plugin.update_model.dependency_changes).toMatch(/pnpm install/i);
+    expect(profile.plugin.update_model.dependency_changes).toMatch(/restart Codex/i);
+    expect(profile.plugin.update_model.dependency_changes).toContain(
+      "Plugin/package reinstall is not the update mechanism."
+    );
+    expect(profile.guardrails).toEqual(
+      expect.arrayContaining([
+        "Source edits require Codex restart to reload MCP source behavior.",
+        "Dependency changes require pnpm install in this repository checkout, then restart Codex."
+      ])
+    );
+    expect(profile.runtime_version).toBe("0.1.0");
+    expect(mcpSurface?.constraints).toEqual(
+      expect.arrayContaining(["Source edits in this repository are picked up on Codex restart."])
+    );
+    expect(mcpSurface?.behavior).toEqual(
+      expect.arrayContaining(["Launches the production MCP server from this repository checkout."])
+    );
+    expect(sourceDependencyArtifact).toMatchObject({
+      target_agent: "codex",
+      surface: "mcp",
+      status: "supported",
+      provenance: "runtime_source",
+      path: "src/mcp/stdio.ts"
+    });
+  });
+
   it("registers integration:///profiles/codex as a schema-owned MCP resource", async () => {
     let registered: RegisteredResource | undefined;
     const server = {
@@ -256,6 +295,30 @@ describe("Codex plugin artifacts", () => {
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )
     ).toContain("repo:///overview");
+  });
+
+  it("launches MCP from the repository checkout entrypoint", () => {
+    const mcpConfig = JSON.parse(
+      fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8")
+    ) as {
+      mcpServers: Record<
+        string,
+        {
+          command: string;
+          args: string[];
+        }
+      >;
+    };
+    const codexServer = mcpConfig.mcpServers["agent-workbench"];
+    const checkoutRoot = path.resolve(".");
+    const entrypoint = codexServer.args.at(-1);
+    const launchPath = entrypoint ? path.resolve(pluginRoot, entrypoint) : "";
+
+    expect(codexServer.command).toBe("node");
+    expect(codexServer.args).toEqual(["--import", "tsx", "../../src/mcp/stdio.ts"]);
+    expect(entrypoint).toMatch(/src[\\/]{1}mcp[\\/]{1}stdio\.ts$/);
+    expect(path.relative(checkoutRoot, launchPath)).toBe(path.join("src", "mcp", "stdio.ts"));
+    expect(fs.existsSync(launchPath)).toBe(true);
   });
 
   it("keeps plugin wrappers out of concrete runtime implementation paths", () => {

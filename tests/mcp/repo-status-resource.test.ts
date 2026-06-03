@@ -26,6 +26,7 @@ describe("repo status MCP resource", () => {
     const result: GetRepoStatusResult = {
       status: {
         repo_root: "/fixture",
+        runtime_state: "fresh",
         freshness: "fresh",
         indexed_roots: ["."],
         skipped_roots: [],

@@ -16,6 +16,10 @@ import type {
   SnapshotPort,
   WorkspaceFilePort
 } from "../../ports/index.js";
+import type {
+  CachePort,
+  WarmupCoordinatorPort
+} from "../../ports/index.js";
 
 export type IndexRepositoryGraphResult = {
   snapshot_id: string;
@@ -28,6 +32,11 @@ export type IndexRepositoryGraphResult = {
   edge_count: number;
   unresolved_reference_count: number;
   truncated: boolean;
+};
+
+export type WarmupRepositoryGraphResult = IndexRepositoryGraphResult & {
+  execution_id: string;
+  warmup_state: "complete";
 };
 
 export async function indexRepositoryGraph(input: {
@@ -158,6 +167,95 @@ export async function indexRepositoryGraph(input: {
     ),
     truncated: scanned.truncated
   };
+}
+
+export async function warmupRepositoryGraph(input: {
+  repo_root: string;
+  scanner: FileCatalogScanPort;
+  workspace: WorkspaceFilePort;
+  extractors: ExtractorRegistryPort;
+  resource_extractor: ExtractorPort;
+  graph: GraphWritePort;
+  catalog: FileCatalogPort;
+  snapshots: SnapshotPort;
+  warmups: WarmupCoordinatorPort;
+  clock: ClockPort;
+  schema_version: number;
+  owner_id: string;
+  snapshot_id?: string;
+  config_identity?: string;
+  max_files?: number;
+  cache?: CachePort;
+}): Promise<WarmupRepositoryGraphResult> {
+  const snapshotId = input.snapshot_id ?? String(input.clock.nowUnixMs());
+  const executionId = await input.warmups.requestWarmup({
+    repo_root: input.repo_root,
+    snapshot_id: snapshotId
+  });
+  await input.warmups.markOwner({
+    execution_id: executionId,
+    owner_id: input.owner_id
+  });
+
+  try {
+    const result = await indexRepositoryGraph({
+      repo_root: input.repo_root,
+      scanner: input.scanner,
+      workspace: input.workspace,
+      extractors: input.extractors,
+      resource_extractor: input.resource_extractor,
+      graph: input.graph,
+      catalog: input.catalog,
+      snapshots: input.snapshots,
+      clock: input.clock,
+      schema_version: input.schema_version,
+      snapshot_id: snapshotId,
+      config_identity: input.config_identity,
+      max_files: input.max_files
+    });
+    const files = await input.catalog.listFiles({
+      snapshot_id: result.snapshot_id,
+      max_rows: input.max_files ?? 2000
+    });
+
+    if (input.cache !== undefined) {
+      await input.cache.set({
+        namespace: "warmup",
+        key: `graph:${input.repo_root}`,
+        value: result,
+        depends_on_snapshot_id: result.snapshot_id,
+        depends_on_config_identity: input.config_identity ?? "default",
+        depends_on_file_hashes: files.map((file) => ({
+          path: file.path,
+          content_hash: file.file_identity.content_hash
+        }))
+      });
+    }
+
+    await input.warmups.completeWarmup({
+      execution_id: executionId,
+      success: true
+    });
+    return {
+      ...result,
+      execution_id: executionId,
+      warmup_state: "complete"
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    await input.snapshots.markSnapshotFreshness({
+      snapshot_id: snapshotId,
+      freshness: "cold",
+      owner_state: "dead_owner",
+      reason
+    });
+    await input.warmups.completeWarmup({
+      execution_id: executionId,
+      success: false,
+      reason
+    });
+    throw error;
+  }
 }
 
 function buildSnapshot(input: {

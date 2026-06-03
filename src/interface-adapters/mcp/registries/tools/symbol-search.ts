@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ZodError, z } from "zod";
+import { z } from "zod";
 import {
   symbolSearchRequestSchema,
   type SymbolSearchRequest
@@ -8,6 +8,10 @@ import {
   buildInvalidSymbolSearchInputEnvelope,
   buildSymbolSearchEnvelope
 } from "../../../../presentation/symbol-search-presenter.js";
+import {
+  formatMcpArgumentError,
+  parseMcpArguments
+} from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
 
 const symbolSearchRawShape = {
@@ -47,9 +51,9 @@ export const symbolSearchTool: McpToolDeclaration = {
       async (args: unknown) => {
         let request: SymbolSearchRequest;
         try {
-          request = symbolSearchRequestSchema.parse(args);
+          request = parseMcpArguments(symbolSearchRequestSchema, args);
         } catch (error) {
-          const message = error instanceof ZodError ? error.issues.map((issue) => issue.message).join("; ") : "Invalid symbol_search arguments.";
+          const message = formatMcpArgumentError(error, "Invalid symbol_search arguments.");
           return textResponse(buildInvalidSymbolSearchInputEnvelope({ repoRoot: context.repoRoot, message }));
         }
 

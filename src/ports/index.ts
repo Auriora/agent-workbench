@@ -2,7 +2,8 @@ import type {
   CancellationToken,
   QueueHandle,
   QueueWorkItem,
-  WorkPriority
+  WorkPriority,
+  CacheValidationInput
 } from "../domain/services/index.js";
 import type {
   ExtractionBatch,
@@ -220,14 +221,19 @@ export interface HasherPort {
 }
 
 export interface CachePort {
-  has(input: { namespace: string; key: string }): Promise<boolean>;
-  get<T>(input: { namespace: string; key: string }): Promise<T | null>;
+  has(input: { namespace: string; key: string } & CacheValidationInput): Promise<boolean>;
+  get<T>(input: { namespace: string; key: string } & CacheValidationInput): Promise<T | null>;
   set<T>(input: {
     namespace: string;
     key: string;
     value: T;
     ttl_ms?: number;
     depends_on_snapshot_id?: string;
+    depends_on_config_identity?: string;
+    depends_on_file_hashes?: readonly {
+      path: string;
+      content_hash: string;
+    }[];
     depends_on_file_paths?: readonly string[];
   }): Promise<void>;
   delete(input: { namespace: string; key: string }): Promise<boolean>;

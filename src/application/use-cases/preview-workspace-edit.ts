@@ -33,7 +33,7 @@ export async function previewWorkspaceEdit(input: {
     files: await Promise.all(
       input.request.edits.map(async (edit) => ({
         path: normalizeRepoPath(edit.path),
-        before: await input.workspace.readText({ path: edit.path }),
+        before: await readWorkspaceEditTarget(input.workspace, edit.path),
         after: edit.replacement_text
       }))
     ),
@@ -123,4 +123,19 @@ function languageFromPath(filePath: string): string {
 
 function normalizeRepoPath(value: string): string {
   return value.replaceAll("\\", "/").replace(/^\.\/+/, "");
+}
+
+async function readWorkspaceEditTarget(workspace: WorkspaceFilePort, filePath: string): Promise<string> {
+  try {
+    return await workspace.readText({ path: filePath });
+  } catch (error) {
+    if (isMissingFileError(error)) {
+      throw new Error(`Workspace edit target was not found: ${normalizeRepoPath(filePath)}`);
+    }
+    throw error;
+  }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  return error instanceof Error && "code" in error && error.code === "ENOENT";
 }

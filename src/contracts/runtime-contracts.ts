@@ -100,6 +100,27 @@ export const nextActionSchema = z.object({
 });
 export type NextAction = z.infer<typeof nextActionSchema>;
 
+export const runtimeStatusCaveatKindSchema = z.enum([
+  "missing_tree_sitter_parser",
+  "missing_parser_grammar",
+  "parser_timeout",
+  "parser_crash",
+  "missing_optional_enrichment_evidence",
+  "unsupported_language_or_platform",
+  "missing_test_runner",
+  "stale_watcher_snapshot"
+]);
+export type RuntimeStatusCaveatKind = z.infer<typeof runtimeStatusCaveatKindSchema>;
+
+export const runtimeStatusCaveatSchema = z.object({
+  kind: runtimeStatusCaveatKindSchema,
+  severity: attentionSeveritySchema,
+  message: z.string(),
+  evidence_kinds: z.array(evidenceKindSchema),
+  next_action: nextActionSchema.optional()
+});
+export type RuntimeStatusCaveat = z.infer<typeof runtimeStatusCaveatSchema>;
+
 export const runtimeErrorSchema = z.object({
   code: z.string(),
   message: z.string(),
@@ -148,6 +169,34 @@ export const contextRiskSchema = z
   .strict();
 export type ContextRisk = z.infer<typeof contextRiskSchema>;
 
+export const rankedSymbolCandidateSchema = z
+  .object({
+    rank: z.number().int().positive(),
+    score: z.number().nonnegative(),
+    symbol: z.lazy(() => symbolReferenceSchema),
+    reason: z.string()
+  })
+  .strict();
+export type RankedSymbolCandidate = z.infer<typeof rankedSymbolCandidateSchema>;
+
+export const skippedWorkSchema = z
+  .object({
+    kind: z.string(),
+    reason: z.string(),
+    next_action: nextActionSchema.optional()
+  })
+  .strict();
+export type SkippedWork = z.infer<typeof skippedWorkSchema>;
+
+export const contextCompletenessSchema = z
+  .object({
+    complete_enough: z.boolean(),
+    markers: z.array(z.string()),
+    caveats: z.array(z.string())
+  })
+  .strict();
+export type ContextCompleteness = z.infer<typeof contextCompletenessSchema>;
+
 export const taskContextRequestSchema = z
   .object({
     task: z.string().min(1),
@@ -167,8 +216,11 @@ export const taskContextSchema = z
     summary: z.string(),
     requested_files: z.array(fileReferenceSchema),
     related_files: z.array(fileReferenceSchema),
+    ranked_symbols: z.array(rankedSymbolCandidateSchema),
     governing_docs: z.array(documentReferenceSchema),
     validation_hints: z.array(validationHintSchema),
+    skipped_work: z.array(skippedWorkSchema),
+    completeness: contextCompletenessSchema,
     risks: z.array(contextRiskSchema),
     next_actions: z.array(nextActionSchema)
   })
@@ -427,7 +479,8 @@ export const responseMetadataSchema = z.object({
   evidence_kinds: z.array(evidenceKindSchema),
   verification_status: verificationStatusSchema,
   truncated: z.boolean(),
-  budget: budgetMetadataSchema.optional()
+  budget: budgetMetadataSchema.optional(),
+  caveats: z.array(runtimeStatusCaveatSchema).optional()
 });
 export type ResponseMetadata = z.infer<typeof responseMetadataSchema>;
 

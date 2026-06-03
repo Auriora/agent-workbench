@@ -1,10 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ZodError, z } from "zod";
+import { z } from "zod";
 import { impactRequestSchema, type ImpactRequest } from "../../../../contracts/index.js";
 import {
   buildImpactEnvelope,
   buildInvalidImpactInputEnvelope
 } from "../../../../presentation/impact-presenter.js";
+import {
+  formatMcpArgumentError,
+  parseMcpArguments
+} from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
 
 const impactRawShape = {
@@ -42,9 +46,9 @@ export const impactTool: McpToolDeclaration = {
       async (args: unknown) => {
         let request: ImpactRequest;
         try {
-          request = impactRequestSchema.parse(args);
+          request = parseMcpArguments(impactRequestSchema, args);
         } catch (error) {
-          const message = error instanceof ZodError ? error.issues.map((issue) => issue.message).join("; ") : "Invalid impact arguments.";
+          const message = formatMcpArgumentError(error, "Invalid impact arguments.");
           return textResponse(buildInvalidImpactInputEnvelope({ repoRoot: context.repoRoot, message }));
         }
 

@@ -1,4 +1,5 @@
 import type {
+  AnalysisValidity,
   CapabilityLevel,
   Freshness
 } from "../../contracts/runtime-contracts.js";
@@ -17,10 +18,16 @@ export interface SnapshotState {
   config_identity: string;
   schema_version: number;
   freshness: SnapshotFreshness;
+  analysis_validity?: AnalysisValidity;
   owner_state: SnapshotOwnershipState;
   created_at: string;
   updated_at: string;
   reason?: string;
+}
+
+export interface FileContentHashBinding {
+  path: string;
+  content_hash: string;
 }
 
 export interface SnapshotOwnershipRecord {

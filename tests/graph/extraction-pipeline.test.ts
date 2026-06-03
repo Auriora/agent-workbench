@@ -2,12 +2,16 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { indexRepositoryGraph } from "../../src/application/use-cases/index-repository-graph.js";
-import type { ClockPort } from "../../src/ports/index.js";
+import {
+  indexRepositoryGraph,
+  warmupRepositoryGraph
+} from "../../src/application/use-cases/index-repository-graph.js";
+import type { ClockPort, ExtractorPort } from "../../src/ports/index.js";
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../../src/infrastructure/extraction/index.js";
 import { FileCatalogScannerAdapter, WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
 import { PythonTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
+import { InMemoryRuntimeOperationsAdapter } from "../../src/infrastructure/runtime/index.js";
 
 const clock: ClockPort = {
   now: () => new Date("2026-05-31T12:00:00.000Z"),
@@ -249,4 +253,225 @@ describe("repository graph extraction pipeline", () => {
       store.close();
     }
   });
+
+  it("marks parser/indexing outputs stale when snapshot, config, or file hash no longer matches", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-basic-python");
+    const store = openGraphStore(path.join(dir, "index-guard.sqlite"));
+    const runtimeGuard = new InMemoryRuntimeOperationsAdapter({ clock });
+    const scanner = new FileCatalogScannerAdapter();
+    const workspace = new WorkspaceFileAdapter({ repoRoot });
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new PythonTreeSitterExtractorAdapter());
+
+    try {
+      const result = await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner,
+        workspace,
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "401",
+        config_identity: "default"
+      });
+
+      const files = await store.listFiles({ snapshot_id: result.snapshot_id });
+      const primary = files.find((file) => file.path.endsWith("sample_pkg/service.py"));
+      expect(primary).not.toBeUndefined();
+      const servicePath = primary?.path;
+
+      await runtimeGuard.set({
+        namespace: "parser-index",
+        key: `fixture:${result.snapshot_id}`,
+        value: {
+          snapshot_id: result.snapshot_id,
+          nodes: result.node_count
+        },
+        depends_on_snapshot_id: result.snapshot_id,
+        depends_on_config_identity: "default",
+        depends_on_file_hashes: files.map((file) => ({
+          path: file.path,
+          content_hash: file.file_identity.content_hash
+        }))
+      });
+
+      await expect(
+        runtimeGuard.get({
+          namespace: "parser-index",
+          key: `fixture:${result.snapshot_id}`,
+          depends_on_snapshot_id: result.snapshot_id,
+          depends_on_config_identity: "default",
+          depends_on_file_hashes: files.map((file) => ({
+            path: file.path,
+            content_hash: file.file_identity.content_hash
+          }))
+        })
+      ).resolves.toEqual({
+        snapshot_id: result.snapshot_id,
+        nodes: result.node_count
+      });
+
+      await expect(
+        runtimeGuard.get({
+          namespace: "parser-index",
+          key: `fixture:${result.snapshot_id}`,
+          depends_on_snapshot_id: "402",
+          depends_on_config_identity: "default",
+          depends_on_file_hashes: files.map((file) => ({
+            path: file.path,
+            content_hash: file.file_identity.content_hash
+          }))
+        })
+      ).resolves.toBeNull();
+
+      await expect(
+        runtimeGuard.get({
+          namespace: "parser-index",
+          key: `fixture:${result.snapshot_id}`,
+          depends_on_snapshot_id: result.snapshot_id,
+          depends_on_config_identity: "legacy",
+          depends_on_file_hashes: files.map((file) => ({
+            path: file.path,
+            content_hash: file.file_identity.content_hash
+          }))
+        })
+      ).resolves.toBeNull();
+
+      const staleHashes = files.map((file) =>
+        file.path === servicePath
+          ? { path: file.path, content_hash: "stat:0000:0000" }
+          : { path: file.path, content_hash: file.file_identity.content_hash }
+      );
+      await expect(
+        runtimeGuard.get({
+          namespace: "parser-index",
+          key: `fixture:${result.snapshot_id}`,
+          depends_on_snapshot_id: result.snapshot_id,
+          depends_on_config_identity: "default",
+          depends_on_file_hashes: staleHashes
+        })
+      ).resolves.toBeNull();
+    } finally {
+      store.close();
+    }
+  });
+
+  it("orchestrates warm-up through scan, extraction, cache publication, and fresh snapshot publication", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-basic-python");
+    const store = openGraphStore(path.join(dir, "warmup.sqlite"));
+    const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new PythonTreeSitterExtractorAdapter());
+
+    try {
+      const result = await warmupRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        warmups: runtime,
+        cache: runtime,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        owner_id: "owner-1",
+        snapshot_id: "501",
+        config_identity: "default"
+      });
+
+      expect(result).toMatchObject({
+        snapshot_id: "501",
+        execution_id: "warmup-1",
+        warmup_state: "complete",
+        scanned_files: 4,
+        extracted_files: 4
+      });
+      await expect(runtime.getState({ repo_root: repoRoot })).resolves.toMatchObject({
+        execution_id: "warmup-1",
+        state: "complete",
+        owner_id: "owner-1"
+      });
+      await expect(store.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({
+        id: "501",
+        freshness: "fresh"
+      });
+      await expect(
+        runtime.get({
+          namespace: "warmup",
+          key: `graph:${repoRoot}`,
+          depends_on_snapshot_id: "501",
+          depends_on_config_identity: "default"
+        })
+      ).resolves.toMatchObject({
+        snapshot_id: "501",
+        node_count: result.node_count
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("records failed warm-up state when parser work fails without returning partial graph evidence", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-basic-python");
+    const store = openGraphStore(path.join(dir, "warmup-failed.sqlite"));
+    const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new FailingPythonExtractor("parser timeout while extracting symbols"));
+
+    try {
+      await expect(
+        warmupRepositoryGraph({
+          repo_root: repoRoot,
+          scanner: new FileCatalogScannerAdapter(),
+          workspace: new WorkspaceFileAdapter({ repoRoot }),
+          extractors: registry,
+          resource_extractor: new ResourceExtractorAdapter(),
+          graph: store,
+          catalog: store,
+          snapshots: store,
+          warmups: runtime,
+          cache: runtime,
+          clock,
+          schema_version: SCHEMA_VERSION,
+          owner_id: "owner-1",
+          snapshot_id: "502",
+          config_identity: "default"
+        })
+      ).rejects.toThrow("parser timeout while extracting symbols");
+
+      await expect(runtime.getState({ repo_root: repoRoot })).resolves.toMatchObject({
+        execution_id: "warmup-1",
+        state: "failed",
+        reason: "parser timeout while extracting symbols"
+      });
+      await expect(store.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({
+        id: "502",
+        freshness: "cold"
+      });
+      await expect(runtime.get({ namespace: "warmup", key: `graph:${repoRoot}` })).resolves.toBeNull();
+    } finally {
+      store.close();
+    }
+  });
 });
+
+class FailingPythonExtractor implements ExtractorPort {
+  public readonly language = "python";
+
+  public constructor(private readonly message: string) {}
+
+  public supports(input: { language: string; path: string }): boolean {
+    return input.language === "python" && input.path.endsWith(".py");
+  }
+
+  public async extract(): Promise<never> {
+    throw new Error(this.message);
+  }
+}

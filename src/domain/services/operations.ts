@@ -1,3 +1,5 @@
+import type { FileContentHashBinding } from "../models/runtime.js";
+
 export type WorkPriority = "fast" | "medium" | "slow";
 
 export interface QueueWorkItem<TPayload = unknown> {
@@ -13,6 +15,24 @@ export interface QueueHandle {
   priority: WorkPriority;
   enqueued_at: string;
 }
+
+export interface CacheValidationInput {
+  depends_on_snapshot_id?: string;
+  depends_on_config_identity?: string;
+  depends_on_file_hashes?: readonly FileContentHashBinding[];
+}
+
+export interface CacheSetInput extends CacheValidationInput {
+  namespace: string;
+  key: string;
+  ttl_ms?: number;
+  depends_on_file_paths?: readonly string[];
+}
+
+export type RuntimeCacheValidationInput = CacheValidationInput & {
+  namespace: string;
+  key: string;
+};
 
 export interface CancellationToken {
   token: string;

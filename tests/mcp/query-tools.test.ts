@@ -133,6 +133,89 @@ describe("graph query MCP tools", () => {
     ]);
   });
 
+  it("parses symbol_search defaults and schema types before provider execution", async () => {
+    let parsedRequest: SymbolSearchRequest | undefined;
+    const registered = registerTool(symbolSearchTool, {
+      searchSymbols: ({ request }) => {
+        parsedRequest = request;
+        return {
+          symbols: {
+            query: request.query,
+            repo_root: request.repo_root ?? "/fixture",
+            snapshot_id: request.snapshot_id ?? "snapshot-1",
+            symbols: [],
+            next_actions: []
+          },
+          meta: meta()
+        };
+      }
+    });
+
+    expect(registered.name).toBe("symbol_search");
+    const response = await registered.handler({ query: "Runner" });
+
+    expect(parsedRequest).toMatchObject({
+      query: "Runner",
+      exact: false,
+      languages: [],
+      max_results: 20,
+      source_byte_limit: 0
+    });
+    expect(parsedRequest?.repo_root).toBeUndefined();
+    expect(parsedRequest?.snapshot_id).toBeUndefined();
+
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: SearchSymbolsResult["symbols"];
+    };
+    expect(parsed.data.query).toBe("Runner");
+  });
+
+  it("returns structured invalid input for find_references before provider execution", async () => {
+    let providerCalled = false;
+    const registered = registerTool(findReferencesTool, {
+      findReferences: () => {
+        providerCalled = true;
+        throw new Error("provider should not run");
+      }
+    });
+
+    const response = await registered.handler({ node_id: 42 } as unknown as { node_id: unknown });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; retryable: boolean }>;
+    };
+
+    expect(providerCalled).toBe(false);
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([expect.objectContaining({ code: "invalid_input", retryable: false })]);
+  });
+
+  it("returns structured invalid input for impact before provider execution", async () => {
+    let providerCalled = false;
+    const registered = registerTool(impactTool, {
+      computeImpact: () => {
+        providerCalled = true;
+        throw new Error("provider should not run");
+      }
+    });
+
+    const response = await registered.handler({ node_id: "", max_depth: "2" } as unknown as { node_id: unknown });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; retryable: boolean }>;
+    };
+
+    expect(providerCalled).toBe(false);
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([expect.objectContaining({ code: "invalid_input", retryable: false })]);
+  });
+
   it("is registered by the composed server", () => {
     const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform") as unknown as {
       _registeredTools: Record<string, unknown>;

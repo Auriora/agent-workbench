@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ClockPort } from "../../src/ports/index.js";
+import type { FileContentHashBinding } from "../../src/domain/models/runtime.js";
 import {
   InMemoryCancellationAdapter,
   InMemoryRuntimeOperationsAdapter
@@ -68,6 +69,75 @@ describe("runtime operation adapters", () => {
     expect(await runtime.invalidateSnapshot({ snapshot_id: "snap-1" })).toBe(1);
   });
 
+  it("rejects stale cache reads when snapshot, config, or file hash no longer matches", async () => {
+    const clock = new MutableClock("2026-05-31T12:00:00.000Z");
+    const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
+    const key = { namespace: "parser", key: "file:service" };
+    const stableHashes: readonly FileContentHashBinding[] = [
+      { path: "src/service.py", content_hash: "stat:1024:1234" },
+      { path: "./src/lib.py", content_hash: "stat:512:5678" }
+    ];
+
+    await runtime.set({
+      ...key,
+      value: { parsed: true },
+      depends_on_snapshot_id: "snapshot-1",
+      depends_on_config_identity: "default",
+      depends_on_file_hashes: stableHashes
+    });
+
+    await expect(runtime.has(key)).resolves.toBe(true);
+    await expect(
+      runtime.get({
+        ...key,
+        depends_on_snapshot_id: "snapshot-1",
+        depends_on_config_identity: "default",
+        depends_on_file_hashes: stableHashes
+      })
+    ).resolves.toEqual({ parsed: true });
+
+    await expect(
+      runtime.get({
+        ...key,
+        depends_on_snapshot_id: "snapshot-2",
+        depends_on_config_identity: "default",
+        depends_on_file_hashes: stableHashes
+      })
+    ).resolves.toBeNull();
+
+    await runtime.set({
+      ...key,
+      value: { parsed: true },
+      depends_on_snapshot_id: "snapshot-1",
+      depends_on_config_identity: "config-a",
+      depends_on_file_hashes: stableHashes
+    });
+    await expect(
+      runtime.get({
+        ...key,
+        depends_on_snapshot_id: "snapshot-1",
+        depends_on_config_identity: "default",
+        depends_on_file_hashes: stableHashes
+      })
+    ).resolves.toBeNull();
+
+    await runtime.set({
+      ...key,
+      value: { parsed: true },
+      depends_on_snapshot_id: "snapshot-1",
+      depends_on_config_identity: "default",
+      depends_on_file_hashes: [{ path: "./src/service.py", content_hash: "stat:1024:1234" }]
+    });
+    await expect(
+      runtime.get({
+        ...key,
+        depends_on_snapshot_id: "snapshot-1",
+        depends_on_config_identity: "default",
+        depends_on_file_hashes: [{ path: "./src/service.py", content_hash: "stat:9999:9999" }]
+      })
+    ).resolves.toBeNull();
+  });
+
   it("refuses duplicate warm-up work unless forced and records terminal state", async () => {
     const clock = new MutableClock("2026-05-31T12:00:00.000Z");
     const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
@@ -102,6 +172,64 @@ describe("runtime operation adapters", () => {
         reason: "parser unavailable"
       })
     );
+  });
+
+  it("keeps bounded reads on last valid cache evidence while refresh work is coordinated", async () => {
+    const clock = new MutableClock("2026-05-31T12:00:00.000Z");
+    const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
+
+    await runtime.set({
+      namespace: "query",
+      key: "symbol:Runner",
+      value: { snapshot_id: "snap-1", rows: 1 },
+      depends_on_snapshot_id: "snap-1",
+      depends_on_config_identity: "default"
+    });
+    const first = await runtime.requestWarmup({ repo_root: "/repo", snapshot_id: "snap-2" });
+    const duplicate = await runtime.requestWarmup({ repo_root: "/repo", snapshot_id: "snap-2" });
+    await runtime.markOwner({ execution_id: first, owner_id: "owner-1" });
+
+    await expect(runtime.getState({ repo_root: "/repo" })).resolves.toMatchObject({
+      execution_id: first,
+      snapshot_id: "snap-2",
+      state: "running"
+    });
+    expect(duplicate).toBe(first);
+    await expect(runtime.get({ namespace: "query", key: "symbol:Runner" })).resolves.toEqual({
+      snapshot_id: "snap-1",
+      rows: 1
+    });
+    await expect(
+      runtime.get({
+        namespace: "query",
+        key: "symbol:Runner",
+        depends_on_snapshot_id: "snap-2",
+        depends_on_config_identity: "default"
+      })
+    ).resolves.toBeNull();
+  });
+
+  it("serializes graph-writer ownership per repository while allowing observers", async () => {
+    const clock = new MutableClock("2026-05-31T12:00:00.000Z");
+    const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
+
+    const [first, second] = await Promise.all([
+      runtime.claimOwnership({ repo_root: "/repo", snapshot_id: "snap-1", owner_id: "owner-1" }),
+      runtime.claimOwnership({ repo_root: "/repo", snapshot_id: "snap-1", owner_id: "owner-2" })
+    ]);
+
+    expect(first).toMatchObject({
+      owner_id: "owner-1",
+      state: "owner"
+    });
+    expect(second).toMatchObject({
+      owner_id: "owner-1",
+      state: "observer"
+    });
+    await expect(runtime.getOwner({ repo_root: "/repo" })).resolves.toMatchObject({
+      owner_id: "owner-1",
+      state: "owner"
+    });
   });
 
   it("coordinates owner, observer, stale owner, dead owner, and isolated worker states", async () => {

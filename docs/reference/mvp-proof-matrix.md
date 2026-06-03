@@ -3,7 +3,7 @@ title: MVP proof matrix
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-05-31
+last_reviewed: 2026-06-03
 ---
 
 # MVP Proof Matrix
@@ -69,6 +69,7 @@ resource-backed discovery fixtures.
 | `apply_workspace_edit` | `fixture-workspace-safety` | drift check, path containment, result metadata | stale or unsafe edits rejected |
 | `verification_plan` | `fixture-basic-python` | planned diagnostics/tests with blocked states | plan names expected commands without executing by default |
 | `verification_plan` | `fixture-basic-python` | planned versus proven runnable checks, test-discovery confidence, exact next actions | does not imply nearest-test proof when discovery is low confidence |
+| Codex replacement readiness | `fixture-basic-python`, `fixture-markdown-config`, `fixture-mixed-language-platform` | first-pass context, docs/config routing, validation planning, test planning, and post-edit static feedback | workflows are discoverable through `context_for_task` and `verification_plan` without predecessor tool names or backend payloads |
 | MCP registry | `fixture-runtime-boundaries` | tool/resource definitions, typed parsers, use-case binding, presenter binding | handlers do not hand-coerce raw MCP input |
 | OTEL instrumentation | `fixture-runtime-boundaries` | dispatch, use-case, graph/query, worker, cache, presentation spans or metrics | operational telemetry exists without durable usage records |
 | Integration profile contract | `fixture-agent-integration-profile` | target agents, MCP bindings, artifacts, unsupported surfaces, provenance | executable behavior remains MCP-first and vendor emitters stay outside core runtime |
@@ -147,4 +148,4 @@ The MVP docs are implementation-ready when:
 
 - [Runtime contracts](runtime-contracts.md)
 - [Workspace safety contract](workspace-safety-contract.md)
-- [Agent IDE runtime MVP spec](../specs/001-agent-ide-runtime/spec.md)
+- [Agent IDE runtime MVP requirements](../specs/001-agent-ide-runtime/requirements.md)

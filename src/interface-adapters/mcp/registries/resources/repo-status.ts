@@ -1,10 +1,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ZodError } from "zod";
 import {
   buildInvalidStatusInputEnvelope,
   buildStatusEnvelope
 } from "../../../../presentation/status-presenter.js";
 import type { McpResourceDeclaration } from "../index.js";
+import { formatMcpArgumentError } from "../../arguments/index.js";
 import { parseRepoStatusArguments } from "../../arguments/repo-status.js";
 
 export const repoStatusResource: McpResourceDeclaration = {
@@ -31,7 +31,10 @@ export const repoStatusResource: McpResourceDeclaration = {
       try {
         args = parseRepoStatusArguments(getRepoStatusArgumentInput(request));
       } catch (error) {
-        const message = error instanceof ZodError ? error.issues.map((issue) => issue.message).join("; ") : "Invalid status resource arguments.";
+        const message = formatMcpArgumentError(
+          error,
+          "Invalid status resource arguments."
+        );
         const envelope = buildInvalidStatusInputEnvelope({
           repoRoot: context.repoRoot,
           message

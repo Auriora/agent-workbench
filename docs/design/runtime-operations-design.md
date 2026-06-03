@@ -243,4 +243,4 @@ Runtime status should expose:
 - [Graph store design](graph-store-design.md)
 - [MCP surface design](mcp-surface-design.md)
 - [Workspace safety contract](../reference/workspace-safety-contract.md)
-- [Agent IDE runtime MVP plan](../specs/001-agent-ide-runtime/plan.md)
+- [Agent IDE runtime MVP design](../specs/001-agent-ide-runtime/design.md)

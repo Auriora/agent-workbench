@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ZodError, z } from "zod";
+import { z } from "zod";
 import {
   taskContextRequestSchema,
   type TaskContextRequest
@@ -8,6 +8,10 @@ import {
   buildInvalidTaskContextInputEnvelope,
   buildTaskContextEnvelope
 } from "../../../../presentation/task-context-presenter.js";
+import {
+  formatMcpArgumentError,
+  parseMcpArguments
+} from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
 
 const contextForTaskRawShape = {
@@ -45,12 +49,12 @@ export const contextForTaskTool: McpToolDeclaration = {
       async (args: unknown) => {
         let request: TaskContextRequest;
         try {
-          request = taskContextRequestSchema.parse(args);
+          request = parseMcpArguments(taskContextRequestSchema, args);
         } catch (error) {
-          const message =
-            error instanceof ZodError
-              ? error.issues.map((issue) => issue.message).join("; ")
-              : "Invalid context_for_task arguments.";
+          const message = formatMcpArgumentError(
+            error,
+            "Invalid context_for_task arguments."
+          );
           const envelope = buildInvalidTaskContextInputEnvelope({
             repoRoot: context.repoRoot,
             message

@@ -211,6 +211,7 @@ describe("repo orientation golden responses", () => {
       contract_version: "0.1",
       data: {
         repo_root: "<repo_root>",
+        runtime_state: "partial",
         freshness: "unknown",
         indexed_roots: ["."],
         skipped_roots: skippedRoots,

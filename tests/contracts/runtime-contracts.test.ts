@@ -7,6 +7,7 @@ import {
   adapterEvidenceSchema,
   capabilityLevelSchema,
   CONTRACT_VERSION,
+  runtimeStatusCaveatSchema,
   makeEnvelope,
   applyWorkspaceEditRequestSchema,
   applyWorkspaceEditResultSchema,
@@ -116,6 +117,41 @@ describe("runtime contracts", () => {
     );
   });
 
+  it("models structured runtime status caveats for degraded and blocked states", () => {
+    const caveat = runtimeStatusCaveatSchema.parse({
+      kind: "parser_timeout",
+      severity: "blocker",
+      message: "Parser workers exceeded the analysis timeout.",
+      evidence_kinds: ["parser"]
+    });
+
+    const envelope = makeEnvelope({
+      data: { ok: true },
+      meta: {
+        analysis_validity: "partial",
+        freshness: "fresh",
+        scope: {
+          repo_root: "/repo",
+          indexed_roots: ["src"],
+          skipped_roots: [],
+          languages: ["python"]
+        },
+        capability_level: "partial_semantic",
+        evidence_kinds: ["parser"],
+        verification_status: "needed",
+        truncated: false,
+        caveats: [caveat]
+      }
+    });
+
+    expect(envelope.meta).toMatchObject({
+      caveats: [caveat]
+    });
+    expect(responseEnvelopeSchema(z.object({ ok: z.literal(true) })).parse(envelope)).toEqual(
+      envelope
+    );
+  });
+
   it("models bounded task context requests and responses", () => {
     const request = taskContextRequestSchema.parse({
       task: "Update the Codex MCP profile",
@@ -152,6 +188,7 @@ describe("runtime contracts", () => {
           }
         ],
         related_files: [],
+        ranked_symbols: [],
         governing_docs: [],
         validation_hints: [
           {
@@ -160,6 +197,12 @@ describe("runtime contracts", () => {
             status: "needed"
           }
         ],
+        skipped_work: [],
+        completeness: {
+          complete_enough: true,
+          markers: ["source_candidates_ranked", "validation_hints_available"],
+          caveats: ["Related files and governing docs are routing evidence; directly read source before editing."]
+        },
         risks: [],
         next_actions: [
           {

@@ -35,6 +35,7 @@ export function buildInvalidStatusInputEnvelope(input: {
   return makeEnvelope({
     data: {
       repo_root: input.repoRoot,
+      runtime_state: "invalid",
       freshness: "unknown",
       indexed_roots: [],
       skipped_roots: [],
@@ -52,7 +53,8 @@ export function buildInvalidStatusInputEnvelope(input: {
       capability_level: "unsupported",
       evidence_kinds: [],
       verification_status: "blocked",
-      truncated: false
+      truncated: false,
+      caveats: []
     },
     errors: [
       {

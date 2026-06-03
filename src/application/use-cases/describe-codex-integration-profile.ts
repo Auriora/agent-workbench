@@ -32,7 +32,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         ],
         constraints: [
           "No copied runtime path.",
-          "No plugin reinstall is required for source changes."
+          "Source edits in this repository are picked up on Codex restart."
         ]
       },
       {
@@ -170,7 +170,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       packaging_model: "wrapper_only",
       update_model: {
         source_changes: "Restart Codex to launch the updated repository source.",
-        dependency_changes: "Run pnpm install in the repository checkout, then restart Codex.",
+        dependency_changes: "Run pnpm install in the repository checkout, then restart Codex. Plugin/package reinstall is not the update mechanism.",
         copied_runtime_allowed: false
       }
     },
@@ -216,6 +216,8 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
     guardrails: [
       "MCP is the only executable runtime surface.",
       "Plugin, skill, and hook artifacts are wrappers around MCP, not parallel implementations.",
+      "Source edits require Codex restart to reload MCP source behavior.",
+      "Dependency changes require pnpm install in this repository checkout, then restart Codex.",
       "No primary-plus-fallback routes are allowed unless the spec and fixture-backed tests require them.",
       "Timeouts and failures must not produce partial-success evidence.",
       "Root causes must be fixed or reported as structured degraded/blocked state with missing evidence."

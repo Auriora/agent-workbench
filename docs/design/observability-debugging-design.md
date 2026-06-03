@@ -62,10 +62,16 @@ they must live in this repository and refuse to run unless the current working
 directory is the `agent-workbench` project. They are not MCP resources/tools and
 must not be emitted to downstream projects.
 
-Current harness:
+Current harnesses:
 
 - `pnpm debug:mcp-status -- <target-repo>`: runs scanned status against another
   repo and prints the normal MCP envelope.
+- `pnpm debug:mcp-use-case -- <status|scope|overview|context> <target-repo>`:
+  runs bounded MCP-adjacent use cases against another repo and prints the normal
+  MCP envelope.
+- `pnpm debug:mcp-profile -- <status|scope|overview|context> <target-repo>`:
+  runs the same debug use-case harness under Node CPU profiling and writes a
+  `.cpuprofile` under `.cache/profiles/` unless `--profile-output` is provided.
 
 Future harnesses should follow the same pattern:
 
@@ -78,7 +84,10 @@ Future harnesses should follow the same pattern:
 
 Profiling should be possible without changing MCP contracts. Preferred modes:
 
-- Node CPU profiling around debug harnesses for local investigations.
+- Node CPU profiling around debug harnesses for local investigations. Use
+  `pnpm debug:mcp-profile -- <use-case> <target-repo>` to capture a local
+  profile without registering new MCP tools/resources or changing response
+  schemas.
 - OTEL spans around runtime boundaries for latency attribution.
 - Query budget tests and trace assertions for hot path regressions.
 - Optional sampled span attributes for row counts, traversal depth, source byte

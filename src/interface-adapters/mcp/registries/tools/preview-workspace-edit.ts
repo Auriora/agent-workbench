@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ZodError, z } from "zod";
+import { z } from "zod";
 import {
   previewWorkspaceEditRequestSchema,
   type PreviewWorkspaceEditRequest
@@ -8,6 +8,10 @@ import {
   buildInvalidPreviewWorkspaceEditInputEnvelope,
   buildPreviewWorkspaceEditEnvelope
 } from "../../../../presentation/workspace-edit-presenter.js";
+import {
+  formatMcpArgumentError,
+  parseMcpArguments
+} from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
 
 const editFileShape = z.object({
@@ -44,9 +48,9 @@ export const previewWorkspaceEditTool: McpToolDeclaration = {
       async (args: unknown) => {
         let request: PreviewWorkspaceEditRequest;
         try {
-          request = previewWorkspaceEditRequestSchema.parse(args);
+          request = parseMcpArguments(previewWorkspaceEditRequestSchema, args);
         } catch (error) {
-          const message = error instanceof ZodError ? error.issues.map((issue) => issue.message).join("; ") : "Invalid preview_workspace_edit arguments.";
+          const message = formatMcpArgumentError(error, "Invalid preview_workspace_edit arguments.");
           return textResponse(buildInvalidPreviewWorkspaceEditInputEnvelope({ repoRoot: context.repoRoot, message }));
         }
 

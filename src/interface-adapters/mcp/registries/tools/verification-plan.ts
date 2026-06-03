@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { ZodError, z } from "zod";
+import { z } from "zod";
 import {
   verificationPlanRequestSchema,
   type VerificationPlanRequest
@@ -8,6 +8,10 @@ import {
   buildInvalidVerificationPlanInputEnvelope,
   buildVerificationPlanEnvelope
 } from "../../../../presentation/verification-plan-presenter.js";
+import {
+  formatMcpArgumentError,
+  parseMcpArguments
+} from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
 
 const verificationPlanRawShape = {
@@ -45,12 +49,12 @@ export const verificationPlanTool: McpToolDeclaration = {
       async (args: unknown) => {
         let request: VerificationPlanRequest;
         try {
-          request = verificationPlanRequestSchema.parse(args);
+          request = parseMcpArguments(verificationPlanRequestSchema, args);
         } catch (error) {
-          const message =
-            error instanceof ZodError
-              ? error.issues.map((issue) => issue.message).join("; ")
-              : "Invalid verification_plan arguments.";
+          const message = formatMcpArgumentError(
+            error,
+            "Invalid verification_plan arguments."
+          );
           const envelope = buildInvalidVerificationPlanInputEnvelope({
             repoRoot: context.repoRoot,
             message

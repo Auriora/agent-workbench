@@ -56,6 +56,7 @@ describe("repo orientation budgets", () => {
     const statusKeys = collectObjectKeys(buildStatusEnvelope({
       status: {
         repo_root: "/repo",
+        runtime_state: "partial",
         freshness: "unknown",
         indexed_roots: ["."],
         skipped_roots: [],

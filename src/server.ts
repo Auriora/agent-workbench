@@ -54,6 +54,10 @@ export function createAgentWorkbenchServer(repoRoot: string) {
       getTaskContext({
         request,
         scanner,
+        graph: graphStore,
+        snapshots: graphStore,
+        catalog: graphStore,
+        workspace,
         default_repo_root: absoluteRepoRoot
       }),
     searchSymbols: ({ request }) =>

@@ -9,6 +9,7 @@ import {
   WorkspaceFileAdapter
 } from "../../src/infrastructure/filesystem/index.js";
 import { verificationPlanTool } from "../../src/interface-adapters/mcp/registries/tools/verification-plan.js";
+import { verificationPlanSchema } from "../../src/contracts/index.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
 
 type RegisteredTool = {
@@ -344,6 +345,124 @@ describe("verification_plan MCP tool", () => {
         retryable: false
       })
     ]);
+  });
+
+  it("strips validation, test-discovery, and worker fields from the MCP verification envelope", async () => {
+    let registered: RegisteredTool | undefined;
+    const server = {
+      tool(
+        name: string,
+        description: string,
+        _shape: unknown,
+        handler: RegisteredTool["handler"]
+      ) {
+        registered = { name, description, handler };
+      }
+    };
+
+    verificationPlanTool.register(server as never, {
+      repoRoot: "/repo",
+      planVerification: () =>
+        ({
+          plan: {
+            repo_root: "/repo",
+            status: "planned",
+            summary: "Plan with backend-only diagnostics.",
+            planned_commands: [
+              {
+                command: "pnpm",
+                args: ["run", "test"],
+                display: "pnpm run test",
+                reason: "backend-discovery result",
+                status: "planned",
+                execution: "not_executed",
+                __validation_discovery: {
+                  runner: "pytest",
+                  raw: {
+                    worker: "discovery-worker",
+                    traces: ["ok"]
+                  }
+                }
+              },
+              {
+                command: "python3",
+                args: ["-m", "pytest"],
+                display: "python3 -m pytest",
+                reason: "python discovery result",
+                status: "planned",
+                execution: "not_executed",
+                __worker_trace: {
+                  id: "worker-1",
+                  pid: 901
+                }
+              }
+            ],
+            risks: [
+              {
+                severity: "warning",
+                message: "Validation discovery confidence is low from fixture.",
+                why_this_matters: "Worker output is missing stable source diagnostics."
+              },
+              {
+                severity: "warning",
+                message: "Legacy raw diagnostic payload seen during discovery.",
+                why_this_matters: "The MCP response should hide worker details."
+              }
+            ],
+            next_actions: [
+              {
+                tool: "symbol_search",
+                args: {
+                  query: "test",
+                  repo_root: "/repo"
+                }
+              }
+            ],
+            __backend_payload: {
+              tool: "worker",
+              diag: {
+                backend_name: "pytest",
+                raw_message: "exit=1"
+              }
+            }
+          },
+          meta: {
+            analysis_validity: "valid",
+            freshness: "fresh",
+            scope: {
+              repo_root: "/repo",
+              indexed_roots: ["."],
+              skipped_roots: [],
+              languages: ["python", "typescript"]
+            },
+            capability_level: "partial_semantic",
+            evidence_kinds: ["parser", "config"],
+            verification_status: "planned",
+            truncated: false,
+            __diagnostic_worker_artifacts: {
+              source: "pytest-worker",
+              raw: [{ code: "W001", message: "x" }]
+            }
+          }
+        }) as unknown as PlanVerificationResult
+    });
+
+    const response = await registered?.handler({
+      files: ["src/app.ts"]
+    });
+    const parsed = JSON.parse(response?.content[0]?.text ?? "{}") as {
+      data: unknown;
+      contract_version: string;
+    };
+
+    expect(parsed.contract_version).toBe("0.1");
+    expect(verificationPlanSchema.parse(parsed.data as never)).toMatchObject({
+      status: "planned"
+    });
+    expect(JSON.stringify(parsed)).not.toContain("__validation_discovery");
+    expect(JSON.stringify(parsed)).not.toContain("__backend_payload");
+    expect(JSON.stringify(parsed)).not.toContain("__diagnostic_worker_artifacts");
+    expect(JSON.stringify(parsed)).not.toContain("__worker_trace");
   });
 
   it("is registered by the composed server", () => {

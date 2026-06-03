@@ -1,7 +1,8 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   createTelemetryAdapter,
   InMemoryTelemetryAdapter,
+  OpenTelemetryAdapter,
   telemetryConfigFromEnv
 } from "../../src/infrastructure/telemetry/index.js";
 
@@ -77,5 +78,77 @@ describe("telemetry configuration", () => {
         })
       })
     ]);
+  });
+
+  it("records operational startup/shutdown lifecycle events on configured adapters", async () => {
+    const events: Array<{
+      name: string;
+      properties: Record<string, unknown> | undefined;
+    }> = [];
+    const recordSpy = vi.spyOn(OpenTelemetryAdapter.prototype, "record").mockImplementation(function (
+      this: OpenTelemetryAdapter,
+      name: string,
+      properties?: Record<string, unknown>
+    ): void {
+      events.push({ name, properties });
+    });
+
+    const adapter = createTelemetryAdapter({
+      enabled: true,
+      destination: "console",
+      serviceName: "agent-workbench-test"
+    });
+
+    await adapter.flush();
+    await adapter.shutdown();
+    recordSpy.mockRestore();
+
+    expect(
+      events.some((event) =>
+        event.name === "telemetry.startup" &&
+        event.properties?.event === "telemetry.startup"
+      )
+    ).toBe(true);
+    expect(
+      events.some((event) =>
+        event.name === "telemetry.shutdown" &&
+        event.properties?.event === "telemetry.shutdown"
+      )
+    ).toBe(true);
+    expect(adapter.constructor.name).toBe("OpenTelemetryAdapter");
+  });
+
+  it("falls back to in-memory telemetry and records startup failure events when exporter setup fails", () => {
+    const adapter = createTelemetryAdapter({
+      enabled: true,
+      destination: "otlp_http",
+      serviceName: "agent-workbench-test",
+      endpoint: "http://[::1"
+    }) as InMemoryTelemetryAdapter;
+
+    expect(adapter.records.map((record) => record.name)).toEqual(
+      expect.arrayContaining(["telemetry.exporter.failure", "telemetry.startup"])
+    );
+    expect(adapter.records).toEqual([
+      expect.objectContaining({
+        name: "telemetry.exporter.failure",
+        properties: expect.objectContaining({
+          event: "telemetry.exporter.failure",
+          outcome: "failed",
+          destination: "otlp_http",
+          reason: "startup_failure"
+        })
+      }),
+      expect.objectContaining({
+        name: "telemetry.startup",
+        properties: expect.objectContaining({
+          event: "telemetry.startup",
+          outcome: "failed",
+          destination: "otlp_http",
+          reason: "startup_failure"
+        })
+      })
+    ]);
+    expect(adapter.records[0]).toHaveProperty("timestamp");
   });
 });

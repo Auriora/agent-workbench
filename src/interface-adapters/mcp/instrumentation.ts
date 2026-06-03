@@ -74,6 +74,14 @@ function instrumentHandler(input: {
     try {
       const response = await input.handler(args);
       const envelope = extractResponseEnvelope(response);
+      const invalidInputCount = envelope.errors.filter((error) => isInvalidInputError(error)).length;
+      const degradedModeCount = isDegradedMode(
+        envelope.meta?.analysis_validity,
+        envelope.runtime_state
+      )
+        ? 1
+        : 0;
+
       input.telemetry.record(input.eventName, {
         surface_kind: input.surfaceKind,
         surface_name: input.surfaceName,
@@ -83,6 +91,11 @@ function instrumentHandler(input: {
         verification_status: envelope.meta?.verification_status,
         error_count: envelope.errors.length,
         warning_count: envelope.warnings.length,
+        invalid_input_count: invalidInputCount,
+        degraded_mode_count: degradedModeCount,
+        runtime_state: envelope.runtime_state,
+        cache_state: envelope.cache_state,
+        quiet_feedback_suppression_count: countQuietFeedbackSuppressions(envelope.warnings),
         truncated: envelope.meta?.truncated,
         row_limit: envelope.meta?.budget?.row_limit,
         traversal_depth: envelope.meta?.budget?.traversal_depth,
@@ -95,6 +108,8 @@ function instrumentHandler(input: {
         surface_kind: input.surfaceKind,
         surface_name: input.surfaceName,
         ...(input.uri === undefined ? {} : { uri: input.uri }),
+        invalid_input_count: 0,
+        degraded_mode_count: 0,
         duration_ms: Date.now() - startedAt
       });
       throw error;
@@ -113,6 +128,8 @@ function extractResponseEnvelope(response: unknown): {
       source_byte_limit?: unknown;
     };
   };
+  runtime_state?: unknown;
+  cache_state?: unknown;
   errors: unknown[];
   warnings: unknown[];
 } {
@@ -125,16 +142,59 @@ function extractResponseEnvelope(response: unknown): {
       meta?: unknown;
       errors?: unknown;
       warnings?: unknown;
+      data?: unknown;
     };
     const meta = typeof parsed.meta === "object" && parsed.meta !== null ? parsed.meta : undefined;
+    const data = typeof parsed.data === "object" && parsed.data !== null ? parsed.data : undefined;
+    const cacheState =
+      data !== undefined && data !== null && typeof data === "object" && "cache_state" in data
+        ? (data as { cache_state?: unknown }).cache_state
+        : undefined;
+    const runtimeState =
+      data !== undefined && data !== null && typeof data === "object" && "runtime_state" in data
+        ? (data as { runtime_state?: unknown }).runtime_state
+        : undefined;
+
     return {
       meta: meta as ReturnType<typeof extractResponseEnvelope>["meta"],
       errors: Array.isArray(parsed.errors) ? parsed.errors : [],
-      warnings: Array.isArray(parsed.warnings) ? parsed.warnings : []
+      warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
+      cache_state: cacheState,
+      runtime_state: runtimeState
     };
   } catch (_error) {
     return { errors: [], warnings: [] };
   }
+}
+
+function isInvalidInputError(error: unknown): boolean {
+  return Boolean(
+    typeof error === "object" && error !== null && "code" in error && (error as { code?: unknown }).code === "invalid_input"
+  );
+}
+
+function isDegradedMode(
+  analysisValidity: unknown,
+  runtimeState: unknown
+): boolean {
+  return (
+    analysisValidity === "partial" ||
+    analysisValidity === "invalid" ||
+    analysisValidity === "invalid_due_to_environment" ||
+    runtimeState === "partial" ||
+    runtimeState === "invalid" ||
+    runtimeState === "invalid_due_to_environment"
+  );
+}
+
+function countQuietFeedbackSuppressions(warnings: unknown[]): number {
+  return warnings.filter((warning) => {
+    return (
+      typeof warning === "object" && warning !== null &&
+      ((warning as { code?: unknown }).code === "quiet_feedback_suppressed" ||
+        (warning as { code?: unknown }).code === "quiet_feedback")
+    );
+  }).length;
 }
 
 function extractResponseText(response: unknown): string | undefined {

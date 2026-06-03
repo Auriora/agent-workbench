@@ -5,7 +5,7 @@ import type {
   SnapshotOwnershipRecord,
   WarmupExecution
 } from "../../domain/models/index.js";
-import type { CancellationToken } from "../../domain/services/index.js";
+import type { CancellationToken, RuntimeCacheValidationInput } from "../../domain/services/index.js";
 import type {
   CacheInvalidationPort,
   CachePort,
@@ -22,6 +22,11 @@ type CacheEntry = {
   value: unknown;
   expires_at_ms?: number;
   depends_on_snapshot_id?: string;
+  depends_on_config_identity?: string;
+  depends_on_file_hashes: readonly {
+    path: string;
+    content_hash: string;
+  }[];
   depends_on_file_paths: readonly string[];
 };
 
@@ -56,17 +61,21 @@ export class InMemoryRuntimeOperationsAdapter
     this.isolatedWorker = options.isolated_worker ?? false;
   }
 
-  public async has(input: { namespace: string; key: string }): Promise<boolean> {
+  public async has(input: RuntimeCacheValidationInput): Promise<boolean> {
     return (await this.get(input)) !== null;
   }
 
-  public async get<T>(input: { namespace: string; key: string }): Promise<T | null> {
+  public async get<T>(input: RuntimeCacheValidationInput): Promise<T | null> {
     const cacheKey = this.cacheKey(input.namespace, input.key);
     const entry = this.cache.get(cacheKey);
     if (entry === undefined) {
       return null;
     }
     if (entry.expires_at_ms !== undefined && entry.expires_at_ms <= this.clock.nowUnixMs()) {
+      this.cache.delete(cacheKey);
+      return null;
+    }
+    if (this.isStale(input, entry)) {
       this.cache.delete(cacheKey);
       return null;
     }
@@ -79,6 +88,11 @@ export class InMemoryRuntimeOperationsAdapter
     value: T;
     ttl_ms?: number;
     depends_on_snapshot_id?: string;
+    depends_on_config_identity?: string;
+    depends_on_file_hashes?: readonly {
+      path: string;
+      content_hash: string;
+    }[];
     depends_on_file_paths?: readonly string[];
   }): Promise<void> {
     this.cache.set(this.cacheKey(input.namespace, input.key), {
@@ -88,6 +102,11 @@ export class InMemoryRuntimeOperationsAdapter
       expires_at_ms:
         input.ttl_ms === undefined ? undefined : this.clock.nowUnixMs() + input.ttl_ms,
       depends_on_snapshot_id: input.depends_on_snapshot_id,
+      depends_on_config_identity: input.depends_on_config_identity,
+      depends_on_file_hashes: (input.depends_on_file_hashes ?? []).map((fileHash) => ({
+        path: normalizePath(fileHash.path),
+        content_hash: fileHash.content_hash
+      })),
       depends_on_file_paths: (input.depends_on_file_paths ?? []).map(normalizePath)
     });
   }
@@ -320,6 +339,43 @@ export class InMemoryRuntimeOperationsAdapter
       }
     }
     return deleted;
+  }
+
+  private isStale(input: RuntimeCacheValidationInput, entry: CacheEntry): boolean {
+    if (
+      input.depends_on_snapshot_id !== undefined &&
+      entry.depends_on_snapshot_id !== input.depends_on_snapshot_id
+    ) {
+      return true;
+    }
+
+    if (
+      input.depends_on_config_identity !== undefined &&
+      entry.depends_on_config_identity !== input.depends_on_config_identity
+    ) {
+      return true;
+    }
+
+    if (input.depends_on_file_hashes === undefined) {
+      return false;
+    }
+
+    const expectedFileHashes = input.depends_on_file_hashes.map((fileHash) => ({
+      path: normalizePath(fileHash.path),
+      content_hash: fileHash.content_hash
+    }));
+
+    if (entry.depends_on_file_hashes.length === 0) {
+      return expectedFileHashes.length > 0;
+    }
+
+    const entryFileHashes = new Map(entry.depends_on_file_hashes.map((item) => [item.path, item.content_hash]));
+    for (const expected of expectedFileHashes) {
+      if (entryFileHashes.get(expected.path) !== expected.content_hash) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private cacheKey(namespace: string, key: string): string {
