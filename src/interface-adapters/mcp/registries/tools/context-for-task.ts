@@ -13,6 +13,7 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
+import { withDefaultRepoRoot } from "../repo-root-default.js";
 
 const contextForTaskRawShape = {
   task: z.string().min(1).describe("The implementation, review, or planning task to gather context for."),
@@ -84,7 +85,9 @@ export const contextForTaskTool: McpToolDeclaration = {
           };
         }
 
-        const result = await context.getTaskContext({ request });
+        const result = await context.getTaskContext({
+          request: withDefaultRepoRoot(request, context.repoRoot)
+        });
         const envelope = buildTaskContextEnvelope(result);
         return {
           content: [

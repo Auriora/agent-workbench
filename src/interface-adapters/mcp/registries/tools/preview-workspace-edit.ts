@@ -13,6 +13,7 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
+import { withDefaultRepoRoot } from "../repo-root-default.js";
 
 const editFileShape = z.object({
   path: z.string().min(1).describe("Repo-relative file path to replace."),
@@ -62,7 +63,9 @@ export const previewWorkspaceEditTool: McpToolDeclaration = {
         }
 
         try {
-          return textResponse(buildPreviewWorkspaceEditEnvelope(await context.previewWorkspaceEdit({ request })));
+          return textResponse(buildPreviewWorkspaceEditEnvelope(await context.previewWorkspaceEdit({
+            request: withDefaultRepoRoot(request, context.repoRoot)
+          })));
         } catch (error) {
           return textResponse(buildInvalidPreviewWorkspaceEditInputEnvelope({
             repoRoot: context.repoRoot,

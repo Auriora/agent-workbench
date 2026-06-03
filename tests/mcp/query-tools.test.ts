@@ -156,18 +156,44 @@ describe("graph query MCP tools", () => {
 
     expect(parsedRequest).toMatchObject({
       query: "Runner",
+      repo_root: "/repo",
       exact: false,
       languages: [],
       max_results: 20,
       source_byte_limit: 0
     });
-    expect(parsedRequest?.repo_root).toBeUndefined();
     expect(parsedRequest?.snapshot_id).toBeUndefined();
 
     const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
       data: SearchSymbolsResult["symbols"];
     };
     expect(parsed.data.query).toBe("Runner");
+  });
+
+  it("preserves explicit repo_root overrides for graph query tools", async () => {
+    let parsedRequest: SymbolSearchRequest | undefined;
+    const registered = registerTool(symbolSearchTool, {
+      searchSymbols: ({ request }) => {
+        parsedRequest = request;
+        return {
+          symbols: {
+            query: request.query,
+            repo_root: request.repo_root ?? "missing-default",
+            snapshot_id: "snapshot-1",
+            symbols: [],
+            next_actions: []
+          },
+          meta: meta()
+        };
+      }
+    });
+
+    await registered.handler({
+      query: "Runner",
+      repo_root: "/other/repo"
+    });
+
+    expect(parsedRequest?.repo_root).toBe("/other/repo");
   });
 
   it("returns structured invalid input for find_references before provider execution", async () => {

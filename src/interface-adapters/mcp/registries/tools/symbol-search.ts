@@ -13,6 +13,7 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
+import { withDefaultRepoRoot } from "../repo-root-default.js";
 
 const symbolSearchRawShape = {
   query: z.string().min(1).describe("Symbol name or text to search for in the indexed graph."),
@@ -64,7 +65,9 @@ export const symbolSearchTool: McpToolDeclaration = {
           }));
         }
 
-        return textResponse(buildSymbolSearchEnvelope(await context.searchSymbols({ request })));
+        return textResponse(buildSymbolSearchEnvelope(await context.searchSymbols({
+          request: withDefaultRepoRoot(request, context.repoRoot)
+        })));
       }
     );
   }

@@ -13,6 +13,7 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
+import { withDefaultRepoRoot } from "../repo-root-default.js";
 
 const verificationPlanRawShape = {
   task: z.string().optional().describe("Optional task description to associate with the validation plan."),
@@ -84,7 +85,9 @@ export const verificationPlanTool: McpToolDeclaration = {
           };
         }
 
-        const result = await context.planVerification({ request });
+        const result = await context.planVerification({
+          request: withDefaultRepoRoot(request, context.repoRoot)
+        });
         const envelope = buildVerificationPlanEnvelope(result);
         return {
           content: [

@@ -347,9 +347,13 @@ describe("verification_plan MCP tool", () => {
       }
     };
 
+    let parsedRepoRoot: string | undefined;
     verificationPlanTool.register(server as never, {
       repoRoot: "/repo",
-      planVerification: () => fixtureResult
+      planVerification: ({ request }) => {
+        parsedRepoRoot = request.repo_root;
+        return fixtureResult;
+      }
     });
 
     expect(registered).toMatchObject({
@@ -365,6 +369,7 @@ describe("verification_plan MCP tool", () => {
     };
 
     expect(parsed.data.summary).toBe("Injected plan.");
+    expect(parsedRepoRoot).toBe("/repo");
   });
 
   it("returns a structured invalid-input envelope before provider execution", async () => {

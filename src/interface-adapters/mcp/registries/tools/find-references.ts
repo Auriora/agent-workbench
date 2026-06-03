@@ -13,6 +13,7 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
+import { withDefaultRepoRoot } from "../repo-root-default.js";
 
 const findReferencesRawShape = {
   node_id: z.string().optional().describe("Indexed graph node id to inspect."),
@@ -62,7 +63,9 @@ export const findReferencesTool: McpToolDeclaration = {
           }));
         }
 
-        return textResponse(buildFindReferencesEnvelope(await context.findReferences({ request })));
+        return textResponse(buildFindReferencesEnvelope(await context.findReferences({
+          request: withDefaultRepoRoot(request, context.repoRoot)
+        })));
       }
     );
   }

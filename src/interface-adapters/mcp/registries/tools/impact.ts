@@ -10,6 +10,7 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
+import { withDefaultRepoRoot } from "../repo-root-default.js";
 
 const impactRawShape = {
   node_id: z.string().describe("Indexed graph node id to start bounded impact traversal from."),
@@ -59,7 +60,9 @@ export const impactTool: McpToolDeclaration = {
           }));
         }
 
-        return textResponse(buildImpactEnvelope(await context.computeImpact({ request })));
+        return textResponse(buildImpactEnvelope(await context.computeImpact({
+          request: withDefaultRepoRoot(request, context.repoRoot)
+        })));
       }
     );
   }

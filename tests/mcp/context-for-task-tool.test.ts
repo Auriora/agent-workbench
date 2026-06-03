@@ -384,15 +384,19 @@ describe("context_for_task MCP tool", () => {
       }
     };
 
+    let parsedRepoRoot: string | undefined;
     contextForTaskTool.register(server as never, {
       repoRoot: "/repo",
-      getTaskContext: ({ request }) => ({
-        ...fixtureResult,
-        context: {
-          ...fixtureResult.context,
-          task: request.task
-        }
-      })
+      getTaskContext: ({ request }) => {
+        parsedRepoRoot = request.repo_root;
+        return {
+          ...fixtureResult,
+          context: {
+            ...fixtureResult.context,
+            task: request.task
+          }
+        };
+      }
     });
 
     expect(registered).toMatchObject({
@@ -411,6 +415,7 @@ describe("context_for_task MCP tool", () => {
       task: "Implement context",
       summary: "Injected context."
     });
+    expect(parsedRepoRoot).toBe("/repo");
   });
 
   it("returns a structured invalid-input envelope before provider execution", async () => {

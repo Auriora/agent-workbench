@@ -145,7 +145,7 @@ describe("workspace edit MCP tools", () => {
     });
 
     expect(parsedRequest).toEqual({
-      repo_root: undefined,
+      repo_root: "/repo",
       edits: [{ path: "src/app.py", replacement_text: "print('ok')\n" }],
       expires_in_ms: 600000
     });
