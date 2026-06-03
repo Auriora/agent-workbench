@@ -3,7 +3,7 @@ title: Documentation map
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-06-03
 ---
 
 # Documentation Map
@@ -41,7 +41,7 @@ copying tables, schemas, or enum definitions.
 | Edit preview/apply/rollback behavior | [Edit and validation loop design](../design/edit-and-validation-loop-design.md) | Owns bounded mutation workflow; schema vocabulary comes from runtime contracts. |
 | Attention lifecycle and ranking | [Attention layer design](../design/attention-layer-design.md) | Owns minimal blocker/warning behavior; full workflow guidance is post-MVP. |
 | Knowledge reports and graph communities | [Knowledge layer design](../design/knowledge-layer-design.md) | Post-MVP unless explicitly reduced to cheap persisted summaries. |
-| MVP scope and implementation plan | [Agent IDE runtime MVP requirements](../specs/001-agent-ide-runtime/requirements.md) | Must stay narrower than the concept roadmap. |
+| MVP delivery record | [Agent IDE runtime MVP requirements](../specs/001-agent-ide-runtime/requirements.md) | Archived Spec 001 delivery evidence. Current behavior lives in the durable design, reference, requirements, runbook, and ADR docs listed in this map. |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) | Owns fixture, budget, degraded-mode, and acceptance evidence. |
 | Architectural decisions | [ADRs](../adr/) | ADR status must match frontmatter and body text. |
 

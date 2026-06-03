@@ -1,12 +1,22 @@
 ---
 title: Agent IDE runtime MVP verification
 doc_type: spec
-status: draft
+status: archived
 owner: platform
 last_reviewed: 2026-06-03
 ---
 
 # Verification
+
+## Closure Record
+
+Spec 001 closed on 2026-06-03 after implementation, durable-documentation
+promotion, Codex sub-agent dogfood review, final validation, and explicit
+deferral of post-MVP Markdown quality work.
+
+Current behavior is described by the durable docs listed in
+[Documentation map](../../reference/documentation-map.md). This spec package is
+retained as archived delivery evidence, not active implementation guidance.
 
 ## Validation Plan
 

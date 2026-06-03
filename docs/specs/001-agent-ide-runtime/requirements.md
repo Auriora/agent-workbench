@@ -1,9 +1,9 @@
 ---
 title: Agent IDE runtime MVP requirements
 doc_type: spec
-status: draft
+status: archived
 owner: platform
-last_reviewed: 2026-06-02
+last_reviewed: 2026-06-03
 ---
 
 # Requirements

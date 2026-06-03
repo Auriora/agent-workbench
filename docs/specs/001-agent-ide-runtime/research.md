@@ -1,9 +1,9 @@
 ---
 title: Agent IDE runtime MVP research
 doc_type: spec
-status: draft
+status: archived
 owner: platform
-last_reviewed: 2026-05-31
+last_reviewed: 2026-06-03
 ---
 
 # Research
