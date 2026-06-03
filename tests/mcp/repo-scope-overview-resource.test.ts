@@ -204,7 +204,8 @@ describe("repo overview MCP resource", () => {
 describe("repo scope and overview composed server resources", () => {
   it("represents mixed-language and platform scope from the default composed server", async () => {
     const server = createAgentWorkbenchServer(
-      "tests/fixtures/fixture-mixed-language-platform"
+      "tests/fixtures/fixture-mixed-language-platform",
+      { startGraphWarmup: false }
     ) as unknown as ResourceReadServer;
 
     const scopeResponse = await server._registeredResources["repo:///scope"].readCallback({});

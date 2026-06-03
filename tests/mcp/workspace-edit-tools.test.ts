@@ -277,7 +277,9 @@ describe("workspace edit MCP tools", () => {
   });
 
   it("is registered by the composed server", () => {
-    const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform") as unknown as {
+    const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
+      startGraphWarmup: false
+    }) as unknown as {
       _registeredTools: Record<string, unknown>;
     };
 

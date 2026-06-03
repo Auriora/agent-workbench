@@ -160,4 +160,20 @@ describe("workspace edit preview and apply", () => {
       })
     ).rejects.toThrow("Replacement text contains secret-like content.");
   });
+
+  it("reports workspace escape separately from generated or vendor read-only paths", async () => {
+    await expect(
+      previewWorkspaceEdit({
+        request: {
+          edits: [{ path: "../outside.py", replacement_text: "x = 1\n" }],
+          expires_in_ms: 600_000
+        },
+        workspace,
+        safety,
+        previews,
+        clock,
+        default_repo_root: repoRoot
+      })
+    ).rejects.toThrow("Path resolves outside the repository root.");
+  });
 });

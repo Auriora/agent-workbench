@@ -534,7 +534,9 @@ describe("verification_plan MCP tool", () => {
   });
 
   it("is registered by the composed server", () => {
-    const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform") as unknown as {
+    const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
+      startGraphWarmup: false
+    }) as unknown as {
       _registeredTools: Record<string, unknown>;
     };
 
@@ -558,7 +560,9 @@ describe("verification_plan MCP tool", () => {
         path.join(targetRoot, "package.json"),
         JSON.stringify({ scripts: { test: "vitest run" } }, null, 2)
       );
-      const server = createAgentWorkbenchServer(defaultRoot) as unknown as {
+      const server = createAgentWorkbenchServer(defaultRoot, {
+        startGraphWarmup: false
+      }) as unknown as {
         _registeredTools: Record<
           string,
           {

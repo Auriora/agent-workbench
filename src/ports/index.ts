@@ -164,7 +164,25 @@ export interface WorkspaceFilePort {
   ensureDirectory(input: { path: string }): Promise<void>;
 }
 
+export type WorkspacePathDecision =
+  | {
+      allowed: true;
+      absolutePath: string;
+      relativePath: string;
+      readOnly: boolean;
+    }
+  | {
+      allowed: false;
+      reason: "path_refused";
+      message: string;
+      requestedPath: string;
+    };
+
 export interface WorkspaceSafetyPort {
+  resolveWorkspacePath(
+    requestedPath: string,
+    options?: { write?: boolean }
+  ): WorkspacePathDecision;
   isReadOnlyPath(requestedPath: string): boolean;
   redactSecretLikeText(value: string): string;
 }

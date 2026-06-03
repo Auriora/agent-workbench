@@ -70,8 +70,9 @@ export function validateEdits(
     if (normalizedPath === ".env" || normalizedPath.endsWith("/.env")) {
       throw new Error("Secret-like files are refused by workspace edit preview.");
     }
-    if (safety.isReadOnlyPath(edit.path)) {
-      throw new Error("Generated or vendor paths are read-only by default.");
+    const decision = safety.resolveWorkspacePath(edit.path, { write: true });
+    if (!decision.allowed) {
+      throw new Error(decision.message);
     }
     if (safety.redactSecretLikeText(edit.replacement_text) !== edit.replacement_text) {
       throw new Error("Replacement text contains secret-like content.");

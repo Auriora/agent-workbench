@@ -227,7 +227,11 @@ describe("stdio MCP entrypoint", () => {
       result: { content: Array<{ text: string }> };
     };
     const parsed = JSON.parse(statusResource.result.contents[0]?.text ?? "{}") as {
-      data: { adapter_coverage: Array<{ domain: string; name: string }> };
+      data: {
+        repo_root: string;
+        runtime_state: string;
+        adapter_coverage: Array<{ domain: string; name: string }>;
+      };
     };
     const parsedScope = JSON.parse(scopeResource.result.contents[0]?.text ?? "{}") as {
       data: { languages: string[]; capability_counts: Record<string, number> };
@@ -258,18 +262,12 @@ describe("stdio MCP entrypoint", () => {
         })
       ])
     );
-    expect(parsed.data.adapter_coverage).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          domain: "language",
-          name: "python"
-        }),
-        expect.objectContaining({
-          domain: "package_manager",
-          name: "npm"
-        })
-      ])
+    expect(parsed.data).toEqual(
+      expect.objectContaining({
+        repo_root: path.resolve("tests/fixtures/fixture-mixed-language-platform")
+      })
     );
+    expect(["cold", "refreshing", "fresh", "partial"]).toContain(parsed.data.runtime_state);
     expect(parsedScope.data.languages).toEqual(
       expect.arrayContaining(["python", "typescript", "json", "infrastructure", "yaml"])
     );
@@ -321,6 +319,69 @@ describe("stdio MCP entrypoint", () => {
     expect(parsedVerificationPlan.data.static_feedback).toBeUndefined();
   });
 
+  it("starts graph warmup for the local repo on MCP startup", async () => {
+    const fixtureRoot = createCleanFixtureCopy({
+      prefix: "agent-workbench-mcp-warmup-",
+      sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
+    });
+    const session = await createStdioSession(fixtureRoot);
+
+    try {
+      await session.call({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: {
+            name: "agent-workbench-test",
+            version: "0.1.0"
+          }
+        }
+      });
+      session.notify({
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+        params: {}
+      });
+
+      const symbolSearch = await waitForWarmSymbolSearch(session, "Runner");
+      expect(symbolSearch.data).toMatchObject({
+        query: "Runner",
+        repo_root: fixtureRoot
+      });
+      expect(symbolSearch.data.symbols).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: "Runner",
+            path: "src/sample_pkg/service.py"
+          })
+        ])
+      );
+
+      const status = parseResponseEnvelope<StatusEnvelope>(
+        await session.call({
+          jsonrpc: "2.0",
+          id: 100,
+          method: "resources/read",
+          params: {
+            uri: "repo:///status"
+          }
+        })
+      );
+      expect(status.data).toMatchObject({
+        repo_root: fixtureRoot,
+        runtime_state: "fresh",
+        freshness: "fresh",
+        warmup_state: "complete"
+      });
+    } finally {
+      await session.close();
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
   it("returns fixture MVP responses shaped by presenter envelopes", async () => {
     const fixtureRoot = createFixtureCopy("agent-workbench-mcp-server-");
     const expectedFixtureRoot = createFixtureCopy("agent-workbench-mcp-expected-");
@@ -340,7 +401,9 @@ describe("stdio MCP entrypoint", () => {
         expectedFixtureRoot,
         fixtureRoot
       );
-      const session = await createStdioSession(fixtureRoot);
+      const session = await createStdioSession(fixtureRoot, {
+        startGraphWarmup: false
+      });
       await session.call({
         jsonrpc: "2.0",
         id: 1,
@@ -540,7 +603,14 @@ describe("stdio MCP entrypoint", () => {
         ])
       );
 
-      expect(statusResource).toEqual(expected.status);
+      expect(statusResource).toMatchObject({
+        contract_version: expected.status.contract_version,
+        data: {
+          repo_root: fixtureRoot
+        },
+        errors: []
+      });
+      expect(["cold", "refreshing", "fresh", "partial"]).toContain(statusResource.data.runtime_state);
       expect(scopeResource).toEqual(expected.scope);
       expect(overviewResource).toEqual(expected.overview);
       expect(taskContext).toEqual(expected.context);
@@ -578,7 +648,13 @@ type ListedResourcesEnvelope = {
 };
 
 type StatusEnvelope = {
-  data: { adapter_coverage: Array<{ domain: string; name: string }> };
+  data: {
+    repo_root: string;
+    runtime_state: string;
+    freshness: string;
+    warmup_state?: string;
+    adapter_coverage: Array<{ domain: string; name: string }>;
+  };
 };
 
 type ScopeEnvelope = {
@@ -673,11 +749,16 @@ type StdioSession = {
   close: () => Promise<void>;
 };
 
-async function createStdioSession(repoRoot: string): Promise<StdioSession> {
+async function createStdioSession(
+  repoRoot: string,
+  options: { startGraphWarmup?: boolean } = {}
+): Promise<StdioSession> {
   const input = new PassThrough();
   const output = new PassThrough();
   const transport = new StdioServerTransport(input, output);
-  const server = createAgentWorkbenchServer(path.resolve(repoRoot));
+  const server = createAgentWorkbenchServer(path.resolve(repoRoot), {
+    startGraphWarmup: options.startGraphWarmup
+  });
   let stdout = "";
   const pendingCalls = new Map<number, { resolve: (message: StdioMessage) => void; reject: (error: Error) => void }>();
 
@@ -790,6 +871,35 @@ function parseResponseEnvelope<T extends object>(message: StdioMessage): T {
     } as T;
   }
   throw new Error("Unable to parse MCP response envelope");
+}
+
+async function waitForWarmSymbolSearch(
+  session: StdioSession,
+  query: string
+): Promise<SymbolSearchEnvelope> {
+  let lastEnvelope: SymbolSearchEnvelope | undefined;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const envelope = parseResponseEnvelope<SymbolSearchEnvelope>(
+      await session.call({
+        jsonrpc: "2.0",
+        id: 50 + attempt,
+        method: "tools/call",
+        params: {
+          name: "symbol_search",
+          arguments: {
+            query
+          }
+        }
+      })
+    );
+    lastEnvelope = envelope;
+    if (envelope.data.symbols.length > 0) {
+      return envelope;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+
+  throw new Error(`Graph warmup did not expose symbol_search results: ${JSON.stringify(lastEnvelope)}`);
 }
 
 async function buildPresenterGoldens(input: {
@@ -1034,5 +1144,14 @@ function createFixtureCopy(prefix: string): string {
     destination,
     { recursive: true }
   );
+  return destination;
+}
+
+function createCleanFixtureCopy(input: { prefix: string; sourceRoot: string }): string {
+  const destination = fs.mkdtempSync(path.join(os.tmpdir(), input.prefix));
+  fs.cpSync(input.sourceRoot, destination, {
+    recursive: true,
+    filter: (source) => path.basename(source) !== ".cache" && path.basename(source) !== "__pycache__"
+  });
   return destination;
 }

@@ -6,37 +6,57 @@ import { findReferences } from "./application/use-cases/find-references.js";
 import { getTaskContext } from "./application/use-cases/get-task-context.js";
 import { getRepoOverview } from "./application/use-cases/get-repo-overview.js";
 import { getRepoScope } from "./application/use-cases/get-repo-scope.js";
-import { getScannedRepoStatus } from "./application/use-cases/get-repo-status.js";
+import { getSnapshotRepoStatus } from "./application/use-cases/get-repo-status.js";
+import { warmupRepositoryGraph } from "./application/use-cases/index-repository-graph.js";
 import { planVerification } from "./application/use-cases/plan-verification.js";
 import { previewWorkspaceEdit } from "./application/use-cases/preview-workspace-edit.js";
 import { searchSymbols } from "./application/use-cases/search-symbols.js";
 import { InMemoryEditPreviewStoreAdapter } from "./infrastructure/edit-preview-store/index.js";
 import {
+  ExtractorRegistryAdapter,
+  ResourceExtractorAdapter
+} from "./infrastructure/extraction/index.js";
+import {
   FileCatalogScannerAdapter,
   WorkspaceFileAdapter,
   WorkspaceSafetyAdapter
 } from "./infrastructure/filesystem/index.js";
-import { openGraphStore } from "./infrastructure/sqlite/index.js";
+import { InMemoryRuntimeOperationsAdapter } from "./infrastructure/runtime/index.js";
+import { openGraphStore, SCHEMA_VERSION } from "./infrastructure/sqlite/index.js";
 import {
   createTelemetryAdapter,
   telemetryConfigFromEnv
 } from "./infrastructure/telemetry/index.js";
+import { PythonTreeSitterExtractorAdapter } from "./infrastructure/tree-sitter/index.js";
 import { SystemClockAdapter } from "./infrastructure/time/index.js";
 import { createAgentWorkbenchServer as createAgentWorkbenchMcpServer } from "./interface-adapters/mcp/server.js";
 
-export function createAgentWorkbenchServer(repoRoot: string) {
+export type AgentWorkbenchServerOptions = {
+  startGraphWarmup?: boolean;
+};
+
+export function createAgentWorkbenchServer(
+  repoRoot: string,
+  options: AgentWorkbenchServerOptions = {}
+) {
   const absoluteRepoRoot = path.resolve(repoRoot);
   const scanner = new FileCatalogScannerAdapter();
   const clock = new SystemClockAdapter();
+  const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
   const previews = new InMemoryEditPreviewStoreAdapter();
   const graphStore = openGraphStore(graphStorePath(absoluteRepoRoot));
+  const extractors = new ExtractorRegistryAdapter();
+  extractors.register(new PythonTreeSitterExtractorAdapter());
+  const resourceExtractor = new ResourceExtractorAdapter();
   const telemetry = createTelemetryAdapter(telemetryConfigFromEnv());
-  return createAgentWorkbenchMcpServer(absoluteRepoRoot, {
+  const server = createAgentWorkbenchMcpServer(absoluteRepoRoot, {
     telemetry,
     getRepoStatus: ({ repo_root }) =>
-      getScannedRepoStatus({
+      getSnapshotRepoStatus({
         repo_root,
-        scanner
+        snapshots: graphStore,
+        catalog: graphStore,
+        warmups: runtime
       }),
     getRepoScope: ({ repo_root }) =>
       getRepoScope({
@@ -112,6 +132,11 @@ export function createAgentWorkbenchServer(repoRoot: string) {
       })
   });
 
+  if (options.startGraphWarmup !== false) {
+    startInitialGraphWarmup();
+  }
+  return server;
+
   function repoRootForRequest(repoRoot: string | undefined): string {
     return path.resolve(repoRoot ?? absoluteRepoRoot);
   }
@@ -122,6 +147,27 @@ export function createAgentWorkbenchServer(repoRoot: string) {
 
   function safetyForRepoRoot(repoRoot: string | undefined): WorkspaceSafetyAdapter {
     return new WorkspaceSafetyAdapter({ repoRoot: repoRootForRequest(repoRoot) });
+  }
+
+  function startInitialGraphWarmup(): void {
+    void warmupRepositoryGraph({
+      repo_root: absoluteRepoRoot,
+      scanner,
+      workspace: workspaceForRepoRoot(absoluteRepoRoot),
+      extractors,
+      resource_extractor: resourceExtractor,
+      graph: graphStore,
+      catalog: graphStore,
+      snapshots: graphStore,
+      warmups: runtime,
+      cache: runtime,
+      clock,
+      schema_version: SCHEMA_VERSION,
+      owner_id: "agent-workbench:mcp-startup",
+      config_identity: "default"
+    }).catch(() => {
+      // The warmup use case records failed snapshot/warmup state before throwing.
+    });
   }
 }
 

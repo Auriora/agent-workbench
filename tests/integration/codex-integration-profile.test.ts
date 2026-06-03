@@ -191,7 +191,7 @@ describe("Codex integration profile", () => {
   });
 
   it("is exposed by the composed server alongside repo resources", () => {
-    const server = createAgentWorkbenchServer(".") as unknown as {
+    const server = createAgentWorkbenchServer(".", { startGraphWarmup: false }) as unknown as {
       _registeredResources: Record<string, unknown>;
     };
 

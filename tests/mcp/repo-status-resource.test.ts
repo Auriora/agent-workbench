@@ -155,7 +155,9 @@ describe("repo status MCP resource", () => {
   });
 
   it("uses scanned status coverage from the default composed server", async () => {
-    const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform") as unknown as {
+    const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
+      startGraphWarmup: false
+    }) as unknown as {
       _registeredResources: Record<
         string,
         {
