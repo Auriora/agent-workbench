@@ -52,7 +52,8 @@ export async function previewWorkspaceEdit(input: {
           tool: "apply_workspace_edit",
           args: {
             preview_token: token.preview_token,
-            edits: input.request.edits
+            paths: token.files.map((file) => file.path),
+            requires_original_edits: true
           }
         }
       ]

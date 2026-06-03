@@ -59,6 +59,18 @@ describe("workspace edit preview and apply", () => {
         change_count: 1
       })
     ]);
+    expect(preview.preview.next_actions).toEqual([
+      {
+        tool: "apply_workspace_edit",
+        args: {
+          preview_token: preview.preview.preview.preview_token,
+          paths: ["src/service.py"],
+          requires_original_edits: true
+        }
+      }
+    ]);
+    expect(JSON.stringify(preview.preview.next_actions)).not.toContain("replacement_text");
+    expect(JSON.stringify(preview.preview.next_actions)).not.toContain("new = 2");
 
     const applied = await applyWorkspaceEdit({
       request: {

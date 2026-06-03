@@ -214,6 +214,37 @@ describe("workspace edit MCP tools", () => {
     }
   });
 
+  it("omits full replacement text from preview next actions", async () => {
+    const fixture = createEditFixture();
+    try {
+      const registered = register(previewWorkspaceEditTool, fixture.context);
+      const response = await registered.handler({
+        edits: [{ path: "src/service.py", replacement_text: "large replacement\n" }]
+      });
+      const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+        data: {
+          preview: { preview_token: string };
+          next_actions: Array<{ tool: string; args: Record<string, unknown> }>;
+        };
+      };
+
+      expect(parsed.data.next_actions).toEqual([
+        {
+          tool: "apply_workspace_edit",
+          args: {
+            preview_token: parsed.data.preview.preview_token,
+            paths: ["src/service.py"],
+            requires_original_edits: true
+          }
+        }
+      ]);
+      expect(JSON.stringify(parsed.data.next_actions)).not.toContain("replacement_text");
+      expect(JSON.stringify(parsed.data.next_actions)).not.toContain("large replacement");
+    } finally {
+      fixture.dispose();
+    }
+  });
+
   it("returns stable MCP envelopes for expired, mismatched, and missing-target apply failures", async () => {
     const fixture = createEditFixture();
     try {
