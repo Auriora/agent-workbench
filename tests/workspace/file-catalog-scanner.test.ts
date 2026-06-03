@@ -2,7 +2,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/index.js";
+import {
+  DEFAULT_SKIPPED_ROOTS,
+  FileCatalogScannerAdapter
+} from "../../src/infrastructure/filesystem/index.js";
 
 describe("file catalog scanner", () => {
   let repoRoot: string;
@@ -11,6 +14,13 @@ describe("file catalog scanner", () => {
     repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-scan-"));
     fs.mkdirSync(path.join(repoRoot, "src"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".github", "workflows"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".claude", "commands"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".codex", ".tmp"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".local"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".mypy_cache", "3.12"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".nuxt"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".pixi", "envs"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "cmake-build-debug"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "node_modules", "pkg"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "src", "__pycache__"), { recursive: true });
     fs.writeFileSync(path.join(repoRoot, "src", "service.py"), "def handler():\n    return 'ok'\n");
@@ -18,6 +28,13 @@ describe("file catalog scanner", () => {
     fs.writeFileSync(path.join(repoRoot, "src", "app.ts"), "export const value = 'ok';\n");
     fs.writeFileSync(path.join(repoRoot, "package.json"), "{\"name\":\"fixture\"}\n");
     fs.writeFileSync(path.join(repoRoot, ".github", "workflows", "ci.yml"), "name: ci\n");
+    fs.writeFileSync(path.join(repoRoot, ".claude", "commands", "review.md"), "local agent guidance\n");
+    fs.writeFileSync(path.join(repoRoot, ".codex", ".tmp", "plugin.md"), "local plugin cache\n");
+    fs.writeFileSync(path.join(repoRoot, ".local", "sample.json"), "{}\n");
+    fs.writeFileSync(path.join(repoRoot, ".mypy_cache", "3.12", "service.data.json"), "{}\n");
+    fs.writeFileSync(path.join(repoRoot, ".nuxt", "manifest.json"), "{}\n");
+    fs.writeFileSync(path.join(repoRoot, ".pixi", "envs", "lock.json"), "{}\n");
+    fs.writeFileSync(path.join(repoRoot, "cmake-build-debug", "CMakeCache.txt"), "generated\n");
     fs.writeFileSync(path.join(repoRoot, "Dockerfile"), "FROM node:24-alpine\n");
     fs.writeFileSync(path.join(repoRoot, "node_modules", "pkg", "index.js"), "module.exports = {};\n");
   });
@@ -36,16 +53,7 @@ describe("file catalog scanner", () => {
     });
 
     expect(result.truncated).toBe(false);
-    expect(result.skipped_roots).toEqual([
-      ".cache",
-      ".git",
-      ".pytest_cache",
-      ".ruff_cache",
-      "__pycache__",
-      "coverage",
-      "dist",
-      "node_modules"
-    ]);
+    expect(result.skipped_roots).toEqual([...DEFAULT_SKIPPED_ROOTS].sort());
     expect(result.files.map((file) => file.path)).toEqual([
       ".github/workflows/ci.yml",
       "Dockerfile",

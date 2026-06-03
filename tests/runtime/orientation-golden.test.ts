@@ -3,21 +3,15 @@ import { getRepoOverview } from "../../src/application/use-cases/get-repo-overvi
 import { getRepoScope } from "../../src/application/use-cases/get-repo-scope.js";
 import { getScannedRepoStatus } from "../../src/application/use-cases/get-repo-status.js";
 import type { ResponseEnvelope } from "../../src/contracts/index.js";
-import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/index.js";
+import {
+  DEFAULT_SKIPPED_ROOTS,
+  FileCatalogScannerAdapter
+} from "../../src/infrastructure/filesystem/index.js";
 import { buildRepoOverviewEnvelope } from "../../src/presentation/repo-overview-presenter.js";
 import { buildRepoScopeEnvelope } from "../../src/presentation/repo-scope-presenter.js";
 import { buildStatusEnvelope } from "../../src/presentation/status-presenter.js";
 
-const skippedRoots = [
-  ".cache",
-  ".git",
-  ".pytest_cache",
-  ".ruff_cache",
-  "__pycache__",
-  "coverage",
-  "dist",
-  "node_modules"
-];
+const skippedRoots = [...DEFAULT_SKIPPED_ROOTS].sort();
 
 describe("repo orientation golden responses", () => {
   it.each([

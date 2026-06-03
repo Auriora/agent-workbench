@@ -27,8 +27,6 @@ import { createAgentWorkbenchServer as createAgentWorkbenchMcpServer } from "./i
 export function createAgentWorkbenchServer(repoRoot: string) {
   const absoluteRepoRoot = path.resolve(repoRoot);
   const scanner = new FileCatalogScannerAdapter();
-  const workspace = new WorkspaceFileAdapter({ repoRoot: absoluteRepoRoot });
-  const safety = new WorkspaceSafetyAdapter({ repoRoot: absoluteRepoRoot });
   const clock = new SystemClockAdapter();
   const previews = new InMemoryEditPreviewStoreAdapter();
   const graphStore = openGraphStore(graphStorePath(absoluteRepoRoot));
@@ -57,7 +55,7 @@ export function createAgentWorkbenchServer(repoRoot: string) {
         graph: graphStore,
         snapshots: graphStore,
         catalog: graphStore,
-        workspace,
+        workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
       }),
     searchSymbols: ({ request }) =>
@@ -66,7 +64,7 @@ export function createAgentWorkbenchServer(repoRoot: string) {
         graph: graphStore,
         snapshots: graphStore,
         catalog: graphStore,
-        workspace,
+        workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
       }),
     findReferences: ({ request }) =>
@@ -75,7 +73,7 @@ export function createAgentWorkbenchServer(repoRoot: string) {
         graph: graphStore,
         snapshots: graphStore,
         catalog: graphStore,
-        workspace,
+        workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
       }),
     computeImpact: ({ request }) =>
@@ -84,14 +82,14 @@ export function createAgentWorkbenchServer(repoRoot: string) {
         graph: graphStore,
         snapshots: graphStore,
         catalog: graphStore,
-        workspace,
+        workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
       }),
     previewWorkspaceEdit: ({ request }) =>
       previewWorkspaceEdit({
         request,
-        workspace,
-        safety,
+        workspace: workspaceForRepoRoot(request.repo_root),
+        safety: safetyForRepoRoot(request.repo_root),
         previews,
         clock,
         default_repo_root: absoluteRepoRoot
@@ -99,8 +97,8 @@ export function createAgentWorkbenchServer(repoRoot: string) {
     applyWorkspaceEdit: ({ request }) =>
       applyWorkspaceEdit({
         request,
-        workspace,
-        safety,
+        workspace: workspaceForRepoRoot(request.repo_root),
+        safety: safetyForRepoRoot(request.repo_root),
         previews,
         clock,
         default_repo_root: absoluteRepoRoot
@@ -109,10 +107,22 @@ export function createAgentWorkbenchServer(repoRoot: string) {
       planVerification({
         request,
         scanner,
-        workspace,
+        workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
       })
   });
+
+  function repoRootForRequest(repoRoot: string | undefined): string {
+    return path.resolve(repoRoot ?? absoluteRepoRoot);
+  }
+
+  function workspaceForRepoRoot(repoRoot: string | undefined): WorkspaceFileAdapter {
+    return new WorkspaceFileAdapter({ repoRoot: repoRootForRequest(repoRoot) });
+  }
+
+  function safetyForRepoRoot(repoRoot: string | undefined): WorkspaceSafetyAdapter {
+    return new WorkspaceSafetyAdapter({ repoRoot: repoRootForRequest(repoRoot) });
+  }
 }
 
 function graphStorePath(repoRoot: string): string {

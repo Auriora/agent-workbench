@@ -9,6 +9,7 @@ import type {
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import { planCommand } from "../../domain/policies/command-safety.js";
 import type { FileCatalogScanPort, WorkspaceFilePort } from "../../ports/index.js";
+import { buildStatBackedFileCatalogEntry } from "./file-catalog-entry.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 
 export type PlanVerificationResult = {
@@ -34,13 +35,18 @@ export async function planVerification(input: {
     ...input.request.changed_files.map(normalizeRepoPath)
   ]);
   const unsafePaths = selectedPaths.filter(isUnsafeValidationTarget);
-  const selectedEntries = selectEntries(scanned.files, selectedPaths);
+  const files = await mergeDirectValidationEntries({
+    scannedFiles: scanned.files,
+    selectedPaths,
+    workspace: input.workspace
+  });
+  const selectedEntries = selectEntries(files, selectedPaths);
   const discovery = await discoverValidationEvidence({
-    files: scanned.files,
+    files,
     workspace: input.workspace
   });
   const commandPlan = planValidationCommands({
-    files: scanned.files,
+    files,
     selectedEntries,
     discovery,
     maxCommands: input.request.max_commands
@@ -48,10 +54,10 @@ export async function planVerification(input: {
   const commands = commandPlan.commands;
   const staticFeedback =
     input.request.include_static_feedback && input.request.changed_files.length > 0
-      ? buildStaticFeedback(input.request.changed_files, scanned.files)
+      ? buildStaticFeedback(input.request.changed_files, files)
       : undefined;
   const missingPaths = selectedPaths.filter((filePath) =>
-    scanned.files.every((entry) => entry.path !== filePath)
+    files.every((entry) => entry.path !== filePath)
   );
   const tooBroad = selectedPaths.length > 50;
   const lowConfidence = scanned.truncated || commandPlan.lowConfidenceReasons.length > 0;
@@ -59,7 +65,6 @@ export async function planVerification(input: {
     unsafePaths.length > 0 ||
     missingPaths.length > 0 ||
     tooBroad ||
-    scanned.truncated ||
     discovery.discoveryErrors.length > 0 ||
     commands.length === 0;
   const risks = [
@@ -113,7 +118,7 @@ export async function planVerification(input: {
     repo_root: scanned.repo_root,
     indexed_roots: scanned.indexed_roots,
     skipped_roots: scanned.skipped_roots,
-    files: scanned.files,
+    files,
     freshness: "unknown"
   });
   const plan: VerificationPlan = {
@@ -166,6 +171,32 @@ export async function planVerification(input: {
       }
     }
   };
+}
+
+async function mergeDirectValidationEntries(input: {
+  scannedFiles: readonly FileCatalogEntry[];
+  selectedPaths: readonly string[];
+  workspace: WorkspaceFilePort;
+}): Promise<FileCatalogEntry[]> {
+  const byPath = new Map(input.scannedFiles.map((file) => [file.path, file]));
+  for (const filePath of uniqueSorted([...input.selectedPaths, "package.json", "pyproject.toml"])) {
+    if (byPath.has(filePath)) {
+      continue;
+    }
+    const stat = await input.workspace.stat({ path: filePath });
+    if (!stat.exists || !stat.is_file) {
+      continue;
+    }
+    byPath.set(
+      filePath,
+      buildStatBackedFileCatalogEntry({
+        path: filePath,
+        size_bytes: stat.size_bytes,
+        mtime_ms: stat.mtime_ms
+      })
+    );
+  }
+  return [...byPath.values()].sort((left, right) => left.path.localeCompare(right.path));
 }
 
 async function discoverValidationEvidence(input: {
@@ -234,7 +265,10 @@ function planValidationCommands(input: {
     }
   }
 
-  if (input.discovery.hasPyproject && (includeAll || selectedLanguages.has("python"))) {
+  if (
+    input.discovery.hasPyproject &&
+    (includeAll || selectedLanguages.has("python") || input.selectedEntries.some((file) => file.path === "pyproject.toml"))
+  ) {
     commands.push({
       command: "python3",
       args: ["-m", "pytest"],

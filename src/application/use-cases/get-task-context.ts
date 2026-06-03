@@ -13,6 +13,7 @@ import type {
 } from "../../contracts/index.js";
 import type { FileCatalogEntry, GraphNode } from "../../domain/models/index.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
+import { buildStatBackedFileCatalogEntry } from "./file-catalog-entry.js";
 import type {
   FileCatalogPort,
   FileCatalogScanPort,
@@ -46,9 +47,15 @@ export async function getTaskContext(input: {
     max_files: 2000
   });
   const byPath = new Map(scanned.files.map((file) => [file.path, file]));
+  const directRequestedEntries = await resolveExplicitEntries({
+    filePaths: input.request.files,
+    byPath,
+    workspace: input.workspace
+  });
   const requestedFiles = input.request.files.map((filePath) =>
-    toFileReference(filePath, byPath.get(normalizeRepoPath(filePath)))
+    toFileReference(filePath, directRequestedEntries.get(normalizeRepoPath(filePath)))
   );
+  const catalogFiles = [...directRequestedEntries.values()].sort((left, right) => left.path.localeCompare(right.path));
   const relatedFiles = selectRelatedFiles({
     task: input.request.task,
     symbols: input.request.symbols,
@@ -61,12 +68,12 @@ export async function getTaskContext(input: {
     files: scanned.files,
     limit: maxDocs
   });
-  const validationHints = inferValidationHints(scanned.files);
+  const validationHints = inferValidationHints(catalogFiles);
   const status = getCatalogRepoStatus({
     repo_root: scanned.repo_root,
     indexed_roots: scanned.indexed_roots,
     skipped_roots: scanned.skipped_roots,
-    files: scanned.files,
+    files: catalogFiles,
     freshness: "unknown"
   });
   const rankedSymbolResult = await selectRankedSymbols({
@@ -542,6 +549,38 @@ function tokenSet(values: readonly string[]): Set<string> {
 
 function normalizeRepoPath(value: string): string {
   return value.replaceAll("\\", "/").replace(/^\.\/+/, "");
+}
+
+async function resolveExplicitEntries(input: {
+  filePaths: readonly string[];
+  byPath: Map<string, FileCatalogEntry>;
+  workspace?: WorkspaceFilePort;
+}): Promise<Map<string, FileCatalogEntry>> {
+  const resolved = new Map(input.byPath);
+  if (input.workspace === undefined) {
+    return resolved;
+  }
+
+  for (const filePath of input.filePaths) {
+    const normalizedPath = normalizeRepoPath(filePath);
+    if (resolved.has(normalizedPath)) {
+      continue;
+    }
+    const stat = await input.workspace.stat({ path: normalizedPath });
+    if (!stat.exists || !stat.is_file) {
+      continue;
+    }
+    resolved.set(
+      normalizedPath,
+      buildStatBackedFileCatalogEntry({
+        path: normalizedPath,
+        size_bytes: stat.size_bytes,
+        mtime_ms: stat.mtime_ms
+      })
+    );
+  }
+
+  return resolved;
 }
 
 function capabilityFromLanguage(language: string): CapabilityLevel {

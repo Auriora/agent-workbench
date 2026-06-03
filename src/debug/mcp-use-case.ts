@@ -17,7 +17,10 @@ import {
   createTelemetryAdapter,
   telemetryConfigFromEnv
 } from "../infrastructure/telemetry/index.js";
-import { FileCatalogScannerAdapter } from "../infrastructure/filesystem/index.js";
+import {
+  FileCatalogScannerAdapter,
+  WorkspaceFileAdapter
+} from "../infrastructure/filesystem/index.js";
 import { buildRepoOverviewEnvelope } from "../presentation/repo-overview-presenter.js";
 import { buildRepoScopeEnvelope } from "../presentation/repo-scope-presenter.js";
 import { buildStatusEnvelope } from "../presentation/status-presenter.js";
@@ -116,6 +119,7 @@ export async function runDebugMcpUseCase(
         max_docs: 5
       },
       scanner,
+      workspace: new WorkspaceFileAdapter({ repoRoot: config.targetRepo }),
       default_repo_root: config.targetRepo
     })
   );

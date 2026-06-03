@@ -5,9 +5,11 @@ import { describe, expect, it } from "vitest";
 import type { PlanVerificationResult } from "../../src/application/use-cases/plan-verification.js";
 import { planVerification } from "../../src/application/use-cases/plan-verification.js";
 import {
+  DEFAULT_SKIPPED_ROOTS,
   FileCatalogScannerAdapter,
   WorkspaceFileAdapter
 } from "../../src/infrastructure/filesystem/index.js";
+import type { FileCatalogScanPort } from "../../src/ports/index.js";
 import { verificationPlanTool } from "../../src/interface-adapters/mcp/registries/tools/verification-plan.js";
 import { verificationPlanSchema } from "../../src/contracts/index.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
@@ -166,6 +168,67 @@ describe("verification_plan use case", () => {
           })
         )
       );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("plans validation from directly requested config when the catalog scan is truncated", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-truncated-"));
+    const scanner: FileCatalogScanPort = {
+      async scan(input) {
+        return {
+          repo_root: input.repo_root,
+          indexed_roots: input.indexed_roots,
+          skipped_roots: [...DEFAULT_SKIPPED_ROOTS].sort(),
+          files: [],
+          truncated: true
+        };
+      }
+    };
+
+    try {
+      fs.writeFileSync(
+        path.join(repoRoot, "package.json"),
+        JSON.stringify(
+          {
+            scripts: {
+              typecheck: "tsc --noEmit",
+              test: "vitest run"
+            }
+          },
+          null,
+          2
+        )
+      );
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["package.json"],
+          changed_files: ["package.json"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner,
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.meta.truncated).toBe(true);
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.static_feedback).toBeUndefined();
+      expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
+        "pnpm run typecheck",
+        "pnpm run test",
+        "planned docs/config syntax review"
+      ]);
+      expect(result.plan.risks).toEqual([
+        expect.objectContaining({
+          severity: "warning",
+          message: "Validation discovery is low confidence for at least one repository area."
+        })
+      ]);
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
@@ -480,5 +543,53 @@ describe("verification_plan MCP tool", () => {
       "verification_plan"
     ]);
     expect(Object.keys(server._registeredTools)).not.toContain("static_feedback");
+  });
+
+  it("binds composed-server validation workspaces to the request repo_root", async () => {
+    const defaultRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-server-default-"));
+    const targetRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-server-target-"));
+    try {
+      fs.writeFileSync(
+        path.join(targetRoot, "package.json"),
+        JSON.stringify({ scripts: { test: "vitest run" } }, null, 2)
+      );
+      const server = createAgentWorkbenchServer(defaultRoot) as unknown as {
+        _registeredTools: Record<
+          string,
+          {
+            handler: (args: unknown) => Promise<{
+              content: Array<{ text: string }>;
+            }>;
+          }
+        >;
+      };
+
+      const response = await server._registeredTools.verification_plan.handler({
+        repo_root: targetRoot,
+        files: ["package.json"],
+        changed_files: ["package.json"],
+        include_static_feedback: true
+      });
+      const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+        data: {
+          status: string;
+          static_feedback?: unknown;
+          planned_commands: Array<{ display: string }>;
+        };
+      };
+
+      expect(parsed.data.status).toBe("planned");
+      expect(parsed.data.static_feedback).toBeUndefined();
+      expect(parsed.data.planned_commands).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            display: "pnpm run test"
+          })
+        ])
+      );
+    } finally {
+      fs.rmSync(defaultRoot, { recursive: true, force: true });
+      fs.rmSync(targetRoot, { recursive: true, force: true });
+    }
   });
 });

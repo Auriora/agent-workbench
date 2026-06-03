@@ -6,13 +6,16 @@ import type { GetTaskContextResult } from "../../src/application/use-cases/get-t
 import { getTaskContext } from "../../src/application/use-cases/get-task-context.js";
 import { indexRepositoryGraph } from "../../src/application/use-cases/index-repository-graph.js";
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../../src/infrastructure/extraction/index.js";
-import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/index.js";
+import {
+  DEFAULT_SKIPPED_ROOTS,
+  FileCatalogScannerAdapter
+} from "../../src/infrastructure/filesystem/index.js";
 import { WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/workspace-file.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
 import { PythonTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
 import { contextForTaskTool } from "../../src/interface-adapters/mcp/registries/tools/context-for-task.js";
 import { taskContextSchema } from "../../src/contracts/index.js";
-import type { ClockPort } from "../../src/ports/index.js";
+import type { ClockPort, FileCatalogScanPort } from "../../src/ports/index.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
 
 type RegisteredTool = {
@@ -114,6 +117,71 @@ describe("context_for_task use case", () => {
     expect(result.meta.scope.languages).toEqual(
       expect.arrayContaining(["python", "typescript", "json"])
     );
+  });
+
+  it("resolves explicit requested files directly when the catalog scan is truncated", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-context-truncated-"));
+    fs.writeFileSync(
+      path.join(repoRoot, "package.json"),
+      JSON.stringify({ scripts: { test: "vitest run" } }, null, 2)
+    );
+    fs.writeFileSync(path.join(repoRoot, "README.md"), "# Fixture\n");
+    const scanner: FileCatalogScanPort = {
+      async scan(input) {
+        return {
+          repo_root: input.repo_root,
+          indexed_roots: input.indexed_roots,
+          skipped_roots: [...DEFAULT_SKIPPED_ROOTS].sort(),
+          files: [],
+          truncated: true
+        };
+      }
+    };
+
+    try {
+      const result = await getTaskContext({
+        request: {
+          task: "Update package validation docs",
+          repo_root: repoRoot,
+          files: ["package.json", "README.md"],
+          symbols: [],
+          max_files: 5,
+          max_docs: 5
+        },
+        scanner,
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: repoRoot
+      });
+
+      expect(result.context.requested_files).toEqual([
+        expect.objectContaining({
+          path: "package.json",
+          exists: true,
+          capability_level: "resource_backed"
+        }),
+        expect.objectContaining({
+          path: "README.md",
+          exists: true,
+          capability_level: "resource_backed"
+        })
+      ]);
+      expect(result.context.validation_hints).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ command: "pnpm typecheck" }),
+          expect.objectContaining({ command: "pnpm test" })
+        ])
+      );
+      expect(result.context.risks).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: "Some requested files were not found in the scanned repository."
+          })
+        ])
+      );
+      expect(result.meta.truncated).toBe(true);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 
   it("routes symbol-oriented work to graph query tools through next actions", async () => {

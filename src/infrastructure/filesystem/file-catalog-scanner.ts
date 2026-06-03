@@ -7,16 +7,26 @@ import { FileIdentityAdapter } from "./file-identity.js";
 
 export const DEFAULT_SKIPPED_ROOTS = [
   ".cache",
+  ".claude",
+  ".codex",
   ".git",
+  ".local",
+  ".mypy_cache",
+  ".nuxt",
+  ".pixi",
   ".pytest_cache",
   ".ruff_cache",
+  ".venv",
   "__pycache__",
+  "build",
   "coverage",
   "dist",
-  "node_modules"
+  "node_modules",
+  "venv"
 ] as const;
 
 const DEFAULT_SKIPPED_DIRECTORY_NAMES = new Set<string>(DEFAULT_SKIPPED_ROOTS);
+const DEFAULT_SKIPPED_DIRECTORY_PREFIXES = ["cmake-build-"] as const;
 
 function normalizePath(value: string): string {
   return value.split(path.sep).join("/");
@@ -30,6 +40,9 @@ function isInsideRoot(relativePath: string, root: string): boolean {
 function shouldSkipRelativePath(relativePath: string, skippedRoots: readonly string[]): boolean {
   const segments = relativePath.split("/");
   if (segments.some((segment) => DEFAULT_SKIPPED_DIRECTORY_NAMES.has(segment))) {
+    return true;
+  }
+  if (segments.some((segment) => DEFAULT_SKIPPED_DIRECTORY_PREFIXES.some((prefix) => segment.startsWith(prefix)))) {
     return true;
   }
 
