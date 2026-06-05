@@ -94,7 +94,7 @@ T001..T008 -> T009
 ### Task T003A: Centralize Freshness And Trust Presentation Helpers
 
 - **ID:** T003A
-- **Status:** pending
+- **Status:** completed
 - **Depends on:** [T003]
 - **Parallel:** no
 - **Story:** Requirement 1
@@ -105,12 +105,17 @@ T001..T008 -> T009
 - **Acceptance:** Contract or MCP tests prove fresh, refreshing, cold, stale,
   partial, and unsupported-language metadata are generated through shared helper
   paths and no resource presenter emits conflicting trust labels.
-- **Evidence:** pending
+- **Evidence:** Added `buildRuntimeResponseMeta`, `classifyRuntimeTrust`, and
+  `deriveRuntimeStatusCaveats` in `src/presentation/metadata.ts`; status now
+  uses the shared helper instead of owning trust-label composition. Validated
+  with `pnpm typecheck` and `pnpm exec vitest run
+  tests/contracts/presentation-metadata.test.ts tests/runtime/status.test.ts
+  tests/mcp/repo-scope-overview-resource.test.ts` on 2026-06-05.
 
 ### Task T004: Preserve Unsupported Source-Language Coverage Under Budgets
 
 - **ID:** T004
-- **Status:** pending
+- **Status:** completed
 - **Depends on:** [T002]
 - **Parallel:** yes
 - **Story:** Requirement 2
@@ -119,8 +124,13 @@ T001..T008 -> T009
   representative unsupported Go/C/C++ source coverage even when row caps apply.
 - **Acceptance:** Go-service fixture reports Go coverage, skips `.gocache`,
   and exposes truncation without hiding unsupported source languages.
-- **Evidence:** pending. Groundwork from T002 covers `.gocache` skipping and
-  unsupported Go/C++ source visibility; row-cap preservation remains.
+- **Evidence:** Added generic catalog traversal priority so project-shape,
+  source, and test paths are considered before docs noise under row caps without
+  increasing the output row budget. Focused scanner tests prove `.gocache`
+  remains skipped and row-capped scans preserve representative Go source
+  coverage. Validated with `pnpm typecheck` and `pnpm exec vitest run
+  tests/workspace/file-catalog-scanner.test.ts
+  tests/mcp/repo-scope-overview-resource.test.ts` on 2026-06-05.
 
 ### Task T005: Remove Non-Callable Next Actions
 
@@ -158,7 +168,7 @@ T001..T008 -> T009
 ### Task T007: Add Repository-Shape Validation Planning
 
 - **ID:** T007
-- **Status:** pending
+- **Status:** completed
 - **Depends on:** [T005]
 - **Parallel:** yes
 - **Story:** Requirement 5
@@ -168,7 +178,13 @@ T001..T008 -> T009
 - **Acceptance:** Go fixtures return planned or blocked Go validation evidence;
   CMake/C++ fixtures prioritize CMake/build/test evidence over incidental
   `package.json` Node commands.
-- **Evidence:** pending
+- **Evidence:** `verification_plan` now detects generic Go project-shape
+  evidence from `go.mod`, `go.work`, and `Makefile`, and CMake/C++ evidence
+  from root/local `CMakeLists.txt` plus C/C++ files. Go plans include `make
+  test`/`go test ./...` when supported by repository evidence; CMake/C++ plans
+  return a planned manual CMake build/test review ahead of incidental Node
+  scripts. Validated with `pnpm typecheck` and `pnpm exec vitest run
+  tests/mcp/verification-plan-tool.test.ts` on 2026-06-05.
 
 ## Phase 4: First-Slice Language Identity And Symbols
 

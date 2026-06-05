@@ -119,7 +119,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     }
 
     const children = fs.readdirSync(input.directory, { withFileTypes: true });
-    children.sort((left, right) => left.name.localeCompare(right.name));
+    children.sort(compareCatalogEntries);
 
     for (const child of children) {
       if (input.entries.length >= input.maxFiles) {
@@ -166,4 +166,42 @@ function isInsideRepo(repoRoot: string, absolutePath: string): boolean {
 
 function mergeSkippedRoots(skippedRoots: readonly string[]): string[] {
   return Array.from(new Set([...DEFAULT_SKIPPED_ROOTS, ...skippedRoots])).sort();
+}
+
+function compareCatalogEntries(left: fs.Dirent, right: fs.Dirent): number {
+  return catalogTraversalPriority(left) - catalogTraversalPriority(right) || left.name.localeCompare(right.name);
+}
+
+function catalogTraversalPriority(entry: fs.Dirent): number {
+  const name = entry.name.toLowerCase();
+  if (entry.isDirectory()) {
+    if (["src", "lib", "app", "cmd", "internal", "include"].includes(name)) return 0;
+    if (["test", "tests", "__tests__"].includes(name)) return 5;
+    if (["docs", "doc", "documentation"].includes(name)) return 60;
+    if (name === ".github") return 70;
+    return 30;
+  }
+
+  if (isProjectShapeFile(name)) return 0;
+  if (isSourceLikeFile(name)) return 5;
+  if (name.includes("test") || name.includes("spec")) return 8;
+  if (name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".mdx")) return 60;
+  if (name.endsWith(".json") || name.endsWith(".yaml") || name.endsWith(".yml") || name.endsWith(".toml")) return 20;
+  return 30;
+}
+
+function isProjectShapeFile(name: string): boolean {
+  return [
+    "pyproject.toml",
+    "package.json",
+    "go.mod",
+    "go.work",
+    "makefile",
+    "cmakelists.txt",
+    "dockerfile"
+  ].includes(name);
+}
+
+function isSourceLikeFile(name: string): boolean {
+  return /\.(py|pyi|ts|tsx|js|jsx|mjs|cjs|cs|go|rs|java|c|cc|cpp|cxx|h|hh|hpp|hxx|sh)$/u.test(name);
 }

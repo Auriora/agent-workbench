@@ -106,6 +106,28 @@ describe("file catalog scanner", () => {
     expect(result.files).toHaveLength(2);
   });
 
+  it("preserves representative source coverage before docs noise when row-capped", async () => {
+    fs.mkdirSync(path.join(repoRoot, "aaa-docs"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "cmd", "service"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "aaa-docs", "000-overview.md"), "# Overview\n");
+    fs.writeFileSync(path.join(repoRoot, "aaa-docs", "001-notes.md"), "# Notes\n");
+    fs.writeFileSync(path.join(repoRoot, "go.mod"), "module example.com/service\n");
+    fs.writeFileSync(path.join(repoRoot, "cmd", "service", "main.go"), "package main\nfunc main() {}\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    const result = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      max_files: 2
+    });
+
+    expect(result.truncated).toBe(true);
+    expect(result.files).toHaveLength(2);
+    expect(result.files.map((file) => file.path)).toContain("cmd/service/main.go");
+    expect(result.files.map((file) => file.file_identity.language)).toContain("go");
+  });
+
   it("classifies first-slice Go, C++ header, and Python stub files while skipping Go cache", async () => {
     fs.writeFileSync(path.join(repoRoot, "go.mod"), "module example.com/onemount\n");
     fs.writeFileSync(path.join(repoRoot, "src", "main.go"), "package main\nfunc main() {}\n");

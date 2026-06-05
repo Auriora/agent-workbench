@@ -38,6 +38,9 @@ Manual dogfood gates:
 | 2026-06-05 | Spec setup | Spec 002 archived; Spec 003 created with task DAG and verification plan | In progress |
 | 2026-06-05 | T002 fixture setup | `pnpm exec vitest run tests/workspace/file-catalog-scanner.test.ts tests/mcp/repo-scope-overview-resource.test.ts` | Passed: 2 test files, 11 tests |
 | 2026-06-05 | T003 scope/overview metadata alignment | `pnpm typecheck`; `pnpm exec vitest run tests/workspace/file-catalog-scanner.test.ts tests/mcp/repo-scope-overview-resource.test.ts` | Passed: typecheck and 2 test files, 13 tests |
+| 2026-06-05 | T003A presentation metadata helper | `pnpm typecheck`; `pnpm exec vitest run tests/contracts/presentation-metadata.test.ts tests/runtime/status.test.ts tests/mcp/repo-scope-overview-resource.test.ts` | Passed: typecheck and 3 test files, 21 tests |
+| 2026-06-05 | T004 row-cap source visibility | `pnpm typecheck`; `pnpm exec vitest run tests/workspace/file-catalog-scanner.test.ts tests/mcp/repo-scope-overview-resource.test.ts` | Passed: typecheck and 2 test files, 14 tests |
+| 2026-06-05 | T007 repository-shape validation planning | `pnpm typecheck`; `pnpm exec vitest run tests/mcp/verification-plan-tool.test.ts` | Passed: typecheck and 1 test file, 13 tests |
 
 ## Residual Risks
 

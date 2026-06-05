@@ -181,7 +181,16 @@ async function mergeDirectValidationEntries(input: {
   workspace: WorkspaceFilePort;
 }): Promise<FileCatalogEntry[]> {
   const byPath = new Map(input.scannedFiles.map((file) => [file.path, file]));
-  for (const filePath of uniqueSorted([...input.selectedPaths, "package.json", "pyproject.toml"])) {
+  for (const filePath of uniqueSorted([
+    ...input.selectedPaths,
+    ...projectShapeConfigCandidates(input.selectedPaths),
+    "package.json",
+    "pyproject.toml",
+    "go.mod",
+    "go.work",
+    "Makefile",
+    "CMakeLists.txt"
+  ])) {
     if (byPath.has(filePath)) {
       continue;
     }
@@ -215,6 +224,11 @@ async function discoverValidationEvidence(input: {
     packageScripts: packageDiscovery.scripts,
     discoveryErrors: packageDiscovery.errors,
     hasPyproject: paths.has("pyproject.toml"),
+    hasGoMod: paths.has("go.mod"),
+    hasGoWork: paths.has("go.work"),
+    hasMakefile: paths.has("Makefile") || paths.has("makefile"),
+    hasRootCMake: paths.has("CMakeLists.txt"),
+    localCMakeFiles: [...paths].filter((filePath) => filePath.endsWith("/CMakeLists.txt")).sort(),
     pythonNearestTests: await discoverPythonNearestTests({
       files: input.files,
       selectedEntries: input.selectedEntries,
@@ -227,6 +241,11 @@ type ValidationDiscovery = {
   packageScripts: Record<string, string>;
   discoveryErrors: string[];
   hasPyproject: boolean;
+  hasGoMod: boolean;
+  hasGoWork: boolean;
+  hasMakefile: boolean;
+  hasRootCMake: boolean;
+  localCMakeFiles: string[];
   pythonNearestTests: PlannedValidationCommand[];
 };
 
@@ -245,8 +264,53 @@ function planValidationCommands(input: {
   const commands: PlannedValidationCommand[] = [];
   const lowConfidenceReasons: string[] = [...input.discovery.discoveryErrors];
   const includeAll = input.selectedEntries.length === 0;
+  const hasGoFiles = input.files.some((file) => file.file_identity.language === "go");
+  const hasCppFiles = input.files.some((file) => file.file_identity.language === "cpp" || file.file_identity.language === "c");
+  const goShapeSelected = input.discovery.hasGoMod && (includeAll ? hasGoFiles : selectedLanguages.has("go"));
+  const cmakeShapeSelected =
+    (input.discovery.hasRootCMake || input.discovery.localCMakeFiles.length > 0) &&
+    (includeAll ? hasCppFiles : hasAny(selectedLanguages, ["c", "cpp"]));
 
-  if (Object.keys(input.discovery.packageScripts).length > 0 && (includeAll || hasAny(selectedLanguages, ["typescript", "javascript", "json"]))) {
+  if (goShapeSelected) {
+    if (input.discovery.hasMakefile) {
+      commands.push({
+        command: "make",
+        args: ["test"],
+        display: "make test",
+        reason: "Makefile and Go project files indicate repository-specific Go validation may be available.",
+        status: "planned",
+        execution: "not_executed"
+      });
+    }
+    commands.push({
+      command: "go",
+      args: ["test", "./..."],
+      display: "go test ./...",
+      reason: input.discovery.hasGoWork
+        ? "go.work/go.mod and Go source files indicate workspace-wide Go tests are the primary validation path."
+        : "go.mod and Go source files indicate Go tests are the primary validation path.",
+      status: "planned",
+      execution: "not_executed"
+    });
+  }
+
+  if (cmakeShapeSelected) {
+    commands.push({
+      command: "manual_review",
+      args: ["cmake-build-test"],
+      display: "planned CMake build/test review",
+      reason: cmakeReason(input.discovery),
+      status: "planned",
+      execution: "not_executed"
+    });
+  }
+
+  if (
+    Object.keys(input.discovery.packageScripts).length > 0 &&
+    !goShapeSelected &&
+    !cmakeShapeSelected &&
+    (includeAll || hasAny(selectedLanguages, ["typescript", "javascript", "json"]))
+  ) {
     commands.push(
       ...configuredPackageCommands(input.discovery.packageScripts, [
         {
@@ -399,6 +463,29 @@ function configuredPackageCommands(
     });
   }
   return commands;
+}
+
+function projectShapeConfigCandidates(selectedPaths: readonly string[]): string[] {
+  const candidates = new Set<string>();
+  for (const filePath of selectedPaths) {
+    let directory = path.posix.dirname(filePath);
+    while (directory !== "." && directory.length > 0) {
+      candidates.add(path.posix.join(directory, "CMakeLists.txt"));
+      const parent = path.posix.dirname(directory);
+      if (parent === directory) {
+        break;
+      }
+      directory = parent;
+    }
+  }
+  return [...candidates];
+}
+
+function cmakeReason(discovery: ValidationDiscovery): string {
+  const local = discovery.localCMakeFiles.length > 0
+    ? ` Local CMake evidence: ${discovery.localCMakeFiles.slice(0, 3).join(", ")}.`
+    : "";
+  return `CMakeLists.txt and C/C++ files indicate CMake build/test validation is the primary path.${local}`;
 }
 
 async function discoverPythonNearestTests(input: {

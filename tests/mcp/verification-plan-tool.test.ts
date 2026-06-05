@@ -242,6 +242,67 @@ describe("verification_plan use case", () => {
     }
   });
 
+  it("plans Go project-shape validation from go.mod and Makefile evidence", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-go-service-repo");
+    const result = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["internal/graph/response_cache.go"],
+        changed_files: ["internal/graph/response_cache.go"],
+        include_static_feedback: true,
+        max_commands: 10
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+
+    expect(result.plan.status).toBe("planned");
+    expect(result.plan.static_feedback).toBeUndefined();
+    expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
+      "make test",
+      "go test ./..."
+    ]);
+    expect(result.plan.planned_commands).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          reason: expect.stringContaining("Go")
+        })
+      ])
+    );
+  });
+
+  it("prioritizes CMake validation over incidental package scripts for C++ files", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-cmake-cpp-repo");
+    const result = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["src/App/DocumentObject.cpp", "src/App/DocumentObject.h"],
+        changed_files: ["src/App/DocumentObject.cpp"],
+        include_static_feedback: true,
+        max_commands: 10
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+
+    expect(result.plan.status).toBe("planned");
+    expect(result.plan.static_feedback).toBeUndefined();
+    expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
+      "planned CMake build/test review"
+    ]);
+    expect(result.plan.planned_commands[0]).toEqual(
+      expect.objectContaining({
+        command: "manual_review",
+        args: ["cmake-build-test"],
+        reason: expect.stringContaining("src/App/CMakeLists.txt")
+      })
+    );
+    expect(result.plan.planned_commands.map((command) => command.display)).not.toContain("pnpm run typecheck");
+    expect(result.plan.planned_commands.map((command) => command.display)).not.toContain("pnpm run test");
+  });
+
   it("blocks unsafe, too-broad, and low-confidence validation targets with quiet feedback", async () => {
     const files = Array.from({ length: 51 }, (_, index) => `src/file-${index}.ts`);
     const result = await planVerification({

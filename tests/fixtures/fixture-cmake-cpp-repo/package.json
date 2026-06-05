@@ -1,2 +1,7 @@
-{"name":"incidental-tooling"}
-
+{
+  "name": "incidental-tooling",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  }
+}
