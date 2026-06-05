@@ -272,6 +272,54 @@ describe("verification_plan use case", () => {
     );
   });
 
+  it("blocks host Go commands when repo guidance requires Docker validation", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-go-docker-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "internal", "graph"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "go.mod"), "module example.com/docker-go\n");
+      fs.writeFileSync(path.join(repoRoot, "Makefile"), "test:\n\tgo test ./...\n");
+      fs.writeFileSync(
+        path.join(repoRoot, "AGENTS.md"),
+        [
+          "# Repository Guidelines",
+          "",
+          "Testing protocol: always use Docker for validation.",
+          "Never run `go test` directly on the host."
+        ].join("\n")
+      );
+      fs.writeFileSync(path.join(repoRoot, "internal", "graph", "response_cache.go"), "package graph\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["internal/graph/response_cache.go"],
+          changed_files: ["internal/graph/response_cache.go"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("blocked");
+      expect(result.plan.static_feedback).toBeUndefined();
+      expect(result.plan.planned_commands.map((command) => command.display)).not.toEqual(
+        expect.arrayContaining(["make test", "go test ./..."])
+      );
+      expect(result.plan.risks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            severity: "blocker",
+            message: expect.stringContaining("Docker-based validation")
+          })
+        ])
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("prioritizes CMake validation over incidental package scripts for C++ files", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-cmake-cpp-repo");
     const result = await planVerification({

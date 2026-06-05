@@ -54,6 +54,8 @@ export function getCatalogRepoStatus(input: {
   freshness?: Freshness;
   snapshot?: SnapshotState | null;
   warmup?: WarmupExecution | null;
+  row_limit?: number;
+  truncated?: boolean;
 }): GetRepoStatusResult {
   const coverage = summarizeAdapterEvidence(input.files);
   const languages = uniqueSorted(input.files.map((file) => file.file_identity.language));
@@ -65,7 +67,9 @@ export function getCatalogRepoStatus(input: {
     coverage,
     snapshot: input.snapshot,
     warmup: input.warmup,
-    freshness: input.freshness
+    freshness: input.freshness,
+    truncated: input.truncated,
+    budget: input.row_limit === undefined ? undefined : { row_limit: input.row_limit }
   });
   const classified = runtimePresentation.classification;
 
@@ -125,13 +129,21 @@ export async function getSnapshotRepoStatus(input: {
     });
   }
 
+  const rowLimit = input.max_files ?? 200;
+  const files = await input.catalog.listFiles({
+    snapshot_id: snapshot.id,
+    max_rows: rowLimit
+  });
+
   return getSnapshotMetadataRepoStatus({
     repo_root: snapshot.repo_root,
     indexed_roots: input.indexed_roots ?? ["."],
     skipped_roots: input.skipped_roots ?? [],
     snapshot,
     warmup,
-    row_limit: input.max_files ?? 0
+    files,
+    row_limit: rowLimit,
+    truncated: files.length >= rowLimit
   });
 }
 
@@ -174,18 +186,24 @@ export function getSnapshotMetadataRepoStatus(input: {
   skipped_roots: readonly string[];
   snapshot: SnapshotState | null;
   warmup?: WarmupExecution | null;
+  files?: readonly FileCatalogEntry[];
   row_limit?: number;
+  truncated?: boolean;
 }): GetRepoStatusResult {
+  const files = input.files ?? [];
+  const coverage = summarizeAdapterEvidence(files);
+  const languages = uniqueSorted(files.map((file) => file.file_identity.language));
   const runtimePresentation = buildRuntimeResponseMeta({
     repoRoot: input.snapshot?.repo_root ?? input.repo_root,
     indexedRoots: input.indexed_roots,
     skippedRoots: input.skipped_roots,
-    languages: [],
-    coverage: [],
+    languages,
+    coverage,
     snapshot: input.snapshot,
     warmup: input.warmup,
     freshness: input.snapshot?.freshness ?? "cold",
     hasEvidence: input.snapshot !== null,
+    truncated: input.truncated,
     budget: {
       row_limit: input.row_limit
     }
@@ -197,7 +215,7 @@ export function getSnapshotMetadataRepoStatus(input: {
     freshness: classified.freshness,
     indexed_roots: [...input.indexed_roots],
     skipped_roots: [...input.skipped_roots],
-    adapter_coverage: []
+    adapter_coverage: [...coverage]
   };
   if (input.snapshot?.id !== undefined) {
     status.snapshot_id = input.snapshot.id;

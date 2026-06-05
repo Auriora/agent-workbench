@@ -297,6 +297,39 @@ Future multi-language repository work:
   reference, impact, and validation tools should remain language-aware at the
   repository-shape level but must not claim cross-language semantic proof.
 
+Post-closure dogfood caveats from large mixed-language repositories:
+
+- Done: keep `repo:///status` aligned with `repo:///scope` by summarizing a
+  bounded slice of persisted catalog evidence when a snapshot exists. Status
+  should remain cheap, but it must not imply `unsupported`/no-language coverage
+  when the catalog already proves Go, C/C++, Python, or other first-slice
+  evidence.
+- Done: validation planning must read bounded repo-local guidance before
+  generic language defaults. If guidance requires Docker-based validation or
+  forbids host test commands, suppress direct commands such as `go test ./...`
+  and return a blocked plan with the governing evidence.
+- Done: skip common hidden runtime/test artifact directories such as `.home`,
+  `.sandbox`, `.gocache`, hidden `*-tests` folders, build outputs, and generated
+  caches before applying row caps.
+- Done: prevent graph warmup from reading oversized text/resource files; record
+  skipped catalog evidence instead of crashing the snapshot with low-level
+  memory errors.
+- Done: make file metadata presentation share one capability/language policy
+  across scope, context, symbol/search results, preview/apply edit metadata, and
+  validation planning.
+- Open: improve broad task routing for large monorepos by ranking first-party
+  implementation roots and exact source/symbol text above third-party, fixture,
+  installer, generated, or package-manager noise unless those areas are named.
+- Open: improve `repo:///overview` platform scoring so root/local CMake and
+  source/test topology outrank incidental `package.json` files in CMake/C++
+  repositories.
+- Future: add Go parser-backed symbols and C/C++ reference/impact edges after
+  the language-adapter contract defines confidence, provenance, and integration
+  boundaries. Routing-only hits must stay clearly marked until then.
+- Future: make CMake validation planning more concrete by identifying likely
+  targets and project command templates without executing commands or guessing
+  unsafe build directories.
+
 ## Related Docs
 
 - [System architecture](../architecture/system-architecture.md)

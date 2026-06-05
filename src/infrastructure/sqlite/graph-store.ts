@@ -39,6 +39,7 @@ type FileRow = {
   mtime_ms: number;
   indexed_at: string | null;
   node_count: number;
+  indexing_error: string | null;
 };
 
 type NodeRow = {
@@ -585,14 +586,15 @@ export class SqliteGraphStoreAdapter implements GraphStore {
 
     const tx = this.db.transaction(() => {
       const upsertFile = this.db.prepare(`
-        INSERT INTO files (snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at)
-        VALUES (@snapshotId, @path, @language, @contentHash, @sizeBytes, @mtimeMs, @indexedAt)
+        INSERT INTO files (snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at, indexing_error)
+        VALUES (@snapshotId, @path, @language, @contentHash, @sizeBytes, @mtimeMs, @indexedAt, NULL)
         ON CONFLICT(snapshot_id, path) DO UPDATE SET
           language = excluded.language,
           content_hash = excluded.content_hash,
           size_bytes = excluded.size_bytes,
           mtime_ms = excluded.mtime_ms,
-          indexed_at = excluded.indexed_at
+          indexed_at = excluded.indexed_at,
+          indexing_error = NULL
       `);
 
       upsertFile.run({
@@ -802,14 +804,15 @@ export class SqliteGraphStoreAdapter implements GraphStore {
 
     this.db
       .prepare(`
-        INSERT INTO files (snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at)
-        VALUES (@snapshotId, @path, @language, @contentHash, @sizeBytes, @mtimeMs, @indexedAt)
+        INSERT INTO files (snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at, indexing_error)
+        VALUES (@snapshotId, @path, @language, @contentHash, @sizeBytes, @mtimeMs, @indexedAt, NULL)
         ON CONFLICT(snapshot_id, path) DO UPDATE SET
           language = excluded.language,
           content_hash = excluded.content_hash,
           size_bytes = excluded.size_bytes,
           mtime_ms = excluded.mtime_ms,
-          indexed_at = excluded.indexed_at
+          indexed_at = excluded.indexed_at,
+          indexing_error = NULL
       `)
       .run({
         snapshotId,
@@ -1056,7 +1059,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     const rows = this.db
       .prepare(
         `
-        SELECT id, snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at, node_count
+        SELECT id, snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at, node_count, indexing_error
         FROM files
         WHERE snapshot_id = @snapshotId
           AND (@afterPath IS NULL OR path > @afterPath)
@@ -1082,7 +1085,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           indexed_at: row.indexed_at ?? undefined
         },
         indexed: row.indexed_at != null,
-        skipped_reason: undefined
+        skipped_reason: row.indexing_error ?? undefined
       })
     );
   }
@@ -1109,7 +1112,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         indexed_at: row.indexed_at ?? undefined
       },
       indexed: row.indexed_at != null,
-      skipped_reason: undefined
+      skipped_reason: row.indexing_error ?? undefined
     };
   }
 
@@ -1121,14 +1124,15 @@ export class SqliteGraphStoreAdapter implements GraphStore {
 
     this.db
       .prepare(`
-        INSERT INTO files (snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at)
-        VALUES (@snapshotId, @path, @language, @contentHash, @sizeBytes, @mtimeMs, @indexedAt)
+        INSERT INTO files (snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at, indexing_error)
+        VALUES (@snapshotId, @path, @language, @contentHash, @sizeBytes, @mtimeMs, @indexedAt, @indexingError)
         ON CONFLICT(snapshot_id, path) DO UPDATE SET
           language = excluded.language,
           content_hash = excluded.content_hash,
           size_bytes = excluded.size_bytes,
           mtime_ms = excluded.mtime_ms,
-          indexed_at = excluded.indexed_at
+          indexed_at = excluded.indexed_at,
+          indexing_error = excluded.indexing_error
       `)
       .run({
         snapshotId,
@@ -1137,7 +1141,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         contentHash: input.entry.file_identity.content_hash,
         sizeBytes: input.entry.file_identity.size_bytes,
         mtimeMs: input.entry.file_identity.mtime_ms,
-        indexedAt: input.entry.indexed ? (input.entry.file_identity.indexed_at ?? null) : null
+        indexedAt: input.entry.indexed ? (input.entry.file_identity.indexed_at ?? null) : null,
+        indexingError: input.entry.skipped_reason ?? null
       });
   }
 
@@ -1213,7 +1218,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     const row = this.db
       .prepare(
         `
-        SELECT id, snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at, node_count
+        SELECT id, snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at, node_count, indexing_error
         FROM files
         WHERE snapshot_id = @snapshotId AND path = @path
       `

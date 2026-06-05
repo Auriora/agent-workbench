@@ -68,6 +68,7 @@ export async function planVerification(input: {
     missingPaths.length > 0 ||
     tooBroad ||
     discovery.discoveryErrors.length > 0 ||
+    commandPlan.blockerReasons.length > 0 ||
     commands.length === 0;
   const risks = [
     ...(unsafePaths.length > 0
@@ -106,6 +107,11 @@ export async function planVerification(input: {
           }
         ]
       : []),
+    ...commandPlan.blockerReasons.map((reason) => ({
+      severity: "blocker" as const,
+      message: reason,
+      why_this_matters: "Repo-local validation guidance takes precedence over generic language command planning."
+    })),
     ...(commands.length === 0
       ? [
           {
@@ -213,10 +219,12 @@ async function discoverValidationEvidence(input: {
   const packageDiscovery = paths.has("package.json")
     ? await readPackageScripts(input.workspace)
     : { scripts: {}, errors: [] };
+  const validationProtocol = await discoverValidationProtocol(input.workspace);
 
   return {
     packageScripts: packageDiscovery.scripts,
-    discoveryErrors: packageDiscovery.errors,
+    discoveryErrors: [...packageDiscovery.errors, ...validationProtocol.errors],
+    validationProtocol,
     hasPyproject: paths.has("pyproject.toml"),
     hasGoMod: paths.has("go.mod"),
     hasGoWork: paths.has("go.work"),
@@ -234,6 +242,7 @@ async function discoverValidationEvidence(input: {
 type ValidationDiscovery = {
   packageScripts: Record<string, string>;
   discoveryErrors: string[];
+  validationProtocol: ValidationProtocolDiscovery;
   hasPyproject: boolean;
   hasGoMod: boolean;
   hasGoWork: boolean;
@@ -246,6 +255,14 @@ type ValidationDiscovery = {
 type CommandPlanningResult = {
   commands: PlannedValidationCommand[];
   lowConfidenceReasons: string[];
+  blockerReasons: string[];
+};
+
+type ValidationProtocolDiscovery = {
+  requiresDockerValidation: boolean;
+  prohibitsHostGoTest: boolean;
+  evidencePaths: string[];
+  errors: string[];
 };
 
 function planValidationCommands(input: {
@@ -257,6 +274,7 @@ function planValidationCommands(input: {
   const selectedLanguages = new Set(input.selectedEntries.map((file) => file.file_identity.language));
   const commands: PlannedValidationCommand[] = [];
   const lowConfidenceReasons: string[] = [...input.discovery.discoveryErrors];
+  const blockerReasons: string[] = [];
   const includeAll = input.selectedEntries.length === 0;
   const hasGoFiles = input.files.some((file) => file.file_identity.language === "go");
   const hasCppFiles = input.files.some((file) => file.file_identity.language === "cpp" || file.file_identity.language === "c");
@@ -266,26 +284,36 @@ function planValidationCommands(input: {
     (includeAll ? hasCppFiles : hasAny(selectedLanguages, ["c", "cpp"]));
 
   if (goShapeSelected) {
-    if (input.discovery.hasMakefile) {
+    if (input.discovery.validationProtocol.requiresDockerValidation || input.discovery.validationProtocol.prohibitsHostGoTest) {
+      const evidence =
+        input.discovery.validationProtocol.evidencePaths.length > 0
+          ? ` Evidence: ${input.discovery.validationProtocol.evidencePaths.slice(0, 3).join(", ")}.`
+          : "";
+      blockerReasons.push(
+        `Repository guidance requires Docker-based validation, so host Go commands were not planned.${evidence}`
+      );
+    } else {
+      if (input.discovery.hasMakefile) {
+        commands.push({
+          command: "make",
+          args: ["test"],
+          display: "make test",
+          reason: "Makefile and Go project files indicate repository-specific Go validation may be available.",
+          status: "planned",
+          execution: "not_executed"
+        });
+      }
       commands.push({
-        command: "make",
-        args: ["test"],
-        display: "make test",
-        reason: "Makefile and Go project files indicate repository-specific Go validation may be available.",
+        command: "go",
+        args: ["test", "./..."],
+        display: "go test ./...",
+        reason: input.discovery.hasGoWork
+          ? "go.work/go.mod and Go source files indicate workspace-wide Go tests are the primary validation path."
+          : "go.mod and Go source files indicate Go tests are the primary validation path.",
         status: "planned",
         execution: "not_executed"
       });
     }
-    commands.push({
-      command: "go",
-      args: ["test", "./..."],
-      display: "go test ./...",
-      reason: input.discovery.hasGoWork
-        ? "go.work/go.mod and Go source files indicate workspace-wide Go tests are the primary validation path."
-        : "go.mod and Go source files indicate Go tests are the primary validation path.",
-      status: "planned",
-      execution: "not_executed"
-    });
   }
 
   if (cmakeShapeSelected) {
@@ -363,7 +391,8 @@ function planValidationCommands(input: {
 
   return {
     commands: commands.slice(0, input.maxCommands),
-    lowConfidenceReasons
+    lowConfidenceReasons,
+    blockerReasons
   };
 }
 
@@ -457,6 +486,77 @@ function configuredPackageCommands(
     });
   }
   return commands;
+}
+
+async function discoverValidationProtocol(workspace: WorkspaceFilePort): Promise<ValidationProtocolDiscovery> {
+  const evidencePaths: string[] = [];
+  const errors: string[] = [];
+  let requiresDockerValidation = false;
+  let prohibitsHostGoTest = false;
+
+  for (const filePath of validationGuidanceCandidates()) {
+    const stat = await statIfPresent(workspace, filePath);
+    if (!stat.exists || !stat.is_file) {
+      continue;
+    }
+    if (stat.size_bytes > 128_000) {
+      errors.push(`${filePath} was too large to inspect for validation guidance`);
+      continue;
+    }
+    let content: string;
+    try {
+      content = await workspace.readText({ path: filePath });
+    } catch (_error) {
+      errors.push(`${filePath} could not be read for validation guidance`);
+      continue;
+    }
+    const lower = content.toLowerCase();
+    const dockerOnly =
+      /\bdocker[- ]only\b/u.test(lower) ||
+      /always\s+use\s+docker/u.test(lower) ||
+      /must\s+use\s+docker/u.test(lower) ||
+      /validation[^.\n]{0,120}\buse\s+docker/u.test(lower);
+    const noHostGo =
+      /never\s+(?:run\s+)?`?go test`?\s+directly/u.test(lower) ||
+      /do\s+not\s+(?:run\s+)?`?go test`?\s+directly/u.test(lower) ||
+      /must\s+not\s+(?:run\s+)?`?go test`?/u.test(lower);
+
+    if (dockerOnly || noHostGo) {
+      evidencePaths.push(filePath);
+      requiresDockerValidation = requiresDockerValidation || dockerOnly;
+      prohibitsHostGoTest = prohibitsHostGoTest || noHostGo;
+    }
+  }
+
+  return {
+    requiresDockerValidation,
+    prohibitsHostGoTest,
+    evidencePaths: uniqueSorted(evidencePaths),
+    errors
+  };
+}
+
+function validationGuidanceCandidates(): string[] {
+  return [
+    "AGENTS.md",
+    "CLAUDE.md",
+    ".kiro/steering/testing-conventions.md",
+    "docs/guides/ai-agent/AGENT-RULE-Testing-Conventions.md",
+    "docs/testing.md",
+    "docs/TESTING.md",
+    "docs/developer/testing.md"
+  ];
+}
+
+async function statIfPresent(
+  workspace: WorkspaceFilePort,
+  filePath: string
+): Promise<{ exists: boolean; is_file: boolean; size_bytes: number }> {
+  try {
+    return await workspace.stat({ path: filePath });
+  } catch (_error) {
+    return { exists: false, is_file: false, size_bytes: 0 };
+  }
 }
 
 function projectShapeConfigCandidates(selectedPaths: readonly string[]): string[] {

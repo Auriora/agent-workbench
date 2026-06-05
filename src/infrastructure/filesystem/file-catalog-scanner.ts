@@ -11,23 +11,28 @@ export const DEFAULT_SKIPPED_ROOTS = [
   ".codex",
   ".git",
   ".gocache",
+  ".home",
   ".local",
   ".mypy_cache",
   ".nuxt",
   ".pixi",
   ".pytest_cache",
   ".ruff_cache",
+  ".sandbox",
   ".venv",
   "__pycache__",
+  "artifacts",
   "build",
   "coverage",
   "dist",
   "node_modules",
+  "test-artifacts",
   "venv"
 ] as const;
 
 const DEFAULT_SKIPPED_DIRECTORY_NAMES = new Set<string>(DEFAULT_SKIPPED_ROOTS);
 const DEFAULT_SKIPPED_DIRECTORY_PREFIXES = ["cmake-build-"] as const;
+const DEFAULT_SKIPPED_HIDDEN_DIRECTORY_SUFFIXES = ["-tests"] as const;
 
 function normalizePath(value: string): string {
   return value.split(path.sep).join("/");
@@ -44,6 +49,14 @@ function shouldSkipRelativePath(relativePath: string, skippedRoots: readonly str
     return true;
   }
   if (segments.some((segment) => DEFAULT_SKIPPED_DIRECTORY_PREFIXES.some((prefix) => segment.startsWith(prefix)))) {
+    return true;
+  }
+  if (
+    segments.some((segment) =>
+      segment.startsWith(".") &&
+      DEFAULT_SKIPPED_HIDDEN_DIRECTORY_SUFFIXES.some((suffix) => segment.endsWith(suffix))
+    )
+  ) {
     return true;
   }
 

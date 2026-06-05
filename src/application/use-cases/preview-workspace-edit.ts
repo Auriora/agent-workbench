@@ -5,12 +5,14 @@ import type {
   PreviewWorkspaceEditResult,
   ResponseMetadata
 } from "../../contracts/index.js";
+import { describeFileCapability } from "../../domain/policies/index.js";
 import type {
   ClockPort,
   EditPreviewStorePort,
   WorkspaceFilePort,
   WorkspaceSafetyPort
 } from "../../ports/index.js";
+import { inferLanguageFromPath } from "./file-catalog-entry.js";
 import { createPreviewToken } from "./preview-edit-token.js";
 
 export type PreviewWorkspaceEditUseCaseResult = {
@@ -82,12 +84,19 @@ export function validateEdits(
 }
 
 export function fileReference(filePath: string): FileReference {
+  const normalizedPath = normalizeRepoPath(filePath);
+  const language = inferLanguageFromPath(normalizedPath);
+  const capability = describeFileCapability({
+    path: normalizedPath,
+    language
+  });
+
   return {
-    path: normalizeRepoPath(filePath),
-    language: languageFromPath(filePath),
+    path: normalizedPath,
+    language,
     exists: true,
-    capability_level: languageFromPath(filePath) === "python" ? "partial_semantic" : "unsupported",
-    evidence_kinds: languageFromPath(filePath) === "python" ? ["parser"] : [],
+    capability_level: capability.capability_level,
+    evidence_kinds: [...capability.evidence_kinds],
     reason: "Workspace edit preview target."
   };
 }
@@ -111,16 +120,6 @@ function meta(repoRoot: string, verificationStatus: ResponseMetadata["verificati
     verification_status: verificationStatus,
     truncated: false
   };
-}
-
-function languageFromPath(filePath: string): string {
-  if (filePath.endsWith(".py")) return "python";
-  if (filePath.endsWith(".ts") || filePath.endsWith(".tsx")) return "typescript";
-  if (filePath.endsWith(".md")) return "markdown";
-  if (filePath.endsWith(".json")) return "json";
-  if (filePath.endsWith(".toml")) return "toml";
-  if (filePath.endsWith(".yml") || filePath.endsWith(".yaml")) return "yaml";
-  return "text";
 }
 
 function normalizeRepoPath(value: string): string {

@@ -17,7 +17,7 @@ export function buildStatBackedFileCatalogEntry(input: {
   });
 }
 
-function inferLanguageFromPath(filePath: string): string {
+export function inferLanguageFromPath(filePath: string): string {
   const normalized = filePath.replaceAll("\\", "/").replace(/^\.\/+/, "");
   const filename = normalized.slice(normalized.lastIndexOf("/") + 1).toLowerCase();
   const ext = filename.slice(filename.lastIndexOf("."));

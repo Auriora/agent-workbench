@@ -6,7 +6,7 @@ import {
   indexRepositoryGraph,
   warmupRepositoryGraph
 } from "../../src/application/use-cases/index-repository-graph.js";
-import type { ClockPort, ExtractorPort } from "../../src/ports/index.js";
+import type { ClockPort, ExtractorPort, WorkspaceFilePort } from "../../src/ports/index.js";
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../../src/infrastructure/extraction/index.js";
 import { FileCatalogScannerAdapter, WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
@@ -132,6 +132,59 @@ describe("repository graph extraction pipeline", () => {
             provenance: "tree-sitter-reference-resolution"
           })
         ])
+      );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("records oversized files as skipped without reading them during extraction", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(dir, "large-file-repo-"));
+    fs.writeFileSync(path.join(repoRoot, "README.md"), "x".repeat(2_000_001));
+    const store = openGraphStore(path.join(dir, "large-file.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    const workspace = new WorkspaceFileAdapter({ repoRoot });
+    const guardedWorkspace: WorkspaceFilePort = {
+      readText(input) {
+        if (input.path === "README.md") {
+          throw new Error("oversized file should not be read");
+        }
+        return workspace.readText(input);
+      },
+      readBinary: (input) => workspace.readBinary(input),
+      writeText: (input) => workspace.writeText(input),
+      writeBinary: (input) => workspace.writeBinary(input),
+      stat: (input) => workspace.stat(input),
+      deletePath: (input) => workspace.deletePath(input),
+      ensureDirectory: (input) => workspace.ensureDirectory(input)
+    };
+
+    try {
+      const result = await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: guardedWorkspace,
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "102"
+      });
+
+      expect(result).toMatchObject({
+        scanned_files: 1,
+        extracted_files: 0,
+        resource_backed_files: 0,
+        unsupported_files: 1
+      });
+      await expect(store.getFile({ snapshot_id: "102", path: "README.md" })).resolves.toEqual(
+        expect.objectContaining({
+          indexed: false,
+          skipped_reason: "file_too_large_for_text_extraction"
+        })
       );
     } finally {
       store.close();

@@ -245,6 +245,40 @@ describe("workspace edit MCP tools", () => {
     }
   });
 
+  it("uses shared capability metadata for C++ preview targets", async () => {
+    const fixture = createEditFixture();
+    try {
+      fs.mkdirSync(path.join(fixture.repoRoot, "src", "App"), { recursive: true });
+      fs.writeFileSync(path.join(fixture.repoRoot, "src", "App", "DocumentObject.cpp"), "int value = 1;\n");
+      const registered = register(previewWorkspaceEditTool, fixture.context);
+
+      const response = await registered.handler({
+        edits: [{ path: "src/App/DocumentObject.cpp", replacement_text: "int value = 2;\n" }]
+      });
+      const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+        data: {
+          changed_files: Array<{
+            path: string;
+            language: string;
+            capability_level: string;
+            evidence_kinds: string[];
+          }>;
+        };
+      };
+
+      expect(parsed.data.changed_files).toEqual([
+        expect.objectContaining({
+          path: "src/App/DocumentObject.cpp",
+          language: "cpp",
+          capability_level: "resource_backed",
+          evidence_kinds: ["heuristic"]
+        })
+      ]);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
   it("returns stable MCP envelopes for expired, mismatched, and missing-target apply failures", async () => {
     const fixture = createEditFixture();
     try {

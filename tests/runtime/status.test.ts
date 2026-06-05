@@ -391,15 +391,35 @@ describe("runtime status", () => {
     }
   });
 
-  it("keeps snapshot status bounded without enumerating the catalog", async () => {
+  it("keeps snapshot status bounded while using persisted catalog evidence", async () => {
     let listFilesCalled = false;
     const result = await getSnapshotRepoStatus({
       repo_root: "/repo",
       snapshots: snapshotPort(snapshot({ freshness: "fresh" })),
       catalog: {
-        async listFiles() {
+        async listFiles(input) {
           listFilesCalled = true;
-          return [];
+          expect(input.max_rows).toBe(10);
+          return [
+            buildFileCatalogEntry({
+              file_identity: {
+                path: "src/main.go",
+                language: "go",
+                content_hash: "sha256:go",
+                size_bytes: 10,
+                mtime_ms: 1
+              }
+            }),
+            buildFileCatalogEntry({
+              file_identity: {
+                path: "src/app/DocumentObject.cpp",
+                language: "cpp",
+                content_hash: "sha256:cpp",
+                size_bytes: 20,
+                mtime_ms: 1
+              }
+            })
+          ];
         },
         async getFile() {
           return null;
@@ -410,9 +430,14 @@ describe("runtime status", () => {
       max_files: 10
     });
 
-    expect(listFilesCalled).toBe(false);
-    expect(result.status.adapter_coverage).toEqual([]);
-    expect(result.meta.scope.languages).toEqual([]);
+    expect(listFilesCalled).toBe(true);
+    expect(result.status.adapter_coverage).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "go", capability_level: "resource_backed" }),
+        expect.objectContaining({ name: "cpp", capability_level: "resource_backed" })
+      ])
+    );
+    expect(result.meta.scope.languages).toEqual(["cpp", "go"]);
     expect(result.meta.budget).toEqual({ row_limit: 10 });
   });
 

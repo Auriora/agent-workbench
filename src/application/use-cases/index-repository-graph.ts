@@ -21,6 +21,8 @@ import type {
   WarmupCoordinatorPort
 } from "../../ports/index.js";
 
+const MAX_TEXT_EXTRACTION_BYTES = 2_000_000;
+
 export type IndexRepositoryGraphResult = {
   snapshot_id: string;
   repo_root: string;
@@ -102,6 +104,23 @@ export async function indexRepositoryGraph(input: {
           ...file,
           indexed: false,
           skipped_reason: "unsupported",
+          file_identity: {
+            ...file.file_identity,
+            indexed_at: undefined
+          }
+        }
+      });
+      continue;
+    }
+
+    if (file.file_identity.size_bytes > MAX_TEXT_EXTRACTION_BYTES) {
+      unsupportedFiles += 1;
+      await input.catalog.upsertEntry({
+        snapshot_id: snapshotId,
+        entry: {
+          ...file,
+          indexed: false,
+          skipped_reason: "file_too_large_for_text_extraction",
           file_identity: {
             ...file.file_identity,
             indexed_at: undefined
