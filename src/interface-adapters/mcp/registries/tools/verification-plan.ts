@@ -85,9 +85,25 @@ export const verificationPlanTool: McpToolDeclaration = {
           };
         }
 
-        const result = await context.planVerification({
-          request: withDefaultRepoRoot(request, context.repoRoot)
-        });
+        let result;
+        try {
+          result = await context.planVerification({
+            request: withDefaultRepoRoot(request, context.repoRoot)
+          });
+        } catch (error) {
+          const envelope = buildInvalidVerificationPlanInputEnvelope({
+            repoRoot: request.repo_root ?? context.repoRoot,
+            message: `verification_plan provider failed before planning could complete: ${error instanceof Error ? error.message : String(error)}`
+          });
+          return {
+            content: [
+              {
+                type: "text",
+                text: JSON.stringify(envelope, null, 2)
+              }
+            ]
+          };
+        }
         const envelope = buildVerificationPlanEnvelope(result);
         return {
           content: [

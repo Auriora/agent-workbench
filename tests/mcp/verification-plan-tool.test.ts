@@ -58,6 +58,41 @@ describe("verification_plan use case", () => {
     );
   });
 
+  it("plans documentation/config review for docs-only repositories when no files are selected", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-docs-only-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "docs", "specs", "001-example"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "README.md"), "# Fixture\n");
+      fs.writeFileSync(path.join(repoRoot, "docs", "specs", "001-example", "tasks.md"), "# Tasks\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: [],
+          changed_files: [],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands).toEqual([
+        expect.objectContaining({
+          command: "manual_review",
+          args: ["docs-config-syntax"],
+          display: "planned docs/config syntax review",
+          reason: expect.stringContaining("Repository documentation or configuration files are present")
+        })
+      ]);
+      expect(result.plan.static_feedback).toBeUndefined();
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("plans Python and docs/config validation from mixed file evidence", async () => {
     const result = await planVerification({
       request: {
@@ -920,6 +955,47 @@ describe("verification_plan MCP tool", () => {
     expect(parsed.errors).toEqual([
       expect.objectContaining({
         code: "invalid_input",
+        retryable: false
+      })
+    ]);
+  });
+
+  it("returns a structured blocked envelope when provider filesystem discovery fails", async () => {
+    let registered: RegisteredTool | undefined;
+    const server = {
+      tool(
+        name: string,
+        description: string,
+        _shape: unknown,
+        handler: RegisteredTool["handler"]
+      ) {
+        registered = { name, description, handler };
+      }
+    };
+
+    verificationPlanTool.register(server as never, {
+      repoRoot: "/repo",
+      planVerification: () => {
+        throw new Error("ENOENT: no such file or directory, scandir '/repo/docs/missing'");
+      }
+    });
+
+    const response = await registered?.handler({
+      changed_files: ["docs/missing/note.md"]
+    });
+    const parsed = JSON.parse(response?.content[0]?.text ?? "{}") as {
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; message: string; retryable: boolean }>;
+    };
+
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "invalid_input",
+        message: expect.stringContaining("ENOENT"),
         retryable: false
       })
     ]);

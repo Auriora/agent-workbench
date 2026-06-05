@@ -29,7 +29,8 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         behavior: [
           "Launches the production MCP server from this repository checkout.",
           "Defaults omitted repo roots to the Codex session working directory.",
-          "Supports explicit repo roots through arguments or AGENT_WORKBENCH_DEFAULT_REPO_ROOT for fixed-target launches."
+          "Supports explicit repo roots through arguments or AGENT_WORKBENCH_DEFAULT_REPO_ROOT for fixed-target launches.",
+          "Lists configured public MCP bindings; a given Codex session may expose only the subset discovered by the active client configuration."
         ],
         constraints: [
           "No copied runtime path.",
@@ -124,43 +125,43 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         name: "context_for_task",
         kind: "tool",
         capability_class: "read_only",
-        description: "Task-context MCP workflow for status, files, docs, risks, and validation hints."
+        description: "Configured task-context MCP workflow for status, files, docs, risks, and validation hints."
       },
       {
         name: "symbol_search",
         kind: "tool",
         capability_class: "read_only",
-        description: "Bounded indexed graph symbol search with optional source-byte snippets."
+        description: "Configured bounded indexed graph symbol search with optional source-byte snippets."
       },
       {
         name: "find_references",
         kind: "tool",
         capability_class: "read_only",
-        description: "Bounded resolved and unresolved reference lookup for indexed symbols."
+        description: "Configured bounded resolved and unresolved reference lookup for indexed symbols."
       },
       {
         name: "impact",
         kind: "tool",
         capability_class: "read_only",
-        description: "Bounded graph impact traversal for indexed symbols and affected files."
+        description: "Configured bounded graph impact traversal for indexed symbols and affected files."
       },
       {
         name: "preview_workspace_edit",
         kind: "tool",
         capability_class: "workspace_write",
-        description: "Previews bounded workspace edits with file hashes and no mutation."
+        description: "Configured preview for bounded workspace edits with file hashes and no mutation."
       },
       {
         name: "apply_workspace_edit",
         kind: "tool",
         capability_class: "workspace_write",
-        description: "Applies a previewed workspace edit after token, hash, and safety checks."
+        description: "Configured apply path for previewed workspace edits after token, hash, and safety checks."
       },
       {
         name: "verification_plan",
         kind: "tool",
         capability_class: "planning",
-        description: "Plans validation commands and quiet static feedback without executing commands."
+        description: "Configured validation planning and quiet static feedback without executing commands."
       }
     ],
     plugin: {
@@ -218,6 +219,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
     ],
     guardrails: [
       "MCP is the only executable runtime surface.",
+      "Configured MCP bindings must not be treated as guaranteed client-discovered tools unless the active session exposes them.",
       "Plugin, skill, and hook artifacts are wrappers around MCP, not parallel implementations.",
       "Source edits require Codex restart to reload MCP source behavior.",
       "Dependency changes require pnpm install in this repository checkout, then restart Codex.",

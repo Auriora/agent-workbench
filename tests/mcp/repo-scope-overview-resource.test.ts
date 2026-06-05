@@ -287,6 +287,48 @@ describe("repo overview MCP resource", () => {
     }
   });
 
+  it("prioritizes durable docs and skill guidance over fixture docs in docs-heavy repositories", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-overview-docs-heavy-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "docs", "design"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "docs", "reference"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "skills", "spec-lifecycle-manager"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "tests", "fixtures", "skill-validation", "example"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "README.md"), "# Fixture\n");
+      fs.writeFileSync(path.join(repoRoot, "AGENTS.md"), "# Agent Guidance\n");
+      fs.writeFileSync(path.join(repoRoot, "docs", "design", "runtime-design.md"), "# Runtime Design\n");
+      fs.writeFileSync(path.join(repoRoot, "docs", "reference", "documentation-map.md"), "# Documentation Map\n");
+      fs.writeFileSync(path.join(repoRoot, "skills", "spec-lifecycle-manager", "SKILL.md"), "# Spec Lifecycle\n");
+      fs.writeFileSync(
+        path.join(repoRoot, "tests", "fixtures", "skill-validation", "example", "fixture.md"),
+        "# Fixture Doc\n"
+      );
+
+      const result = await getRepoOverview({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter()
+      });
+
+      expect(result.overview.key_docs.map((doc) => doc.path).slice(0, 5)).toEqual([
+        "AGENTS.md",
+        "README.md",
+        "skills/spec-lifecycle-manager/SKILL.md",
+        "docs/design/runtime-design.md",
+        "docs/reference/documentation-map.md"
+      ]);
+      expect(result.overview.key_docs.map((doc) => doc.path).indexOf("tests/fixtures/skill-validation/example/fixture.md")).toBe(-1);
+      expect(result.overview.validation_hints).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            command: "manual_review docs-config-syntax"
+          })
+        ])
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("promotes .NET solution, project, app, Razor, and test anchors", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-dotnet-web-repo");
     const result = await getRepoOverview({

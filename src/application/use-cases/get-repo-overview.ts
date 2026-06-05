@@ -116,7 +116,13 @@ function selectKeyDocs(files: readonly FileCatalogEntry[]): DocumentReference[] 
 
 function isOverviewDocCandidate(filePath: string): boolean {
   const lower = filePath.toLowerCase();
-  return lower === "readme.md" || lower === "agents.md" || lower.startsWith("docs/");
+  return (
+    lower === "readme.md" ||
+    lower === "agents.md" ||
+    lower.startsWith("docs/") ||
+    lower.startsWith("skills/") ||
+    lower.includes("/skills/")
+  );
 }
 
 function docRank(filePath: string): number {
@@ -128,7 +134,10 @@ function docRank(filePath: string): number {
   if (lower.includes("architecture") || lower.includes("design")) score += 70;
   if (lower.includes("runbook") || lower.includes("operations") || lower.includes("developer")) score += 60;
   if (lower.startsWith("docs/reference/")) score += 50;
+  if (lower.startsWith("skills/") || lower.includes("/skills/")) score += 85;
+  if (lower.endsWith("/skill.md")) score += 45;
   if (lower.includes("template")) score -= 80;
+  if (lower.includes("/fixtures/") || lower.startsWith("tests/fixtures/")) score -= 140;
   if (lower.includes("/archive/") || lower.startsWith("docs/archive/")) score -= 70;
   if (lower.includes("/updates/") || lower.startsWith("docs/updates/")) score -= 60;
   if (lower.includes("project-management") || lower.includes("/plans/")) score -= 40;
@@ -142,6 +151,7 @@ function reasonForDoc(filePath: string): string {
   if (lower.startsWith("docs/guides/")) return "Durable guide document.";
   if (lower.includes("architecture") || lower.includes("design")) return "Durable architecture or design document.";
   if (lower.startsWith("docs/reference/")) return "Durable reference document.";
+  if (lower.startsWith("skills/") || lower.includes("/skills/")) return "Canonical skill guidance document.";
   return "Repository documentation file.";
 }
 
@@ -152,6 +162,7 @@ function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHin
   const hasCpp = files.some((file) => file.file_identity.language === "c" || file.file_identity.language === "cpp");
   const hasGo = paths.has("go.mod") || paths.has("go.work");
   const hasPackage = paths.has("package.json");
+  const hasDocsOrConfig = files.some((file) => ["config", "markdown", "json", "toml", "yaml"].includes(file.file_identity.language));
   const dotnetSolution = firstDotnetSolution(paths);
   const dotnetTestProject = firstDotnetTestProject(paths);
   const samTemplate = firstSamTemplate(paths);
@@ -217,6 +228,22 @@ function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHin
   }
   if (paths.has("pyproject.toml")) {
     hints.push({ command: "python3 -m pytest", reason: "pyproject.toml indicates Python tests may be available.", status: "needed" });
+  }
+  if (
+    hasDocsOrConfig &&
+    samTemplate === undefined &&
+    dotnetSolution === undefined &&
+    !hasDotnetProject(paths) &&
+    !(hasCmake && hasCpp) &&
+    !hasGo &&
+    !hasPackage &&
+    !paths.has("pyproject.toml")
+  ) {
+    hints.push({
+      command: "manual_review docs-config-syntax",
+      reason: "Documentation or configuration files indicate syntax, metadata, and link/readability checks may be useful even when no code test runner is present.",
+      status: "needed"
+    });
   }
   return hints;
 }
@@ -291,6 +318,7 @@ function keyFileRank(file: FileCatalogEntry): number {
   if (file.file_identity.language === "csharp") score += 8;
   if (file.file_identity.language === "python") score += 6;
   if (lower.includes("/generated/") || lower.includes("/fixtures/")) score -= 60;
+  if (lower.startsWith("tests/fixtures/") || lower.includes("/fixture")) score -= 140;
   if (lower.includes("template-generated")) score -= 90;
   return score;
 }

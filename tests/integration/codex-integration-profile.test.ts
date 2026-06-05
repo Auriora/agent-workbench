@@ -65,7 +65,8 @@ describe("Codex integration profile", () => {
         expect.objectContaining({
           name: "context_for_task",
           kind: "tool",
-          capability_class: "read_only"
+          capability_class: "read_only",
+          description: expect.stringContaining("Configured")
         }),
         expect.objectContaining({
           name: "verification_plan",
@@ -110,6 +111,9 @@ describe("Codex integration profile", () => {
           capability_class: "read_only"
         })
       ])
+    );
+    expect(profile.guardrails).toContain(
+      "Configured MCP bindings must not be treated as guaranteed client-discovered tools unless the active session exposes them."
     );
   });
 

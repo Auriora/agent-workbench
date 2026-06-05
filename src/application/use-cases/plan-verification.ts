@@ -366,6 +366,7 @@ function planValidationCommands(input: {
   const hasGoFiles = input.files.some((file) => file.file_identity.language === "go");
   const hasCppFiles = input.files.some((file) => file.file_identity.language === "cpp" || file.file_identity.language === "c");
   const hasDotnetFiles = input.files.some((file) => file.file_identity.language === "csharp" || isDotnetProjectPath(file.path));
+  const hasDocsOrConfigFiles = input.files.some((file) => isDocsOrConfigLanguage(file.file_identity.language));
   const hasSamTemplate = input.discovery.samTemplates.length > 0;
   const goShapeSelected = input.discovery.hasGoMod && (includeAll ? hasGoFiles : selectedLanguages.has("go"));
   const cmakeShapeSelected =
@@ -613,12 +614,17 @@ function planValidationCommands(input: {
     }
   }
 
-  if (input.selectedEntries.some((file) => ["config", "markdown", "json", "toml", "yaml"].includes(file.file_identity.language))) {
+  if (
+    input.selectedEntries.some((file) => isDocsOrConfigLanguage(file.file_identity.language)) ||
+    (includeAll && hasDocsOrConfigFiles)
+  ) {
     commands.push({
       command: "manual_review",
       args: ["docs-config-syntax"],
       display: "planned docs/config syntax review",
-      reason: "Documentation or configuration files changed; syntax/readability checks are planned, not executed.",
+      reason: includeAll && input.selectedEntries.length === 0
+        ? "Repository documentation or configuration files are present; syntax/readability checks are planned, not executed."
+        : "Documentation or configuration files changed; syntax/readability checks are planned, not executed.",
       status: "planned",
       execution: "not_executed"
     });
@@ -707,6 +713,10 @@ function buildSummary(
 
 function hasAny(values: Set<string>, expected: readonly string[]): boolean {
   return expected.some((value) => values.has(value));
+}
+
+function isDocsOrConfigLanguage(language: string): boolean {
+  return ["config", "markdown", "json", "toml", "yaml"].includes(language);
 }
 
 function uniqueSorted(values: readonly string[]): string[] {

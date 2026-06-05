@@ -427,10 +427,21 @@ Post-closure dogfood caveats from large mixed-language repositories:
   surfaces summarize skipped-path counts through `skipped_work` to stay compact.
   Future work can add write-path `workspace_escape` and graph warmup
   `file_too_large` evidence where those subsystems own the skip.
-- Open: align `integration:///profiles/codex` with the exact tool surface that
-  Codex discovery exposes in a fresh session. If tools exist but require
-  targeted discovery, the profile should say that explicitly; if they are not
-  callable, the profile and `next_action` metadata must not advertise them.
+- Done: align `integration:///profiles/codex` wording with the distinction
+  between configured public MCP bindings and the subset actually discovered by
+  a given Codex client session. The profile now warns callers not to treat
+  configured bindings as guaranteed client-exposed tools unless the active
+  session exposes them.
+- Done: improve docs-heavy repository overview ranking so durable docs and
+  canonical skill guidance rank ahead of fixture/example documents in first-read
+  key-doc results.
+- Done: add documentation/config-only validation hints and plans. Repositories
+  with Markdown/config evidence but no stronger code project shape now get a
+  non-executed docs/config syntax/readability review hint; `verification_plan`
+  also plans the docs/config review when no explicit files are selected.
+- Done: wrap `verification_plan` provider failures in the standard blocked
+  response envelope instead of leaking raw filesystem errors such as `ENOENT`
+  to MCP callers.
 - Done: add first-slice package-manager-aware validation planning for JavaScript
   and TypeScript monorepos. The planner detects root/package-local
   `package.json` files, lockfile-selected package managers, and selected-file
