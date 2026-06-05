@@ -13,15 +13,9 @@ export function buildSessionStartContext(payload, env = process.env) {
     return undefined;
   }
 
-  const cwd = typeof payload.cwd === "string" ? payload.cwd : undefined;
-  if (!cwd) {
-    return undefined;
-  }
-
   return [
-    "Agent Workbench MCP is available for this Codex session.",
-    `Repo root candidate: ${cwd}`,
-    "Start with repo:///status, repo:///scope, and repo:///overview; use integration:///profiles/codex when you need Codex surface details."
+    "Agent Workbench MCP is available.",
+    "Use repo:///status, repo:///scope, or repo:///overview when repository context is unclear."
   ].join(" ");
 }
 
@@ -29,7 +23,7 @@ async function main() {
   const payload = parsePayload(await readStdin());
   const context = buildSessionStartContext(payload);
   if (context) {
-    emitAdditionalContext(context);
+    emitAdditionalContext("SessionStart", context);
   }
 }
 

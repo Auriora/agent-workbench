@@ -21,7 +21,12 @@ for fixed-target launches outside the active workspace.
 ## Hook Behavior
 
 Hooks are silent by default. Set `AGENT_WORKBENCH_HOOK_FEEDBACK=basic` to emit
-compact MCP follow-up guidance.
+compact session-start context only. File-edit hooks stay silent unless they have
+an actionable finding to report.
 
-The hooks never run diagnostics, never return partial results for timeouts or
-failures, and never block Codex editing. Runtime analysis remains MCP-owned.
+Post-edit feedback is limited to cheap local findings: generated/local artifact
+touches, workspace-escape-looking paths, merge-conflict markers, and syntax
+failures for Python, JavaScript, JSON, TOML, and shell files. The hooks never
+report clean edits, never suggest follow-up calls from file-edit events, never
+return partial results for timeouts or failures, and never block Codex editing.
+Runtime analysis remains MCP-owned.

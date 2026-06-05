@@ -199,8 +199,8 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         default_mode: "silent",
         blocks_workflow: false,
         emits_when: ["AGENT_WORKBENCH_HOOK_FEEDBACK=basic"],
-        quiet_when: ["default configuration", "invalid payload", "missing cwd"],
-        schema_mapping: "MCP status/resource guidance only; no runtime analysis is executed."
+        quiet_when: ["default configuration", "invalid payload"],
+        schema_mapping: "Short MCP availability guidance only; no runtime analysis is executed."
       },
       {
         name: "agent-workbench-post-edit-feedback",
@@ -209,9 +209,11 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         path: "plugins/agent-workbench/hooks/post-edit-feedback.js",
         default_mode: "silent",
         blocks_workflow: false,
-        emits_when: ["AGENT_WORKBENCH_HOOK_FEEDBACK=basic and changed files are detected"],
-        quiet_when: ["default configuration", "no changed files", "unsupported payload", "hook errors"],
-        schema_mapping: "verification_plan.static_feedback follow-up guidance only; no diagnostics are run."
+        emits_when: [
+          "AGENT_WORKBENCH_HOOK_FEEDBACK=basic and actionable path, conflict-marker, or syntax findings are detected"
+        ],
+        quiet_when: ["clean edits", "successful edits", "unsupported payload", "hook errors"],
+        schema_mapping: "Cheap local actionable findings only; no runtime diagnostics or tests are run."
       }
     ],
     guardrails: [

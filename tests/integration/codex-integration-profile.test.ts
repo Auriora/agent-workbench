@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -252,6 +253,9 @@ describe("Codex plugin artifacts", () => {
     const sessionStart = await import(
       pathToFileURL(path.join(pluginRoot, "hooks/session-start.js")).href
     );
+    const common = await import(
+      pathToFileURL(path.join(pluginRoot, "hooks/hook-common.js")).href
+    );
 
     expect(
       postEdit.buildPostEditContext(
@@ -270,34 +274,130 @@ describe("Codex plugin artifacts", () => {
         },
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )
-    ).toContain("The hook did not run analysis and did not produce partial results.");
+    ).toBeUndefined();
+    expect(postEdit.extractChangedFiles({ tool_input: { path: "src/app.ts" } })).toEqual([
+      "src/app.ts"
+    ]);
     expect(
       postEdit.buildPostEditContext(
         {
+          cwd: "/repo",
           tool_name: "write_file",
-          tool_input: { path: "src/app.ts" }
+          tool_input: { path: "generated/out.txt" }
         },
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )
-    ).toContain("verification_plan tool");
+    ).toBe("Generated/local artifact changed: generated/out.txt.");
+    expect(
+      postEdit.buildPostEditContext(
+        {
+          cwd: "/repo",
+          tool_name: "write_file",
+          tool_input: { path: "/repo/.cache/agent-workbench/index.db" }
+        },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toBe("Generated/local artifact changed: .cache/agent-workbench/index.db.");
+    expect(
+      postEdit.buildPostEditContext(
+        {
+          cwd: "/repo",
+          tool_name: "write_file",
+          tool_input: { path: "/outside/file.txt" }
+        },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toBe("Workspace escape path reported: ../outside/file.txt.");
+
+    const hookFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-hook-"));
+    fs.mkdirSync(path.join(hookFixtureRoot, "src"), { recursive: true });
+    fs.writeFileSync(path.join(hookFixtureRoot, "src", "valid.json"), "{\"ok\": true}\n");
+    fs.writeFileSync(path.join(hookFixtureRoot, "src", "invalid.json"), "{\"ok\": \n");
+    fs.writeFileSync(path.join(hookFixtureRoot, "src", "bad.py"), "def broken(:\n");
+    fs.writeFileSync(path.join(hookFixtureRoot, "src", "bad.js"), "function broken( {\n");
+    fs.writeFileSync(path.join(hookFixtureRoot, "src", "bad.sh"), "if true; then\n");
+    fs.writeFileSync(path.join(hookFixtureRoot, "src", "bad.toml"), "[tool.\n");
+    fs.writeFileSync(
+      path.join(hookFixtureRoot, "src", "conflict.md"),
+      "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> branch\n"
+    );
+
+    expect(
+      postEdit.buildPostEditContext(
+        { cwd: hookFixtureRoot, tool_input: { path: "src/valid.json" } },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toBeUndefined();
+    expect(
+      postEdit.buildPostEditContext(
+        { cwd: hookFixtureRoot, tool_input: { path: "src/invalid.json" } },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toContain("JSON syntax error in src/invalid.json");
+    expect(
+      postEdit.buildPostEditContext(
+        { cwd: hookFixtureRoot, tool_input: { path: "src/bad.py" } },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toContain("Python syntax error in src/bad.py");
+    expect(
+      postEdit.buildPostEditContext(
+        { cwd: hookFixtureRoot, tool_input: { path: "src/bad.js" } },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toContain("JavaScript syntax error in src/bad.js");
+    expect(
+      postEdit.buildPostEditContext(
+        { cwd: hookFixtureRoot, tool_input: { path: "src/bad.sh" } },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toContain("Shell syntax error in src/bad.sh");
+    expect(
+      postEdit.buildPostEditContext(
+        { cwd: hookFixtureRoot, tool_input: { path: "src/bad.toml" } },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toContain("TOML syntax error in src/bad.toml");
+    expect(
+      postEdit.buildPostEditContext(
+        { cwd: hookFixtureRoot, tool_input: { path: "src/conflict.md" } },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toBe("Merge conflict marker in src/conflict.md.");
+    expect(
+      postEdit.buildPostEditContext(
+        {
+          cwd: hookFixtureRoot,
+          tool_input: { path: "src/invalid.json" },
+          tool_response: { code: 1 }
+        },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toBeUndefined();
     expect(
       sessionStart.buildSessionStartContext(
         { cwd: "/repo" },
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )
-    ).toContain("repo:///status");
+    ).toBe("Agent Workbench MCP is available. Use repo:///status, repo:///scope, or repo:///overview when repository context is unclear.");
     expect(
       sessionStart.buildSessionStartContext(
         { cwd: "/repo" },
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )
-    ).toContain("repo:///scope");
-    expect(
-      sessionStart.buildSessionStartContext(
-        { cwd: "/repo" },
-        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
-      )
-    ).toContain("repo:///overview");
+    ).not.toContain("/repo");
+    expect(common.buildAdditionalContextOutput("SessionStart", "hello")).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "SessionStart",
+        additionalContext: "hello"
+      }
+    });
+    expect(common.buildAdditionalContextOutput("PostToolUse", "hello")).toEqual({
+      hookSpecificOutput: {
+        hookEventName: "PostToolUse",
+        additionalContext: "hello"
+      }
+    });
   });
 
   it("launches MCP from the repository checkout entrypoint", () => {

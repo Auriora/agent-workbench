@@ -1,4 +1,6 @@
 import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
 import { pathToFileURL } from "node:url";
 
 export function feedbackMode(env = process.env) {
@@ -27,14 +29,35 @@ export function parsePayload(raw) {
   return typeof parsed === "object" && parsed !== null ? parsed : {};
 }
 
-export function emitAdditionalContext(message, stdout = process.stdout) {
+export function buildAdditionalContextOutput(hookEventName, message) {
+  return {
+    hookSpecificOutput: {
+      hookEventName,
+      additionalContext: message
+    }
+  };
+}
+
+export function emitAdditionalContext(hookEventName, message, stdout = process.stdout) {
   stdout.write(
-    `${JSON.stringify({
-      hookSpecificOutput: {
-        additionalContext: message
-      }
-    })}\n`
+    `${JSON.stringify(buildAdditionalContextOutput(hookEventName, message))}\n`
   );
+}
+
+export function appendHookLog(name, record, env = process.env) {
+  const logPath =
+    env.AGENT_WORKBENCH_HOOK_LOG_PATH ??
+    path.join(os.homedir(), ".codex", "hooks", `${name}.log.jsonl`);
+  try {
+    fs.mkdirSync(path.dirname(logPath), { recursive: true });
+    fs.appendFileSync(
+      logPath,
+      `${JSON.stringify({ timestamp: new Date().toISOString(), ...record })}\n`,
+      "utf8"
+    );
+  } catch {
+    // Hook logs are diagnostic only. Never surface logging failures to Codex.
+  }
 }
 
 export async function runQuietHook(main) {
