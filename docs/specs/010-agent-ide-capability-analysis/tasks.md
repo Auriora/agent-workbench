@@ -52,14 +52,21 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     candidates, and links the durable analysis from
     `docs/reference/documentation-map.md`.
 
-- [ ] T004 Identify tool/resource changes worth planning.
+- [x] T004 Identify tool/resource changes worth planning.
   - Depends on: T003
   - Files: `docs/reference/agent-ide-capability-analysis/`,
     `docs/design/mcp-surface-design.md`
   - Acceptance: Candidate public MCP changes are justified by workflow value,
     language neutrality, presenter behavior, and validation evidence; existing
     tools are preferred where they can carry the workflow.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-05. Added T004 recommendations to
+    [Agent IDE capability analysis](../../reference/agent-ide-capability-analysis/agent-ide-capability-analysis-2026-06-05.md)
+    and summarized the public-surface direction in
+    `docs/design/mcp-surface-design.md`. The recommended follow-up order is
+    diagnostics/post-edit feedback first, docs query/read surfaces second, with
+    `repo_preflight`, broad orientation, usage resources, dependency deep dives,
+    and semantic refactor parity deferred or rejected until evidence justifies
+    them.
 
 - [ ] T005 Create or update follow-up specs for high-priority gaps.
   - Depends on: T004

@@ -152,3 +152,170 @@ orientation or semantic refactor parity.
 - Should docs search/read-section be MCP tools, resources/templates, or both?
 - Should opt-in usage/adoption resources exist, or should telemetry stay only
   in Jaeger/logs for now?
+
+## T004 Tool And Resource Recommendations
+
+### Recommendation 1: Plan A Diagnostics And Post-Edit Feedback Slice
+
+Decision: promote to follow-up spec planning.
+
+The strongest replacement gap is language-neutral changed-file diagnostics and
+post-edit feedback. In predecessor telemetry, diagnostics and post-apply
+feedback dominated real workflow usage. Agent Workbench already has quiet hooks
+and `verification_plan.static_feedback`, but the workflow is not yet explicit
+enough to replace `diagnostics_for_files -> post_edit_feedback ->
+test_impact_with_evidence`.
+
+Recommended public surface:
+
+- Add a `diagnostics_for_files` tool only if the implementation can return a
+  compact, provider-backed diagnostics envelope without running broad
+  validation or tests.
+- Add a `post_edit_feedback` tool after diagnostics provider contracts exist,
+  or make the same use case available through `verification_plan` if T005
+  chooses to avoid another public tool.
+- Keep hooks as thin clients over the same feedback use case. Hooks must remain
+  silent for clean results and optional analyzer failures.
+
+Presenter behavior:
+
+- Return only actionable findings, blockers, risky-edit warnings, and concise
+  next actions.
+- Include relative paths only.
+- Suppress no-finding results.
+- Label provider failures as unavailable or blocked only when the requested
+  tool promised that analysis.
+
+Validation evidence needed:
+
+- Fixture-backed diagnostics providers for at least Markdown/config plus one
+  language adapter.
+- Golden response tests for clean, finding, unavailable-provider, and degraded
+  runtime states.
+- Hook tests proving clean/error paths stay quiet and actionable findings are
+  concise.
+
+Language-neutral constraints:
+
+- Providers emit normalized diagnostics records; they do not leak Ruff, Pyright,
+  pytest, TypeScript, clangd, or other backend-specific output into MCP
+  envelopes.
+- Language adapters decide provider readiness and capability; MCP fields stay
+  shared.
+
+### Recommendation 2: Plan A Docs Query Slice
+
+Decision: promote to follow-up spec planning, behind diagnostics/post-edit
+feedback unless immediate docs dogfood says otherwise.
+
+Predecessor usage shows docs search and docs section reads are high-value,
+language-neutral surfaces. Agent Workbench has Markdown/resource-backed routing,
+but not a direct docs query/read workflow matching `docs_search`,
+`docs_outline`, `docs_read_section`, and `repo:///docs/overview`.
+
+Recommended public surface:
+
+- Add compact docs resources first: `repo:///docs/overview` and
+  `repo:///docs/map`.
+- Add docs tools or templates for intentional query/read work:
+  `docs_search`, `docs_outline`, and `docs_read_section`.
+- Defer `docs_crosslinks` until the core query/read workflow is useful and
+  bounded.
+
+Presenter behavior:
+
+- Return title/path/heading matches, snippets, and direct-read caveats.
+- Never make docs search authoritative for precise documentation claims without
+  direct section read evidence.
+- Keep payloads paged and row-capped.
+
+Validation evidence needed:
+
+- Markdown fixture repos with headings, duplicate headings, links, missing
+  files, non-UTF-8 or unreadable docs, and large docs sets.
+- Budget tests proving docs query paths do not walk the repo or rebuild indexes
+  on every read.
+
+Language-neutral constraints:
+
+- Markdown indexing is documentation evidence, not Python project evidence.
+- Future docs providers for other formats must map into the same docs result
+  shape.
+
+### Recommendation 3: Do Not Add `repo_preflight` Yet
+
+Decision: improve existing first-read resources before adding a new public tool.
+
+`repo_preflight` was useful in `agent-ide`, but Agent Workbench already exposes
+`repo:///status`, `repo:///scope`, and `repo:///overview` as first-read
+resources. Adding a tool with overlapping semantics would increase surface area
+before proving that the resources cannot carry the workflow.
+
+Recommended action:
+
+- Make `repo:///overview` and `repo:///status` explicitly cover the useful
+  preflight questions: trust state, freshness, scope, blockers, capability
+  summary, and next reads.
+- Add examples to integration guidance if agents keep asking for one preflight
+  call.
+- Reconsider `repo_preflight` only if usage evidence shows resources are not
+  discoverable or agent clients strongly prefer a tool call.
+
+### Recommendation 4: Keep Runtime Path, Orientation, And Reports Deferred
+
+Decision: defer new broad orientation/report tools.
+
+`find_runtime_path`, `orient_repo`, `explore_codebase`, topology reports, and
+usage reports were useful in predecessor workflows, but they also caused drift,
+latency, and trust issues. Workbench should first make `context_for_task`
+stronger and preserve broad orientation as explicit knowledge-layer work.
+
+Recommended action:
+
+- Do not add broad orientation tools during this replacement slice.
+- Use `context_for_task` next actions to route agents to `symbol_search`,
+  `find_references`, `impact`, docs queries, or direct reads.
+- Keep future runtime-path and orientation work under the knowledge/reporting
+  layer with explicit budgets and skipped-work metadata.
+
+### Recommendation 5: Keep Usage/Adoption Resources Opt-In And Post-MVP
+
+Decision: do not add public usage resources yet.
+
+Usage telemetry is valuable product evidence, but predecessor usage resources
+grew large and introduced write overhead. Agent Workbench already has
+OpenTelemetry-oriented observability guidance and intentionally avoids durable
+usage records in the MVP.
+
+Recommended action:
+
+- Use Jaeger/log analysis and manual dogfood reports for now.
+- Add opt-in usage/adoption resources only after storage, privacy, and payload
+  budgets are designed.
+- If implemented later, store events append-only or in SQLite, not through hot
+  full JSON rewrites.
+
+### Recommendation 6: Defer Semantic Refactor Parity
+
+Decision: reject parity-driven semantic refactor tools for now.
+
+`rename_symbol`, `change_signature`, rollback, import updates, and code actions
+should not be added until language adapters can prove safe semantic edits with
+preview, drift checks, diagnostics, and fixture-backed promotion gates.
+
+Recommended action:
+
+- Keep `preview_workspace_edit` and `apply_workspace_edit` as the shared edit
+  safety foundation.
+- Add semantic refactors only per language after adapter evidence proves
+  references, impact, and edit generation are reliable.
+
+## T004 Priority Result
+
+The next follow-up specs should be planned in this order:
+
+1. Diagnostics and post-edit feedback.
+2. Docs query/read surfaces.
+3. Optional adoption telemetry, only after observability/storage design.
+4. Broad orientation/runtime-path reports and semantic refactors remain
+   deferred until stronger evidence exists.

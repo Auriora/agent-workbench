@@ -554,6 +554,12 @@ Post-closure dogfood caveats from large mixed-language repositories:
   perform a detailed predecessor `agent-ide` capability analysis, map which
   lessons are already implemented, and promote only language-neutral replacement
   gaps into tool, presenter, provider, roadmap, or follow-up spec work.
+- Spec 010 first-pass recommendation: plan diagnostics/post-edit feedback next,
+  then docs query/read surfaces. Do not add `repo_preflight`, broad orientation,
+  runtime-path reports, usage resources, semantic refactor tools, or dependency
+  deep dives merely for predecessor surface parity. Improve existing resources
+  and workflow tools unless a new public tool has cross-language workflow value
+  and fixture-backed evidence.
 
 ## Related Docs
 
