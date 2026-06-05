@@ -43,6 +43,8 @@ must appear in status, scope, and context with explicit capability metadata.
 | `fixture-runtime-boundaries` | Prove runtime context, registries, argument parsing, and OTEL boundaries | malformed MCP inputs, registry entries, runtime context fields, OTEL span/metric assertions |
 | `fixture-agent-integration-profile` | Prove common integration contract shape | Codex, Claude Code, Kiro, Augment, Gemini, and Junie target surfaces; unsupported-surface reasons; MCP binding metadata |
 | `fixture-markdown-quality` | Prove post-MVP Markdown quality contract shape | skipped heading levels, inconsistent numbering, ambiguous nested lists, wide tables, frontmatter violations, broken links, unchanged documents |
+| `fixture-go-service-repo` | Prove first-slice Go routing evidence | `.go` source files, `.gocache` skip behavior, `go.mod`, `Makefile`, package/function/type/method declarations, low-confidence impact when edges are absent |
+| `fixture-cmake-cpp-repo` | Prove first-slice C/C++ and CMake routing evidence | C++ source/header files, `.pyi` stubs, local `CMakeLists.txt`, CMake targets, classes/methods/includes, incidental `package.json` that must not dominate validation planning |
 
 TypeScript/JavaScript may be added as the second language fixture after the
 Python path passes the MVP gates. C#, CloudFormation/SAM, graph reports, and
@@ -62,13 +64,17 @@ resource-backed discovery fixtures.
 | `context_for_task` | `fixture-basic-python` | ranked files/symbols, direct-read caveats, trust metadata | includes expected edit target and excludes unrelated files |
 | `context_for_task` | `fixture-basic-python` and `fixture-markdown-config` | complete-enough markers, skipped-work metadata, exact next actions | routes ambiguous or partial evidence to symbol/reference/impact or direct reads |
 | `context_for_task` | `fixture-mixed-language-platform` | language-neutral routing and capability caveats | unsupported/resource-backed files appear as routing evidence only |
+| `context_for_task` | `fixture-cmake-cpp-repo` | file-seeded ranking for headers, sources, local CMake files, tests, and stubs | adjacent build/test/source evidence ranks ahead of incidental repository matches |
 | `symbol_search` | `fixture-basic-python` | exact and fuzzy symbol lookup | expected symbols found under row/time budget |
+| `symbol_search` | `fixture-go-service-repo`, `fixture-cmake-cpp-repo` | routing-only Go and C/C++ declarations | expected symbols found with `resource_backed` capability and heuristic evidence |
 | `find_references` | `fixture-basic-python` | references with confidence and unresolved caveats | expected references found; ambiguous refs labeled |
 | `impact` | `fixture-basic-python` | bounded file/symbol impact | traversal depth and result cap enforced |
+| `impact` | `fixture-go-service-repo`, `fixture-cmake-cpp-repo` | missing semantic-edge behavior | impact remains low confidence with `empty` or `local_only` scope when no parser-backed edges exist |
 | `preview_workspace_edit` | `fixture-workspace-safety` | preview token, base hashes, affected files | no mutation before apply |
 | `apply_workspace_edit` | `fixture-workspace-safety` | drift check, path containment, result metadata | stale or unsafe edits rejected |
 | `verification_plan` | `fixture-basic-python` | planned diagnostics/tests with blocked states | plan names expected commands without executing by default |
 | `verification_plan` | `fixture-basic-python` | planned versus proven runnable checks, test-discovery confidence, exact next actions | does not imply nearest-test proof when discovery is low confidence |
+| `verification_plan` | `fixture-go-service-repo`, `fixture-cmake-cpp-repo` | repository-shape validation planning | Go and CMake/C++ evidence outrank incidental tooling; planned or blocked checks explain their evidence |
 | Codex replacement readiness | `fixture-basic-python`, `fixture-markdown-config`, `fixture-mixed-language-platform` | first-pass context, docs/config routing, validation planning, test planning, and post-edit static feedback | workflows are discoverable through `context_for_task` and `verification_plan` without predecessor tool names or backend payloads |
 | MCP registry | `fixture-runtime-boundaries` | tool/resource definitions, typed parsers, use-case binding, presenter binding | handlers do not hand-coerce raw MCP input |
 | OTEL instrumentation | `fixture-runtime-boundaries` | dispatch, use-case, graph/query, worker, cache, presentation spans or metrics | operational telemetry exists without durable usage records |

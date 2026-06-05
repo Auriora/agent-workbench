@@ -77,9 +77,15 @@ MVP warm-up should be explicit and observable. `repo:///status` must report
 warm-up phase, snapshot freshness, queued work counts, extraction errors, and
 degraded blockers.
 
-## Prewarm Command
+## Prewarm Entry Points
 
-The runtime should expose an explicit prewarm entry point so clients can prepare
+The MCP runtime starts a graph warm-up automatically when it binds to a repo.
+Agent-facing MCP resources and tools must report cold, refreshing, fresh,
+stale, or degraded state instead of recommending hidden worker actions.
+Internal operations such as graph prewarm are not public MCP `next_action`
+values unless they are exposed through a documented public tool.
+
+A future CLI may expose an explicit prewarm entry point so clients can prepare
 repo caches before interactive agent work starts.
 
 ```text
@@ -91,8 +97,8 @@ generated cache state, and record the resulting snapshot id and repo
 fingerprint. A later runtime start can reuse the fresh snapshot when the repo
 fingerprint, config, and file identities still match.
 
-Prewarm must not bypass normal scope, safety, parser, or cache invalidation
-rules.
+Automatic and future explicit prewarm paths must not bypass normal scope,
+safety, parser, or cache invalidation rules.
 
 ## Runtime Ownership
 

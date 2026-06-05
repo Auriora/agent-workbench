@@ -71,13 +71,21 @@ describe("repo-local MCP debug harness", () => {
       task: "Update package validation",
       files: ["package.json"]
     });
+    const verification = await runDebugMcpUseCase({
+      useCase: "verification",
+      targetRepo,
+      task: "Validate package change",
+      files: ["package.json"]
+    });
 
     expect(status.contract_version).toBe("0.1");
     expect(status.meta.scope.repo_root).toBe(targetRepo);
     expect(scope.meta.scope.repo_root).toBe(targetRepo);
     expect(context.meta.scope.repo_root).toBe(targetRepo);
+    expect(verification.meta.scope.repo_root).toBe(targetRepo);
     expect(JSON.stringify(status)).toContain("adapter_coverage");
     expect(JSON.stringify(scope)).toContain("capability_counts");
     expect(JSON.stringify(context)).toContain("requested_files");
+    expect(JSON.stringify(verification)).toContain("planned_commands");
   });
 });

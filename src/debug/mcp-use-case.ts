@@ -6,13 +6,15 @@ import type {
   RepoOverview,
   RepoScope,
   ResponseEnvelope,
-  TaskContext
+  TaskContext,
+  VerificationPlan
 } from "../contracts/index.js";
 import type { RuntimeStatus } from "../application/use-cases/get-repo-status.js";
 import { getRepoOverview } from "../application/use-cases/get-repo-overview.js";
 import { getRepoScope } from "../application/use-cases/get-repo-scope.js";
 import { getScannedRepoStatus } from "../application/use-cases/get-repo-status.js";
 import { getTaskContext } from "../application/use-cases/get-task-context.js";
+import { planVerification } from "../application/use-cases/plan-verification.js";
 import {
   createTelemetryAdapter,
   telemetryConfigFromEnv
@@ -25,8 +27,9 @@ import { buildRepoOverviewEnvelope } from "../presentation/repo-overview-present
 import { buildRepoScopeEnvelope } from "../presentation/repo-scope-presenter.js";
 import { buildStatusEnvelope } from "../presentation/status-presenter.js";
 import { buildTaskContextEnvelope } from "../presentation/task-context-presenter.js";
+import { buildVerificationPlanEnvelope } from "../presentation/verification-plan-presenter.js";
 
-export type DebugMcpUseCase = "status" | "scope" | "overview" | "context";
+export type DebugMcpUseCase = "status" | "scope" | "overview" | "context" | "verification";
 
 export type DebugMcpUseCaseConfig = {
   useCase: DebugMcpUseCase;
@@ -41,7 +44,8 @@ export type DebugMcpUseCaseEnvelope =
   | ResponseEnvelope<RuntimeStatus>
   | ResponseEnvelope<RepoScope>
   | ResponseEnvelope<RepoOverview>
-  | ResponseEnvelope<TaskContext>;
+  | ResponseEnvelope<TaskContext>
+  | ResponseEnvelope<VerificationPlan>;
 
 export function resolveDebugMcpUseCaseConfig(input: {
   argv: readonly string[];
@@ -56,7 +60,7 @@ export function resolveDebugMcpUseCaseConfig(input: {
   const targetRepo = args[1];
   if (!isDebugMcpUseCase(useCase) || targetRepo == null) {
     throw new Error(
-      "Usage: pnpm debug:mcp-use-case -- <status|scope|overview|context> <target-repo> [--task <task>] [--file <path>]"
+      "Usage: pnpm debug:mcp-use-case -- <status|scope|overview|context|verification> <target-repo> [--task <task>] [--file <path>]"
     );
   }
 
@@ -104,6 +108,24 @@ export async function runDebugMcpUseCase(
       await getRepoOverview({
         repo_root: config.targetRepo,
         scanner
+      })
+    );
+  }
+
+  if (config.useCase === "verification") {
+    return buildVerificationPlanEnvelope(
+      await planVerification({
+        request: {
+          task: config.task,
+          repo_root: config.targetRepo,
+          files: config.files,
+          changed_files: config.files,
+          max_commands: 5,
+          include_static_feedback: true
+        },
+        scanner,
+        workspace: new WorkspaceFileAdapter({ repoRoot: config.targetRepo }),
+        default_repo_root: config.targetRepo
       })
     );
   }
@@ -195,7 +217,13 @@ export function isAgentWorkbenchRepo(repoRoot: string): boolean {
 }
 
 function isDebugMcpUseCase(value: string | undefined): value is DebugMcpUseCase {
-  return value === "status" || value === "scope" || value === "overview" || value === "context";
+  return (
+    value === "status" ||
+    value === "scope" ||
+    value === "overview" ||
+    value === "context" ||
+    value === "verification"
+  );
 }
 
 function readOption(args: readonly string[], name: string): string | undefined {

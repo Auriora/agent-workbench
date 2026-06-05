@@ -217,6 +217,13 @@ evidence in the same reference-hit shape. Every hit includes `evidence_kinds`:
 Lexical hits are routing evidence only. Agents must directly verify source
 before treating them as semantic references.
 
+Routing-only language extractors, such as the first-slice Go and C/C++ paths,
+may return symbols with `capability_level: "resource_backed"` and
+`evidence_kinds: ["heuristic"]`. These symbols are valid for navigation and
+context routing, but they do not imply parser-backed references, impact, or
+safe refactoring. `find_references` and `impact` must keep confidence low when
+no semantic edges exist.
+
 `impact` includes a `confidence` object with:
 
 - `level`: `high`, `medium`, or `low`

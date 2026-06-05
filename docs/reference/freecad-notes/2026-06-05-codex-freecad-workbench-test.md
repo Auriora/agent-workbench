@@ -1,3 +1,11 @@
+---
+title: FreeCAD Agent Workbench Test - Codex - 2026-06-05
+doc_type: reference
+status: draft
+owner: platform
+last_reviewed: 2026-06-05
+---
+
 # FreeCAD Agent Workbench Test - Codex - 2026-06-05
 
 Repository tested: `/home/bcherrington/Projects/CLion/FreeCAD`

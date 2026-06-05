@@ -1,10 +1,9 @@
 ---
 title: "Update: Agent Workbench Retest"
-id: "update-agent-workbench-retest"
-type: [ update ]
-status: [ draft ]
-owner: "Agent"
-last_reviewed: "05-06-2026"
+doc_type: reference
+status: draft
+owner: platform
+last_reviewed: 2026-06-05
 tags: [update, ai-agent, mcp, agent-workbench]
 links:
   tooling: [agent-workbench, mcp]

@@ -233,52 +233,60 @@ Avoid names inherited from internal backend workers, caches, parsers, or
 diagnostic providers. If an internal component is replaced, the public name and
 schema should not change unless the agent-facing capability changes.
 
-## Follow-Up Backlog
+## Cross-Repo Dogfood Follow-Up Status
 
 TimeLocker dogfood after Spec 002 left two MCP-resource polish items:
 
-- Align `repo:///scope` and `repo:///overview` freshness metadata with
+- Done: align `repo:///scope` and `repo:///overview` freshness metadata with
   snapshot-backed `repo:///status` when a fresh graph snapshot exists. Scope and
   overview may still scan for counts and rankings, but their response metadata
   should not report `freshness: unknown` when status proves a fresh completed
   warmup for the same repository.
-- Improve `repo:///overview` key-file ranking so application entrypoints,
+- Open: improve `repo:///overview` key-file ranking so application entrypoints,
   representative source files, test roots, and package/test configuration rank
   ahead of large groups of workflow/config files such as
   `.github/workflows/*`.
 
 OneMount dogfood left Go and broad-scan follow-up items:
 
-- Add `.gocache` to the default skipped roots so Go build/test cache files do
+- Done: add `.gocache` to the default skipped roots so Go build/test cache files do
   not consume scan budget or crowd out source files.
-- Ensure `repo:///scope` reports unsupported code-language files even when no
-  semantic adapter exists yet. A row cap or unsupported adapter must not make a
+- Done: ensure `repo:///scope` reports source-language files even when no
+  semantic adapter exists yet. A row cap or routing-only adapter must not make a
   Go-heavy repository look like it contains only config, Markdown, JSON, YAML,
   or text.
-- Expose an agent-callable graph warm-up tool or remove `prewarm_graph` from
+- Done: remove `prewarm_graph` from
   `next_action` values. Recovery actions must only name public MCP tools that
   are actually available in the Codex integration profile.
-- Improve `verification_plan` for Go repositories so it detects `go.mod`,
+- Done: improve `verification_plan` for Go repositories so it detects `go.mod`,
   `Makefile`, Docker test configuration, and repository-specific test
   conventions as planning evidence. When checks cannot be proven runnable, the
   result should return blocked/planned validation evidence rather than zero
   commands with no useful explanation.
+- Done: expose Go package, function, type, method, and `main` declarations as
+  `resource_backed` routing symbols while keeping references and impact low
+  confidence until semantic edges exist.
 
 FreeCAD dogfood left C++ monorepo and Codex-discoverability follow-up items:
 
-- Make `repo:///status` capability and language metadata consistent with
+- Done: make `repo:///status` capability and language metadata consistent with
   `repo:///scope` for large mixed-language repositories. Status may stay cheap,
   but it should not report `capability_level: unsupported` and `languages: []`
   when scope has already identified partial/resource-backed coverage.
-- Improve broad `context_for_task` ranking for implementation tasks by
+- Done: improve broad `context_for_task` ranking for implementation tasks by
   down-ranking generated data, third-party vendored docs, installer docs, and
   fixture blobs unless the prompt names those areas. When ranking is driven only
   by path-term matches, include a compact `confidence_reason`.
-- When the caller supplies known files, rank same-directory build files,
+- Done: when the caller supplies known files, rank same-directory build files,
   adjacent headers/sources, and nearby tests ahead of broad repository matches.
-- Ensure `next_action` values only reference tools visible in the active Codex
+- Done: expose C/C++ classes, functions, methods, includes, Python stubs, and
+  CMake target declarations as routing evidence while keeping references and
+  impact low confidence until semantic edges exist.
+- Done: ensure `next_action` values only reference tools visible in the active Codex
   discovery path, or adjust the integration profile/tool metadata so advertised
   tools are discoverable on first use.
+- Open: verify the live MCP startup path no longer reports stale
+  `Unknown snapshot id` warmup failures after session reload.
 
 Future multi-language repository work:
 

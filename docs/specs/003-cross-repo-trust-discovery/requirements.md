@@ -1,12 +1,18 @@
 ---
 title: Cross-repo trust and discovery requirements
 doc_type: spec
-status: draft
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---
 
 # Requirements
+
+## Closure Record
+
+Spec 003 closed on 2026-06-05. Accepted behavior was promoted to durable
+design/reference docs, and remaining caveats were routed to durable backlog
+sections instead of leaving this implementation spec active.
 
 ## Introduction
 

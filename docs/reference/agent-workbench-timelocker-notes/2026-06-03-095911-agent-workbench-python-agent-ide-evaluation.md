@@ -1,10 +1,9 @@
 ---
 title: "Update: Agent Workbench and Python Agent IDE Evaluation"
-id: "update-agent-workbench-python-agent-ide-evaluation"
-type: [ update ]
-status: [ draft ]
-owner: "Agent"
-last_reviewed: "03-06-2026"
+doc_type: reference
+status: draft
+owner: platform
+last_reviewed: 2026-06-03
 tags: [update, ai-agent, mcp, agent-workbench, python-agent-ide]
 links:
   tooling: [python-agent-ide, agent-workbench, mcp]

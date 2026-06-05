@@ -1,12 +1,20 @@
 ---
 title: Cross-repo trust and discovery tasks
 doc_type: spec
-status: draft
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---
 
 # Tasks
+
+## Closure Record
+
+Spec 003 closed on 2026-06-05 after implementation, automated validation,
+read-only dogfood retests, and durable-documentation promotion. All tasks are
+completed. Remaining caveats are tracked in durable backlog/status sections in
+[MCP surface design](../../design/mcp-surface-design.md) and promotion-gate
+guidance in [Language adapter design](../../design/language-adapter-design.md).
 
 **Input**: [Requirements](requirements.md), [Technical design](design.md), and
 [Verification](verification.md).
@@ -29,6 +37,7 @@ T005 -> T007
 T006 -> T008
 T007 -> T008
 T001..T008 -> T009
+T009 -> T010
 ```
 
 ## Phase 1: Close Prior Specs And Establish Fixtures
@@ -265,7 +274,7 @@ T001..T008 -> T009
 ### Task T010: Retest Cross-Repo Dogfood And Promote Durable Docs
 
 - **ID:** T010
-- **Status:** pending
+- **Status:** completed
 - **Depends on:** [T001, T002, T003, T004, T005, T006, T007, T008, T009]
 - **Parallel:** no
 - **Story:** All requirements
@@ -274,4 +283,18 @@ T001..T008 -> T009
   OneMount, and FreeCAD, and promote accepted behavior to durable docs.
 - **Acceptance:** Verification records automated tests, manual dogfood results,
   residual risks, and durable-doc promotion status.
-- **Evidence:** pending
+- **Evidence:** Promoted accepted behavior into durable docs:
+  `docs/design/mcp-surface-design.md`,
+  `docs/design/runtime-operations-design.md`,
+  `docs/reference/language-capability-matrix.md`,
+  `docs/reference/mvp-proof-matrix.md`, and
+  `docs/reference/runtime-contracts.md`. Normalized imported dogfood notes
+  under `docs/reference/`. Added `verification` mode to the repo-local MCP
+  debug harness for reproducible read-only external-repo retests. Current-code
+  retests against TimeLocker, OneMount, and FreeCAD confirmed scope coverage,
+  skipped roots, Go/C++ resource-backed visibility, file-seeded C++ context
+  ranking, and Go/CMake validation planning, with remaining caveats recorded in
+  [Verification](verification.md#residual-risks). Validated with `pnpm
+  typecheck`, `pnpm exec vitest run tests/mcp/debug-harness.test.ts`,
+  `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts`, and
+  `pnpm test` on 2026-06-05.

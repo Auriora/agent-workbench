@@ -1,12 +1,22 @@
 ---
 title: Cross-repo trust and discovery design
 doc_type: spec
-status: draft
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---
 
 # Technical Design
+
+## Closure Record
+
+Spec 003 closed on 2026-06-05. Durable current-state behavior now lives in
+[MCP surface design](../../design/mcp-surface-design.md),
+[Runtime operations design](../../design/runtime-operations-design.md),
+[Language adapter design](../../design/language-adapter-design.md),
+[Language capability matrix](../../reference/language-capability-matrix.md),
+[Runtime contracts](../../reference/runtime-contracts.md), and
+[MVP proof matrix](../../reference/mvp-proof-matrix.md).
 
 ## Overview
 

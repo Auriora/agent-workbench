@@ -43,8 +43,8 @@ promotion gates are owned by [Language adapter design](../design/language-adapte
 | 3 | TypeScript/JavaScript | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
 | 4 | C# | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional C# LSP, `.sln`/`.csproj`, NuGet and test project discovery |
 | 5 | CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser plus intrinsic resolver and source handler linking |
-| 6 | Go | unsupported scope visibility, then `partial_semantic`, then `semantic` | `.go` file identity, `go.mod`/Makefile/Docker test discovery, basic package/function/type/method extraction, then Go parser, `gopls`, `go list`, `go test` |
-| 7 | C/C++ | reliable file identity and CMake discovery, then `resource_backed`, then `partial_semantic` | C/C++ header/source classification, Python stub routing where applicable, classes/functions/methods/includes, CMake target membership, `tree-sitter` (mandatory), clangd/libclang when `compile_commands.json` exists |
+| 6 | Go | `resource_backed`, then `partial_semantic`, then `semantic` | `.go` file identity, `go.mod`/Makefile/Docker test discovery, routing-only package/function/type/method extraction, then parser-backed references, `gopls`, `go list`, `go test` |
+| 7 | C/C++ | `resource_backed`, then `partial_semantic` | C/C++ header/source classification, Python stub routing where applicable, routing-only classes/functions/methods/includes, CMake target membership, `tree-sitter` (mandatory), clangd/libclang when `compile_commands.json` exists |
 | 8 | Rust | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Rust parser/enrichment, Cargo metadata, `rust-analyzer`, `cargo test` |
 | 9 | SQL | `resource_backed`, then `partial_semantic` | dialect-aware parser, migration-tool integration, schema/table/column references |
 | 10 | Bash/Shell | `partial_semantic` | shell parser, ShellCheck, sourced-file and command/function references |
