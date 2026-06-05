@@ -241,6 +241,51 @@ describe("repo overview MCP resource", () => {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
   });
+
+  it("prioritizes CMake and source topology over incidental package scripts in overview", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-cmake-cpp-repo");
+    const result = await getRepoOverview({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter()
+    });
+
+    expect(result.overview.platforms).toEqual(expect.arrayContaining(["cmake", "node"]));
+    expect(result.overview.key_files.map((file) => file.path).slice(0, 4)).toEqual([
+      "CMakeLists.txt",
+      "src/App/CMakeLists.txt",
+      "package.json",
+      "src/App/DocumentObject.cpp"
+    ]);
+    expect(result.overview.validation_hints.map((hint) => hint.command)).toEqual([
+      "manual_review cmake-build-test"
+    ]);
+  });
+
+  it("surfaces devcontainer and Docker evidence as environment hints", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-overview-devcontainer-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, ".devcontainer"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, ".devcontainer", "devcontainer.json"), "{\"name\":\"fixture\"}\n");
+      fs.writeFileSync(path.join(repoRoot, ".devcontainer", "Dockerfile"), "FROM debian:stable\n");
+      fs.writeFileSync(path.join(repoRoot, "package.json"), "{\"name\":\"fixture\"}\n");
+
+      const result = await getRepoOverview({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter()
+      });
+
+      expect(result.overview.platforms).toEqual(expect.arrayContaining(["devcontainer", "docker", "node"]));
+      expect(result.overview.validation_hints).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            command: "manual_review devcontainer-validation-environment"
+          })
+        ])
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("repo scope and overview composed server resources", () => {

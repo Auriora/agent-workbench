@@ -506,7 +506,7 @@ function toFileReference(pathInput: string, entry?: FileCatalogEntry, reason = "
 
 function scoreFile(file: FileCatalogEntry, terms: Set<string>): number {
   const pathTerms = tokenSet([file.path]);
-  let score = 0;
+  let score = firstPartyPathBoost(file.path);
   for (const term of terms) {
     if (pathTerms.has(term)) {
       score += 3;
@@ -523,6 +523,13 @@ function scoreFile(file: FileCatalogEntry, terms: Set<string>): number {
   return Math.max(0, score - noisyArtifactPenalty(file.path));
 }
 
+function firstPartyPathBoost(filePath: string): number {
+  const lower = filePath.toLowerCase();
+  if (/^(src|lib|app|cmd|internal|include|tests?|packages)\//u.test(lower)) return 2;
+  if (/^src\/(app|base|gui|mod)\//u.test(lower)) return 3;
+  return 0;
+}
+
 function scoreFileSeededEvidence(file: FileCatalogEntry, requestedPaths: readonly string[]): number {
   if (requestedPaths.length === 0) {
     return 0;
@@ -534,7 +541,7 @@ function scoreFileSeededEvidence(file: FileCatalogEntry, requestedPaths: readonl
     const candidateDir = path.posix.dirname(file.path);
     const candidateStem = stemFromPath(file.path);
     if (candidateDir === requestedDir && path.posix.basename(file.path).toLowerCase() === "cmakelists.txt") {
-      score = Math.max(score, 15);
+      score = Math.max(score, 20);
     }
     if (candidateDir === requestedDir && candidateStem.toLowerCase() === requestedStem.toLowerCase()) {
       score = Math.max(score, 12);
@@ -581,8 +588,9 @@ function reasonForRelatedFile(
 
 function noisyArtifactPenalty(filePath: string): number {
   const lower = filePath.toLowerCase();
-  if (lower.includes("/vendor/") || lower.includes("/third_party/") || lower.includes("/fixtures/")) return 6;
-  if (lower.includes("/installer/") || lower.includes("/generated/")) return 5;
+  if (/(^|\/)(vendor|third_party|thirdparty|3rdparty|external|extern)\//u.test(lower)) return 12;
+  if (lower.includes("/fixtures/") || lower.includes("/fixture/")) return 7;
+  if (lower.includes("/installer/") || lower.includes("/generated/")) return 6;
   if (lower.endsWith(".md") || lower.endsWith(".txt")) return 3;
   return 0;
 }

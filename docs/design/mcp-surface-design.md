@@ -311,18 +311,35 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Done: skip common hidden runtime/test artifact directories such as `.home`,
   `.sandbox`, `.gocache`, hidden `*-tests` folders, build outputs, and generated
   caches before applying row caps.
+- Done: skip common language environment and dependency roots, including Python
+  tox/nox/venv, Node package/cache stores, JVM/Gradle/Maven caches, Terraform
+  caches, Rust-style `target`, vendored dependency roots, and nested git
+  checkouts. These should not consume catalog budget or rank as first-party
+  implementation evidence.
 - Done: prevent graph warmup from reading oversized text/resource files; record
   skipped catalog evidence instead of crashing the snapshot with low-level
   memory errors.
 - Done: make file metadata presentation share one capability/language policy
   across scope, context, symbol/search results, preview/apply edit metadata, and
   validation planning.
-- Open: improve broad task routing for large monorepos by ranking first-party
+- Done: surface Docker and `.devcontainer` files as environment evidence in
+  overview. Devcontainer presence alone is not treated as Docker-only validation
+  proof; explicit repo guidance is still required before suppressing generic
+  host commands.
+- Done: improve broad task routing for large monorepos by ranking first-party
   implementation roots and exact source/symbol text above third-party, fixture,
   installer, generated, or package-manager noise unless those areas are named.
-- Open: improve `repo:///overview` platform scoring so root/local CMake and
+- Done: improve `repo:///overview` platform scoring so root/local CMake and
   source/test topology outrank incidental `package.json` files in CMake/C++
   repositories.
+- Open: parse Docker Compose, Dockerfile labels/stages, and devcontainer
+  features/customizations as validation-environment evidence. Use that evidence
+  to explain likely container workflows, but require repo guidance or explicit
+  Agent Workbench config before marking host commands unsafe.
+- Open: add an explicit repo-local validation policy/config surface for allowed
+  command templates and environment requirements across languages. This is the
+  reliable path for Docker-only, Nix-only, devcontainer-only, Bazel-only, or
+  other project-specific validation rules.
 - Future: add Go parser-backed symbols and C/C++ reference/impact edges after
   the language-adapter contract defines confidence, provenance, and integration
   boundaries. Routing-only hits must stay clearly marked until then.

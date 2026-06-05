@@ -74,6 +74,7 @@ export async function getRepoOverview(input: {
 function selectKeyFiles(files: readonly FileCatalogEntry[]): FileReference[] {
   return files
     .filter((file) => isKeyFile(file.path))
+    .sort((left, right) => keyFileRank(right) - keyFileRank(left) || left.path.localeCompare(right.path))
     .slice(0, 20)
     .map((file) => ({
       path: file.path,
@@ -133,7 +134,33 @@ function reasonForDoc(filePath: string): string {
 function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHint[] {
   const paths = new Set(files.map((file) => file.path));
   const hints: ValidationHint[] = [];
-  if (paths.has("package.json")) {
+  const hasCmake = hasCMakeEvidence(paths);
+  const hasCpp = files.some((file) => file.file_identity.language === "c" || file.file_identity.language === "cpp");
+  const hasGo = paths.has("go.mod") || paths.has("go.work");
+  const hasPackage = paths.has("package.json");
+
+  if (hasCmake && hasCpp) {
+    hints.push({
+      command: "manual_review cmake-build-test",
+      reason: "CMakeLists.txt and C/C++ files indicate CMake build/test validation should drive this repository area.",
+      status: "needed"
+    });
+  }
+  if (hasGo) {
+    hints.push({
+      command: "verification_plan",
+      reason: "go.mod/go.work indicates Go validation is available; repo guidance may constrain whether host or container commands are allowed.",
+      status: "needed"
+    });
+  }
+  if (hasDevcontainerEvidence(paths)) {
+    hints.push({
+      command: "manual_review devcontainer-validation-environment",
+      reason: ".devcontainer configuration indicates containerized development environment evidence; it is not proof of Docker-only validation by itself.",
+      status: "needed"
+    });
+  }
+  if (hasPackage && !(hasCmake && hasCpp) && !hasGo) {
     hints.push({ command: "pnpm typecheck", reason: "package.json indicates TypeScript/JavaScript validation.", status: "needed" });
     hints.push({ command: "pnpm test", reason: "package.json indicates JavaScript/TypeScript tests may be available.", status: "needed" });
   }
@@ -148,7 +175,10 @@ function detectPlatforms(files: readonly FileCatalogEntry[]): string[] {
   const platforms = new Set<string>();
   if (paths.has("package.json")) platforms.add("node");
   if (paths.has("pyproject.toml")) platforms.add("python");
-  if ([...paths].some((file) => file.toLowerCase().endsWith("dockerfile") || file === "Dockerfile")) platforms.add("docker");
+  if (paths.has("go.mod") || paths.has("go.work")) platforms.add("go");
+  if (hasCMakeEvidence(paths)) platforms.add("cmake");
+  if (hasDockerEvidence(paths)) platforms.add("docker");
+  if (hasDevcontainerEvidence(paths)) platforms.add("devcontainer");
   if ([...paths].some((file) => file.startsWith(".github/workflows/"))) platforms.add("github_actions");
   return [...platforms].sort();
 }
@@ -157,11 +187,51 @@ function isKeyFile(filePath: string): boolean {
   return (
     filePath === "package.json" ||
     filePath === "pyproject.toml" ||
+    filePath === "go.mod" ||
+    filePath === "go.work" ||
+    pathBasename(filePath).toLowerCase() === "cmakelists.txt" ||
     filePath === "Dockerfile" ||
+    filePath.startsWith(".devcontainer/") ||
     filePath.startsWith(".github/workflows/") ||
     filePath.startsWith("src/") ||
     filePath.startsWith("tests/")
   );
+}
+
+function keyFileRank(file: FileCatalogEntry): number {
+  const lower = file.path.toLowerCase();
+  if (lower === "cmakelists.txt") return 130;
+  if (lower.endsWith("/cmakelists.txt")) return 125;
+  let score = 0;
+  if (lower === "go.mod" || lower === "go.work") score += 120;
+  if (lower === "pyproject.toml" || lower === "package.json") score += 100;
+  if (lower === "dockerfile" || lower.startsWith(".devcontainer/")) score += 80;
+  if (/^(src|lib|app|cmd|internal|include)\//u.test(lower)) score += 70;
+  if (/^(test|tests)\//u.test(lower)) score += 55;
+  if (lower.startsWith(".github/workflows/")) score += 20;
+  if (file.file_identity.language === "cpp" || file.file_identity.language === "c" || file.file_identity.language === "go") score += 8;
+  if (file.file_identity.language === "python") score += 6;
+  if (lower.includes("/generated/") || lower.includes("/fixtures/")) score -= 60;
+  return score;
+}
+
+function hasCMakeEvidence(paths: Set<string>): boolean {
+  return [...paths].some((file) => pathBasename(file).toLowerCase() === "cmakelists.txt");
+}
+
+function hasDockerEvidence(paths: Set<string>): boolean {
+  return [...paths].some((file) => {
+    const lower = file.toLowerCase();
+    return lower.endsWith("dockerfile") || lower.includes("docker-compose") || lower.endsWith(".devcontainer/dockerfile");
+  });
+}
+
+function hasDevcontainerEvidence(paths: Set<string>): boolean {
+  return [...paths].some((file) => file.startsWith(".devcontainer/"));
+}
+
+function pathBasename(filePath: string): string {
+  return filePath.slice(filePath.lastIndexOf("/") + 1);
 }
 
 function titleFromPath(filePath: string): string {

@@ -16,9 +16,12 @@ describe("file catalog scanner", () => {
     fs.mkdirSync(path.join(repoRoot, ".github", "workflows"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".claude", "commands"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".codex", ".tmp"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".direnv"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".gocache"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".gradle", "caches"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".home", ".onemount-tests"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".local"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".nox", "unit"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".mypy_cache", "3.12"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".nuxt"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".pixi", "envs"), { recursive: true });
@@ -26,6 +29,9 @@ describe("file catalog scanner", () => {
     fs.mkdirSync(path.join(repoRoot, ".onemount-tests"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "cmake-build-debug"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "node_modules", "pkg"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "vendor", "dep"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "src", "3rdParty", "dep"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "libs", "nested-repo", ".git"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "test-artifacts", "logs"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "src", "__pycache__"), { recursive: true });
     fs.writeFileSync(path.join(repoRoot, "src", "service.py"), "def handler():\n    return 'ok'\n");
@@ -35,9 +41,12 @@ describe("file catalog scanner", () => {
     fs.writeFileSync(path.join(repoRoot, ".github", "workflows", "ci.yml"), "name: ci\n");
     fs.writeFileSync(path.join(repoRoot, ".claude", "commands", "review.md"), "local agent guidance\n");
     fs.writeFileSync(path.join(repoRoot, ".codex", ".tmp", "plugin.md"), "local plugin cache\n");
+    fs.writeFileSync(path.join(repoRoot, ".direnv", "state"), "generated env\n");
     fs.writeFileSync(path.join(repoRoot, ".gocache", "cache-a"), "generated go cache\n");
+    fs.writeFileSync(path.join(repoRoot, ".gradle", "caches", "module.bin"), "generated gradle cache\n");
     fs.writeFileSync(path.join(repoRoot, ".home", ".onemount-tests", "state.json"), "{}\n");
     fs.writeFileSync(path.join(repoRoot, ".local", "sample.json"), "{}\n");
+    fs.writeFileSync(path.join(repoRoot, ".nox", "unit", "python"), "generated nox env\n");
     fs.writeFileSync(path.join(repoRoot, ".mypy_cache", "3.12", "service.data.json"), "{}\n");
     fs.writeFileSync(path.join(repoRoot, ".nuxt", "manifest.json"), "{}\n");
     fs.writeFileSync(path.join(repoRoot, ".pixi", "envs", "lock.json"), "{}\n");
@@ -46,6 +55,10 @@ describe("file catalog scanner", () => {
     fs.writeFileSync(path.join(repoRoot, "cmake-build-debug", "CMakeCache.txt"), "generated\n");
     fs.writeFileSync(path.join(repoRoot, "Dockerfile"), "FROM node:24-alpine\n");
     fs.writeFileSync(path.join(repoRoot, "node_modules", "pkg", "index.js"), "module.exports = {};\n");
+    fs.writeFileSync(path.join(repoRoot, "vendor", "dep", "dep.go"), "package dep\n");
+    fs.writeFileSync(path.join(repoRoot, "src", "3rdParty", "dep", "dep.cpp"), "int dep = 1;\n");
+    fs.writeFileSync(path.join(repoRoot, "libs", "nested-repo", ".git", "HEAD"), "ref: refs/heads/main\n");
+    fs.writeFileSync(path.join(repoRoot, "libs", "nested-repo", "foreign.py"), "print('foreign')\n");
     fs.writeFileSync(path.join(repoRoot, "test-artifacts", "logs", "integration.log"), "generated log\n");
   });
 
@@ -76,7 +89,13 @@ describe("file catalog scanner", () => {
         ".home/.onemount-tests/state.json",
         ".sandbox/home/.onemount-tests/state.json",
         ".onemount-tests/state.json",
-        "test-artifacts/logs/integration.log"
+        "test-artifacts/logs/integration.log",
+        ".direnv/state",
+        ".gradle/caches/module.bin",
+        ".nox/unit/python",
+        "vendor/dep/dep.go",
+        "src/3rdParty/dep/dep.cpp",
+        "libs/nested-repo/foreign.py"
       ])
     );
     expect(result.files).toEqual(

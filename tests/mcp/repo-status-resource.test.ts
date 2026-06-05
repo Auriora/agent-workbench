@@ -154,7 +154,7 @@ describe("repo status MCP resource", () => {
     ]);
   });
 
-  it("keeps default status bounded without scanned coverage", async () => {
+  it("keeps default status bounded with compact catalog coverage", async () => {
     const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
       startGraphWarmup: false
     }) as unknown as {
@@ -176,7 +176,16 @@ describe("repo status MCP resource", () => {
       meta: GetRepoStatusResult["meta"];
     };
 
-    expect(parsed.data.adapter_coverage).toEqual([]);
-    expect(parsed.meta.scope.languages).toEqual([]);
+    expect(parsed.data.adapter_coverage).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "python", capability_level: "partial_semantic" }),
+        expect.objectContaining({ name: "typescript", capability_level: "unsupported" }),
+        expect.objectContaining({ name: "npm", capability_level: "resource_backed" })
+      ])
+    );
+    expect(parsed.meta.scope.languages).toEqual(
+      expect.arrayContaining(["infrastructure", "json", "python", "typescript", "yaml"])
+    );
+    expect(parsed.meta.budget).toEqual({ row_limit: 200 });
   });
 });

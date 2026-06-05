@@ -219,6 +219,40 @@ describe("context_for_task use case", () => {
     );
   });
 
+  it("downranks third-party and fixture path matches for broad implementation tasks", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-context-ranking-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "src", "App"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "src", "3rdParty", "Library"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "tests", "fixtures"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "src", "App", "DocumentObject.cpp"), "int DocumentObject = 1;\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "App", "DocumentObject.h"), "class DocumentObject {};\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "3rdParty", "Library", "DocumentObject.cpp"), "int third_party = 1;\n");
+      fs.writeFileSync(path.join(repoRoot, "tests", "fixtures", "DocumentObject.txt"), "fixture\n");
+
+      const result = await getTaskContext({
+        request: {
+          task: "Update DocumentObject recompute behavior",
+          repo_root: repoRoot,
+          files: [],
+          symbols: [],
+          max_files: 4,
+          max_docs: 5
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        default_repo_root: repoRoot
+      });
+
+      expect(result.context.related_files.map((file) => file.path).slice(0, 2)).toEqual([
+        "src/App/DocumentObject.cpp",
+        "src/App/DocumentObject.h"
+      ]);
+      expect(result.context.related_files.map((file) => file.path)).not.toContain("src/3rdParty/Library/DocumentObject.cpp");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("ranks symbols from graph evidence and reports context completeness caveats", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-context-"));
     const repoRoot = path.resolve("tests/fixtures/fixture-basic-python");

@@ -9,24 +9,39 @@ export const DEFAULT_SKIPPED_ROOTS = [
   ".cache",
   ".claude",
   ".codex",
+  ".devenv",
+  ".direnv",
   ".git",
   ".gocache",
+  ".gradle",
   ".home",
   ".local",
+  ".m2",
   ".mypy_cache",
+  ".nox",
+  ".npm",
   ".nuxt",
   ".pixi",
+  ".pnpm-store",
   ".pytest_cache",
   ".ruff_cache",
   ".sandbox",
+  ".terraform",
+  ".tox",
   ".venv",
+  ".yarn",
   "__pycache__",
+  "3rdparty",
   "artifacts",
   "build",
   "coverage",
   "dist",
   "node_modules",
+  "target",
   "test-artifacts",
+  "third_party",
+  "thirdparty",
+  "vendor",
   "venv"
 ] as const;
 
@@ -45,14 +60,15 @@ function isInsideRoot(relativePath: string, root: string): boolean {
 
 function shouldSkipRelativePath(relativePath: string, skippedRoots: readonly string[]): boolean {
   const segments = relativePath.split("/");
-  if (segments.some((segment) => DEFAULT_SKIPPED_DIRECTORY_NAMES.has(segment))) {
+  const lowerSegments = segments.map((segment) => segment.toLowerCase());
+  if (lowerSegments.some((segment) => DEFAULT_SKIPPED_DIRECTORY_NAMES.has(segment))) {
     return true;
   }
-  if (segments.some((segment) => DEFAULT_SKIPPED_DIRECTORY_PREFIXES.some((prefix) => segment.startsWith(prefix)))) {
+  if (lowerSegments.some((segment) => DEFAULT_SKIPPED_DIRECTORY_PREFIXES.some((prefix) => segment.startsWith(prefix)))) {
     return true;
   }
   if (
-    segments.some((segment) =>
+    lowerSegments.some((segment) =>
       segment.startsWith(".") &&
       DEFAULT_SKIPPED_HIDDEN_DIRECTORY_SUFFIXES.some((suffix) => segment.endsWith(suffix))
     )
@@ -147,6 +163,9 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       }
 
       if (child.isDirectory()) {
+        if (isNestedGitRepository(input.repoRoot, absolutePath)) {
+          continue;
+        }
         await this.scanDirectory({ ...input, directory: absolutePath });
         continue;
       }
@@ -175,6 +194,13 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
 function isInsideRepo(repoRoot: string, absolutePath: string): boolean {
   const relative = path.relative(repoRoot, absolutePath);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function isNestedGitRepository(repoRoot: string, absolutePath: string): boolean {
+  if (path.resolve(repoRoot) === path.resolve(absolutePath)) {
+    return false;
+  }
+  return fs.existsSync(path.join(absolutePath, ".git"));
 }
 
 function mergeSkippedRoots(skippedRoots: readonly string[]): string[] {

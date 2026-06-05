@@ -131,11 +131,11 @@ describe("repo orientation golden responses", () => {
         summary: "Repository has 5 indexed file(s) across 5 language/category value(s).",
         platforms: ["docker", "github_actions", "node"],
         key_files: [
-          file(".github/workflows/ci.yml", "yaml", "resource_backed", ["config"]),
-          file("Dockerfile", "infrastructure", "resource_backed", ["config"]),
           file("package.json", "json", "resource_backed", ["config"]),
+          file("Dockerfile", "infrastructure", "resource_backed", ["config"]),
+          file("src/service.py", "python", "partial_semantic", ["parser"]),
           file("src/app.ts", "typescript", "unsupported", []),
-          file("src/service.py", "python", "partial_semantic", ["parser"])
+          file(".github/workflows/ci.yml", "yaml", "resource_backed", ["config"])
         ],
         key_docs: [],
         validation_hints: [
