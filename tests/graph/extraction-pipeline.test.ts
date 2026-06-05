@@ -6,7 +6,9 @@ import {
   indexRepositoryGraph,
   warmupRepositoryGraph
 } from "../../src/application/use-cases/index-repository-graph.js";
-import type { ClockPort, ExtractorPort, WorkspaceFilePort } from "../../src/ports/index.js";
+import type { ClockPort, ExtractorPort, FileCatalogScanPort, WorkspaceFilePort } from "../../src/ports/index.js";
+import type { ExtractionRequest } from "../../src/domain/models/index.js";
+import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../../src/infrastructure/extraction/index.js";
 import { FileCatalogScannerAdapter, WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
@@ -186,6 +188,37 @@ describe("repository graph extraction pipeline", () => {
           skipped_reason: "file_too_large_for_text_extraction"
         })
       );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("yields to the event loop while indexing large repositories", async () => {
+    const repoRoot = path.join(dir, "yield-repo");
+    const store = openGraphStore(path.join(dir, "yield.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    let yielded = false;
+    registry.register(new YieldProbeExtractor(() => yielded));
+    setImmediate(() => {
+      yielded = true;
+    });
+
+    try {
+      await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: fakeScanner(60),
+        workspace: fakeWorkspace(),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "103"
+      });
+
+      expect(yielded).toBe(true);
     } finally {
       store.close();
     }
@@ -717,4 +750,102 @@ class FailingPythonExtractor implements ExtractorPort {
   public async extract(): Promise<never> {
     throw new Error(this.message);
   }
+}
+
+class YieldProbeExtractor implements ExtractorPort {
+  public readonly language = "python";
+
+  public constructor(private readonly hasYielded: () => boolean) {}
+
+  public supports(input: { language: string; path: string }): boolean {
+    return input.language === "python" && input.path.endsWith(".py");
+  }
+
+  public async extract(input: ExtractionRequest) {
+    if (input.path === "src/file-30.py") {
+      expect(this.hasYielded()).toBe(true);
+    }
+    return {
+      snapshot_id: input.snapshot_id,
+      source_path: input.path,
+      extractor_id: "yield-probe",
+      language: input.language,
+      file_identity: {
+        path: input.path,
+        language: input.language,
+        content_hash: `content:${input.path}`,
+        size_bytes: input.content.length,
+        mtime_ms: 0
+      },
+      nodes: [
+        {
+          id: `${input.snapshot_id}:${input.path}:module`,
+          kind: "module",
+          name: input.path,
+          qualified_name: input.path,
+          file_path: input.path,
+          language: input.language,
+          source_range: {
+            start_line: 1,
+            start_column: 0,
+            end_line: 1,
+            end_column: input.content.length
+          },
+          metadata: {}
+        }
+      ],
+      edges: [],
+      unresolved_references: [],
+      diagnostics_hints: [],
+      test_hints: [],
+      extracted_at: "2026-05-31T12:00:00.000Z"
+    };
+  }
+}
+
+function fakeScanner(fileCount: number): FileCatalogScanPort {
+  return {
+    async scan(input) {
+      return {
+        repo_root: input.repo_root,
+        indexed_roots: input.indexed_roots,
+        skipped_roots: input.skipped_roots,
+        truncated: false,
+        files: Array.from({ length: fileCount }, (_, index) =>
+          buildFileCatalogEntry({
+            file_identity: {
+              path: `src/file-${index}.py`,
+              language: "python",
+              content_hash: `stat:${index}`,
+              size_bytes: 10,
+              mtime_ms: index
+            }
+          })
+        )
+      };
+    }
+  };
+}
+
+function fakeWorkspace(): WorkspaceFilePort {
+  return {
+    async readText(input) {
+      return `# ${input.path}\n`;
+    },
+    async readBinary() {
+      return new Uint8Array();
+    },
+    async writeText() {},
+    async writeBinary() {},
+    async stat() {
+      return {
+        exists: true,
+        is_file: true,
+        size_bytes: 10,
+        mtime_ms: 0
+      };
+    },
+    async deletePath() {},
+    async ensureDirectory() {}
+  };
 }

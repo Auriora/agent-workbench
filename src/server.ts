@@ -144,7 +144,7 @@ export function createAgentWorkbenchServer(
   });
 
   if (options.startGraphWarmup !== false) {
-    startInitialGraphWarmup();
+    setImmediate(startInitialGraphWarmup);
   }
   return server;
 

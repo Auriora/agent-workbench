@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { repoStatusResource } from "../../src/interface-adapters/mcp/registries/resources/repo-status.js";
 import type { GetRepoStatusResult } from "../../src/application/use-cases/get-repo-status.js";
@@ -154,38 +157,35 @@ describe("repo status MCP resource", () => {
     ]);
   });
 
-  it("keeps default status bounded with compact catalog coverage", async () => {
-    const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
-      startGraphWarmup: false
-    }) as unknown as {
-      _registeredResources: Record<
-        string,
-        {
-          readCallback: (request: unknown) => Promise<{
-            contents: Array<{
-              text: string;
+  it("keeps default status bounded without scanned coverage when no snapshot exists", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-status-cold-"));
+    try {
+      fs.writeFileSync(path.join(repoRoot, "package.json"), "{\"name\":\"cold-fixture\"}\n");
+      const server = createAgentWorkbenchServer(repoRoot, {
+        startGraphWarmup: false
+      }) as unknown as {
+        _registeredResources: Record<
+          string,
+          {
+            readCallback: (request: unknown) => Promise<{
+              contents: Array<{
+                text: string;
+              }>;
             }>;
-          }>;
-        }
-      >;
-    };
+          }
+        >;
+      };
 
-    const response = await server._registeredResources["repo:///status"].readCallback({});
-    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
-      data: GetRepoStatusResult["status"];
-      meta: GetRepoStatusResult["meta"];
-    };
+      const response = await server._registeredResources["repo:///status"].readCallback({});
+      const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
+        data: GetRepoStatusResult["status"];
+        meta: GetRepoStatusResult["meta"];
+      };
 
-    expect(parsed.data.adapter_coverage).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ name: "python", capability_level: "partial_semantic" }),
-        expect.objectContaining({ name: "typescript", capability_level: "unsupported" }),
-        expect.objectContaining({ name: "npm", capability_level: "resource_backed" })
-      ])
-    );
-    expect(parsed.meta.scope.languages).toEqual(
-      expect.arrayContaining(["infrastructure", "json", "python", "typescript", "yaml"])
-    );
-    expect(parsed.meta.budget).toEqual({ row_limit: 200 });
+      expect(parsed.data.adapter_coverage).toEqual([]);
+      expect(parsed.meta.scope.languages).toEqual([]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 });

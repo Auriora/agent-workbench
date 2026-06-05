@@ -11,7 +11,7 @@ import type {
 } from "../../ports/index.js";
 import type { GraphNode } from "../../domain/models/index.js";
 import { blockedMeta, resolveSnapshot, toSymbolReference } from "./query-helpers.js";
-import { capNextActions } from "../../presentation/metadata.js";
+import { capNextActions, uniqueSorted } from "../../presentation/metadata.js";
 
 export type SearchSymbolsResult = {
   symbols: SymbolSearchResult;
@@ -113,6 +113,13 @@ export async function searchSymbols(input: {
     },
     meta: {
       ...resolved.meta,
+      scope: {
+        ...resolved.meta.scope,
+        languages: uniqueSorted([
+          ...resolved.meta.scope.languages,
+          ...filtered.map((node) => node.language)
+        ])
+      },
       truncated: nodes.length >= input.request.max_results
     }
   };

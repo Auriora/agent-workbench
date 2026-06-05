@@ -22,6 +22,7 @@ import type {
 } from "../../ports/index.js";
 
 const MAX_TEXT_EXTRACTION_BYTES = 2_000_000;
+const INDEXING_YIELD_INTERVAL = 25;
 
 export type IndexRepositoryGraphResult = {
   snapshot_id: string;
@@ -89,7 +90,8 @@ export async function indexRepositoryGraph(input: {
   let unsupportedFiles = 0;
   let resourceBackedFiles = 0;
 
-  for (const file of scanned.files) {
+  for (const [index, file] of scanned.files.entries()) {
+    await yieldToEventLoop(index);
     const extractor = resolveExtractor({
       file,
       registry: input.extractors,
@@ -152,13 +154,15 @@ export async function indexRepositoryGraph(input: {
   }
 
   const resolved = resolveReferences(batches);
-  for (const batch of resolved.batches) {
+  for (const [index, batch] of resolved.batches.entries()) {
+    await yieldToEventLoop(index);
     await input.graph.replaceSnapshotExtraction({
       batch,
       replace: true
     });
   }
-  for (const edgesForFile of resolved.edges) {
+  for (const [index, edgesForFile] of resolved.edges.entries()) {
+    await yieldToEventLoop(index);
     await input.graph.insertEdges({
       snapshot_id: snapshotId,
       file_path: edgesForFile.file_path,
@@ -324,6 +328,14 @@ function resolveExtractor(input: {
   }
 
   return null;
+}
+
+async function yieldToEventLoop(index: number): Promise<void> {
+  if (index > 0 && index % INDEXING_YIELD_INTERVAL === 0) {
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+  }
 }
 
 function resolveReferences(batches: readonly ExtractionBatch[]): {
