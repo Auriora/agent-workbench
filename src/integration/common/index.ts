@@ -31,11 +31,11 @@ export function buildCommonIntegrationProfile(): IntegrationProfile {
       {
         target_agent: "codex",
         surface: "mcp",
-        path: "plugins/agent-workbench/.mcp.json",
+        path: "src/mcp/stdio.ts",
         status: "supported",
-        provenance: "mcp_binding_metadata",
+        provenance: "runtime_source",
         regeneration_safe: true,
-        notes: ["Codex wrapper launches the repository checkout MCP runtime."]
+        notes: ["Codex host-level configuration launches the repository checkout MCP runtime."]
       },
       {
         target_agent: "claude_code",

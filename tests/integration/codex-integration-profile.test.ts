@@ -137,7 +137,9 @@ describe("Codex integration profile", () => {
 
     expect(profile.runtime_source).toBe("repository_checkout");
     expect(profile.plugin.runtime_source).toBe("repository_checkout");
-    expect(profile.plugin.packaging_model).toBe("wrapper_only");
+    expect(profile.plugin.packaging_model).toBe("skill_and_hook_wrapper_only");
+    expect(profile.plugin.mcp_binding_model).toBe("host_level_config_required");
+    expect(profile.plugin.mcp_config_path).toBeUndefined();
     expect(profile.plugin.update_model.source_changes).toMatch(/Restart Codex/i);
     expect(profile.plugin.update_model.source_changes).toContain("updated repository source");
     expect(profile.plugin.update_model.dependency_changes).toMatch(/pnpm install/i);
@@ -212,17 +214,14 @@ describe("Codex integration profile", () => {
 describe("Codex plugin artifacts", () => {
   const pluginRoot = path.resolve("plugins/agent-workbench");
 
-  it("ships a valid wrapper manifest, MCP config, skill, and hook config", () => {
+  it("ships a valid skill-only wrapper manifest, skill, and hook config", () => {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(pluginRoot, ".codex-plugin/plugin.json"), "utf8")
     ) as {
       name: string;
       skills: string;
-      mcpServers: string;
+      mcpServers?: string;
       hooks?: string;
-    };
-    const mcpConfig = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8")) as {
-      mcpServers: Record<string, { args: string[] }>;
     };
     const hooksConfig = JSON.parse(
       fs.readFileSync(path.join(pluginRoot, "hooks/hooks.json"), "utf8")
@@ -236,15 +235,10 @@ describe("Codex plugin artifacts", () => {
 
     expect(manifest).toMatchObject({
       name: "agent-workbench",
-      skills: "./skills/",
-      mcpServers: "./.mcp.json"
+      skills: "./skills/"
     });
+    expect(manifest.mcpServers).toBeUndefined();
     expect(manifest.hooks).toBeUndefined();
-    expect(mcpConfig.mcpServers["agent-workbench"].args).toEqual([
-      "--import",
-      "tsx",
-      "../../src/mcp/stdio.ts"
-    ]);
     expect(Object.keys(hooksConfig.hooks).sort()).toEqual(["PostToolUse", "SessionStart"]);
     expect(skill).toContain("Agent Workbench is the executable runtime.");
     expect(skill).toContain("Do not add primary-plus-fallback routes");
@@ -404,44 +398,42 @@ describe("Codex plugin artifacts", () => {
     });
   });
 
-  it("launches MCP from the repository checkout entrypoint", () => {
-    const mcpConfig = JSON.parse(
-      fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8")
+  it("keeps MCP launch owned by the host-level repository checkout entrypoint", () => {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(pluginRoot, ".codex-plugin/plugin.json"), "utf8")
     ) as {
-      mcpServers: Record<
-        string,
-        {
-          command: string;
-          args: string[];
-        }
-      >;
+      mcpServers?: string;
     };
-    const codexServer = mcpConfig.mcpServers["agent-workbench"];
-    const checkoutRoot = path.resolve(".");
-    const entrypoint = codexServer.args.at(-1);
-    const launchPath = entrypoint ? path.resolve(pluginRoot, entrypoint) : "";
+    const profile = codexIntegrationProfileSchema.parse(describeCodexIntegrationProfile());
+    const mcpSurface = profile.active_surfaces.find((entry) => entry.surface === "mcp");
+    const pluginSurface = profile.active_surfaces.find((entry) => entry.surface === "plugins");
 
-    expect(codexServer.command).toBe("node");
-    expect(codexServer.args).toEqual(["--import", "tsx", "../../src/mcp/stdio.ts"]);
-    expect(entrypoint).toMatch(/src[\\/]{1}mcp[\\/]{1}stdio\.ts$/);
-    expect(path.relative(checkoutRoot, launchPath)).toBe(path.join("src", "mcp", "stdio.ts"));
-    expect(fs.existsSync(launchPath)).toBe(true);
+    expect(manifest.mcpServers).toBeUndefined();
+    expect(fs.existsSync(path.join(pluginRoot, ".mcp.json"))).toBe(false);
+    expect(mcpSurface).toEqual(
+      expect.objectContaining({
+        artifact_path: "src/mcp/stdio.ts"
+      })
+    );
+    expect(pluginSurface?.behavior).toEqual(
+      expect.arrayContaining([
+        "Does not register an MCP server for local development.",
+        "Relies on host-level Codex MCP configuration to launch the repository checkout runtime."
+      ])
+    );
+    expect(profile.plugin.mcp_config_path).toBeUndefined();
+    expect(profile.plugin.mcp_binding_model).toBe("host_level_config_required");
   });
 
   it("keeps plugin wrappers out of concrete runtime implementation paths", () => {
     const files = listFiles(pluginRoot);
-    const checkedFiles = files.filter((file) => !file.endsWith(".mcp.json"));
 
-    for (const file of checkedFiles) {
+    for (const file of files) {
       const text = fs.readFileSync(file, "utf8");
       expect(text, path.relative(pluginRoot, file)).not.toMatch(/src\/(?:application|domain|infrastructure|presentation|interface-adapters)/);
       expect(text, path.relative(pluginRoot, file)).not.toContain("tree-sitter");
       expect(text, path.relative(pluginRoot, file)).not.toContain("better-sqlite3");
     }
-
-    const mcpConfig = fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8");
-    expect(mcpConfig).toContain("../../src/mcp/stdio.ts");
-    expect(mcpConfig).not.toContain("src/infrastructure");
   });
 });
 

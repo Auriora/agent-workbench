@@ -4,19 +4,39 @@ This plugin is a Codex wrapper around the Agent Workbench MCP runtime.
 
 It packages:
 
-- `.mcp.json` for launching the stdio MCP server from this repository checkout
 - `skills/agent-workbench/SKILL.md` for workflow guidance
 - `hooks/` scripts and hook configuration for optional quiet lifecycle feedback
 
-The plugin does not copy or reimplement runtime code. The MCP server is launched
-from `../../src/mcp/stdio.ts`, so local development should use this plugin from a
-checkout-linked location. Restart Codex after source changes. Run `pnpm install`
-after dependency changes, then restart Codex.
+The plugin does not copy, launch, or reimplement runtime code. For local
+development, configure the MCP server at the Codex host level with absolute
+paths to this repository checkout. The plugin is only the installable wrapper
+for skill guidance and optional quiet hooks; it must not create a cache-relative
+MCP runtime path. Restart Codex after source changes. Run `pnpm install` after
+dependency changes, then restart Codex.
 
 For normal Codex workspace sessions, do not set
 `AGENT_WORKBENCH_DEFAULT_REPO_ROOT`; the MCP server should default to Codex's
 active working directory. Use that environment variable or `--repo-root` only
 for fixed-target launches outside the active workspace.
+
+## Local Installation Model
+
+Use host-level Codex MCP configuration for the executable server, for example:
+
+```toml
+[mcp_servers.agent-workbench]
+command = "node"
+args = [
+  "--import",
+  "tsx",
+  "/absolute/path/to/agent-workbench/src/mcp/stdio.ts"
+]
+```
+
+Install the plugin only to make the `agent-workbench` skill and quiet hook
+artifacts available. If Codex shows a plugin-provided MCP server for
+`agent-workbench`, disable that plugin server and keep the host-level server as
+the single executable runtime path.
 
 ## Hook Behavior
 

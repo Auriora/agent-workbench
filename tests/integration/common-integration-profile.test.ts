@@ -36,7 +36,20 @@ describe("common integration profile", () => {
       ])
     );
 
-    for (const target of profile.target_agents) {
+    expect(profile.artifacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          target_agent: "codex",
+          surface: "mcp",
+          status: "supported",
+          provenance: "runtime_source",
+          path: "src/mcp/stdio.ts",
+          regeneration_safe: true
+        })
+      ])
+    );
+
+    for (const target of profile.target_agents.filter((agent) => agent !== "codex")) {
       expect(profile.artifacts).toEqual(
         expect.arrayContaining([
           expect.objectContaining({

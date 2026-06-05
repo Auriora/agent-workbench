@@ -432,6 +432,10 @@ Post-closure dogfood caveats from large mixed-language repositories:
   a given Codex client session. The profile now warns callers not to treat
   configured bindings as guaranteed client-exposed tools unless the active
   session exposes them.
+- Done: make the Codex plugin install path skill/hook-only for local
+  development. Host-level Codex MCP configuration is the single executable
+  runtime path; the plugin manifest must not register a copied or cache-relative
+  MCP server for Agent Workbench.
 - Done: improve docs-heavy repository overview ranking so durable docs and
   canonical skill guidance rank ahead of fixture/example documents in first-read
   key-doc results.

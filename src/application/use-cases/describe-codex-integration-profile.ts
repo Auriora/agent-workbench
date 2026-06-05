@@ -41,12 +41,14 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         surface: "plugins",
         status: "available",
         artifact_path: "plugins/agent-workbench/.codex-plugin/plugin.json",
-        purpose: "Codex plugin wrapper that packages MCP config, skill guidance, and hook scripts.",
+        purpose: "Codex plugin wrapper that packages skill guidance and quiet hook scripts.",
         behavior: [
-          "Points Codex at the repository checkout runtime instead of duplicating implementation code."
+          "Does not register an MCP server for local development.",
+          "Relies on host-level Codex MCP configuration to launch the repository checkout runtime."
         ],
         constraints: [
-          "Plugin artifacts must not import runtime internals except through MCP launch metadata."
+          "Plugin artifacts must not import runtime internals.",
+          "Plugin installation must not create a copied or cache-relative MCP runtime path."
         ]
       },
       {
@@ -167,9 +169,9 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
     plugin: {
       name: "agent-workbench",
       manifest_path: "plugins/agent-workbench/.codex-plugin/plugin.json",
-      mcp_config_path: "plugins/agent-workbench/.mcp.json",
       runtime_source: "repository_checkout",
-      packaging_model: "wrapper_only",
+      packaging_model: "skill_and_hook_wrapper_only",
+      mcp_binding_model: "host_level_config_required",
       update_model: {
         source_changes: "Restart Codex to launch the updated repository source.",
         dependency_changes: "Run pnpm install in the repository checkout, then restart Codex. Plugin/package reinstall is not the update mechanism.",
@@ -253,7 +255,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         status: "supported",
         provenance: "codex_wrapper",
         regeneration_safe: true,
-        notes: ["Wrapper manifest only; runtime code stays in the checkout."]
+        notes: ["Wrapper manifest only; runtime code stays in the checkout and MCP is configured at host level."]
       },
       {
         target_agent: "codex",

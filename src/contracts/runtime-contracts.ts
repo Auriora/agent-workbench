@@ -710,9 +710,10 @@ export const codexPluginSpecSchema = z
   .object({
     name: z.string(),
     manifest_path: z.string(),
-    mcp_config_path: z.string(),
+    mcp_config_path: z.string().optional(),
     runtime_source: z.string(),
     packaging_model: z.string(),
+    mcp_binding_model: z.string().optional(),
     update_model: z.object({
       source_changes: z.string(),
       dependency_changes: z.string(),

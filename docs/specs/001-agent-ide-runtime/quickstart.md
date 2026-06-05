@@ -97,16 +97,17 @@ The repo-local Codex plugin wrapper lives at `plugins/agent-workbench/`.
 It includes:
 
 - `.codex-plugin/plugin.json`
-- `.mcp.json`
 - `skills/agent-workbench/SKILL.md`
 - `hooks/hooks.json`
 - `hooks/session-start.js`
 - `hooks/post-edit-feedback.js`
 
-The plugin is a wrapper only. It points at the repository checkout runtime and
-does not copy implementation code. Hook scripts are silent by default. Set
-`AGENT_WORKBENCH_HOOK_FEEDBACK=basic` only when concise MCP follow-up guidance is
-useful during local testing.
+The plugin is a wrapper only. It installs workflow guidance and optional quiet
+hook artifacts; it does not register the executable MCP server. Keep the
+host-level `mcp_servers.agent-workbench` entry above as the single runtime path
+so Codex launches this repository checkout instead of a copied plugin cache
+path. Hook scripts are silent by default. Set `AGENT_WORKBENCH_HOOK_FEEDBACK=basic`
+only when concise MCP follow-up guidance is useful during local testing.
 
 ## Expected Results
 
