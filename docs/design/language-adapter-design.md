@@ -123,6 +123,14 @@ evidence. This first slice is not semantic Go support; references and impact
 must stay low confidence until parser-backed reference resolution and promotion
 fixtures prove stronger behavior.
 
+The Modena AEC .NET dogfood comparison in
+[`docs/reference/dotnet/modena-aec-dotnet-evaluation-2026-06-05.md`](../reference/dotnet/modena-aec-dotnet-evaluation-2026-06-05.md)
+is the current concrete reference for the C#/.NET slice. It shows that the
+first useful .NET step is likely resource-backed project graph extraction:
+solution/project files, target frameworks, SDK type, package/project
+references, app roles, generated-output policy, and validation planning. C# and
+Razor symbol/reference semantics should follow only with fixture-backed design.
+
 FreeCAD dogfood confirmed the first C/C++ slice should start with reliable file
 identity and project-shape evidence before broad blast-radius claims. Common
 C/C++ extensions such as `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp`, and

@@ -345,15 +345,26 @@ Post-closure dogfood caveats from large mixed-language repositories:
   command templates and environment requirements across languages. This is the
   reliable path for Docker-only, Nix-only, devcontainer-only, Bazel-only, or
   other project-specific validation rules.
-- Open: make first-read resources reliable on large AWS/IaC repositories. If
+- Done: make first-read resources reliable on large AWS/IaC repositories. If
   `repo:///status`, `repo:///scope`, `repo:///overview`, or
   `integration:///profiles/codex` can time out while direct tools remain fast,
   either fix the resource path budget or adjust the skill first-call guidance
   to use a cheap direct status path.
-- Open: fix query-result scope metadata so responses that return Python
+- Done: fix query-result scope metadata so responses that return Python
   symbols do not report only `json`/`text` languages. Result metadata should
   distinguish repository coverage, queried adapter coverage, and returned
   evidence languages clearly.
+- Open: improve .NET generated-output handling so `bin/`, `obj/`,
+  `TestResults/`, local `packages/`, publish output, `.dll`, `.pdb`, `.wasm`,
+  compressed framework assets, and source maps do not dominate context or
+  scope budgets unless explicitly requested.
+- Open: promote `.sln`, `.csproj`, `Program.cs`, `appsettings*.json`, Razor
+  route pages/components, controllers, EF `DbContext`/migrations, and shared
+  model projects as first-class .NET routing and overview anchors.
+- Open: add .NET validation planning evidence for solution and project files,
+  including non-executed `dotnet build <solution-or-project>` and `dotnet test`
+  candidates when test projects or repo policy support them. Until policy is
+  known, commands should remain planned evidence, not executed proof.
 - Open: improve exact-first symbol filtering for caller-supplied symbols before
   broad fuzzy fallback. Domain hints such as SAM logical IDs and Lambda
   `handler` functions should not rank unrelated test helpers above exact or
@@ -375,6 +386,12 @@ Post-closure dogfood caveats from large mixed-language repositories:
   repositories, including cfn-lint, repo-approved SAM validation commands,
   containerized deploy/test runners, and host-tool availability as planned or
   blocked evidence rather than guessed commands.
+- Future: add resource-backed `.sln`/`.csproj` extraction for SDK type, target
+  frameworks, package references, project references, output type, and likely
+  app role before deeper C# semantics.
+- Future: add C# and Razor fixture-backed partial semantic support for
+  controllers, services, Razor/Blazor components, EF contexts, migrations, and
+  shared models using one approved implementation path.
 - Future: add Go parser-backed symbols and C/C++ reference/impact edges after
   the language-adapter contract defines confidence, provenance, and integration
   boundaries. Routing-only hits must stay clearly marked until then.
