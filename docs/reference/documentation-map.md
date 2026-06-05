@@ -48,6 +48,9 @@ copying tables, schemas, or enum definitions.
 | Overview ranking delivery record | [Overview ranking polish requirements](../specs/004-overview-ranking-polish/requirements.md) | Archived Spec 004 delivery evidence. Current overview ranking behavior lives in the durable MCP surface design. |
 | .NET repository-shape delivery record | [.NET repository shape hardening requirements](../specs/005-dotnet-repository-shape-hardening/requirements.md) | Archived Spec 005 delivery evidence. Current .NET generated-output, project metadata, and validation-planning behavior lives in durable design/reference docs. |
 | Infrastructure-template routing delivery record | [Infrastructure template routing requirements](../specs/006-infra-template-routing/requirements.md) | Archived Spec 006 delivery evidence. Current SAM/CloudFormation handler routing and validation-planning behavior lives in durable design docs. |
+| Active redaction boundary work | [Redaction boundary polish requirements](../specs/007-redaction-boundary-polish/requirements.md) | Active implementation spec for preserving ordinary source snippets while keeping path/secret redaction strict. |
+| Active Lambda result presentation work | [Lambda result presentation requirements](../specs/008-lambda-result-presentation/requirements.md) | Active implementation spec for compact grouping of Lambda handler search/context results. |
+| Active CMake/C++ routing work | [CMake C++ routing and validation requirements](../specs/009-cmake-cpp-routing-validation/requirements.md) | Active implementation spec for CMake/C++ first-party routing, heuristic edges, and concrete validation planning. |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) | Owns fixture, budget, degraded-mode, and acceptance evidence. |
 | Architectural decisions | [ADRs](../adr/) | ADR status must match frontmatter and body text. |
 

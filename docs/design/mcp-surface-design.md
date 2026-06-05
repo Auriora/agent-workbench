@@ -493,7 +493,8 @@ Post-closure dogfood caveats from large mixed-language repositories:
   was driven by path terms, package boundaries, workspace config,
   route/controller/service conventions, or lexical snippets rather than
   semantic graph edges.
-- Open: avoid redacting ordinary in-repo string snippets such as URL paths as
+- Promoted to [Spec 007](../specs/007-redaction-boundary-polish/requirements.md):
+  avoid redacting ordinary in-repo string snippets such as URL paths as
   outside-repo paths. Workspace safety redaction should apply to filesystem
   paths or secret-like values, not normal source text fragments.
 - Done: improve exact-first symbol filtering for caller-supplied symbols before
@@ -520,9 +521,10 @@ Post-closure dogfood caveats from large mixed-language repositories:
   low-confidence resource-backed template-to-handler-file routing rather than
   isolated zero-edge template evidence. Event-source, intrinsic-function, and
   dependency semantics remain future work.
-- Future: add Lambda-heavy repository presentation that groups generic
-  `handler` results by stack/service/logical ID, handler file, and event source
-  while preserving the compact graph contract.
+- Promoted to [Spec 008](../specs/008-lambda-result-presentation/requirements.md):
+  add Lambda-heavy repository presentation that groups generic `handler`
+  results by stack/service/logical ID, handler file, and event source while
+  preserving the compact graph contract.
 - Done: add first-slice AWS validation planning evidence for SAM/CloudFormation
   repositories, including non-executed `cfn-lint`, `sam validate`, and nearby
   infrastructure pytest candidates when template/test evidence exists.
@@ -533,19 +535,21 @@ Post-closure dogfood caveats from large mixed-language repositories:
   host-blocking policy suppresses generic host commands.
 - Done: add first-slice resource-backed `.sln`/`.csproj` discovery as project
   graph routing and validation evidence.
-- Promoted to [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md):
-  deepen resource-backed `.sln`/`.csproj` extraction for SDK type, target
+- Done: deepen resource-backed `.sln`/`.csproj` extraction for SDK type, target
   frameworks, package references, project references, output type, and likely
-  app role before deeper C# semantics.
+  app role before deeper C# semantics. The delivery record is
+  [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md).
 - Future: add C# and Razor fixture-backed partial semantic support for
   controllers, services, Razor/Blazor components, EF contexts, migrations, and
   shared models using one approved implementation path.
 - Future: add Go parser-backed symbols and C/C++ reference/impact edges after
   the language-adapter contract defines confidence, provenance, and integration
   boundaries. Routing-only hits must stay clearly marked until then.
-- Future: make CMake validation planning more concrete by identifying likely
-  targets and project command templates without executing commands or guessing
-  unsafe build directories.
+- Promoted to [Spec 009](../specs/009-cmake-cpp-routing-validation/requirements.md):
+  improve CMake/C++ routing and validation by prioritizing first-party source,
+  adding heuristic include/same-file routing edges, and identifying likely
+  CMake target command templates without executing commands or guessing unsafe
+  build directories.
 
 ## Related Docs
 
