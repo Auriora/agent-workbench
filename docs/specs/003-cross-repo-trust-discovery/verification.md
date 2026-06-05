@@ -79,9 +79,9 @@ Manual dogfood gates:
   tests, not a substitute for warm graph snapshot validation inside each
   external repo's own MCP session.
 
-## Closure Criteria
+## Closure Criteria Satisfied
 
-This spec can close when:
+This archived spec closed with the following evidence:
 
 - All tasks are marked completed or explicitly deferred with rationale.
 - Required automated gates pass.

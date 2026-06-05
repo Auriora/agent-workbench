@@ -31,6 +31,7 @@ copying tables, schemas, or enum definitions.
 | SQLite graph schema and freshness model | [Graph store design](../design/graph-store-design.md) | Owns storage invariants, FTS, rebuilds, and query budgets. |
 | Cache, warm-up, and concurrency | [Runtime operations design](../design/runtime-operations-design.md) | Owns cache tiers, invalidation, warm-up, work queues, worker pools, async/snapshot rules, and runtime signals exposed to observability. |
 | Observability, Jaeger export, debug harnesses, and profiling | [Observability and debugging design](../design/observability-debugging-design.md) | Owns disabled-by-default OpenTelemetry configuration, OTLP HTTP export, repo-local debug harnesses, profiler guidance, low-impact monitoring candidates, and usage-record boundaries. |
+| Codex Agent Workbench plugin and MCP setup | [Codex Agent Workbench plugin and MCP setup](../runbooks/codex-agent-workbench-plugin.md) | Owns the local Codex host-level MCP setup and skill-only plugin installation/update model. |
 | Adapter capability model and promotion gates | [Language adapter design](../design/language-adapter-design.md) | Owns adapter lifecycle and semantic promotion rules. |
 | Language priority table | [Language capability matrix](language-capability-matrix.md) | Reference view only; uses enums from runtime contracts. |
 | MCP resources and tools | [MCP surface design](../design/mcp-surface-design.md) | Owns MVP/non-MVP tool split and schema examples through runtime contracts. |
@@ -44,6 +45,9 @@ copying tables, schemas, or enum definitions.
 | MVP delivery record | [Agent IDE runtime MVP requirements](../specs/001-agent-ide-runtime/requirements.md) | Archived Spec 001 delivery evidence. Current behavior lives in the durable design, reference, requirements, runbook, and ADR docs listed in this map. |
 | TimeLocker dogfood delivery record | [TimeLocker dogfood follow-up requirements](../specs/002-timelocker-dogfood-followups/requirements.md) | Archived Spec 002 delivery evidence. Cross-repo follow-up behavior was implemented through Spec 003 and promoted to durable backlog/status sections. |
 | Cross-repo dogfood delivery record | [Cross-repo trust and discovery requirements](../specs/003-cross-repo-trust-discovery/requirements.md) | Archived Spec 003 delivery evidence for first-call trust, scope visibility, project-shape validation, and first-slice Go/C++ routing evidence. Current behavior lives in durable design/reference docs. |
+| Active overview ranking work | [Overview ranking polish requirements](../specs/004-overview-ranking-polish/requirements.md) | Active implementation spec promoted from the durable MCP surface backlog. |
+| Active .NET repository-shape work | [.NET repository shape hardening requirements](../specs/005-dotnet-repository-shape-hardening/requirements.md) | Active implementation spec for .NET generated-output handling, project metadata, and validation planning. |
+| Active infrastructure-template routing work | [Infrastructure template routing requirements](../specs/006-infra-template-routing/requirements.md) | Active implementation spec for SAM/CloudFormation template-to-handler routing and validation planning. |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) | Owns fixture, budget, degraded-mode, and acceptance evidence. |
 | Architectural decisions | [ADRs](../adr/) | ADR status must match frontmatter and body text. |
 

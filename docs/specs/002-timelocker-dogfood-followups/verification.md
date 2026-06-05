@@ -74,9 +74,9 @@ Manual dogfood gate:
   `ValidationService`; non-existent symbol behavior should be documented
   separately from failed exact lookup.
 
-## Closure Criteria
+## Closure Criteria Satisfied
 
-This spec can close when:
+This archived spec closed with the following evidence:
 
 - All tasks are marked done or explicitly deferred with rationale. Completed on
   2026-06-05.

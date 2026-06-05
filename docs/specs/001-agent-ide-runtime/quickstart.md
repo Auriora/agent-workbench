@@ -109,6 +109,10 @@ so Codex launches this repository checkout instead of a copied plugin cache
 path. Hook scripts are silent by default. Set `AGENT_WORKBENCH_HOOK_FEEDBACK=basic`
 only when concise MCP follow-up guidance is useful during local testing.
 
+This archived quickstart is delivery evidence for Spec 001. Current operational
+setup guidance lives in
+[Codex Agent Workbench plugin and MCP setup](../../runbooks/codex-agent-workbench-plugin.md).
+
 ## Expected Results
 
 The runtime returns compact MCP responses using the shared response envelope.

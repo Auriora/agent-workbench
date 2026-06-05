@@ -270,10 +270,10 @@ TimeLocker dogfood after Spec 002 left two MCP-resource polish items:
   overview may still scan for counts and rankings, but their response metadata
   should not report `freshness: unknown` when status proves a fresh completed
   warmup for the same repository.
-- Open: improve `repo:///overview` key-file ranking so application entrypoints,
+- Promoted to [Spec 004](../specs/004-overview-ranking-polish/requirements.md):
+  improve `repo:///overview` key-file ranking so application entrypoints,
   representative source files, test roots, and package/test configuration rank
-  ahead of large groups of workflow/config files such as
-  `.github/workflows/*`.
+  ahead of large groups of workflow/config files such as `.github/workflows/*`.
 
 OneMount dogfood left Go and broad-scan follow-up items:
 
@@ -402,17 +402,19 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Done: add first-slice .NET generated-output handling so `bin/`, `obj/`,
   `TestResults/`, `.dll`, `.pdb`, `.wasm`, `.nupkg`, and `.snupkg` artifacts
   do not consume catalog/context budgets by default.
-- Open: deepen .NET generated-output handling so
-  `TestResults/`, local `packages/`, publish output, `.dll`, `.pdb`, `.wasm`,
-  compressed framework assets, and source maps do not dominate context or
-  scope budgets unless explicitly requested.
+- Promoted to [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md):
+  deepen .NET generated-output handling so `TestResults/`, local `packages/`,
+  publish output, `.dll`, `.pdb`, `.wasm`, compressed framework assets, and
+  source maps do not dominate context or scope budgets unless explicitly
+  requested.
 - Done: promote `.sln`, `.csproj`, `Program.cs`, `appsettings*.json`, Razor
   route pages/components, controllers, EF `DbContext`/migrations, and shared
   model projects as first-class .NET routing and overview anchors.
 - Done: add first-slice .NET validation planning evidence for solution,
   project, and test-project files, including non-executed `dotnet build` and
   `dotnet test` candidates.
-- Open: deepen .NET validation planning evidence for solution and project files,
+- Promoted to [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md):
+  deepen .NET validation planning evidence for solution and project files,
   including non-executed `dotnet build <solution-or-project>` and `dotnet test`
   candidates when test projects or repo policy support them. Until policy is
   known, commands should remain planned evidence, not executed proof.
@@ -479,12 +481,15 @@ Post-closure dogfood caveats from large mixed-language repositories:
   logical IDs and Lambda handler strings. These appear as routing symbols with
   `resource_backed` capability and `infra_parser` provenance, not as semantic
   reference/impact proof.
-- Future: add SAM/CloudFormation fixture-backed semantic indexing for logical
-  IDs, Lambda handler strings, events, parameters, environment references,
-  policies, layers, outputs, and template dependencies.
+- Promoted first routing slice to
+  [Spec 006](../specs/006-infra-template-routing/requirements.md): add
+  SAM/CloudFormation fixture-backed resource routing for logical IDs, Lambda
+  handler strings, unresolved handler references, events, and template
+  dependencies. Full semantic indexing remains future work.
 - Done: add first-slice SAM/Lambda overview and context routing for template
   files, handler source files, and infrastructure tests.
-- Future: connect SAM/CloudFormation templates to source handlers, tests, and
+- Promoted to [Spec 006](../specs/006-infra-template-routing/requirements.md):
+  connect SAM/CloudFormation templates to source handlers, tests, and
   validation evidence. Impact on a SAM template should expose low-confidence
   but useful template-to-handler and event-source relationships rather than an
   isolated zero-edge resource.
@@ -494,13 +499,15 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Done: add first-slice AWS validation planning evidence for SAM/CloudFormation
   repositories, including non-executed `cfn-lint`, `sam validate`, and nearby
   infrastructure pytest candidates when template/test evidence exists.
-- Future: deepen AWS validation planning evidence for SAM/CloudFormation
-  repositories, including cfn-lint, repo-approved SAM validation commands,
-  containerized deploy/test runners, and host-tool availability as planned or
-  blocked evidence rather than guessed commands.
+- Promoted to [Spec 006](../specs/006-infra-template-routing/requirements.md):
+  deepen AWS validation planning evidence for SAM/CloudFormation repositories,
+  including cfn-lint, repo-approved SAM validation commands, containerized
+  deploy/test runners, and host-tool availability as planned or blocked
+  evidence rather than guessed commands.
 - Done: add first-slice resource-backed `.sln`/`.csproj` discovery as project
   graph routing and validation evidence.
-- Future: deepen resource-backed `.sln`/`.csproj` extraction for SDK type, target
+- Promoted to [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md):
+  deepen resource-backed `.sln`/`.csproj` extraction for SDK type, target
   frameworks, package references, project references, output type, and likely
   app role before deeper C# semantics.
 - Future: add C# and Razor fixture-backed partial semantic support for
