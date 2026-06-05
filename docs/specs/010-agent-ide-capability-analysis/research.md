@@ -2,7 +2,7 @@
 title: Agent IDE capability analysis research
 doc_type: spec
 artifact_type: research
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---

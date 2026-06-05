@@ -2,7 +2,7 @@
 title: Agent IDE capability analysis tasks
 doc_type: spec
 artifact_type: tasks
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---
@@ -81,22 +81,26 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     query/read surfaces, and linked both from durable documentation map and MCP
     surface backlog. Lower-priority parity items remain deferred in the Spec 010
     analysis.
-  - Evidence: Pending.
-
-- [ ] T006 Promote durable analysis and close this spec.
+- [x] T006 Promote durable analysis and close this spec.
   - Depends on: T005
   - Files: `docs/reference/agent-ide-capability-analysis/`,
     `docs/reference/documentation-map.md`, `docs/design/`
   - Acceptance: The final analysis is durable, linked from the documentation
     map, and this spec records validation evidence and residual risks before
     being archived.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-05. The durable analysis lives at
+    [Agent IDE capability analysis](../../reference/agent-ide-capability-analysis/agent-ide-capability-analysis-2026-06-05.md),
+    is linked from `docs/reference/documentation-map.md`, and the high-priority
+    follow-up work was promoted to Specs 011 and 012 while lower-priority parity
+    items remain deferred in the analysis.
 
-- [ ] T007 Validate the analysis package.
+- [x] T007 Validate the analysis package.
   - Depends on: T002
   - Files: `docs/specs/010-agent-ide-capability-analysis/`,
     `docs/reference/agent-ide-capability-analysis/`
   - Acceptance: Spec lint, documentation metadata checks, link checks, and
     whitespace checks pass; any inability to inspect `agent-ide` evidence is
     recorded as a limitation.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-05. `spec_runtime.py lint` passed for Spec
+    010, `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts` passed,
+    and `git diff --check` passed before archival.
