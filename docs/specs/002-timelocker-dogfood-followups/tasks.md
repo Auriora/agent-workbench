@@ -1,12 +1,19 @@
 ---
 title: TimeLocker dogfood follow-up tasks
 doc_type: spec
-status: draft
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---
 
 # Tasks
+
+## Closure Record
+
+Spec 002 closed on 2026-06-05. All tasks are completed; no task remains active
+in this package. Follow-up work is tracked in
+[Spec 003](../003-cross-repo-trust-discovery/tasks.md) and durable backlog
+sections.
 
 **Input**: [Requirements](requirements.md), [Technical design](design.md), and
 [Verification](verification.md).

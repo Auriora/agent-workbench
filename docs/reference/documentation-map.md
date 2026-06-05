@@ -3,7 +3,7 @@ title: Documentation map
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-06-03
+last_reviewed: 2026-06-05
 ---
 
 # Documentation Map
@@ -42,6 +42,8 @@ copying tables, schemas, or enum definitions.
 | Attention lifecycle and ranking | [Attention layer design](../design/attention-layer-design.md) | Owns minimal blocker/warning behavior; full workflow guidance is post-MVP. |
 | Knowledge reports and graph communities | [Knowledge layer design](../design/knowledge-layer-design.md) | Post-MVP unless explicitly reduced to cheap persisted summaries. |
 | MVP delivery record | [Agent IDE runtime MVP requirements](../specs/001-agent-ide-runtime/requirements.md) | Archived Spec 001 delivery evidence. Current behavior lives in the durable design, reference, requirements, runbook, and ADR docs listed in this map. |
+| TimeLocker dogfood delivery record | [TimeLocker dogfood follow-up requirements](../specs/002-timelocker-dogfood-followups/requirements.md) | Archived Spec 002 delivery evidence. Cross-repo follow-up work lives in Spec 003 and durable backlog sections. |
+| Active cross-repo dogfood follow-up | [Cross-repo trust and discovery requirements](../specs/003-cross-repo-trust-discovery/requirements.md) | Active Spec 003 implementation stream for first-call trust, scope visibility, project-shape validation, and first-slice Go/C++ routing evidence. |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) | Owns fixture, budget, degraded-mode, and acceptance evidence. |
 | Architectural decisions | [ADRs](../adr/) | ADR status must match frontmatter and body text. |
 

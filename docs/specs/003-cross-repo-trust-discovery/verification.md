@@ -1,0 +1,62 @@
+---
+title: Cross-repo trust and discovery verification
+doc_type: spec
+status: draft
+owner: platform
+last_reviewed: 2026-06-05
+---
+
+# Verification
+
+## Validation Plan
+
+Required automated gates:
+
+- `pnpm typecheck`
+- Focused Vitest suites for status/scope/overview metadata, scope budgets,
+  context ranking, next actions, validation planning, and query tools.
+- Fixture tests for generic Python-service, Go-service, and CMake/C++
+  repositories inspired by TimeLocker, OneMount, and FreeCAD findings.
+- Contract tests if new public metadata, evidence labels, or capability values
+  are added.
+
+Manual dogfood gates:
+
+- Restart Agent Workbench MCP in TimeLocker, OneMount, and FreeCAD.
+- Read `repo:///status`, `repo:///scope`, and `repo:///overview`.
+- Run `context_for_task` with broad and explicit-file prompts in each repo.
+- Run `verification_plan` for Python, Go, and CMake/C++ representative files.
+- Run `symbol_search`, `find_references`, and `impact` for representative Go
+  and C/C++ identifiers, verifying confidence labels remain honest.
+- Confirm `next_actions` contain only visible public MCP tool names.
+
+## Evidence Log
+
+| Date | Scope | Evidence | Result |
+|------|-------|----------|--------|
+| 2026-06-05 | Spec intake | TimeLocker, OneMount, and FreeCAD dogfood feedback reviewed and durable backlog updated | Follow-up requirements captured |
+| 2026-06-05 | Spec setup | Spec 002 archived; Spec 003 created with task DAG and verification plan | In progress |
+| 2026-06-05 | T002 fixture setup | `pnpm exec vitest run tests/workspace/file-catalog-scanner.test.ts tests/mcp/repo-scope-overview-resource.test.ts` | Passed: 2 test files, 11 tests |
+| 2026-06-05 | T003 scope/overview metadata alignment | `pnpm typecheck`; `pnpm exec vitest run tests/workspace/file-catalog-scanner.test.ts tests/mcp/repo-scope-overview-resource.test.ts` | Passed: typecheck and 2 test files, 13 tests |
+
+## Residual Risks
+
+- External dogfood repositories may drift independently and should not be
+  required for automated CI.
+- Go and C/C++ parser-backed extraction may require native tree-sitter grammar
+  dependencies; install/build failures must be surfaced rather than masked.
+- Repository-shape validation can infer wrong commands in unusual build
+  systems; plans must distinguish proven, planned, and blocked evidence.
+- Context ranking heuristics can improve first pass routing but must not be
+  treated as edit-proof evidence.
+
+## Closure Criteria
+
+This spec can close when:
+
+- All tasks are marked completed or explicitly deferred with rationale.
+- Required automated gates pass.
+- TimeLocker, OneMount, and FreeCAD dogfood confirms the targeted improvements
+  or records remaining caveats.
+- Accepted behavior is promoted to durable design/reference docs listed in
+  [Design](design.md#promotion-targets).

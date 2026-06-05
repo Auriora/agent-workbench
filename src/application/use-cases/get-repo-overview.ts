@@ -6,7 +6,11 @@ import type {
   ValidationHint
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
-import type { FileCatalogScanPort } from "../../ports/index.js";
+import type {
+  FileCatalogScanPort,
+  SnapshotPort,
+  WarmupCoordinatorPort
+} from "../../ports/index.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 
 export type GetRepoOverviewResult = {
@@ -17,20 +21,28 @@ export type GetRepoOverviewResult = {
 export async function getRepoOverview(input: {
   repo_root: string;
   scanner: FileCatalogScanPort;
+  snapshots?: SnapshotPort;
+  warmups?: WarmupCoordinatorPort;
 }): Promise<GetRepoOverviewResult> {
-  const scanned = await input.scanner.scan({
-    repo_root: input.repo_root,
-    indexed_roots: ["."],
-    skipped_roots: [],
-    max_files: 2000
-  });
+  const [scanned, snapshot, warmup] = await Promise.all([
+    input.scanner.scan({
+      repo_root: input.repo_root,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      max_files: 2000
+    }),
+    input.snapshots?.getSnapshot({ repo_root: input.repo_root }) ?? Promise.resolve(undefined),
+    input.warmups?.getState({ repo_root: input.repo_root }) ?? Promise.resolve(undefined)
+  ]);
   const languages = uniqueSorted(scanned.files.map((file) => file.file_identity.language));
   const status = getCatalogRepoStatus({
     repo_root: scanned.repo_root,
     indexed_roots: scanned.indexed_roots,
     skipped_roots: scanned.skipped_roots,
     files: scanned.files,
-    freshness: "unknown"
+    freshness: snapshot?.freshness ?? "unknown",
+    snapshot: snapshot ?? undefined,
+    warmup: warmup ?? undefined
   });
 
   return {

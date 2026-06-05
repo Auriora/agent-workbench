@@ -1,0 +1,3 @@
+class DocumentObject:
+    def recompute(self) -> None: ...
+

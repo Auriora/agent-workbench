@@ -1,12 +1,18 @@
 ---
 title: TimeLocker dogfood follow-up verification
 doc_type: spec
-status: draft
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---
 
 # Verification
+
+## Closure Record
+
+Spec 002 closed on 2026-06-05. All closure criteria below are satisfied with
+documented caveats. Caveats that remain relevant across repositories are routed
+to [Spec 003](../003-cross-repo-trust-discovery/requirements.md).
 
 ## Validation Plan
 

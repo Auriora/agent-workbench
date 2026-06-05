@@ -41,7 +41,7 @@ export class FileIdentityAdapter implements FileIdentityPort {
     const ext = normalizeRelativePath(path.extname(input.path)).toLowerCase();
     const stem = filename.replace(/\.[^.]*$/, "");
 
-    if (ext === ".py") {
+    if (ext === ".py" || ext === ".pyi") {
       return "python";
     }
 
@@ -73,7 +73,15 @@ export class FileIdentityAdapter implements FileIdentityPort {
       return "c";
     }
 
-    if (ext === ".cc" || ext === ".cpp" || ext === ".cxx" || ext === ".hpp" || ext === ".hxx") {
+    if (
+      ext === ".cc" ||
+      ext === ".cpp" ||
+      ext === ".cxx" ||
+      ext === ".h" ||
+      ext === ".hh" ||
+      ext === ".hpp" ||
+      ext === ".hxx"
+    ) {
       return "cpp";
     }
 

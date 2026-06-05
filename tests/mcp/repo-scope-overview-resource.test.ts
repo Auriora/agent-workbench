@@ -6,11 +6,13 @@ import {
   getRepoOverview,
   type GetRepoOverviewResult
 } from "../../src/application/use-cases/get-repo-overview.js";
-import type { GetRepoScopeResult } from "../../src/application/use-cases/get-repo-scope.js";
+import { getRepoScope, type GetRepoScopeResult } from "../../src/application/use-cases/get-repo-scope.js";
 import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { repoOverviewResource } from "../../src/interface-adapters/mcp/registries/resources/repo-overview.js";
 import { repoScopeResource } from "../../src/interface-adapters/mcp/registries/resources/repo-scope.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
+import type { SnapshotState } from "../../src/domain/models/runtime.js";
+import type { SnapshotPort } from "../../src/ports/index.js";
 
 type RegisteredResource = {
   name: string;
@@ -308,4 +310,93 @@ describe("repo scope and overview composed server resources", () => {
       ])
     );
   });
+
+  it("reports Go source coverage and skips Go cache roots", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-go-service-repo");
+    const result = await getRepoScope({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter()
+    });
+
+    expect(result.scope.skipped_roots).toContain(".gocache");
+    expect(result.scope.languages).toEqual(expect.arrayContaining(["go", "text"]));
+    expect(result.scope.file_counts).toMatchObject({
+      go: 2
+    });
+    expect(result.scope.capability_counts.unsupported).toBeGreaterThanOrEqual(2);
+  });
+
+  it("reports C++ headers, sources, and Python stubs in CMake C++ shaped scope", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-cmake-cpp-repo");
+    const result = await getRepoScope({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter()
+    });
+
+    expect(result.scope.languages).toEqual(expect.arrayContaining(["cpp", "json", "python", "text"]));
+    expect(result.scope.file_counts).toMatchObject({
+      cpp: 3,
+      python: 1
+    });
+    expect(result.scope.capability_counts).toMatchObject({
+      partial_semantic: 1,
+      unsupported: expect.any(Number)
+    });
+  });
+
+  it("aligns scope freshness with an available fresh snapshot", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-cmake-cpp-repo");
+    const result = await getRepoScope({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter(),
+      snapshots: snapshotPort(snapshot({ repoRoot, freshness: "fresh" }))
+    });
+
+    expect(result.meta.freshness).toBe("fresh");
+    expect(result.meta.scope.languages).toEqual(expect.arrayContaining(["cpp", "python"]));
+  });
+
+  it("aligns overview freshness with an available fresh snapshot", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-go-service-repo");
+    const result = await getRepoOverview({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter(),
+      snapshots: snapshotPort(snapshot({ repoRoot, freshness: "fresh" }))
+    });
+
+    expect(result.meta.freshness).toBe("fresh");
+    expect(result.meta.scope.languages).toEqual(expect.arrayContaining(["go"]));
+  });
 });
+
+function snapshot(input: {
+  repoRoot: string;
+  freshness: SnapshotState["freshness"];
+}): SnapshotState {
+  return {
+    id: "snap-fixture",
+    repo_root: input.repoRoot,
+    workspace_root: input.repoRoot,
+    repo_identity: "fixture",
+    config_identity: "default",
+    schema_version: 1,
+    freshness: input.freshness,
+    analysis_validity: "valid",
+    owner_state: "owner",
+    created_at: "2026-06-05T12:00:00.000Z",
+    updated_at: "2026-06-05T12:00:00.000Z"
+  };
+}
+
+function snapshotPort(value: SnapshotState | null): SnapshotPort {
+  return {
+    async getSnapshot() {
+      return value;
+    },
+    async listSnapshots() {
+      return value === null ? [] : [value];
+    },
+    async upsertSnapshot() {},
+    async markSnapshotFreshness() {}
+  };
+}

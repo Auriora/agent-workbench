@@ -16,6 +16,7 @@ describe("file catalog scanner", () => {
     fs.mkdirSync(path.join(repoRoot, ".github", "workflows"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".claude", "commands"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".codex", ".tmp"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".gocache"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".local"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".mypy_cache", "3.12"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".nuxt"), { recursive: true });
@@ -30,6 +31,7 @@ describe("file catalog scanner", () => {
     fs.writeFileSync(path.join(repoRoot, ".github", "workflows", "ci.yml"), "name: ci\n");
     fs.writeFileSync(path.join(repoRoot, ".claude", "commands", "review.md"), "local agent guidance\n");
     fs.writeFileSync(path.join(repoRoot, ".codex", ".tmp", "plugin.md"), "local plugin cache\n");
+    fs.writeFileSync(path.join(repoRoot, ".gocache", "cache-a"), "generated go cache\n");
     fs.writeFileSync(path.join(repoRoot, ".local", "sample.json"), "{}\n");
     fs.writeFileSync(path.join(repoRoot, ".mypy_cache", "3.12", "service.data.json"), "{}\n");
     fs.writeFileSync(path.join(repoRoot, ".nuxt", "manifest.json"), "{}\n");
@@ -102,6 +104,44 @@ describe("file catalog scanner", () => {
 
     expect(result.truncated).toBe(true);
     expect(result.files).toHaveLength(2);
+  });
+
+  it("classifies first-slice Go, C++ header, and Python stub files while skipping Go cache", async () => {
+    fs.writeFileSync(path.join(repoRoot, "go.mod"), "module example.com/onemount\n");
+    fs.writeFileSync(path.join(repoRoot, "src", "main.go"), "package main\nfunc main() {}\n");
+    fs.writeFileSync(path.join(repoRoot, "src", "DocumentObject.h"), "class DocumentObject {};\n");
+    fs.writeFileSync(path.join(repoRoot, "src", "DocumentObject.cpp"), "#include \"DocumentObject.h\"\n");
+    fs.writeFileSync(path.join(repoRoot, "src", "DocumentObject.pyi"), "class DocumentObject: ...\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    const result = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      max_files: 100
+    });
+
+    expect(result.files.map((file) => file.path)).not.toContain(".gocache/cache-a");
+    expect(result.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "src/main.go",
+          file_identity: expect.objectContaining({ language: "go" })
+        }),
+        expect.objectContaining({
+          path: "src/DocumentObject.h",
+          file_identity: expect.objectContaining({ language: "cpp" })
+        }),
+        expect.objectContaining({
+          path: "src/DocumentObject.cpp",
+          file_identity: expect.objectContaining({ language: "cpp" })
+        }),
+        expect.objectContaining({
+          path: "src/DocumentObject.pyi",
+          file_identity: expect.objectContaining({ language: "python" })
+        })
+      ])
+    );
   });
 
   it("does not read file contents while building status catalog evidence", async () => {

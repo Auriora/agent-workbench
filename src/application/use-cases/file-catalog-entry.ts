@@ -23,7 +23,7 @@ function inferLanguageFromPath(filePath: string): string {
   const ext = filename.slice(filename.lastIndexOf("."));
   const stem = filename.replace(/\.[^.]*$/, "");
 
-  if (ext === ".py") return "python";
+  if (ext === ".py" || ext === ".pyi") return "python";
   if (ext === ".ts" || ext === ".tsx") return "typescript";
   if (ext === ".js" || ext === ".jsx" || ext === ".mjs" || ext === ".cjs") return "javascript";
   if (ext === ".cs") return "csharp";
@@ -31,7 +31,17 @@ function inferLanguageFromPath(filePath: string): string {
   if (ext === ".rs") return "rust";
   if (ext === ".java") return "java";
   if (ext === ".c") return "c";
-  if (ext === ".cc" || ext === ".cpp" || ext === ".cxx" || ext === ".hpp" || ext === ".hxx") return "cpp";
+  if (
+    ext === ".cc" ||
+    ext === ".cpp" ||
+    ext === ".cxx" ||
+    ext === ".h" ||
+    ext === ".hh" ||
+    ext === ".hpp" ||
+    ext === ".hxx"
+  ) {
+    return "cpp";
+  }
   if (ext === ".sh" || filename === "bashrc" || filename === "zshrc") return "shell";
   if (filename === "dockerfile" || ext === ".tf" || ext === ".tfvars") return "infrastructure";
   if (ext === ".yaml" || ext === ".yml") return "yaml";

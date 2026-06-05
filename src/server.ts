@@ -61,12 +61,16 @@ export function createAgentWorkbenchServer(
     getRepoScope: ({ repo_root }) =>
       getRepoScope({
         repo_root,
-        scanner
+        scanner,
+        snapshots: graphStore,
+        warmups: runtime
       }),
     getRepoOverview: ({ repo_root }) =>
       getRepoOverview({
         repo_root,
-        scanner
+        scanner,
+        snapshots: graphStore,
+        warmups: runtime
       }),
     getTaskContext: ({ request }) =>
       getTaskContext({

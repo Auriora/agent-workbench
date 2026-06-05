@@ -10,6 +10,7 @@ export const DEFAULT_SKIPPED_ROOTS = [
   ".claude",
   ".codex",
   ".git",
+  ".gocache",
   ".local",
   ".mypy_cache",
   ".nuxt",

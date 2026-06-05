@@ -1,12 +1,19 @@
 ---
 title: TimeLocker dogfood follow-up design
 doc_type: spec
-status: draft
+status: archived
 owner: platform
-last_reviewed: 2026-06-03
+last_reviewed: 2026-06-05
 ---
 
 # Technical Design
+
+## Closure Record
+
+Spec 002 closed on 2026-06-05. Accepted behavior was promoted into durable
+design/reference docs; cross-repo dogfood gaps from TimeLocker, OneMount, and
+FreeCAD are handled by
+[Spec 003](../003-cross-repo-trust-discovery/requirements.md).
 
 ## Overview
 

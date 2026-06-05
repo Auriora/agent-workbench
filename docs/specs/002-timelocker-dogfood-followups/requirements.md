@@ -1,12 +1,19 @@
 ---
 title: TimeLocker dogfood follow-up requirements
 doc_type: spec
-status: draft
+status: archived
 owner: platform
-last_reviewed: 2026-06-03
+last_reviewed: 2026-06-05
 ---
 
 # Requirements
+
+## Closure Record
+
+Spec 002 closed on 2026-06-05 after implementation, focused validation,
+TimeLocker retest, and durable-documentation promotion. Remaining caveats were
+routed to [Spec 003](../003-cross-repo-trust-discovery/requirements.md) and the
+durable backlog in [MCP surface design](../../design/mcp-surface-design.md).
 
 ## Introduction
 
