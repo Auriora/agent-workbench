@@ -326,6 +326,11 @@ Post-closure dogfood caveats from large mixed-language repositories:
   overview. Devcontainer presence alone is not treated as Docker-only validation
   proof; explicit repo guidance is still required before suppressing generic
   host commands.
+- Done: add a repo-local, read-only sample smoke harness that can run bounded
+  status, scope, overview, and optional context checks across explicit sample
+  repositories or discovered git repositories under `~/Projects`. Reports are
+  written under ignored `.tmp/` paths in this repository; external sample
+  repositories must not be modified.
 - Done: improve broad task routing for large monorepos by ranking first-party
   implementation roots and exact source/symbol text above third-party, fixture,
   installer, generated, or package-manager noise unless those areas are named.

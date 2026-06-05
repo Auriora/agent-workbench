@@ -153,7 +153,7 @@ export function resolveProfileOutputPath(config: DebugMcpUseCaseConfig): string 
   }
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-  return path.resolve(".cache", "profiles", `${config.useCase}-${timestamp}.cpuprofile`);
+  return path.resolve(".tmp", "profiles", `${config.useCase}-${timestamp}.cpuprofile`);
 }
 
 export async function main(argv = process.argv.slice(2), cwd = process.cwd()): Promise<void> {
