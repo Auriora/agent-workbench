@@ -550,6 +550,10 @@ Post-closure dogfood caveats from large mixed-language repositories:
   adding heuristic include/same-file routing edges, and identifying likely
   CMake target command templates without executing commands or guessing unsafe
   build directories.
+- Promoted to [Spec 010](../specs/010-agent-ide-capability-analysis/requirements.md):
+  perform a detailed predecessor `agent-ide` capability analysis, map which
+  lessons are already implemented, and promote only language-neutral replacement
+  gaps into tool, presenter, provider, roadmap, or follow-up spec work.
 
 ## Related Docs
 

@@ -51,6 +51,7 @@ copying tables, schemas, or enum definitions.
 | Active redaction boundary work | [Redaction boundary polish requirements](../specs/007-redaction-boundary-polish/requirements.md) | Active implementation spec for preserving ordinary source snippets while keeping path/secret redaction strict. |
 | Active Lambda result presentation work | [Lambda result presentation requirements](../specs/008-lambda-result-presentation/requirements.md) | Active implementation spec for compact grouping of Lambda handler search/context results. |
 | Active CMake/C++ routing work | [CMake C++ routing and validation requirements](../specs/009-cmake-cpp-routing-validation/requirements.md) | Active implementation spec for CMake/C++ first-party routing, heuristic edges, and concrete validation planning. |
+| Active Agent IDE replacement analysis | [Agent IDE capability analysis requirements](../specs/010-agent-ide-capability-analysis/requirements.md) | Active planning spec for analyzing predecessor `agent-ide` capabilities, mapping implemented lessons, and creating language-neutral follow-up specs. |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) | Owns fixture, budget, degraded-mode, and acceptance evidence. |
 | Architectural decisions | [ADRs](../adr/) | ADR status must match frontmatter and body text. |
 
