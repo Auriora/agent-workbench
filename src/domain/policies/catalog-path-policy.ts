@@ -81,6 +81,13 @@ export type GitignoreRule = {
   hasSlash: boolean;
 };
 
+export type CatalogSkipReason =
+  | "secret"
+  | "generated_or_vendor"
+  | "configured_skip"
+  | "hidden_path"
+  | "gitignore";
+
 const DEFAULT_SKIPPED_DIRECTORY_NAMES = new Set<string>(DEFAULT_SKIPPED_ROOTS);
 const ALLOWED_HIDDEN_DIRECTORY_NAMES = new Set<string>(ALLOWED_HIDDEN_DIRECTORIES);
 const ALLOWED_HIDDEN_FILE_NAMES = new Set<string>(ALLOWED_HIDDEN_FILES);
@@ -139,24 +146,33 @@ export function shouldSkipCatalogPath(input: {
   skippedRoots: readonly string[];
   gitignoreRules?: readonly GitignoreRule[];
 }): boolean {
+  return catalogSkipReason(input) !== null;
+}
+
+export function catalogSkipReason(input: {
+  relativePath: string;
+  isDirectory: boolean;
+  skippedRoots: readonly string[];
+  gitignoreRules?: readonly GitignoreRule[];
+}): CatalogSkipReason | null {
   const relativePath = normalizeCatalogPath(input.relativePath).replace(/^\.\/+/, "");
   if (relativePath.length === 0 || relativePath === ".") {
-    return false;
+    return null;
   }
   if (isSecretEnvPath(relativePath)) {
-    return true;
+    return "secret";
   }
   if (!input.isDirectory && hasSkippedFileExtension(relativePath)) {
-    return true;
+    return "generated_or_vendor";
   }
 
   const segments = relativePath.split("/");
   const lowerSegments = segments.map((segment) => segment.toLowerCase());
   if (lowerSegments.some((segment) => DEFAULT_SKIPPED_DIRECTORY_NAMES.has(segment))) {
-    return true;
+    return "generated_or_vendor";
   }
   if (lowerSegments.some((segment) => DEFAULT_SKIPPED_DIRECTORY_PREFIXES.some((prefix) => segment.startsWith(prefix)))) {
-    return true;
+    return "generated_or_vendor";
   }
   if (
     lowerSegments.some((segment) =>
@@ -164,19 +180,21 @@ export function shouldSkipCatalogPath(input: {
       DEFAULT_SKIPPED_HIDDEN_DIRECTORY_SUFFIXES.some((suffix) => segment.endsWith(suffix))
     )
   ) {
-    return true;
+    return "generated_or_vendor";
   }
   if (hasSkippedRoot(relativePath, input.skippedRoots)) {
-    return true;
+    return "configured_skip";
   }
   if (isHiddenPathSkippedByDefault(relativePath, input.isDirectory)) {
-    return true;
+    return "hidden_path";
   }
   return isIgnoredByGitignore({
     relativePath,
     isDirectory: input.isDirectory,
     rules: input.gitignoreRules ?? []
-  });
+  })
+    ? "gitignore"
+    : null;
 }
 
 function hasSkippedFileExtension(relativePath: string): boolean {

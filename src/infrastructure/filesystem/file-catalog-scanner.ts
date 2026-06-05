@@ -3,14 +3,21 @@ import path from "node:path";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import {
   buildFileCatalogEntry,
+  catalogSkipReason,
   mergeSkippedRoots,
   normalizeCatalogPath,
   parseGitignoreRules,
-  shouldSkipCatalogPath,
   type GitignoreRule
 } from "../../domain/policies/index.js";
-import type { FileCatalogScanPort, FileCatalogScanResult, FileIdentityPort } from "../../ports/index.js";
+import type {
+  FileCatalogScanPort,
+  FileCatalogScanResult,
+  FileCatalogSkippedPath,
+  FileIdentityPort
+} from "../../ports/index.js";
 import { FileIdentityAdapter } from "./file-identity.js";
+
+const MAX_SKIPPED_PATHS = 100;
 
 function isInsideRoot(relativePath: string, root: string): boolean {
   const normalizedRoot = normalizeCatalogPath(root).replace(/^\/+|\/+$/g, "");
@@ -33,6 +40,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     const repoRoot = path.resolve(input.repo_root);
     const indexedRoots = input.indexed_roots.length > 0 ? input.indexed_roots : ["."];
     const entries: FileCatalogEntry[] = [];
+    const skippedPaths: FileCatalogSkippedPath[] = [];
     const skippedRoots = new Set(input.skipped_roots);
     const gitignoreRules = readRootGitignoreRules(repoRoot);
     let truncated = false;
@@ -55,6 +63,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
         recordSkippedRoot: (root) => {
           skippedRoots.add(root);
         },
+        recordSkippedPath: skippedPathRecorder(skippedPaths),
         maxFiles: input.max_files,
         entries,
         setTruncated: () => {
@@ -69,6 +78,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       repo_root: repoRoot,
       indexed_roots: indexedRoots,
       skipped_roots: mergeSkippedRoots([...skippedRoots]),
+      skipped_paths: skippedPaths,
       files: entries,
       truncated
     };
@@ -81,6 +91,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     skippedRoots: readonly string[];
     gitignoreRules: readonly GitignoreRule[];
     recordSkippedRoot: (root: string) => void;
+    recordSkippedPath: (skipped: FileCatalogSkippedPath) => void;
     maxFiles: number;
     entries: FileCatalogEntry[];
     setTruncated: () => void;
@@ -93,7 +104,8 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     const children = readDirectoryOrSkip({
       repoRoot: input.repoRoot,
       directory: input.directory,
-      recordSkippedRoot: input.recordSkippedRoot
+      recordSkippedRoot: input.recordSkippedRoot,
+      recordSkippedPath: input.recordSkippedPath
     });
     if (children === null) {
       return;
@@ -108,19 +120,28 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
 
       const absolutePath = path.join(input.directory, child.name);
       const relativePath = normalizeCatalogPath(path.relative(input.repoRoot, absolutePath));
-      if (
-        shouldSkipCatalogPath({
-          relativePath,
-          isDirectory: child.isDirectory(),
-          skippedRoots: input.skippedRoots,
-          gitignoreRules: input.gitignoreRules
-        })
-      ) {
+      const skipReason = catalogSkipReason({
+        relativePath,
+        isDirectory: child.isDirectory(),
+        skippedRoots: input.skippedRoots,
+        gitignoreRules: input.gitignoreRules
+      });
+      if (skipReason !== null) {
+        input.recordSkippedPath({
+          path: relativePath,
+          reason: skipReason,
+          detail: catalogSkipDetail(skipReason)
+        });
         continue;
       }
 
       if (child.isDirectory()) {
         if (isNestedGitRepository(input.repoRoot, absolutePath)) {
+          input.recordSkippedPath({
+            path: relativePath,
+            reason: "nested_git_repository",
+            detail: "Nested git checkout was skipped during catalog scan."
+          });
           continue;
         }
         await this.scanDirectory({ ...input, directory: absolutePath });
@@ -134,7 +155,8 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       const stats = statFileOrSkip({
         repoRoot: input.repoRoot,
         absolutePath,
-        recordSkippedRoot: input.recordSkippedRoot
+        recordSkippedRoot: input.recordSkippedRoot,
+        recordSkippedPath: input.recordSkippedPath
       });
       if (stats === null) {
         continue;
@@ -159,12 +181,19 @@ function readDirectoryOrSkip(input: {
   repoRoot: string;
   directory: string;
   recordSkippedRoot: (root: string) => void;
+  recordSkippedPath: (skipped: FileCatalogSkippedPath) => void;
 }): fs.Dirent[] | null {
   try {
     return fs.readdirSync(input.directory, { withFileTypes: true });
   } catch (error) {
     if (isSkippableFilesystemError(error)) {
-      input.recordSkippedRoot(relativeCatalogPath(input.repoRoot, input.directory));
+      const path = relativeCatalogPath(input.repoRoot, input.directory);
+      input.recordSkippedRoot(path);
+      input.recordSkippedPath({
+        path,
+        reason: filesystemSkipReason(error),
+        detail: "Directory could not be read during catalog scan."
+      });
       return null;
     }
     throw error;
@@ -175,15 +204,72 @@ function statFileOrSkip(input: {
   repoRoot: string;
   absolutePath: string;
   recordSkippedRoot: (root: string) => void;
+  recordSkippedPath: (skipped: FileCatalogSkippedPath) => void;
 }): fs.Stats | null {
   try {
     return fs.statSync(input.absolutePath);
   } catch (error) {
     if (isSkippableFilesystemError(error)) {
-      input.recordSkippedRoot(relativeCatalogPath(input.repoRoot, input.absolutePath));
+      const path = relativeCatalogPath(input.repoRoot, input.absolutePath);
+      input.recordSkippedRoot(path);
+      input.recordSkippedPath({
+        path,
+        reason: filesystemSkipReason(error),
+        detail: "File metadata could not be read during catalog scan."
+      });
       return null;
     }
     throw error;
+  }
+}
+
+function filesystemSkipReason(error: unknown): FileCatalogSkippedPath["reason"] {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return "permission_denied";
+  }
+  const code = String(error.code);
+  if (code === "ENOENT") return "missing";
+  if (code === "ENOTDIR") return "not_directory";
+  return "permission_denied";
+}
+
+function skippedPathRecorder(skippedPaths: FileCatalogSkippedPath[]): (skipped: FileCatalogSkippedPath) => void {
+  const seen = new Set<string>();
+  return (skipped) => {
+    if (skipped.path.length === 0 || skipped.path === ".") {
+      return;
+    }
+    const key = `${skipped.reason}:${skipped.path}`;
+    if (seen.has(key) || skippedPaths.length >= MAX_SKIPPED_PATHS) {
+      return;
+    }
+    seen.add(key);
+    skippedPaths.push(skipped);
+  };
+}
+
+function catalogSkipDetail(reason: FileCatalogSkippedPath["reason"]): string {
+  switch (reason) {
+    case "secret":
+      return "Secret-bearing local environment file was excluded from catalog evidence.";
+    case "generated_or_vendor":
+      return "Generated, dependency, cache, build, or vendor path was excluded from catalog evidence.";
+    case "configured_skip":
+      return "Path matched caller-provided skipped roots.";
+    case "hidden_path":
+      return "Hidden local path is not allowlisted as repository-shape evidence.";
+    case "gitignore":
+      return "Path matched root .gitignore skip rules.";
+    case "nested_git_repository":
+      return "Nested git checkout was skipped during catalog scan.";
+    case "permission_denied":
+      return "Path could not be accessed during catalog scan.";
+    case "missing":
+      return "Path disappeared during catalog scan.";
+    case "not_directory":
+      return "Expected directory was not a directory during catalog scan.";
+    case "workspace_escape":
+      return "Path escaped the repository root.";
   }
 }
 

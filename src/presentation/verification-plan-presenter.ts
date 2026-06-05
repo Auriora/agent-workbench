@@ -3,6 +3,7 @@ import {
   contextRiskSchema,
   nextActionSchema,
   plannedValidationCommandSchema,
+  skippedPathSchema,
   staticFeedbackFindingSchema,
   staticFeedbackSchema,
   responseMetadataSchema,
@@ -56,8 +57,17 @@ function sanitizeVerificationPlan(plan: PlanVerificationResult["plan"]): Verific
     planned_commands: plan.planned_commands.map(sanitizePlannedCommand),
     static_feedback: plan.static_feedback === undefined ? undefined : sanitizeStaticFeedback(plan.static_feedback),
     risks: plan.risks.map(sanitizeRisk),
+    skipped_paths: plan.skipped_paths?.map(sanitizeSkippedPath),
     next_actions: plan.next_actions.map(sanitizeNextAction),
     task: plan.task
+  });
+}
+
+function sanitizeSkippedPath(input: NonNullable<PlanVerificationResult["plan"]["skipped_paths"]>[number]) {
+  return skippedPathSchema.parse({
+    path: input.path,
+    reason: input.reason,
+    detail: input.detail
   });
 }
 

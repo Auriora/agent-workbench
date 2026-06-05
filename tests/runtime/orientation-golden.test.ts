@@ -33,6 +33,10 @@ describe("repo orientation golden responses", () => {
           unsupported: 0
         }
       },
+      skippedPaths: [
+        skippedPath("src/sample_pkg/__pycache__"),
+        skippedPath("tests/__pycache__")
+      ],
       overview: {
         summary: "Repository has 4 indexed file(s) across 2 language/category value(s).",
         platforms: ["python"],
@@ -72,6 +76,7 @@ describe("repo orientation golden responses", () => {
           unsupported: 0
         }
       },
+      skippedPaths: undefined,
       overview: {
         summary: "Repository has 4 indexed file(s) across 3 language/category value(s).",
         platforms: ["node"],
@@ -125,6 +130,9 @@ describe("repo orientation golden responses", () => {
           unsupported: 1
         }
       },
+      skippedPaths: [
+        skippedPath(".cache")
+      ],
       overview: {
         summary: "Repository has 5 indexed file(s) across 5 language/category value(s).",
         platforms: ["docker", "github_actions", "node"],
@@ -221,7 +229,8 @@ describe("repo orientation golden responses", () => {
         skipped_roots: skippedRoots,
         languages: fixture.languages,
         ...fixture.scopeCounts,
-        generated_or_vendor_roots: skippedRoots
+        generated_or_vendor_roots: skippedRoots,
+        skipped_paths: fixture.skippedPaths
       },
       meta: baseMeta,
       warnings: [],
@@ -237,6 +246,7 @@ describe("repo orientation golden responses", () => {
         key_files: fixture.overview.key_files,
         key_docs: fixture.overview.key_docs,
         validation_hints: fixture.overview.validation_hints,
+        skipped_paths: fixture.skippedPaths,
         recommended_first_calls: [
           { tool: "read_resource", args: { uri: "repo:///status" } },
           { tool: "read_resource", args: { uri: "repo:///scope" } },
@@ -284,6 +294,14 @@ function file(
     capability_level: capabilityLevel,
     evidence_kinds: evidenceKinds,
     reason: "Recognized repository configuration, source, test, or infrastructure file."
+  };
+}
+
+function skippedPath(path: string) {
+  return {
+    path,
+    reason: "generated_or_vendor",
+    detail: "Generated, dependency, cache, build, or vendor path was excluded from catalog evidence."
   };
 }
 

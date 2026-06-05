@@ -188,6 +188,30 @@ export const skippedWorkSchema = z
   .strict();
 export type SkippedWork = z.infer<typeof skippedWorkSchema>;
 
+export const skippedPathReasonSchema = z.enum([
+  "permission_denied",
+  "missing",
+  "not_directory",
+  "generated_or_vendor",
+  "configured_skip",
+  "hidden_path",
+  "gitignore",
+  "secret",
+  "nested_git_repository",
+  "file_too_large",
+  "workspace_escape"
+]);
+export type SkippedPathReason = z.infer<typeof skippedPathReasonSchema>;
+
+export const skippedPathSchema = z
+  .object({
+    path: z.string(),
+    reason: skippedPathReasonSchema,
+    detail: z.string()
+  })
+  .strict();
+export type SkippedPath = z.infer<typeof skippedPathSchema>;
+
 export const contextCompletenessSchema = z
   .object({
     complete_enough: z.boolean(),
@@ -235,7 +259,8 @@ export const repoScopeSchema = z
     languages: z.array(z.string()),
     file_counts: z.record(z.string(), z.number().int().nonnegative()),
     capability_counts: z.record(capabilityLevelSchema, z.number().int().nonnegative()),
-    generated_or_vendor_roots: z.array(z.string())
+    generated_or_vendor_roots: z.array(z.string()),
+    skipped_paths: z.array(skippedPathSchema).optional()
   })
   .strict();
 export type RepoScope = z.infer<typeof repoScopeSchema>;
@@ -249,6 +274,7 @@ export const repoOverviewSchema = z
     key_files: z.array(fileReferenceSchema),
     key_docs: z.array(documentReferenceSchema),
     validation_hints: z.array(validationHintSchema),
+    skipped_paths: z.array(skippedPathSchema).optional(),
     recommended_first_calls: z.array(nextActionSchema)
   })
   .strict();
@@ -449,6 +475,7 @@ export const verificationPlanSchema = z
     planned_commands: z.array(plannedValidationCommandSchema),
     static_feedback: staticFeedbackSchema.optional(),
     risks: z.array(contextRiskSchema),
+    skipped_paths: z.array(skippedPathSchema).optional(),
     next_actions: z.array(nextActionSchema)
   })
   .strict();

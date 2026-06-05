@@ -2,6 +2,7 @@ import path from "node:path";
 import type {
   PlannedValidationCommand,
   ResponseMetadata,
+  SkippedPath,
   StaticFeedback,
   VerificationPlan,
   VerificationPlanRequest
@@ -9,7 +10,7 @@ import type {
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import { isExplicitHiddenCatalogPathAllowed } from "../../domain/policies/index.js";
 import { planCommand } from "../../domain/policies/command-safety.js";
-import type { FileCatalogScanPort, WorkspaceFilePort } from "../../ports/index.js";
+import type { FileCatalogScanPort, FileCatalogSkippedPath, WorkspaceFilePort } from "../../ports/index.js";
 import { capNextActions } from "../../presentation/metadata.js";
 import { buildStatBackedFileCatalogEntry } from "./file-catalog-entry.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
@@ -113,6 +114,15 @@ export async function planVerification(input: {
       message: reason.replace(/^validation-environment: /u, ""),
       why_this_matters: "Validation planning is evidence-driven; advisory environment or missing-script evidence should be checked before treating the plan as complete."
     })),
+    ...(hasRuntimeSkippedPath(scanned.skipped_paths ?? [])
+      ? [
+          {
+            severity: "warning" as const,
+            message: "Some repository paths were skipped during validation discovery.",
+            why_this_matters: "Skipped paths can hide validation config, tests, or generated noise; inspect skipped_paths before treating the plan as complete."
+          }
+        ]
+      : []),
     ...commandPlan.blockerReasons.map((reason) => ({
       severity: "blocker" as const,
       message: reason,
@@ -142,6 +152,7 @@ export async function planVerification(input: {
     summary: buildSummary(commands, staticFeedback, blocked),
     planned_commands: commands,
     ...(staticFeedback?.status === "actionable" ? { static_feedback: staticFeedback } : {}),
+    skipped_paths: mapSkippedPaths(scanned.skipped_paths ?? []),
     risks,
     next_actions: capNextActions([
       ...selectedEntries
@@ -179,6 +190,23 @@ export async function planVerification(input: {
       }
     }
   };
+}
+
+function mapSkippedPaths(skippedPaths: readonly FileCatalogSkippedPath[]): SkippedPath[] | undefined {
+  if (skippedPaths.length === 0) {
+    return undefined;
+  }
+  return skippedPaths.slice(0, 50).map((skipped) => ({
+    path: skipped.path,
+    reason: skipped.reason,
+    detail: skipped.detail
+  }));
+}
+
+function hasRuntimeSkippedPath(skippedPaths: readonly FileCatalogSkippedPath[]): boolean {
+  return skippedPaths.some((skipped) =>
+    ["permission_denied", "missing", "not_directory", "workspace_escape"].includes(skipped.reason)
+  );
 }
 
 async function mergeDirectValidationEntries(input: {

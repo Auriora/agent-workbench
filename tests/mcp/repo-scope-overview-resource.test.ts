@@ -317,6 +317,18 @@ describe("repo overview MCP resource", () => {
         })
       ])
     );
+    expect(result.overview.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "src/WebApi/bin",
+          reason: "generated_or_vendor"
+        }),
+        expect.objectContaining({
+          path: "src/WebApi/obj",
+          reason: "generated_or_vendor"
+        })
+      ])
+    );
   });
 
   it("promotes SAM templates, Lambda handlers, and infra validation hints", async () => {
@@ -421,6 +433,14 @@ describe("repo scope and overview composed server resources", () => {
     });
 
     expect(result.scope.skipped_roots).toContain(".gocache");
+    expect(result.scope.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ".gocache",
+          reason: "generated_or_vendor"
+        })
+      ])
+    );
     expect(result.scope.languages).toEqual(expect.arrayContaining(["go", "text"]));
     expect(result.scope.file_counts).toMatchObject({
       go: 2

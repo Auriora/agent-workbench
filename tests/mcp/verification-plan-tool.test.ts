@@ -421,6 +421,14 @@ describe("verification_plan use case", () => {
         })
       ])
     );
+    expect(result.plan.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ".gocache",
+          reason: "generated_or_vendor"
+        })
+      ])
+    );
   });
 
   it("blocks host Go commands when repo guidance requires Docker validation", async () => {

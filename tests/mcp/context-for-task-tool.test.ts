@@ -117,6 +117,30 @@ describe("context_for_task use case", () => {
     );
   });
 
+  it("summarizes skipped path evidence in bounded task context", async () => {
+    const result = await getTaskContext({
+      request: {
+        task: "Update Go response cache",
+        repo_root: "tests/fixtures/fixture-go-service-repo",
+        files: ["internal/graph/response_cache.go"],
+        symbols: [],
+        max_files: 5,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+
+    expect(result.context.skipped_work).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "skipped_paths",
+          reason: expect.stringContaining("generated_or_vendor")
+        })
+      ])
+    );
+  });
+
   it("ranks common web auth implementation paths ahead of unrelated token matches", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-context-web-"));
     try {

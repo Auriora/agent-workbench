@@ -1,7 +1,8 @@
-import type { CapabilityLevel, RepoScope, ResponseMetadata } from "../../contracts/index.js";
+import type { CapabilityLevel, RepoScope, ResponseMetadata, SkippedPath } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import type {
   FileCatalogScanPort,
+  FileCatalogSkippedPath,
   SnapshotPort,
   WarmupCoordinatorPort
 } from "../../ports/index.js";
@@ -46,7 +47,8 @@ export async function getRepoScope(input: {
       languages: uniqueSorted(scanned.files.map((file) => file.file_identity.language)),
       file_counts: countByLanguage(scanned.files),
       capability_counts: countByCapability(scanned.files),
-      generated_or_vendor_roots: [...scanned.skipped_roots]
+      generated_or_vendor_roots: [...scanned.skipped_roots],
+      skipped_paths: mapSkippedPaths(scanned.skipped_paths ?? [])
     },
     meta: {
       ...status.meta,
@@ -56,6 +58,17 @@ export async function getRepoScope(input: {
       }
     }
   };
+}
+
+function mapSkippedPaths(skippedPaths: readonly FileCatalogSkippedPath[]): SkippedPath[] | undefined {
+  if (skippedPaths.length === 0) {
+    return undefined;
+  }
+  return skippedPaths.slice(0, 50).map((skipped) => ({
+    path: skipped.path,
+    reason: skipped.reason,
+    detail: skipped.detail
+  }));
 }
 
 function countByLanguage(files: readonly FileCatalogEntry[]): Record<string, number> {

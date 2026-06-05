@@ -121,8 +121,25 @@ export type FileCatalogScanResult = {
   repo_root: string;
   indexed_roots: readonly string[];
   skipped_roots: readonly string[];
+  skipped_paths?: readonly FileCatalogSkippedPath[];
   files: readonly FileCatalogEntry[];
   truncated: boolean;
+};
+
+export type FileCatalogSkippedPath = {
+  path: string;
+  reason:
+    | "permission_denied"
+    | "missing"
+    | "not_directory"
+    | "generated_or_vendor"
+    | "configured_skip"
+    | "hidden_path"
+    | "gitignore"
+    | "secret"
+    | "nested_git_repository"
+    | "workspace_escape";
+  detail: string;
 };
 
 export interface FileCatalogScanPort {

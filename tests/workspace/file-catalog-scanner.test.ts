@@ -105,6 +105,22 @@ describe("file catalog scanner", () => {
         "libs/nested-repo/foreign.py"
       ])
     );
+    expect(result.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "node_modules",
+          reason: "generated_or_vendor"
+        }),
+        expect.objectContaining({
+          path: "vendor",
+          reason: "generated_or_vendor"
+        }),
+        expect.objectContaining({
+          path: "libs/nested-repo",
+          reason: "nested_git_repository"
+        })
+      ])
+    );
     expect(result.files).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -165,6 +181,14 @@ describe("file catalog scanner", () => {
     expect(result.files.map((file) => file.path)).toContain("src/service.py");
     expect(result.files.map((file) => file.path)).not.toContain("runtime-data/diagnostic.data/state.json");
     expect(result.skipped_roots).toContain("runtime-data/diagnostic.data");
+    expect(result.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "runtime-data/diagnostic.data",
+          reason: "permission_denied"
+        })
+      ])
+    );
   });
 
   it("skips hidden paths by default while preserving allowlisted repository config", async () => {
@@ -205,6 +229,18 @@ describe("file catalog scanner", () => {
         ".hidden-runtime/state.json"
       ])
     );
+    expect(result.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: ".env",
+          reason: "secret"
+        }),
+        expect.objectContaining({
+          path: ".vscode",
+          reason: "hidden_path"
+        })
+      ])
+    );
   });
 
   it("uses root gitignore as an additional skip signal with negation support", async () => {
@@ -227,6 +263,18 @@ describe("file catalog scanner", () => {
     expect(paths).toContain("keep.log");
     expect(paths).not.toContain("debug.log");
     expect(paths).not.toContain("ignored-dir/state.json");
+    expect(result.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "debug.log",
+          reason: "gitignore"
+        }),
+        expect.objectContaining({
+          path: "ignored-dir",
+          reason: "gitignore"
+        })
+      ])
+    );
   });
 
   it("preserves representative source coverage before docs noise when row-capped", async () => {

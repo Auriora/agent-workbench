@@ -416,18 +416,17 @@ Post-closure dogfood caveats from large mixed-language repositories:
   including non-executed `dotnet build <solution-or-project>` and `dotnet test`
   candidates when test projects or repo policy support them. Until policy is
   known, commands should remain planned evidence, not executed proof.
-- Open: make unreadable filesystem paths visible as skipped evidence across
-  status, scope, overview, context, and verification surfaces. Scanner-level
-  permission failures should not abort repository orientation when the requested
-  task is outside the unreadable path; the response should preserve usable
-  evidence and clearly name the skipped relative paths. If the requested target
-  itself is unreadable, return a blocked state with the access failure as the
-  root cause.
-- Open: add a modeled `skipped_paths` or skipped-evidence section with reasons
-  such as `permission_denied`, `workspace_escape`, `generated_or_vendor`,
-  `nested_git_repository`, and `file_too_large`. Reusing `skipped_roots` is an
-  acceptable MVP bridge, but durable MCP output should distinguish configured
-  skips from runtime access skips.
+- Done: make scanner-level skipped filesystem paths visible as skipped evidence
+  across scope, overview, context, and verification surfaces. Scanner-level
+  permission failures do not abort repository orientation when the requested
+  task is outside the unreadable path; usable evidence is preserved and skipped
+  relative paths are modeled with reasons.
+- Done: add a modeled `skipped_paths` section with reasons such as
+  `permission_denied`, `generated_or_vendor`, `hidden_path`, `gitignore`,
+  `secret`, `nested_git_repository`, `missing`, and `not_directory`. Context
+  surfaces summarize skipped-path counts through `skipped_work` to stay compact.
+  Future work can add write-path `workspace_escape` and graph warmup
+  `file_too_large` evidence where those subsystems own the skip.
 - Open: align `integration:///profiles/codex` with the exact tool surface that
   Codex discovery exposes in a fresh session. If tools exist but require
   targeted discovery, the profile should say that explicitly; if they are not

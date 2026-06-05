@@ -3,11 +3,13 @@ import type {
   FileReference,
   RepoOverview,
   ResponseMetadata,
+  SkippedPath,
   ValidationHint
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import type {
   FileCatalogScanPort,
+  FileCatalogSkippedPath,
   SnapshotPort,
   WarmupCoordinatorPort
 } from "../../ports/index.js";
@@ -54,6 +56,7 @@ export async function getRepoOverview(input: {
       key_files: selectKeyFiles(scanned.files),
       key_docs: selectKeyDocs(scanned.files),
       validation_hints: inferValidationHints(scanned.files),
+      skipped_paths: mapSkippedPaths(scanned.skipped_paths ?? []),
       recommended_first_calls: [
         { tool: "read_resource", args: { uri: "repo:///status" } },
         { tool: "read_resource", args: { uri: "repo:///scope" } },
@@ -69,6 +72,17 @@ export async function getRepoOverview(input: {
       }
     }
   };
+}
+
+function mapSkippedPaths(skippedPaths: readonly FileCatalogSkippedPath[]): SkippedPath[] | undefined {
+  if (skippedPaths.length === 0) {
+    return undefined;
+  }
+  return skippedPaths.slice(0, 20).map((skipped) => ({
+    path: skipped.path,
+    reason: skipped.reason,
+    detail: skipped.detail
+  }));
 }
 
 function selectKeyFiles(files: readonly FileCatalogEntry[]): FileReference[] {
