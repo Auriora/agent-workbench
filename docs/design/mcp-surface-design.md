@@ -285,8 +285,9 @@ FreeCAD dogfood left C++ monorepo and Codex-discoverability follow-up items:
 - Done: ensure `next_action` values only reference tools visible in the active Codex
   discovery path, or adjust the integration profile/tool metadata so advertised
   tools are discoverable on first use.
-- Open: verify the live MCP startup path no longer reports stale
-  `Unknown snapshot id` warmup failures after session reload.
+- Done: verify the live MCP startup path after reload. The current session
+  reports `runtime_state: fresh`, `freshness: fresh`, and
+  `warmup_state: complete` for the Agent Workbench checkout.
 
 Future multi-language repository work:
 
