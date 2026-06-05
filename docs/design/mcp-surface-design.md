@@ -105,6 +105,22 @@ available.
 Detailed language/platform coverage belongs to `repo:///scope` and
 `repo:///overview`; the status hot path must not enumerate broad catalog rows.
 
+`repo:///overview` key-file output is a bounded routing aid, not semantic proof.
+Ranking prefers project/package descriptors, application entrypoints, first-party
+source files, tests, and repository-shape build or infrastructure anchors ahead
+of workflow noise. Workflow files remain visible when they are present, and they
+can still be the primary key files in workflow-focused repositories. Generated,
+vendor, third-party, fixture, and package-cache paths are skipped by catalog
+policy where possible and downranked when they remain inside allowed catalog
+paths. Equal scores are ordered by path for deterministic output.
+
+Each key file includes a compact `reason` naming generic evidence classes such
+as package configuration, application entrypoint, first-party source, test,
+build configuration, infrastructure template, runtime configuration, or workflow
+configuration. These reasons describe path and repository-shape routing
+evidence only; capability metadata remains the trust boundary for whether a
+file has semantic support.
+
 ## MVP Tools
 
 - `context_for_task`
@@ -270,10 +286,11 @@ TimeLocker dogfood after Spec 002 left two MCP-resource polish items:
   overview may still scan for counts and rankings, but their response metadata
   should not report `freshness: unknown` when status proves a fresh completed
   warmup for the same repository.
-- Promoted to [Spec 004](../specs/004-overview-ranking-polish/requirements.md):
-  improve `repo:///overview` key-file ranking so application entrypoints,
-  representative source files, test roots, and package/test configuration rank
-  ahead of large groups of workflow/config files such as `.github/workflows/*`.
+- Done: improve `repo:///overview` key-file ranking so application
+  entrypoints, representative source files, test roots, and package/test
+  configuration rank ahead of large groups of workflow/config files such as
+  `.github/workflows/*`. The delivery record is
+  [Spec 004](../specs/004-overview-ranking-polish/requirements.md).
 
 OneMount dogfood left Go and broad-scan follow-up items:
 

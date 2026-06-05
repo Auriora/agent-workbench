@@ -2,12 +2,18 @@
 title: Overview ranking polish requirements
 doc_type: spec
 artifact_type: requirements
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---
 
 # Requirements
+
+## Closure Record
+
+Spec 004 closed on 2026-06-05. Accepted overview ranking behavior was promoted
+to [MCP surface design](../../design/mcp-surface-design.md), and the
+implementation is covered by overview resource and orientation golden tests.
 
 ## Introduction
 

@@ -41,10 +41,10 @@ describe("repo orientation golden responses", () => {
         summary: "Repository has 4 indexed file(s) across 2 language/category value(s).",
         platforms: ["python"],
         key_files: [
-          file("pyproject.toml", "toml", "resource_backed", ["config"]),
-          file("src/sample_pkg/__init__.py", "python", "partial_semantic", ["parser"]),
-          file("src/sample_pkg/service.py", "python", "partial_semantic", ["parser"]),
-          file("tests/test_service.py", "python", "partial_semantic", ["parser"])
+          file("pyproject.toml", "toml", "resource_backed", ["config"], "Promoted as package configuration evidence."),
+          file("src/sample_pkg/__init__.py", "python", "partial_semantic", ["parser"], "Promoted as first-party source evidence."),
+          file("src/sample_pkg/service.py", "python", "partial_semantic", ["parser"], "Promoted as first-party source evidence."),
+          file("tests/test_service.py", "python", "partial_semantic", ["parser"], "Promoted as test evidence.")
         ],
         key_docs: [],
         validation_hints: [
@@ -80,7 +80,9 @@ describe("repo orientation golden responses", () => {
       overview: {
         summary: "Repository has 4 indexed file(s) across 3 language/category value(s).",
         platforms: ["node"],
-        key_files: [file("package.json", "json", "resource_backed", ["config"])],
+        key_files: [
+          file("package.json", "json", "resource_backed", ["config"], "Promoted as package configuration evidence.")
+        ],
         key_docs: [
           {
             path: "README.md",
@@ -137,11 +139,17 @@ describe("repo orientation golden responses", () => {
         summary: "Repository has 5 indexed file(s) across 5 language/category value(s).",
         platforms: ["docker", "github_actions", "node"],
         key_files: [
-          file("package.json", "json", "resource_backed", ["config"]),
-          file("Dockerfile", "infrastructure", "resource_backed", ["config"]),
-          file("src/service.py", "python", "partial_semantic", ["parser"]),
-          file("src/app.ts", "typescript", "unsupported", []),
-          file(".github/workflows/ci.yml", "yaml", "resource_backed", ["config"])
+          file(
+            "src/app.ts",
+            "typescript",
+            "unsupported",
+            [],
+            "Promoted as application entrypoint and first-party source evidence."
+          ),
+          file("package.json", "json", "resource_backed", ["config"], "Promoted as package configuration evidence."),
+          file("Dockerfile", "infrastructure", "resource_backed", ["config"], "Promoted as infrastructure environment evidence."),
+          file("src/service.py", "python", "partial_semantic", ["parser"], "Promoted as first-party source evidence."),
+          file(".github/workflows/ci.yml", "yaml", "resource_backed", ["config"], "Promoted as workflow configuration evidence.")
         ],
         key_docs: [],
         validation_hints: [
@@ -285,7 +293,8 @@ function file(
   path: string,
   language: string,
   capabilityLevel: string,
-  evidenceKinds: string[]
+  evidenceKinds: string[],
+  reason: string
 ) {
   return {
     path,
@@ -293,7 +302,7 @@ function file(
     exists: true,
     capability_level: capabilityLevel,
     evidence_kinds: evidenceKinds,
-    reason: "Recognized repository configuration, source, test, or infrastructure file."
+    reason
   };
 }
 

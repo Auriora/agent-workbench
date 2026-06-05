@@ -2,12 +2,17 @@
 title: Overview ranking polish design
 doc_type: spec
 artifact_type: design
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---
 
 # Technical Design
+
+## Closure Record
+
+Spec 004 closed on 2026-06-05. Current overview key-file ranking behavior lives
+in [MCP surface design](../../design/mcp-surface-design.md).
 
 ## Overview
 

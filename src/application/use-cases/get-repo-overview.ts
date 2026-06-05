@@ -88,7 +88,7 @@ function mapSkippedPaths(skippedPaths: readonly FileCatalogSkippedPath[]): Skipp
 function selectKeyFiles(files: readonly FileCatalogEntry[]): FileReference[] {
   return files
     .filter((file) => isKeyFile(file.path))
-    .sort((left, right) => keyFileRank(right) - keyFileRank(left) || left.path.localeCompare(right.path))
+    .sort((left, right) => keyFileEvidence(right).score - keyFileEvidence(left).score || left.path.localeCompare(right.path))
     .slice(0, 20)
     .map((file) => ({
       path: file.path,
@@ -96,7 +96,7 @@ function selectKeyFiles(files: readonly FileCatalogEntry[]): FileReference[] {
       exists: true,
       capability_level: file.adapter_evidence?.capability_level ?? "unsupported",
       evidence_kinds: file.adapter_evidence?.evidence_kinds ?? [],
-      reason: "Recognized repository configuration, source, test, or infrastructure file."
+      reason: keyFileEvidence(file).reason
     }));
 }
 
@@ -293,7 +293,122 @@ function isKeyFile(filePath: string): boolean {
   );
 }
 
-function keyFileRank(file: FileCatalogEntry): number {
+function keyFileEvidence(file: FileCatalogEntry): { score: number; reason: string } {
+  const lower = file.path.toLowerCase();
+  const reasons: string[] = [];
+  let score = baseKeyFileRank(file);
+  if (lower.endsWith(".sln")) {
+    reasons.push("project configuration");
+  }
+  if (lower.endsWith(".csproj") || lower.endsWith(".fsproj") || lower.endsWith(".vbproj")) {
+    reasons.push(lower.includes("test") ? "test project configuration" : "project configuration");
+  }
+  if (isSamTemplatePath(lower)) {
+    reasons.push("infrastructure template");
+  }
+  if (isLambdaHandlerPath(lower)) {
+    reasons.push("application entrypoint");
+  }
+  if (lower === "cmakelists.txt") {
+    reasons.push("build configuration");
+  } else if (lower.endsWith("/cmakelists.txt")) {
+    reasons.push("build configuration");
+  }
+  if (lower.includes("/tests/infra/") || lower.includes("/test/infra/")) {
+    reasons.push("infrastructure test");
+  }
+  if (lower === "go.mod" || lower === "go.work") {
+    reasons.push("package configuration");
+  }
+  if (lower === "pyproject.toml" || lower === "package.json") {
+    reasons.push("package configuration");
+  }
+  if (isEntrypointPath(lower)) {
+    score = Math.max(score, 115);
+    reasons.push("application entrypoint");
+  }
+  if (isTestPath(lower)) {
+    reasons.push("test");
+  }
+  if (isFirstPartySourcePath(lower)) {
+    reasons.push("first-party source");
+  }
+  if (lower.includes("/controllers/")) {
+    reasons.push("application route");
+  }
+  if (lower.endsWith(".razor") || lower.includes("/pages/") || lower.includes("/shared/")) {
+    reasons.push("application UI source");
+  }
+  if (lower.includes("/migrations/") || lower.includes("dbcontext")) {
+    reasons.push("data model source");
+  }
+  if (pathBasename(lower).startsWith("appsettings")) {
+    reasons.push("runtime configuration");
+  }
+  if (lower === "dockerfile" || lower.startsWith(".devcontainer/")) {
+    reasons.push("infrastructure environment");
+  }
+  if (lower.startsWith(".github/workflows/")) {
+    reasons.push("workflow configuration");
+  }
+  if (isGeneratedVendorOrFixturePath(lower)) {
+    reasons.push("downranked generated/vendor/fixture path");
+  }
+  return {
+    score,
+    reason: reasonFromEvidence(reasons)
+  };
+}
+
+function isEntrypointPath(lowerPath: string): boolean {
+  const basename = pathBasename(lowerPath);
+  return (
+    basename === "program.cs" ||
+    basename === "main.go" ||
+    basename === "main.ts" ||
+    basename === "main.js" ||
+    basename === "index.ts" ||
+    basename === "index.js" ||
+    basename === "app.ts" ||
+    basename === "app.js" ||
+    lowerPath.endsWith("/app.py") ||
+    lowerPath.endsWith("/main.py")
+  );
+}
+
+function isFirstPartySourcePath(lowerPath: string): boolean {
+  return /^(src|lib|app|cmd|internal|include)\//u.test(lowerPath);
+}
+
+function isTestPath(lowerPath: string): boolean {
+  return /^(test|tests)\//u.test(lowerPath) || /(^|\/)[^/]*(?:test|spec)\.[cm]?[jt]sx?$/u.test(lowerPath);
+}
+
+function isGeneratedVendorOrFixturePath(lowerPath: string): boolean {
+  return (
+    lowerPath.includes("/generated/") ||
+    lowerPath.includes("/fixtures/") ||
+    lowerPath.startsWith("tests/fixtures/") ||
+    lowerPath.includes("/fixture") ||
+    /(^|\/)(vendor|third_party|thirdparty|3rdparty|external|extern)\//u.test(lowerPath)
+  );
+}
+
+function reasonFromEvidence(reasons: readonly string[]): string {
+  const uniqueReasons = Array.from(new Set(reasons));
+  const primary = uniqueReasons.filter((reason) => !reason.startsWith("downranked"));
+  const downranked = uniqueReasons.find((reason) => reason.startsWith("downranked"));
+  if (primary.length > 0) {
+    const shown = primary.slice(0, 2).join(" and ");
+    return downranked === undefined ? `Promoted as ${shown} evidence.` : `Promoted as ${shown} evidence; ${downranked}.`;
+  }
+  if (downranked !== undefined) {
+    return `Weak path evidence; ${downranked}.`;
+  }
+  return "Weak path-based routing evidence.";
+}
+
+function baseKeyFileRank(file: FileCatalogEntry): number {
   const lower = file.path.toLowerCase();
   if (lower === "cmakelists.txt") return 130;
   if (lower.endsWith("/cmakelists.txt")) return 125;

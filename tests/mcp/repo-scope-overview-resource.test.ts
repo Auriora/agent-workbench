@@ -329,6 +329,52 @@ describe("repo overview MCP resource", () => {
     }
   });
 
+  it("prioritizes package, source, and test anchors over workflow-heavy config noise", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-overview-workflow-heavy-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, ".github", "workflows"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "src", "services"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "src", "generated"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "tests", "fixtures", "sample"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "package.json"), "{\"name\":\"overview-fixture\"}\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "main.ts"), "export const main = () => undefined;\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "services", "orders.ts"), "export const listOrders = () => [];\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "generated", "client.ts"), "export const generated = true;\n");
+      fs.writeFileSync(path.join(repoRoot, "tests", "orders.test.ts"), "import '../src/main';\n");
+      fs.writeFileSync(path.join(repoRoot, "tests", "fixtures", "sample", "fixture.ts"), "export const fixture = true;\n");
+      for (const workflow of ["build", "lint", "release", "docs", "nightly"]) {
+        fs.writeFileSync(path.join(repoRoot, ".github", "workflows", `${workflow}.yml`), `name: ${workflow}\n`);
+      }
+
+      const result = await getRepoOverview({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter()
+      });
+      const keyFiles = result.overview.key_files;
+      const paths = keyFiles.map((file) => file.path);
+      const firstWorkflowIndex = paths.findIndex((filePath) => filePath.startsWith(".github/workflows/"));
+
+      expect(paths.slice(0, 4)).toEqual([
+        "src/main.ts",
+        "package.json",
+        "src/services/orders.ts",
+        "tests/orders.test.ts"
+      ]);
+      expect(firstWorkflowIndex).toBeGreaterThan(paths.indexOf("tests/orders.test.ts"));
+      expect(paths.indexOf("src/generated/client.ts")).toBeGreaterThan(paths.indexOf("tests/orders.test.ts"));
+      expect(paths.indexOf("tests/fixtures/sample/fixture.ts")).toBeGreaterThan(paths.indexOf("tests/orders.test.ts"));
+      expect(keyFiles.find((file) => file.path === "src/main.ts")?.reason).toContain("application entrypoint");
+      expect(keyFiles.find((file) => file.path === "package.json")?.reason).toContain("package configuration");
+      expect(keyFiles.find((file) => file.path === "tests/orders.test.ts")?.reason).toContain("test");
+      expect(keyFiles.find((file) => file.path === ".github/workflows/build.yml")?.reason).toContain("workflow configuration");
+      expect(keyFiles.find((file) => file.path === "src/generated/client.ts")?.reason).toContain(
+        "downranked generated/vendor/fixture path"
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("promotes .NET solution, project, app, Razor, and test anchors", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-dotnet-web-repo");
     const result = await getRepoOverview({
