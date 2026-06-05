@@ -196,7 +196,10 @@ async function mergeDirectValidationEntries(input: {
     "go.mod",
     "go.work",
     "Makefile",
-    "CMakeLists.txt"
+    "CMakeLists.txt",
+    "template.yaml",
+    "template.yml",
+    "template.json"
   ])) {
     if (byPath.has(filePath)) {
       continue;
@@ -247,6 +250,8 @@ async function discoverValidationEvidence(input: {
     dotnetSolutions: [...paths].filter((filePath) => lowerExtension(filePath) === ".sln").sort(),
     dotnetProjects: [...paths].filter((filePath) => isDotnetProjectPath(filePath)).sort(),
     dotnetTestProjects: [...paths].filter((filePath) => isDotnetProjectPath(filePath) && isDotnetTestProjectPath(filePath)).sort(),
+    samTemplates: [...paths].filter(isSamTemplatePath).sort(),
+    samInfraTests: [...paths].filter(isSamInfraTestPath).sort(),
     pythonNearestTests: await discoverPythonNearestTests({
       files: input.files,
       selectedEntries: input.selectedEntries,
@@ -268,6 +273,8 @@ type ValidationDiscovery = {
   dotnetSolutions: string[];
   dotnetProjects: string[];
   dotnetTestProjects: string[];
+  samTemplates: string[];
+  samInfraTests: string[];
   pythonNearestTests: PlannedValidationCommand[];
 };
 
@@ -307,6 +314,7 @@ function planValidationCommands(input: {
   const hasGoFiles = input.files.some((file) => file.file_identity.language === "go");
   const hasCppFiles = input.files.some((file) => file.file_identity.language === "cpp" || file.file_identity.language === "c");
   const hasDotnetFiles = input.files.some((file) => file.file_identity.language === "csharp" || isDotnetProjectPath(file.path));
+  const hasSamTemplate = input.discovery.samTemplates.length > 0;
   const goShapeSelected = input.discovery.hasGoMod && (includeAll ? hasGoFiles : selectedLanguages.has("go"));
   const cmakeShapeSelected =
     (input.discovery.hasRootCMake || input.discovery.localCMakeFiles.length > 0) &&
@@ -314,6 +322,9 @@ function planValidationCommands(input: {
   const dotnetShapeSelected =
     (input.discovery.dotnetSolutions.length > 0 || input.discovery.dotnetProjects.length > 0) &&
     (includeAll || selectedLanguages.has("csharp") || input.selectedEntries.some((file) => isDotnetProjectPath(file.path)));
+  const samShapeSelected =
+    hasSamTemplate &&
+    (includeAll || input.selectedEntries.some((file) => isSamRelatedPath(file.path)) || hasAny(selectedLanguages, ["yaml", "json", "python"]));
 
   if (goShapeSelected) {
     if (input.discovery.validationProtocol.requiresDockerValidation || input.discovery.validationProtocol.prohibitsHostGoTest) {
@@ -413,6 +424,37 @@ function planValidationCommands(input: {
     }
   }
 
+  if (samShapeSelected) {
+    for (const template of input.discovery.samTemplates.slice(0, 2)) {
+      commands.push({
+        command: "cfn-lint",
+        args: [template],
+        display: `cfn-lint ${template}`,
+        reason: `${template} is SAM/CloudFormation template evidence; cfn-lint is planned but not executed.`,
+        status: "planned",
+        execution: "not_executed"
+      });
+      commands.push({
+        command: "sam",
+        args: ["validate", "--template-file", template],
+        display: `sam validate --template-file ${template}`,
+        reason: `${template} is SAM template evidence; SAM validation is planned but not executed.`,
+        status: "planned",
+        execution: "not_executed"
+      });
+    }
+    for (const testPath of input.discovery.samInfraTests.slice(0, 2)) {
+      commands.push({
+        command: "python3",
+        args: ["-m", "pytest", testPath],
+        display: `python3 -m pytest ${testPath}`,
+        reason: `${testPath} is infrastructure test evidence near SAM/CloudFormation templates.`,
+        status: "planned",
+        execution: "not_executed"
+      });
+    }
+  }
+
   const selectedPackageScripts = selectPackageScripts({
     packages: input.discovery.packageScripts,
     selectedEntries: input.selectedEntries,
@@ -424,6 +466,7 @@ function planValidationCommands(input: {
     !goShapeSelected &&
     !cmakeShapeSelected &&
     !dotnetShapeSelected &&
+    !samShapeSelected &&
     (includeAll || hasAny(selectedLanguages, ["typescript", "javascript", "json"]))
   ) {
     commands.push(
@@ -746,6 +789,9 @@ function projectShapeConfigCandidates(selectedPaths: readonly string[]): string[
       candidates.add(path.posix.join(directory, "CMakeLists.txt"));
       candidates.add(path.posix.join(directory, "package.json"));
       candidates.add(path.posix.join(directory, "tsconfig.json"));
+      candidates.add(path.posix.join(directory, "template.yaml"));
+      candidates.add(path.posix.join(directory, "template.yml"));
+      candidates.add(path.posix.join(directory, "template.json"));
       candidates.add(path.posix.join(directory, `${path.posix.basename(directory)}.csproj`));
       candidates.add(path.posix.join(directory, `${path.posix.basename(directory)}.fsproj`));
       candidates.add(path.posix.join(directory, `${path.posix.basename(directory)}.vbproj`));
@@ -803,6 +849,24 @@ function isDotnetProjectPath(filePath: string): boolean {
 function isDotnetTestProjectPath(filePath: string): boolean {
   const lower = filePath.toLowerCase();
   return lower.includes("test") || lower.includes("spec");
+}
+
+function isSamTemplatePath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return (
+    (lower.endsWith("template.yaml") || lower.endsWith("template.yml") || lower.endsWith("template.json")) &&
+    (lower.includes("/sam/") || lower.includes("/cloudformation/") || lower.startsWith("infra/") || lower.startsWith("template."))
+  );
+}
+
+function isSamRelatedPath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return isSamTemplatePath(lower) || lower.includes("/lambda/") || lower.includes("/handlers/") || lower.endsWith("/app.py") || lower.includes("/tests/infra/");
+}
+
+function isSamInfraTestPath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return lower.endsWith(".py") && (lower.startsWith("tests/infra/") || lower.startsWith("test/infra/") || lower.includes("/tests/infra/") || lower.includes("/test/infra/"));
 }
 
 function lowerExtension(filePath: string): string {

@@ -1,0 +1,3 @@
+Resources:
+  GeneratedNoise:
+    Type: AWS::S3::Bucket

@@ -1,0 +1,18 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  OrdersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/orders/app.handler
+      Runtime: python3.12
+      Events:
+        Schedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(5 minutes)
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+Outputs:
+  OrdersFunctionArn:
+    Value: !GetAtt OrdersFunction.Arn

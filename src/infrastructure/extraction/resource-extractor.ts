@@ -42,7 +42,8 @@ export class ResourceExtractorAdapter implements ExtractorPort {
           provenance: capability.provenance
         }
       },
-      ...cmakeTargetNodes(input)
+      ...cmakeTargetNodes(input),
+      ...cloudFormationTemplateNodes(input)
     ];
 
     return {
@@ -66,6 +67,128 @@ export class ResourceExtractorAdapter implements ExtractorPort {
       extracted_at: extractedAt
     };
   }
+}
+
+function cloudFormationTemplateNodes(input: ExtractionRequest): GraphNodeWriteModel[] {
+  if (!isCloudFormationTemplate(input)) {
+    return [];
+  }
+
+  const nodes: GraphNodeWriteModel[] = [];
+  const lines = input.content.split(/\r?\n/u);
+  let inResources = false;
+  let currentResource: {
+    name: string;
+    line: number;
+    type?: string;
+    handler?: string;
+  } | undefined;
+
+  function flushResource(): void {
+    if (currentResource === undefined) {
+      return;
+    }
+    const kind = currentResource.type?.includes("Serverless::Function") || currentResource.type?.includes("Lambda::Function")
+      ? "lambda_function"
+      : "cloudformation_resource";
+    nodes.push({
+      id: nodeId(input.snapshot_id, input.path, kind, currentResource.name),
+      kind,
+      name: currentResource.name,
+      qualified_name: `${input.path}:${currentResource.name}`,
+      file_path: input.path,
+      language: input.language,
+      source_range: lineRange(lines[currentResource.line - 1] ?? "", currentResource.line),
+      signature: currentResource.type,
+      metadata: {
+        domain: "infrastructure",
+        capability_level: "resource_backed",
+        evidence_kinds: ["config", "infra_parser"],
+        provenance: "cloudformation_resource_scan",
+        semantic_scope: "template_declarations_only",
+        handler: currentResource.handler
+      }
+    });
+    if (currentResource.handler !== undefined) {
+      nodes.push({
+        id: nodeId(input.snapshot_id, input.path, "lambda_handler_binding", `${currentResource.name}:${currentResource.handler}`),
+        kind: "lambda_handler_binding",
+        name: currentResource.handler,
+        qualified_name: `${input.path}:${currentResource.name}:${currentResource.handler}`,
+        file_path: input.path,
+        language: input.language,
+        source_range: lineRange(lines[currentResource.line - 1] ?? "", currentResource.line),
+        signature: `${currentResource.name} -> ${currentResource.handler}`,
+        metadata: {
+          domain: "infrastructure",
+          capability_level: "resource_backed",
+          evidence_kinds: ["config", "infra_parser"],
+          provenance: "cloudformation_handler_scan",
+          semantic_scope: "handler_string_only",
+          logical_id: currentResource.name
+        }
+      });
+    }
+    currentResource = undefined;
+  }
+
+  for (const [index, line] of lines.entries()) {
+    if (/^Resources:\s*$/u.test(line)) {
+      inResources = true;
+      continue;
+    }
+    if (inResources && /^[A-Za-z_][A-Za-z0-9_]*:\s*$/u.test(line)) {
+      flushResource();
+      inResources = false;
+      continue;
+    }
+    if (!inResources) {
+      continue;
+    }
+    const resourceMatch = /^  ([A-Za-z][A-Za-z0-9]+):\s*$/u.exec(line);
+    if (resourceMatch) {
+      flushResource();
+      currentResource = {
+        name: resourceMatch[1] ?? "",
+        line: index + 1
+      };
+      continue;
+    }
+    if (currentResource === undefined) {
+      continue;
+    }
+    const typeMatch = /^    Type:\s*([A-Za-z0-9:._-]+)\s*$/u.exec(line);
+    if (typeMatch) {
+      currentResource.type = typeMatch[1];
+      continue;
+    }
+    const handlerMatch = /^\s+Handler:\s*([A-Za-z0-9_./:-]+)\s*$/u.exec(line);
+    if (handlerMatch) {
+      currentResource.handler = handlerMatch[1];
+    }
+  }
+  flushResource();
+  return nodes;
+}
+
+function isCloudFormationTemplate(input: ExtractionRequest): boolean {
+  const lower = input.path.toLowerCase();
+  if (!(input.language === "yaml" || input.language === "json")) {
+    return false;
+  }
+  if (!/(^|\/)(template|sam|cloudformation)[^/]*\.(ya?ml|json)$/u.test(lower) && !lower.includes("/sam/")) {
+    return false;
+  }
+  return /(^|\n)(AWSTemplateFormatVersion|Transform:\s*AWS::Serverless|Resources:)/u.test(input.content);
+}
+
+function lineRange(line: string, lineNumber: number) {
+  return {
+    start_line: lineNumber,
+    start_column: 0,
+    end_line: lineNumber,
+    end_column: line.length
+  };
 }
 
 function cmakeTargetNodes(input: ExtractionRequest): GraphNodeWriteModel[] {

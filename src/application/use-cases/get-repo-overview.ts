@@ -140,7 +140,15 @@ function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHin
   const hasPackage = paths.has("package.json");
   const dotnetSolution = firstDotnetSolution(paths);
   const dotnetTestProject = firstDotnetTestProject(paths);
+  const samTemplate = firstSamTemplate(paths);
 
+  if (samTemplate !== undefined) {
+    hints.push({
+      command: "verification_plan",
+      reason: `${samTemplate} indicates SAM/CloudFormation validation is available; use verification planning for non-executed cfn/SAM checks.`,
+      status: "needed"
+    });
+  }
   if (dotnetSolution !== undefined) {
     hints.push({
       command: "verification_plan",
@@ -198,6 +206,11 @@ function detectPlatforms(files: readonly FileCatalogEntry[]): string[] {
   if (paths.has("package.json")) platforms.add("node");
   if (paths.has("pyproject.toml")) platforms.add("python");
   if (firstDotnetSolution(paths) !== undefined || hasDotnetProject(paths)) platforms.add("dotnet");
+  if (firstSamTemplate(paths) !== undefined) {
+    platforms.add("aws_lambda");
+    platforms.add("cloudformation");
+    platforms.add("sam");
+  }
   if (paths.has("go.mod") || paths.has("go.work")) platforms.add("go");
   if (hasCMakeEvidence(paths)) platforms.add("cmake");
   if (hasDockerEvidence(paths)) platforms.add("docker");
@@ -216,6 +229,8 @@ function isKeyFile(filePath: string): boolean {
     lowerExtension(filePath) === ".csproj" ||
     lowerExtension(filePath) === ".fsproj" ||
     lowerExtension(filePath) === ".vbproj" ||
+    isSamTemplatePath(filePath) ||
+    isLambdaHandlerPath(filePath) ||
     pathBasename(filePath).toLowerCase() === "program.cs" ||
     pathBasename(filePath).toLowerCase().startsWith("appsettings") ||
     pathBasename(filePath).toLowerCase().endsWith(".razor") ||
@@ -236,6 +251,9 @@ function keyFileRank(file: FileCatalogEntry): number {
   if (lower.endsWith("/cmakelists.txt")) return 125;
   if (lower.endsWith(".sln")) return 320;
   if (lower.endsWith(".csproj") || lower.endsWith(".fsproj") || lower.endsWith(".vbproj")) return 300;
+  if (isSamTemplatePath(lower)) return 290;
+  if (isLambdaHandlerPath(lower)) return 170;
+  if (lower.includes("/tests/infra/") || lower.includes("/test/infra/")) return 120;
   let score = 0;
   if (lower.endsWith("/program.cs")) score += 115;
   if (lower.includes("/controllers/")) score += 95;
@@ -252,6 +270,7 @@ function keyFileRank(file: FileCatalogEntry): number {
   if (file.file_identity.language === "csharp") score += 8;
   if (file.file_identity.language === "python") score += 6;
   if (lower.includes("/generated/") || lower.includes("/fixtures/")) score -= 60;
+  if (lower.includes("template-generated")) score -= 90;
   return score;
 }
 
@@ -280,6 +299,23 @@ function firstDotnetSolution(paths: Set<string>): string | undefined {
 
 function firstDotnetTestProject(paths: Set<string>): string | undefined {
   return [...paths].sort().find((file) => lowerExtension(file) === ".csproj" && file.toLowerCase().includes("test"));
+}
+
+function firstSamTemplate(paths: Set<string>): string | undefined {
+  return [...paths].sort().find(isSamTemplatePath);
+}
+
+function isSamTemplatePath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return (
+    (lower.endsWith("template.yaml") || lower.endsWith("template.yml") || lower.endsWith("template.json")) &&
+    (lower.includes("/sam/") || lower.includes("/cloudformation/") || lower.startsWith("infra/") || lower.startsWith("template."))
+  );
+}
+
+function isLambdaHandlerPath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return /\.(py|ts|js|mjs|cjs)$/u.test(lower) && (lower.includes("/lambda/") || lower.includes("/handlers/") || lower.endsWith("/app.py"));
 }
 
 function pathBasename(filePath: string): string {

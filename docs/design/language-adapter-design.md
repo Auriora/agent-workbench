@@ -242,6 +242,13 @@ is the current concrete reference for this adapter's missing behavior: SAM
 logical ID lookup, template-to-handler edges, Lambda handler grouping,
 template-aware impact, and AWS validation planning.
 
+The first delivered SAM/CloudFormation slice is resource-backed. It emits
+routing nodes for template logical IDs and Lambda handler strings, promotes SAM
+templates, handler files, and infrastructure tests in overview/context, and
+plans non-executed `cfn-lint`, `sam validate`, and nearby infrastructure pytest
+commands. It does not yet resolve intrinsic functions, template dependencies,
+or template-to-source handler edges as semantic graph relationships.
+
 ## Promotion Gates
 
 - exact-symbol correctness

@@ -534,6 +534,40 @@ describe("verification_plan use case", () => {
     );
   });
 
+  it("plans SAM and CloudFormation validation from template and infra test evidence", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-sam-lambda-repo");
+    const result = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["infra/sam/orders/template.yaml", "src/orders/app.py"],
+        changed_files: ["infra/sam/orders/template.yaml"],
+        include_static_feedback: true,
+        max_commands: 10
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+
+    expect(result.plan.status).toBe("planned");
+    expect(result.plan.static_feedback).toBeUndefined();
+    expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
+      "cfn-lint infra/sam/orders/template.yaml",
+      "sam validate --template-file infra/sam/orders/template.yaml",
+      "python3 -m pytest tests/infra/test_orders_template.py",
+      "python3 -m pytest",
+      "planned docs/config syntax review"
+    ]);
+    expect(result.plan.planned_commands).toEqual(
+      result.plan.planned_commands.map(() =>
+        expect.objectContaining({
+          status: "planned",
+          execution: "not_executed"
+        })
+      )
+    );
+  });
+
   it("blocks unsafe, too-broad, and low-confidence validation targets with quiet feedback", async () => {
     const files = Array.from({ length: 51 }, (_, index) => `src/file-${index}.ts`);
     const result = await planVerification({

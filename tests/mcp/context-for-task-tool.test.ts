@@ -319,6 +319,38 @@ describe("context_for_task use case", () => {
     );
   });
 
+  it("ranks SAM template, Lambda handler, and infra test routing anchors", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-sam-lambda-repo");
+    const result = await getTaskContext({
+      request: {
+        task: "Update SAM Lambda handler schedule event template validation",
+        repo_root: repoRoot,
+        files: [],
+        symbols: [],
+        max_files: 5,
+        max_docs: 2
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: repoRoot
+    });
+
+    expect(result.context.related_files.map((file) => file.path)).toEqual(
+      expect.arrayContaining([
+        "infra/sam/orders/template.yaml",
+        "src/orders/app.py",
+        "tests/infra/test_orders_template.py"
+      ])
+    );
+    expect(result.context.related_files.map((file) => file.reason)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("SAM/CloudFormation template"),
+        expect.stringContaining("Lambda handler"),
+        expect.stringContaining("infrastructure test")
+      ])
+    );
+  });
+
   it("routes symbol-oriented work to graph query tools through next actions", async () => {
     const result = await getTaskContext({
       request: {

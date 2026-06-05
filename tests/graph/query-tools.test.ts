@@ -111,6 +111,66 @@ describe("graph query use cases", () => {
     }
   });
 
+  it("searches SAM logical IDs and Lambda handler strings as resource-backed routing symbols", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-sam-lambda-repo", "219");
+    try {
+      const logicalId = await searchSymbols({
+        request: {
+          query: "OrdersFunction",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: [],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+      const handler = await searchSymbols({
+        request: {
+          query: "src/orders/app.handler",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: [],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(logicalId.symbols.symbols).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "lambda_function",
+            name: "OrdersFunction",
+            path: "infra/sam/orders/template.yaml",
+            capability_level: "resource_backed",
+            evidence_kinds: expect.arrayContaining(["config", "infra_parser"])
+          })
+        ])
+      );
+      expect(handler.symbols.symbols).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "lambda_handler_binding",
+            name: "src/orders/app.handler",
+            path: "infra/sam/orders/template.yaml",
+            capability_level: "resource_backed"
+          })
+        ])
+      );
+    } finally {
+      fixture.store.close();
+    }
+  });
+
   it("resolves exact qualified symbol queries before fuzzy fallback", async () => {
     const fixture = await indexedFixture("tests/fixtures/fixture-basic-python", "205");
     try {

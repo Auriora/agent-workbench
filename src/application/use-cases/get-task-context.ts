@@ -507,7 +507,11 @@ function toFileReference(pathInput: string, entry?: FileCatalogEntry, reason = "
 
 function scoreFile(file: FileCatalogEntry, terms: Set<string>): number {
   const pathTerms = tokenSet([file.path]);
-  let score = firstPartyPathBoost(file.path) + webAppStructureBoost(file.path, terms) + dotnetStructureBoost(file.path, terms);
+  let score =
+    firstPartyPathBoost(file.path) +
+    webAppStructureBoost(file.path, terms) +
+    dotnetStructureBoost(file.path, terms) +
+    samStructureBoost(file.path, terms);
   for (const term of terms) {
     if (pathTerms.has(term)) {
       score += 3;
@@ -589,6 +593,10 @@ function reasonForRelatedFile(
   const dotnetReason = dotnetStructureReason(file.path, terms);
   if (dotnetReason !== undefined) {
     return dotnetReason;
+  }
+  const samReason = samStructureReason(file.path, terms);
+  if (samReason !== undefined) {
+    return samReason;
   }
   return hasExactPathTerm
     ? "Matched task terms in the repo-relative path."
@@ -689,6 +697,48 @@ function dotnetStructureReason(filePath: string, terms: Set<string>): string | u
     return "Matched .NET appsettings configuration convention.";
   }
   return undefined;
+}
+
+function samStructureBoost(filePath: string, terms: Set<string>): number {
+  const reason = samStructureReason(filePath, terms);
+  if (reason === undefined) {
+    return 0;
+  }
+  const lower = filePath.toLowerCase();
+  if (isSamTemplatePath(lower)) return 18;
+  if (lower.includes("/tests/infra/") || lower.includes("/test/infra/")) return 11;
+  if (isLambdaHandlerPath(lower)) return 10;
+  return 5;
+}
+
+function samStructureReason(filePath: string, terms: Set<string>): string | undefined {
+  if (!hasAnyTerm(terms, ["sam", "cloudformation", "lambda", "handler", "template", "stack", "event", "schedule", "aws", "test", "validation"])) {
+    return undefined;
+  }
+  const lower = filePath.toLowerCase();
+  if (isSamTemplatePath(lower)) {
+    return "Matched SAM/CloudFormation template convention.";
+  }
+  if (isLambdaHandlerPath(lower)) {
+    return "Matched Lambda handler source convention.";
+  }
+  if (lower.startsWith("tests/infra/") || lower.startsWith("test/infra/") || lower.includes("/tests/infra/") || lower.includes("/test/infra/")) {
+    return "Matched infrastructure test convention.";
+  }
+  return undefined;
+}
+
+function isSamTemplatePath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return (
+    (lower.endsWith("template.yaml") || lower.endsWith("template.yml") || lower.endsWith("template.json")) &&
+    (lower.includes("/sam/") || lower.includes("/cloudformation/") || lower.startsWith("infra/") || lower.startsWith("template."))
+  );
+}
+
+function isLambdaHandlerPath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return /\.(py|ts|js|mjs|cjs)$/u.test(lower) && (lower.includes("/lambda/") || lower.includes("/handlers/") || lower.endsWith("/app.py"));
 }
 
 function noisyArtifactPenalty(filePath: string): number {

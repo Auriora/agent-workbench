@@ -1,0 +1,3 @@
+[project]
+name = "fixture-sam-lambda-repo"
+version = "0.1.0"

@@ -430,9 +430,15 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Open: improve nearest-test ranking for service slices, especially
   infrastructure-plus-handler changes where tests live under service, infra, or
   script-specific test families rather than same-package Python paths.
+- Done: add first-slice SAM/CloudFormation resource-backed extraction for
+  logical IDs and Lambda handler strings. These appear as routing symbols with
+  `resource_backed` capability and `infra_parser` provenance, not as semantic
+  reference/impact proof.
 - Future: add SAM/CloudFormation fixture-backed semantic indexing for logical
   IDs, Lambda handler strings, events, parameters, environment references,
   policies, layers, outputs, and template dependencies.
+- Done: add first-slice SAM/Lambda overview and context routing for template
+  files, handler source files, and infrastructure tests.
 - Future: connect SAM/CloudFormation templates to source handlers, tests, and
   validation evidence. Impact on a SAM template should expose low-confidence
   but useful template-to-handler and event-source relationships rather than an
@@ -440,7 +446,10 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Future: add Lambda-heavy repository presentation that groups generic
   `handler` results by stack/service/logical ID, handler file, and event source
   while preserving the compact graph contract.
-- Future: add AWS validation planning evidence for SAM/CloudFormation
+- Done: add first-slice AWS validation planning evidence for SAM/CloudFormation
+  repositories, including non-executed `cfn-lint`, `sam validate`, and nearby
+  infrastructure pytest candidates when template/test evidence exists.
+- Future: deepen AWS validation planning evidence for SAM/CloudFormation
   repositories, including cfn-lint, repo-approved SAM validation commands,
   containerized deploy/test runners, and host-tool availability as planned or
   blocked evidence rather than guessed commands.

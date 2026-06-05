@@ -318,6 +318,31 @@ describe("repo overview MCP resource", () => {
       ])
     );
   });
+
+  it("promotes SAM templates, Lambda handlers, and infra validation hints", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-sam-lambda-repo");
+    const result = await getRepoOverview({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter()
+    });
+
+    expect(result.overview.platforms).toEqual(expect.arrayContaining(["aws_lambda", "cloudformation", "sam", "python"]));
+    expect(result.overview.key_files.map((file) => file.path).slice(0, 4)).toEqual([
+      "infra/sam/orders/template.yaml",
+      "src/orders/app.py",
+      "pyproject.toml",
+      "tests/infra/test_orders_template.py"
+    ]);
+    expect(result.overview.key_files.map((file) => file.path)).not.toContain("template-generated.yaml");
+    expect(result.overview.validation_hints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          command: "verification_plan",
+          reason: expect.stringContaining("infra/sam/orders/template.yaml")
+        })
+      ])
+    );
+  });
 });
 
 describe("repo scope and overview composed server resources", () => {
