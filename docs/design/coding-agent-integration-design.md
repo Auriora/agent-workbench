@@ -3,7 +3,7 @@ title: Coding agent integration design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-05-08
+last_reviewed: 2026-06-05
 ---
 
 # Coding Agent Integration Design
@@ -107,6 +107,12 @@ payloads, blocking behavior, concurrency, timeouts, and config precedence vary.
 
 The runtime should model hook intent internally and emit agent-specific hook
 configuration only at the integration boundary.
+
+Hook output should be quiet by default. Successful checks, optional backend
+errors, and no-finding file edits should not print agent-visible messages.
+Actionable findings should use repo-relative paths and the shortest message
+that lets the agent continue. Operational failures belong in telemetry or
+logger output unless the failure blocks the current user-visible workflow.
 
 Example hook intents:
 

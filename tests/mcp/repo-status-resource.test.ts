@@ -154,7 +154,7 @@ describe("repo status MCP resource", () => {
     ]);
   });
 
-  it("uses scanned status coverage from the default composed server", async () => {
+  it("keeps default status bounded without scanned coverage", async () => {
     const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
       startGraphWarmup: false
     }) as unknown as {
@@ -173,21 +173,10 @@ describe("repo status MCP resource", () => {
     const response = await server._registeredResources["repo:///status"].readCallback({});
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: GetRepoStatusResult["status"];
+      meta: GetRepoStatusResult["meta"];
     };
 
-    expect(parsed.data.adapter_coverage).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          domain: "language",
-          name: "typescript",
-          capability_level: "unsupported"
-        }),
-        expect.objectContaining({
-          domain: "package_manager",
-          name: "npm",
-          capability_level: "resource_backed"
-        })
-      ])
-    );
+    expect(parsed.data.adapter_coverage).toEqual([]);
+    expect(parsed.meta.scope.languages).toEqual([]);
   });
 });

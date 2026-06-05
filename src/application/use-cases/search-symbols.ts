@@ -10,6 +10,7 @@ import type {
   WorkspaceFilePort
 } from "../../ports/index.js";
 import { blockedMeta, resolveSnapshot, toSymbolReference } from "./query-helpers.js";
+import { capNextActions } from "../../presentation/metadata.js";
 
 export type SearchSymbolsResult = {
   symbols: SymbolSearchResult;
@@ -51,10 +52,10 @@ export async function searchSymbols(input: {
   }
 
   const nodes = input.request.exact
-    ? await input.graph.findNodesByName({
+    ? await findExactThenFallbackSymbols({
+        graph: input.graph,
         snapshot_id: resolved.snapshot_id,
         query: input.request.query,
-        exact: true,
         max_rows: input.request.max_results
       })
     : await input.graph.searchNodes({
@@ -80,7 +81,7 @@ export async function searchSymbols(input: {
           })
         )
       ),
-      next_actions: [
+      next_actions: capNextActions([
         {
           tool: "find_references",
           args: {
@@ -88,11 +89,47 @@ export async function searchSymbols(input: {
             snapshot_id: resolved.snapshot_id
           }
         }
-      ]
+      ])
     },
     meta: {
       ...resolved.meta,
       truncated: nodes.length >= input.request.max_results
     }
   };
+}
+
+async function findExactThenFallbackSymbols(input: {
+  graph: GraphQueryPort;
+  snapshot_id: string;
+  query: string;
+  max_rows: number;
+}) {
+  const byName = await input.graph.findNodesByName({
+    snapshot_id: input.snapshot_id,
+    query: input.query,
+    exact: true,
+    max_rows: input.max_rows
+  });
+  const byQualifiedName = await input.graph.findNodesByQualifiedName({
+    snapshot_id: input.snapshot_id,
+    qualified_name: input.query,
+    max_rows: input.max_rows
+  });
+  const exact = dedupeNodes([...byName, ...byQualifiedName]).slice(0, input.max_rows);
+  if (exact.length > 0) {
+    return exact;
+  }
+  return input.graph.searchNodes({
+    snapshot_id: input.snapshot_id,
+    query: input.query,
+    max_rows: input.max_rows
+  });
+}
+
+function dedupeNodes<T extends { id: string }>(nodes: readonly T[]): T[] {
+  const byId = new Map<string, T>();
+  for (const node of nodes) {
+    byId.set(node.id, node);
+  }
+  return [...byId.values()];
 }

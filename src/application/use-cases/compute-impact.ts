@@ -11,6 +11,7 @@ import {
   resolveSnapshot,
   toSymbolReference
 } from "./query-helpers.js";
+import { capNextActions } from "../../presentation/metadata.js";
 
 export type ComputeImpactResult = {
   impact: ImpactResult;
@@ -45,6 +46,12 @@ export async function computeImpact(input: {
         edge_count: 0,
         reached_depth: 0,
         traversal_truncated: false,
+        confidence: {
+          level: "low",
+          scope: "empty",
+          reason: "No graph snapshot was available, so impact evidence could not be computed.",
+          evidence_kinds: []
+        },
         next_actions: [{ tool: "prewarm_graph", args: { repo_root: repoRoot } }]
       },
       meta: blockedMeta({
@@ -63,6 +70,11 @@ export async function computeImpact(input: {
       max_nodes: input.request.max_nodes,
       direction: input.request.direction
     }
+  });
+  const confidence = impactConfidence({
+    edgeCount: traversal.edges.length,
+    fileCount: new Set(traversal.nodes.map((node) => node.file_path)).size,
+    truncated: traversal.truncated
   });
 
   return {
@@ -87,14 +99,15 @@ export async function computeImpact(input: {
       edge_count: traversal.edges.length,
       reached_depth: traversal.reached_depth,
       traversal_truncated: traversal.truncated,
-      next_actions: [
+      confidence,
+      next_actions: capNextActions([
         {
           tool: "verification_plan",
           args: {
             files: Array.from(new Set(traversal.nodes.map((node) => node.file_path))).sort()
           }
         }
-      ]
+      ])
     },
     meta: {
       ...resolved.meta,
@@ -105,5 +118,36 @@ export async function computeImpact(input: {
         row_limit: input.request.max_nodes
       }
     }
+  };
+}
+
+function impactConfidence(input: {
+  edgeCount: number;
+  fileCount: number;
+  truncated: boolean;
+}): ImpactResult["confidence"] {
+  if (input.edgeCount === 0) {
+    return {
+      level: "low",
+      scope: "empty",
+      reason: "Traversal found no parser-backed edges; blast-radius evidence is insufficient for broad edit planning.",
+      evidence_kinds: ["parser"]
+    };
+  }
+  if (input.fileCount <= 1) {
+    return {
+      level: "low",
+      scope: "local_only",
+      reason: "Traversal stayed within one file; treat impact as local-only and verify broader usage before broad edits.",
+      evidence_kinds: ["parser"]
+    };
+  }
+  return {
+    level: input.truncated ? "medium" : "high",
+    scope: "graph",
+    reason: input.truncated
+      ? "Traversal reached cross-file parser-backed edges but hit the configured budget."
+      : "Traversal reached cross-file parser-backed edges within the configured budget.",
+    evidence_kinds: ["parser"]
   };
 }

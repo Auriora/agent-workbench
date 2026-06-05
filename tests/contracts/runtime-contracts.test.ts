@@ -401,6 +401,7 @@ describe("runtime contracts", () => {
             target_file_path: "src/service.py",
             reference_kind: "call",
             confidence: 0.8,
+            evidence_kinds: ["parser"],
             provenance: "tree-sitter-reference-resolution",
             status: "resolved"
           }
@@ -427,6 +428,12 @@ describe("runtime contracts", () => {
         edge_count: 0,
         reached_depth: 0,
         traversal_truncated: false,
+        confidence: {
+          level: "low",
+          scope: "empty",
+          reason: "No graph edges were found.",
+          evidence_kinds: ["parser"]
+        },
         next_actions: []
       })
     ).toMatchObject({

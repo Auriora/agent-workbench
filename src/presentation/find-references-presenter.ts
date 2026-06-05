@@ -4,6 +4,7 @@ import {
   type ResponseEnvelope
 } from "../contracts/index.js";
 import type { FindReferencesUseCaseResult } from "../application/use-cases/find-references.js";
+import { invalidResponseMeta } from "./metadata.js";
 
 export function buildFindReferencesEnvelope(
   result: FindReferencesUseCaseResult
@@ -31,13 +32,5 @@ export function buildInvalidFindReferencesInputEnvelope(input: {
 }
 
 function invalidMeta(repoRoot: string) {
-  return {
-    analysis_validity: "invalid" as const,
-    freshness: "unknown" as const,
-    scope: { repo_root: repoRoot, indexed_roots: [], skipped_roots: [], languages: [] },
-    capability_level: "unsupported" as const,
-    evidence_kinds: [],
-    verification_status: "blocked" as const,
-    truncated: false
-  };
+  return invalidResponseMeta({ repoRoot });
 }

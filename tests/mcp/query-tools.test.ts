@@ -61,6 +61,7 @@ describe("graph query MCP tools", () => {
               target_file_path: "src/service.py",
               reference_kind: "call",
               confidence: 0.8,
+              evidence_kinds: ["parser"],
               provenance: "unit",
               status: "resolved"
             }
@@ -91,6 +92,12 @@ describe("graph query MCP tools", () => {
           edge_count: 0,
           reached_depth: 0,
           traversal_truncated: false,
+          confidence: {
+            level: "low",
+            scope: "empty",
+            reason: "fixture",
+            evidence_kinds: []
+          },
           next_actions: []
         },
         meta: meta()

@@ -16,6 +16,7 @@ import {
   type TaskContext
 } from "../contracts/index.js";
 import type { GetTaskContextResult } from "../application/use-cases/get-task-context.js";
+import { invalidResponseMeta } from "./metadata.js";
 
 export function buildTaskContextEnvelope(
   result: GetTaskContextResult
@@ -51,20 +52,7 @@ export function buildInvalidTaskContextInputEnvelope(input: {
       risks: [],
       next_actions: []
     },
-    meta: {
-      analysis_validity: "invalid",
-      freshness: "unknown",
-      scope: {
-        repo_root: input.repoRoot,
-        indexed_roots: [],
-        skipped_roots: [],
-        languages: []
-      },
-      capability_level: "unsupported",
-      evidence_kinds: [],
-      verification_status: "blocked",
-      truncated: false
-    },
+    meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
     errors: [
       {
         code: "invalid_input",

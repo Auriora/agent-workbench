@@ -267,6 +267,16 @@ export const sourceSectionSchema = z
   .strict();
 export type SourceSection = z.infer<typeof sourceSectionSchema>;
 
+export const sourceRangeSchema = z
+  .object({
+    start_line: z.number().int().positive(),
+    start_column: z.number().int().nonnegative(),
+    end_line: z.number().int().positive(),
+    end_column: z.number().int().nonnegative()
+  })
+  .strict();
+export type SourceRangeContract = z.infer<typeof sourceRangeSchema>;
+
 export const symbolReferenceSchema = z
   .object({
     node_id: z.string(),
@@ -275,12 +285,7 @@ export const symbolReferenceSchema = z
     qualified_name: z.string().optional(),
     path: z.string(),
     language: z.string(),
-    source_range: z.object({
-      start_line: z.number().int().positive(),
-      start_column: z.number().int().nonnegative(),
-      end_line: z.number().int().positive(),
-      end_column: z.number().int().nonnegative()
-    }),
+    source_range: sourceRangeSchema,
     signature: z.string().optional(),
     docstring: z.string().optional(),
     capability_level: capabilityLevelSchema,
@@ -331,13 +336,15 @@ export type FindReferencesRequest = z.infer<typeof findReferencesRequestSchema>;
 
 export const referenceHitSchema = z
   .object({
-    source_node_id: z.string(),
+    source_node_id: z.string().optional(),
     source_file_path: z.string().optional(),
+    source_range: sourceRangeSchema.optional(),
     target_node_id: z.string().optional(),
     target_file_path: z.string().optional(),
     reference_name: z.string().optional(),
     reference_kind: z.string(),
     confidence: z.number().min(0).max(1).optional(),
+    evidence_kinds: z.array(evidenceKindSchema),
     provenance: z.string(),
     status: z.enum(["resolved", "unresolved", "ambiguous"])
   })
@@ -377,6 +384,14 @@ export const impactResultSchema = z
     edge_count: z.number().int().nonnegative(),
     reached_depth: z.number().int().nonnegative(),
     traversal_truncated: z.boolean(),
+    confidence: z
+      .object({
+        level: z.enum(["high", "medium", "low"]),
+        scope: z.enum(["graph", "local_only", "empty"]),
+        reason: z.string(),
+        evidence_kinds: z.array(evidenceKindSchema)
+      })
+      .strict(),
     next_actions: z.array(nextActionSchema)
   })
   .strict();

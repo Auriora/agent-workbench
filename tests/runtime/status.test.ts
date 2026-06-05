@@ -362,12 +362,23 @@ describe("runtime status", () => {
     ];
 
     for (const testCase of cases) {
-      const result = await getSnapshotRepoStatus({
-        repo_root: "/repo",
-        snapshots: snapshotPort(testCase.snapshot),
-        catalog: catalogPort(testCase.files),
-        max_files: 10
-      });
+      const result =
+        testCase.expectedKind === "missing_optional_enrichment_evidence" ||
+        testCase.expectedKind === "unsupported_language_or_platform"
+          ? getCatalogRepoStatus({
+              repo_root: "/repo",
+              indexed_roots: ["."],
+              skipped_roots: [],
+              files: testCase.files,
+              snapshot: testCase.snapshot,
+              freshness: testCase.snapshot.freshness
+            })
+          : await getSnapshotRepoStatus({
+              repo_root: "/repo",
+              snapshots: snapshotPort(testCase.snapshot),
+              catalog: catalogPort(testCase.files),
+              max_files: 10
+            });
       const caveats = result.meta.caveats ?? [];
 
       expect(caveats, testCase.name).toEqual(
@@ -378,6 +389,31 @@ describe("runtime status", () => {
         ])
       );
     }
+  });
+
+  it("keeps snapshot status bounded without enumerating the catalog", async () => {
+    let listFilesCalled = false;
+    const result = await getSnapshotRepoStatus({
+      repo_root: "/repo",
+      snapshots: snapshotPort(snapshot({ freshness: "fresh" })),
+      catalog: {
+        async listFiles() {
+          listFilesCalled = true;
+          return [];
+        },
+        async getFile() {
+          return null;
+        },
+        async upsertEntry() {},
+        async removeEntry() {}
+      },
+      max_files: 10
+    });
+
+    expect(listFilesCalled).toBe(false);
+    expect(result.status.adapter_coverage).toEqual([]);
+    expect(result.meta.scope.languages).toEqual([]);
+    expect(result.meta.budget).toEqual({ row_limit: 10 });
   });
 
   it("builds scanned status from a file catalog scan port", async () => {

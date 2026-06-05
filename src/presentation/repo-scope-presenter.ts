@@ -1,5 +1,6 @@
 import { makeEnvelope, type RepoScope, type ResponseEnvelope } from "../contracts/index.js";
 import type { GetRepoScopeResult } from "../application/use-cases/get-repo-scope.js";
+import { invalidResponseMeta } from "./metadata.js";
 
 export function buildRepoScopeEnvelope(
   result: GetRepoScopeResult
@@ -29,20 +30,7 @@ export function buildInvalidRepoScopeInputEnvelope(input: {
       },
       generated_or_vendor_roots: []
     },
-    meta: {
-      analysis_validity: "invalid",
-      freshness: "unknown",
-      scope: {
-        repo_root: input.repoRoot,
-        indexed_roots: [],
-        skipped_roots: [],
-        languages: []
-      },
-      capability_level: "unsupported",
-      evidence_kinds: [],
-      verification_status: "blocked",
-      truncated: false
-    },
+    meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
     errors: [
       {
         code: "invalid_input",

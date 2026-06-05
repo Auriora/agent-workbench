@@ -13,6 +13,12 @@ import type {
   SnapshotPort,
   WorkspaceFilePort
 } from "../../ports/index.js";
+import {
+  buildResponseMeta,
+  invalidResponseMeta,
+  strongestCapabilityLevel,
+  uniqueSorted
+} from "../../presentation/metadata.js";
 
 export type ResolvedSnapshot = {
   snapshot_id: string;
@@ -41,11 +47,15 @@ export async function resolveSnapshot(input: {
     snapshot_id: snapshot.id,
     max_rows: input.row_limit
   });
-  const languages = Array.from(new Set(files.map((file) => file.file_identity.language))).sort();
+  const languages = uniqueSorted(files.map((file) => file.file_identity.language));
+  const fileRefs = files.map((file) => ({
+    capability_level: file.adapter_evidence?.capability_level ?? capabilityForLanguage(file.file_identity.language),
+    evidence_kinds: file.adapter_evidence?.evidence_kinds ?? evidenceForLanguage(file.file_identity.language)
+  }));
   return {
     snapshot_id: snapshot.id,
     repo_root: snapshot.repo_root,
-    meta: {
+    meta: buildResponseMeta({
       analysis_validity: "valid",
       freshness: snapshot.freshness,
       scope: {
@@ -54,8 +64,8 @@ export async function resolveSnapshot(input: {
         skipped_roots: [],
         languages
       },
-      capability_level: strongestCapability(files.map((file) => file.adapter_evidence?.capability_level ?? capabilityForLanguage(file.file_identity.language))),
-      evidence_kinds: Array.from(new Set(files.flatMap((file) => file.adapter_evidence?.evidence_kinds ?? evidenceForLanguage(file.file_identity.language)))).sort(),
+      capability_level: strongestCapabilityLevel(fileRefs.map((file) => file.capability_level)),
+      files: fileRefs,
       verification_status: "needed",
       truncated: files.length >= input.row_limit,
       budget: {
@@ -63,7 +73,7 @@ export async function resolveSnapshot(input: {
         traversal_depth: input.traversal_depth,
         source_byte_limit: input.source_byte_limit
       }
-    }
+    })
   };
 }
 
@@ -73,25 +83,15 @@ export function blockedMeta(input: {
   traversal_depth?: number;
   source_byte_limit?: number;
 }): ResponseMetadata {
-  return {
-    analysis_validity: "invalid",
+  return invalidResponseMeta({
+    repoRoot: input.repo_root,
     freshness: "cold",
-    scope: {
-      repo_root: input.repo_root,
-      indexed_roots: [],
-      skipped_roots: [],
-      languages: []
-    },
-    capability_level: "unsupported",
-    evidence_kinds: [],
-    verification_status: "blocked",
-    truncated: false,
     budget: {
       row_limit: input.row_limit,
       traversal_depth: input.traversal_depth,
       source_byte_limit: input.source_byte_limit
     }
-  };
+  });
 }
 
 export async function toSymbolReference(input: {
@@ -204,13 +204,6 @@ function evidenceForLanguage(language: string): EvidenceKind[] {
     return ["config"];
   }
   return [];
-}
-
-function strongestCapability(levels: readonly CapabilityLevel[]): CapabilityLevel {
-  if (levels.includes("semantic")) return "semantic";
-  if (levels.includes("partial_semantic")) return "partial_semantic";
-  if (levels.includes("resource_backed")) return "resource_backed";
-  return "unsupported";
 }
 
 async function sourceSection(input: {

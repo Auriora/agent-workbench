@@ -76,14 +76,46 @@ function selectKeyFiles(files: readonly FileCatalogEntry[]): FileReference[] {
 function selectKeyDocs(files: readonly FileCatalogEntry[]): DocumentReference[] {
   return files
     .filter((file) => file.file_identity.language === "markdown")
-    .filter((file) => file.path.toLowerCase() === "readme.md" || file.path.startsWith("docs/"))
+    .filter((file) => isOverviewDocCandidate(file.path))
+    .sort((left, right) => docRank(right.path) - docRank(left.path) || left.path.localeCompare(right.path))
     .slice(0, 10)
     .map((file) => ({
       path: file.path,
       title: titleFromPath(file.path),
-      reason: "Top-level README or docs directory file.",
+      reason: reasonForDoc(file.path),
       evidence_kinds: ["docs"]
     }));
+}
+
+function isOverviewDocCandidate(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return lower === "readme.md" || lower === "agents.md" || lower.startsWith("docs/");
+}
+
+function docRank(filePath: string): number {
+  const lower = filePath.toLowerCase();
+  let score = 0;
+  if (lower === "agents.md") score += 220;
+  if (lower === "readme.md") score += 210;
+  if (lower.startsWith("docs/guides/")) score += 90;
+  if (lower.includes("architecture") || lower.includes("design")) score += 70;
+  if (lower.includes("runbook") || lower.includes("operations") || lower.includes("developer")) score += 60;
+  if (lower.startsWith("docs/reference/")) score += 50;
+  if (lower.includes("template")) score -= 80;
+  if (lower.includes("/archive/") || lower.startsWith("docs/archive/")) score -= 70;
+  if (lower.includes("/updates/") || lower.startsWith("docs/updates/")) score -= 60;
+  if (lower.includes("project-management") || lower.includes("/plans/")) score -= 40;
+  return score;
+}
+
+function reasonForDoc(filePath: string): string {
+  const lower = filePath.toLowerCase();
+  if (lower === "readme.md") return "Repository entry document.";
+  if (lower === "agents.md") return "Agent guidance document.";
+  if (lower.startsWith("docs/guides/")) return "Durable guide document.";
+  if (lower.includes("architecture") || lower.includes("design")) return "Durable architecture or design document.";
+  if (lower.startsWith("docs/reference/")) return "Durable reference document.";
+  return "Repository documentation file.";
 }
 
 function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHint[] {

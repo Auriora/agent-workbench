@@ -1,4 +1,5 @@
 import type {
+  EvidenceKind,
   FindReferencesRequest,
   FindReferencesResult,
   ReferenceHit,
@@ -11,6 +12,7 @@ import type {
   WorkspaceFilePort
 } from "../../ports/index.js";
 import { blockedMeta, resolveSnapshot, toSymbolReference } from "./query-helpers.js";
+import { capNextActions } from "../../presentation/metadata.js";
 
 export type FindReferencesUseCaseResult = {
   references: FindReferencesResult;
@@ -76,30 +78,77 @@ export async function findReferences(input: {
     max_depth: input.request.max_depth,
     max_rows: input.request.max_results
   });
-  const unresolved = await input.graph.getUnresolvedReferences({
+  const incoming = await input.graph.getIncomingEdges({
     snapshot_id: resolved.snapshot_id,
-    file_path: target.file_path,
+    node_id: target.id,
     max_rows: input.request.max_results
   });
-  const references: ReferenceHit[] = [
+  const unresolved = (await input.graph.getUnresolvedReferences({
+    snapshot_id: resolved.snapshot_id,
+    max_rows: input.request.max_results
+  })).filter(
+    (item) =>
+      item.source_node_id === target.id ||
+      item.reference_name === target.name ||
+      item.reference_name === target.qualified_name
+  );
+  const parserReferences: ReferenceHit[] = [
     ...outgoing.map((item) => ({
       source_node_id: item.source_node_id,
       target_node_id: item.target_node_id,
       target_file_path: item.target_file_path,
       reference_kind: "resolved",
       confidence: item.confidence,
+      evidence_kinds: ["parser"] as EvidenceKind[],
       provenance: item.provenance,
       status: "resolved" as const
     })),
+    ...(await Promise.all(
+      incoming
+        .filter((edge) => edge.source_node_id !== target.id)
+        .map(async (edge) => {
+          const source = await input.graph.getNode({
+            snapshot_id: resolved.snapshot_id,
+            node_id: edge.source_node_id
+          });
+          return {
+            source_node_id: edge.source_node_id,
+            source_file_path: source?.file_path,
+            source_range: edge.source_range,
+            target_node_id: target.id,
+            target_file_path: target.file_path,
+            reference_name: String(edge.metadata.reference_name ?? target.name),
+            reference_kind: edge.kind,
+            confidence: edge.confidence,
+            evidence_kinds: ["parser"] as EvidenceKind[],
+            provenance: edge.provenance,
+            status: "resolved" as const
+          };
+        })
+    )),
     ...unresolved.map((item) => ({
       source_node_id: item.source_node_id,
       source_file_path: item.source_file_path,
+      source_range: item.source_range,
       reference_name: item.reference_name,
       reference_kind: item.reference_kind,
+      confidence: item.candidate_metadata.resolution === "ambiguous" ? 0.4 : 0.35,
+      evidence_kinds: ["parser", "heuristic"] as EvidenceKind[],
       provenance: "unresolved_reference",
       status: item.candidate_metadata.resolution === "ambiguous" ? "ambiguous" as const : "unresolved" as const
     }))
-  ].slice(0, input.request.max_results);
+  ];
+  const lexicalReferences =
+    parserReferences.length === 0
+      ? await findLexicalReferences({
+          target,
+          snapshot_id: resolved.snapshot_id,
+          catalog: input.catalog,
+          workspace: input.workspace,
+          max_results: input.request.max_results
+        })
+      : [];
+  const references = dedupeReferences([...parserReferences, ...lexicalReferences]).slice(0, input.request.max_results);
 
   return {
     references: {
@@ -111,7 +160,7 @@ export async function findReferences(input: {
         source_byte_limit: 0
       }),
       references,
-      next_actions: [
+      next_actions: capNextActions([
         {
           tool: "impact",
           args: {
@@ -119,11 +168,93 @@ export async function findReferences(input: {
             snapshot_id: resolved.snapshot_id
           }
         }
-      ]
+      ])
     },
     meta: {
       ...resolved.meta,
       truncated: references.length >= input.request.max_results
     }
   };
+}
+
+async function findLexicalReferences(input: {
+  target: { id: string; name: string; file_path: string };
+  snapshot_id: string;
+  catalog: FileCatalogPort;
+  workspace?: WorkspaceFilePort;
+  max_results: number;
+}): Promise<ReferenceHit[]> {
+  if (input.workspace === undefined || input.target.name.trim().length === 0) {
+    return [];
+  }
+  const files = await input.catalog.listFiles({
+    snapshot_id: input.snapshot_id,
+    max_rows: Math.min(100, Math.max(10, input.max_results * 5))
+  });
+  const identifier = input.target.name;
+  const pattern = new RegExp(`(^|[^A-Za-z0-9_])${escapeRegExp(identifier)}([^A-Za-z0-9_]|$)`, "u");
+  const hits: ReferenceHit[] = [];
+  for (const file of files) {
+    if (hits.length >= input.max_results) {
+      break;
+    }
+    if (!["python", "typescript", "javascript", "markdown", "text"].includes(file.file_identity.language)) {
+      continue;
+    }
+    if (file.file_identity.size_bytes > 128_000) {
+      continue;
+    }
+    const text = await input.workspace.readText({ path: file.path });
+    const lines = text.split(/\r?\n/u);
+    for (const [index, line] of lines.entries()) {
+      if (hits.length >= input.max_results) {
+        break;
+      }
+      if (!pattern.test(line)) {
+        continue;
+      }
+      const startColumn = Math.max(0, line.indexOf(identifier));
+      hits.push({
+        source_file_path: file.path,
+        source_range: {
+          start_line: index + 1,
+          start_column: startColumn,
+          end_line: index + 1,
+          end_column: startColumn + identifier.length
+        },
+        target_node_id: input.target.id,
+        target_file_path: input.target.file_path,
+        reference_name: identifier,
+        reference_kind: "lexical",
+        confidence: 0.2,
+        evidence_kinds: ["text_fallback", "heuristic"],
+        provenance: "bounded_lexical_identifier_scan",
+        status: "unresolved"
+      });
+    }
+  }
+  return hits;
+}
+
+function dedupeReferences(references: readonly ReferenceHit[]): ReferenceHit[] {
+  const byKey = new Map<string, ReferenceHit>();
+  for (const reference of references) {
+    byKey.set(
+      [
+        reference.source_node_id ?? "",
+        reference.source_file_path ?? "",
+        reference.source_range?.start_line ?? "",
+        reference.target_node_id ?? "",
+        reference.reference_name ?? "",
+        reference.reference_kind,
+        reference.provenance
+      ].join(":"),
+      reference
+    );
+  }
+  return [...byKey.values()];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }

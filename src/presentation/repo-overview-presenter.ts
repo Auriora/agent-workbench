@@ -1,5 +1,6 @@
 import { makeEnvelope, type RepoOverview, type ResponseEnvelope } from "../contracts/index.js";
 import type { GetRepoOverviewResult } from "../application/use-cases/get-repo-overview.js";
+import { invalidResponseMeta } from "./metadata.js";
 
 export function buildRepoOverviewEnvelope(
   result: GetRepoOverviewResult
@@ -25,20 +26,7 @@ export function buildInvalidRepoOverviewInputEnvelope(input: {
       validation_hints: [],
       recommended_first_calls: []
     },
-    meta: {
-      analysis_validity: "invalid",
-      freshness: "unknown",
-      scope: {
-        repo_root: input.repoRoot,
-        indexed_roots: [],
-        skipped_roots: [],
-        languages: []
-      },
-      capability_level: "unsupported",
-      evidence_kinds: [],
-      verification_status: "blocked",
-      truncated: false
-    },
+    meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
     errors: [
       {
         code: "invalid_input",

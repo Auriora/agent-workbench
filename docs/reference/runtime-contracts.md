@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-06-05
 ---
 
 # Runtime Contracts
@@ -196,6 +196,30 @@ Post-MVP documentation-quality kinds:
 - `markdown_frontmatter`
 - `markdown_link`
 - `markdown_format_preview`
+
+## Graph Evidence Labels
+
+`find_references` returns parser-backed, unresolved-parser, and bounded lexical
+evidence in the same reference-hit shape. Every hit includes `evidence_kinds`:
+
+- resolved parser edges use `["parser"]`
+- unresolved parser candidates use `["parser", "heuristic"]`
+- lexical fallback hits use `["text_fallback", "heuristic"]` and lower
+  confidence
+
+Lexical hits are routing evidence only. Agents must directly verify source
+before treating them as semantic references.
+
+`impact` includes a `confidence` object with:
+
+- `level`: `high`, `medium`, or `low`
+- `scope`: `graph`, `local_only`, or `empty`
+- `reason`: compact explanation for blast-radius trust
+- `evidence_kinds`: evidence supporting the confidence label
+
+When traversal stays within one file or finds no edges, `scope` must be
+`local_only` or `empty` and the reason must state that broad edit planning needs
+additional verification.
 
 ## Edit Token Shape
 

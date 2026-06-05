@@ -3,7 +3,7 @@ title: Agent IDE restart concept
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-06-05
 ---
 
 # Agent IDE Restart Concept
@@ -11,8 +11,8 @@ last_reviewed: 2026-05-07
 ## Purpose
 
 This document captures the concept for a new agent-first IDE/runtime project
-based on lessons from the existing `agent-ide` proof of concept and selected
-ideas from `graphify` and `codegraph`.
+based on lessons from the existing `agent-ide` proof of concept and current
+Agent Workbench design work.
 
 The goal is to define the project shape before creating a new repository: what
 to keep, what to change, and which capabilities should be first-class from the
@@ -81,38 +81,9 @@ Some compact first-pass tools still trigger broad topology, validation, or
 cache freshness work. That makes results slower and pushes agents back to
 direct file reads.
 
-### `codegraph`
-
-`codegraph` provides the strongest model for deterministic, local,
-cross-language code intelligence:
-
-- tree-sitter-based extraction across many languages
-- SQLite graph database with FTS indexes
-- explicit reference-resolution phase after extraction
-- callers, callees, impact radius, file tree, symbol search, and task context
-- native file watcher with debounced incremental sync
-- parse workers, parser timeouts, and worker recycling for large repositories
-- MCP tools separated into lightweight targeted lookups and heavier exploration
-  tools
-
-The restart should borrow its local-first graph core and language extraction
-model, while preserving Agent IDE's stronger edit-loop and validation semantics.
-
-### `graphify`
-
-`graphify` provides the strongest knowledge-graph product model:
-
-- pipeline from detection to extraction, graph build, clustering, analysis,
-  report, and export
-- confidence labels such as `EXTRACTED`, `INFERRED`, and `AMBIGUOUS`
-- god nodes, communities, surprising connections, knowledge gaps, ambiguous
-  edges, and suggested questions
-- graph query tools such as BFS/DFS query, neighbors, shortest path, community,
-  graph stats, and god nodes
-- generated markdown/wiki/report outputs that give agents a stable onboarding
-  entry point
-
-The restart should borrow these reporting and audit concepts, but keep
+The restart should keep deterministic local extraction, persisted graph
+evidence, explicit reference resolution, confidence labels, and compact
+agent-facing query tools, but keep
 `tree-sitter` as the mandatory deterministic parser evidence for coding
 workflows. LSP and AST are optional enrichers, never replacement parsers.
 
@@ -191,8 +162,8 @@ Initial recommended language scope:
 - Python: first partial-semantic target, with promotion to `semantic` only after
   fixture-proven references, impact, diagnostics, validation routing,
   freshness, and degraded behavior.
-- TypeScript/JavaScript: second partial-semantic target, borrowing from
-  `codegraph`, after the first language path proves the contracts.
+- TypeScript/JavaScript: second partial-semantic target after the first
+  language path proves the contracts.
 - C#: post-MVP resource-backed or partial-semantic target.
 - CloudFormation/SAM: post-MVP infrastructure/resource-backed target for
   resource and handler relationships.
@@ -566,9 +537,9 @@ language-neutral.
 
 TypeScript is the recommended starting point because:
 
-- `codegraph` already proves much of the desired shape in TypeScript: tree-sitter
-  extraction, SQLite, FTS, MCP tools, watcher/sync, graph traversal, and context
-  building.
+- TypeScript fits the target runtime shape: tree-sitter extraction, SQLite,
+  MCP tools, watcher/sync, graph traversal, and context building are all
+  practical in a Node.js package.
 - Node.js has practical cross-platform support for filesystem watching, worker
   threads, subprocess orchestration, and npm distribution.
 - MCP server packaging and installation into arbitrary repositories is
@@ -683,5 +654,3 @@ rename, change signature, safe delete, and broad graph exploration tools.
 - Reference: [Language capability matrix](../reference/language-capability-matrix.md)
 - Spec: [Agent IDE runtime MVP](../specs/001-agent-ide-runtime/requirements.md)
 - Existing PoC: `/home/bcherrington/Projects/Auriora/agent-ide`
-- Graph product/reference workflow: `/home/bcherrington/Projects/Webstorm/graphify`
-- Cross-language code graph reference: `/home/bcherrington/Projects/Webstorm/codegraph`

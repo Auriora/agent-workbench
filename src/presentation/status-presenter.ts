@@ -3,6 +3,7 @@ import {
   type RuntimeStatus,
   type RuntimeStatusResult
 } from "../application/use-cases/get-repo-status.js";
+import { invalidResponseMeta } from "./metadata.js";
 
 export type StatusPresentationPayload = {
   status: RuntimeStatus;
@@ -41,21 +42,7 @@ export function buildInvalidStatusInputEnvelope(input: {
       skipped_roots: [],
       adapter_coverage: []
     },
-    meta: {
-      analysis_validity: "invalid",
-      freshness: "unknown",
-      scope: {
-        repo_root: input.repoRoot,
-        indexed_roots: [],
-        skipped_roots: [],
-        languages: []
-      },
-      capability_level: "unsupported",
-      evidence_kinds: [],
-      verification_status: "blocked",
-      truncated: false,
-      caveats: []
-    },
+    meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
     errors: [
       {
         code: "invalid_input",

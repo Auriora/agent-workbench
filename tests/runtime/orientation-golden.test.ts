@@ -80,15 +80,15 @@ describe("repo orientation golden responses", () => {
         key_files: [file("package.json", "json", "resource_backed", ["config"])],
         key_docs: [
           {
-            path: "docs/architecture.md",
-            title: "Architecture",
-            reason: "Top-level README or docs directory file.",
+            path: "README.md",
+            title: "README",
+            reason: "Repository entry document.",
             evidence_kinds: ["docs"]
           },
           {
-            path: "README.md",
-            title: "README",
-            reason: "Top-level README or docs directory file.",
+            path: "docs/architecture.md",
+            title: "Architecture",
+            reason: "Durable architecture or design document.",
             evidence_kinds: ["docs"]
           }
         ],

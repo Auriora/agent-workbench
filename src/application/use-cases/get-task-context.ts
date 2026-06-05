@@ -14,6 +14,7 @@ import type {
 import type { FileCatalogEntry, GraphNode } from "../../domain/models/index.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 import { buildStatBackedFileCatalogEntry } from "./file-catalog-entry.js";
+import { capNextActions } from "../../presentation/metadata.js";
 import type {
   FileCatalogPort,
   FileCatalogScanPort,
@@ -142,7 +143,7 @@ export async function getTaskContext(input: {
       skipped_work: skippedWork,
       completeness,
       risks,
-      next_actions: [
+      next_actions: capNextActions([
         ...input.request.symbols.map((symbol) => ({
           tool: "symbol_search",
           args: {
@@ -150,25 +151,27 @@ export async function getTaskContext(input: {
             repo_root: scanned.repo_root
           }
         })),
+        ...rankedSymbolResult.ranked_symbols.flatMap((candidate) => [
+          {
+            tool: "find_references",
+            args: {
+              node_id: candidate.symbol.node_id,
+              symbol: candidate.symbol.name,
+              repo_root: scanned.repo_root
+            }
+          },
+          {
+            tool: "impact",
+            args: {
+              node_id: candidate.symbol.node_id,
+              repo_root: scanned.repo_root
+            }
+          }
+        ]),
         ...input.request.symbols.map((symbol) => ({
           tool: "find_references",
           args: {
             symbol,
-            repo_root: scanned.repo_root
-          }
-        })),
-        ...rankedSymbolResult.ranked_symbols.map((candidate) => ({
-          tool: "find_references",
-          args: {
-            node_id: candidate.symbol.node_id,
-            symbol: candidate.symbol.name,
-            repo_root: scanned.repo_root
-          }
-        })),
-        ...rankedSymbolResult.ranked_symbols.map((candidate) => ({
-          tool: "impact",
-          args: {
-            node_id: candidate.symbol.node_id,
             repo_root: scanned.repo_root
           }
         })),
@@ -178,7 +181,7 @@ export async function getTaskContext(input: {
             files: [...requestedFiles, ...relatedFiles].filter((file) => file.exists).map((file) => file.path)
           }
         }
-      ]
+      ])
     },
     meta: {
       ...status.meta,

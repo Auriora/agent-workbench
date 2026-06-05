@@ -9,6 +9,7 @@ import type {
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import { planCommand } from "../../domain/policies/command-safety.js";
 import type { FileCatalogScanPort, WorkspaceFilePort } from "../../ports/index.js";
+import { capNextActions } from "../../presentation/metadata.js";
 import { buildStatBackedFileCatalogEntry } from "./file-catalog-entry.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 
@@ -43,6 +44,7 @@ export async function planVerification(input: {
   const selectedEntries = selectEntries(files, selectedPaths);
   const discovery = await discoverValidationEvidence({
     files,
+    selectedEntries,
     workspace: input.workspace
   });
   const commandPlan = planValidationCommands({
@@ -129,7 +131,7 @@ export async function planVerification(input: {
     planned_commands: commands,
     ...(staticFeedback?.status === "actionable" ? { static_feedback: staticFeedback } : {}),
     risks,
-    next_actions: [
+    next_actions: capNextActions([
       ...selectedEntries
         .filter((entry) => entry.file_identity.language === "python")
         .map((entry) => ({
@@ -157,7 +159,7 @@ export async function planVerification(input: {
             }
           ]
         : [])
-    ]
+    ])
   };
 
   return {
@@ -201,6 +203,7 @@ async function mergeDirectValidationEntries(input: {
 
 async function discoverValidationEvidence(input: {
   files: readonly FileCatalogEntry[];
+  selectedEntries: readonly FileCatalogEntry[];
   workspace: WorkspaceFilePort;
 }): Promise<ValidationDiscovery> {
   const paths = new Set(input.files.map((file) => file.path));
@@ -211,7 +214,12 @@ async function discoverValidationEvidence(input: {
   return {
     packageScripts: packageDiscovery.scripts,
     discoveryErrors: packageDiscovery.errors,
-    hasPyproject: paths.has("pyproject.toml")
+    hasPyproject: paths.has("pyproject.toml"),
+    pythonNearestTests: await discoverPythonNearestTests({
+      files: input.files,
+      selectedEntries: input.selectedEntries,
+      workspace: input.workspace
+    })
   };
 }
 
@@ -219,6 +227,7 @@ type ValidationDiscovery = {
   packageScripts: Record<string, string>;
   discoveryErrors: string[];
   hasPyproject: boolean;
+  pythonNearestTests: PlannedValidationCommand[];
 };
 
 type CommandPlanningResult = {
@@ -269,11 +278,15 @@ function planValidationCommands(input: {
     input.discovery.hasPyproject &&
     (includeAll || selectedLanguages.has("python") || input.selectedEntries.some((file) => file.path === "pyproject.toml"))
   ) {
+    commands.push(...input.discovery.pythonNearestTests);
     commands.push({
       command: "python3",
       args: ["-m", "pytest"],
       display: "python3 -m pytest",
-      reason: "pyproject.toml and Python files indicate pytest is the nearest validation path.",
+      reason:
+        input.discovery.pythonNearestTests.length > 0
+          ? "Broad pytest remains as deferred fallback after nearest-test targets."
+          : "pyproject.toml and Python files indicate pytest is the available validation path.",
       status: "planned",
       execution: "not_executed"
     });
@@ -386,6 +399,88 @@ function configuredPackageCommands(
     });
   }
   return commands;
+}
+
+async function discoverPythonNearestTests(input: {
+  files: readonly FileCatalogEntry[];
+  selectedEntries: readonly FileCatalogEntry[];
+  workspace: WorkspaceFilePort;
+}): Promise<PlannedValidationCommand[]> {
+  const paths = new Set(input.files.map((file) => file.path));
+  const pythonPaths = input.selectedEntries
+    .filter((file) => file.file_identity.language === "python")
+    .map((file) => file.path);
+  const targets = new Map<string, string>();
+
+  for (const filePath of pythonPaths) {
+    if (isPythonTestPath(filePath)) {
+      targets.set(filePath, "Explicit Python test file was selected.");
+      continue;
+    }
+    for (const candidate of directPythonTestCandidates(filePath)) {
+      if (paths.has(candidate)) {
+        targets.set(candidate, `Nearest test inferred from ${filePath}.`);
+      }
+    }
+  }
+
+  const testPaths = [...paths].filter(isPythonTestPath);
+  for (const sourcePath of pythonPaths.filter((filePath) => !isPythonTestPath(filePath))) {
+    const moduleStem = moduleStemFromPath(sourcePath);
+    const dottedModule = sourcePath.replace(/^src\//u, "").replace(/\.py$/u, "").replaceAll("/", ".");
+    for (const testPath of testPaths) {
+      if (targets.has(testPath)) {
+        continue;
+      }
+      if (testPath.toLowerCase().includes(moduleStem.toLowerCase())) {
+        targets.set(testPath, `Same-package test name matches ${sourcePath}.`);
+        continue;
+      }
+      const stat = await input.workspace.stat({ path: testPath });
+      if (!stat.exists || !stat.is_file || stat.size_bytes > 128_000) {
+        continue;
+      }
+      const content = await input.workspace.readText({ path: testPath });
+      if (content.includes(moduleStem) || content.includes(dottedModule)) {
+        targets.set(testPath, `Same-package test mentions ${sourcePath}.`);
+      }
+    }
+  }
+
+  return [...targets.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([target, reason]) => ({
+      command: "python3",
+      args: ["-m", "pytest", target],
+      display: `python3 -m pytest ${target}`,
+      reason,
+      status: "planned" as const,
+      execution: "not_executed" as const
+    }));
+}
+
+function isPythonTestPath(filePath: string): boolean {
+  const basename = path.posix.basename(filePath);
+  return filePath.endsWith(".py") && (filePath.startsWith("tests/") || basename.startsWith("test_") || basename.endsWith("_test.py"));
+}
+
+function directPythonTestCandidates(filePath: string): string[] {
+  const directory = path.posix.dirname(filePath);
+  const basename = path.posix.basename(filePath);
+  const testName = `test_${basename}`;
+  const stem = basename.replace(/\.py$/u, "");
+  const withoutSrc = directory.replace(/^src\//u, "");
+  return uniqueSorted([
+    path.posix.join(directory, testName),
+    path.posix.join(directory, "tests", testName),
+    path.posix.join("tests", withoutSrc, testName),
+    path.posix.join("tests", `${stem}_test.py`),
+    path.posix.join("tests", testName)
+  ]);
+}
+
+function moduleStemFromPath(filePath: string): string {
+  return path.posix.basename(filePath).replace(/\.py$/u, "");
 }
 
 async function readPackageScripts(

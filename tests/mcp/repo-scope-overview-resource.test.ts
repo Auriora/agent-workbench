@@ -1,6 +1,13 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { GetRepoOverviewResult } from "../../src/application/use-cases/get-repo-overview.js";
+import {
+  getRepoOverview,
+  type GetRepoOverviewResult
+} from "../../src/application/use-cases/get-repo-overview.js";
 import type { GetRepoScopeResult } from "../../src/application/use-cases/get-repo-scope.js";
+import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { repoOverviewResource } from "../../src/interface-adapters/mcp/registries/resources/repo-overview.js";
 import { repoScopeResource } from "../../src/interface-adapters/mcp/registries/resources/repo-scope.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
@@ -198,6 +205,39 @@ describe("repo overview MCP resource", () => {
 
     expect(parsed.data.repo_root).toBe("/requested");
     expect(parsed.data.recommended_first_calls).toEqual(result.overview.recommended_first_calls);
+  });
+
+  it("prioritizes durable root and guide docs over templates and update notes", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-overview-docs-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "docs", "guides"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "docs", "templates"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "docs", "updates"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "AGENTS.md"), "# Agent Guidance\n");
+      fs.writeFileSync(path.join(repoRoot, "README.md"), "# Project\n");
+      fs.writeFileSync(path.join(repoRoot, "docs", "guides", "developer.md"), "# Developer Guide\n");
+      fs.writeFileSync(path.join(repoRoot, "docs", "templates", "spec.md"), "# Template\n");
+      fs.writeFileSync(path.join(repoRoot, "docs", "updates", "2026-06-05-note.md"), "# Update\n");
+
+      const result = await getRepoOverview({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter()
+      });
+
+      expect(result.overview.key_docs.map((doc) => doc.path).slice(0, 3)).toEqual([
+        "AGENTS.md",
+        "README.md",
+        "docs/guides/developer.md"
+      ]);
+      expect(result.overview.key_docs.map((doc) => doc.path).indexOf("docs/templates/spec.md")).toBeGreaterThan(
+        result.overview.key_docs.map((doc) => doc.path).indexOf("docs/guides/developer.md")
+      );
+      expect(result.overview.key_docs.map((doc) => doc.path).indexOf("docs/updates/2026-06-05-note.md")).toBeGreaterThan(
+        result.overview.key_docs.map((doc) => doc.path).indexOf("docs/guides/developer.md")
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 });
 

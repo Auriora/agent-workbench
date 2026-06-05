@@ -75,6 +75,37 @@ describe("graph query use cases", () => {
     }
   });
 
+  it("resolves exact qualified symbol queries before fuzzy fallback", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-basic-python", "205");
+    try {
+      const result = await searchSymbols({
+        request: {
+          query: "Runner.run",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: ["python"],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(result.symbols.symbols).toEqual([
+        expect.objectContaining({
+          name: "run",
+          qualified_name: "Runner.run",
+          language: "python"
+        })
+      ]);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
   it("finds resolved references and routes to impact", async () => {
     const fixture = await indexedFixture("tests/fixtures/fixture-basic-python", "202");
     try {
@@ -113,6 +144,88 @@ describe("graph query use cases", () => {
           tool: "impact"
         })
       ]);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
+  it("surfaces cross-file incoming parser references within the budget", async () => {
+    const repoRoot = path.join(dir, "cross-file-repo");
+    fs.mkdirSync(repoRoot, { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "lib.py"), "def helper() -> str:\n    return 'ok'\n");
+    fs.writeFileSync(path.join(repoRoot, "main.py"), "def run() -> str:\n    return helper()\n");
+    const fixture = await indexedFixture(repoRoot, "206");
+    try {
+      const helper = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "206",
+        qualified_name: "helper"
+      });
+      const result = await findReferences({
+        request: {
+          node_id: helper[0]?.id,
+          max_depth: 1,
+          max_results: 5
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: repoRoot
+      });
+
+      expect(result.references.references).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            source_file_path: "main.py",
+            target_file_path: "lib.py",
+            reference_name: "helper",
+            status: "resolved",
+            evidence_kinds: ["parser"]
+          })
+        ])
+      );
+    } finally {
+      fixture.store.close();
+    }
+  });
+
+  it("labels bounded lexical references as low-confidence fallback evidence", async () => {
+    const repoRoot = path.join(dir, "lexical-repo");
+    fs.mkdirSync(repoRoot, { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "target.py"), "def target() -> str:\n    return 'ok'\n");
+    fs.writeFileSync(path.join(repoRoot, "notes.md"), "Call target from the runtime adapter later.\n");
+    const fixture = await indexedFixture(repoRoot, "207");
+    try {
+      const target = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "207",
+        qualified_name: "target"
+      });
+      const result = await findReferences({
+        request: {
+          node_id: target[0]?.id,
+          max_depth: 1,
+          max_results: 5
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: repoRoot
+      });
+
+      expect(result.references.references).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            source_file_path: "notes.md",
+            reference_name: "target",
+            reference_kind: "lexical",
+            confidence: 0.2,
+            evidence_kinds: ["text_fallback", "heuristic"],
+            provenance: "bounded_lexical_identifier_scan",
+            status: "unresolved"
+          })
+        ])
+      );
     } finally {
       fixture.store.close();
     }
@@ -193,6 +306,10 @@ describe("graph query use cases", () => {
       expect(result.meta.budget).toMatchObject({
         row_limit: 2,
         traversal_depth: 1
+      });
+      expect(result.impact.confidence).toMatchObject({
+        level: "low",
+        scope: "local_only"
       });
     } finally {
       fixture.store.close();

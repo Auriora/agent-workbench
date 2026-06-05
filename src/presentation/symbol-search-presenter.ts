@@ -4,6 +4,7 @@ import {
   type SymbolSearchResult
 } from "../contracts/index.js";
 import type { SearchSymbolsResult } from "../application/use-cases/search-symbols.js";
+import { invalidResponseMeta } from "./metadata.js";
 
 export function buildSymbolSearchEnvelope(
   result: SearchSymbolsResult
@@ -32,13 +33,5 @@ export function buildInvalidSymbolSearchInputEnvelope(input: {
 }
 
 function invalidMeta(repoRoot: string) {
-  return {
-    analysis_validity: "invalid" as const,
-    freshness: "unknown" as const,
-    scope: { repo_root: repoRoot, indexed_roots: [], skipped_roots: [], languages: [] },
-    capability_level: "unsupported" as const,
-    evidence_kinds: [],
-    verification_status: "blocked" as const,
-    truncated: false
-  };
+  return invalidResponseMeta({ repoRoot });
 }

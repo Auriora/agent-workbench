@@ -11,6 +11,7 @@ import {
   type VerificationPlan
 } from "../contracts/index.js";
 import type { PlanVerificationResult } from "../application/use-cases/plan-verification.js";
+import { invalidResponseMeta } from "./metadata.js";
 
 export function buildVerificationPlanEnvelope(
   result: PlanVerificationResult
@@ -36,20 +37,7 @@ export function buildInvalidVerificationPlanInputEnvelope(input: {
       risks: [],
       next_actions: []
     },
-    meta: {
-      analysis_validity: "invalid",
-      freshness: "unknown",
-      scope: {
-        repo_root: input.repoRoot,
-        indexed_roots: [],
-        skipped_roots: [],
-        languages: []
-      },
-      capability_level: "unsupported",
-      evidence_kinds: [],
-      verification_status: "blocked",
-      truncated: false
-    },
+    meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
     errors: [
       {
         code: "invalid_input",

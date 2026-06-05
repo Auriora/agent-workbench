@@ -78,6 +78,10 @@ describe("verification_plan use case", () => {
     expect(result.plan.planned_commands).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
+          display: "python3 -m pytest tests/test_service.py",
+          execution: "not_executed"
+        }),
+        expect.objectContaining({
           display: "python3 -m pytest",
           execution: "not_executed"
         }),
@@ -86,6 +90,10 @@ describe("verification_plan use case", () => {
           execution: "not_executed"
         })
       ])
+    );
+    expect(result.plan.planned_commands.map((command) => command.display)).toContain("python3 -m pytest tests/test_service.py");
+    expect(result.plan.planned_commands.map((command) => command.display).indexOf("python3 -m pytest tests/test_service.py")).toBeLessThan(
+      result.plan.planned_commands.map((command) => command.display).indexOf("python3 -m pytest")
     );
     expect(result.plan.risks).toEqual(
       expect.arrayContaining([

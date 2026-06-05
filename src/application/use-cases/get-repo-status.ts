@@ -9,6 +9,11 @@ import type {
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import type { SnapshotState, WarmupExecution } from "../../domain/models/runtime.js";
 import { summarizeAdapterEvidence } from "../../domain/policies/index.js";
+import {
+  buildResponseMeta,
+  strongestCapabilityLevel,
+  uniqueSorted
+} from "../../presentation/metadata.js";
 import type {
   FileCatalogPort,
   FileCatalogScanPort,
@@ -44,25 +49,6 @@ export type RuntimeStatusResult = {
 };
 
 export type GetRepoStatusResult = RuntimeStatusResult;
-
-function uniqueSorted<T extends string>(values: readonly T[]): T[] {
-  return Array.from(new Set(values)).sort();
-}
-
-function strongestCapabilityLevel(
-  coverage: readonly AdapterEvidence[]
-): ResponseMetadata["capability_level"] {
-  if (coverage.some((item) => item.capability_level === "semantic")) {
-    return "semantic";
-  }
-  if (coverage.some((item) => item.capability_level === "partial_semantic")) {
-    return "partial_semantic";
-  }
-  if (coverage.some((item) => item.capability_level === "resource_backed")) {
-    return "resource_backed";
-  }
-  return "unsupported";
-}
 
 const warningSeverities: Record<
   "parser" | "grammar" | "timeout" | "crash" | "enrichment" | "language" | "runner" | "watcher",
@@ -250,11 +236,11 @@ export function getCatalogRepoStatus(input: {
         skipped_roots: [...input.skipped_roots],
         languages
       },
-      capability_level: strongestCapabilityLevel(coverage),
+      capability_level: strongestCapabilityLevel(coverage.map((item) => item.capability_level)),
       evidence_kinds: evidenceKinds,
       verification_status: "needed",
       truncated: false,
-      caveats: caveats.length === 0 ? undefined : caveats
+      ...(caveats.length === 0 ? {} : { caveats })
     }
   };
 }
@@ -288,29 +274,14 @@ export async function getSnapshotRepoStatus(input: {
     });
   }
 
-  const maxFiles = input.max_files ?? 2000;
-  const files = await input.catalog.listFiles({
-    snapshot_id: snapshot.id,
-    max_rows: maxFiles
-  });
-  const result = getCatalogRepoStatus({
+  return getSnapshotMetadataRepoStatus({
     repo_root: snapshot.repo_root,
     indexed_roots: input.indexed_roots ?? ["."],
     skipped_roots: input.skipped_roots ?? [],
-    files,
     snapshot,
-    warmup
+    warmup,
+    row_limit: input.max_files ?? 0
   });
-  return {
-    status: result.status,
-    meta: {
-      ...result.meta,
-      truncated: files.length >= maxFiles,
-      budget: {
-        row_limit: maxFiles
-      }
-    }
-  };
 }
 
 export async function getScannedRepoStatus(input: {
@@ -416,5 +387,71 @@ function classifyRuntimeStatus(input: {
     runtime_state: "fresh",
     freshness: "fresh",
     analysis_validity: input.hasEvidence ? "valid" : "partial"
+  };
+}
+
+export function getSnapshotMetadataRepoStatus(input: {
+  repo_root: string;
+  indexed_roots: readonly string[];
+  skipped_roots: readonly string[];
+  snapshot: SnapshotState | null;
+  warmup?: WarmupExecution | null;
+  row_limit?: number;
+}): GetRepoStatusResult {
+  const classified = classifyRuntimeStatus({
+    snapshot: input.snapshot,
+    warmup: input.warmup,
+    freshness: input.snapshot?.freshness ?? "cold",
+    hasEvidence: input.snapshot !== null
+  });
+  const status: RuntimeStatus = {
+    repo_root: input.snapshot?.repo_root ?? input.repo_root,
+    runtime_state: classified.runtime_state,
+    freshness: classified.freshness,
+    indexed_roots: [...input.indexed_roots],
+    skipped_roots: [...input.skipped_roots],
+    adapter_coverage: []
+  };
+  if (input.snapshot?.id !== undefined) {
+    status.snapshot_id = input.snapshot.id;
+  }
+  if (input.snapshot?.owner_state !== undefined) {
+    status.owner_state = input.snapshot.owner_state;
+  }
+  if (input.warmup?.state !== undefined) {
+    status.warmup_state = input.warmup.state;
+  }
+  const reason = input.snapshot?.reason ?? input.warmup?.reason;
+  if (reason !== undefined) {
+    status.reason = reason;
+  }
+
+  return {
+    status,
+    meta: buildResponseMeta({
+      analysis_validity: classified.analysis_validity,
+      freshness: classified.freshness,
+      scope: {
+        repo_root: status.repo_root,
+        indexed_roots: [...input.indexed_roots],
+        skipped_roots: [...input.skipped_roots],
+        languages: []
+      },
+      capability_level: "unsupported",
+      evidence_kinds: [],
+      verification_status: "needed",
+      truncated: false,
+      budget: {
+        row_limit: input.row_limit
+      },
+      caveats:
+        input.snapshot === null
+          ? []
+          : deriveStatusCaveats({
+              coverage: [],
+              snapshot: input.snapshot,
+              warmup: input.warmup
+            })
+    })
   };
 }

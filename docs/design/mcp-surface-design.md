@@ -3,7 +3,7 @@ title: MCP surface design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-05-31
+last_reviewed: 2026-06-05
 ---
 
 # MCP Surface Design
@@ -73,6 +73,9 @@ Presenters own response consistency across every MCP resource and tool:
 - shared response envelope construction
 - metadata composition for freshness, capability, evidence, verification,
   budgets, and truncation
+- shared helpers for metadata labels and compact next-action lists, so trust
+  labels are generated in one place and only included when they calibrate agent
+  behavior
 - warning, blocker, and error formatting
 - source section packing and stable ordering
 - retryable `next_action` mapping
@@ -99,6 +102,8 @@ They must not trigger broad graph analysis.
 `repo:///status` must expose cold, refreshing, fresh, stale, and degraded
 warm-up state, including queued work counts and indexing blockers where
 available.
+Detailed language/platform coverage belongs to `repo:///scope` and
+`repo:///overview`; the status hot path must not enumerate broad catalog rows.
 
 ## MVP Tools
 

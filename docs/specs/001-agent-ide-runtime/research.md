@@ -3,15 +3,15 @@ title: Agent IDE runtime MVP research
 doc_type: spec
 status: archived
 owner: platform
-last_reviewed: 2026-06-03
+last_reviewed: 2026-06-05
 ---
 
 # Research
 
 ## Question
 
-Which ideas from the existing `agent-ide` proof of concept, `codegraph`, and
-`graphify` should shape the restart?
+Which ideas from the existing `agent-ide` proof of concept and current local
+runtime design work should shape the restart?
 
 ## Findings
 
@@ -47,26 +47,24 @@ Which ideas from the existing `agent-ide` proof of concept, `codegraph`, and
   topology construction inside compact/default calls. The restart should build
   hot paths directly on targeted SQLite queries and snapshot metadata from the
   beginning.
-- `codegraph` provides the strongest deterministic local code-intelligence
-  model: tree-sitter extraction, SQLite graph storage, FTS, reference
-  resolution, traversal, file watching, and targeted MCP tools.
-- `graphify` provides the strongest knowledge-product model: communities, god
-  nodes, surprising connections, ambiguous edges, gaps, suggested questions, and
-  generated reports.
+- The runtime should use deterministic local code-intelligence building blocks:
+  tree-sitter extraction, SQLite graph storage, FTS, reference resolution,
+  traversal, file watching, and targeted MCP tools.
+- Knowledge-oriented reporting should remain an explicit orientation layer with
+  confidence labels, ambiguous evidence, gaps, suggested questions, and
+  generated reports rather than hidden work inside compact calls.
 
 ## Sources
 
 - Existing PoC: `/home/bcherrington/Projects/Auriora/agent-ide`
 - Agent IDE performance and usage review:
   `/home/bcherrington/Projects/Auriora/agent-ide/docs/performance-findings-2026-05-06.md`
-- Graph product/reference workflow: `/home/bcherrington/Projects/Webstorm/graphify`
-- Cross-language code graph reference: `/home/bcherrington/Projects/Webstorm/codegraph`
 
 ## Recommendation
 
-Start with a TypeScript local-first runtime that borrows `codegraph`'s graph
-core, keeps Agent IDE's edit/validation semantics, and adapts `graphify`'s
-knowledge report as an explicit orientation layer.
+Start with a TypeScript local-first runtime that uses deterministic local graph
+evidence, keeps Agent IDE's edit/validation semantics, and treats knowledge
+reports as an explicit orientation layer.
 
 The first implementation should prioritize the workflow agents actually used
 most in the PoC: fast status/scope, bounded task context, docs/config routing,
