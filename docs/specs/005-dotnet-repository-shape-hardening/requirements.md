@@ -2,12 +2,19 @@
 title: .NET repository shape hardening requirements
 doc_type: spec
 artifact_type: requirements
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---
 
 # Requirements
+
+## Closure Record
+
+Spec 005 closed on 2026-06-05. Accepted .NET resource-backed behavior was
+promoted to durable MCP surface, language adapter, and language capability docs.
+C# and Razor semantic support remains deferred to future fixture-backed adapter
+work.
 
 ## Introduction
 

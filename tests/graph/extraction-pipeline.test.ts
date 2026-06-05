@@ -485,6 +485,91 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
+  it("indexes .NET solution and project metadata as resource-backed routing evidence", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-dotnet-web-repo");
+    const store = openGraphStore(path.join(dir, "dotnet.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+
+    try {
+      const result = await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "111"
+      });
+
+      expect(result).toMatchObject({
+        resource_backed_files: expect.any(Number),
+        unsupported_files: 0,
+        truncated: false
+      });
+
+      const solutionProjects = await store.findNodesByName({
+        snapshot_id: "111",
+        query: "WebApi",
+        exact: true
+      });
+      expect(solutionProjects).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "dotnet_solution_project",
+            qualified_name: "ModenaFixture.sln:WebApi",
+            metadata: expect.objectContaining({
+              provenance: "dotnet_solution_scan",
+              project_path: "src/WebApi/WebApi.csproj"
+            })
+          })
+        ])
+      );
+
+      const webApiProject = await store.findNodesByQualifiedName({
+        snapshot_id: "111",
+        qualified_name: "src/WebApi/WebApi.csproj"
+      });
+      expect(webApiProject).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "dotnet_project",
+            metadata: expect.objectContaining({
+              sdk: "Microsoft.NET.Sdk.Web",
+              target_frameworks: ["net8.0"],
+              output_type: "Exe",
+              package_references: ["Microsoft.AspNetCore.OpenApi"],
+              is_test_project: false,
+              semantic_scope: "project_metadata_only"
+            })
+          })
+        ])
+      );
+
+      const testProject = await store.findNodesByQualifiedName({
+        snapshot_id: "111",
+        qualified_name: "tests/WebApi.Tests/WebApi.Tests.csproj"
+      });
+      expect(testProject).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "dotnet_project",
+            metadata: expect.objectContaining({
+              is_test_project: true,
+              package_references: ["xunit"],
+              project_references: ["../../src/WebApi/WebApi.csproj"]
+            })
+          })
+        ])
+      );
+    } finally {
+      store.close();
+    }
+  });
+
   it("keeps duplicate-name references unresolved with ambiguity metadata", async () => {
     const repoRoot = path.join(dir, "ambiguous-repo");
     fs.mkdirSync(repoRoot, { recursive: true });

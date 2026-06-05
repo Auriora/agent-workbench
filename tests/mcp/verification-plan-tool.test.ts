@@ -744,6 +744,74 @@ describe("verification_plan use case", () => {
     );
   });
 
+  it("does not plan unrelated .NET test projects for selected project files", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-dotnet-web-repo");
+    const result = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["src/WebApp/Pages/Index.razor"],
+        changed_files: ["src/WebApp/Pages/Index.razor"],
+        include_static_feedback: true,
+        max_commands: 10
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+
+    expect(result.plan.status).toBe("planned");
+    expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
+      "dotnet build src/WebApp/WebApp.csproj",
+      "dotnet build ModenaFixture.sln"
+    ]);
+  });
+
+  it("blocks generic host .NET commands when repo policy requires container validation", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-dotnet-policy-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, ".agent-workbench"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "src", "Service"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, ".agent-workbench", "validation-policy.json"),
+        JSON.stringify({
+          validation: {
+            environment: "docker",
+            host_commands: "blocked"
+          }
+        })
+      );
+      fs.writeFileSync(path.join(repoRoot, "Service.sln"), "Microsoft Visual Studio Solution File, Format Version 12.00\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "Service", "Service.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "Service", "Worker.cs"), "namespace Service;\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["src/Service/Worker.cs"],
+          changed_files: ["src/Service/Worker.cs"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("blocked");
+      expect(result.plan.planned_commands.map((command) => command.command)).not.toContain("dotnet");
+      expect(result.plan.risks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            severity: "blocker",
+            message: expect.stringContaining("generic host .NET commands were not planned")
+          })
+        ])
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("plans SAM and CloudFormation validation from template and infra test evidence", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-sam-lambda-repo");
     const result = await planVerification({

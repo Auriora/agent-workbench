@@ -3,4 +3,8 @@
     <TargetFramework>net8.0</TargetFramework>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/WebApi/WebApi.csproj" />
+    <PackageReference Include="xunit" Version="2.8.1" />
+  </ItemGroup>
 </Project>

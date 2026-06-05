@@ -32,6 +32,7 @@ export const DEFAULT_SKIPPED_ROOTS = [
   "dist",
   "node_modules",
   "obj",
+  "publish",
   "target",
   "test-artifacts",
   "testresults",
@@ -94,11 +95,17 @@ const ALLOWED_HIDDEN_FILE_NAMES = new Set<string>(ALLOWED_HIDDEN_FILES);
 const DEFAULT_SKIPPED_DIRECTORY_PREFIXES = ["cmake-build-"] as const;
 const DEFAULT_SKIPPED_HIDDEN_DIRECTORY_SUFFIXES = ["-tests"] as const;
 const DEFAULT_SKIPPED_FILE_EXTENSIONS = new Set([
+  ".br",
+  ".coverage",
+  ".coveragexml",
   ".dll",
   ".exe",
+  ".gz",
+  ".map",
   ".nupkg",
   ".pdb",
   ".snupkg",
+  ".trx",
   ".wasm"
 ]);
 const SECRET_ENV_PATTERN = /(^|\/)\.env(?:$|\.(?!example$|sample$|template$)[^/]+$)/u;

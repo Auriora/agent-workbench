@@ -2,12 +2,17 @@
 title: .NET repository shape hardening design
 doc_type: spec
 artifact_type: design
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---
 
 # Technical Design
+
+## Closure Record
+
+Spec 005 closed on 2026-06-05. Current .NET generated-output, project metadata,
+and validation-planning behavior lives in durable design/reference docs.
 
 ## Overview
 

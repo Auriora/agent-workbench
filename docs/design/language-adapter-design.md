@@ -67,7 +67,7 @@ routing, freshness behavior, and degraded-mode reporting.
 | Markdown/config | `resource_backed` | deterministic parsers, path/link extraction, project config discovery, documentation-quality structure checks |
 | Python | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Python AST enrichment, Pyright/LSP, Ruff, pytest |
 | TypeScript/JavaScript | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
-| C# | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional C# LSP, `.sln`/`.csproj`, NuGet and test project discovery |
+| C#/.NET | `resource_backed`, then `partial_semantic`, then `semantic` | `.sln`/`.csproj`/`.fsproj`/`.vbproj` project metadata, NuGet and test project discovery, generated-output policy, then `tree-sitter` and optional C# LSP |
 | CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser plus intrinsic resolver and source handler linking |
 | Go | `partial_semantic`, then `semantic` | Go parser, `gopls`, `go list`, `go test` |
 | C/C++ | `resource_backed`, then `partial_semantic` | `tree-sitter` (mandatory), clangd/libclang when `compile_commands.json` exists |
@@ -111,7 +111,7 @@ After the MVP slice works, deepen support in this order:
 2. TypeScript/JavaScript to `partial_semantic`
 3. TypeScript/JavaScript to `semantic` after promotion fixtures pass
 4. CloudFormation/SAM resource-backed discovery
-5. C# project/symbol discovery
+5. C#/.NET project discovery
 6. Go, C/C++, Rust, then the extended backlog
 
 JavaScript/TypeScript dogfood against a large web monorepo confirmed that the
@@ -140,11 +140,16 @@ first useful .NET step is likely resource-backed project graph extraction:
 solution/project files, target frameworks, SDK type, package/project
 references, app roles, generated-output policy, and validation planning. C# and
 Razor symbol/reference semantics should follow only with fixture-backed design.
-The first delivered slice classifies `.sln`, `.csproj`, C#, and Razor files as
-resource-backed routing evidence, skips common .NET build/test outputs, promotes
-solution/project/app/controller/Razor/EF anchors in overview and context, and
-plans non-executed `dotnet build`/`dotnet test` candidates from solution,
-project, and test-project evidence.
+The delivered resource-backed slice classifies `.sln`, `.csproj`, `.fsproj`,
+`.vbproj`, C#, and Razor files as routing evidence, skips common .NET
+build/test/publish outputs, promotes solution/project/app/controller/Razor/EF
+anchors in overview and context, and extracts declaration-only project metadata
+from solution and project files. Project metadata includes SDK, target
+frameworks, output type, package references, project references, and test-project
+markers when cheaply parseable. Validation planning returns non-executed
+`dotnet build`/`dotnet test` candidates from nearest project, solution, relevant
+test-project, and repo-local policy evidence. C# and Razor symbol/reference
+semantics remain deferred until fixture-backed parser design promotes them.
 
 FreeCAD dogfood confirmed the first C/C++ slice should start with reliable file
 identity and project-shape evidence before broad blast-radius claims. Common

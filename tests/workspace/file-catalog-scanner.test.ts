@@ -360,8 +360,28 @@ describe("file catalog scanner", () => {
     expect(paths).not.toEqual(
       expect.arrayContaining([
         "src/WebApi/bin/Debug/net8.0/WebApi.dll",
+        "src/WebApi/bin/Release/net8.0/publish/WebApi.exe",
         "src/WebApi/obj/Debug/net8.0/WebApi.AssemblyInfo.cs",
-        "TestResults/abc/results.trx"
+        "src/WebApi/obj/Release/net8.0/staticwebassets.build.json",
+        "TestResults/abc/results.trx",
+        "packages/Foo/Foo.1.0.0.nupkg",
+        "publish/wwwroot/site.css.map"
+      ])
+    );
+    expect(result.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "TestResults",
+          reason: "generated_or_vendor"
+        }),
+        expect.objectContaining({
+          path: "publish",
+          reason: "generated_or_vendor"
+        }),
+        expect.objectContaining({
+          path: "packages/Foo/Foo.1.0.0.nupkg",
+          reason: "generated_or_vendor"
+        })
       ])
     );
     expect(result.files).toEqual(

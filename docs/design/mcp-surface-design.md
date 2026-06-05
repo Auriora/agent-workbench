@@ -419,22 +419,31 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Done: add first-slice .NET generated-output handling so `bin/`, `obj/`,
   `TestResults/`, `.dll`, `.pdb`, `.wasm`, `.nupkg`, and `.snupkg` artifacts
   do not consume catalog/context budgets by default.
-- Promoted to [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md):
-  deepen .NET generated-output handling so `TestResults/`, local `packages/`,
-  publish output, `.dll`, `.pdb`, `.wasm`, compressed framework assets, and
-  source maps do not dominate context or scope budgets unless explicitly
-  requested.
+- Done: deepen .NET generated-output handling so `TestResults/`, publish
+  output, `.dll`, `.pdb`, `.wasm`, `.nupkg`, `.snupkg`, compressed framework
+  assets, source maps, and test result files do not dominate context or scope
+  budgets unless explicitly requested. Local `packages/` directories are not
+  skipped wholesale because many JavaScript/TypeScript monorepos use that name
+  for first-party source; generated package files inside them are skipped by
+  artifact extension. The delivery record is
+  [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md).
 - Done: promote `.sln`, `.csproj`, `Program.cs`, `appsettings*.json`, Razor
   route pages/components, controllers, EF `DbContext`/migrations, and shared
   model projects as first-class .NET routing and overview anchors.
 - Done: add first-slice .NET validation planning evidence for solution,
   project, and test-project files, including non-executed `dotnet build` and
   `dotnet test` candidates.
-- Promoted to [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md):
-  deepen .NET validation planning evidence for solution and project files,
-  including non-executed `dotnet build <solution-or-project>` and `dotnet test`
-  candidates when test projects or repo policy support them. Until policy is
-  known, commands should remain planned evidence, not executed proof.
+- Done: extract resource-backed `.sln` and project-file metadata for SDK,
+  target frameworks, output type, package references, project references, and
+  test-project markers. These nodes use declaration-only provenance and do not
+  imply C# or Razor semantic support. The delivery record is
+  [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md).
+- Done: deepen .NET validation planning evidence for solution and project
+  files. The planner ranks nearest `dotnet build <project>` before broader
+  solution builds, includes relevant test projects when selected-project
+  evidence supports them, and blocks generic host `dotnet` commands when
+  repo-local policy or guidance requires containerized validation. Commands
+  remain planned evidence, not executed proof.
 - Done: make scanner-level skipped filesystem paths visible as skipped evidence
   across scope, overview, context, and verification surfaces. Scanner-level
   permission failures do not abort repository orientation when the requested

@@ -41,7 +41,7 @@ promotion gates are owned by [Language adapter design](../design/language-adapte
 | 1 | Markdown/config | `resource_backed` | deterministic parsers, path/link extraction, project config discovery |
 | 2 | Python | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Python AST enrichment, Pyright/LSP, Ruff, pytest |
 | 3 | TypeScript/JavaScript | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
-| 4 | C# | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional C# LSP, `.sln`/`.csproj`, NuGet and test project discovery |
+| 4 | C#/.NET | `resource_backed`, then `partial_semantic`, then `semantic` | `.sln`/`.csproj`/`.fsproj`/`.vbproj` project metadata, NuGet and test project discovery, generated-output policy, then `tree-sitter` and optional C# LSP |
 | 5 | CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser plus intrinsic resolver and source handler linking |
 | 6 | Go | `resource_backed`, then `partial_semantic`, then `semantic` | `.go` file identity, `go.mod`/Makefile/Docker test discovery, routing-only package/function/type/method extraction, then parser-backed references, `gopls`, `go list`, `go test` |
 | 7 | C/C++ | `resource_backed`, then `partial_semantic` | C/C++ header/source classification, Python stub routing where applicable, routing-only classes/functions/methods/includes, CMake target membership, `tree-sitter` (mandatory), clangd/libclang when `compile_commands.json` exists |

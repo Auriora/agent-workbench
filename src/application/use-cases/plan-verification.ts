@@ -477,6 +477,7 @@ function planValidationCommands(input: {
       }
       for (const testProject of dotnetTestTargets({
         selectedEntries: input.selectedEntries,
+        selectedProject: selectedDotnetProject,
         testProjects: input.discovery.dotnetTestProjects
       })) {
         commands.push({
@@ -1189,16 +1190,49 @@ function nearestDotnetProject(input: {
 
 function dotnetTestTargets(input: {
   selectedEntries: readonly FileCatalogEntry[];
+  selectedProject: string | undefined;
   testProjects: readonly string[];
 }): string[] {
   if (input.testProjects.length === 0) {
     return [];
   }
   const selectedPaths = input.selectedEntries.map((entry) => entry.path);
+  const relevant =
+    input.selectedProject === undefined
+      ? input.testProjects
+      : input.testProjects.filter((testProject) =>
+          isRelevantDotnetTestProject({
+            selectedProject: input.selectedProject ?? "",
+            testProject,
+            selectedPaths
+          })
+        );
+  if (relevant.length === 0 && input.selectedProject !== undefined) {
+    return [];
+  }
   const ranked = [...input.testProjects].sort(
     (left, right) => projectDistance(left, selectedPaths) - projectDistance(right, selectedPaths) || left.localeCompare(right)
   );
-  return ranked.slice(0, 2);
+  return ranked.filter((testProject) => relevant.includes(testProject)).slice(0, 2);
+}
+
+function isRelevantDotnetTestProject(input: {
+  selectedProject: string;
+  testProject: string;
+  selectedPaths: readonly string[];
+}): boolean {
+  const selectedName = dotnetProjectStem(input.selectedProject);
+  const testName = dotnetProjectStem(input.testProject);
+  if (selectedName.length > 0 && testName.startsWith(selectedName)) {
+    return true;
+  }
+  const selectedDir = path.posix.dirname(input.selectedProject);
+  return input.selectedPaths.some((selectedPath) => selectedPath.startsWith(`${selectedDir}/`)) &&
+    testName.includes(selectedName);
+}
+
+function dotnetProjectStem(projectPath: string): string {
+  return path.posix.basename(projectPath).replace(/\.(?:csproj|fsproj|vbproj)$/iu, "").replace(/\.(?:tests?|specs?)$/iu, "").toLowerCase();
 }
 
 function projectDistance(projectPath: string, selectedPaths: readonly string[]): number {
