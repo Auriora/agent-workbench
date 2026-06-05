@@ -1,0 +1,12 @@
+{
+  "name": "fixture-js-ts-monorepo",
+  "private": true,
+  "scripts": {
+    "lint": "eslint .",
+    "test:e2e": "playwright test"
+  },
+  "workspaces": [
+    "apps/*",
+    "services/*"
+  ]
+}

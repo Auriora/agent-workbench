@@ -436,19 +436,20 @@ Post-closure dogfood caveats from large mixed-language repositories:
   `package.json` files, lockfile-selected package managers, and selected-file
   package boundaries, then returns package-local scripts before root workspace
   scripts without executing commands.
-- Open: deepen package-manager-aware validation planning for JavaScript and
-  TypeScript monorepos. Detect root/package-local `package.json`,
-  `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, workspace config,
-  `tsconfig`, and common client/server/e2e package boundaries before suggesting
-  lint, typecheck, or test commands. Commands should remain planned evidence
-  until repo guidance proves they are safe and runnable.
+- Done: deepen package-manager-aware validation planning for JavaScript and
+  TypeScript monorepos. The planner detects root/package-local `package.json`,
+  lockfiles, workspace config, nearby `tsconfig` files, and common
+  client/server/e2e package boundaries before suggesting lint, typecheck, or
+  test commands. Commands remain planned evidence until repo guidance proves
+  they are safe and runnable.
 - Done: add first-slice context ranking explanations for common web
   authentication implementation paths such as controllers, services, routes,
   strategies, UI pages/components, data providers, and e2e setup files.
-- Open: improve context ranking explanations by including compact, non-secret
+- Done: improve context ranking explanations by including compact, non-secret
   reasons for high-ranking implementation candidates, especially when routing
-  was driven by path terms, package boundaries, route/controller/service
-  conventions, or lexical snippets rather than semantic graph edges.
+  was driven by path terms, package boundaries, workspace config,
+  route/controller/service conventions, or lexical snippets rather than
+  semantic graph edges.
 - Open: avoid redacting ordinary in-repo string snippets such as URL paths as
   outside-repo paths. Workspace safety redaction should apply to filesystem
   paths or secret-like values, not normal source text fragments.

@@ -1,0 +1,7 @@
+{
+  "name": "@fixture/api",
+  "scripts": {
+    "lint": "eslint src",
+    "test:api": "node --test"
+  }
+}

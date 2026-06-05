@@ -141,6 +141,38 @@ describe("context_for_task use case", () => {
     );
   });
 
+  it("explains JavaScript and TypeScript package, tsconfig, and service routing evidence", async () => {
+    const result = await getTaskContext({
+      request: {
+        task: "Update TypeScript web login package validation",
+        repo_root: "tests/fixtures/fixture-js-ts-monorepo",
+        files: ["apps/web/src/Login.tsx"],
+        symbols: [],
+        max_files: 12,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+
+    expect(result.context.related_files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "apps/web/package.json",
+          reason: "Matched JavaScript/TypeScript package boundary evidence."
+        }),
+        expect.objectContaining({
+          path: "apps/web/tsconfig.json",
+          reason: "Matched TypeScript project configuration evidence."
+        }),
+        expect.objectContaining({
+          path: "pnpm-workspace.yaml",
+          reason: "Matched JavaScript/TypeScript workspace configuration evidence."
+        })
+      ])
+    );
+  });
+
   it("ranks common web auth implementation paths ahead of unrelated token matches", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-context-web-"));
     try {

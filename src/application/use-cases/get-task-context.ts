@@ -531,6 +531,7 @@ function scoreFile(file: FileCatalogEntry, terms: Set<string>): number {
   const pathTerms = tokenSet([file.path]);
   let score =
     firstPartyPathBoost(file.path) +
+    jsTsStructureBoost(file.path, terms) +
     webAppStructureBoost(file.path, terms) +
     dotnetStructureBoost(file.path, terms) +
     samStructureBoost(file.path, terms);
@@ -612,6 +613,10 @@ function reasonForRelatedFile(
   if (webReason !== undefined) {
     return webReason;
   }
+  const jsTsReason = jsTsStructureReason(file.path, terms);
+  if (jsTsReason !== undefined) {
+    return jsTsReason;
+  }
   const dotnetReason = dotnetStructureReason(file.path, terms);
   if (dotnetReason !== undefined) {
     return dotnetReason;
@@ -625,6 +630,47 @@ function reasonForRelatedFile(
     : "Weak path-term match; use as routing evidence only.";
 }
 
+function jsTsStructureBoost(filePath: string, terms: Set<string>): number {
+  const reason = jsTsStructureReason(filePath, terms);
+  if (reason === undefined) {
+    return 0;
+  }
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith("package.json")) return 5;
+  if (lower.endsWith("tsconfig.json") || lower.includes("tsconfig.")) return 5;
+  if (lower.endsWith("pnpm-workspace.yaml") || lower.endsWith("pnpm-workspace.yml")) return 4;
+  if (lower.startsWith("apps/") || lower.startsWith("packages/")) return 8;
+  if (lower.startsWith("services/") || lower.includes("/api/") || lower.includes("/server/")) return 8;
+  if (lower.startsWith("e2e/") || lower.includes("/e2e/")) return 7;
+  return 4;
+}
+
+function jsTsStructureReason(filePath: string, terms: Set<string>): string | undefined {
+  if (!hasAnyTerm(terms, ["javascript", "typescript", "js", "ts", "tsx", "client", "web", "server", "api", "e2e", "workspace", "package", "monorepo", "auth", "login"])) {
+    return undefined;
+  }
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith("package.json")) {
+    return "Matched JavaScript/TypeScript package boundary evidence.";
+  }
+  if (lower.endsWith("tsconfig.json") || lower.includes("tsconfig.")) {
+    return "Matched TypeScript project configuration evidence.";
+  }
+  if (lower.endsWith("pnpm-workspace.yaml") || lower.endsWith("pnpm-workspace.yml")) {
+    return "Matched JavaScript/TypeScript workspace configuration evidence.";
+  }
+  if (lower.startsWith("apps/") || lower.startsWith("packages/")) {
+    return "Matched JavaScript/TypeScript app or package workspace convention.";
+  }
+  if (lower.startsWith("services/") || lower.includes("/api/") || lower.includes("/server/")) {
+    return "Matched JavaScript/TypeScript service or API workspace convention.";
+  }
+  if (lower.startsWith("e2e/") || lower.includes("/e2e/")) {
+    return "Matched end-to-end test workspace convention.";
+  }
+  return undefined;
+}
+
 function webAppStructureBoost(filePath: string, terms: Set<string>): number {
   const reason = webAppStructureReason(filePath, terms);
   if (reason === undefined) {
@@ -633,7 +679,7 @@ function webAppStructureBoost(filePath: string, terms: Set<string>): number {
   const lower = filePath.toLowerCase();
   if (lower.includes("/controllers/") || lower.includes("/routes/")) return 9;
   if (lower.includes("/services/") || lower.includes("/strategies/")) return 8;
-  if (lower.includes("/pages/") || lower.includes("/components/")) return 7;
+  if (lower.includes("/pages/") || lower.includes("/components/")) return 15;
   if (lower.startsWith("e2e/") || lower.includes("/e2e/")) return 6;
   if (lower.includes("data-provider") || lower.includes("api-endpoint")) return 5;
   return 4;

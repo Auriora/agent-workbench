@@ -225,6 +225,10 @@ async function mergeDirectValidationEntries(input: {
     "yarn.lock",
     "bun.lock",
     "bun.lockb",
+    "pnpm-workspace.yaml",
+    "pnpm-workspace.yml",
+    "nx.json",
+    "turbo.json",
     "pyproject.toml",
     "go.mod",
     "go.work",
@@ -266,7 +270,8 @@ async function discoverValidationEvidence(input: {
   const packageDiscovery = await discoverPackageScripts({
     workspace: input.workspace,
     packageJsonPaths: [...paths].filter((filePath) => path.posix.basename(filePath) === "package.json"),
-    packageManager
+    packageManager,
+    allPaths: paths
   });
   const validationProtocol = await discoverValidationProtocol(input.workspace);
 
@@ -343,6 +348,8 @@ type PackageScriptEvidence = {
   directory: string;
   package_manager: PackageManager;
   scripts: Record<string, string>;
+  tsconfig_paths: string[];
+  workspace_config_paths: string[];
 };
 
 function planValidationCommands(input: {
@@ -744,15 +751,29 @@ function configuredPackageCommands(
         command: decision.command.command,
         args: decision.command.args,
         display,
-        reason: pkg.directory === "."
-          ? candidate.reason
-          : `${candidate.reason} Package evidence: ${pkg.package_json_path}.`,
+        reason: packageCommandReason(pkg, candidate.reason),
         status: "planned",
         execution: "not_executed"
       });
     }
   }
   return commands;
+}
+
+function packageCommandReason(pkg: PackageScriptEvidence, baseReason: string): string {
+  const evidence: string[] = [];
+  if (pkg.directory !== ".") {
+    evidence.push(`Package evidence: ${pkg.package_json_path}`);
+  }
+  if (pkg.tsconfig_paths.length > 0) {
+    evidence.push(`tsconfig evidence: ${pkg.tsconfig_paths.slice(0, 2).join(", ")}`);
+  }
+  if (pkg.workspace_config_paths.length > 0) {
+    evidence.push(`workspace evidence: ${pkg.workspace_config_paths.slice(0, 2).join(", ")}`);
+  }
+  return evidence.length === 0
+    ? baseReason
+    : `${baseReason} ${evidence.join(". ")}.`;
 }
 
 function packageScriptCommand(pkg: PackageScriptEvidence, script: string): { command: string; args: string[] } {
@@ -1129,6 +1150,9 @@ function projectShapeConfigCandidates(selectedPaths: readonly string[]): string[
       candidates.add(path.posix.join(directory, "CMakeLists.txt"));
       candidates.add(path.posix.join(directory, "package.json"));
       candidates.add(path.posix.join(directory, "tsconfig.json"));
+      candidates.add(path.posix.join(directory, "tsconfig.app.json"));
+      candidates.add(path.posix.join(directory, "tsconfig.build.json"));
+      candidates.add(path.posix.join(directory, "tsconfig.node.json"));
       candidates.add(path.posix.join(directory, "template.yaml"));
       candidates.add(path.posix.join(directory, "template.yml"));
       candidates.add(path.posix.join(directory, "template.json"));
@@ -1308,6 +1332,7 @@ async function discoverPackageScripts(input: {
   workspace: WorkspaceFilePort;
   packageJsonPaths: readonly string[];
   packageManager: PackageManager;
+  allPaths: ReadonlySet<string>;
 }): Promise<{ packages: PackageScriptEvidence[]; errors: string[] }> {
   const packages: PackageScriptEvidence[] = [];
   const errors: string[] = [];
@@ -1315,7 +1340,8 @@ async function discoverPackageScripts(input: {
     const result = await readPackageScripts({
       workspace: input.workspace,
       packageJsonPath,
-      packageManager: input.packageManager
+      packageManager: input.packageManager,
+      allPaths: input.allPaths
     });
     if (result.error !== undefined) {
       errors.push(result.error);
@@ -1330,6 +1356,7 @@ async function readPackageScripts(input: {
   workspace: WorkspaceFilePort;
   packageJsonPath: string;
   packageManager: PackageManager;
+  allPaths: ReadonlySet<string>;
 }): Promise<{ package: PackageScriptEvidence; error?: undefined } | { error: string }> {
   let parsed: { scripts?: unknown };
   try {
@@ -1340,13 +1367,17 @@ async function readPackageScripts(input: {
   }
   const directory = path.posix.dirname(input.packageJsonPath);
   const normalizedDirectory = directory === "." ? "." : directory;
+  const tsconfigPaths = packageTsconfigPaths(normalizedDirectory, input.allPaths);
+  const workspaceConfigPaths = workspaceConfigPathsForPackage(normalizedDirectory, input.allPaths);
   if (parsed.scripts === undefined || typeof parsed.scripts !== "object" || parsed.scripts === null) {
     return {
       package: {
         package_json_path: input.packageJsonPath,
         directory: normalizedDirectory,
         package_manager: input.packageManager,
-        scripts: {}
+        scripts: {},
+        tsconfig_paths: tsconfigPaths,
+        workspace_config_paths: workspaceConfigPaths
       }
     };
   }
@@ -1355,11 +1386,41 @@ async function readPackageScripts(input: {
       package_json_path: input.packageJsonPath,
       directory: normalizedDirectory,
       package_manager: input.packageManager,
+      tsconfig_paths: tsconfigPaths,
+      workspace_config_paths: workspaceConfigPaths,
       scripts: Object.fromEntries(
         Object.entries(parsed.scripts).filter((entry): entry is [string, string] => typeof entry[1] === "string")
       )
     }
   };
+}
+
+function packageTsconfigPaths(directory: string, paths: ReadonlySet<string>): string[] {
+  const candidates = [
+    path.posix.join(directory, "tsconfig.json"),
+    path.posix.join(directory, "tsconfig.app.json"),
+    path.posix.join(directory, "tsconfig.build.json"),
+    path.posix.join(directory, "tsconfig.node.json")
+  ].map((candidate) => candidate.replace(/^\.\//u, ""));
+  return candidates.filter((candidate) => paths.has(candidate)).sort();
+}
+
+function workspaceConfigPathsForPackage(directory: string, paths: ReadonlySet<string>): string[] {
+  const candidates = [
+    "pnpm-workspace.yaml",
+    "pnpm-workspace.yml",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
+    "nx.json",
+    "turbo.json"
+  ];
+  if (directory === ".") {
+    return candidates.filter((candidate) => paths.has(candidate)).sort();
+  }
+  return candidates.filter((candidate) => paths.has(candidate)).sort();
 }
 
 function detectPackageManager(paths: Set<string>): PackageManager {

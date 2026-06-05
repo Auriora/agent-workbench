@@ -275,6 +275,53 @@ describe("verification_plan use case", () => {
     }
   });
 
+  it("uses workspace, lockfile, and tsconfig evidence for package-local JS/TS validation", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-js-ts-monorepo");
+    const webResult = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["apps/web/src/Login.tsx"],
+        changed_files: ["apps/web/src/Login.tsx"],
+        include_static_feedback: true,
+        max_commands: 10
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+    const apiResult = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["services/api/src/auth-controller.ts"],
+        changed_files: ["services/api/src/auth-controller.ts"],
+        include_static_feedback: true,
+        max_commands: 10
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+
+    expect(webResult.plan.status).toBe("planned");
+    expect(webResult.plan.planned_commands.map((command) => command.display)).toEqual([
+      "pnpm --dir apps/web run typecheck",
+      "pnpm --dir apps/web run test",
+      "pnpm --dir apps/web run test:client",
+      "pnpm run lint",
+      "pnpm run test:e2e"
+    ]);
+    expect(webResult.plan.planned_commands[0]?.reason).toContain("tsconfig evidence: apps/web/tsconfig.json");
+    expect(webResult.plan.planned_commands[0]?.reason).toContain("workspace evidence: pnpm-lock.yaml, pnpm-workspace.yaml");
+    expect(apiResult.plan.status).toBe("planned");
+    expect(apiResult.plan.planned_commands.map((command) => command.display)).toEqual([
+      "pnpm --dir services/api run lint",
+      "pnpm --dir services/api run test:api",
+      "pnpm run lint",
+      "pnpm run test:e2e"
+    ]);
+    expect(apiResult.plan.planned_commands[0]?.reason).toContain("tsconfig evidence: services/api/tsconfig.json");
+  });
+
   it("plans validation from directly requested config when the catalog scan is truncated", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-truncated-"));
     const scanner: FileCatalogScanPort = {

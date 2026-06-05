@@ -1,0 +1,8 @@
+{
+  "name": "@fixture/web",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:client": "vitest run src"
+  }
+}
