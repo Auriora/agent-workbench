@@ -31,7 +31,14 @@ import type {
   SnapshotState,
   WarmupExecution
 } from "../domain/models/runtime.js";
-import type { EditToken, IntegrationArtifact, IntegrationProfile } from "../contracts/index.js";
+import type {
+  CapabilityLevel,
+  DiagnosticFinding,
+  DiagnosticsProviderStatus,
+  EditToken,
+  IntegrationArtifact,
+  IntegrationProfile
+} from "../contracts/index.js";
 
 export interface GraphQueryPort {
   getNode(input: { snapshot_id: string; node_id: string }): Promise<GraphNode | null>;
@@ -234,6 +241,24 @@ export interface ReferenceResolverPort {
 
 export interface ValidationPlannerPort {
   plan(input: ValidationPlanRequest): Promise<ValidationPlan>;
+}
+
+export type DiagnosticsProviderResult = {
+  statuses: readonly DiagnosticsProviderStatus[];
+  findings: readonly DiagnosticFinding[];
+};
+
+export interface DiagnosticsProviderPort {
+  provider_id: string;
+  supports(input: {
+    path: string;
+    language: string;
+    capability_level: CapabilityLevel;
+  }): boolean;
+  diagnose(input: {
+    repo_root: string;
+    file: FileCatalogEntry;
+  }): Promise<DiagnosticsProviderResult>;
 }
 
 export interface EditPreviewStorePort {

@@ -22,6 +22,7 @@ last_reviewed: 2026-06-05
 | Date | Activity | Result |
 | --- | --- | --- |
 | 2026-06-05 | Spec created from Spec 010 T005 follow-up planning | Pending implementation |
+| 2026-06-05 | T001-T003 diagnostics contracts, fixtures, use case, and presenter | `pnpm exec vitest run tests/diagnostics/diagnose-changed-files.test.ts` passed with 6 tests; `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts tests/diagnostics/diagnose-changed-files.test.ts` passed with 17 tests; `pnpm typecheck`, `pnpm test`, `spec_runtime.py lint docs/specs/011-diagnostics-post-edit-feedback`, `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts`, and `git diff --check` passed |
 
 ## Residual Risks
 

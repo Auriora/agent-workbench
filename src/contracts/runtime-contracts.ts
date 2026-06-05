@@ -481,6 +481,68 @@ export const verificationPlanSchema = z
   .strict();
 export type VerificationPlan = z.infer<typeof verificationPlanSchema>;
 
+export const diagnosticCategorySchema = z.enum([
+  "syntax",
+  "config",
+  "documentation",
+  "format",
+  "type",
+  "lint",
+  "edit_risk",
+  "unsupported"
+]);
+export type DiagnosticCategory = z.infer<typeof diagnosticCategorySchema>;
+
+export const diagnosticsProviderStatusSchema = z
+  .object({
+    provider_id: z.string(),
+    path: z.string().optional(),
+    status: z.enum(["checked", "clean", "not_applicable", "unavailable", "failed"]),
+    message: z.string().optional(),
+    capability_level: capabilityLevelSchema,
+    evidence_kinds: z.array(evidenceKindSchema)
+  })
+  .strict();
+export type DiagnosticsProviderStatus = z.infer<typeof diagnosticsProviderStatusSchema>;
+
+export const diagnosticFindingSchema = z
+  .object({
+    path: z.string(),
+    range: sourceRangeSchema.optional(),
+    severity: attentionSeveritySchema,
+    message: z.string(),
+    category: diagnosticCategorySchema,
+    provider_id: z.string(),
+    capability_level: capabilityLevelSchema,
+    evidence_kinds: z.array(evidenceKindSchema),
+    blocking: z.boolean(),
+    fix_hint: z.string().optional()
+  })
+  .strict();
+export type DiagnosticFinding = z.infer<typeof diagnosticFindingSchema>;
+
+export const diagnosticsForFilesRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    files: z.array(z.string()).default([]),
+    max_files: z.number().int().positive().max(50).default(20)
+  })
+  .strict();
+export type DiagnosticsForFilesRequest = z.infer<typeof diagnosticsForFilesRequestSchema>;
+
+export const diagnosticsForFilesResultSchema = z
+  .object({
+    repo_root: z.string(),
+    status: verificationStatusSchema,
+    summary: z.string(),
+    checked_files: z.array(z.string()),
+    findings: z.array(diagnosticFindingSchema),
+    provider_statuses: z.array(diagnosticsProviderStatusSchema),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type DiagnosticsForFilesResult = z.infer<typeof diagnosticsForFilesResultSchema>;
+
 export const scopeMetadataSchema = z.object({
   repo_root: z.string(),
   indexed_roots: z.array(z.string()),

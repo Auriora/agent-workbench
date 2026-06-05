@@ -16,25 +16,38 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
              \-> T007 -----------/
 ```
 
-- [ ] T001 Add diagnostics and feedback fixtures.
+- [x] T001 Add diagnostics and feedback fixtures.
   - Files: `tests/fixtures/`, `tests/diagnostics/`, `tests/hooks/`
   - Acceptance: Fixtures cover clean files, syntax/config findings,
     unsupported files, optional provider failures, and hook quiet behavior.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-05. Added
+    `tests/fixtures/fixture-diagnostics-feedback/` and
+    `tests/diagnostics/diagnose-changed-files.test.ts` covering clean Markdown,
+    provider-simulated config syntax findings, unsupported Java files, optional
+    provider failures, invalid-input envelopes, and refused unsafe paths.
 
-- [ ] T002 Define diagnostics provider contracts.
+- [x] T002 Define diagnostics provider contracts.
   - Depends on: T001
   - Files: `src/ports/`, `src/contracts/`, `src/application/`
   - Acceptance: Provider result and status types are language-neutral and do
     not expose backend-specific raw output.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-05. Added diagnostics request/result,
+    finding, category, and provider-status schemas in
+    `src/contracts/runtime-contracts.ts`, plus `DiagnosticsProviderPort` and
+    `DiagnosticsProviderResult` in `src/ports/index.ts`.
 
-- [ ] T003 Implement changed-file diagnostics use case and presenter.
+- [x] T003 Implement changed-file diagnostics use case and presenter.
   - Depends on: T002
   - Files: `src/application/use-cases/`, `src/presentation/`, `tests/`
   - Acceptance: Diagnostics are bounded, relative-path-only, quiet when clean,
     and explicit when unsupported or blocked.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-05. Added
+    `diagnoseChangedFiles` and `diagnostics-presenter` with provider-backed
+    findings, quiet clean responses, unsupported-provider statuses, optional
+    provider failure suppression, relative-path sanitization, and
+    `verification_plan` next actions. Validation:
+    `pnpm exec vitest run tests/diagnostics/diagnose-changed-files.test.ts`
+    passed with 6 tests; `pnpm typecheck` passed.
 
 - [ ] T004 Decide and wire MCP surface.
   - Depends on: T003
