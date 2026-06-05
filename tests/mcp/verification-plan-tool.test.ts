@@ -847,6 +847,64 @@ describe("verification_plan use case", () => {
     );
   });
 
+  it("plans repo-approved SAM and CloudFormation commands before generic template checks", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-sam-policy-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, ".agent-workbench"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "infra", "sam", "orders"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, ".agent-workbench", "validation-policy.json"),
+        JSON.stringify({
+          validation: {
+            environment: "host",
+            host_commands: "allowed",
+            commands: [
+              {
+                command: "cfn-lint",
+                args: ["infra/sam/orders/template.yaml"],
+                reason: "Repository-approved template lint."
+              }
+            ]
+          }
+        })
+      );
+      fs.writeFileSync(
+        path.join(repoRoot, "infra", "sam", "orders", "template.yaml"),
+        "AWSTemplateFormatVersion: '2010-09-09'\nTransform: AWS::Serverless-2016-10-31\nResources:\n  OrdersFunction:\n    Type: AWS::Serverless::Function\n    Properties:\n      Handler: src/orders/app.handler\n"
+      );
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["infra/sam/orders/template.yaml"],
+          changed_files: ["infra/sam/orders/template.yaml"],
+          include_static_feedback: true,
+          max_commands: 5
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands[0]).toEqual(
+        expect.objectContaining({
+          display: "cfn-lint infra/sam/orders/template.yaml",
+          reason: expect.stringContaining(".agent-workbench/validation-policy.json"),
+          execution: "not_executed"
+        })
+      );
+      expect(result.plan.planned_commands.map((command) => command.display)).toEqual(
+        expect.arrayContaining([
+          "cfn-lint infra/sam/orders/template.yaml",
+          "sam validate --template-file infra/sam/orders/template.yaml"
+        ])
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("blocks unsafe, too-broad, and low-confidence validation targets with quiet feedback", async () => {
     const files = Array.from({ length: 51 }, (_, index) => `src/file-${index}.ts`);
     const result = await planVerification({

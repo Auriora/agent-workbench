@@ -580,6 +580,12 @@ function scoreFileSeededEvidence(file: FileCatalogEntry, requestedPaths: readonl
     if (isNearbyTestPath(file.path, requestedDir, requestedStem)) {
       score = Math.max(score, 9);
     }
+    if (isSamTemplatePath(requestedPath) && isLambdaHandlerPath(file.path)) {
+      score = Math.max(score, 13);
+    }
+    if (isSamTemplatePath(requestedPath) && isSamInfraTestPath(file.path)) {
+      score = Math.max(score, 12);
+    }
   }
   return score;
 }
@@ -605,6 +611,12 @@ function reasonForRelatedFile(
     }
     if (isNearbyTestPath(file.path, requestedDir, requestedStem)) {
       return "Nearby test file associated with an explicitly supplied source file.";
+    }
+    if (isSamTemplatePath(requestedPath) && isLambdaHandlerPath(file.path)) {
+      return "Lambda handler source associated with an explicitly supplied SAM/CloudFormation template.";
+    }
+    if (isSamTemplatePath(requestedPath) && isSamInfraTestPath(file.path)) {
+      return "Infrastructure test associated with an explicitly supplied SAM/CloudFormation template.";
     }
   }
   const pathTerms = tokenSet([file.path]);
@@ -807,6 +819,11 @@ function isSamTemplatePath(filePath: string): boolean {
 function isLambdaHandlerPath(filePath: string): boolean {
   const lower = filePath.toLowerCase();
   return /\.(py|ts|js|mjs|cjs)$/u.test(lower) && (lower.includes("/lambda/") || lower.includes("/handlers/") || lower.endsWith("/app.py"));
+}
+
+function isSamInfraTestPath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return lower.endsWith(".py") && (lower.startsWith("tests/infra/") || lower.startsWith("test/infra/") || lower.includes("/tests/infra/") || lower.includes("/test/infra/"));
 }
 
 function noisyArtifactPenalty(filePath: string): number {

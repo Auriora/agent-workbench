@@ -190,13 +190,20 @@ describe("graph query use cases", () => {
         default_repo_root: fixture.repoRoot
       });
 
-      expect(result.symbols.symbols).toEqual([
-        expect.objectContaining({
-          kind: "lambda_handler_binding",
-          name: "src/orders/app.handler",
-          capability_level: "resource_backed"
-        })
-      ]);
+      expect(result.symbols.symbols).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "lambda_handler_binding",
+            name: "src/orders/app.handler",
+            capability_level: "resource_backed"
+          }),
+          expect.objectContaining({
+            kind: "lambda_handler_file",
+            path: "src/orders/app.py",
+            capability_level: "resource_backed"
+          })
+        ])
+      );
       expect(result.symbols.next_actions).toEqual([
         expect.objectContaining({
           tool: "find_references"
@@ -207,12 +214,93 @@ describe("graph query use cases", () => {
     }
   });
 
+  it("routes SAM handler bindings to resolved handler files with low-confidence impact", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-sam-lambda-repo", "222");
+    try {
+      const symbols = await searchSymbols({
+        request: {
+          query: "src/orders/app.handler",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: [],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+      const nodeId = symbols.symbols.symbols.find((symbol) => symbol.kind === "lambda_handler_binding")?.node_id ?? "";
+      const impact = await computeImpact({
+        request: {
+          node_id: nodeId,
+          max_depth: 1,
+          max_nodes: 10,
+          direction: "outgoing"
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+      const unresolved = await fixture.store.getUnresolvedReferences({
+        snapshot_id: "222",
+        file_path: "infra/sam/orders/template.yaml"
+      });
+
+      expect(impact.impact.edge_count).toBeGreaterThan(0);
+      expect(impact.impact.affected_symbols).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "lambda_handler_file",
+            path: "src/orders/app.py",
+            capability_level: "resource_backed"
+          })
+        ])
+      );
+      expect(impact.impact.affected_files).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: "infra/sam/orders/template.yaml"
+          }),
+          expect.objectContaining({
+            path: "src/orders/app.py"
+          })
+        ])
+      );
+      expect(impact.impact.confidence).toEqual(
+        expect.objectContaining({
+          level: "low",
+          scope: "graph",
+          evidence_kinds: expect.arrayContaining(["config", "infra_parser"])
+        })
+      );
+      expect(unresolved).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            reference_kind: "lambda_handler_file",
+            reference_name: "src/missing/app.py",
+            candidate_metadata: expect.objectContaining({
+              resolution: "unresolved",
+              confidence: "low"
+            })
+          })
+        ])
+      );
+    } finally {
+      fixture.store.close();
+    }
+  });
+
   it("falls back when exact matches exist only outside the requested languages", async () => {
     const fixture = await indexedFixture("tests/fixtures/fixture-sam-lambda-repo", "221");
     try {
       const result = await searchSymbols({
         request: {
-          query: "OrdersFunction",
+          query: "OrdersTable",
           repo_root: fixture.repoRoot,
           exact: true,
           languages: ["python"],
@@ -231,7 +319,7 @@ describe("graph query use cases", () => {
         expect.objectContaining({
           tool: "context_for_task",
           args: expect.objectContaining({
-            symbols: ["OrdersFunction"]
+            symbols: ["OrdersTable"]
           })
         })
       ]);

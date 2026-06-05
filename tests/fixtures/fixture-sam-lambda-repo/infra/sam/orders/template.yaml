@@ -13,6 +13,11 @@ Resources:
             Schedule: rate(5 minutes)
   OrdersTable:
     Type: AWS::DynamoDB::Table
+  MissingFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/missing/app.handler
+      Runtime: python3.12
 Outputs:
   OrdersFunctionArn:
     Value: !GetAtt OrdersFunction.Arn

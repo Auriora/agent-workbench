@@ -258,6 +258,7 @@ function cloudFormationTemplateNodes(input: ExtractionRequest): GraphNodeWriteMo
       }
     });
     if (currentResource.handler !== undefined) {
+      const handlerTarget = lambdaHandlerTarget(currentResource.handler);
       nodes.push({
         id: nodeId(input.snapshot_id, input.path, "lambda_handler_binding", `${currentResource.name}:${currentResource.handler}`),
         kind: "lambda_handler_binding",
@@ -273,7 +274,11 @@ function cloudFormationTemplateNodes(input: ExtractionRequest): GraphNodeWriteMo
           evidence_kinds: ["config", "infra_parser"],
           provenance: "cloudformation_handler_scan",
           semantic_scope: "handler_string_only",
-          logical_id: currentResource.name
+          logical_id: currentResource.name,
+          handler_file_candidate: handlerTarget?.file_paths[0],
+          handler_file_candidates: handlerTarget?.file_paths,
+          handler_export_candidate: handlerTarget?.export_name,
+          handler_resolution: "pending_file_match"
         }
       });
     }
@@ -328,6 +333,25 @@ function isCloudFormationTemplate(input: ExtractionRequest): boolean {
     return false;
   }
   return /(^|\n)(AWSTemplateFormatVersion|Transform:\s*AWS::Serverless|Resources:)/u.test(input.content);
+}
+
+function lambdaHandlerTarget(handler: string): { file_paths: string[]; export_name: string } | undefined {
+  const normalized = handler.trim().replaceAll("\\", "/");
+  const lastDot = normalized.lastIndexOf(".");
+  if (lastDot <= 0 || lastDot === normalized.length - 1) {
+    return undefined;
+  }
+  const modulePath = normalized.slice(0, lastDot);
+  const exportName = normalized.slice(lastDot + 1);
+  if (!/^[A-Za-z0-9_./-]+$/u.test(modulePath) || !/^[A-Za-z_$][A-Za-z0-9_$]*$/u.test(exportName)) {
+    return undefined;
+  }
+  const candidateExtensions = [".py", ".ts", ".js", ".mjs", ".cjs"];
+  const existingExtension = path.extname(modulePath);
+  return {
+    file_paths: existingExtension.length > 0 ? [modulePath] : candidateExtensions.map((extension) => `${modulePath}${extension}`),
+    export_name: exportName
+  };
 }
 
 function lineRange(line: string, lineNumber: number) {

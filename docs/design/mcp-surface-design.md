@@ -507,29 +507,30 @@ Post-closure dogfood caveats from large mixed-language repositories:
   logical IDs and Lambda handler strings. These appear as routing symbols with
   `resource_backed` capability and `infra_parser` provenance, not as semantic
   reference/impact proof.
-- Promoted first routing slice to
-  [Spec 006](../specs/006-infra-template-routing/requirements.md): add
-  SAM/CloudFormation fixture-backed resource routing for logical IDs, Lambda
-  handler strings, unresolved handler references, events, and template
-  dependencies. Full semantic indexing remains future work.
+- Done: add SAM/CloudFormation fixture-backed resource routing for logical IDs,
+  Lambda handler strings, resolved handler files, and unresolved handler-file
+  candidates. This is file-level routing evidence with `resource_backed`
+  capability and `infra_parser` provenance; full semantic indexing remains
+  future work. The delivery record is
+  [Spec 006](../specs/006-infra-template-routing/requirements.md).
 - Done: add first-slice SAM/Lambda overview and context routing for template
   files, handler source files, and infrastructure tests.
-- Promoted to [Spec 006](../specs/006-infra-template-routing/requirements.md):
-  connect SAM/CloudFormation templates to source handlers, tests, and
-  validation evidence. Impact on a SAM template should expose low-confidence
-  but useful template-to-handler and event-source relationships rather than an
-  isolated zero-edge resource.
+- Done: connect SAM/CloudFormation templates to source handlers, tests, and
+  validation evidence. Impact from a Lambda handler binding now exposes
+  low-confidence resource-backed template-to-handler-file routing rather than
+  isolated zero-edge template evidence. Event-source, intrinsic-function, and
+  dependency semantics remain future work.
 - Future: add Lambda-heavy repository presentation that groups generic
   `handler` results by stack/service/logical ID, handler file, and event source
   while preserving the compact graph contract.
 - Done: add first-slice AWS validation planning evidence for SAM/CloudFormation
   repositories, including non-executed `cfn-lint`, `sam validate`, and nearby
   infrastructure pytest candidates when template/test evidence exists.
-- Promoted to [Spec 006](../specs/006-infra-template-routing/requirements.md):
-  deepen AWS validation planning evidence for SAM/CloudFormation repositories,
-  including cfn-lint, repo-approved SAM validation commands, containerized
-  deploy/test runners, and host-tool availability as planned or blocked
-  evidence rather than guessed commands.
+- Done: deepen AWS validation planning evidence for SAM/CloudFormation
+  repositories. Repo-approved validation policy commands are planned before
+  generic template checks, generic `cfn-lint`/`sam validate` and nearby
+  infrastructure pytest candidates remain non-executed planned evidence, and
+  host-blocking policy suppresses generic host commands.
 - Done: add first-slice resource-backed `.sln`/`.csproj` discovery as project
   graph routing and validation evidence.
 - Promoted to [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md):

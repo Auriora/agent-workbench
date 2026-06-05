@@ -2,12 +2,18 @@
 title: Infrastructure template routing requirements
 doc_type: spec
 artifact_type: requirements
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---
 
 # Requirements
+
+## Closure Record
+
+Spec 006 closed on 2026-06-05. Accepted SAM/CloudFormation handler routing and
+validation-planning behavior was promoted to durable MCP surface and language
+adapter docs. Full CloudFormation/SAM semantic indexing remains future work.
 
 ## Introduction
 

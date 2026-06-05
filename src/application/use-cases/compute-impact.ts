@@ -1,4 +1,5 @@
 import type { ImpactRequest, ImpactResult, ResponseMetadata } from "../../contracts/index.js";
+import type { GraphEdge } from "../../domain/models/index.js";
 import type {
   FileCatalogPort,
   GraphQueryPort,
@@ -74,6 +75,7 @@ export async function computeImpact(input: {
   const confidence = impactConfidence({
     edgeCount: traversal.edges.length,
     fileCount: new Set(traversal.nodes.map((node) => node.file_path)).size,
+    edges: traversal.edges,
     truncated: traversal.truncated
   });
 
@@ -124,6 +126,7 @@ export async function computeImpact(input: {
 function impactConfidence(input: {
   edgeCount: number;
   fileCount: number;
+  edges: readonly GraphEdge[];
   truncated: boolean;
 }): ImpactResult["confidence"] {
   if (input.edgeCount === 0) {
@@ -140,6 +143,14 @@ function impactConfidence(input: {
       scope: "local_only",
       reason: "Traversal stayed within one file; treat impact as local-only and verify broader usage before broad edits.",
       evidence_kinds: ["parser"]
+    };
+  }
+  if (input.edges.some((edge) => edge.confidence < 0.7 || edge.provenance.includes("cloudformation"))) {
+    return {
+      level: "low",
+      scope: "graph",
+      reason: "Traversal reached resource-backed routing edges; treat impact as low-confidence file routing, not semantic blast-radius proof.",
+      evidence_kinds: ["config", "infra_parser"]
     };
   }
   return {

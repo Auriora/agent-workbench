@@ -407,6 +407,41 @@ describe("context_for_task use case", () => {
     );
   });
 
+  it("routes explicit SAM templates to handler and infrastructure test files", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-sam-lambda-repo");
+    const result = await getTaskContext({
+      request: {
+        task: "Review selected infrastructure template",
+        repo_root: repoRoot,
+        files: ["infra/sam/orders/template.yaml"],
+        symbols: [],
+        max_files: 4,
+        max_docs: 2
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: repoRoot
+    });
+
+    expect(result.context.requested_files).toEqual([
+      expect.objectContaining({
+        path: "infra/sam/orders/template.yaml",
+        capability_level: "resource_backed"
+      })
+    ]);
+    expect(result.context.related_files.map((file) => file.path)).toEqual(
+      expect.arrayContaining([
+        "src/orders/app.py",
+        "tests/infra/test_orders_template.py"
+      ])
+    );
+    expect(result.context.related_files.map((file) => file.reason)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("explicitly supplied SAM/CloudFormation template")
+      ])
+    );
+  });
+
   it("routes symbol-oriented work to graph query tools through next actions", async () => {
     const result = await getTaskContext({
       request: {

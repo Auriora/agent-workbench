@@ -47,7 +47,7 @@ copying tables, schemas, or enum definitions.
 | Cross-repo dogfood delivery record | [Cross-repo trust and discovery requirements](../specs/003-cross-repo-trust-discovery/requirements.md) | Archived Spec 003 delivery evidence for first-call trust, scope visibility, project-shape validation, and first-slice Go/C++ routing evidence. Current behavior lives in durable design/reference docs. |
 | Overview ranking delivery record | [Overview ranking polish requirements](../specs/004-overview-ranking-polish/requirements.md) | Archived Spec 004 delivery evidence. Current overview ranking behavior lives in the durable MCP surface design. |
 | .NET repository-shape delivery record | [.NET repository shape hardening requirements](../specs/005-dotnet-repository-shape-hardening/requirements.md) | Archived Spec 005 delivery evidence. Current .NET generated-output, project metadata, and validation-planning behavior lives in durable design/reference docs. |
-| Active infrastructure-template routing work | [Infrastructure template routing requirements](../specs/006-infra-template-routing/requirements.md) | Active implementation spec for SAM/CloudFormation template-to-handler routing and validation planning. |
+| Infrastructure-template routing delivery record | [Infrastructure template routing requirements](../specs/006-infra-template-routing/requirements.md) | Archived Spec 006 delivery evidence. Current SAM/CloudFormation handler routing and validation-planning behavior lives in durable design docs. |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) | Owns fixture, budget, degraded-mode, and acceptance evidence. |
 | Architectural decisions | [ADRs](../adr/) | ADR status must match frontmatter and body text. |
 

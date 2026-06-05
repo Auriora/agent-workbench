@@ -2,12 +2,17 @@
 title: Infrastructure template routing design
 doc_type: spec
 artifact_type: design
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-05
 ---
 
 # Technical Design
+
+## Closure Record
+
+Spec 006 closed on 2026-06-05. Current resource-backed infrastructure-template
+routing behavior lives in durable design docs.
 
 ## Overview
 

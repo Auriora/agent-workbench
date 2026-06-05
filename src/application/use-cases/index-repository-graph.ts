@@ -153,7 +153,11 @@ export async function indexRepositoryGraph(input: {
     });
   }
 
-  const resolved = resolveReferences(batches);
+  const augmentedRouting = augmentTemplateHandlerRouting({
+    batches,
+    files: scanned.files
+  });
+  const resolved = resolveReferences(augmentedRouting.batches);
   for (const [index, batch] of resolved.batches.entries()) {
     await yieldToEventLoop(index);
     await input.graph.replaceSnapshotExtraction({
@@ -161,7 +165,8 @@ export async function indexRepositoryGraph(input: {
       replace: true
     });
   }
-  for (const [index, edgesForFile] of resolved.edges.entries()) {
+  const allEdges = [...resolved.edges, ...augmentedRouting.edges];
+  for (const [index, edgesForFile] of allEdges.entries()) {
     await yieldToEventLoop(index);
     await input.graph.insertEdges({
       snapshot_id: snapshotId,
@@ -189,6 +194,139 @@ export async function indexRepositoryGraph(input: {
       0
     ),
     truncated: scanned.truncated
+  };
+}
+
+function augmentTemplateHandlerRouting(input: {
+  batches: readonly ExtractionBatch[];
+  files: readonly FileCatalogEntry[];
+}): {
+  batches: ExtractionBatch[];
+  edges: Array<{ file_path: string; edges: GraphEdgeWriteModel[] }>;
+} {
+  const filePaths = new Set(input.files.map((file) => file.path));
+  const batchesByPath = new Map(input.batches.map((batch) => [batch.source_path, batch]));
+  const handlerAnchorsByPath = new Map<string, GraphNodeWriteModel[]>();
+  const augmented = input.batches.map((batch) => ({ ...batch, nodes: [...batch.nodes], edges: [...batch.edges], unresolved_references: [...batch.unresolved_references] }));
+  const edges: Array<{ file_path: string; edges: GraphEdgeWriteModel[] }> = [];
+
+  for (const batch of augmented) {
+    for (const node of batch.nodes) {
+      if (node.kind !== "lambda_handler_binding") {
+        continue;
+      }
+      const candidates = handlerFileCandidates(node.metadata.handler_file_candidates, node.metadata.handler_file_candidate);
+      const resolvedPath = candidates.find((candidate) => filePaths.has(candidate));
+      if (resolvedPath === undefined) {
+        batch.unresolved_references.push({
+          id: `${node.id}:handler-file-unresolved`,
+          source_node_id: node.id,
+          source_file_path: batch.source_path,
+          reference_name: candidates[0] ?? String(node.name),
+          reference_kind: "lambda_handler_file",
+          source_range: node.source_range,
+          candidate_metadata: {
+            provenance: "cloudformation_handler_file_resolution",
+            confidence: "low",
+            handler: node.name,
+            candidates,
+            resolution: "unresolved"
+          }
+        });
+        continue;
+      }
+
+      const targetBatch = batchesByPath.get(resolvedPath);
+      const augmentedTargetBatch = augmented.find((candidate) => candidate.source_path === resolvedPath);
+      if (targetBatch === undefined || augmentedTargetBatch === undefined) {
+        continue;
+      }
+      const anchor = lambdaHandlerFileAnchor({
+        snapshot_id: batch.snapshot_id,
+        sourceNode: node,
+        targetBatch,
+        resolvedPath
+      });
+      const existingAnchors = handlerAnchorsByPath.get(resolvedPath) ?? [];
+      if (!existingAnchors.some((candidate) => candidate.id === anchor.id)) {
+        handlerAnchorsByPath.set(resolvedPath, [...existingAnchors, anchor]);
+        augmentedTargetBatch.nodes.push(anchor);
+      }
+      edges.push({
+        file_path: batch.source_path,
+        edges: [
+          {
+            id: `${node.id}:routes-to:${anchor.id}`,
+            source_node_id: node.id,
+            target_node_id: anchor.id,
+            kind: "routes_to_handler_file",
+            source_range: node.source_range,
+            provenance: "cloudformation_handler_file_resolution",
+            confidence: 0.45,
+            metadata: {
+              domain: "infrastructure",
+              capability_level: "resource_backed",
+              evidence_kinds: ["config", "infra_parser"],
+              semantic_scope: "file_level_handler_routing",
+              handler: node.name,
+              handler_file_path: resolvedPath,
+              handler_export_candidate: node.metadata.handler_export_candidate
+            }
+          }
+        ]
+      });
+    }
+  }
+
+  return {
+    batches: augmented,
+    edges
+  };
+}
+
+function handlerFileCandidates(value: unknown, fallback: unknown): string[] {
+  const fromArray = Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+  const fromFallback = typeof fallback === "string" ? [fallback] : [];
+  return Array.from(new Set([...fromArray, ...fromFallback].map((candidate) => candidate.replaceAll("\\", "/"))));
+}
+
+function lambdaHandlerFileAnchor(input: {
+  snapshot_id: string;
+  sourceNode: GraphNodeWriteModel;
+  targetBatch: ExtractionBatch;
+  resolvedPath: string;
+}): GraphNodeWriteModel {
+  const exportName = typeof input.sourceNode.metadata.handler_export_candidate === "string"
+    ? input.sourceNode.metadata.handler_export_candidate
+    : undefined;
+  return {
+    id: `${input.snapshot_id}:${input.resolvedPath}:lambda_handler_file:${input.sourceNode.id}`,
+    kind: "lambda_handler_file",
+    name: input.resolvedPath,
+    qualified_name: `${input.sourceNode.qualified_name}:file:${input.resolvedPath}`,
+    file_path: input.resolvedPath,
+    language: input.targetBatch.language,
+    source_range: fullFileRangeForBatch(input.targetBatch),
+    signature: exportName === undefined ? String(input.sourceNode.name) : `${input.resolvedPath}#${exportName}`,
+    metadata: {
+      domain: "infrastructure",
+      capability_level: "resource_backed",
+      evidence_kinds: ["config", "infra_parser"],
+      provenance: "cloudformation_handler_file_resolution",
+      semantic_scope: "file_level_handler_routing",
+      handler: input.sourceNode.name,
+      logical_id: input.sourceNode.metadata.logical_id,
+      handler_export_candidate: exportName
+    }
+  };
+}
+
+function fullFileRangeForBatch(batch: ExtractionBatch): GraphNodeWriteModel["source_range"] {
+  return {
+    start_line: 1,
+    start_column: 0,
+    end_line: Math.max(1, batch.file_identity.size_bytes > 0 ? 1 : 1),
+    end_column: 0
   };
 }
 
