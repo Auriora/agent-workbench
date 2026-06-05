@@ -190,6 +190,13 @@ function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHin
       status: "needed"
     });
   }
+  if (hasDockerComposeEvidence(paths)) {
+    hints.push({
+      command: "manual_review compose-validation-environment",
+      reason: "Docker Compose configuration indicates container workflow evidence; explicit repo guidance or policy is still required before suppressing host commands.",
+      status: "needed"
+    });
+  }
   if (hasPackage && !(hasCmake && hasCpp) && !hasGo) {
     hints.push({ command: "pnpm typecheck", reason: "package.json indicates TypeScript/JavaScript validation.", status: "needed" });
     hints.push({ command: "pnpm test", reason: "package.json indicates JavaScript/TypeScript tests may be available.", status: "needed" });
@@ -281,12 +288,19 @@ function hasCMakeEvidence(paths: Set<string>): boolean {
 function hasDockerEvidence(paths: Set<string>): boolean {
   return [...paths].some((file) => {
     const lower = file.toLowerCase();
-    return lower.endsWith("dockerfile") || lower.includes("docker-compose") || lower.endsWith(".devcontainer/dockerfile");
+    return lower.endsWith("dockerfile") || hasDockerComposeEvidence(new Set([lower])) || lower.endsWith(".devcontainer/dockerfile");
   });
 }
 
 function hasDevcontainerEvidence(paths: Set<string>): boolean {
   return [...paths].some((file) => file.startsWith(".devcontainer/"));
+}
+
+function hasDockerComposeEvidence(paths: Set<string>): boolean {
+  return [...paths].some((file) => {
+    const lower = file.toLowerCase();
+    return lower.endsWith("docker-compose.yml") || lower.endsWith("docker-compose.yaml") || lower.endsWith("compose.yml") || lower.endsWith("compose.yaml");
+  });
 }
 
 function hasDotnetProject(paths: Set<string>): boolean {

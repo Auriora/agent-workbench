@@ -108,6 +108,11 @@ export async function planVerification(input: {
           }
         ]
       : []),
+    ...commandPlan.lowConfidenceReasons.filter(isValidationEnvironmentReason).map((reason) => ({
+      severity: "warning" as const,
+      message: reason.replace(/^validation-environment: /u, ""),
+      why_this_matters: "Validation planning is evidence-driven; advisory environment or missing-script evidence should be checked before treating the plan as complete."
+    })),
     ...commandPlan.blockerReasons.map((reason) => ({
       severity: "blocker" as const,
       message: reason,
@@ -286,9 +291,21 @@ type CommandPlanningResult = {
 
 type ValidationProtocolDiscovery = {
   requiresDockerValidation: boolean;
+  requiresDevcontainerValidation: boolean;
+  requiresNixValidation: boolean;
+  requiresBazelValidation: boolean;
+  blocksHostCommands: boolean;
   prohibitsHostGoTest: boolean;
+  policyCommands: PlannedValidationCommand[];
+  environmentEvidence: ValidationEnvironmentEvidence[];
   evidencePaths: string[];
   errors: string[];
+};
+
+type ValidationEnvironmentEvidence = {
+  kind: "dockerfile" | "docker_compose" | "devcontainer";
+  path: string;
+  detail: string;
 };
 
 type PackageManager = "pnpm" | "npm" | "yarn" | "bun";
@@ -326,15 +343,20 @@ function planValidationCommands(input: {
     hasSamTemplate &&
     (includeAll || input.selectedEntries.some((file) => isSamRelatedPath(file.path)) || hasAny(selectedLanguages, ["yaml", "json", "python"]));
 
+  commands.push(...input.discovery.validationProtocol.policyCommands);
+  if (!hostCommandsBlocked(input.discovery.validationProtocol)) {
+    lowConfidenceReasons.push(
+      ...input.discovery.validationProtocol.environmentEvidence.map(
+        (evidence) => `validation-environment: ${evidence.path} is validation-environment evidence (${evidence.detail}) but does not prove host commands are unsafe without repo guidance or policy.`
+      )
+    );
+  }
+
   if (goShapeSelected) {
-    if (input.discovery.validationProtocol.requiresDockerValidation || input.discovery.validationProtocol.prohibitsHostGoTest) {
-      const evidence =
-        input.discovery.validationProtocol.evidencePaths.length > 0
-          ? ` Evidence: ${input.discovery.validationProtocol.evidencePaths.slice(0, 3).join(", ")}.`
-          : "";
-      blockerReasons.push(
-        `Repository guidance requires Docker-based validation, so host Go commands were not planned.${evidence}`
-      );
+    if (hostCommandsBlocked(input.discovery.validationProtocol) || input.discovery.validationProtocol.prohibitsHostGoTest) {
+      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+        blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "Go"));
+      }
     } else {
       if (input.discovery.hasMakefile) {
         commands.push({
@@ -360,98 +382,116 @@ function planValidationCommands(input: {
   }
 
   if (cmakeShapeSelected) {
-    commands.push({
-      command: "manual_review",
-      args: ["cmake-build-test"],
-      display: "planned CMake build/test review",
-      reason: cmakeReason(input.discovery),
-      status: "planned",
-      execution: "not_executed"
-    });
+    if (hostCommandsBlocked(input.discovery.validationProtocol)) {
+      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+        blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "CMake"));
+      }
+    } else {
+      commands.push({
+        command: "manual_review",
+        args: ["cmake-build-test"],
+        display: "planned CMake build/test review",
+        reason: cmakeReason(input.discovery),
+        status: "planned",
+        execution: "not_executed"
+      });
+    }
   }
 
   if (dotnetShapeSelected) {
-    const selectedDotnetProject = nearestDotnetProject({
-      selectedEntries: input.selectedEntries,
-      projects: input.discovery.dotnetProjects
-    });
-    if (selectedDotnetProject !== undefined) {
-      commands.push({
-        command: "dotnet",
-        args: ["build", selectedDotnetProject],
-        display: `dotnet build ${selectedDotnetProject}`,
-        reason: `${selectedDotnetProject} is the nearest .NET project for selected files.`,
-        status: "planned",
-        execution: "not_executed"
+    if (hostCommandsBlocked(input.discovery.validationProtocol)) {
+      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+        blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, ".NET"));
+      }
+    } else {
+      const selectedDotnetProject = nearestDotnetProject({
+        selectedEntries: input.selectedEntries,
+        projects: input.discovery.dotnetProjects
       });
-    }
-    const solution = input.discovery.dotnetSolutions[0];
-    if (solution !== undefined) {
-      commands.push({
-        command: "dotnet",
-        args: ["build", solution],
-        display: `dotnet build ${solution}`,
-        reason: `${solution} is the repository solution file for broader .NET validation.`,
-        status: "planned",
-        execution: "not_executed"
-      });
-    } else if (selectedDotnetProject === undefined && input.discovery.dotnetProjects[0] !== undefined) {
-      const project = input.discovery.dotnetProjects[0];
-      commands.push({
-        command: "dotnet",
-        args: ["build", project],
-        display: `dotnet build ${project}`,
-        reason: `${project} is available .NET project evidence.`,
-        status: "planned",
-        execution: "not_executed"
-      });
-    }
-    for (const testProject of dotnetTestTargets({
-      selectedEntries: input.selectedEntries,
-      testProjects: input.discovery.dotnetTestProjects
-    })) {
-      commands.push({
-        command: "dotnet",
-        args: ["test", testProject],
-        display: `dotnet test ${testProject}`,
-        reason: `${testProject} is test-project evidence for .NET validation.`,
-        status: "planned",
-        execution: "not_executed"
-      });
-    }
-    if (!hasDotnetFiles) {
-      lowConfidenceReasons.push("dotnet project files were present but no C#/Razor files were selected");
+      if (selectedDotnetProject !== undefined) {
+        commands.push({
+          command: "dotnet",
+          args: ["build", selectedDotnetProject],
+          display: `dotnet build ${selectedDotnetProject}`,
+          reason: `${selectedDotnetProject} is the nearest .NET project for selected files.`,
+          status: "planned",
+          execution: "not_executed"
+        });
+      }
+      const solution = input.discovery.dotnetSolutions[0];
+      if (solution !== undefined) {
+        commands.push({
+          command: "dotnet",
+          args: ["build", solution],
+          display: `dotnet build ${solution}`,
+          reason: `${solution} is the repository solution file for broader .NET validation.`,
+          status: "planned",
+          execution: "not_executed"
+        });
+      } else if (selectedDotnetProject === undefined && input.discovery.dotnetProjects[0] !== undefined) {
+        const project = input.discovery.dotnetProjects[0];
+        commands.push({
+          command: "dotnet",
+          args: ["build", project],
+          display: `dotnet build ${project}`,
+          reason: `${project} is available .NET project evidence.`,
+          status: "planned",
+          execution: "not_executed"
+        });
+      }
+      for (const testProject of dotnetTestTargets({
+        selectedEntries: input.selectedEntries,
+        testProjects: input.discovery.dotnetTestProjects
+      })) {
+        commands.push({
+          command: "dotnet",
+          args: ["test", testProject],
+          display: `dotnet test ${testProject}`,
+          reason: `${testProject} is test-project evidence for .NET validation.`,
+          status: "planned",
+          execution: "not_executed"
+        });
+      }
+      if (!hasDotnetFiles) {
+        lowConfidenceReasons.push("dotnet project files were present but no C#/Razor files were selected");
+      }
     }
   }
 
   if (samShapeSelected) {
-    for (const template of input.discovery.samTemplates.slice(0, 2)) {
-      commands.push({
-        command: "cfn-lint",
-        args: [template],
-        display: `cfn-lint ${template}`,
-        reason: `${template} is SAM/CloudFormation template evidence; cfn-lint is planned but not executed.`,
-        status: "planned",
-        execution: "not_executed"
-      });
-      commands.push({
-        command: "sam",
-        args: ["validate", "--template-file", template],
-        display: `sam validate --template-file ${template}`,
-        reason: `${template} is SAM template evidence; SAM validation is planned but not executed.`,
-        status: "planned",
-        execution: "not_executed"
-      });
-    }
-    for (const testPath of input.discovery.samInfraTests.slice(0, 2)) {
-      commands.push({
-        command: "python3",
-        args: ["-m", "pytest", testPath],
-        display: `python3 -m pytest ${testPath}`,
-        reason: `${testPath} is infrastructure test evidence near SAM/CloudFormation templates.`,
-        status: "planned",
-        execution: "not_executed"
-      });
+    if (hostCommandsBlocked(input.discovery.validationProtocol)) {
+      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+        blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "SAM/CloudFormation"));
+      }
+    } else {
+      for (const template of input.discovery.samTemplates.slice(0, 2)) {
+        commands.push({
+          command: "cfn-lint",
+          args: [template],
+          display: `cfn-lint ${template}`,
+          reason: `${template} is SAM/CloudFormation template evidence; cfn-lint is planned but not executed.`,
+          status: "planned",
+          execution: "not_executed"
+        });
+        commands.push({
+          command: "sam",
+          args: ["validate", "--template-file", template],
+          display: `sam validate --template-file ${template}`,
+          reason: `${template} is SAM template evidence; SAM validation is planned but not executed.`,
+          status: "planned",
+          execution: "not_executed"
+        });
+      }
+      for (const testPath of input.discovery.samInfraTests.slice(0, 2)) {
+        commands.push({
+          command: "python3",
+          args: ["-m", "pytest", testPath],
+          display: `python3 -m pytest ${testPath}`,
+          reason: `${testPath} is infrastructure test evidence near SAM/CloudFormation templates.`,
+          status: "planned",
+          execution: "not_executed"
+        });
+      }
     }
   }
 
@@ -469,38 +509,44 @@ function planValidationCommands(input: {
     !samShapeSelected &&
     (includeAll || hasAny(selectedLanguages, ["typescript", "javascript", "json"]))
   ) {
-    commands.push(
-      ...configuredPackageCommands(selectedPackageScripts, [
-        {
-          script: "typecheck",
-          reason: "Configured package script indicates type checking is available for JavaScript/TypeScript validation."
-        },
-        {
-          script: "lint",
-          reason: "Configured package script indicates lint validation is available."
-        },
-        {
-          script: "format:check",
-          reason: "Configured package script indicates formatter validation is available without mutating files."
-        },
-        {
-          script: "test",
-          reason: "Configured package script indicates the JavaScript/TypeScript test suite is available."
-        },
-        {
-          script: "test:client",
-          reason: "Configured package script indicates client-side JavaScript/TypeScript tests are available."
-        },
-        {
-          script: "test:api",
-          reason: "Configured package script indicates API JavaScript/TypeScript tests are available."
-        },
-        {
-          script: "test:e2e",
-          reason: "Configured package script indicates end-to-end JavaScript/TypeScript tests are available."
-        }
-      ])
-    );
+    if (hostCommandsBlocked(input.discovery.validationProtocol)) {
+      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+        blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "JavaScript/TypeScript"));
+      }
+    } else {
+      commands.push(
+        ...configuredPackageCommands(selectedPackageScripts, [
+          {
+            script: "typecheck",
+            reason: "Configured package script indicates type checking is available for JavaScript/TypeScript validation."
+          },
+          {
+            script: "lint",
+            reason: "Configured package script indicates lint validation is available."
+          },
+          {
+            script: "format:check",
+            reason: "Configured package script indicates formatter validation is available without mutating files."
+          },
+          {
+            script: "test",
+            reason: "Configured package script indicates the JavaScript/TypeScript test suite is available."
+          },
+          {
+            script: "test:client",
+            reason: "Configured package script indicates client-side JavaScript/TypeScript tests are available."
+          },
+          {
+            script: "test:api",
+            reason: "Configured package script indicates API JavaScript/TypeScript tests are available."
+          },
+          {
+            script: "test:e2e",
+            reason: "Configured package script indicates end-to-end JavaScript/TypeScript tests are available."
+          }
+        ])
+      );
+    }
     for (const script of ["typecheck", "lint", "format:check", "test"]) {
       if (selectedPackageScripts.every((pkg) => pkg.scripts[script] === undefined)) {
         lowConfidenceReasons.push(`missing selected package script: ${script}`);
@@ -512,18 +558,24 @@ function planValidationCommands(input: {
     input.discovery.hasPyproject &&
     (includeAll || selectedLanguages.has("python") || input.selectedEntries.some((file) => file.path === "pyproject.toml"))
   ) {
-    commands.push(...input.discovery.pythonNearestTests);
-    commands.push({
-      command: "python3",
-      args: ["-m", "pytest"],
-      display: "python3 -m pytest",
-      reason:
-        input.discovery.pythonNearestTests.length > 0
-          ? "Broad pytest remains as deferred fallback after nearest-test targets."
-          : "pyproject.toml and Python files indicate pytest is the available validation path.",
-      status: "planned",
-      execution: "not_executed"
-    });
+    if (hostCommandsBlocked(input.discovery.validationProtocol)) {
+      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+        blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "Python"));
+      }
+    } else {
+      commands.push(...input.discovery.pythonNearestTests);
+      commands.push({
+        command: "python3",
+        args: ["-m", "pytest"],
+        display: "python3 -m pytest",
+        reason:
+          input.discovery.pythonNearestTests.length > 0
+            ? "Broad pytest remains as deferred fallback after nearest-test targets."
+            : "pyproject.toml and Python files indicate pytest is the available validation path.",
+        status: "planned",
+        execution: "not_executed"
+      });
+    }
   }
 
   if (input.selectedEntries.some((file) => ["config", "markdown", "json", "toml", "yaml"].includes(file.file_identity.language))) {
@@ -542,6 +594,34 @@ function planValidationCommands(input: {
     lowConfidenceReasons,
     blockerReasons
   };
+}
+
+function hostCommandsBlocked(protocol: ValidationProtocolDiscovery): boolean {
+  return protocol.blocksHostCommands || protocol.requiresDockerValidation || protocol.requiresDevcontainerValidation || protocol.requiresNixValidation || protocol.requiresBazelValidation;
+}
+
+function isValidationEnvironmentReason(reason: string): boolean {
+  return reason.startsWith("validation-environment: ");
+}
+
+function policyCommandsCoverHostSuppression(protocol: ValidationProtocolDiscovery): boolean {
+  return hostCommandsBlocked(protocol) && protocol.policyCommands.length > 0;
+}
+
+function hostCommandBlockedReason(protocol: ValidationProtocolDiscovery, family: string): string {
+  const environment = requiredEnvironmentLabel(protocol);
+  const evidence =
+    protocol.evidencePaths.length > 0
+      ? ` Evidence: ${protocol.evidencePaths.slice(0, 3).join(", ")}.`
+      : "";
+  return `Repository guidance requires ${environment} validation, so generic host ${family} commands were not planned.${evidence}`;
+}
+
+function requiredEnvironmentLabel(protocol: ValidationProtocolDiscovery): string {
+  if (protocol.requiresDevcontainerValidation) return "devcontainer-based";
+  if (protocol.requiresNixValidation) return "Nix-based";
+  if (protocol.requiresBazelValidation) return "Bazel-based";
+  return "Docker-based";
 }
 
 function buildStaticFeedback(
@@ -713,8 +793,27 @@ function packageDepth(directory: string): number {
 async function discoverValidationProtocol(workspace: WorkspaceFilePort): Promise<ValidationProtocolDiscovery> {
   const evidencePaths: string[] = [];
   const errors: string[] = [];
+  const policyCommands: PlannedValidationCommand[] = [];
+  const environmentEvidence = await discoverValidationEnvironmentEvidence(workspace);
   let requiresDockerValidation = false;
+  let requiresDevcontainerValidation = false;
+  let requiresNixValidation = false;
+  let requiresBazelValidation = false;
+  let blocksHostCommands = false;
   let prohibitsHostGoTest = false;
+
+  const policy = await readValidationPolicy(workspace);
+  if (policy.error !== undefined) {
+    errors.push(policy.error);
+  } else if (policy.policy !== undefined) {
+    evidencePaths.push(policy.path);
+    requiresDockerValidation = requiresDockerValidation || policy.policy.environment === "docker";
+    requiresDevcontainerValidation = requiresDevcontainerValidation || policy.policy.environment === "devcontainer";
+    requiresNixValidation = requiresNixValidation || policy.policy.environment === "nix";
+    requiresBazelValidation = requiresBazelValidation || policy.policy.environment === "bazel";
+    blocksHostCommands = blocksHostCommands || policy.policy.hostCommands === "blocked";
+    policyCommands.push(...policy.policy.commands);
+  }
 
   for (const filePath of validationGuidanceCandidates()) {
     const stat = await statIfPresent(workspace, filePath);
@@ -738,21 +837,43 @@ async function discoverValidationProtocol(workspace: WorkspaceFilePort): Promise
       /always\s+use\s+docker/u.test(lower) ||
       /must\s+use\s+docker/u.test(lower) ||
       /validation[^.\n]{0,120}\buse\s+docker/u.test(lower);
+    const devcontainerOnly =
+      /\bdevcontainer[- ]only\b/u.test(lower) ||
+      /always\s+use\s+(?:the\s+)?devcontainer/u.test(lower) ||
+      /must\s+use\s+(?:the\s+)?devcontainer/u.test(lower);
+    const nixOnly =
+      /\bnix[- ]only\b/u.test(lower) ||
+      /always\s+use\s+nix/u.test(lower) ||
+      /must\s+use\s+nix/u.test(lower);
+    const bazelOnly =
+      /\bbazel[- ]only\b/u.test(lower) ||
+      /always\s+use\s+bazel/u.test(lower) ||
+      /must\s+use\s+bazel/u.test(lower);
     const noHostGo =
       /never\s+(?:run\s+)?`?go test`?\s+directly/u.test(lower) ||
       /do\s+not\s+(?:run\s+)?`?go test`?\s+directly/u.test(lower) ||
       /must\s+not\s+(?:run\s+)?`?go test`?/u.test(lower);
 
-    if (dockerOnly || noHostGo) {
+    if (dockerOnly || devcontainerOnly || nixOnly || bazelOnly || noHostGo) {
       evidencePaths.push(filePath);
       requiresDockerValidation = requiresDockerValidation || dockerOnly;
+      requiresDevcontainerValidation = requiresDevcontainerValidation || devcontainerOnly;
+      requiresNixValidation = requiresNixValidation || nixOnly;
+      requiresBazelValidation = requiresBazelValidation || bazelOnly;
+      blocksHostCommands = blocksHostCommands || dockerOnly || devcontainerOnly || nixOnly || bazelOnly;
       prohibitsHostGoTest = prohibitsHostGoTest || noHostGo;
     }
   }
 
   return {
     requiresDockerValidation,
+    requiresDevcontainerValidation,
+    requiresNixValidation,
+    requiresBazelValidation,
+    blocksHostCommands,
     prohibitsHostGoTest,
+    policyCommands,
+    environmentEvidence,
     evidencePaths: uniqueSorted(evidencePaths),
     errors
   };
@@ -760,6 +881,7 @@ async function discoverValidationProtocol(workspace: WorkspaceFilePort): Promise
 
 function validationGuidanceCandidates(): string[] {
   return [
+    ".agent-workbench/validation-policy.json",
     "AGENTS.md",
     "CLAUDE.md",
     ".kiro/steering/testing-conventions.md",
@@ -768,6 +890,196 @@ function validationGuidanceCandidates(): string[] {
     "docs/TESTING.md",
     "docs/developer/testing.md"
   ];
+}
+
+async function discoverValidationEnvironmentEvidence(workspace: WorkspaceFilePort): Promise<ValidationEnvironmentEvidence[]> {
+  const evidence: ValidationEnvironmentEvidence[] = [];
+  for (const filePath of [
+    "Dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
+    ".devcontainer/devcontainer.json",
+    ".devcontainer/Dockerfile",
+    ".devcontainer/docker-compose.yml",
+    ".devcontainer/docker-compose.yaml"
+  ]) {
+    const stat = await statIfPresent(workspace, filePath);
+    if (!stat.exists || !stat.is_file || stat.size_bytes > 128_000) {
+      continue;
+    }
+    let content = "";
+    try {
+      content = await workspace.readText({ path: filePath });
+    } catch (_error) {
+      continue;
+    }
+    if (path.posix.basename(filePath).toLowerCase() === "devcontainer.json") {
+      evidence.push({
+        kind: "devcontainer",
+        path: filePath,
+        detail: devcontainerDetail(content)
+      });
+      continue;
+    }
+    if (path.posix.basename(filePath).toLowerCase().includes("compose")) {
+      evidence.push({
+        kind: "docker_compose",
+        path: filePath,
+        detail: composeDetail(content)
+      });
+      continue;
+    }
+    if (path.posix.basename(filePath).toLowerCase() === "dockerfile") {
+      evidence.push({
+        kind: "dockerfile",
+        path: filePath,
+        detail: dockerfileDetail(content)
+      });
+    }
+  }
+  return evidence;
+}
+
+type ValidationPolicy = {
+  environment: "host" | "docker" | "devcontainer" | "nix" | "bazel";
+  hostCommands: "allowed" | "blocked";
+  commands: PlannedValidationCommand[];
+};
+
+async function readValidationPolicy(
+  workspace: WorkspaceFilePort
+): Promise<{ path: string; policy?: ValidationPolicy; error?: undefined } | { path: string; error: string }> {
+  const policyPath = ".agent-workbench/validation-policy.json";
+  const stat = await statIfPresent(workspace, policyPath);
+  if (!stat.exists || !stat.is_file) {
+    return { path: policyPath };
+  }
+  if (stat.size_bytes > 64_000) {
+    return { path: policyPath, error: `${policyPath} was too large to inspect for validation policy` };
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await workspace.readText({ path: policyPath }));
+  } catch (_error) {
+    return { path: policyPath, error: `${policyPath} could not be read as JSON` };
+  }
+  if (!isRecord(parsed)) {
+    return { path: policyPath, error: `${policyPath} must contain a JSON object` };
+  }
+  const validation = isRecord(parsed.validation) ? parsed.validation : parsed;
+  const environment = parsePolicyEnvironment(validation.environment);
+  const hostCommands = validation.host_commands === "blocked" || validation.hostCommands === "blocked" ? "blocked" : "allowed";
+  const commands = Array.isArray(validation.commands)
+    ? validation.commands.flatMap((candidate) => policyCommand(candidate, policyPath))
+    : [];
+  return {
+    path: policyPath,
+    policy: {
+      environment,
+      hostCommands,
+      commands
+    }
+  };
+}
+
+function parsePolicyEnvironment(value: unknown): ValidationPolicy["environment"] {
+  return value === "docker" || value === "devcontainer" || value === "nix" || value === "bazel" || value === "host"
+    ? value
+    : "host";
+}
+
+function policyCommand(value: unknown, policyPath: string): PlannedValidationCommand[] {
+  if (!isRecord(value) || typeof value.command !== "string") {
+    return [];
+  }
+  const args = Array.isArray(value.args) ? value.args.filter((arg): arg is string => typeof arg === "string") : [];
+  const decision = planCommand({
+    command: value.command,
+    args,
+    source: "configured"
+  });
+  if (!decision.allowed) {
+    return [];
+  }
+  const display = typeof value.display === "string"
+    ? value.display
+    : [decision.command.command, ...decision.command.args].join(" ");
+  return [
+    {
+      command: decision.command.command,
+      args: decision.command.args,
+      display,
+      reason: typeof value.reason === "string"
+        ? `${value.reason} Policy evidence: ${policyPath}.`
+        : `Repo-local validation policy command. Policy evidence: ${policyPath}.`,
+      status: "planned",
+      execution: "not_executed"
+    }
+  ];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function dockerfileDetail(content: string): string {
+  const stages = content
+    .split(/\r?\n/u)
+    .map((line) => /^\s*FROM\s+\S+(?:\s+AS\s+([A-Za-z0-9_.-]+))?/iu.exec(line)?.[1])
+    .filter((stage): stage is string => stage !== undefined);
+  return stages.length > 0
+    ? `Dockerfile stages: ${stages.slice(0, 3).join(", ")}.`
+    : "Dockerfile present.";
+}
+
+function composeDetail(content: string): string {
+  const serviceNames = new Set<string>();
+  let inServices = false;
+  for (const line of content.split(/\r?\n/u)) {
+    if (/^services:\s*$/u.test(line)) {
+      inServices = true;
+      continue;
+    }
+    if (inServices && /^[A-Za-z_][A-Za-z0-9_.-]*:\s*$/u.test(line)) {
+      break;
+    }
+    const match = /^  ([A-Za-z0-9_.-]+):\s*$/u.exec(line);
+    if (inServices && match) {
+      serviceNames.add(match[1] ?? "");
+    }
+  }
+  return serviceNames.size > 0
+    ? `Docker Compose services: ${[...serviceNames].slice(0, 4).join(", ")}.`
+    : "Docker Compose file present.";
+}
+
+function devcontainerDetail(content: string): string {
+  try {
+    const parsed = JSON.parse(content) as unknown;
+    if (!isRecord(parsed)) {
+      return "devcontainer configuration present.";
+    }
+    const details: string[] = [];
+    if (isRecord(parsed.features)) {
+      details.push(`features: ${Object.keys(parsed.features).slice(0, 4).join(", ")}`);
+    }
+    if (isRecord(parsed.customizations)) {
+      details.push(`customizations: ${Object.keys(parsed.customizations).slice(0, 4).join(", ")}`);
+    }
+    if (typeof parsed.dockerComposeFile === "string" || Array.isArray(parsed.dockerComposeFile)) {
+      details.push("compose workflow");
+    }
+    if (isRecord(parsed.build)) {
+      details.push("custom build");
+    }
+    return details.length > 0
+      ? `devcontainer ${details.join("; ")}.`
+      : "devcontainer configuration present.";
+  } catch (_error) {
+    return "devcontainer configuration present.";
+  }
 }
 
 async function statIfPresent(

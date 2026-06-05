@@ -471,6 +471,126 @@ describe("verification_plan use case", () => {
     }
   });
 
+  it("uses repo-local validation policy commands instead of generic host commands", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-policy-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, ".agent-workbench"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "src"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, ".agent-workbench", "validation-policy.json"),
+        JSON.stringify(
+          {
+            validation: {
+              environment: "docker",
+              host_commands: "blocked",
+              commands: [
+                {
+                  command: "docker",
+                  args: ["compose", "run", "--rm", "app", "pnpm", "test"],
+                  reason: "Project validation must run inside the app service container."
+                }
+              ]
+            }
+          },
+          null,
+          2
+        )
+      );
+      fs.writeFileSync(path.join(repoRoot, "compose.yaml"), "services:\n  app:\n    image: node:24\n");
+      fs.writeFileSync(
+        path.join(repoRoot, "package.json"),
+        JSON.stringify({ scripts: { typecheck: "tsc --noEmit", test: "vitest run" } })
+      );
+      fs.writeFileSync(path.join(repoRoot, "src", "app.ts"), "export const value = 1;\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["src/app.ts"],
+          changed_files: ["src/app.ts"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
+        "docker compose run --rm app pnpm test"
+      ]);
+      expect(result.plan.planned_commands[0]).toEqual(
+        expect.objectContaining({
+          reason: expect.stringContaining(".agent-workbench/validation-policy.json")
+        })
+      );
+      expect(result.plan.risks.map((risk) => risk.severity)).not.toContain("blocker");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("treats Docker Compose and devcontainer files as advisory evidence without blocking host commands", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-environment-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, ".devcontainer"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "src"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, ".devcontainer", "devcontainer.json"),
+        JSON.stringify({
+          name: "fixture",
+          dockerComposeFile: "../compose.yaml",
+          features: {
+            "ghcr.io/devcontainers/features/node:1": {}
+          },
+          customizations: {
+            vscode: {}
+          }
+        })
+      );
+      fs.writeFileSync(path.join(repoRoot, "compose.yaml"), "services:\n  app:\n    image: node:24\n");
+      fs.writeFileSync(
+        path.join(repoRoot, "package.json"),
+        JSON.stringify({ scripts: { typecheck: "tsc --noEmit", test: "vitest run" } })
+      );
+      fs.writeFileSync(path.join(repoRoot, "src", "app.ts"), "export const value = 1;\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["src/app.ts"],
+          changed_files: ["src/app.ts"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
+        "pnpm run typecheck",
+        "pnpm run test"
+      ]);
+      expect(result.plan.risks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            severity: "warning",
+            message: expect.stringContaining("compose.yaml is validation-environment evidence")
+          }),
+          expect.objectContaining({
+            severity: "warning",
+            message: expect.stringContaining(".devcontainer/devcontainer.json is validation-environment evidence")
+          })
+        ])
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("prioritizes CMake validation over incidental package scripts for C++ files", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-cmake-cpp-repo");
     const result = await planVerification({

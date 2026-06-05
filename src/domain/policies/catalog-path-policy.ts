@@ -42,6 +42,7 @@ export const DEFAULT_SKIPPED_ROOTS = [
 ] as const;
 
 export const ALLOWED_HIDDEN_DIRECTORIES = [
+  ".agent-workbench",
   ".devcontainer",
   ".github"
 ] as const;

@@ -233,6 +233,34 @@ Avoid names inherited from internal backend workers, caches, parsers, or
 diagnostic providers. If an internal component is replaced, the public name and
 schema should not change unless the agent-facing capability changes.
 
+## Repo-Local Validation Policy
+
+`verification_plan` may read `.agent-workbench/validation-policy.json` as
+repo-local validation evidence. The first supported shape is intentionally
+small:
+
+```json
+{
+  "validation": {
+    "environment": "docker",
+    "host_commands": "blocked",
+    "commands": [
+      {
+        "command": "docker",
+        "args": ["compose", "run", "--rm", "app", "pnpm", "test"],
+        "reason": "Project validation must run inside the app service container."
+      }
+    ]
+  }
+}
+```
+
+Supported `environment` values are `host`, `docker`, `devcontainer`, `nix`, and
+`bazel`. Supported `host_commands` values are `allowed` and `blocked`.
+Configured commands are planned evidence only; the MVP does not execute them.
+Unsafe command parts with shell metacharacters are refused by the existing
+command-safety policy.
+
 ## Cross-Repo Dogfood Follow-Up Status
 
 TimeLocker dogfood after Spec 002 left two MCP-resource polish items:
@@ -352,14 +380,16 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Done: improve `repo:///overview` platform scoring so root/local CMake and
   source/test topology outrank incidental `package.json` files in CMake/C++
   repositories.
-- Open: parse Docker Compose, Dockerfile labels/stages, and devcontainer
-  features/customizations as validation-environment evidence. Use that evidence
-  to explain likely container workflows, but require repo guidance or explicit
-  Agent Workbench config before marking host commands unsafe.
-- Open: add an explicit repo-local validation policy/config surface for allowed
-  command templates and environment requirements across languages. This is the
-  reliable path for Docker-only, Nix-only, devcontainer-only, Bazel-only, or
-  other project-specific validation rules.
+- Done: parse Docker Compose, Dockerfile stages, and devcontainer
+  features/customizations as validation-environment evidence. The planner uses
+  this evidence to explain likely container workflows, but still requires repo
+  guidance or explicit Agent Workbench config before marking host commands
+  unsafe.
+- Done: add a first-slice explicit repo-local validation policy/config surface
+  at `.agent-workbench/validation-policy.json` for allowed command templates and
+  environment requirements across languages. This is the reliable path for
+  Docker-only, Nix-only, devcontainer-only, Bazel-only, or other
+  project-specific validation rules.
 - Done: make first-read resources reliable on large AWS/IaC repositories. If
   `repo:///status`, `repo:///scope`, `repo:///overview`, or
   `integration:///profiles/codex` can time out while direct tools remain fast,
