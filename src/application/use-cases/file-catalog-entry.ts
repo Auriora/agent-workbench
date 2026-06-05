@@ -26,7 +26,7 @@ export function inferLanguageFromPath(filePath: string): string {
   if (ext === ".py" || ext === ".pyi") return "python";
   if (ext === ".ts" || ext === ".tsx") return "typescript";
   if (ext === ".js" || ext === ".jsx" || ext === ".mjs" || ext === ".cjs") return "javascript";
-  if (ext === ".cs") return "csharp";
+  if (ext === ".cs" || ext === ".razor" || ext === ".cshtml") return "csharp";
   if (ext === ".go") return "go";
   if (ext === ".rs") return "rust";
   if (ext === ".java") return "java";
@@ -53,6 +53,10 @@ export function inferLanguageFromPath(filePath: string): string {
     ext === ".config" ||
     ext === ".ini" ||
     ext === ".env" ||
+    ext === ".sln" ||
+    ext === ".csproj" ||
+    ext === ".fsproj" ||
+    ext === ".vbproj" ||
     stem === "pyproject" ||
     filename === "pyproject.toml" ||
     filename === "setup.cfg" ||

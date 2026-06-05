@@ -8,9 +8,8 @@ type FileCapabilityInput = {
 };
 
 const partialSemanticLanguages = new Set(["python"]);
-const resourceBackedLanguageNames = new Set(["c", "cpp", "go"]);
+const resourceBackedLanguageNames = new Set(["c", "cpp", "csharp", "go"]);
 const unsupportedLanguageNames = new Set([
-  "csharp",
   "java",
   "javascript",
   "rust",
@@ -41,7 +40,17 @@ function isGithubWorkflow(filePath: string): boolean {
 
 function isPackageManifest(filePath: string): boolean {
   const filename = lowerBasename(filePath);
-  return filename === "package.json" || filename === "pyproject.toml" || filename === "go.mod" || filename === "cargo.toml";
+  const ext = extension(filePath);
+  return (
+    filename === "package.json" ||
+    filename === "pyproject.toml" ||
+    filename === "go.mod" ||
+    filename === "cargo.toml" ||
+    ext === ".sln" ||
+    ext === ".csproj" ||
+    ext === ".fsproj" ||
+    ext === ".vbproj"
+  );
 }
 
 function packageManifestName(filePath: string): string {
@@ -57,6 +66,9 @@ function packageManifestName(filePath: string): string {
   }
   if (filename === "cargo.toml") {
     return "cargo";
+  }
+  if ([".sln", ".csproj", ".fsproj", ".vbproj"].includes(extension(filePath))) {
+    return "dotnet";
   }
   return "package_manager";
 }

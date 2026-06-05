@@ -26,12 +26,15 @@ export const DEFAULT_SKIPPED_ROOTS = [
   "__pycache__",
   "3rdparty",
   "artifacts",
+  "bin",
   "build",
   "coverage",
   "dist",
   "node_modules",
+  "obj",
   "target",
   "test-artifacts",
+  "testresults",
   "third_party",
   "thirdparty",
   "vendor",
@@ -82,6 +85,14 @@ const ALLOWED_HIDDEN_DIRECTORY_NAMES = new Set<string>(ALLOWED_HIDDEN_DIRECTORIE
 const ALLOWED_HIDDEN_FILE_NAMES = new Set<string>(ALLOWED_HIDDEN_FILES);
 const DEFAULT_SKIPPED_DIRECTORY_PREFIXES = ["cmake-build-"] as const;
 const DEFAULT_SKIPPED_HIDDEN_DIRECTORY_SUFFIXES = ["-tests"] as const;
+const DEFAULT_SKIPPED_FILE_EXTENSIONS = new Set([
+  ".dll",
+  ".exe",
+  ".nupkg",
+  ".pdb",
+  ".snupkg",
+  ".wasm"
+]);
 const SECRET_ENV_PATTERN = /(^|\/)\.env(?:$|\.(?!example$|sample$|template$)[^/]+$)/u;
 
 export function normalizeCatalogPath(value: string): string {
@@ -134,6 +145,9 @@ export function shouldSkipCatalogPath(input: {
   if (isSecretEnvPath(relativePath)) {
     return true;
   }
+  if (!input.isDirectory && hasSkippedFileExtension(relativePath)) {
+    return true;
+  }
 
   const segments = relativePath.split("/");
   const lowerSegments = segments.map((segment) => segment.toLowerCase());
@@ -162,6 +176,12 @@ export function shouldSkipCatalogPath(input: {
     isDirectory: input.isDirectory,
     rules: input.gitignoreRules ?? []
   });
+}
+
+function hasSkippedFileExtension(relativePath: string): boolean {
+  const basename = relativePath.slice(relativePath.lastIndexOf("/") + 1).toLowerCase();
+  const dot = basename.lastIndexOf(".");
+  return dot > 0 && DEFAULT_SKIPPED_FILE_EXTENSIONS.has(basename.slice(dot));
 }
 
 export function isExplicitHiddenCatalogPathAllowed(relativePath: string): boolean {

@@ -138,7 +138,29 @@ function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHin
   const hasCpp = files.some((file) => file.file_identity.language === "c" || file.file_identity.language === "cpp");
   const hasGo = paths.has("go.mod") || paths.has("go.work");
   const hasPackage = paths.has("package.json");
+  const dotnetSolution = firstDotnetSolution(paths);
+  const dotnetTestProject = firstDotnetTestProject(paths);
 
+  if (dotnetSolution !== undefined) {
+    hints.push({
+      command: "verification_plan",
+      reason: `${dotnetSolution} indicates .NET validation is available; project/test discovery should plan non-executed dotnet commands.`,
+      status: "needed"
+    });
+  } else if (hasDotnetProject(paths)) {
+    hints.push({
+      command: "verification_plan",
+      reason: ".NET project files indicate dotnet build/test validation may be available.",
+      status: "needed"
+    });
+  }
+  if (dotnetTestProject !== undefined) {
+    hints.push({
+      command: "dotnet test",
+      reason: `${dotnetTestProject} is marked as a test project.`,
+      status: "needed"
+    });
+  }
   if (hasCmake && hasCpp) {
     hints.push({
       command: "manual_review cmake-build-test",
@@ -175,6 +197,7 @@ function detectPlatforms(files: readonly FileCatalogEntry[]): string[] {
   const platforms = new Set<string>();
   if (paths.has("package.json")) platforms.add("node");
   if (paths.has("pyproject.toml")) platforms.add("python");
+  if (firstDotnetSolution(paths) !== undefined || hasDotnetProject(paths)) platforms.add("dotnet");
   if (paths.has("go.mod") || paths.has("go.work")) platforms.add("go");
   if (hasCMakeEvidence(paths)) platforms.add("cmake");
   if (hasDockerEvidence(paths)) platforms.add("docker");
@@ -189,6 +212,15 @@ function isKeyFile(filePath: string): boolean {
     filePath === "pyproject.toml" ||
     filePath === "go.mod" ||
     filePath === "go.work" ||
+    lowerExtension(filePath) === ".sln" ||
+    lowerExtension(filePath) === ".csproj" ||
+    lowerExtension(filePath) === ".fsproj" ||
+    lowerExtension(filePath) === ".vbproj" ||
+    pathBasename(filePath).toLowerCase() === "program.cs" ||
+    pathBasename(filePath).toLowerCase().startsWith("appsettings") ||
+    pathBasename(filePath).toLowerCase().endsWith(".razor") ||
+    filePath.toLowerCase().includes("/controllers/") ||
+    filePath.toLowerCase().includes("/migrations/") ||
     pathBasename(filePath).toLowerCase() === "cmakelists.txt" ||
     filePath === "Dockerfile" ||
     filePath.startsWith(".devcontainer/") ||
@@ -202,7 +234,14 @@ function keyFileRank(file: FileCatalogEntry): number {
   const lower = file.path.toLowerCase();
   if (lower === "cmakelists.txt") return 130;
   if (lower.endsWith("/cmakelists.txt")) return 125;
+  if (lower.endsWith(".sln")) return 320;
+  if (lower.endsWith(".csproj") || lower.endsWith(".fsproj") || lower.endsWith(".vbproj")) return 300;
   let score = 0;
+  if (lower.endsWith("/program.cs")) score += 115;
+  if (lower.includes("/controllers/")) score += 95;
+  if (lower.endsWith(".razor") || lower.includes("/pages/") || lower.includes("/shared/")) score += 90;
+  if (lower.includes("/migrations/") || lower.includes("dbcontext")) score += 85;
+  if (pathBasename(lower).startsWith("appsettings")) score += 82;
   if (lower === "go.mod" || lower === "go.work") score += 120;
   if (lower === "pyproject.toml" || lower === "package.json") score += 100;
   if (lower === "dockerfile" || lower.startsWith(".devcontainer/")) score += 80;
@@ -210,6 +249,7 @@ function keyFileRank(file: FileCatalogEntry): number {
   if (/^(test|tests)\//u.test(lower)) score += 55;
   if (lower.startsWith(".github/workflows/")) score += 20;
   if (file.file_identity.language === "cpp" || file.file_identity.language === "c" || file.file_identity.language === "go") score += 8;
+  if (file.file_identity.language === "csharp") score += 8;
   if (file.file_identity.language === "python") score += 6;
   if (lower.includes("/generated/") || lower.includes("/fixtures/")) score -= 60;
   return score;
@@ -230,8 +270,26 @@ function hasDevcontainerEvidence(paths: Set<string>): boolean {
   return [...paths].some((file) => file.startsWith(".devcontainer/"));
 }
 
+function hasDotnetProject(paths: Set<string>): boolean {
+  return [...paths].some((file) => [".csproj", ".fsproj", ".vbproj"].includes(lowerExtension(file)));
+}
+
+function firstDotnetSolution(paths: Set<string>): string | undefined {
+  return [...paths].sort().find((file) => lowerExtension(file) === ".sln");
+}
+
+function firstDotnetTestProject(paths: Set<string>): string | undefined {
+  return [...paths].sort().find((file) => lowerExtension(file) === ".csproj" && file.toLowerCase().includes("test"));
+}
+
 function pathBasename(filePath: string): string {
   return filePath.slice(filePath.lastIndexOf("/") + 1);
+}
+
+function lowerExtension(filePath: string): string {
+  const basename = pathBasename(filePath).toLowerCase();
+  const dot = basename.lastIndexOf(".");
+  return dot <= 0 ? "" : basename.slice(dot);
 }
 
 function titleFromPath(filePath: string): string {

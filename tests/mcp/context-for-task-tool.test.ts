@@ -284,6 +284,41 @@ describe("context_for_task use case", () => {
     }
   });
 
+  it("ranks .NET project, controller, Razor, and EF routing anchors", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-dotnet-web-repo");
+    const result = await getTaskContext({
+      request: {
+        task: "Update dotnet API controller and Blazor Razor page with Entity Framework context",
+        repo_root: repoRoot,
+        files: [],
+        symbols: [],
+        max_files: 8,
+        max_docs: 2
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: repoRoot
+    });
+
+    expect(result.context.related_files.map((file) => file.path)).toEqual(
+      expect.arrayContaining([
+        "ModenaFixture.sln",
+        "src/WebApi/WebApi.csproj",
+        "src/WebApi/Controllers/OrdersController.cs",
+        "src/WebApi/Data/AppDbContext.cs",
+        "src/WebApp/Pages/Index.razor"
+      ])
+    );
+    expect(result.context.related_files.map((file) => file.reason)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining(".NET solution"),
+        expect.stringContaining("ASP.NET controller"),
+        expect.stringContaining("Razor/Blazor"),
+        expect.stringContaining("Entity Framework")
+      ])
+    );
+  });
+
   it("routes symbol-oriented work to graph query tools through next actions", async () => {
     const result = await getTaskContext({
       request: {

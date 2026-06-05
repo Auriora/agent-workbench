@@ -289,6 +289,54 @@ describe("file catalog scanner", () => {
     );
   });
 
+  it("classifies .NET project/source files while skipping generated build outputs", async () => {
+    const scanner = new FileCatalogScannerAdapter();
+    const result = await scanner.scan({
+      repo_root: path.resolve("tests/fixtures/fixture-dotnet-web-repo"),
+      indexed_roots: ["."],
+      skipped_roots: [],
+      max_files: 200
+    });
+    const paths = result.files.map((file) => file.path);
+
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        "ModenaFixture.sln",
+        "src/WebApi/WebApi.csproj",
+        "src/WebApi/Program.cs",
+        "src/WebApi/Controllers/OrdersController.cs",
+        "src/WebApp/Pages/Index.razor",
+        "tests/WebApi.Tests/WebApi.Tests.csproj"
+      ])
+    );
+    expect(paths).not.toEqual(
+      expect.arrayContaining([
+        "src/WebApi/bin/Debug/net8.0/WebApi.dll",
+        "src/WebApi/obj/Debug/net8.0/WebApi.AssemblyInfo.cs",
+        "TestResults/abc/results.trx"
+      ])
+    );
+    expect(result.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "src/WebApi/Controllers/OrdersController.cs",
+          file_identity: expect.objectContaining({ language: "csharp" }),
+          adapter_evidence: expect.objectContaining({
+            capability_level: "resource_backed"
+          })
+        }),
+        expect.objectContaining({
+          path: "src/WebApi/WebApi.csproj",
+          adapter_evidence: expect.objectContaining({
+            domain: "package_manager",
+            name: "dotnet",
+            capability_level: "resource_backed"
+          })
+        })
+      ])
+    );
+  });
+
   it("does not read file contents while building status catalog evidence", async () => {
     const scanner = new FileCatalogScannerAdapter({
       fileIdentity: {

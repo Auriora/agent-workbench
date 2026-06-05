@@ -286,6 +286,38 @@ describe("repo overview MCP resource", () => {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
   });
+
+  it("promotes .NET solution, project, app, Razor, and test anchors", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-dotnet-web-repo");
+    const result = await getRepoOverview({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter()
+    });
+
+    expect(result.overview.platforms).toContain("dotnet");
+    expect(result.overview.languages).toEqual(expect.arrayContaining(["config", "csharp", "json"]));
+    expect(result.overview.key_files.map((file) => file.path).slice(0, 7)).toEqual([
+      "ModenaFixture.sln",
+      "src/WebApi/WebApi.csproj",
+      "src/WebApp/WebApp.csproj",
+      "tests/WebApi.Tests/WebApi.Tests.csproj",
+      "src/WebApi/Program.cs",
+      "src/WebApi/Controllers/OrdersController.cs",
+      "src/WebApp/Pages/Index.razor"
+    ]);
+    expect(result.overview.validation_hints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          command: "verification_plan",
+          reason: expect.stringContaining("ModenaFixture.sln")
+        }),
+        expect.objectContaining({
+          command: "dotnet test",
+          reason: expect.stringContaining("tests/WebApi.Tests/WebApi.Tests.csproj")
+        })
+      ])
+    );
+  });
 });
 
 describe("repo scope and overview composed server resources", () => {

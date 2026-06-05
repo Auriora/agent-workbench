@@ -244,6 +244,9 @@ async function discoverValidationEvidence(input: {
     hasMakefile: paths.has("Makefile") || paths.has("makefile"),
     hasRootCMake: paths.has("CMakeLists.txt"),
     localCMakeFiles: [...paths].filter((filePath) => filePath.endsWith("/CMakeLists.txt")).sort(),
+    dotnetSolutions: [...paths].filter((filePath) => lowerExtension(filePath) === ".sln").sort(),
+    dotnetProjects: [...paths].filter((filePath) => isDotnetProjectPath(filePath)).sort(),
+    dotnetTestProjects: [...paths].filter((filePath) => isDotnetProjectPath(filePath) && isDotnetTestProjectPath(filePath)).sort(),
     pythonNearestTests: await discoverPythonNearestTests({
       files: input.files,
       selectedEntries: input.selectedEntries,
@@ -262,6 +265,9 @@ type ValidationDiscovery = {
   hasMakefile: boolean;
   hasRootCMake: boolean;
   localCMakeFiles: string[];
+  dotnetSolutions: string[];
+  dotnetProjects: string[];
+  dotnetTestProjects: string[];
   pythonNearestTests: PlannedValidationCommand[];
 };
 
@@ -300,10 +306,14 @@ function planValidationCommands(input: {
   const includeAll = input.selectedEntries.length === 0;
   const hasGoFiles = input.files.some((file) => file.file_identity.language === "go");
   const hasCppFiles = input.files.some((file) => file.file_identity.language === "cpp" || file.file_identity.language === "c");
+  const hasDotnetFiles = input.files.some((file) => file.file_identity.language === "csharp" || isDotnetProjectPath(file.path));
   const goShapeSelected = input.discovery.hasGoMod && (includeAll ? hasGoFiles : selectedLanguages.has("go"));
   const cmakeShapeSelected =
     (input.discovery.hasRootCMake || input.discovery.localCMakeFiles.length > 0) &&
     (includeAll ? hasCppFiles : hasAny(selectedLanguages, ["c", "cpp"]));
+  const dotnetShapeSelected =
+    (input.discovery.dotnetSolutions.length > 0 || input.discovery.dotnetProjects.length > 0) &&
+    (includeAll || selectedLanguages.has("csharp") || input.selectedEntries.some((file) => isDotnetProjectPath(file.path)));
 
   if (goShapeSelected) {
     if (input.discovery.validationProtocol.requiresDockerValidation || input.discovery.validationProtocol.prohibitsHostGoTest) {
@@ -349,6 +359,60 @@ function planValidationCommands(input: {
     });
   }
 
+  if (dotnetShapeSelected) {
+    const selectedDotnetProject = nearestDotnetProject({
+      selectedEntries: input.selectedEntries,
+      projects: input.discovery.dotnetProjects
+    });
+    if (selectedDotnetProject !== undefined) {
+      commands.push({
+        command: "dotnet",
+        args: ["build", selectedDotnetProject],
+        display: `dotnet build ${selectedDotnetProject}`,
+        reason: `${selectedDotnetProject} is the nearest .NET project for selected files.`,
+        status: "planned",
+        execution: "not_executed"
+      });
+    }
+    const solution = input.discovery.dotnetSolutions[0];
+    if (solution !== undefined) {
+      commands.push({
+        command: "dotnet",
+        args: ["build", solution],
+        display: `dotnet build ${solution}`,
+        reason: `${solution} is the repository solution file for broader .NET validation.`,
+        status: "planned",
+        execution: "not_executed"
+      });
+    } else if (selectedDotnetProject === undefined && input.discovery.dotnetProjects[0] !== undefined) {
+      const project = input.discovery.dotnetProjects[0];
+      commands.push({
+        command: "dotnet",
+        args: ["build", project],
+        display: `dotnet build ${project}`,
+        reason: `${project} is available .NET project evidence.`,
+        status: "planned",
+        execution: "not_executed"
+      });
+    }
+    for (const testProject of dotnetTestTargets({
+      selectedEntries: input.selectedEntries,
+      testProjects: input.discovery.dotnetTestProjects
+    })) {
+      commands.push({
+        command: "dotnet",
+        args: ["test", testProject],
+        display: `dotnet test ${testProject}`,
+        reason: `${testProject} is test-project evidence for .NET validation.`,
+        status: "planned",
+        execution: "not_executed"
+      });
+    }
+    if (!hasDotnetFiles) {
+      lowConfidenceReasons.push("dotnet project files were present but no C#/Razor files were selected");
+    }
+  }
+
   const selectedPackageScripts = selectPackageScripts({
     packages: input.discovery.packageScripts,
     selectedEntries: input.selectedEntries,
@@ -359,6 +423,7 @@ function planValidationCommands(input: {
     selectedPackageScripts.length > 0 &&
     !goShapeSelected &&
     !cmakeShapeSelected &&
+    !dotnetShapeSelected &&
     (includeAll || hasAny(selectedLanguages, ["typescript", "javascript", "json"]))
   ) {
     commands.push(
@@ -681,6 +746,9 @@ function projectShapeConfigCandidates(selectedPaths: readonly string[]): string[
       candidates.add(path.posix.join(directory, "CMakeLists.txt"));
       candidates.add(path.posix.join(directory, "package.json"));
       candidates.add(path.posix.join(directory, "tsconfig.json"));
+      candidates.add(path.posix.join(directory, `${path.posix.basename(directory)}.csproj`));
+      candidates.add(path.posix.join(directory, `${path.posix.basename(directory)}.fsproj`));
+      candidates.add(path.posix.join(directory, `${path.posix.basename(directory)}.vbproj`));
       const parent = path.posix.dirname(directory);
       if (parent === directory) {
         break;
@@ -689,6 +757,58 @@ function projectShapeConfigCandidates(selectedPaths: readonly string[]): string[
     }
   }
   return [...candidates];
+}
+
+function nearestDotnetProject(input: {
+  selectedEntries: readonly FileCatalogEntry[];
+  projects: readonly string[];
+}): string | undefined {
+  const selectedPaths = input.selectedEntries.map((entry) => entry.path);
+  return [...input.projects].sort((left, right) => projectDistance(left, selectedPaths) - projectDistance(right, selectedPaths) || left.localeCompare(right))[0];
+}
+
+function dotnetTestTargets(input: {
+  selectedEntries: readonly FileCatalogEntry[];
+  testProjects: readonly string[];
+}): string[] {
+  if (input.testProjects.length === 0) {
+    return [];
+  }
+  const selectedPaths = input.selectedEntries.map((entry) => entry.path);
+  const ranked = [...input.testProjects].sort(
+    (left, right) => projectDistance(left, selectedPaths) - projectDistance(right, selectedPaths) || left.localeCompare(right)
+  );
+  return ranked.slice(0, 2);
+}
+
+function projectDistance(projectPath: string, selectedPaths: readonly string[]): number {
+  const projectDir = path.posix.dirname(projectPath);
+  if (selectedPaths.length === 0) {
+    return 0;
+  }
+  return Math.min(
+    ...selectedPaths.map((selectedPath) => {
+      if (selectedPath === projectPath) return 0;
+      if (selectedPath.startsWith(`${projectDir}/`)) return 1;
+      const projectRoot = projectDir.split("/")[0] ?? "";
+      return selectedPath.startsWith(`${projectRoot}/`) ? 5 : 20;
+    })
+  );
+}
+
+function isDotnetProjectPath(filePath: string): boolean {
+  return [".csproj", ".fsproj", ".vbproj"].includes(lowerExtension(filePath));
+}
+
+function isDotnetTestProjectPath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return lower.includes("test") || lower.includes("spec");
+}
+
+function lowerExtension(filePath: string): string {
+  const basename = path.posix.basename(filePath).toLowerCase();
+  const dot = basename.lastIndexOf(".");
+  return dot <= 0 ? "" : basename.slice(dot);
 }
 
 function cmakeReason(discovery: ValidationDiscovery): string {

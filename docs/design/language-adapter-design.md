@@ -140,6 +140,11 @@ first useful .NET step is likely resource-backed project graph extraction:
 solution/project files, target frameworks, SDK type, package/project
 references, app roles, generated-output policy, and validation planning. C# and
 Razor symbol/reference semantics should follow only with fixture-backed design.
+The first delivered slice classifies `.sln`, `.csproj`, C#, and Razor files as
+resource-backed routing evidence, skips common .NET build/test outputs, promotes
+solution/project/app/controller/Razor/EF anchors in overview and context, and
+plans non-executed `dotnet build`/`dotnet test` candidates from solution,
+project, and test-project evidence.
 
 FreeCAD dogfood confirmed the first C/C++ slice should start with reliable file
 identity and project-shape evidence before broad blast-radius claims. Common

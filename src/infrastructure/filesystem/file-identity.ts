@@ -53,7 +53,7 @@ export class FileIdentityAdapter implements FileIdentityPort {
       return "javascript";
     }
 
-    if (ext === ".cs") {
+    if (ext === ".cs" || ext === ".razor" || ext === ".cshtml") {
       return "csharp";
     }
 
@@ -114,6 +114,10 @@ export class FileIdentityAdapter implements FileIdentityPort {
       ext === ".config" ||
       ext === ".ini" ||
       ext === ".env" ||
+      ext === ".sln" ||
+      ext === ".csproj" ||
+      ext === ".fsproj" ||
+      ext === ".vbproj" ||
       stem === "pyproject" ||
       filename === "pyproject.toml" ||
       filename === "setup.cfg" ||

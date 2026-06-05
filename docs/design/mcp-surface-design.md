@@ -369,14 +369,20 @@ Post-closure dogfood caveats from large mixed-language repositories:
   symbols do not report only `json`/`text` languages. Result metadata should
   distinguish repository coverage, queried adapter coverage, and returned
   evidence languages clearly.
-- Open: improve .NET generated-output handling so `bin/`, `obj/`,
+- Done: add first-slice .NET generated-output handling so `bin/`, `obj/`,
+  `TestResults/`, `.dll`, `.pdb`, `.wasm`, `.nupkg`, and `.snupkg` artifacts
+  do not consume catalog/context budgets by default.
+- Open: deepen .NET generated-output handling so
   `TestResults/`, local `packages/`, publish output, `.dll`, `.pdb`, `.wasm`,
   compressed framework assets, and source maps do not dominate context or
   scope budgets unless explicitly requested.
-- Open: promote `.sln`, `.csproj`, `Program.cs`, `appsettings*.json`, Razor
+- Done: promote `.sln`, `.csproj`, `Program.cs`, `appsettings*.json`, Razor
   route pages/components, controllers, EF `DbContext`/migrations, and shared
   model projects as first-class .NET routing and overview anchors.
-- Open: add .NET validation planning evidence for solution and project files,
+- Done: add first-slice .NET validation planning evidence for solution,
+  project, and test-project files, including non-executed `dotnet build` and
+  `dotnet test` candidates.
+- Open: deepen .NET validation planning evidence for solution and project files,
   including non-executed `dotnet build <solution-or-project>` and `dotnet test`
   candidates when test projects or repo policy support them. Until policy is
   known, commands should remain planned evidence, not executed proof.
@@ -438,7 +444,9 @@ Post-closure dogfood caveats from large mixed-language repositories:
   repositories, including cfn-lint, repo-approved SAM validation commands,
   containerized deploy/test runners, and host-tool availability as planned or
   blocked evidence rather than guessed commands.
-- Future: add resource-backed `.sln`/`.csproj` extraction for SDK type, target
+- Done: add first-slice resource-backed `.sln`/`.csproj` discovery as project
+  graph routing and validation evidence.
+- Future: deepen resource-backed `.sln`/`.csproj` extraction for SDK type, target
   frameworks, package references, project references, output type, and likely
   app role before deeper C# semantics.
 - Future: add C# and Razor fixture-backed partial semantic support for

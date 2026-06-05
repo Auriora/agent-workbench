@@ -502,6 +502,38 @@ describe("verification_plan use case", () => {
     expect(result.plan.planned_commands.map((command) => command.display)).not.toContain("pnpm run test");
   });
 
+  it("plans .NET project, solution, and test validation from resource-backed evidence", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-dotnet-web-repo");
+    const result = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["src/WebApi/Controllers/OrdersController.cs"],
+        changed_files: ["src/WebApi/Controllers/OrdersController.cs"],
+        include_static_feedback: true,
+        max_commands: 10
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+
+    expect(result.plan.status).toBe("planned");
+    expect(result.plan.static_feedback).toBeUndefined();
+    expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
+      "dotnet build src/WebApi/WebApi.csproj",
+      "dotnet build ModenaFixture.sln",
+      "dotnet test tests/WebApi.Tests/WebApi.Tests.csproj"
+    ]);
+    expect(result.plan.planned_commands).toEqual(
+      result.plan.planned_commands.map(() =>
+        expect.objectContaining({
+          status: "planned",
+          execution: "not_executed"
+        })
+      )
+    );
+  });
+
   it("blocks unsafe, too-broad, and low-confidence validation targets with quiet feedback", async () => {
     const files = Array.from({ length: 51 }, (_, index) => `src/file-${index}.ts`);
     const result = await planVerification({

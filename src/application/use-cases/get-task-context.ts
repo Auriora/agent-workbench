@@ -507,7 +507,7 @@ function toFileReference(pathInput: string, entry?: FileCatalogEntry, reason = "
 
 function scoreFile(file: FileCatalogEntry, terms: Set<string>): number {
   const pathTerms = tokenSet([file.path]);
-  let score = firstPartyPathBoost(file.path) + webAppStructureBoost(file.path, terms);
+  let score = firstPartyPathBoost(file.path) + webAppStructureBoost(file.path, terms) + dotnetStructureBoost(file.path, terms);
   for (const term of terms) {
     if (pathTerms.has(term)) {
       score += 3;
@@ -586,6 +586,10 @@ function reasonForRelatedFile(
   if (webReason !== undefined) {
     return webReason;
   }
+  const dotnetReason = dotnetStructureReason(file.path, terms);
+  if (dotnetReason !== undefined) {
+    return dotnetReason;
+  }
   return hasExactPathTerm
     ? "Matched task terms in the repo-relative path."
     : "Weak path-term match; use as routing evidence only.";
@@ -640,6 +644,51 @@ function webAppStructureReason(filePath: string, terms: Set<string>): string | u
 
 function hasAnyTerm(terms: Set<string>, expected: readonly string[]): boolean {
   return expected.some((term) => terms.has(term));
+}
+
+function dotnetStructureBoost(filePath: string, terms: Set<string>): number {
+  const reason = dotnetStructureReason(filePath, terms);
+  if (reason === undefined) {
+    return 0;
+  }
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith(".sln")) return 22;
+  if (lower.endsWith(".csproj")) return 20;
+  if (lower.endsWith("/program.cs")) return 10;
+  if (lower.includes("dbcontext") || lower.includes("/migrations/")) return 10;
+  if (lower.includes("/controllers/")) return 9;
+  if (lower.endsWith(".razor") || lower.includes("/pages/") || lower.includes("/shared/")) return 8;
+  if (lower.includes("appsettings")) return 7;
+  return 4;
+}
+
+function dotnetStructureReason(filePath: string, terms: Set<string>): string | undefined {
+  if (!hasAnyTerm(terms, ["dotnet", "net", "csharp", "blazor", "razor", "controller", "api", "ef", "entity", "migration", "dbcontext"])) {
+    return undefined;
+  }
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith(".sln")) {
+    return "Matched .NET solution file convention.";
+  }
+  if (lower.endsWith(".csproj") || lower.endsWith(".fsproj") || lower.endsWith(".vbproj")) {
+    return "Matched .NET project file convention.";
+  }
+  if (lower.endsWith("/program.cs")) {
+    return "Matched .NET application entrypoint convention.";
+  }
+  if (lower.includes("/controllers/")) {
+    return "Matched ASP.NET controller convention.";
+  }
+  if (lower.endsWith(".razor") || lower.includes("/pages/") || lower.includes("/shared/")) {
+    return "Matched Razor/Blazor UI convention.";
+  }
+  if (lower.includes("dbcontext") || lower.includes("/migrations/")) {
+    return "Matched Entity Framework context or migration convention.";
+  }
+  if (lower.includes("appsettings")) {
+    return "Matched .NET appsettings configuration convention.";
+  }
+  return undefined;
 }
 
 function noisyArtifactPenalty(filePath: string): number {
@@ -741,7 +790,7 @@ function capabilityFromLanguage(language: string): CapabilityLevel {
   if (language === "python") {
     return "partial_semantic";
   }
-  if (["markdown", "json", "toml", "yaml", "infrastructure"].includes(language)) {
+  if (["csharp", "markdown", "json", "toml", "yaml", "infrastructure"].includes(language)) {
     return "resource_backed";
   }
   return "unsupported";
@@ -753,6 +802,9 @@ function evidenceFromLanguage(language: string): EvidenceKind[] {
   }
   if (language === "markdown") {
     return ["docs"];
+  }
+  if (language === "csharp") {
+    return ["heuristic"];
   }
   if (["json", "toml", "yaml", "infrastructure"].includes(language)) {
     return ["config"];
