@@ -199,6 +199,13 @@ Post-MVP documentation-quality kinds:
 
 ## Graph Evidence Labels
 
+`symbol_search` exact mode first checks exact `name` and `qualified_name`
+matches. If no exact symbol exists, the result may be empty or may contain
+bounded fuzzy matches. An empty exact result is not a tool failure. It means the
+requested symbol was not present in the current snapshot, and `next_actions`
+should route the agent back to `context_for_task` or source inspection rather
+than `find_references`.
+
 `find_references` returns parser-backed, unresolved-parser, and bounded lexical
 evidence in the same reference-hit shape. Every hit includes `evidence_kinds`:
 

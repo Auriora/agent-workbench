@@ -80,6 +80,7 @@ export async function getTaskContext(input: {
   const rankedSymbolResult = await selectRankedSymbols({
     task: input.request.task,
     symbols: input.request.symbols,
+    requestedPaths: requestedFiles.filter((file) => file.exists).map((file) => file.path),
     repo_root: scanned.repo_root,
     graph: input.graph,
     snapshots: input.snapshots,
@@ -254,6 +255,7 @@ function selectGoverningDocs(input: {
 async function selectRankedSymbols(input: {
   task: string;
   symbols: readonly string[];
+  requestedPaths: readonly string[];
   repo_root: string;
   graph?: GraphQueryPort;
   snapshots?: SnapshotPort;
@@ -308,6 +310,7 @@ async function selectRankedSymbols(input: {
   }
 
   const terms = symbolTerms(input);
+  const requestedPaths = new Set(input.requestedPaths);
   const candidates = new Map<string, { node: GraphNode; score: number; reason: string }>();
   for (const term of terms) {
     const nodes = await input.graph.searchNodes({
@@ -316,15 +319,18 @@ async function selectRankedSymbols(input: {
       max_rows: input.limit
     });
     for (const node of nodes) {
-      const score = scoreSymbol(node, term, input.symbols);
+      const requestedFileMatch = requestedPaths.has(node.file_path);
+      const score = scoreSymbol(node, term, input.symbols) + (requestedFileMatch ? 50 : 0);
       const existing = candidates.get(node.id);
       if (existing === undefined || score > existing.score) {
         candidates.set(node.id, {
           node,
           score,
-          reason: input.symbols.includes(term)
-            ? "Matched a caller-supplied symbol through indexed graph evidence."
-            : "Matched task terms through indexed graph evidence."
+          reason: requestedFileMatch
+            ? "Matched task terms in a caller-supplied implementation file."
+            : input.symbols.includes(term)
+              ? "Matched a caller-supplied symbol through indexed graph evidence."
+              : "Matched task terms through indexed graph evidence."
         });
       }
     }

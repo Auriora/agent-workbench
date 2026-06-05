@@ -69,6 +69,49 @@ describe("graph store", () => {
     }
   });
 
+  it("preserves a new numeric snapshot id when refreshing an existing repo", async () => {
+    const store = openGraphStore(path.join(dir, "index.sqlite"));
+    const first = snapshotState("42");
+    const refresh: SnapshotState = {
+      ...snapshotState("1780653277649"),
+      repo_root: first.repo_root,
+      workspace_root: first.workspace_root,
+      repo_identity: first.repo_identity,
+      freshness: "refreshing"
+    };
+
+    try {
+      await store.upsertSnapshot({ snapshot: first });
+      await store.upsertSnapshot({ snapshot: refresh });
+
+      await expect(
+        store.replaceSnapshotExtraction({
+          batch: extractionBatch({
+            snapshot_id: refresh.id,
+            source_path: "src/service.py",
+            node_id: "node-refresh",
+            name: "RefreshedSymbol"
+          }),
+          replace: true
+        })
+      ).resolves.toBeUndefined();
+
+      await expect(
+        store.findNodesByName({
+          snapshot_id: refresh.id,
+          query: "RefreshedSymbol",
+          exact: true
+        })
+      ).resolves.toEqual([
+        expect.objectContaining({
+          id: "node-refresh"
+        })
+      ]);
+    } finally {
+      store.close();
+    }
+  });
+
   it("supports file catalog upsert/list/get/remove", async () => {
     const store = openGraphStore(path.join(dir, "index.sqlite"));
     const snapshot: SnapshotState = {

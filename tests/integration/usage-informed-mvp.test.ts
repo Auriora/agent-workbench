@@ -157,6 +157,70 @@ describe("usage-informed MVP validation", () => {
     }
   });
 
+  it("ranks symbols from explicit implementation files ahead of matching tests", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-rank-"));
+    fs.mkdirSync(path.join(repoRoot, "src"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "tests"), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoRoot, "src", "validation_service.py"),
+      "class ValidationService:\n    def validate_repository_uri(self, uri: str) -> bool:\n        return uri.startswith('repo://')\n"
+    );
+    fs.writeFileSync(
+      path.join(repoRoot, "tests", "test_validation_service.py"),
+      "class TestValidationService:\n    def test_validate_repository_uri(self):\n        assert True\n"
+    );
+    const store = openGraphStore(path.join(repoRoot, "graph.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new PythonTreeSitterExtractorAdapter());
+    try {
+      await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner,
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "2027"
+      });
+
+      const result = await getTaskContext({
+        request: {
+          task: "Update validation service repository URI handling",
+          repo_root: repoRoot,
+          files: ["src/validation_service.py"],
+          symbols: ["ValidationService", "validate_repository_uri"],
+          max_files: 5,
+          max_docs: 5
+        },
+        scanner,
+        graph: store,
+        snapshots: store,
+        catalog: store,
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: repoRoot
+      });
+
+      expect(result.context.ranked_symbols[0]).toEqual(
+        expect.objectContaining({
+          symbol: expect.objectContaining({
+            path: "src/validation_service.py"
+          }),
+          reason: "Matched task terms in a caller-supplied implementation file."
+        })
+      );
+      expect(result.context.ranked_symbols.findIndex((candidate) => candidate.symbol.path.startsWith("src/"))).toBeLessThan(
+        result.context.ranked_symbols.findIndex((candidate) => candidate.symbol.path.startsWith("tests/"))
+      );
+    } finally {
+      store.close();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("keeps docs/config and non-Python evidence as routing metadata with direct-read caveats", async () => {
     const docsContext = await getTaskContext({
       request: {

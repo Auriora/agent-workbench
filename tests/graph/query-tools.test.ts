@@ -106,6 +106,47 @@ describe("graph query use cases", () => {
     }
   });
 
+  it("routes exact symbol misses to context instead of reference follow-up", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-basic-python", "208");
+    try {
+      const result = await searchSymbols({
+        request: {
+          query: "ConfigValidationService",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: ["python"],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(result.symbols.symbols).toEqual([]);
+      expect(result.symbols.next_actions).toEqual([
+        expect.objectContaining({
+          tool: "context_for_task",
+          args: expect.objectContaining({
+            symbols: ["ConfigValidationService"],
+            task: expect.stringContaining("Exact symbol 'ConfigValidationService' was not found")
+          })
+        })
+      ]);
+      expect(result.symbols.next_actions).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            tool: "find_references"
+          })
+        ])
+      );
+    } finally {
+      fixture.store.close();
+    }
+  });
+
   it("finds resolved references and routes to impact", async () => {
     const fixture = await indexedFixture("tests/fixtures/fixture-basic-python", "202");
     try {

@@ -9,6 +9,7 @@ import type {
   SnapshotPort,
   WorkspaceFilePort
 } from "../../ports/index.js";
+import type { GraphNode } from "../../domain/models/index.js";
 import { blockedMeta, resolveSnapshot, toSymbolReference } from "./query-helpers.js";
 import { capNextActions } from "../../presentation/metadata.js";
 
@@ -51,18 +52,23 @@ export async function searchSymbols(input: {
     };
   }
 
-  const nodes = input.request.exact
+  const searchResult: SymbolNodeSearchResult = input.request.exact
     ? await findExactThenFallbackSymbols({
         graph: input.graph,
         snapshot_id: resolved.snapshot_id,
         query: input.request.query,
         max_rows: input.request.max_results
       })
-    : await input.graph.searchNodes({
-        snapshot_id: resolved.snapshot_id,
-        query: input.request.query,
-        max_rows: input.request.max_results
-      });
+    : {
+        nodes: await input.graph.searchNodes({
+          snapshot_id: resolved.snapshot_id,
+          query: input.request.query,
+          max_rows: input.request.max_results
+        }),
+        exactMiss: false
+      };
+  const nodes = searchResult.nodes;
+  const exactMiss = searchResult.exactMiss;
   const filtered = input.request.languages.length > 0
     ? nodes.filter((node) => input.request.languages.includes(node.language))
     : nodes;
@@ -81,15 +87,29 @@ export async function searchSymbols(input: {
           })
         )
       ),
-      next_actions: capNextActions([
-        {
-          tool: "find_references",
-          args: {
-            symbol: input.request.query,
-            snapshot_id: resolved.snapshot_id
-          }
-        }
-      ])
+      next_actions:
+        filtered.length > 0
+          ? capNextActions([
+              {
+                tool: "find_references",
+                args: {
+                  symbol: input.request.query,
+                  snapshot_id: resolved.snapshot_id
+                }
+              }
+            ])
+          : capNextActions([
+              {
+                tool: "context_for_task",
+                args: {
+                  task: exactMiss
+                    ? `Exact symbol '${input.request.query}' was not found; inspect nearby files or verify the symbol name.`
+                    : `No symbol results were found for '${input.request.query}'.`,
+                  symbols: [input.request.query],
+                  repo_root: resolved.repo_root
+                }
+              }
+            ])
     },
     meta: {
       ...resolved.meta,
@@ -103,7 +123,7 @@ async function findExactThenFallbackSymbols(input: {
   snapshot_id: string;
   query: string;
   max_rows: number;
-}) {
+}): Promise<SymbolNodeSearchResult> {
   const byName = await input.graph.findNodesByName({
     snapshot_id: input.snapshot_id,
     query: input.query,
@@ -117,13 +137,20 @@ async function findExactThenFallbackSymbols(input: {
   });
   const exact = dedupeNodes([...byName, ...byQualifiedName]).slice(0, input.max_rows);
   if (exact.length > 0) {
-    return exact;
+    return {
+      nodes: exact,
+      exactMiss: false
+    };
   }
-  return input.graph.searchNodes({
+  const fallback = await input.graph.searchNodes({
     snapshot_id: input.snapshot_id,
     query: input.query,
     max_rows: input.max_rows
   });
+  return {
+    nodes: fallback,
+    exactMiss: true
+  };
 }
 
 function dedupeNodes<T extends { id: string }>(nodes: readonly T[]): T[] {
@@ -133,3 +160,8 @@ function dedupeNodes<T extends { id: string }>(nodes: readonly T[]): T[] {
   }
   return [...byId.values()];
 }
+
+type SymbolNodeSearchResult = {
+  nodes: readonly GraphNode[];
+  exactMiss: boolean;
+};

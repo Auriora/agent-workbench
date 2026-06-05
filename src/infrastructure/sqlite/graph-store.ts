@@ -982,7 +982,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       return;
     }
 
-    if (existingByRepo) {
+    if (existingByRepo && (requestedId === null || existingByRepo.id === requestedId)) {
       this.db
         .prepare(`
           UPDATE snapshots
