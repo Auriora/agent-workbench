@@ -27,7 +27,11 @@ import {
   createTelemetryAdapter,
   telemetryConfigFromEnv
 } from "./infrastructure/telemetry/index.js";
-import { PythonTreeSitterExtractorAdapter } from "./infrastructure/tree-sitter/index.js";
+import {
+  CppDeclarationExtractorAdapter,
+  GoDeclarationExtractorAdapter,
+  PythonTreeSitterExtractorAdapter
+} from "./infrastructure/tree-sitter/index.js";
 import { SystemClockAdapter } from "./infrastructure/time/index.js";
 import { createAgentWorkbenchServer as createAgentWorkbenchMcpServer } from "./interface-adapters/mcp/server.js";
 
@@ -46,6 +50,9 @@ export function createAgentWorkbenchServer(
   const previews = new InMemoryEditPreviewStoreAdapter();
   const graphStore = openGraphStore(graphStorePath(absoluteRepoRoot));
   const extractors = new ExtractorRegistryAdapter();
+  extractors.register(new CppDeclarationExtractorAdapter({ language: "c" }));
+  extractors.register(new CppDeclarationExtractorAdapter({ language: "cpp" }));
+  extractors.register(new GoDeclarationExtractorAdapter());
   extractors.register(new PythonTreeSitterExtractorAdapter());
   const resourceExtractor = new ResourceExtractorAdapter();
   const telemetry = createTelemetryAdapter(telemetryConfigFromEnv());

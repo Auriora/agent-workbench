@@ -16,7 +16,7 @@ export class PythonTreeSitterExtractorAdapter implements ExtractorPort {
   }
 
   public supports(input: { language: string; path: string }): boolean {
-    return input.language === "python" && input.path.endsWith(".py");
+    return input.language === "python" && (input.path.endsWith(".py") || input.path.endsWith(".pyi"));
   }
 
   public async extract(input: ExtractionRequest): Promise<ExtractionBatch> {

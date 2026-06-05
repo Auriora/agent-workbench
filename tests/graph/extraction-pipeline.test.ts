@@ -10,7 +10,11 @@ import type { ClockPort, ExtractorPort } from "../../src/ports/index.js";
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../../src/infrastructure/extraction/index.js";
 import { FileCatalogScannerAdapter, WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
-import { PythonTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
+import {
+  CppDeclarationExtractorAdapter,
+  GoDeclarationExtractorAdapter,
+  PythonTreeSitterExtractorAdapter
+} from "../../src/infrastructure/tree-sitter/index.js";
 import { InMemoryRuntimeOperationsAdapter } from "../../src/infrastructure/runtime/index.js";
 
 const clock: ClockPort = {
@@ -204,6 +208,192 @@ describe("repository graph extraction pipeline", () => {
           })
         ])
       );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("indexes Go declarations as routing evidence without semantic edges", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-go-service-repo");
+    const store = openGraphStore(path.join(dir, "go.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new GoDeclarationExtractorAdapter());
+
+    try {
+      const result = await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "109"
+      });
+
+      expect(result).toMatchObject({
+        scanned_files: 4,
+        extracted_files: 4,
+        resource_backed_files: 2,
+        unsupported_files: 0,
+        edge_count: 0,
+        unresolved_reference_count: 0
+      });
+
+      const responseCache = await store.findNodesByName({
+        snapshot_id: "109",
+        query: "ResponseCache",
+        exact: true
+      });
+      expect(responseCache).toEqual([
+        expect.objectContaining({
+          kind: "type",
+          name: "ResponseCache",
+          qualified_name: "graph.ResponseCache",
+          language: "go",
+          metadata: expect.objectContaining({
+            capability_level: "resource_backed",
+            evidence_kinds: ["heuristic"],
+            semantic_scope: "declarations_only"
+          })
+        })
+      ]);
+
+      const loadConfig = await store.findNodesByName({
+        snapshot_id: "109",
+        query: "LoadConfig",
+        exact: true
+      });
+      expect(loadConfig).toEqual([
+        expect.objectContaining({
+          kind: "method",
+          name: "LoadConfig",
+          qualified_name: "graph.ResponseCache.LoadConfig"
+        })
+      ]);
+
+      const main = await store.findNodesByName({
+        snapshot_id: "109",
+        query: "main",
+        exact: true
+      });
+      expect(main).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "function",
+            name: "main",
+            qualified_name: "main.main"
+          })
+        ])
+      );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("indexes C++ declarations, Python stubs, and CMake targets as routing evidence", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-cmake-cpp-repo");
+    const store = openGraphStore(path.join(dir, "cpp.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new CppDeclarationExtractorAdapter({ language: "cpp" }));
+    registry.register(new PythonTreeSitterExtractorAdapter());
+
+    try {
+      const result = await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "110"
+      });
+
+      expect(result).toMatchObject({
+        scanned_files: 7,
+        extracted_files: 7,
+        unsupported_files: 0
+      });
+
+      const documentObject = await store.findNodesByName({
+        snapshot_id: "110",
+        query: "DocumentObject",
+        exact: true
+      });
+      expect(documentObject).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "class",
+            name: "DocumentObject",
+            language: "cpp",
+            metadata: expect.objectContaining({
+              capability_level: "resource_backed",
+              evidence_kinds: ["heuristic"],
+              semantic_scope: "declarations_only"
+            })
+          }),
+          expect.objectContaining({
+            kind: "class",
+            name: "DocumentObject",
+            language: "python",
+            metadata: expect.objectContaining({
+              parser: "tree-sitter-python"
+            })
+          })
+        ])
+      );
+
+      const mustExecute = await store.findNodesByName({
+        snapshot_id: "110",
+        query: "mustExecute",
+        exact: true
+      });
+      expect(mustExecute).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "method",
+            qualified_name: "DocumentObject.mustExecute",
+            language: "cpp"
+          })
+        ])
+      );
+
+      const include = await store.findNodesByName({
+        snapshot_id: "110",
+        query: "DocumentObject.h",
+        exact: true
+      });
+      expect(include).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "include",
+            language: "cpp"
+          })
+        ])
+      );
+
+      const appTarget = await store.findNodesByName({
+        snapshot_id: "110",
+        query: "App",
+        exact: true
+      });
+      expect(appTarget).toEqual([
+        expect.objectContaining({
+          kind: "cmake_library",
+          qualified_name: "src/App/CMakeLists.txt:App",
+          metadata: expect.objectContaining({
+            provenance: "cmake_target_scan",
+            sources: ["DocumentObject.cpp"]
+          })
+        })
+      ]);
     } finally {
       store.close();
     }

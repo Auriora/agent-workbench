@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { AdapterEvidence } from "../../src/contracts/index.js";
 import type { SnapshotState, WarmupExecution } from "../../src/domain/models/runtime.js";
 import {
+  capNextActions,
   buildRuntimeResponseMeta,
   classifyRuntimeTrust,
   deriveRuntimeStatusCaveats
@@ -91,6 +92,20 @@ describe("presentation metadata helpers", () => {
         severity: "warning",
         evidence_kinds: []
       })
+    ]);
+  });
+
+  it("filters next actions to public MCP tools only", () => {
+    expect(
+      capNextActions([
+        { tool: "prewarm_graph", args: { repo_root: "/repo" } },
+        { tool: "manual_command", args: { command: "pnpm test" } },
+        { tool: "verification_plan", args: { files: ["src/service.py"] } },
+        { tool: "symbol_search", args: { query: "Service" } }
+      ])
+    ).toEqual([
+      { tool: "verification_plan", args: { files: ["src/service.py"] } },
+      { tool: "symbol_search", args: { query: "Service" } }
     ]);
   });
 });

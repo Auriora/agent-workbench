@@ -334,6 +334,40 @@ describe("context_for_task use case", () => {
     expect(JSON.stringify(result.context)).not.toContain("python-agent-ide");
     expect(JSON.stringify(result.context)).not.toContain("agent-ide");
   });
+
+  it("boosts local build files and nearby tests for explicit CMake C++ files", async () => {
+    const result = await getTaskContext({
+      request: {
+        task: "Update DocumentObject recompute behavior",
+        repo_root: "tests/fixtures/fixture-cmake-cpp-repo",
+        files: ["src/App/DocumentObject.cpp", "src/App/DocumentObject.h"],
+        symbols: [],
+        max_files: 5,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+
+    expect(result.context.related_files.map((file) => file.path).slice(0, 3)).toEqual([
+      "src/App/CMakeLists.txt",
+      "src/App/DocumentObject.pyi",
+      "src/App/DocumentObjectTest.cpp"
+    ]);
+    expect(result.context.related_files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "src/App/CMakeLists.txt",
+          reason: "Local build file adjacent to an explicitly supplied source file."
+        }),
+        expect.objectContaining({
+          path: "src/App/DocumentObjectTest.cpp",
+          reason: "Nearby test file associated with an explicitly supplied source file."
+        })
+      ])
+    );
+    expect(result.context.related_files.map((file) => file.path)).not.toContain("package.json");
+  });
 });
 
 describe("context_for_task MCP tool", () => {

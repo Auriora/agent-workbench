@@ -323,7 +323,7 @@ describe("repo scope and overview composed server resources", () => {
     expect(result.scope.file_counts).toMatchObject({
       go: 2
     });
-    expect(result.scope.capability_counts.unsupported).toBeGreaterThanOrEqual(2);
+    expect(result.scope.capability_counts.resource_backed).toBeGreaterThanOrEqual(2);
   });
 
   it("reports C++ headers, sources, and Python stubs in CMake C++ shaped scope", async () => {
@@ -340,7 +340,7 @@ describe("repo scope and overview composed server resources", () => {
     });
     expect(result.scope.capability_counts).toMatchObject({
       partial_semantic: 1,
-      unsupported: expect.any(Number)
+      resource_backed: expect.any(Number)
     });
   });
 

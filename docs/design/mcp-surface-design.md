@@ -280,6 +280,14 @@ FreeCAD dogfood left C++ monorepo and Codex-discoverability follow-up items:
   discovery path, or adjust the integration profile/tool metadata so advertised
   tools are discoverable on first use.
 
+Future multi-language repository work:
+
+- Add cross-language symbol/reference concepts only after language adapters
+  define how symbols, generated bindings, stubs, foreign-function interfaces,
+  build targets, and framework routing are integrated. Until then, MCP symbol,
+  reference, impact, and validation tools should remain language-aware at the
+  repository-shape level but must not claim cross-language semantic proof.
+
 ## Related Docs
 
 - [System architecture](../architecture/system-architecture.md)

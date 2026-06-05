@@ -141,12 +141,6 @@ export async function planVerification(input: {
             repo_root: scanned.repo_root
           }
         })),
-      ...commands.map((command) => ({
-        tool: "manual_command",
-        args: {
-          command: command.display
-        }
-      })),
       ...(commands.length === 0
         ? [
             {

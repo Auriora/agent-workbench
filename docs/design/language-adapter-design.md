@@ -115,12 +115,13 @@ After the MVP slice works, deepen support in this order:
 6. Go, C/C++, Rust, then the extended backlog
 
 OneMount dogfood confirmed the first Go slice should start before deep
-reference/impact work with file identity, project discovery, and basic symbol
-extraction. A Go-heavy repository must surface `.go` files in scope, recognize
-`go.mod` and test/build configuration, extract package-level declarations such
-as functions, types, methods, and `main`, and label the adapter as unsupported
-or partial-semantic honestly until reference resolution and impact evidence are
-fixture-backed.
+reference/impact work with file identity, project discovery, and basic routing
+symbols. A Go-heavy repository must surface `.go` files in scope, recognize
+`go.mod` and test/build configuration, and expose package-level declarations
+such as functions, types, methods, and `main` as `resource_backed` routing
+evidence. This first slice is not semantic Go support; references and impact
+must stay low confidence until parser-backed reference resolution and promotion
+fixtures prove stronger behavior.
 
 FreeCAD dogfood confirmed the first C/C++ slice should start with reliable file
 identity and project-shape evidence before broad blast-radius claims. Common
@@ -130,6 +131,13 @@ C/C++ extensions such as `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp`, and
 should extract classes, functions, methods, includes, and CMake target
 membership before reference and impact results are promoted beyond low
 confidence.
+
+Cross-language symbols are deferred. Mixed-language repositories should expose
+per-language routing evidence and project-shape validation now, but references
+across Python stubs, generated bindings, C/C++ extension modules, Go services,
+TypeScript clients, infrastructure handlers, or other language boundaries must
+not be promoted until adapter integration contracts define provenance,
+identity, confidence, and fixture-backed promotion gates for those edges.
 
 ## Adapter Roles
 

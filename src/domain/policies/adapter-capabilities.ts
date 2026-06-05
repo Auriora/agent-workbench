@@ -8,11 +8,9 @@ type FileCapabilityInput = {
 };
 
 const partialSemanticLanguages = new Set(["python"]);
+const resourceBackedLanguageNames = new Set(["c", "cpp", "go"]);
 const unsupportedLanguageNames = new Set([
-  "c",
-  "cpp",
   "csharp",
-  "go",
   "java",
   "javascript",
   "rust",
@@ -109,6 +107,10 @@ export function describeFileCapability(input: FileCapabilityInput): AdapterEvide
 
   if (partialSemanticLanguages.has(input.language)) {
     return evidence(input, "language", "partial_semantic", ["parser"], "high");
+  }
+
+  if (resourceBackedLanguageNames.has(input.language)) {
+    return evidence(input, "language", "resource_backed", ["heuristic"], "high");
   }
 
   if (unsupportedLanguageNames.has(input.language)) {

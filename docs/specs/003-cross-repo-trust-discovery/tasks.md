@@ -135,7 +135,7 @@ T001..T008 -> T009
 ### Task T005: Remove Non-Callable Next Actions
 
 - **ID:** T005
-- **Status:** pending
+- **Status:** completed
 - **Depends on:** [T003, T004]
 - **Parallel:** no
 - **Story:** Requirement 3
@@ -145,14 +145,21 @@ T001..T008 -> T009
   as `prewarm_graph`.
 - **Acceptance:** MCP tests prove every returned next action names a callable
   public tool in Codex-visible surfaces.
-- **Evidence:** pending
+- **Evidence:** `capNextActions` now filters next actions to the public MCP tool
+  set, unavailable `prewarm_graph` actions were removed from graph-blocked
+  results, and `verification_plan` no longer emits pseudo `manual_command`
+  next actions. Validated with `pnpm typecheck` and `pnpm exec vitest run
+  tests/contracts/presentation-metadata.test.ts tests/graph/query-tools.test.ts
+  tests/mcp/query-tools.test.ts tests/mcp/context-for-task-tool.test.ts
+  tests/mcp/verification-plan-tool.test.ts tests/integration/usage-informed-mvp.test.ts
+  tests/integration/replacement-readiness.test.ts` on 2026-06-05.
 
 ## Phase 3: Ranking And Validation Planning
 
 ### Task T006: Improve Context Ranking For Broad And File-Seeded Tasks
 
 - **ID:** T006
-- **Status:** pending
+- **Status:** completed
 - **Depends on:** [T005]
 - **Parallel:** yes
 - **Story:** Requirement 4
@@ -163,7 +170,14 @@ T001..T008 -> T009
 - **Acceptance:** CMake/C++ fixture ranks `DocumentObject` adjacent files
   and local CMake/test evidence ahead of unrelated CMake find modules,
   installer docs, vendored docs, or fixture blobs.
-- **Evidence:** pending
+- **Evidence:** `context_for_task` now boosts same-directory build files,
+  same-stem sibling files, and nearby tests when explicit files are supplied;
+  weak broad path matches carry routing-only wording and noisy artifact paths
+  are downranked. CMake/C++ fixture tests prove local CMake and test evidence
+  rank ahead of incidental package files. Validated with `pnpm typecheck` and
+  `pnpm exec vitest run tests/mcp/context-for-task-tool.test.ts
+  tests/integration/usage-informed-mvp.test.ts
+  tests/integration/replacement-readiness.test.ts` on 2026-06-05.
 
 ### Task T007: Add Repository-Shape Validation Planning
 
@@ -191,7 +205,7 @@ T001..T008 -> T009
 ### Task T008: Add Go Identity And Basic Symbol Extraction
 
 - **ID:** T008
-- **Status:** pending
+- **Status:** completed
 - **Depends on:** [T006, T007]
 - **Parallel:** yes
 - **Story:** Requirement 6
@@ -201,12 +215,25 @@ T001..T008 -> T009
 - **Acceptance:** Go-service fixtures support Go scope and symbol search
   for representative declarations while references/impact remain low confidence
   when semantic edges are absent.
-- **Evidence:** pending
+- **Evidence:** Added a Go declaration extractor that emits routing-only
+  package, function, method, type, and `main` symbols with `resource_backed`
+  capability and `heuristic` evidence. The server registers the extractor, Go
+  files classify as resource-backed instead of unsupported, and graph tests
+  prove representative Go symbols are searchable while impact remains low
+  confidence when semantic edges are absent. Validated with `pnpm typecheck`
+  and `pnpm exec vitest run tests/contracts/presentation-metadata.test.ts
+  tests/runtime/status.test.ts tests/workspace/file-catalog-scanner.test.ts
+  tests/mcp/repo-scope-overview-resource.test.ts
+  tests/graph/extraction-pipeline.test.ts tests/graph/query-tools.test.ts
+  tests/mcp/query-tools.test.ts tests/mcp/context-for-task-tool.test.ts
+  tests/mcp/verification-plan-tool.test.ts
+  tests/integration/usage-informed-mvp.test.ts
+  tests/integration/replacement-readiness.test.ts` on 2026-06-05.
 
 ### Task T009: Add C/C++ Identity, Stub Routing, And Basic Symbol Extraction
 
 - **ID:** T009
-- **Status:** pending
+- **Status:** completed
 - **Depends on:** [T001, T002, T003, T004, T005, T006, T007, T008]
 - **Parallel:** no
 - **Story:** Requirement 7
@@ -217,7 +244,21 @@ T001..T008 -> T009
 - **Acceptance:** CMake/C++ fixtures support C/C++ scope and symbol search
   for classes/functions/methods/includes and keep impact confidence low unless
   parser-backed edges exist.
-- **Evidence:** pending
+- **Evidence:** Added a C/C++ declaration extractor for routing-only classes,
+  functions, methods, and includes with `resource_backed` capability and
+  `heuristic` evidence; `.pyi` files now route through the Python parser path;
+  and `CMakeLists.txt` resource extraction now emits CMake target declaration
+  nodes with source membership metadata. Graph and query tests prove C++ and
+  stub symbols are searchable while impact remains low confidence when semantic
+  edges are absent. Validated with `pnpm typecheck` and `pnpm exec vitest run
+  tests/contracts/presentation-metadata.test.ts tests/runtime/status.test.ts
+  tests/workspace/file-catalog-scanner.test.ts
+  tests/mcp/repo-scope-overview-resource.test.ts
+  tests/graph/extraction-pipeline.test.ts tests/graph/query-tools.test.ts
+  tests/mcp/query-tools.test.ts tests/mcp/context-for-task-tool.test.ts
+  tests/mcp/verification-plan-tool.test.ts
+  tests/integration/usage-informed-mvp.test.ts
+  tests/integration/replacement-readiness.test.ts` on 2026-06-05.
 
 ## Phase 5: Verification And Promotion
 

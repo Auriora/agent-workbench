@@ -52,7 +52,7 @@ export async function computeImpact(input: {
           reason: "No graph snapshot was available, so impact evidence could not be computed.",
           evidence_kinds: []
         },
-        next_actions: [{ tool: "prewarm_graph", args: { repo_root: repoRoot } }]
+        next_actions: capNextActions([])
       },
       meta: blockedMeta({
         repo_root: repoRoot,

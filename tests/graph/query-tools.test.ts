@@ -10,7 +10,11 @@ import type { ClockPort } from "../../src/ports/index.js";
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../../src/infrastructure/extraction/index.js";
 import { FileCatalogScannerAdapter, WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
-import { PythonTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
+import {
+  CppDeclarationExtractorAdapter,
+  GoDeclarationExtractorAdapter,
+  PythonTreeSitterExtractorAdapter
+} from "../../src/infrastructure/tree-sitter/index.js";
 
 const clock: ClockPort = {
   now: () => new Date("2026-05-31T12:00:00.000Z"),
@@ -380,21 +384,145 @@ describe("graph query use cases", () => {
         freshness: "cold",
         verification_status: "blocked"
       });
-      expect(result.symbols.next_actions).toEqual([
-        expect.objectContaining({
-          tool: "prewarm_graph"
-        })
-      ]);
+      expect(result.symbols.next_actions).toEqual([]);
     } finally {
       store.close();
     }
   });
 
-  async function indexedFixture(repoRootInput: string, snapshotId: string) {
+  it("returns Go routing symbols while impact remains low confidence without edges", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-go-service-repo", "209", {
+      registerGo: true,
+      registerPython: false
+    });
+    try {
+      const symbols = await searchSymbols({
+        request: {
+          query: "NewResponseCache",
+          max_results: 5,
+          source_byte_limit: 0,
+          exact: true,
+          languages: ["go"]
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(symbols.symbols.symbols).toEqual([
+        expect.objectContaining({
+          name: "NewResponseCache",
+          language: "go",
+          capability_level: "resource_backed",
+          evidence_kinds: ["heuristic"]
+        })
+      ]);
+
+      const nodeId = symbols.symbols.symbols[0]?.node_id ?? "";
+      const impact = await computeImpact({
+        request: {
+          node_id: nodeId,
+          max_depth: 2,
+          max_nodes: 10,
+          direction: "both"
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(impact.impact.confidence).toEqual(
+        expect.objectContaining({
+          level: "low",
+          scope: "empty"
+        })
+      );
+      expect(impact.impact.edge_count).toBe(0);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
+  it("returns C++ routing symbols while impact remains low confidence without edges", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-cmake-cpp-repo", "210", {
+      registerCpp: true,
+      registerPython: true
+    });
+    try {
+      const symbols = await searchSymbols({
+        request: {
+          query: "mustExecute",
+          max_results: 5,
+          source_byte_limit: 0,
+          exact: true,
+          languages: ["cpp"]
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(symbols.symbols.symbols).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            name: "mustExecute",
+            language: "cpp",
+            capability_level: "resource_backed",
+            evidence_kinds: ["heuristic"]
+          })
+        ])
+      );
+
+      const nodeId = symbols.symbols.symbols[0]?.node_id ?? "";
+      const impact = await computeImpact({
+        request: {
+          node_id: nodeId,
+          max_depth: 2,
+          max_nodes: 10,
+          direction: "both"
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(impact.impact.confidence).toEqual(
+        expect.objectContaining({
+          level: "low",
+          scope: "empty"
+        })
+      );
+      expect(impact.impact.edge_count).toBe(0);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
+  async function indexedFixture(
+    repoRootInput: string,
+    snapshotId: string,
+    options: { registerPython?: boolean; registerGo?: boolean; registerCpp?: boolean } = {}
+  ) {
     const repoRoot = path.resolve(repoRootInput);
     const store = openGraphStore(path.join(dir, `${snapshotId}.sqlite`));
     const registry = new ExtractorRegistryAdapter();
-    registry.register(new PythonTreeSitterExtractorAdapter());
+    if (options.registerPython ?? true) {
+      registry.register(new PythonTreeSitterExtractorAdapter());
+    }
+    if (options.registerGo ?? false) {
+      registry.register(new GoDeclarationExtractorAdapter());
+    }
+    if (options.registerCpp ?? false) {
+      registry.register(new CppDeclarationExtractorAdapter({ language: "cpp" }));
+    }
     const workspace = new WorkspaceFileAdapter({ repoRoot });
     await indexRepositoryGraph({
       repo_root: repoRoot,

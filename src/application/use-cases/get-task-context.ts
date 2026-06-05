@@ -60,6 +60,7 @@ export async function getTaskContext(input: {
   const relatedFiles = selectRelatedFiles({
     task: input.request.task,
     symbols: input.request.symbols,
+    requestedPaths: requestedFiles.filter((file) => file.exists).map((file) => file.path),
     files: scanned.files,
     exclude: new Set(requestedFiles.map((file) => file.path)),
     limit: maxFiles
@@ -212,6 +213,7 @@ function buildSummary(input: {
 function selectRelatedFiles(input: {
   task: string;
   symbols: readonly string[];
+  requestedPaths: readonly string[];
   files: readonly FileCatalogEntry[];
   exclude: Set<string>;
   limit: number;
@@ -221,12 +223,13 @@ function selectRelatedFiles(input: {
     .filter((file) => input.exclude.has(file.path) === false)
     .map((file) => ({
       file,
-      score: scoreFile(file, terms)
+      score: scoreFile(file, terms) + scoreFileSeededEvidence(file, input.requestedPaths),
+      reason: reasonForRelatedFile(file, terms, input.requestedPaths)
     }))
     .filter((item) => item.score > 0)
     .sort((left, right) => right.score - left.score || left.file.path.localeCompare(right.file.path))
     .slice(0, input.limit)
-    .map((item) => toFileReference(item.file.path, item.file, "Matched task terms in the repo-relative path."));
+    .map((item) => toFileReference(item.file.path, item.file, item.reason));
 }
 
 function selectGoverningDocs(input: {
@@ -297,13 +300,7 @@ async function selectRankedSymbols(input: {
       skipped_work: [
         {
           kind: "ranked_symbols",
-          reason: "No graph snapshot is available, so symbol ranking is deferred.",
-          next_action: {
-            tool: "prewarm_graph",
-            args: {
-              repo_root: input.repo_root
-            }
-          }
+          reason: "No graph snapshot is available, so symbol ranking is deferred."
         }
       ]
     };
@@ -523,7 +520,88 @@ function scoreFile(file: FileCatalogEntry, terms: Set<string>): number {
   if (file.file_identity.language === "typescript") {
     score += terms.has("typescript") || terms.has("codex") || terms.has("mcp") ? 2 : 0;
   }
+  return Math.max(0, score - noisyArtifactPenalty(file.path));
+}
+
+function scoreFileSeededEvidence(file: FileCatalogEntry, requestedPaths: readonly string[]): number {
+  if (requestedPaths.length === 0) {
+    return 0;
+  }
+  let score = 0;
+  for (const requestedPath of requestedPaths) {
+    const requestedDir = path.posix.dirname(requestedPath);
+    const requestedStem = stemFromPath(requestedPath);
+    const candidateDir = path.posix.dirname(file.path);
+    const candidateStem = stemFromPath(file.path);
+    if (candidateDir === requestedDir && path.posix.basename(file.path).toLowerCase() === "cmakelists.txt") {
+      score = Math.max(score, 15);
+    }
+    if (candidateDir === requestedDir && candidateStem.toLowerCase() === requestedStem.toLowerCase()) {
+      score = Math.max(score, 12);
+    }
+    if (candidateDir === requestedDir && isTestLikePath(file.path)) {
+      score = Math.max(score, 10);
+    }
+    if (isNearbyTestPath(file.path, requestedDir, requestedStem)) {
+      score = Math.max(score, 9);
+    }
+  }
   return score;
+}
+
+function reasonForRelatedFile(
+  file: FileCatalogEntry,
+  terms: Set<string>,
+  requestedPaths: readonly string[]
+): string {
+  for (const requestedPath of requestedPaths) {
+    const requestedDir = path.posix.dirname(requestedPath);
+    const requestedStem = stemFromPath(requestedPath);
+    const candidateDir = path.posix.dirname(file.path);
+    const candidateStem = stemFromPath(file.path);
+    if (candidateDir === requestedDir && path.posix.basename(file.path).toLowerCase() === "cmakelists.txt") {
+      return "Local build file adjacent to an explicitly supplied source file.";
+    }
+    if (candidateDir === requestedDir && candidateStem.toLowerCase() === requestedStem.toLowerCase()) {
+      return "Same-stem sibling file adjacent to an explicitly supplied source file.";
+    }
+    if (candidateDir === requestedDir && isTestLikePath(file.path)) {
+      return "Nearby test file associated with an explicitly supplied source file.";
+    }
+    if (isNearbyTestPath(file.path, requestedDir, requestedStem)) {
+      return "Nearby test file associated with an explicitly supplied source file.";
+    }
+  }
+  const pathTerms = tokenSet([file.path]);
+  const hasExactPathTerm = [...terms].some((term) => pathTerms.has(term));
+  return hasExactPathTerm
+    ? "Matched task terms in the repo-relative path."
+    : "Weak path-term match; use as routing evidence only.";
+}
+
+function noisyArtifactPenalty(filePath: string): number {
+  const lower = filePath.toLowerCase();
+  if (lower.includes("/vendor/") || lower.includes("/third_party/") || lower.includes("/fixtures/")) return 6;
+  if (lower.includes("/installer/") || lower.includes("/generated/")) return 5;
+  if (lower.endsWith(".md") || lower.endsWith(".txt")) return 3;
+  return 0;
+}
+
+function isNearbyTestPath(filePath: string, requestedDir: string, requestedStem: string): boolean {
+  const lower = filePath.toLowerCase();
+  return (
+    isTestLikePath(filePath) &&
+    (path.posix.dirname(filePath) === requestedDir || lower.includes(`/${requestedStem.toLowerCase()}`))
+  );
+}
+
+function isTestLikePath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return lower.includes("test") || lower.includes("spec");
+}
+
+function stemFromPath(filePath: string): string {
+  return path.posix.basename(filePath).replace(/\.[^.]+$/u, "");
 }
 
 function docPriority(filePath: string): number {

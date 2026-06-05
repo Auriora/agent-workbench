@@ -53,6 +53,18 @@ export function strongestCapabilityLevel(levels: readonly CapabilityLevel[]): Ca
   return "unsupported";
 }
 
+export const PUBLIC_NEXT_ACTION_TOOLS = [
+  "context_for_task",
+  "symbol_search",
+  "find_references",
+  "impact",
+  "preview_workspace_edit",
+  "apply_workspace_edit",
+  "verification_plan"
+] as const;
+
+const publicNextActionTools = new Set<string>(PUBLIC_NEXT_ACTION_TOOLS);
+
 export function classifyRuntimeTrust(input: {
   snapshot?: SnapshotState | null;
   warmup?: WarmupExecution | null;
@@ -292,6 +304,9 @@ export function capNextActions(actions: readonly NextAction[], limit = 3): NextA
   const seen = new Set<string>();
   const capped: NextAction[] = [];
   for (const action of actions) {
+    if (!publicNextActionTools.has(action.tool)) {
+      continue;
+    }
     const key = `${action.tool}:${JSON.stringify(action.args)}`;
     if (seen.has(key)) {
       continue;

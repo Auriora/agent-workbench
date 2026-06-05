@@ -42,7 +42,7 @@ export async function searchSymbols(input: {
         repo_root: repoRoot,
         snapshot_id: input.request.snapshot_id ?? "",
         symbols: [],
-        next_actions: [{ tool: "prewarm_graph", args: { repo_root: repoRoot } }]
+        next_actions: capNextActions([])
       },
       meta: blockedMeta({
         repo_root: repoRoot,
