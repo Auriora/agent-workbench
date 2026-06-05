@@ -3,7 +3,7 @@ title: Language adapter design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-05-31
+last_reviewed: 2026-06-05
 ---
 
 # Language Adapter Design
@@ -113,6 +113,23 @@ After the MVP slice works, deepen support in this order:
 4. CloudFormation/SAM resource-backed discovery
 5. C# project/symbol discovery
 6. Go, C/C++, Rust, then the extended backlog
+
+OneMount dogfood confirmed the first Go slice should start before deep
+reference/impact work with file identity, project discovery, and basic symbol
+extraction. A Go-heavy repository must surface `.go` files in scope, recognize
+`go.mod` and test/build configuration, extract package-level declarations such
+as functions, types, methods, and `main`, and label the adapter as unsupported
+or partial-semantic honestly until reference resolution and impact evidence are
+fixture-backed.
+
+FreeCAD dogfood confirmed the first C/C++ slice should start with reliable file
+identity and project-shape evidence before broad blast-radius claims. Common
+C/C++ extensions such as `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp`, and
+`.hxx` must classify as C/C++ instead of `text`; Python stub files such as
+`.pyi` must classify with Python-like routing evidence. The initial C/C++ graph
+should extract classes, functions, methods, includes, and CMake target
+membership before reference and impact results are promoted beyond low
+confidence.
 
 ## Adapter Roles
 

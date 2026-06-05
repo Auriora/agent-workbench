@@ -3,7 +3,7 @@ title: Edit and validation loop design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-06-05
 ---
 
 # Edit And Validation Loop Design
@@ -85,6 +85,14 @@ Validation planning should consider:
 - public/exported API surface
 - Markdown heading/list/table/link/frontmatter quality for touched
   documentation
+
+Validation discovery must account for repository shape before choosing command
+families. A root `CMakeLists.txt`, nearby directory `CMakeLists.txt`, C/C++
+source tree, or test CMake files should make CMake/build/test planning outrank
+incidental Node tooling such as a package-level `package.json`. Project config
+files are evidence, not commands by themselves; if the runtime cannot prove the
+right command, it should return blocked or planned validation with the evidence
+that would guide the agent's manual check.
 
 MVP validation is plan-only by default. Command execution requires a post-MVP
 allowlist and command runner safety contract.
