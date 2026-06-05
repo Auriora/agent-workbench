@@ -23,6 +23,7 @@ last_reviewed: 2026-06-05
 | 2026-06-05 | Spec created from user request to analyze `agent-ide` capabilities and plan replacement work | Pending implementation |
 | 2026-06-05 | T001-T003 inventory, matrix, and reconciliation | Completed in `docs/reference/agent-ide-capability-analysis/agent-ide-capability-analysis-2026-06-05.md`; `spec_runtime.py lint docs/specs/010-agent-ide-capability-analysis`, `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts`, and `git diff --check` passed |
 | 2026-06-05 | T004 tool/resource recommendation pass | Completed recommendations for diagnostics/post-edit feedback, docs query/read surfaces, first-read resources, orientation/reporting, usage telemetry, and semantic refactors; `spec_runtime.py lint docs/specs/010-agent-ide-capability-analysis`, `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts`, and `git diff --check` passed |
+| 2026-06-05 | T005 follow-up spec creation | Created Specs 011 and 012 for the two high-priority replacement gaps; `spec_runtime.py lint` passed for Specs 010, 011, and 012; `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts` and `git diff --check` passed |
 
 ## Residual Risks
 

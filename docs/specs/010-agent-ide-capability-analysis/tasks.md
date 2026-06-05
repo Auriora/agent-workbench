@@ -68,12 +68,19 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     and semantic refactor parity deferred or rejected until evidence justifies
     them.
 
-- [ ] T005 Create or update follow-up specs for high-priority gaps.
+- [x] T005 Create or update follow-up specs for high-priority gaps.
   - Depends on: T004
   - Files: `docs/specs/`, `docs/reference/documentation-map.md`
   - Acceptance: High-priority replacement gaps become coherent spec packages or
     explicit additions to existing active specs; lower-priority gaps remain in
     durable backlog with promotion criteria.
+  - Evidence: Completed on 2026-06-05. Created
+    [Spec 011](../011-diagnostics-post-edit-feedback/requirements.md) for
+    language-neutral diagnostics and quiet post-edit feedback, created
+    [Spec 012](../012-docs-query-read-surfaces/requirements.md) for compact docs
+    query/read surfaces, and linked both from durable documentation map and MCP
+    surface backlog. Lower-priority parity items remain deferred in the Spec 010
+    analysis.
   - Evidence: Pending.
 
 - [ ] T006 Promote durable analysis and close this spec.

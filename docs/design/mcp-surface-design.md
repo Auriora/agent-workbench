@@ -560,6 +560,13 @@ Post-closure dogfood caveats from large mixed-language repositories:
   deep dives merely for predecessor surface parity. Improve existing resources
   and workflow tools unless a new public tool has cross-language workflow value
   and fixture-backed evidence.
+- Promoted to [Spec 011](../specs/011-diagnostics-post-edit-feedback/requirements.md):
+  add a language-neutral diagnostics and quiet post-edit feedback workflow using
+  provider contracts and shared presenters rather than Python-specific analyzer
+  output.
+- Promoted to [Spec 012](../specs/012-docs-query-read-surfaces/requirements.md):
+  add compact documentation overview, map, search, outline, and read-section
+  surfaces before considering crosslink graphs or generated reports.
 
 ## Related Docs
 
