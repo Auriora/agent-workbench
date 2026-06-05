@@ -54,11 +54,12 @@ export async function searchSymbols(input: {
 
   const searchResult: SymbolNodeSearchResult = input.request.exact
     ? await findExactThenFallbackSymbols({
-        graph: input.graph,
-        snapshot_id: resolved.snapshot_id,
-        query: input.request.query,
-        max_rows: input.request.max_results
-      })
+      graph: input.graph,
+      snapshot_id: resolved.snapshot_id,
+      query: input.request.query,
+      languages: input.request.languages,
+      max_rows: input.request.max_results
+    })
     : {
         nodes: await input.graph.searchNodes({
           snapshot_id: resolved.snapshot_id,
@@ -69,9 +70,7 @@ export async function searchSymbols(input: {
       };
   const nodes = searchResult.nodes;
   const exactMiss = searchResult.exactMiss;
-  const filtered = input.request.languages.length > 0
-    ? nodes.filter((node) => input.request.languages.includes(node.language))
-    : nodes;
+  const filtered = filterByLanguages(nodes, input.request.languages);
 
   return {
     symbols: {
@@ -129,6 +128,7 @@ async function findExactThenFallbackSymbols(input: {
   graph: GraphQueryPort;
   snapshot_id: string;
   query: string;
+  languages: readonly string[];
   max_rows: number;
 }): Promise<SymbolNodeSearchResult> {
   const byName = await input.graph.findNodesByName({
@@ -142,10 +142,23 @@ async function findExactThenFallbackSymbols(input: {
     qualified_name: input.query,
     max_rows: input.max_rows
   });
-  const exact = dedupeNodes([...byName, ...byQualifiedName]).slice(0, input.max_rows);
+  const exact = filterByLanguages(
+    rankExactNodes(dedupeNodes([...byName, ...byQualifiedName]), input.query),
+    input.languages
+  ).slice(0, input.max_rows);
   if (exact.length > 0) {
     return {
       nodes: exact,
+      exactMiss: false
+    };
+  }
+  const resourceExact = filterByLanguages(
+    await findResourceBackedExactSymbols(input),
+    input.languages
+  ).slice(0, input.max_rows);
+  if (resourceExact.length > 0) {
+    return {
+      nodes: resourceExact,
       exactMiss: false
     };
   }
@@ -158,6 +171,66 @@ async function findExactThenFallbackSymbols(input: {
     nodes: fallback,
     exactMiss: true
   };
+}
+
+async function findResourceBackedExactSymbols(input: {
+  graph: GraphQueryPort;
+  snapshot_id: string;
+  query: string;
+  max_rows: number;
+}): Promise<readonly GraphNode[]> {
+  const query = input.query.trim().toLowerCase();
+  if (query.length === 0) {
+    return [];
+  }
+  const candidates = await input.graph.searchNodes({
+    snapshot_id: input.snapshot_id,
+    query: input.query,
+    max_rows: input.max_rows
+  });
+  return rankExactNodes(
+    candidates.filter((node) => isResourceBackedExactMatch(node, query)),
+    input.query
+  );
+}
+
+function isResourceBackedExactMatch(node: GraphNode, lowerQuery: string): boolean {
+  if (node.metadata.capability_level !== "resource_backed") {
+    return false;
+  }
+  const lowerName = node.name.toLowerCase();
+  const lowerQualified = node.qualified_name?.toLowerCase() ?? "";
+  if (node.kind === "lambda_handler_binding") {
+    return lowerName === lowerQuery || lowerName.endsWith(`.${lowerQuery}`) || lowerQualified.endsWith(`:${lowerQuery}`);
+  }
+  if (node.kind === "lambda_function" || node.kind === "cloudformation_resource") {
+    return lowerName === lowerQuery || lowerQualified.endsWith(`:${lowerQuery}`);
+  }
+  return false;
+}
+
+function rankExactNodes(nodes: readonly GraphNode[], query: string): GraphNode[] {
+  const lowerQuery = query.toLowerCase();
+  return [...nodes].sort((left, right) => {
+    const delta = exactRank(left, lowerQuery) - exactRank(right, lowerQuery);
+    return delta || left.file_path.localeCompare(right.file_path) || left.name.localeCompare(right.name);
+  });
+}
+
+function exactRank(node: GraphNode, lowerQuery: string): number {
+  const lowerName = node.name.toLowerCase();
+  const lowerQualified = node.qualified_name?.toLowerCase() ?? "";
+  if (lowerName === lowerQuery) return 0;
+  if (lowerQualified === lowerQuery) return 1;
+  if (node.kind === "lambda_handler_binding" && lowerName.endsWith(`.${lowerQuery}`)) return 2;
+  if (lowerQualified.endsWith(`:${lowerQuery}`)) return 3;
+  return 10;
+}
+
+function filterByLanguages(nodes: readonly GraphNode[], languages: readonly string[]): readonly GraphNode[] {
+  return languages.length > 0
+    ? nodes.filter((node) => languages.includes(node.language))
+    : nodes;
 }
 
 function dedupeNodes<T extends { id: string }>(nodes: readonly T[]): T[] {

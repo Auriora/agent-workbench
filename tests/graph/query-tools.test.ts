@@ -171,6 +171,75 @@ describe("graph query use cases", () => {
     }
   });
 
+  it("treats Lambda handler string suffix queries as exact resource-backed matches", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-sam-lambda-repo", "220");
+    try {
+      const result = await searchSymbols({
+        request: {
+          query: "app.handler",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: [],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(result.symbols.symbols).toEqual([
+        expect.objectContaining({
+          kind: "lambda_handler_binding",
+          name: "src/orders/app.handler",
+          capability_level: "resource_backed"
+        })
+      ]);
+      expect(result.symbols.next_actions).toEqual([
+        expect.objectContaining({
+          tool: "find_references"
+        })
+      ]);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
+  it("falls back when exact matches exist only outside the requested languages", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-sam-lambda-repo", "221");
+    try {
+      const result = await searchSymbols({
+        request: {
+          query: "OrdersFunction",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: ["python"],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(result.symbols.symbols).toEqual([]);
+      expect(result.symbols.next_actions).toEqual([
+        expect.objectContaining({
+          tool: "context_for_task",
+          args: expect.objectContaining({
+            symbols: ["OrdersFunction"]
+          })
+        })
+      ]);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
   it("resolves exact qualified symbol queries before fuzzy fallback", async () => {
     const fixture = await indexedFixture("tests/fixtures/fixture-basic-python", "205");
     try {

@@ -453,11 +453,11 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Open: avoid redacting ordinary in-repo string snippets such as URL paths as
   outside-repo paths. Workspace safety redaction should apply to filesystem
   paths or secret-like values, not normal source text fragments.
-- Open: improve exact-first symbol filtering for caller-supplied symbols before
-  broad fuzzy fallback. Domain hints such as SAM logical IDs and Lambda
-  `handler` functions should not rank unrelated test helpers above exact or
-  service-local candidates.
-- Open: improve nearest-test ranking for service slices, especially
+- Done: improve exact-first symbol filtering for caller-supplied symbols before
+  broad fuzzy fallback. Exact mode now applies language filters before deciding
+  whether exact evidence exists and treats SAM logical IDs and Lambda handler
+  string suffixes as resource-backed exact routing evidence.
+- Done: improve nearest-test ranking for service slices, especially
   infrastructure-plus-handler changes where tests live under service, infra, or
   script-specific test families rather than same-package Python paths.
 - Done: add first-slice SAM/CloudFormation resource-backed extraction for

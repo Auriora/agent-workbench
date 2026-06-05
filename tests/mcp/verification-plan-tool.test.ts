@@ -730,6 +730,7 @@ describe("verification_plan use case", () => {
       "cfn-lint infra/sam/orders/template.yaml",
       "sam validate --template-file infra/sam/orders/template.yaml",
       "python3 -m pytest tests/infra/test_orders_template.py",
+      "python3 -m pytest tests/orders/test_app.py",
       "python3 -m pytest",
       "planned docs/config syntax review"
     ]);
