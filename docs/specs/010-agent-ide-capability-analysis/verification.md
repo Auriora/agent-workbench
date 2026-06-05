@@ -21,6 +21,7 @@ last_reviewed: 2026-06-05
 | Date | Activity | Result |
 | --- | --- | --- |
 | 2026-06-05 | Spec created from user request to analyze `agent-ide` capabilities and plan replacement work | Pending implementation |
+| 2026-06-05 | T001-T003 inventory, matrix, and reconciliation | Completed in `docs/reference/agent-ide-capability-analysis/agent-ide-capability-analysis-2026-06-05.md`; `spec_runtime.py lint docs/specs/010-agent-ide-capability-analysis`, `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts`, and `git diff --check` passed |
 
 ## Residual Risks
 

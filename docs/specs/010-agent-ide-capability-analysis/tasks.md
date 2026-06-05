@@ -17,29 +17,40 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
                   -> T007 ----------
 ```
 
-- [ ] T001 Inventory `agent-ide` surfaces.
+- [x] T001 Inventory `agent-ide` surfaces.
   - Files: `/home/bcherrington/Projects/Auriora/agent-ide`, `.tmp/` or
     `docs/reference/agent-ide-capability-analysis/`
   - Acceptance: Inventory covers documented resources, tools, hooks, skills,
     command surfaces, telemetry notes, warmup/cache behavior, edit feedback,
     diagnostics, validation, and relevant tests without modifying `agent-ide`.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-05. Inspected tracked `agent-ide` docs,
+    plugin/skill metadata, MCP tool/resource catalogs, hook docs, performance
+    findings, multi-language plans, and test inventory read-only. Findings are
+    recorded in
+    [Agent IDE capability analysis](../../reference/agent-ide-capability-analysis/agent-ide-capability-analysis-2026-06-05.md).
 
-- [ ] T002 Build the capability taxonomy and parity matrix.
+- [x] T002 Build the capability taxonomy and parity matrix.
   - Depends on: T001
   - Files: `docs/reference/agent-ide-capability-analysis/`
   - Acceptance: Matrix records capability, predecessor surface, observed value,
     Agent Workbench status, portable lesson, Python-specific parts,
     recommended action, and evidence needed.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-05. Added a capability matrix covering
+    first-read readiness, task context, docs routing, diagnostics, validation,
+    post-edit feedback, symbol/reference/impact, semantic refactors, warmup,
+    usage telemetry, hooks, dependency intelligence, config/conventions, and
+    multi-language support.
 
-- [ ] T003 Reconcile against Agent Workbench specs, backlog, and roadmap.
+- [x] T003 Reconcile against Agent Workbench specs, backlog, and roadmap.
   - Depends on: T002
   - Files: `docs/specs/`, `docs/design/`, `docs/reference/documentation-map.md`
   - Acceptance: Existing active and archived specs are linked where relevant;
     duplicates are avoided; durable docs are preferred over archived specs for
     implemented behavior.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-05. The analysis reconciles Specs 007-010,
+    points to docs/diagnostics/post-edit feedback as likely next planning
+    candidates, and links the durable analysis from
+    `docs/reference/documentation-map.md`.
 
 - [ ] T004 Identify tool/resource changes worth planning.
   - Depends on: T003
