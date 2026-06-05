@@ -2,10 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  DEFAULT_SKIPPED_ROOTS,
-  FileCatalogScannerAdapter
-} from "../../src/infrastructure/filesystem/index.js";
+import { DEFAULT_SKIPPED_ROOTS } from "../../src/domain/policies/index.js";
+import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/index.js";
 
 describe("file catalog scanner", () => {
   let repoRoot: string;
@@ -63,6 +61,15 @@ describe("file catalog scanner", () => {
   });
 
   afterEach(() => {
+    fs.chmodSync(repoRoot, 0o700);
+    for (const directory of [
+      path.join(repoRoot, "runtime-data"),
+      path.join(repoRoot, "runtime-data", "diagnostic.data")
+    ]) {
+      if (fs.existsSync(directory)) {
+        fs.chmodSync(directory, 0o700);
+      }
+    }
     fs.rmSync(repoRoot, { recursive: true, force: true });
   });
 
@@ -139,6 +146,87 @@ describe("file catalog scanner", () => {
 
     expect(result.truncated).toBe(true);
     expect(result.files).toHaveLength(2);
+  });
+
+  it("skips unreadable directories without aborting catalog scans", async () => {
+    const unreadableRoot = path.join(repoRoot, "runtime-data", "diagnostic.data");
+    fs.mkdirSync(unreadableRoot, { recursive: true });
+    fs.writeFileSync(path.join(unreadableRoot, "state.json"), "{}\n");
+    fs.chmodSync(unreadableRoot, 0);
+
+    const scanner = new FileCatalogScannerAdapter();
+    const result = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      max_files: 100
+    });
+
+    expect(result.files.map((file) => file.path)).toContain("src/service.py");
+    expect(result.files.map((file) => file.path)).not.toContain("runtime-data/diagnostic.data/state.json");
+    expect(result.skipped_roots).toContain("runtime-data/diagnostic.data");
+  });
+
+  it("skips hidden paths by default while preserving allowlisted repository config", async () => {
+    fs.mkdirSync(path.join(repoRoot, ".devcontainer"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".vscode"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, ".hidden-runtime"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, ".devcontainer", "devcontainer.json"), "{\"name\":\"fixture\"}\n");
+    fs.writeFileSync(path.join(repoRoot, ".editorconfig"), "root = true\n");
+    fs.writeFileSync(path.join(repoRoot, ".env"), "TOKEN=secret\n");
+    fs.writeFileSync(path.join(repoRoot, ".env.local"), "TOKEN=secret\n");
+    fs.writeFileSync(path.join(repoRoot, ".env.example"), "TOKEN=\n");
+    fs.writeFileSync(path.join(repoRoot, ".gitignore"), "debug.log\n");
+    fs.writeFileSync(path.join(repoRoot, ".vscode", "settings.json"), "{}\n");
+    fs.writeFileSync(path.join(repoRoot, ".hidden-runtime", "state.json"), "{}\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    const result = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      max_files: 100
+    });
+    const paths = result.files.map((file) => file.path);
+
+    expect(paths).toEqual(
+      expect.arrayContaining([
+        ".devcontainer/devcontainer.json",
+        ".editorconfig",
+        ".env.example",
+        ".gitignore"
+      ])
+    );
+    expect(paths).not.toEqual(
+      expect.arrayContaining([
+        ".env",
+        ".env.local",
+        ".vscode/settings.json",
+        ".hidden-runtime/state.json"
+      ])
+    );
+  });
+
+  it("uses root gitignore as an additional skip signal with negation support", async () => {
+    fs.writeFileSync(path.join(repoRoot, ".gitignore"), "*.log\n!keep.log\nignored-dir/\n");
+    fs.writeFileSync(path.join(repoRoot, "debug.log"), "debug\n");
+    fs.writeFileSync(path.join(repoRoot, "keep.log"), "keep\n");
+    fs.mkdirSync(path.join(repoRoot, "ignored-dir"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "ignored-dir", "state.json"), "{}\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    const result = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      max_files: 100
+    });
+    const paths = result.files.map((file) => file.path);
+
+    expect(paths).toContain(".gitignore");
+    expect(paths).toContain("keep.log");
+    expect(paths).not.toContain("debug.log");
+    expect(paths).not.toContain("ignored-dir/state.json");
   });
 
   it("preserves representative source coverage before docs noise when row-capped", async () => {

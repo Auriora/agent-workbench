@@ -311,6 +311,21 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Done: skip common hidden runtime/test artifact directories such as `.home`,
   `.sandbox`, `.gocache`, hidden `*-tests` folders, build outputs, and generated
   caches before applying row caps.
+- Done: apply a centralized hidden-path policy during catalog scans. Hidden
+  directories are skipped by default unless allowlisted as repository-shape
+  evidence, including `.github/` and `.devcontainer/`; high-signal dotfiles
+  such as `.gitignore`, `.dockerignore`, `.editorconfig`, `.env.example`,
+  `.env.sample`, `.env.template`, `.prettierrc*`, `.eslintrc*`, `.npmrc`,
+  `.nvmrc`, and runtime-version files remain visible. Secret-bearing `.env`
+  files and local hidden state remain excluded from catalog evidence.
+- Done: parse root `.gitignore` as an additional skip signal for catalog scans,
+  including simple glob, anchored, directory-only, and negated patterns. The
+  hardcoded generated/vendor/secret policy remains authoritative for safety;
+  `.gitignore` augments it rather than replacing it.
+- Done: allow explicit requested hidden config files through direct safe stat
+  hydration when they are allowlisted, while refusing secret/local hidden paths
+  such as `.env`. Verification plans surface refused explicit paths as blocked
+  missing evidence instead of silently indexing them.
 - Done: skip common language environment and dependency roots, including Python
   tox/nox/venv, Node package/cache stores, JVM/Gradle/Maven caches, Terraform
   caches, Rust-style `target`, vendored dependency roots, and nested git
@@ -365,6 +380,43 @@ Post-closure dogfood caveats from large mixed-language repositories:
   including non-executed `dotnet build <solution-or-project>` and `dotnet test`
   candidates when test projects or repo policy support them. Until policy is
   known, commands should remain planned evidence, not executed proof.
+- Open: make unreadable filesystem paths visible as skipped evidence across
+  status, scope, overview, context, and verification surfaces. Scanner-level
+  permission failures should not abort repository orientation when the requested
+  task is outside the unreadable path; the response should preserve usable
+  evidence and clearly name the skipped relative paths. If the requested target
+  itself is unreadable, return a blocked state with the access failure as the
+  root cause.
+- Open: add a modeled `skipped_paths` or skipped-evidence section with reasons
+  such as `permission_denied`, `workspace_escape`, `generated_or_vendor`,
+  `nested_git_repository`, and `file_too_large`. Reusing `skipped_roots` is an
+  acceptable MVP bridge, but durable MCP output should distinguish configured
+  skips from runtime access skips.
+- Open: align `integration:///profiles/codex` with the exact tool surface that
+  Codex discovery exposes in a fresh session. If tools exist but require
+  targeted discovery, the profile should say that explicitly; if they are not
+  callable, the profile and `next_action` metadata must not advertise them.
+- Done: add first-slice package-manager-aware validation planning for JavaScript
+  and TypeScript monorepos. The planner detects root/package-local
+  `package.json` files, lockfile-selected package managers, and selected-file
+  package boundaries, then returns package-local scripts before root workspace
+  scripts without executing commands.
+- Open: deepen package-manager-aware validation planning for JavaScript and
+  TypeScript monorepos. Detect root/package-local `package.json`,
+  `package-lock.json`, `pnpm-lock.yaml`, `yarn.lock`, workspace config,
+  `tsconfig`, and common client/server/e2e package boundaries before suggesting
+  lint, typecheck, or test commands. Commands should remain planned evidence
+  until repo guidance proves they are safe and runnable.
+- Done: add first-slice context ranking explanations for common web
+  authentication implementation paths such as controllers, services, routes,
+  strategies, UI pages/components, data providers, and e2e setup files.
+- Open: improve context ranking explanations by including compact, non-secret
+  reasons for high-ranking implementation candidates, especially when routing
+  was driven by path terms, package boundaries, route/controller/service
+  conventions, or lexical snippets rather than semantic graph edges.
+- Open: avoid redacting ordinary in-repo string snippets such as URL paths as
+  outside-repo paths. Workspace safety redaction should apply to filesystem
+  paths or secret-like values, not normal source text fragments.
 - Open: improve exact-first symbol filtering for caller-supplied symbols before
   broad fuzzy fallback. Domain hints such as SAM logical IDs and Lambda
   `handler` functions should not rank unrelated test helpers above exact or

@@ -4,8 +4,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { PlanVerificationResult } from "../../src/application/use-cases/plan-verification.js";
 import { planVerification } from "../../src/application/use-cases/plan-verification.js";
+import { DEFAULT_SKIPPED_ROOTS } from "../../src/domain/policies/index.js";
 import {
-  DEFAULT_SKIPPED_ROOTS,
   FileCatalogScannerAdapter,
   WorkspaceFileAdapter
 } from "../../src/infrastructure/filesystem/index.js";
@@ -181,6 +181,100 @@ describe("verification_plan use case", () => {
     }
   });
 
+  it("plans package-local JavaScript and TypeScript scripts for selected monorepo files", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-js-monorepo-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "client", "src"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "api", "server"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "package-lock.json"), "{}\n");
+      fs.writeFileSync(
+        path.join(repoRoot, "package.json"),
+        JSON.stringify(
+          {
+            scripts: {
+              lint: "eslint .",
+              "test:e2e": "playwright test"
+            },
+            workspaces: ["client", "api"]
+          },
+          null,
+          2
+        )
+      );
+      fs.writeFileSync(
+        path.join(repoRoot, "client", "package.json"),
+        JSON.stringify(
+          {
+            scripts: {
+              typecheck: "tsc --noEmit",
+              test: "vitest run"
+            }
+          },
+          null,
+          2
+        )
+      );
+      fs.writeFileSync(
+        path.join(repoRoot, "api", "package.json"),
+        JSON.stringify(
+          {
+            scripts: {
+              lint: "eslint server",
+              "test:api": "node --test"
+            }
+          },
+          null,
+          2
+        )
+      );
+      fs.writeFileSync(path.join(repoRoot, "client", "src", "Login.tsx"), "export function Login() { return null; }\n");
+      fs.writeFileSync(path.join(repoRoot, "api", "server", "AuthController.js"), "module.exports = {};\n");
+
+      const clientResult = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["client/src/Login.tsx"],
+          changed_files: ["client/src/Login.tsx"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+      const apiResult = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["api/server/AuthController.js"],
+          changed_files: ["api/server/AuthController.js"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(clientResult.plan.status).toBe("planned");
+      expect(clientResult.plan.planned_commands.map((command) => command.display)).toEqual([
+        "npm --prefix client run typecheck",
+        "npm --prefix client run test",
+        "npm run lint",
+        "npm run test:e2e"
+      ]);
+      expect(clientResult.plan.planned_commands[0]?.reason).toContain("client/package.json");
+      expect(apiResult.plan.status).toBe("planned");
+      expect(apiResult.plan.planned_commands.map((command) => command.display)).toEqual([
+        "npm --prefix api run lint",
+        "npm --prefix api run test:api",
+        "npm run lint",
+        "npm run test:e2e"
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("plans validation from directly requested config when the catalog scan is truncated", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-truncated-"));
     const scanner: FileCatalogScanPort = {
@@ -237,6 +331,63 @@ describe("verification_plan use case", () => {
           message: "Validation discovery is low confidence for at least one repository area."
         })
       ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks explicit secret env files while allowing env templates as direct config evidence", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-hidden-"));
+    const scanner: FileCatalogScanPort = {
+      async scan(input) {
+        return {
+          repo_root: input.repo_root,
+          indexed_roots: input.indexed_roots,
+          skipped_roots: [...DEFAULT_SKIPPED_ROOTS].sort(),
+          files: [],
+          truncated: true
+        };
+      }
+    };
+
+    try {
+      fs.writeFileSync(path.join(repoRoot, ".env.example"), "TOKEN=\n");
+      fs.writeFileSync(path.join(repoRoot, ".env"), "TOKEN=secret\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: [".env.example", ".env"],
+          changed_files: [".env.example", ".env"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner,
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("blocked");
+      expect(result.plan.planned_commands.map((command) => command.display)).toContain("planned docs/config syntax review");
+      expect(result.plan.static_feedback).toEqual(
+        expect.objectContaining({
+          status: "actionable",
+          findings: [
+            expect.objectContaining({
+              path: ".env",
+              severity: "warning"
+            })
+          ]
+        })
+      );
+      expect(result.plan.risks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            severity: "blocker",
+            message: "Some requested validation files were not found in the scanned repository."
+          })
+        ])
+      );
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }

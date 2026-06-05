@@ -3,10 +3,8 @@ import { getRepoOverview } from "../../src/application/use-cases/get-repo-overvi
 import { getRepoScope } from "../../src/application/use-cases/get-repo-scope.js";
 import { getScannedRepoStatus } from "../../src/application/use-cases/get-repo-status.js";
 import type { ResponseEnvelope } from "../../src/contracts/index.js";
-import {
-  DEFAULT_SKIPPED_ROOTS,
-  FileCatalogScannerAdapter
-} from "../../src/infrastructure/filesystem/index.js";
+import { DEFAULT_SKIPPED_ROOTS } from "../../src/domain/policies/index.js";
+import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { buildRepoOverviewEnvelope } from "../../src/presentation/repo-overview-presenter.js";
 import { buildRepoScopeEnvelope } from "../../src/presentation/repo-scope-presenter.js";
 import { buildStatusEnvelope } from "../../src/presentation/status-presenter.js";

@@ -7,6 +7,7 @@ import type {
   VerificationPlanRequest
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
+import { isExplicitHiddenCatalogPathAllowed } from "../../domain/policies/index.js";
 import { planCommand } from "../../domain/policies/command-safety.js";
 import type { FileCatalogScanPort, WorkspaceFilePort } from "../../ports/index.js";
 import { capNextActions } from "../../presentation/metadata.js";
@@ -185,6 +186,12 @@ async function mergeDirectValidationEntries(input: {
     ...input.selectedPaths,
     ...projectShapeConfigCandidates(input.selectedPaths),
     "package.json",
+    "package-lock.json",
+    "npm-shrinkwrap.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "bun.lock",
+    "bun.lockb",
     "pyproject.toml",
     "go.mod",
     "go.work",
@@ -192,6 +199,9 @@ async function mergeDirectValidationEntries(input: {
     "CMakeLists.txt"
   ])) {
     if (byPath.has(filePath)) {
+      continue;
+    }
+    if (!isExplicitHiddenCatalogPathAllowed(filePath)) {
       continue;
     }
     const stat = await input.workspace.stat({ path: filePath });
@@ -216,13 +226,16 @@ async function discoverValidationEvidence(input: {
   workspace: WorkspaceFilePort;
 }): Promise<ValidationDiscovery> {
   const paths = new Set(input.files.map((file) => file.path));
-  const packageDiscovery = paths.has("package.json")
-    ? await readPackageScripts(input.workspace)
-    : { scripts: {}, errors: [] };
+  const packageManager = detectPackageManager(paths);
+  const packageDiscovery = await discoverPackageScripts({
+    workspace: input.workspace,
+    packageJsonPaths: [...paths].filter((filePath) => path.posix.basename(filePath) === "package.json"),
+    packageManager
+  });
   const validationProtocol = await discoverValidationProtocol(input.workspace);
 
   return {
-    packageScripts: packageDiscovery.scripts,
+    packageScripts: packageDiscovery.packages,
     discoveryErrors: [...packageDiscovery.errors, ...validationProtocol.errors],
     validationProtocol,
     hasPyproject: paths.has("pyproject.toml"),
@@ -240,7 +253,7 @@ async function discoverValidationEvidence(input: {
 }
 
 type ValidationDiscovery = {
-  packageScripts: Record<string, string>;
+  packageScripts: PackageScriptEvidence[];
   discoveryErrors: string[];
   validationProtocol: ValidationProtocolDiscovery;
   hasPyproject: boolean;
@@ -263,6 +276,15 @@ type ValidationProtocolDiscovery = {
   prohibitsHostGoTest: boolean;
   evidencePaths: string[];
   errors: string[];
+};
+
+type PackageManager = "pnpm" | "npm" | "yarn" | "bun";
+
+type PackageScriptEvidence = {
+  package_json_path: string;
+  directory: string;
+  package_manager: PackageManager;
+  scripts: Record<string, string>;
 };
 
 function planValidationCommands(input: {
@@ -327,14 +349,20 @@ function planValidationCommands(input: {
     });
   }
 
+  const selectedPackageScripts = selectPackageScripts({
+    packages: input.discovery.packageScripts,
+    selectedEntries: input.selectedEntries,
+    includeAll
+  });
+
   if (
-    Object.keys(input.discovery.packageScripts).length > 0 &&
+    selectedPackageScripts.length > 0 &&
     !goShapeSelected &&
     !cmakeShapeSelected &&
     (includeAll || hasAny(selectedLanguages, ["typescript", "javascript", "json"]))
   ) {
     commands.push(
-      ...configuredPackageCommands(input.discovery.packageScripts, [
+      ...configuredPackageCommands(selectedPackageScripts, [
         {
           script: "typecheck",
           reason: "Configured package script indicates type checking is available for JavaScript/TypeScript validation."
@@ -350,12 +378,24 @@ function planValidationCommands(input: {
         {
           script: "test",
           reason: "Configured package script indicates the JavaScript/TypeScript test suite is available."
+        },
+        {
+          script: "test:client",
+          reason: "Configured package script indicates client-side JavaScript/TypeScript tests are available."
+        },
+        {
+          script: "test:api",
+          reason: "Configured package script indicates API JavaScript/TypeScript tests are available."
+        },
+        {
+          script: "test:e2e",
+          reason: "Configured package script indicates end-to-end JavaScript/TypeScript tests are available."
         }
       ])
     );
     for (const script of ["typecheck", "lint", "format:check", "test"]) {
-      if (input.discovery.packageScripts[script] === undefined) {
-        lowConfidenceReasons.push(`missing package script: ${script}`);
+      if (selectedPackageScripts.every((pkg) => pkg.scripts[script] === undefined)) {
+        lowConfidenceReasons.push(`missing selected package script: ${script}`);
       }
     }
   }
@@ -378,7 +418,7 @@ function planValidationCommands(input: {
     });
   }
 
-  if (input.selectedEntries.some((file) => ["markdown", "json", "toml", "yaml"].includes(file.file_identity.language))) {
+  if (input.selectedEntries.some((file) => ["config", "markdown", "json", "toml", "yaml"].includes(file.file_identity.language))) {
     commands.push({
       command: "manual_review",
       args: ["docs-config-syntax"],
@@ -460,32 +500,106 @@ function symbolQueryFromPath(filePath: string): string {
 }
 
 function configuredPackageCommands(
-  scripts: Record<string, string>,
+  packages: readonly PackageScriptEvidence[],
   candidates: readonly { script: string; reason: string }[]
 ): PlannedValidationCommand[] {
   const commands: PlannedValidationCommand[] = [];
-  for (const candidate of candidates) {
-    if (scripts[candidate.script] === undefined) {
-      continue;
+  const seen = new Set<string>();
+  for (const pkg of packages) {
+    for (const candidate of candidates) {
+      if (pkg.scripts[candidate.script] === undefined) {
+        continue;
+      }
+      const planned = packageScriptCommand(pkg, candidate.script);
+      const decision = planCommand({
+        command: planned.command,
+        args: planned.args,
+        source: "configured"
+      });
+      if (!decision.allowed) {
+        continue;
+      }
+      const display = [decision.command.command, ...decision.command.args].join(" ");
+      if (seen.has(display)) {
+        continue;
+      }
+      seen.add(display);
+      commands.push({
+        command: decision.command.command,
+        args: decision.command.args,
+        display,
+        reason: pkg.directory === "."
+          ? candidate.reason
+          : `${candidate.reason} Package evidence: ${pkg.package_json_path}.`,
+        status: "planned",
+        execution: "not_executed"
+      });
     }
-    const decision = planCommand({
-      command: "pnpm",
-      args: ["run", candidate.script],
-      source: "configured"
-    });
-    if (!decision.allowed) {
-      continue;
-    }
-    commands.push({
-      command: decision.command.command,
-      args: decision.command.args,
-      display: [decision.command.command, ...decision.command.args].join(" "),
-      reason: candidate.reason,
-      status: "planned",
-      execution: "not_executed"
-    });
   }
   return commands;
+}
+
+function packageScriptCommand(pkg: PackageScriptEvidence, script: string): { command: string; args: string[] } {
+  if (pkg.directory === ".") {
+    return {
+      command: pkg.package_manager,
+      args: ["run", script]
+    };
+  }
+  if (pkg.package_manager === "pnpm") {
+    return {
+      command: "pnpm",
+      args: ["--dir", pkg.directory, "run", script]
+    };
+  }
+  if (pkg.package_manager === "yarn" || pkg.package_manager === "bun") {
+    return {
+      command: pkg.package_manager,
+      args: ["--cwd", pkg.directory, "run", script]
+    };
+  }
+  return {
+    command: "npm",
+    args: ["--prefix", pkg.directory, "run", script]
+  };
+}
+
+function selectPackageScripts(input: {
+  packages: readonly PackageScriptEvidence[];
+  selectedEntries: readonly FileCatalogEntry[];
+  includeAll: boolean;
+}): PackageScriptEvidence[] {
+  if (input.includeAll) {
+    return prioritizePackageScripts(input.packages, []);
+  }
+  const selectedPaths = input.selectedEntries.map((entry) => entry.path);
+  const relevant = input.packages.filter((pkg) =>
+    selectedPaths.some((filePath) => isPackageAncestor(pkg.directory, filePath) || filePath === pkg.package_json_path)
+  );
+  return prioritizePackageScripts(relevant.length > 0 ? relevant : input.packages.filter((pkg) => pkg.directory === "."), selectedPaths);
+}
+
+function prioritizePackageScripts(
+  packages: readonly PackageScriptEvidence[],
+  selectedPaths: readonly string[]
+): PackageScriptEvidence[] {
+  return [...packages].sort((left, right) => {
+    const leftSelected = selectedPaths.some((filePath) => isPackageAncestor(left.directory, filePath));
+    const rightSelected = selectedPaths.some((filePath) => isPackageAncestor(right.directory, filePath));
+    if (leftSelected !== rightSelected) {
+      return leftSelected ? -1 : 1;
+    }
+    const depthDelta = packageDepth(right.directory) - packageDepth(left.directory);
+    return depthDelta || left.directory.localeCompare(right.directory);
+  });
+}
+
+function isPackageAncestor(directory: string, filePath: string): boolean {
+  return directory === "." || filePath === directory || filePath.startsWith(`${directory}/`);
+}
+
+function packageDepth(directory: string): number {
+  return directory === "." ? 0 : directory.split("/").length;
 }
 
 async function discoverValidationProtocol(workspace: WorkspaceFilePort): Promise<ValidationProtocolDiscovery> {
@@ -565,6 +679,8 @@ function projectShapeConfigCandidates(selectedPaths: readonly string[]): string[
     let directory = path.posix.dirname(filePath);
     while (directory !== "." && directory.length > 0) {
       candidates.add(path.posix.join(directory, "CMakeLists.txt"));
+      candidates.add(path.posix.join(directory, "package.json"));
+      candidates.add(path.posix.join(directory, "tsconfig.json"));
       const parent = path.posix.dirname(directory);
       if (parent === directory) {
         break;
@@ -664,28 +780,75 @@ function moduleStemFromPath(filePath: string): string {
   return path.posix.basename(filePath).replace(/\.py$/u, "");
 }
 
-async function readPackageScripts(
-  workspace: WorkspaceFilePort
-): Promise<{ scripts: Record<string, string>; errors: string[] }> {
+async function discoverPackageScripts(input: {
+  workspace: WorkspaceFilePort;
+  packageJsonPaths: readonly string[];
+  packageManager: PackageManager;
+}): Promise<{ packages: PackageScriptEvidence[]; errors: string[] }> {
+  const packages: PackageScriptEvidence[] = [];
+  const errors: string[] = [];
+  for (const packageJsonPath of uniqueSorted(input.packageJsonPaths)) {
+    const result = await readPackageScripts({
+      workspace: input.workspace,
+      packageJsonPath,
+      packageManager: input.packageManager
+    });
+    if (result.error !== undefined) {
+      errors.push(result.error);
+      continue;
+    }
+    packages.push(result.package);
+  }
+  return { packages, errors };
+}
+
+async function readPackageScripts(input: {
+  workspace: WorkspaceFilePort;
+  packageJsonPath: string;
+  packageManager: PackageManager;
+}): Promise<{ package: PackageScriptEvidence; error?: undefined } | { error: string }> {
   let parsed: { scripts?: unknown };
   try {
-    const content = await workspace.readText({ path: "package.json" });
+    const content = await input.workspace.readText({ path: input.packageJsonPath });
     parsed = JSON.parse(content) as { scripts?: unknown };
   } catch (_error) {
+    return { error: `${input.packageJsonPath} could not be read as JSON` };
+  }
+  const directory = path.posix.dirname(input.packageJsonPath);
+  const normalizedDirectory = directory === "." ? "." : directory;
+  if (parsed.scripts === undefined || typeof parsed.scripts !== "object" || parsed.scripts === null) {
     return {
-      scripts: {},
-      errors: ["package.json could not be read as JSON"]
+      package: {
+        package_json_path: input.packageJsonPath,
+        directory: normalizedDirectory,
+        package_manager: input.packageManager,
+        scripts: {}
+      }
     };
   }
-  if (parsed.scripts === undefined || typeof parsed.scripts !== "object" || parsed.scripts === null) {
-    return { scripts: {}, errors: [] };
-  }
   return {
-    scripts: Object.fromEntries(
-      Object.entries(parsed.scripts).filter((entry): entry is [string, string] => typeof entry[1] === "string")
-    ),
-    errors: []
+    package: {
+      package_json_path: input.packageJsonPath,
+      directory: normalizedDirectory,
+      package_manager: input.packageManager,
+      scripts: Object.fromEntries(
+        Object.entries(parsed.scripts).filter((entry): entry is [string, string] => typeof entry[1] === "string")
+      )
+    }
   };
+}
+
+function detectPackageManager(paths: Set<string>): PackageManager {
+  if (paths.has("package-lock.json") || paths.has("npm-shrinkwrap.json")) {
+    return "npm";
+  }
+  if (paths.has("yarn.lock")) {
+    return "yarn";
+  }
+  if (paths.has("bun.lock") || paths.has("bun.lockb")) {
+    return "bun";
+  }
+  return "pnpm";
 }
 
 function isUnsafeValidationTarget(filePath: string): boolean {

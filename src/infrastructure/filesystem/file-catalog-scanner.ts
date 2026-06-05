@@ -1,85 +1,20 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
-import { buildFileCatalogEntry } from "../../domain/policies/index.js";
+import {
+  buildFileCatalogEntry,
+  mergeSkippedRoots,
+  normalizeCatalogPath,
+  parseGitignoreRules,
+  shouldSkipCatalogPath,
+  type GitignoreRule
+} from "../../domain/policies/index.js";
 import type { FileCatalogScanPort, FileCatalogScanResult, FileIdentityPort } from "../../ports/index.js";
 import { FileIdentityAdapter } from "./file-identity.js";
 
-export const DEFAULT_SKIPPED_ROOTS = [
-  ".cache",
-  ".claude",
-  ".codex",
-  ".devenv",
-  ".direnv",
-  ".git",
-  ".gocache",
-  ".gradle",
-  ".home",
-  ".local",
-  ".m2",
-  ".mypy_cache",
-  ".nox",
-  ".npm",
-  ".nuxt",
-  ".pixi",
-  ".pnpm-store",
-  ".pytest_cache",
-  ".ruff_cache",
-  ".sandbox",
-  ".terraform",
-  ".tox",
-  ".venv",
-  ".yarn",
-  "__pycache__",
-  "3rdparty",
-  "artifacts",
-  "build",
-  "coverage",
-  "dist",
-  "node_modules",
-  "target",
-  "test-artifacts",
-  "third_party",
-  "thirdparty",
-  "vendor",
-  "venv"
-] as const;
-
-const DEFAULT_SKIPPED_DIRECTORY_NAMES = new Set<string>(DEFAULT_SKIPPED_ROOTS);
-const DEFAULT_SKIPPED_DIRECTORY_PREFIXES = ["cmake-build-"] as const;
-const DEFAULT_SKIPPED_HIDDEN_DIRECTORY_SUFFIXES = ["-tests"] as const;
-
-function normalizePath(value: string): string {
-  return value.split(path.sep).join("/");
-}
-
 function isInsideRoot(relativePath: string, root: string): boolean {
-  const normalizedRoot = normalizePath(root).replace(/^\/+|\/+$/g, "");
+  const normalizedRoot = normalizeCatalogPath(root).replace(/^\/+|\/+$/g, "");
   return normalizedRoot === "." || relativePath === normalizedRoot || relativePath.startsWith(`${normalizedRoot}/`);
-}
-
-function shouldSkipRelativePath(relativePath: string, skippedRoots: readonly string[]): boolean {
-  const segments = relativePath.split("/");
-  const lowerSegments = segments.map((segment) => segment.toLowerCase());
-  if (lowerSegments.some((segment) => DEFAULT_SKIPPED_DIRECTORY_NAMES.has(segment))) {
-    return true;
-  }
-  if (lowerSegments.some((segment) => DEFAULT_SKIPPED_DIRECTORY_PREFIXES.some((prefix) => segment.startsWith(prefix)))) {
-    return true;
-  }
-  if (
-    lowerSegments.some((segment) =>
-      segment.startsWith(".") &&
-      DEFAULT_SKIPPED_HIDDEN_DIRECTORY_SUFFIXES.some((suffix) => segment.endsWith(suffix))
-    )
-  ) {
-    return true;
-  }
-
-  return skippedRoots.some((root) => {
-    const normalizedRoot = normalizePath(root).replace(/^\/+|\/+$/g, "");
-    return normalizedRoot.length > 0 && isInsideRoot(relativePath, normalizedRoot);
-  });
 }
 
 export class FileCatalogScannerAdapter implements FileCatalogScanPort {
@@ -98,6 +33,8 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     const repoRoot = path.resolve(input.repo_root);
     const indexedRoots = input.indexed_roots.length > 0 ? input.indexed_roots : ["."];
     const entries: FileCatalogEntry[] = [];
+    const skippedRoots = new Set(input.skipped_roots);
+    const gitignoreRules = readRootGitignoreRules(repoRoot);
     let truncated = false;
 
     for (const indexedRoot of indexedRoots) {
@@ -114,6 +51,10 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
         directory: absoluteRoot,
         indexedRoots,
         skippedRoots: input.skipped_roots,
+        gitignoreRules,
+        recordSkippedRoot: (root) => {
+          skippedRoots.add(root);
+        },
         maxFiles: input.max_files,
         entries,
         setTruncated: () => {
@@ -127,7 +68,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     return {
       repo_root: repoRoot,
       indexed_roots: indexedRoots,
-      skipped_roots: mergeSkippedRoots(input.skipped_roots),
+      skipped_roots: mergeSkippedRoots([...skippedRoots]),
       files: entries,
       truncated
     };
@@ -138,6 +79,8 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     directory: string;
     indexedRoots: readonly string[];
     skippedRoots: readonly string[];
+    gitignoreRules: readonly GitignoreRule[];
+    recordSkippedRoot: (root: string) => void;
     maxFiles: number;
     entries: FileCatalogEntry[];
     setTruncated: () => void;
@@ -147,7 +90,14 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       return;
     }
 
-    const children = fs.readdirSync(input.directory, { withFileTypes: true });
+    const children = readDirectoryOrSkip({
+      repoRoot: input.repoRoot,
+      directory: input.directory,
+      recordSkippedRoot: input.recordSkippedRoot
+    });
+    if (children === null) {
+      return;
+    }
     children.sort(compareCatalogEntries);
 
     for (const child of children) {
@@ -157,8 +107,15 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       }
 
       const absolutePath = path.join(input.directory, child.name);
-      const relativePath = normalizePath(path.relative(input.repoRoot, absolutePath));
-      if (shouldSkipRelativePath(relativePath, input.skippedRoots)) {
+      const relativePath = normalizeCatalogPath(path.relative(input.repoRoot, absolutePath));
+      if (
+        shouldSkipCatalogPath({
+          relativePath,
+          isDirectory: child.isDirectory(),
+          skippedRoots: input.skippedRoots,
+          gitignoreRules: input.gitignoreRules
+        })
+      ) {
         continue;
       }
 
@@ -174,7 +131,14 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
         continue;
       }
 
-      const stats = fs.statSync(absolutePath);
+      const stats = statFileOrSkip({
+        repoRoot: input.repoRoot,
+        absolutePath,
+        recordSkippedRoot: input.recordSkippedRoot
+      });
+      if (stats === null) {
+        continue;
+      }
       const language = await this.fileIdentity.inferLanguage({ path: absolutePath });
       input.entries.push(
         buildFileCatalogEntry({
@@ -191,6 +155,50 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
   }
 }
 
+function readDirectoryOrSkip(input: {
+  repoRoot: string;
+  directory: string;
+  recordSkippedRoot: (root: string) => void;
+}): fs.Dirent[] | null {
+  try {
+    return fs.readdirSync(input.directory, { withFileTypes: true });
+  } catch (error) {
+    if (isSkippableFilesystemError(error)) {
+      input.recordSkippedRoot(relativeCatalogPath(input.repoRoot, input.directory));
+      return null;
+    }
+    throw error;
+  }
+}
+
+function statFileOrSkip(input: {
+  repoRoot: string;
+  absolutePath: string;
+  recordSkippedRoot: (root: string) => void;
+}): fs.Stats | null {
+  try {
+    return fs.statSync(input.absolutePath);
+  } catch (error) {
+    if (isSkippableFilesystemError(error)) {
+      input.recordSkippedRoot(relativeCatalogPath(input.repoRoot, input.absolutePath));
+      return null;
+    }
+    throw error;
+  }
+}
+
+function isSkippableFilesystemError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("code" in error)) {
+    return false;
+  }
+  return ["EACCES", "EPERM", "ENOENT", "ENOTDIR"].includes(String(error.code));
+}
+
+function relativeCatalogPath(repoRoot: string, absolutePath: string): string {
+  const relativePath = normalizeCatalogPath(path.relative(repoRoot, absolutePath));
+  return relativePath.length === 0 ? "." : relativePath;
+}
+
 function isInsideRepo(repoRoot: string, absolutePath: string): boolean {
   const relative = path.relative(repoRoot, absolutePath);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
@@ -203,12 +211,20 @@ function isNestedGitRepository(repoRoot: string, absolutePath: string): boolean 
   return fs.existsSync(path.join(absolutePath, ".git"));
 }
 
-function mergeSkippedRoots(skippedRoots: readonly string[]): string[] {
-  return Array.from(new Set([...DEFAULT_SKIPPED_ROOTS, ...skippedRoots])).sort();
-}
-
 function compareCatalogEntries(left: fs.Dirent, right: fs.Dirent): number {
   return catalogTraversalPriority(left) - catalogTraversalPriority(right) || left.name.localeCompare(right.name);
+}
+
+function readRootGitignoreRules(repoRoot: string): GitignoreRule[] {
+  const gitignorePath = path.join(repoRoot, ".gitignore");
+  if (!fs.existsSync(gitignorePath)) {
+    return [];
+  }
+  try {
+    return parseGitignoreRules(fs.readFileSync(gitignorePath, "utf8"));
+  } catch (_error) {
+    return [];
+  }
 }
 
 function catalogTraversalPriority(entry: fs.Dirent): number {

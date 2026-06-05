@@ -5,11 +5,9 @@ import { describe, expect, it } from "vitest";
 import type { GetTaskContextResult } from "../../src/application/use-cases/get-task-context.js";
 import { getTaskContext } from "../../src/application/use-cases/get-task-context.js";
 import { indexRepositoryGraph } from "../../src/application/use-cases/index-repository-graph.js";
+import { DEFAULT_SKIPPED_ROOTS } from "../../src/domain/policies/index.js";
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../../src/infrastructure/extraction/index.js";
-import {
-  DEFAULT_SKIPPED_ROOTS,
-  FileCatalogScannerAdapter
-} from "../../src/infrastructure/filesystem/index.js";
+import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/workspace-file.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
 import { PythonTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
@@ -119,6 +117,53 @@ describe("context_for_task use case", () => {
     );
   });
 
+  it("ranks common web auth implementation paths ahead of unrelated token matches", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-context-web-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "api", "server", "controllers"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "api", "server", "services"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "client", "src", "components"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "e2e", "setup"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "package.json"), JSON.stringify({ scripts: { test: "vitest run" } }, null, 2));
+      fs.writeFileSync(path.join(repoRoot, "api", "server", "controllers", "AuthController.js"), "module.exports = {};\n");
+      fs.writeFileSync(path.join(repoRoot, "api", "server", "services", "AuthService.js"), "module.exports = {};\n");
+      fs.writeFileSync(path.join(repoRoot, "api", "server", "services", "MCP.js"), "module.exports = {};\n");
+      fs.writeFileSync(path.join(repoRoot, "client", "src", "components", "Login.tsx"), "export function Login() { return null; }\n");
+      fs.writeFileSync(path.join(repoRoot, "e2e", "setup", "authenticate.ts"), "export async function authenticate() {}\n");
+
+      const result = await getTaskContext({
+        request: {
+          task: "Update login authentication flow",
+          repo_root: repoRoot,
+          files: [],
+          symbols: [],
+          max_files: 4,
+          max_docs: 2
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: repoRoot
+      });
+
+      expect(result.context.related_files.map((file) => file.path)).toEqual([
+        "client/src/components/Login.tsx",
+        "api/server/controllers/AuthController.js",
+        "api/server/services/AuthService.js",
+        "e2e/setup/authenticate.ts"
+      ]);
+      expect(result.context.related_files.map((file) => file.reason)).toEqual(
+        expect.arrayContaining([
+          expect.stringContaining("component convention"),
+          expect.stringContaining("controller convention"),
+          expect.stringContaining("service convention")
+        ])
+      );
+      expect(result.context.related_files.map((file) => file.path)).not.toContain("api/server/services/MCP.js");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("resolves explicit requested files directly when the catalog scan is truncated", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-context-truncated-"));
     fs.writeFileSync(
@@ -179,6 +224,61 @@ describe("context_for_task use case", () => {
         ])
       );
       expect(result.meta.truncated).toBe(true);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("directly resolves allowlisted hidden config but refuses secret env files", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-context-hidden-"));
+    const scanner: FileCatalogScanPort = {
+      async scan(input) {
+        return {
+          repo_root: input.repo_root,
+          indexed_roots: input.indexed_roots,
+          skipped_roots: [...DEFAULT_SKIPPED_ROOTS].sort(),
+          files: [],
+          truncated: true
+        };
+      }
+    };
+
+    try {
+      fs.writeFileSync(path.join(repoRoot, ".env.example"), "TOKEN=\n");
+      fs.writeFileSync(path.join(repoRoot, ".env"), "TOKEN=secret\n");
+
+      const result = await getTaskContext({
+        request: {
+          task: "Review environment template",
+          repo_root: repoRoot,
+          files: [".env.example", ".env"],
+          symbols: [],
+          max_files: 5,
+          max_docs: 5
+        },
+        scanner,
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: repoRoot
+      });
+
+      expect(result.context.requested_files).toEqual([
+        expect.objectContaining({
+          path: ".env.example",
+          exists: true,
+          language: "config"
+        }),
+        expect.objectContaining({
+          path: ".env",
+          exists: false
+        })
+      ]);
+      expect(result.context.risks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: "Some requested files were not found in the scanned repository."
+          })
+        ])
+      );
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }

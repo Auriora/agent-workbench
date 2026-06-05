@@ -114,6 +114,16 @@ After the MVP slice works, deepen support in this order:
 5. C# project/symbol discovery
 6. Go, C/C++, Rust, then the extended backlog
 
+JavaScript/TypeScript dogfood against a large web monorepo confirmed that the
+first useful slice should start with repository-shape and package-boundary
+evidence before deep semantic navigation. A JS/TS-heavy repository must not be
+classified as Python-primary because of incidental utility scripts. The first
+slice should identify package/workspace roots, root and package-local scripts,
+client/server/e2e boundaries, `tsconfig` files, route/controller/service
+conventions, React page/component areas, and nearby tests. Symbol, export,
+import, and route-level navigation should be promoted only after fixture-backed
+adapter tests prove the extracted evidence and confidence labels.
+
 OneMount dogfood confirmed the first Go slice should start before deep
 reference/impact work with file identity, project discovery, and basic routing
 symbols. A Go-heavy repository must surface `.go` files in scope, recognize

@@ -12,6 +12,7 @@ import type {
   ValidationHint
 } from "../../contracts/index.js";
 import type { FileCatalogEntry, GraphNode } from "../../domain/models/index.js";
+import { isExplicitHiddenCatalogPathAllowed } from "../../domain/policies/index.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 import { buildStatBackedFileCatalogEntry } from "./file-catalog-entry.js";
 import { capNextActions } from "../../presentation/metadata.js";
@@ -506,7 +507,7 @@ function toFileReference(pathInput: string, entry?: FileCatalogEntry, reason = "
 
 function scoreFile(file: FileCatalogEntry, terms: Set<string>): number {
   const pathTerms = tokenSet([file.path]);
-  let score = firstPartyPathBoost(file.path);
+  let score = firstPartyPathBoost(file.path) + webAppStructureBoost(file.path, terms);
   for (const term of terms) {
     if (pathTerms.has(term)) {
       score += 3;
@@ -581,9 +582,64 @@ function reasonForRelatedFile(
   }
   const pathTerms = tokenSet([file.path]);
   const hasExactPathTerm = [...terms].some((term) => pathTerms.has(term));
+  const webReason = webAppStructureReason(file.path, terms);
+  if (webReason !== undefined) {
+    return webReason;
+  }
   return hasExactPathTerm
     ? "Matched task terms in the repo-relative path."
     : "Weak path-term match; use as routing evidence only.";
+}
+
+function webAppStructureBoost(filePath: string, terms: Set<string>): number {
+  const reason = webAppStructureReason(filePath, terms);
+  if (reason === undefined) {
+    return 0;
+  }
+  const lower = filePath.toLowerCase();
+  if (lower.includes("/controllers/") || lower.includes("/routes/")) return 9;
+  if (lower.includes("/services/") || lower.includes("/strategies/")) return 8;
+  if (lower.includes("/pages/") || lower.includes("/components/")) return 7;
+  if (lower.startsWith("e2e/") || lower.includes("/e2e/")) return 6;
+  if (lower.includes("data-provider") || lower.includes("api-endpoint")) return 5;
+  return 4;
+}
+
+function webAppStructureReason(filePath: string, terms: Set<string>): string | undefined {
+  if (!hasAnyTerm(terms, ["auth", "login", "logout", "oauth", "openid", "session", "user"])) {
+    return undefined;
+  }
+  const lower = filePath.toLowerCase();
+  const pathMentionsAuth = /auth|login|logout|oauth|openid|session|user/u.test(lower);
+  if (!pathMentionsAuth) {
+    return undefined;
+  }
+  if (lower.includes("/controllers/")) {
+    return "Matched web application controller convention and authentication task terms.";
+  }
+  if (lower.includes("/routes/")) {
+    return "Matched web application route convention and authentication task terms.";
+  }
+  if (lower.includes("/services/")) {
+    return "Matched web application service convention and authentication task terms.";
+  }
+  if (lower.includes("/strategies/")) {
+    return "Matched web authentication strategy convention and task terms.";
+  }
+  if (lower.includes("/pages/") || lower.includes("/components/")) {
+    return "Matched web UI page/component convention and authentication task terms.";
+  }
+  if (lower.startsWith("e2e/") || lower.includes("/e2e/")) {
+    return "Matched end-to-end authentication test/setup convention.";
+  }
+  if (lower.includes("data-provider") || lower.includes("api-endpoint")) {
+    return "Matched web data-provider/API endpoint convention and authentication task terms.";
+  }
+  return undefined;
+}
+
+function hasAnyTerm(terms: Set<string>, expected: readonly string[]): boolean {
+  return expected.some((term) => terms.has(term));
 }
 
 function noisyArtifactPenalty(filePath: string): number {
@@ -659,6 +715,9 @@ async function resolveExplicitEntries(input: {
   for (const filePath of input.filePaths) {
     const normalizedPath = normalizeRepoPath(filePath);
     if (resolved.has(normalizedPath)) {
+      continue;
+    }
+    if (!isExplicitHiddenCatalogPathAllowed(normalizedPath)) {
       continue;
     }
     const stat = await input.workspace.stat({ path: normalizedPath });

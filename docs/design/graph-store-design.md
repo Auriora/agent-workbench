@@ -178,6 +178,13 @@ The graph store must apply the [Workspace safety contract](../reference/workspac
 skip or redact secret-like values, avoid indexing `.env` files by default, and
 store infrastructure environment variable names rather than values.
 
+Catalog indexing treats hidden paths as local state by default. Allowlisted
+repository-shape evidence such as `.github/`, `.devcontainer/`, `.gitignore`,
+`.dockerignore`, `.editorconfig`, `.env.example`, `.env.sample`, and
+`.env.template` may be indexed; secret-bearing `.env` files, hidden caches, and
+agent/tool runtime state must stay out of graph evidence. Root `.gitignore`
+patterns are used as an additional skip signal, not as the sole safety policy.
+
 ## Observability And Operations
 
 The runtime should expose graph size, schema version, freshness, indexing
