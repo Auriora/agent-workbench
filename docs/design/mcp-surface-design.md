@@ -345,6 +345,36 @@ Post-closure dogfood caveats from large mixed-language repositories:
   command templates and environment requirements across languages. This is the
   reliable path for Docker-only, Nix-only, devcontainer-only, Bazel-only, or
   other project-specific validation rules.
+- Open: make first-read resources reliable on large AWS/IaC repositories. If
+  `repo:///status`, `repo:///scope`, `repo:///overview`, or
+  `integration:///profiles/codex` can time out while direct tools remain fast,
+  either fix the resource path budget or adjust the skill first-call guidance
+  to use a cheap direct status path.
+- Open: fix query-result scope metadata so responses that return Python
+  symbols do not report only `json`/`text` languages. Result metadata should
+  distinguish repository coverage, queried adapter coverage, and returned
+  evidence languages clearly.
+- Open: improve exact-first symbol filtering for caller-supplied symbols before
+  broad fuzzy fallback. Domain hints such as SAM logical IDs and Lambda
+  `handler` functions should not rank unrelated test helpers above exact or
+  service-local candidates.
+- Open: improve nearest-test ranking for service slices, especially
+  infrastructure-plus-handler changes where tests live under service, infra, or
+  script-specific test families rather than same-package Python paths.
+- Future: add SAM/CloudFormation fixture-backed semantic indexing for logical
+  IDs, Lambda handler strings, events, parameters, environment references,
+  policies, layers, outputs, and template dependencies.
+- Future: connect SAM/CloudFormation templates to source handlers, tests, and
+  validation evidence. Impact on a SAM template should expose low-confidence
+  but useful template-to-handler and event-source relationships rather than an
+  isolated zero-edge resource.
+- Future: add Lambda-heavy repository presentation that groups generic
+  `handler` results by stack/service/logical ID, handler file, and event source
+  while preserving the compact graph contract.
+- Future: add AWS validation planning evidence for SAM/CloudFormation
+  repositories, including cfn-lint, repo-approved SAM validation commands,
+  containerized deploy/test runners, and host-tool availability as planned or
+  blocked evidence rather than guessed commands.
 - Future: add Go parser-backed symbols and C/C++ reference/impact edges after
   the language-adapter contract defines confidence, provenance, and integration
   boundaries. Routing-only hits must stay clearly marked until then.

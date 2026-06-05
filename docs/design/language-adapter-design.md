@@ -213,6 +213,12 @@ The adapter should understand common intrinsic functions and SAM conventions:
 Lambda events, API routes, environment variables, policies, outputs, and
 handler strings.
 
+The AWS datalake dogfood comparison in
+[`docs/reference/aws-iac/aws-datalake-agent-workbench-evaluation-2026-06-05.md`](../reference/aws-iac/aws-datalake-agent-workbench-evaluation-2026-06-05.md)
+is the current concrete reference for this adapter's missing behavior: SAM
+logical ID lookup, template-to-handler edges, Lambda handler grouping,
+template-aware impact, and AWS validation planning.
+
 ## Promotion Gates
 
 - exact-symbol correctness
