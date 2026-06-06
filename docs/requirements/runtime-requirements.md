@@ -133,4 +133,4 @@ workflow designers.
 - [Coding agent integration design](../design/coding-agent-integration-design.md)
 - [Markdown document quality design](../design/markdown-document-quality-design.md)
 - [Language adapter design](../design/language-adapter-design.md)
-- [MVP requirements](../specs/001-agent-ide-runtime/requirements.md)
+- [Spec closure log](../history/spec-closure-log.md)

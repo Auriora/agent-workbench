@@ -40,7 +40,7 @@ Primary fanned-out docs:
 - [Knowledge layer design](knowledge-layer-design.md)
 - [Language capability matrix](../reference/language-capability-matrix.md)
 - [MVP proof matrix](../reference/mvp-proof-matrix.md)
-- [MVP spec package](../specs/001-agent-ide-runtime/requirements.md)
+- [Runtime requirements](../requirements/runtime-requirements.md)
 
 ## Scope
 
@@ -652,5 +652,5 @@ rename, change signature, safe delete, and broad graph exploration tools.
   - [Edit and validation loop design](edit-and-validation-loop-design.md)
   - [Knowledge layer design](knowledge-layer-design.md)
 - Reference: [Language capability matrix](../reference/language-capability-matrix.md)
-- Spec: [Agent IDE runtime MVP](../specs/001-agent-ide-runtime/requirements.md)
+- Delivery record: [Spec closure log](../history/spec-closure-log.md)
 - Existing PoC: `/home/bcherrington/Projects/Auriora/agent-ide`

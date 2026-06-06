@@ -63,5 +63,5 @@ remote infrastructure.
 ## Related Artifacts
 
 - Related architecture docs: [System architecture](../architecture/system-architecture.md)
-- Related specs: [MVP requirements](../specs/001-agent-ide-runtime/requirements.md)
+- Related delivery record: [Spec closure log](../history/spec-closure-log.md)
 - Related code or config:

@@ -358,7 +358,7 @@ TimeLocker dogfood after Spec 002 left two MCP-resource polish items:
   entrypoints, representative source files, test roots, and package/test
   configuration rank ahead of large groups of workflow/config files such as
   `.github/workflows/*`. The delivery record is
-  [Spec 004](../specs/004-overview-ranking-polish/requirements.md).
+  [Spec closure log](../history/spec-closure-log.md).
 
 OneMount dogfood left Go and broad-scan follow-up items:
 
@@ -511,7 +511,7 @@ Post-closure dogfood caveats from large mixed-language repositories:
   skipped wholesale because many JavaScript/TypeScript monorepos use that name
   for first-party source; generated package files inside them are skipped by
   artifact extension. The delivery record is
-  [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md).
+  [Spec closure log](../history/spec-closure-log.md).
 - Done: promote `.sln`, `.csproj`, `Program.cs`, `appsettings*.json`, Razor
   route pages/components, controllers, EF `DbContext`/migrations, and shared
   model projects as first-class .NET routing and overview anchors.
@@ -522,7 +522,7 @@ Post-closure dogfood caveats from large mixed-language repositories:
   target frameworks, output type, package references, project references, and
   test-project markers. These nodes use declaration-only provenance and do not
   imply C# or Razor semantic support. The delivery record is
-  [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md).
+  [Spec closure log](../history/spec-closure-log.md).
 - Done: deepen .NET validation planning evidence for solution and project
   files. The planner ranks nearest `dotnet build <project>` before broader
   solution builds, includes relevant test projects when selected-project
@@ -590,7 +590,7 @@ Post-closure dogfood caveats from large mixed-language repositories:
   sections and snippets, and treats repo-relative paths as path evidence only
   when the field is path-typed. Workspace safety path containment remains the
   authority for reads and writes. The delivery record is
-  [Spec 007](../specs/007-redaction-boundary-polish/requirements.md).
+  [Spec closure log](../history/spec-closure-log.md).
 - Done: improve exact-first symbol filtering for caller-supplied symbols before
   broad fuzzy fallback. Exact mode now applies language filters before deciding
   whether exact evidence exists and treats SAM logical IDs and Lambda handler
@@ -607,7 +607,7 @@ Post-closure dogfood caveats from large mixed-language repositories:
   candidates. This is file-level routing evidence with `resource_backed`
   capability and `infra_parser` provenance; full semantic indexing remains
   future work. The delivery record is
-  [Spec 006](../specs/006-infra-template-routing/requirements.md).
+  [Spec closure log](../history/spec-closure-log.md).
 - Done: add first-slice SAM/Lambda overview and context routing for template
   files, handler source files, and infrastructure tests.
 - Done: connect SAM/CloudFormation templates to source handlers, tests, and
@@ -621,14 +621,14 @@ Post-closure dogfood caveats from large mixed-language repositories:
   summaries, and handler impact reaches event sources and directly referenced
   template resources with low-confidence infrastructure caveats. The delivery
   record is
-  [Spec 016](../specs/016-sam-cloudformation-intrinsic-routing/requirements.md).
+  [Spec closure log](../history/spec-closure-log.md).
 - Done: add Lambda-heavy repository presentation that groups generic
   `handler` results by template path, logical ID, handler binding, and resolved
   handler file while preserving the compact graph contract. Grouping uses
   existing resource-backed metadata and bounded handler-file routing edges; it
   does not infer stack, event-source, dependency, IAM, or deployment semantics.
   The delivery record is
-  [Spec 008](../specs/008-lambda-result-presentation/requirements.md).
+  [Spec closure log](../history/spec-closure-log.md).
 - Done: add first-slice AWS validation planning evidence for SAM/CloudFormation
   repositories, including non-executed `cfn-lint`, `sam validate`, and nearby
   infrastructure pytest candidates when template/test evidence exists.
@@ -646,14 +646,14 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Done: deepen resource-backed `.sln`/`.csproj` extraction for SDK type, target
   frameworks, package references, project references, output type, and likely
   app role before deeper C# semantics. The delivery record is
-  [Spec 005](../specs/005-dotnet-repository-shape-hardening/requirements.md).
+  [Spec closure log](../history/spec-closure-log.md).
 - Future: add C# and Razor fixture-backed partial semantic support for
   controllers, services, Razor/Blazor components, EF contexts, migrations, and
   shared models using one approved implementation path.
 - Done: add Go parser-backed symbols, direct references, and conservative
   impact edges with confidence, provenance, and ambiguity caveats. The delivery
   record is
-  [Spec 015](../specs/015-go-reference-impact-promotion/requirements.md).
+  [Spec closure log](../history/spec-closure-log.md).
 - Future: add C/C++ reference/impact edges after the language-adapter contract
   defines confidence, provenance, and integration boundaries. Routing-only hits
   must stay clearly marked until then.
@@ -661,12 +661,12 @@ Post-closure dogfood caveats from large mixed-language repositories:
   source, adding heuristic include/same-file routing edges, and identifying
   likely CMake target command templates without executing commands or guessing
   unsafe build directories. The delivery record is
-  [Spec 009](../specs/009-cmake-cpp-routing-validation/requirements.md).
+  [Spec closure log](../history/spec-closure-log.md).
 - Done: performed a detailed predecessor `agent-ide` capability analysis,
   mapped which lessons are already implemented, and promoted only
   language-neutral replacement gaps into tool, presenter, provider, roadmap, or
   follow-up spec work. The delivery record is
-  [Spec 010](../specs/010-agent-ide-capability-analysis/requirements.md).
+  [Spec closure log](../history/spec-closure-log.md).
 - Spec 010 first-pass recommendation was delivered through Specs 011, 012, and
   013. Do not add `repo_preflight`, broad orientation, runtime-path reports,
   usage resources, semantic refactor tools, or dependency deep dives merely for

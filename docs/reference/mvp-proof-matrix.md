@@ -154,4 +154,4 @@ The MVP docs are implementation-ready when:
 
 - [Runtime contracts](runtime-contracts.md)
 - [Workspace safety contract](workspace-safety-contract.md)
-- [Agent IDE runtime MVP requirements](../specs/001-agent-ide-runtime/requirements.md)
+- [Spec closure log](../history/spec-closure-log.md)

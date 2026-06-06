@@ -282,4 +282,4 @@ The implementation must include architecture checks that prove:
 - [Language adapter design](language-adapter-design.md)
 - [Edit and validation loop design](edit-and-validation-loop-design.md)
 - [Runtime operations design](runtime-operations-design.md)
-- [Agent IDE runtime MVP design](../specs/001-agent-ide-runtime/design.md)
+- [Runtime requirements](../requirements/runtime-requirements.md)

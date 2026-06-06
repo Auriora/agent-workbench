@@ -61,5 +61,5 @@ breaking clients.
 ## Related Artifacts
 
 - Related architecture docs: [System architecture](../architecture/system-architecture.md)
-- Related specs: [MVP design](../specs/001-agent-ide-runtime/design.md)
+- Related delivery record: [Spec closure log](../history/spec-closure-log.md)
 - Related code or config:

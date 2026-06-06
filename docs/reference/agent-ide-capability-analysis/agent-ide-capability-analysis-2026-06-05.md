@@ -12,7 +12,7 @@ last_reviewed: 2026-06-05
 
 This document records the first inventory and reconciliation pass for
 predecessor `agent-ide` capabilities. It supports
-[Spec 010](../../specs/010-agent-ide-capability-analysis/requirements.md).
+[Spec closure log](../../history/spec-closure-log.md).
 
 The intent is not to port Python implementation code. The useful output is a
 language-neutral replacement plan: keep the workflows that proved valuable,

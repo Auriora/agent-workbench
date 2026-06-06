@@ -315,8 +315,8 @@ or runtime telemetry.
 - Validation:
   - Spec 018 scanner run against Agent Workbench.
   - Future synthetic history fixture report tests.
-- Promotion target: archived
-  [Spec 018](../specs/018-history-mining-agent-ide-signals/requirements.md);
+- Promotion target: closed
+  [Spec 018](../history/spec-closure-log.md);
   defer public MCP usage resources until privacy and storage policy are
   explicit.
 
