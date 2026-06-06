@@ -185,6 +185,21 @@ Optional future ports:
 
 ## MCP Surface
 
+Current docs query/read surfaces are part of the MVP MCP surface:
+
+- `repo:///docs/overview`
+- `repo:///docs/map`
+- `docs_search`
+- `docs_outline`
+- `docs_read_section`
+
+These surfaces help agents find and read repository documentation. They return
+bounded routing evidence, stable section identifiers, direct-read caveats,
+truncation metadata, and repo-relative paths. They do not perform document
+quality checks, broad crosslink analysis, generated reporting, or formatting.
+`docs_search` is not authoritative for precise claims; use
+`docs_read_section` for direct section evidence.
+
 Potential tools:
 
 - `check_markdown_document`
@@ -196,6 +211,11 @@ Potential tools:
 These tools are documentation-quality surfaces, not language-semantic tools.
 They should report structured findings, severity, source ranges, suggested
 actions, and formatter preview tokens using runtime contracts.
+
+Promote cross-document links, generated documentation reports, or Markdown
+quality tools only with fixture-backed evidence that the bounded query/read
+surfaces are insufficient for the workflow and that the new surface stays
+within explicit row, source-byte, and mutation budgets.
 
 ## Validation Planning Integration
 

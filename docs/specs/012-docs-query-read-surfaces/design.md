@@ -2,14 +2,19 @@
 title: Docs query and read surfaces design
 doc_type: spec
 artifact_type: design
-status: active
+status: archived
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Technical Design
 
 ## Overview
+
+Spec 012 closed on 2026-06-06. Current public docs query/read behavior lives in
+[MCP surface design](../../design/mcp-surface-design.md), with Markdown quality
+boundaries in
+[Markdown document quality design](../../design/markdown-document-quality-design.md).
 
 Add docs query/read surfaces on top of documentation adapter evidence. The first
 slice should be compact and deterministic: overview, map, search, outline, and

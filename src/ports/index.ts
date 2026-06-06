@@ -35,6 +35,7 @@ import type {
   CapabilityLevel,
   DiagnosticFinding,
   DiagnosticsProviderStatus,
+  DocsDocument,
   EditToken,
   IntegrationArtifact,
   IntegrationProfile
@@ -259,6 +260,22 @@ export interface DiagnosticsProviderPort {
     repo_root: string;
     file: FileCatalogEntry;
   }): Promise<DiagnosticsProviderResult>;
+}
+
+export interface DocsIndexPort {
+  load(input: {
+    repo_root: string;
+    max_docs: number;
+    max_headings_per_doc: number;
+  }): Promise<{
+    documents: readonly DocsDocument[];
+    warnings: readonly {
+      path?: string;
+      reason: FileCatalogSkippedPath["reason"];
+      message: string;
+    }[];
+    truncated: boolean;
+  }>;
 }
 
 export interface EditPreviewStorePort {

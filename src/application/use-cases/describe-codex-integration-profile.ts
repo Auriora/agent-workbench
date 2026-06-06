@@ -117,6 +117,20 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         description: "Compact repository overview with platforms, key files, key docs, validation hints, and first-call guidance."
       },
       {
+        name: "docs-overview",
+        uri: "repo:///docs/overview",
+        kind: "resource",
+        capability_class: "read_only",
+        description: "Compact documentation overview with important docs, headings, warnings, truncation, and direct-read caveats."
+      },
+      {
+        name: "docs-map",
+        uri: "repo:///docs/map",
+        kind: "resource",
+        capability_class: "read_only",
+        description: "Bounded documentation map with repo-relative paths, headings, warnings, truncation, and direct-read caveats."
+      },
+      {
         name: "codex-integration-profile",
         uri: "integration:///profiles/codex",
         kind: "resource",
@@ -134,6 +148,24 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         kind: "tool",
         capability_class: "read_only",
         description: "Configured compact provider-backed diagnostics for repo-relative files without command execution."
+      },
+      {
+        name: "docs_search",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Configured bounded documentation search with routing caveats and direct-read follow-up guidance."
+      },
+      {
+        name: "docs_outline",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Configured bounded heading outline for one repo-relative Markdown document."
+      },
+      {
+        name: "docs_read_section",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Configured bounded direct section read for precise documentation evidence."
       },
       {
         name: "symbol_search",

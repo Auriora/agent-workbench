@@ -96,6 +96,8 @@ analysis or the failure changes the recommended next action.
 - `repo:///overview`
 - `repo:///status`
 - `repo:///scope`
+- `repo:///docs/overview`
+- `repo:///docs/map`
 
 These resources must be cheap, bounded, and backed by current snapshot metadata.
 They must not trigger broad graph analysis.
@@ -121,6 +123,20 @@ configuration. These reasons describe path and repository-shape routing
 evidence only; capability metadata remains the trust boundary for whether a
 file has semantic support.
 
+`repo:///docs/overview` and `repo:///docs/map` expose bounded Markdown
+documentation routing evidence. They return repo-relative paths, titles,
+heading outlines, links where available, skipped/unreadable path warnings,
+truncation metadata, and direct-read caveats. They are routing surfaces, not
+generated documentation reports and not semantic proof for precise claims.
+
+`repo:///docs/overview` ranks important docs such as repository guidance,
+README files, durable design/reference docs, and task-relevant guides ahead of
+templates, update notes, generated output, vendor docs, and fixture material.
+`repo:///docs/map` returns a deterministic bounded map of docs paths and
+headings. Both resources preserve skipped-path evidence for unreadable,
+generated, vendor, hidden, gitignored, missing, or permission-denied docs
+without failing the whole resource.
+
 ## MVP Tools
 
 - `context_for_task`
@@ -128,6 +144,9 @@ file has semantic support.
 - `find_references`
 - `impact` with explicit traversal and result caps
 - `diagnostics_for_files`
+- `docs_search`
+- `docs_outline`
+- `docs_read_section`
 - `verification_plan`
 - `preview_workspace_edit`
 - `apply_workspace_edit`
@@ -157,13 +176,23 @@ workflows from the predecessor system and must remain first-class. The MVP
 should replicate their useful behavior through this runtime's schemas rather
 than duplicating predecessor tool names or backend payloads.
 
+`docs_search` searches documentation by repo-relative path, title, heading, and
+bounded text snippets. It returns ranked hits with evidence labels and a
+direct-read caveat. Search results are routing evidence only; agents must use
+`docs_read_section` before making precise documentation claims.
+
+`docs_outline` reads a bounded heading outline for one repo-relative Markdown
+document and returns stable heading identifiers. `docs_read_section` reads one
+bounded section by repo-relative path and heading identifier. Both tools refuse
+workspace escapes and generated/vendor paths through structured blocked
+responses rather than best-effort reads.
+
 ## Post-MVP Resources And Tools
 
 - `repo:///mcp-surface`
 - `repo:///graph/summary`
 - `repo:///graph/report`
 - `repo:///graph/communities`
-- `repo:///docs/overview`
 - `repo:///validation-surface`
 - `repo:///agent-integration-profile`
 - `repo:///attention/current`
@@ -178,6 +207,12 @@ than duplicating predecessor tool names or backend payloads.
 - `apply_markdown_format`
 - `post_edit_feedback`
 - `run_nearest_tests`
+
+Documentation crosslink graphs, broad docs reports, generated architecture
+answers, and `docs_crosslinks` remain post-MVP. Promote them only when dogfood
+or usage evidence shows the bounded overview/map/search/outline/read-section
+flow is insufficient, and add fixture-backed budget tests proving that the new
+surface does not become hidden broad orientation work.
 
 Post-MVP graph exploration tools:
 
@@ -236,6 +271,9 @@ agent request
 - MVP `verification_plan` does not execute commands by default.
 - MVP tools must publish row limits, traversal limits, source-byte caps, and
   timeout behavior through response metadata.
+- Docs resources/tools must publish truncation metadata and keep all document
+  paths repo-relative. Search snippets and section reads are source-byte
+  bounded; exact section claims require `docs_read_section` evidence.
 - MVP responses should fail quietly for non-essential backend failures. Only
   task-blocking failures, actionable findings, or required follow-up should be
   promoted to warnings or errors.
@@ -580,6 +618,12 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Promoted to [Spec 012](../specs/012-docs-query-read-surfaces/requirements.md):
   add compact documentation overview, map, search, outline, and read-section
   surfaces before considering crosslink graphs or generated reports.
+- Done: Spec 012 exposed `repo:///docs/overview`, `repo:///docs/map`,
+  `docs_search`, `docs_outline`, and `docs_read_section` as bounded public MCP
+  documentation surfaces. Search/overview/map remain routing evidence with
+  direct-read caveats; precise documentation claims require section evidence
+  from `docs_read_section`. Crosslink graphs and generated reports remain
+  deferred until usage evidence proves they are needed.
 
 ## Related Docs
 

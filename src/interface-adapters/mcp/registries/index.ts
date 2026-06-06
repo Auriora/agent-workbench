@@ -3,6 +3,11 @@ import type {
   CodexIntegrationProfile,
   ApplyWorkspaceEditRequest,
   DiagnosticsForFilesRequest,
+  DocsMapRequest,
+  DocsOutlineRequest,
+  DocsOverviewRequest,
+  DocsReadSectionRequest,
+  DocsSearchRequest,
   FindReferencesRequest,
   ImpactRequest,
   PreviewWorkspaceEditRequest,
@@ -14,6 +19,13 @@ import type {
 import type { ApplyWorkspaceEditUseCaseResult } from "../../../application/use-cases/apply-workspace-edit.js";
 import type { ComputeImpactResult } from "../../../application/use-cases/compute-impact.js";
 import type { DiagnoseChangedFilesResult } from "../../../application/use-cases/diagnose-changed-files.js";
+import type {
+  DocsMapUseCaseResult,
+  DocsOutlineUseCaseResult,
+  DocsOverviewUseCaseResult,
+  DocsReadSectionUseCaseResult,
+  DocsSearchUseCaseResult
+} from "../../../application/use-cases/query-docs.js";
 import type { FindReferencesUseCaseResult } from "../../../application/use-cases/find-references.js";
 import type { GetRepoOverviewResult } from "../../../application/use-cases/get-repo-overview.js";
 import type { GetRepoScopeResult } from "../../../application/use-cases/get-repo-scope.js";
@@ -23,11 +35,16 @@ import type { PlanVerificationResult } from "../../../application/use-cases/plan
 import type { PreviewWorkspaceEditUseCaseResult } from "../../../application/use-cases/preview-workspace-edit.js";
 import type { SearchSymbolsResult } from "../../../application/use-cases/search-symbols.js";
 import { codexIntegrationProfileResource } from "./resources/codex-integration-profile.js";
+import { docsMapResource } from "./resources/docs-map.js";
+import { docsOverviewResource } from "./resources/docs-overview.js";
 import { repoOverviewResource } from "./resources/repo-overview.js";
 import { repoScopeResource } from "./resources/repo-scope.js";
 import { repoStatusResource } from "./resources/repo-status.js";
 import { contextForTaskTool } from "./tools/context-for-task.js";
 import { diagnosticsForFilesTool } from "./tools/diagnostics-for-files.js";
+import { docsOutlineTool } from "./tools/docs-outline.js";
+import { docsReadSectionTool } from "./tools/docs-read-section.js";
+import { docsSearchTool } from "./tools/docs-search.js";
 import { applyWorkspaceEditTool } from "./tools/apply-workspace-edit.js";
 import { findReferencesTool } from "./tools/find-references.js";
 import { impactTool } from "./tools/impact.js";
@@ -40,6 +57,11 @@ export type McpRegistryContext = {
   getRepoStatus?: (input: { repo_root: string }) => Promise<GetRepoStatusResult> | GetRepoStatusResult;
   getRepoScope?: (input: { repo_root: string }) => Promise<GetRepoScopeResult> | GetRepoScopeResult;
   getRepoOverview?: (input: { repo_root: string }) => Promise<GetRepoOverviewResult> | GetRepoOverviewResult;
+  getDocsOverview?: (input: { request: DocsOverviewRequest }) => Promise<DocsOverviewUseCaseResult> | DocsOverviewUseCaseResult;
+  getDocsMap?: (input: { request: DocsMapRequest }) => Promise<DocsMapUseCaseResult> | DocsMapUseCaseResult;
+  searchDocs?: (input: { request: DocsSearchRequest }) => Promise<DocsSearchUseCaseResult> | DocsSearchUseCaseResult;
+  getDocsOutline?: (input: { request: DocsOutlineRequest }) => Promise<DocsOutlineUseCaseResult> | DocsOutlineUseCaseResult;
+  readDocsSection?: (input: { request: DocsReadSectionRequest }) => Promise<DocsReadSectionUseCaseResult> | DocsReadSectionUseCaseResult;
   getTaskContext?: (input: { request: TaskContextRequest }) => Promise<GetTaskContextResult> | GetTaskContextResult;
   diagnoseChangedFiles?: (input: { request: DiagnosticsForFilesRequest }) => Promise<DiagnoseChangedFilesResult> | DiagnoseChangedFilesResult;
   searchSymbols?: (input: { request: SymbolSearchRequest }) => Promise<SearchSymbolsResult> | SearchSymbolsResult;
@@ -94,12 +116,17 @@ export const mcpResources: McpResourceDeclaration[] = [
   repoStatusResource,
   repoScopeResource,
   repoOverviewResource,
+  docsOverviewResource,
+  docsMapResource,
   codexIntegrationProfileResource
 ];
 
 export const mcpTools: McpToolDeclaration[] = [
   contextForTaskTool,
   diagnosticsForFilesTool,
+  docsSearchTool,
+  docsOutlineTool,
+  docsReadSectionTool,
   symbolSearchTool,
   findReferencesTool,
   impactTool,

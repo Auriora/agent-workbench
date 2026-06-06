@@ -293,6 +293,173 @@ export const sourceSectionSchema = z
   .strict();
 export type SourceSection = z.infer<typeof sourceSectionSchema>;
 
+export const docsHeadingSchema = z
+  .object({
+    id: z.string(),
+    text: z.string(),
+    depth: z.number().int().positive().max(6),
+    line: z.number().int().positive()
+  })
+  .strict();
+export type DocsHeading = z.infer<typeof docsHeadingSchema>;
+
+export const docsLinkSchema = z
+  .object({
+    label: z.string(),
+    target: z.string(),
+    resolved_path: z.string().optional(),
+    exists: z.boolean()
+  })
+  .strict();
+export type DocsLink = z.infer<typeof docsLinkSchema>;
+
+export const docsWarningSchema = z
+  .object({
+    path: z.string().optional(),
+    reason: skippedPathReasonSchema,
+    message: z.string()
+  })
+  .strict();
+export type DocsWarning = z.infer<typeof docsWarningSchema>;
+
+export const docsDocumentSchema = z
+  .object({
+    path: z.string(),
+    title: z.string(),
+    headings: z.array(docsHeadingSchema),
+    links: z.array(docsLinkSchema),
+    capability_level: capabilityLevelSchema,
+    evidence_kinds: z.array(evidenceKindSchema),
+    direct_read_caveat: z.string()
+  })
+  .strict();
+export type DocsDocument = z.infer<typeof docsDocumentSchema>;
+
+export const docsSearchHitSchema = z
+  .object({
+    path: z.string(),
+    title: z.string(),
+    heading_id: z.string().optional(),
+    heading: z.string().optional(),
+    snippet: z.string().optional(),
+    score: z.number().nonnegative(),
+    evidence_kinds: z.array(evidenceKindSchema),
+    direct_read_caveat: z.string()
+  })
+  .strict();
+export type DocsSearchHit = z.infer<typeof docsSearchHitSchema>;
+
+export const docsOverviewRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    max_docs: z.number().int().positive().max(50).default(10),
+    max_headings_per_doc: z.number().int().positive().max(20).default(5)
+  })
+  .strict();
+export type DocsOverviewRequest = z.infer<typeof docsOverviewRequestSchema>;
+
+export const docsMapRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    max_docs: z.number().int().positive().max(200).default(50),
+    max_headings_per_doc: z.number().int().positive().max(50).default(20)
+  })
+  .strict();
+export type DocsMapRequest = z.infer<typeof docsMapRequestSchema>;
+
+export const docsSearchRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    query: z.string().min(1),
+    max_results: z.number().int().positive().max(50).default(10),
+    include_snippets: z.boolean().default(true)
+  })
+  .strict();
+export type DocsSearchRequest = z.infer<typeof docsSearchRequestSchema>;
+
+export const docsOutlineRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    path: z.string().min(1)
+  })
+  .strict();
+export type DocsOutlineRequest = z.infer<typeof docsOutlineRequestSchema>;
+
+export const docsReadSectionRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    path: z.string().min(1),
+    heading_id: z.string().min(1),
+    max_bytes: z.number().int().positive().max(12000).default(4000)
+  })
+  .strict();
+export type DocsReadSectionRequest = z.infer<typeof docsReadSectionRequestSchema>;
+
+export const docsOverviewSchema = z
+  .object({
+    repo_root: z.string(),
+    status: verificationStatusSchema,
+    summary: z.string(),
+    important_docs: z.array(docsDocumentSchema),
+    warnings: z.array(docsWarningSchema),
+    truncated: z.boolean(),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type DocsOverview = z.infer<typeof docsOverviewSchema>;
+
+export const docsMapSchema = z
+  .object({
+    repo_root: z.string(),
+    status: verificationStatusSchema,
+    docs: z.array(docsDocumentSchema),
+    warnings: z.array(docsWarningSchema),
+    truncated: z.boolean(),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type DocsMap = z.infer<typeof docsMapSchema>;
+
+export const docsSearchResultSchema = z
+  .object({
+    repo_root: z.string(),
+    query: z.string(),
+    status: verificationStatusSchema,
+    hits: z.array(docsSearchHitSchema),
+    warnings: z.array(docsWarningSchema),
+    truncated: z.boolean(),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type DocsSearchResult = z.infer<typeof docsSearchResultSchema>;
+
+export const docsOutlineResultSchema = z
+  .object({
+    repo_root: z.string(),
+    path: z.string(),
+    status: verificationStatusSchema,
+    title: z.string(),
+    headings: z.array(docsHeadingSchema),
+    warnings: z.array(docsWarningSchema),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type DocsOutlineResult = z.infer<typeof docsOutlineResultSchema>;
+
+export const docsReadSectionResultSchema = z
+  .object({
+    repo_root: z.string(),
+    path: z.string(),
+    heading_id: z.string(),
+    status: verificationStatusSchema,
+    heading: docsHeadingSchema.optional(),
+    section: sourceSectionSchema.optional(),
+    warnings: z.array(docsWarningSchema),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type DocsReadSectionResult = z.infer<typeof docsReadSectionResultSchema>;
+
 export const sourceRangeSchema = z
   .object({
     start_line: z.number().int().positive(),

@@ -13,12 +13,17 @@ describe("MCP registry metadata", () => {
 
     expect(surfaces.map((surface) => `${surface.kind}:${surface.name}`).sort()).toEqual([
       "resource:codex-integration-profile",
+      "resource:docs-map",
+      "resource:docs-overview",
       "resource:overview",
       "resource:scope",
       "resource:status",
       "tool:apply_workspace_edit",
       "tool:context_for_task",
       "tool:diagnostics_for_files",
+      "tool:docs_outline",
+      "tool:docs_read_section",
+      "tool:docs_search",
       "tool:find_references",
       "tool:impact",
       "tool:preview_workspace_edit",
@@ -65,7 +70,14 @@ describe("MCP registry metadata", () => {
       capability_class: "read_only",
       mutation_class: "none"
     });
-    for (const name of ["status", "scope", "overview", "codex-integration-profile"]) {
+    for (const name of [
+      "status",
+      "scope",
+      "overview",
+      "docs-overview",
+      "docs-map",
+      "codex-integration-profile"
+    ]) {
       expect(byName.get(name)).toMatchObject({
         capability_class: "read_only",
         mutation_class: "none"

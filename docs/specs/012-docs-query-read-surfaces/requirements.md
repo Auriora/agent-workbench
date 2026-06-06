@@ -2,14 +2,19 @@
 title: Docs query and read surfaces requirements
 doc_type: spec
 artifact_type: requirements
-status: active
+status: archived
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Requirements
 
 ## Introduction
+
+Spec 012 closed on 2026-06-06. Accepted docs query/read behavior was promoted
+to [MCP surface design](../../design/mcp-surface-design.md),
+[Markdown document quality design](../../design/markdown-document-quality-design.md),
+and [Documentation map](../../reference/documentation-map.md).
 
 This spec promotes the second high-priority replacement gap from
 [Spec 010](../010-agent-ide-capability-analysis/requirements.md): compact

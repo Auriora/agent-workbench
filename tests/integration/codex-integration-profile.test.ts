@@ -204,6 +204,8 @@ describe("Codex integration profile", () => {
 
     expect(Object.keys(server._registeredResources).sort()).toEqual([
       "integration:///profiles/codex",
+      "repo:///docs/map",
+      "repo:///docs/overview",
       "repo:///overview",
       "repo:///scope",
       "repo:///status"

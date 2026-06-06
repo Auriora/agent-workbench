@@ -11,6 +11,13 @@ import { getSnapshotRepoStatus } from "./application/use-cases/get-repo-status.j
 import { warmupRepositoryGraph } from "./application/use-cases/index-repository-graph.js";
 import { planVerification } from "./application/use-cases/plan-verification.js";
 import { previewWorkspaceEdit } from "./application/use-cases/preview-workspace-edit.js";
+import {
+  getDocsMap,
+  getDocsOutline,
+  getDocsOverview,
+  readDocsSection,
+  searchDocs
+} from "./application/use-cases/query-docs.js";
 import { searchSymbols } from "./application/use-cases/search-symbols.js";
 import { InMemoryEditPreviewStoreAdapter } from "./infrastructure/edit-preview-store/index.js";
 import { JsonSyntaxDiagnosticsProviderAdapter } from "./infrastructure/diagnostics/index.js";
@@ -81,6 +88,41 @@ export function createAgentWorkbenchServer(
         scanner,
         snapshots: graphStore,
         warmups: runtime
+      }),
+    getDocsOverview: ({ request }) =>
+      getDocsOverview({
+        request,
+        scanner,
+        workspace: workspaceForRepoRoot(request.repo_root),
+        default_repo_root: absoluteRepoRoot
+      }),
+    getDocsMap: ({ request }) =>
+      getDocsMap({
+        request,
+        scanner,
+        workspace: workspaceForRepoRoot(request.repo_root),
+        default_repo_root: absoluteRepoRoot
+      }),
+    searchDocs: ({ request }) =>
+      searchDocs({
+        request,
+        scanner,
+        workspace: workspaceForRepoRoot(request.repo_root),
+        default_repo_root: absoluteRepoRoot
+      }),
+    getDocsOutline: ({ request }) =>
+      getDocsOutline({
+        request,
+        scanner,
+        workspace: workspaceForRepoRoot(request.repo_root),
+        default_repo_root: absoluteRepoRoot
+      }),
+    readDocsSection: ({ request }) =>
+      readDocsSection({
+        request,
+        scanner,
+        workspace: workspaceForRepoRoot(request.repo_root),
+        default_repo_root: absoluteRepoRoot
       }),
     getTaskContext: ({ request }) =>
       getTaskContext({

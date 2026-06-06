@@ -2,7 +2,7 @@
 title: Docs query and read surfaces traceability
 doc_type: spec
 artifact_type: traceability
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
