@@ -18,6 +18,7 @@ describe("MCP registry metadata", () => {
       "resource:status",
       "tool:apply_workspace_edit",
       "tool:context_for_task",
+      "tool:diagnostics_for_files",
       "tool:find_references",
       "tool:impact",
       "tool:preview_workspace_edit",
@@ -59,6 +60,10 @@ describe("MCP registry metadata", () => {
     expect(byName.get("verification_plan")).toMatchObject({
       capability_class: "planning",
       mutation_class: "planning"
+    });
+    expect(byName.get("diagnostics_for_files")).toMatchObject({
+      capability_class: "read_only",
+      mutation_class: "none"
     });
     for (const name of ["status", "scope", "overview", "codex-integration-profile"]) {
       expect(byName.get(name)).toMatchObject({

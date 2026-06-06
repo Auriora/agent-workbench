@@ -4,6 +4,7 @@ import { createAgentWorkbenchServer } from "../../src/interface-adapters/mcp/ser
 describe("MCP malformed input handling", () => {
   it.each([
     ["context_for_task", { task: "" }],
+    ["diagnostics_for_files", { max_files: 100 }],
     ["symbol_search", { query: "" }],
     ["find_references", {}],
     ["impact", { node_id: "node-1", direction: "sideways" }],
@@ -84,6 +85,7 @@ function providerContextThatThrows() {
     getRepoScope: fail,
     getRepoOverview: fail,
     getTaskContext: fail,
+    diagnoseChangedFiles: fail,
     searchSymbols: fail,
     findReferences: fail,
     computeImpact: fail,

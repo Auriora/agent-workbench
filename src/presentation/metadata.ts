@@ -55,6 +55,7 @@ export function strongestCapabilityLevel(levels: readonly CapabilityLevel[]): Ca
 
 export const PUBLIC_NEXT_ACTION_TOOLS = [
   "context_for_task",
+  "diagnostics_for_files",
   "symbol_search",
   "find_references",
   "impact",

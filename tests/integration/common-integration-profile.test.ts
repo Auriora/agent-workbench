@@ -29,6 +29,11 @@ describe("common integration profile", () => {
           capability_class: "planning"
         }),
         expect.objectContaining({
+          name: "diagnostics_for_files",
+          kind: "tool",
+          capability_class: "read_only"
+        }),
+        expect.objectContaining({
           name: "apply_workspace_edit",
           kind: "tool",
           capability_class: "workspace_write"

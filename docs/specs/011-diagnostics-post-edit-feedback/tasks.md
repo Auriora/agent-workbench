@@ -49,12 +49,19 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     `pnpm exec vitest run tests/diagnostics/diagnose-changed-files.test.ts`
     passed with 6 tests; `pnpm typecheck` passed.
 
-- [ ] T004 Decide and wire MCP surface.
+- [x] T004 Decide and wire MCP surface.
   - Depends on: T003
   - Files: `src/interface-adapters/mcp/`, `src/mcp/`, `tests/mcp/`
   - Acceptance: Either `diagnostics_for_files` is exposed with schema and tests,
     or the deferral is documented with equivalent workflow support.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-05. Exposed
+    `diagnostics_for_files` through the MCP registry, stdio server, registry
+    metadata, malformed-input handling, Codex integration profile, and common
+    integration profile. Added a focused MCP tool test and a real JSON syntax
+    diagnostics provider for the composed server. Validation:
+    `pnpm exec vitest run tests/mcp/diagnostics-for-files-tool.test.ts tests/mcp/registry-metadata.test.ts tests/mcp/malformed-input.test.ts tests/mcp/query-tools.test.ts tests/mcp/verification-plan-tool.test.ts tests/mcp/workspace-edit-tools.test.ts tests/integration/common-integration-profile.test.ts tests/integration/usage-informed-mvp.test.ts`
+    passed with 70 tests; `pnpm exec vitest run tests/mcp/stdio-entrypoint.test.ts`
+    passed with 7 tests; `pnpm typecheck` passed.
 
 - [ ] T005 Implement post-edit feedback use case and hook integration.
   - Depends on: T003

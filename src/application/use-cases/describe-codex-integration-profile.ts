@@ -130,6 +130,12 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         description: "Configured task-context MCP workflow for status, files, docs, risks, and validation hints."
       },
       {
+        name: "diagnostics_for_files",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Configured compact provider-backed diagnostics for repo-relative files without command execution."
+      },
+      {
         name: "symbol_search",
         kind: "tool",
         capability_class: "read_only",

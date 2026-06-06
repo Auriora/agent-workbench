@@ -27,6 +27,11 @@ The Codex plugin is a wrapper only:
 - It must not register an MCP server for local development.
 - It must not launch a copied or cache-relative runtime path.
 
+Companion MCP servers, such as a spec lifecycle server for a separate docs
+repository, should also be configured as host-level Codex MCP entries. Keep
+their install and validation notes with the repository they target; the Agent
+Workbench plugin should not package or proxy those companion runtimes.
+
 This keeps source updates simple: restart Codex after source changes. After
 dependency changes, run `pnpm install` in this repository checkout, then restart
 Codex. Do not rely on plugin reinstall as the runtime update mechanism.
@@ -86,4 +91,3 @@ For broader runtime-impacting changes, also run:
 pnpm typecheck
 pnpm test
 ```
-

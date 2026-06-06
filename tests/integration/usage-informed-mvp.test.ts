@@ -304,6 +304,7 @@ describe("usage-informed MVP validation", () => {
     expect(profile.mcp_bindings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "context_for_task" }),
+        expect.objectContaining({ name: "diagnostics_for_files" }),
         expect.objectContaining({ name: "verification_plan" })
       ])
     );

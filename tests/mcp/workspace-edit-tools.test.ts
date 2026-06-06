@@ -351,6 +351,7 @@ describe("workspace edit MCP tools", () => {
     expect(Object.keys(server._registeredTools).sort()).toEqual([
       "apply_workspace_edit",
       "context_for_task",
+      "diagnostics_for_files",
       "find_references",
       "impact",
       "preview_workspace_edit",

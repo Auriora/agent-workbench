@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type {
   CodexIntegrationProfile,
   ApplyWorkspaceEditRequest,
+  DiagnosticsForFilesRequest,
   FindReferencesRequest,
   ImpactRequest,
   PreviewWorkspaceEditRequest,
@@ -12,6 +13,7 @@ import type {
 } from "../../../contracts/index.js";
 import type { ApplyWorkspaceEditUseCaseResult } from "../../../application/use-cases/apply-workspace-edit.js";
 import type { ComputeImpactResult } from "../../../application/use-cases/compute-impact.js";
+import type { DiagnoseChangedFilesResult } from "../../../application/use-cases/diagnose-changed-files.js";
 import type { FindReferencesUseCaseResult } from "../../../application/use-cases/find-references.js";
 import type { GetRepoOverviewResult } from "../../../application/use-cases/get-repo-overview.js";
 import type { GetRepoScopeResult } from "../../../application/use-cases/get-repo-scope.js";
@@ -25,6 +27,7 @@ import { repoOverviewResource } from "./resources/repo-overview.js";
 import { repoScopeResource } from "./resources/repo-scope.js";
 import { repoStatusResource } from "./resources/repo-status.js";
 import { contextForTaskTool } from "./tools/context-for-task.js";
+import { diagnosticsForFilesTool } from "./tools/diagnostics-for-files.js";
 import { applyWorkspaceEditTool } from "./tools/apply-workspace-edit.js";
 import { findReferencesTool } from "./tools/find-references.js";
 import { impactTool } from "./tools/impact.js";
@@ -38,6 +41,7 @@ export type McpRegistryContext = {
   getRepoScope?: (input: { repo_root: string }) => Promise<GetRepoScopeResult> | GetRepoScopeResult;
   getRepoOverview?: (input: { repo_root: string }) => Promise<GetRepoOverviewResult> | GetRepoOverviewResult;
   getTaskContext?: (input: { request: TaskContextRequest }) => Promise<GetTaskContextResult> | GetTaskContextResult;
+  diagnoseChangedFiles?: (input: { request: DiagnosticsForFilesRequest }) => Promise<DiagnoseChangedFilesResult> | DiagnoseChangedFilesResult;
   searchSymbols?: (input: { request: SymbolSearchRequest }) => Promise<SearchSymbolsResult> | SearchSymbolsResult;
   findReferences?: (input: { request: FindReferencesRequest }) => Promise<FindReferencesUseCaseResult> | FindReferencesUseCaseResult;
   computeImpact?: (input: { request: ImpactRequest }) => Promise<ComputeImpactResult> | ComputeImpactResult;
@@ -95,6 +99,7 @@ export const mcpResources: McpResourceDeclaration[] = [
 
 export const mcpTools: McpToolDeclaration[] = [
   contextForTaskTool,
+  diagnosticsForFilesTool,
   symbolSearchTool,
   findReferencesTool,
   impactTool,

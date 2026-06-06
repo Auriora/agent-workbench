@@ -50,7 +50,7 @@ Provider result shape should include:
 
 Public surface decision is part of implementation:
 
-- Preferred path: add `diagnostics_for_files` when it can be compact and
+- Accepted for T004: add `diagnostics_for_files` because it is compact and
   provider-backed.
 - Add `post_edit_feedback` only when it provides value beyond
   `verification_plan.static_feedback`.

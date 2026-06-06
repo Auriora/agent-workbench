@@ -285,10 +285,13 @@ describe("stdio MCP entrypoint", () => {
     );
     expect(listedTools.result.tools).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          name: "context_for_task"
-        }),
-        expect.objectContaining({
+          expect.objectContaining({
+            name: "context_for_task"
+          }),
+          expect.objectContaining({
+            name: "diagnostics_for_files"
+          }),
+          expect.objectContaining({
           name: "verification_plan"
         }),
         expect.objectContaining({
@@ -628,6 +631,7 @@ describe("stdio MCP entrypoint", () => {
       expect(listedTools.tools).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ name: "symbol_search" }),
+          expect.objectContaining({ name: "diagnostics_for_files" }),
           expect.objectContaining({ name: "find_references" }),
           expect.objectContaining({ name: "impact" }),
           expect.objectContaining({ name: "preview_workspace_edit" }),
