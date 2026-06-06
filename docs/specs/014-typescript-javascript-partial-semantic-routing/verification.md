@@ -25,6 +25,7 @@ last_reviewed: 2026-06-06
 | 2026-06-06 | Spec created from durable JS/TS language-adapter backlog | Pending implementation |
 | 2026-06-06 | T001-T003 fixtures, parser-path decision, and project-shape extraction | Added JS/TS monorepo fixture coverage, parser grammar package mapping, resource-backed JS/TS capability labels, overview/context project-shape routing, and package-local validation hints. `pnpm rebuild:native`, `pnpm typecheck`, `pnpm exec vitest run tests/language/js-ts-parser-path.test.ts tests/workspace/js-ts-project-shape.test.ts`, and focused overview/context/extraction/scanner tests passed. |
 | 2026-06-06 | T004 parser-backed declaration, import, and export extraction | Added JS/TS tree-sitter extractor registration, parser-backed partial-semantic capability labels, declaration nodes, and unresolved import/export references with provenance and confidence metadata. `pnpm typecheck`, `pnpm exec vitest run tests/graph/extraction-pipeline.test.ts`, and focused affected MCP/runtime/integration tests passed. |
+| 2026-06-06 | T005 JS/TS query and context surfaces | Proved JS/TS parser-backed symbols, resolved import references, bounded impact, and graph-ranked task context through shared query surfaces. Corrected impact caveats for low-confidence parser-backed graph edges. `pnpm exec vitest run tests/graph/query-tools.test.ts` passed. |
 
 ## Residual Risks
 

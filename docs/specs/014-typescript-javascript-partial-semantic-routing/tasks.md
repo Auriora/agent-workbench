@@ -75,12 +75,19 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
     `pnpm exec vitest run tests/graph/extraction-pipeline.test.ts`, and the
     focused affected MCP/runtime/integration suite passed.
 
-- [ ] T005 Wire JS/TS evidence into query and context surfaces.
+- [x] T005 Wire JS/TS evidence into query and context surfaces.
   - Depends on: T003, T004
   - Files: `src/application/`, `src/presentation/`, `tests/mcp/`, `tests/graph/`
   - Acceptance: `symbol_search`, `find_references`, `impact`, and
     `context_for_task` return compact JS/TS results with correct caveats.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Added fixture-backed graph-query
+    coverage proving JS/TS parser-backed symbols flow through
+    `symbol_search`, resolved import edges flow through `find_references`,
+    bounded outgoing traversal flows through `impact`, and graph-ranked
+    `context_for_task` results return parser-backed symbols with follow-up
+    actions. Updated impact confidence wording so low-confidence parser-backed
+    JS/TS edges do not reuse resource-backed SAM/CloudFormation caveats.
+    Validation: `pnpm exec vitest run tests/graph/query-tools.test.ts` passed.
 
 - [ ] T006 Improve JS/TS validation planning.
   - Depends on: T003

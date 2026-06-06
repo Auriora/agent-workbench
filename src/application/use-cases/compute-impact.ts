@@ -145,12 +145,20 @@ function impactConfidence(input: {
       evidence_kinds: ["parser"]
     };
   }
-  if (input.edges.some((edge) => edge.confidence < 0.7 || edge.provenance.includes("cloudformation"))) {
+  if (input.edges.some((edge) => edge.provenance.includes("cloudformation"))) {
     return {
       level: "low",
       scope: "graph",
       reason: "Traversal reached resource-backed routing edges; treat impact as low-confidence file routing, not semantic blast-radius proof.",
       evidence_kinds: ["config", "infra_parser"]
+    };
+  }
+  if (input.edges.some((edge) => edge.confidence < 0.7)) {
+    return {
+      level: "low",
+      scope: "graph",
+      reason: "Traversal reached low-confidence parser-backed edges; verify the language-specific usage before broad edits.",
+      evidence_kinds: ["parser"]
     };
   }
   return {

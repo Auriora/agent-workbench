@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { computeImpact } from "../../src/application/use-cases/compute-impact.js";
 import { findReferences } from "../../src/application/use-cases/find-references.js";
+import { getTaskContext } from "../../src/application/use-cases/get-task-context.js";
 import { indexRepositoryGraph } from "../../src/application/use-cases/index-repository-graph.js";
 import { searchSymbols } from "../../src/application/use-cases/search-symbols.js";
 import type { ClockPort } from "../../src/ports/index.js";
@@ -13,6 +14,7 @@ import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/
 import {
   CppDeclarationExtractorAdapter,
   GoDeclarationExtractorAdapter,
+  JavaScriptTypeScriptTreeSitterExtractorAdapter,
   PythonTreeSitterExtractorAdapter
 } from "../../src/infrastructure/tree-sitter/index.js";
 
@@ -106,6 +108,158 @@ describe("graph query use cases", () => {
         })
       ]);
       expect(result.meta.scope.languages).toContain("python");
+    } finally {
+      fixture.store.close();
+    }
+  });
+
+  it("surfaces JS/TS parser-backed symbols, references, impact caveats, and ranked context", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-js-ts-monorepo", "210", {
+      registerPython: false,
+      registerJsTs: true
+    });
+    try {
+      const symbols = await searchSymbols({
+        request: {
+          query: "Login",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: ["typescript"],
+          max_results: 5,
+          source_byte_limit: 80
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+      const loginModule = symbols.symbols.symbols.find((symbol) => symbol.kind === "module");
+
+      expect(symbols.symbols.symbols).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "function",
+            name: "Login",
+            path: "apps/web/src/Login.tsx",
+            language: "typescript",
+            capability_level: "partial_semantic",
+            evidence_kinds: ["parser"],
+            source_section: expect.objectContaining({
+              path: "apps/web/src/Login.tsx",
+              truncated: true
+            })
+          })
+        ])
+      );
+      expect(symbols.meta.scope.languages).toContain("typescript");
+      expect(symbols.symbols.next_actions).toEqual([
+        expect.objectContaining({ tool: "find_references" })
+      ]);
+
+      const references = await findReferences({
+        request: {
+          node_id: loginModule?.node_id ?? "",
+          repo_root: fixture.repoRoot,
+          max_depth: 1,
+          max_results: 10
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(references.references.references).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            target_file_path: "services/api/src/auth-controller.ts",
+            reference_kind: "resolved",
+            evidence_kinds: ["parser"],
+            provenance: "tree-sitter-js-ts-import",
+            status: "resolved"
+          })
+        ])
+      );
+      expect(references.references.next_actions).toEqual([
+        expect.objectContaining({ tool: "impact" })
+      ]);
+
+      const impact = await computeImpact({
+        request: {
+          node_id: loginModule?.node_id ?? "",
+          repo_root: fixture.repoRoot,
+          max_depth: 1,
+          max_nodes: 10,
+          direction: "outgoing"
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(impact.impact.affected_symbols).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "module",
+            path: "apps/web/src/Login.tsx",
+            capability_level: "partial_semantic"
+          }),
+          expect.objectContaining({
+            kind: "class",
+            name: "AuthController",
+            path: "services/api/src/auth-controller.ts",
+            capability_level: "partial_semantic"
+          })
+        ])
+      );
+      expect(impact.impact.confidence).toEqual(
+        expect.objectContaining({
+          level: "low",
+          scope: "graph",
+          evidence_kinds: ["parser"]
+        })
+      );
+      expect(impact.impact.confidence.reason).toContain("low-confidence parser-backed edges");
+
+      const context = await getTaskContext({
+        request: {
+          task: "Update Login flow",
+          repo_root: fixture.repoRoot,
+          files: ["apps/web/src/Login.tsx"],
+          symbols: ["Login"],
+          max_files: 6,
+          max_docs: 2
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(context.context.ranked_symbols).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            symbol: expect.objectContaining({
+              name: "Login",
+              language: "typescript",
+              capability_level: "partial_semantic",
+              evidence_kinds: ["parser"]
+            })
+          })
+        ])
+      );
+      expect(context.context.next_actions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ tool: "find_references" }),
+          expect.objectContaining({ tool: "impact" })
+        ])
+      );
     } finally {
       fixture.store.close();
     }
@@ -826,7 +980,7 @@ describe("graph query use cases", () => {
   async function indexedFixture(
     repoRootInput: string,
     snapshotId: string,
-    options: { registerPython?: boolean; registerGo?: boolean; registerCpp?: boolean } = {}
+    options: { registerPython?: boolean; registerGo?: boolean; registerCpp?: boolean; registerJsTs?: boolean } = {}
   ) {
     const repoRoot = path.resolve(repoRootInput);
     const store = openGraphStore(path.join(dir, `${snapshotId}.sqlite`));
@@ -839,6 +993,10 @@ describe("graph query use cases", () => {
     }
     if (options.registerCpp ?? false) {
       registry.register(new CppDeclarationExtractorAdapter({ language: "cpp" }));
+    }
+    if (options.registerJsTs ?? false) {
+      registry.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "javascript" }));
+      registry.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "typescript" }));
     }
     const workspace = new WorkspaceFileAdapter({ repoRoot });
     await indexRepositoryGraph({
