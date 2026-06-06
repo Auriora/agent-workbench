@@ -375,6 +375,42 @@ or runtime telemetry.
   [Spec 019](../specs/019-integration-health-session-routing/requirements.md),
   combined with EB001 and EB002.
 
+### EB012: TODO And Annotation Tag Surfacing
+
+- Priority: P2
+- Status: proposed spec
+- Friction signal: agent orientation often misses explicit maintainer intent
+  already present in source comments, docs, and config notes such as `TODO`,
+  `FIXME`, `XXX`, `HACK`, `BUG`, `NOTE`, `DEPRECATED`, and project-specific
+  tags.
+- Runtime surface: status/scope summaries, `context_for_task`, docs/search
+  surfaces, optional annotation-specific query surface, and future
+  pre-final/review readiness feedback.
+- Acceptance:
+  - Discover common annotation tags in source, docs, and config while honoring
+    ignore rules, generated/vendor boundaries, hidden-path policy, budgets, and
+    redaction rules.
+  - Preserve repo-relative file paths, line numbers, tag type, language, short
+    snippet, and confidence/provenance without treating comments as semantic
+    proof.
+  - Rank annotations near selected files or task context above broad repo-wide
+    tag counts.
+  - Distinguish actionable tags from informational notes and stale/noisy tags.
+  - Support project-local tag configuration only through explicit durable
+    policy or config evidence; do not infer arbitrary uppercase words as tags.
+  - Keep clean results quiet in hooks and avoid surfacing annotation noise in
+    normal responses unless task context makes it relevant.
+- Validation:
+  - Fixtures for source comments, Markdown task notes, config comments,
+    generated/vendor paths, hidden paths, redacted values, large repos, and
+    project-specific tag policy.
+  - Golden responses for context-adjacent annotations, repo-wide summary,
+    no-results, budget-truncated, and generated/vendor-skipped states.
+  - Regression tests proving annotations do not promote capability level,
+    semantic confidence, or validation status by themselves.
+- Promotion target: create a future context-routing or review-readiness spec
+  after higher-priority integration, repair-loop, and validation-planning work.
+
 ## Backlog To Spec Promotion Rules
 
 Promote a backlog item into an implementation spec when:
@@ -410,6 +446,7 @@ Do not promote an item when:
 | MCP-server development support | EB007. |
 | Fallback telemetry | EB009. |
 | Generated/noise guard | EB008. |
+| TODO/FIXME annotation surfacing | EB012. |
 
 ## Immediate Next Specs
 
