@@ -148,6 +148,11 @@ type-check routing, documentation structure checks, config validation, and
 future framework-specific analyzers. Each check must declare whether it is
 blocking, advisory, optional, or unavailable.
 
+Markdown documentation validation uses read-only `check_markdown_document` for
+selected Markdown files and `check_markdown_set` for bounded include-all
+Markdown evidence. These checks report compact findings and skipped/blocked
+states only; they do not format or mutate files.
+
 Markdown formatting is handled through the same preview/apply safety path as
 code edits. A formatter may plan or preview improvements for plain-text
 readability, such as table alignment or table-to-list rewrites, but it must not

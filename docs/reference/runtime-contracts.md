@@ -308,23 +308,25 @@ artifacts around those bindings.
 
 ## Markdown Quality Shapes
 
-Markdown quality findings are post-MVP executable tool outputs, but their
-contract shape is defined up front so checker and formatter work remains
-previewable and presentation-compatible.
+Markdown quality findings are executable read-only checker outputs from
+`check_markdown_document` and `check_markdown_set`. The contract shape also
+keeps future formatter work previewable and presentation-compatible.
 
 ```json
 {
   "category": "table_readability",
   "severity": "warning",
-  "code": "markdown_table_readability",
+  "rule_id": "markdown.table.readability",
+  "code": "markdown.table.readability",
   "path": "docs/design/example.md",
   "start_line": 12,
   "start_column": 0,
   "end_line": 20,
   "end_column": 0,
   "message": "The table is hard to read as plain text.",
+  "evidence": "| Field | Long explanation ... |",
   "suggested_action": "Preview a table-to-definition-list rewrite.",
-  "evidence_kinds": ["parser", "docs"]
+  "evidence_kinds": ["direct_read", "docs"]
 }
 ```
 

@@ -2,7 +2,7 @@
 title: Markdown quality MCP surface tasks
 doc_type: spec
 artifact_type: tasks
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -74,7 +74,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     tests/mcp/docs-surfaces.test.ts tests/mcp/verification-plan-tool.test.ts
     tests/mcp/registry-metadata.test.ts`.
 
-- [ ] T006 Promote docs, validate, and close.
+- [x] T006 Promote docs, validate, and close.
   - Depends on: T004, T005
   - Files: `docs/design/markdown-document-quality-design.md`,
     `docs/design/mcp-surface-design.md`,
@@ -84,4 +84,9 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
   - Acceptance: Durable docs describe accepted checker behavior and explicitly
     defer formatter/report work; full relevant validation passes before
     archival.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Promoted accepted read-only
+    `check_markdown_document`, `check_markdown_set`, validation-planning, parser
+    path, budget, skip/block, and deferred formatter/report behavior to durable
+    Markdown quality, MCP surface, edit/validation, layered architecture,
+    runtime-contract, and documentation-map docs. Closure validation passed:
+    `pnpm typecheck`, `pnpm test`, `git diff --check`, and spec lifecycle scan.

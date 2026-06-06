@@ -17,9 +17,10 @@ Markdown quality is not just lint compliance. The runtime should also detect
 structural consistency issues and offer formatting that improves text-only
 readability without damaging semantic content.
 
-Executable Markdown quality tools are post-MVP. MVP architecture work defines
-contracts, ports, fixture shape, and preview/apply safety requirements so the
-capability can be added without changing the runtime layering.
+Read-only Markdown quality tools are available through the MCP surface.
+Formatter planning, formatter preview/apply, cross-document reports, and
+generated documentation reports remain future work and must still use the edit
+preview/apply safety path before any mutation is introduced.
 
 ## Scope
 
@@ -35,13 +36,16 @@ In scope:
 - frontmatter compliance
 - link and file-reference shape checks
 - table readability checks for plain-text viewing
-- formatter planning and preview for Markdown readability
+- bounded read-only MCP checks for one document or an explicit/scoped document
+  set
 - integration with validation planning
 
-Out of scope for MVP unless fixture-backed:
+Out of scope until a follow-up spec provides fixture-backed evidence:
 
 - rewriting prose style or tone
 - semantic contradiction detection across unrelated documents
+- generated documentation reports
+- Markdown formatter planning, preview, or apply
 - generated documentation publishing
 - automatic broad formatting without preview
 
@@ -51,8 +55,8 @@ Markdown document quality has three separate capabilities:
 
 | Capability | Purpose | Mutation |
 | --- | --- | --- |
-| Structure checker | Detect heading, list, numbering, table, link, and cross-reference consistency issues | None |
-| Compliance linter | Check repository documentation rules and markdownlint-style conventions | None |
+| Structure checker | Detect heading, list, table, link, and frontmatter consistency issues | None |
+| Compliance linter | Check bounded repository documentation rules through configurable required frontmatter fields | None |
 | Readability formatter | Produce a previewable rewrite that improves text-only readability while preserving rendered meaning | Preview/apply only |
 
 These capabilities must be implemented through named application use cases and
@@ -71,14 +75,23 @@ document quality checks are a separate documentation-quality capability. The
 quality subsystem may reuse extracted document outlines, but it must be able to
 parse a document directly when asked to check or format it.
 
+The current implementation uses `MarkdownParserAdapter` as the single approved
+parser-aware input path for checker rules. It emits a small document event
+stream for frontmatter, headings, ordered-list items, tables, and inline links,
+and ignores fenced code blocks so code samples do not create Markdown quality
+findings. It is not an external linter and does not execute formatters.
+
 ## Checks
 
 ### Heading Structure
 
-Detect:
+The read-only checker detects:
 
 - skipped heading levels, such as `h2` directly to `h4`
 - duplicate headings in the same scope
+
+Deferred checks:
+
 - inconsistent title/frontmatter title
 - missing top-level title where required by repository policy
 - headings that imply a numbered hierarchy but break sequence
@@ -86,10 +99,13 @@ Detect:
 
 ### Ordered Lists
 
-Detect:
+The read-only checker detects:
+
+- manually numbered lists that skip or duplicate numbers
+
+Deferred checks:
 
 - mixed numbering styles in one list
-- manually numbered lists that skip or duplicate numbers
 - inconsistent reset behavior between sibling lists
 - ambiguous nesting caused by indentation
 
@@ -99,9 +115,10 @@ the repository's existing style unless a policy requires one style.
 
 ### Tables
 
-Tables are often readable when rendered but poor as plain text. The checker
-should flag tables that exceed plain-text readability budgets or use short-form
-headers/definitions that obscure meaning.
+Tables are often readable when rendered but poor as plain text. The read-only
+checker flags rows or cells that exceed plain-text readability budgets and
+adjacent rows with mismatched cell counts. Definition-like table rewrites
+remain formatter work.
 
 The formatter should support table rewrite strategies:
 
@@ -114,9 +131,12 @@ Formatter choices must be previewed and explain why a rewrite was selected.
 
 ### Links And References
 
-Detect:
+The read-only checker detects:
 
 - broken relative Markdown links when the target is in scope
+
+Deferred checks:
+
 - non-canonical local document links
 - duplicate reference definitions
 - unresolved reference-style links
@@ -124,9 +144,12 @@ Detect:
 
 ### Frontmatter
 
-Detect:
+The read-only checker detects:
 
 - missing required fields
+
+Deferred checks:
+
 - invalid `doc_type`, `status`, or owner values
 - stale or malformed review dates
 - title/frontmatter mismatch
@@ -157,28 +180,33 @@ rewrites.
 
 - `CheckMarkdownDocument`
 - `CheckMarkdownSet`
-- `PlanMarkdownFormat`
-- `PreviewMarkdownFormat`
-- `ApplyMarkdownFormat`
+- future `PlanMarkdownFormat`
+- future `PreviewMarkdownFormat`
+- future `ApplyMarkdownFormat`
 
-`CheckMarkdownDocument` and `CheckMarkdownSet` are read-only. `PlanMarkdownFormat`
-is planning-only. `PreviewMarkdownFormat` produces a bounded edit preview.
-`ApplyMarkdownFormat` delegates to the same workspace safety, path containment,
-and stale-preview protections as other edit application.
+`CheckMarkdownDocument` and `CheckMarkdownSet` are read-only. They apply
+catalog policy, generated/vendor skips, workspace-escape refusal, file-size
+budgets, finding budgets, and bounded evidence snippets. Clean results are
+compact and quiet.
+
+Future `PlanMarkdownFormat` will be planning-only. Future
+`PreviewMarkdownFormat` must produce a bounded edit preview. Future
+`ApplyMarkdownFormat` must delegate to the same workspace safety, path
+containment, and stale-preview protections as other edit application.
 
 ## Ports
 
-MVP or first implementation ports:
+Implemented first-slice ports:
 
 - `MarkdownParserPort`
 - `MarkdownStructureCheckPort`
+
+Optional future ports:
+
 - `MarkdownCompliancePolicyPort`
 - `MarkdownFormatPlannerPort`
 - `MarkdownLinkResolverPort`
 - `DocumentationPolicyPort`
-
-Optional future ports:
-
 - `MarkdownStyleAdvisorPort`
 - `CrossDocumentConsistencyPort`
 - `DocumentationPublishPort`
@@ -200,28 +228,34 @@ quality checks, broad crosslink analysis, generated reporting, or formatting.
 `docs_search` is not authoritative for precise claims; use
 `docs_read_section` for direct section evidence.
 
-Potential tools:
+Read-only quality tools:
 
 - `check_markdown_document`
 - `check_markdown_set`
+
+Deferred formatter tools:
+
 - `plan_markdown_format`
 - `preview_markdown_format`
 - `apply_markdown_format`
 
 These tools are documentation-quality surfaces, not language-semantic tools.
-They should report structured findings, severity, source ranges, suggested
-actions, and formatter preview tokens using runtime contracts.
+The read-only checker tools report structured findings, severity, source
+ranges, bounded evidence, suggested actions, warnings, budgets, skipped or
+blocked states, and repo-relative paths using runtime contracts. Formatter
+preview tokens remain deferred to the formatter surface.
 
-Promote cross-document links, generated documentation reports, or Markdown
-quality tools only with fixture-backed evidence that the bounded query/read
+Promote cross-document links, generated documentation reports, or formatter
+tools only with fixture-backed evidence that the bounded query/read/check
 surfaces are insufficient for the workflow and that the new surface stays
 within explicit row, source-byte, and mutation budgets.
 
 ## Validation Planning Integration
 
-`verification_plan` may include documentation-quality checks when touched files
-include Markdown or documentation policy files. It should plan the checks; it
-must not silently run formatting or report success without evidence.
+`verification_plan` plans `check_markdown_document` for selected Markdown files
+and `check_markdown_set` for include-all Markdown evidence. Non-Markdown config
+evidence still receives a manual docs/config review plan. Validation planning
+does not execute formatting or report success without evidence.
 
 ## Acceptance Evidence
 
@@ -237,7 +271,8 @@ Fixtures should include:
 - broken relative links
 - documents that should remain unchanged
 
-Golden outputs should cover checker findings and formatter previews.
+Golden outputs should cover checker findings. Formatter previews remain future
+work.
 
 ## Related Docs
 

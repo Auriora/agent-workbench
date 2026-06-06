@@ -203,6 +203,14 @@ the FTS search hot path because outline and section reads are precise direct
 evidence rather than search ranking evidence. Documentation crosslink graphs,
 broad docs reports, and generated architecture answers remain post-MVP.
 
+`check_markdown_document` and `check_markdown_set` are read-only documentation
+quality tools. They parse direct Markdown content through the Markdown quality
+subsystem, apply catalog and workspace safety policy, return compact findings
+with repo-relative paths and bounded evidence, and report skipped or blocked
+states for generated, hidden, oversized, missing, or unsafe paths. They do not
+format, mutate, generate reports, or replace `docs_read_section` as precise
+source evidence.
+
 ## Post-MVP Resources And Tools
 
 - `repo:///mcp-surface`
@@ -216,8 +224,6 @@ broad docs reports, and generated architecture answers remain post-MVP.
 - `symbol_context`
 - `callers`
 - `callees`
-- `check_markdown_document`
-- `check_markdown_set`
 - `plan_markdown_format`
 - `preview_markdown_format`
 - `apply_markdown_format`
@@ -546,10 +552,10 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Done: improve docs-heavy repository overview ranking so durable docs and
   canonical skill guidance rank ahead of fixture/example documents in first-read
   key-doc results.
-- Done: add documentation/config-only validation hints and plans. Repositories
-  with Markdown/config evidence but no stronger code project shape now get a
-  non-executed docs/config syntax/readability review hint; `verification_plan`
-  also plans the docs/config review when no explicit files are selected.
+- Done: add documentation/config-only validation hints and plans. Selected
+  Markdown files now plan `check_markdown_document`, include-all Markdown
+  evidence plans `check_markdown_set`, and non-Markdown config evidence keeps a
+  non-executed manual docs/config syntax/readability review hint.
 - Done: wrap `verification_plan` provider failures in the standard blocked
   response envelope instead of leaking raw filesystem errors such as `ENOENT`
   to MCP callers.

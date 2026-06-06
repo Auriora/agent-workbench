@@ -2,7 +2,7 @@
 title: Markdown quality MCP surface design
 doc_type: spec
 artifact_type: design
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -59,8 +59,11 @@ Findings should use stable rule ids such as:
 
 ## Open Questions
 
-- Which Markdown parser should be used as the approved implementation path?
-- What repository documentation policy fields should be configurable in the
-  first slice?
-- Should `check_markdown_set` accept glob-like selectors, explicit files only,
-  or both with strict budgets?
+No active open questions remain. Closure decisions:
+
+- `MarkdownParserAdapter` is the approved first-slice parser-aware
+  implementation path for read-only checks.
+- The first slice supports configurable required frontmatter fields and defers
+  richer repository documentation policy validation.
+- `check_markdown_set` supports explicit paths and a bounded `scope_path`; glob
+  selectors remain deferred to avoid unsafe broad reads.
