@@ -64,7 +64,9 @@ T006 can run after T003.
 
 - [ ] T007 Consider additional data sources.
   - Depends on: T005
-  - Files: future design or observability docs
+  - Files: `docs/requirements/agent-workbench-executable-backlog.md`
   - Acceptance: Decide whether to mine PR comments, CI logs, git history,
-    shell command logs, MCP server logs, and Jaeger traces.
-  - Evidence: Pending.
+    shell command logs, MCP server logs, Jaeger traces, issue trackers,
+    `AGENTS.md` files, spec/task docs, and human or agent tooling references.
+  - Evidence: Added a durable evidence-source list to the executable backlog;
+    implementation and automation remain pending.

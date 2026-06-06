@@ -23,6 +23,67 @@ A backlog item is executable when it has:
 - a promotion target such as an active spec, follow-up spec, durable design
   document, or implementation task.
 
+## Mining Taxonomy
+
+Chat-history mining should classify repeated agent friction into these product
+signals:
+
+- repeated user corrections, such as wrong repo, wrong file, wrong test,
+  missing MCP use, unsafe command choice, or edits the user did not ask for;
+- try/fail/change loops caused by missing dependencies, wrong package manager,
+  wrong Docker context, wrong command surface, or fallback to another tool;
+- validation uncertainty, such as unclear test choice, insufficient evidence,
+  skipped tests, missing native builds, or blocked local environments;
+- repo orientation waste, including repeated `ls`, `find`, broad `rg`, README
+  reads, and `AGENTS.md` reads before useful task work begins;
+- wrong-surface use, such as shell use when a domain MCP is available, or
+  choosing one agent IDE surface when the requested surface is another;
+- dirty worktree and wrong-repo mistakes, including generated artifacts,
+  temporary docs, `.cache/`, unrelated reversions, and accidental target-repo
+  edits;
+- broad routing failures where generated, vendor, wrong-language, or irrelevant
+  docs dominate useful first-party evidence;
+- subagent handoff problems, including repeated setup, unclear file ownership,
+  duplicated work, missing validation packets, and weak blocker transfer;
+- tool trust failures, including incomplete MCP startup, unexposed tools,
+  stale caches, wrong repo roots, timeouts, misleading green results, and
+  unavailable next actions;
+- human process encoded in chat, including repeated spec lifecycle, PR review,
+  deployment, smoke-test, release, and dogfood workflows that should become
+  agent-facing tools or packets.
+
+## Evidence Sources To Mine
+
+Use multiple evidence sources because chat transcripts only show the visible
+part of the workflow:
+
+- hook logs for deferred diagnostics, timeout reasons, unknown tool failures,
+  cache refresh volume, and quiet-success behavior;
+- Jaeger or OpenTelemetry traces for slow MCP tools, common call sequences,
+  degraded spans, and shell fallback after a tool should have helped;
+- git history for fixes to agent mistakes, generated-artifact cleanup,
+  validation-policy changes, and recurring repair commits;
+- PR review comments for bugs, stale docs, missing tests, generated artifacts,
+  and risky diffs that an agent IDE could catch before review;
+- CI failures for wrong validation slices, missing generated or native setup,
+  environment mismatch, and package-manager mistakes;
+- `AGENTS.md` files across repositories, because repeated instructions are
+  product requirements for agent support;
+- spec and task docs for traceability pain, closure checks, open decisions,
+  design/requirements mismatches, and implementation drift;
+- shell history or command logs when available, to learn what agents and users
+  actually run to verify work;
+- MCP server logs for tool visibility, session lifecycle, protocol errors,
+  long calls, malformed arguments, and transport mismatch;
+- issue trackers and backlogs for repeated "agent forgot", "tool timed out",
+  "needs better validation", and "wrong docs" reports;
+- existing human IDE features such as symbol outline, problems panel, test
+  explorer, source-control view, call hierarchy, refactor preview, task runner,
+  and extension marketplace;
+- existing agent tools such as CodeGraph, Graphify, Python Agent IDE, GitHub
+  MCP, ActivityWatch MCP, spec-lifecycle MCP, Figma MCP, Context7,
+  sequential-thinking, and memory.
+
 ## Sequencing
 
 1. Integration health and session-aware next actions.
@@ -268,6 +329,21 @@ Do not promote an item when:
   integration boundary;
 - it is parity-only work for a public tool catalog with no agent friction
   signal.
+
+## Extension Idea Coverage
+
+| Extension idea | Backlog coverage |
+| --- | --- |
+| Repo readiness packet | EB003, with EB001 and EB002 for capability visibility. |
+| Integration health | EB001 and EB002. |
+| Validation planner with policy | EB004. |
+| Post-edit repair panel | EB005, with EB008 for workspace risk. |
+| Spec/task context | EB006. |
+| PR/review readiness | EB005 and EB008; promote a dedicated review-readiness spec when PR evidence is mined. |
+| Agent handoff packet | EB005, EB006, and EB008; promote a dedicated handoff spec when subagent evidence is mined. |
+| MCP-server development support | EB007. |
+| Fallback telemetry | EB009. |
+| Generated/noise guard | EB008. |
 
 ## Immediate Next Specs
 

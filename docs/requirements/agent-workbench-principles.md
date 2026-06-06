@@ -75,6 +75,10 @@ Agent Workbench should cache and present repo roots, language mix, package
 boundaries, generated paths, project guidance, and capability availability as
 explicit evidence with freshness and scope metadata.
 
+The driving question is: if an agent has to ask what repo it is in, what
+matters, what command proves the change, whether a tool can be trusted, or what
+it missed, Agent Workbench should answer directly.
+
 ### 2. Make The Edit And Repair Loop Easy
 
 Making edits, verifying, compiling, refactoring, and reviewing should be easy

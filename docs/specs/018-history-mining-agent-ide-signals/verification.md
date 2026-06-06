@@ -32,6 +32,10 @@ last_reviewed: 2026-06-06
 - 2026-06-06: Promoted mined principles and history signals into executable
   backlog by adding `docs/requirements/agent-workbench-executable-backlog.md`
   and linking it from the principles document and documentation map.
+- 2026-06-06: Expanded the executable backlog with explicit chat-history mining
+  categories, external evidence sources, extension idea coverage, and the
+  driving "what repo, what matters, what proves this, can I trust this, what
+  did I miss" product question.
 
 ## Residual Risks
 
