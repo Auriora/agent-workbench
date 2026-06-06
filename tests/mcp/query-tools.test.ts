@@ -48,6 +48,57 @@ describe("graph query MCP tools", () => {
     expect(parsed.data.query).toBe("Runner");
   });
 
+  it("redacts unsafe tokens in symbol source sections while preserving route snippets", async () => {
+    const registered = registerTool(symbolSearchTool, {
+      searchSymbols: ({ request }: { request: SymbolSearchRequest }) => ({
+        symbols: {
+          query: request.query,
+          repo_root: "/fixture",
+          snapshot_id: "1",
+          symbols: [
+            {
+              node_id: "node-1",
+              kind: "function",
+              name: "handler",
+              qualified_name: "orders.handler",
+              path: "src/routes/orders.py",
+              language: "python",
+              source_range: {
+                start_line: 1,
+                start_column: 0,
+                end_line: 3,
+                end_column: 1
+              },
+              capability_level: "partial_semantic",
+              evidence_kinds: ["parser"],
+              source_section: {
+                path: "src/routes/orders.py",
+                start_line: 1,
+                end_line: 3,
+                byte_count: 120,
+                truncated: false,
+                text: "route = '/api/orders'\nkey = 'TOKEN=abc123'\npath = '/home/example/.ssh/id_rsa'"
+              }
+            }
+          ],
+          next_actions: []
+        },
+        meta: meta()
+      })
+    });
+
+    const response = await registered.handler({ query: "handler", source_byte_limit: 200 });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: SearchSymbolsResult["symbols"];
+    };
+    const text = parsed.data.symbols[0]?.source_section?.text ?? "";
+
+    expect(text).toContain("/api/orders");
+    expect(text).toContain("TOKEN=[REDACTED]");
+    expect(text).toContain("[REDACTED_ABSOLUTE_PATH]");
+    expect(text).not.toContain("/home/example");
+  });
+
   it("uses the injected find_references provider", async () => {
     const registered = registerTool(findReferencesTool, {
       findReferences: () => ({

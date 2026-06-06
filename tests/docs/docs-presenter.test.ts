@@ -82,7 +82,7 @@ describe("docs presenter", () => {
             title: "A",
             heading_id: "deploy",
             heading: "Deploy",
-            snippet: "Deploy safely.",
+            snippet: "Deploy /api/orders from /home/example/.ssh/id_rsa with TOKEN=abc123.",
             score: 10,
             evidence_kinds: ["docs"],
             direct_read_caveat: "Routing only."
@@ -98,7 +98,7 @@ describe("docs presenter", () => {
     expect(envelope.data.hits.map((hit) => hit.path)).toEqual(["docs/a.md", "docs/b.md"]);
     expect(envelope.data.hits[0]).toMatchObject({
       heading_id: "deploy",
-      snippet: "Deploy safely.",
+      snippet: "Deploy /api/orders from [REDACTED_ABSOLUTE_PATH] with TOKEN=[REDACTED].",
       direct_read_caveat: "Routing only."
     });
   });
@@ -117,7 +117,7 @@ describe("docs presenter", () => {
           end_line: 6,
           byte_count: 42,
           truncated: false,
-          text: "## Configure\nUse direct evidence.",
+          text: "## Configure\nUse /api/orders and /home/example/.ssh/id_rsa.",
           caveat: "Direct-read evidence."
         },
         warnings: [],
@@ -133,6 +133,9 @@ describe("docs presenter", () => {
 
     expect(envelope.data.path).toBe("docs/guide.md");
     expect(envelope.data.section?.path).toBe("docs/guide.md");
+    expect(envelope.data.section?.text).toContain("/api/orders");
+    expect(envelope.data.section?.text).toContain("[REDACTED_ABSOLUTE_PATH]");
+    expect(envelope.data.section?.text).not.toContain("/home/example");
     expect(envelope.data.section?.caveat).toContain("Direct-read");
     expect(invalid.data).toMatchObject({
       repo_root: "/repo",

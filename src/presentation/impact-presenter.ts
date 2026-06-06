@@ -1,10 +1,22 @@
-import { makeEnvelope, type ImpactResult, type ResponseEnvelope } from "../contracts/index.js";
+import {
+  impactResultSchema,
+  makeEnvelope,
+  sourceSectionSchema,
+  symbolReferenceSchema,
+  type ImpactResult,
+  type ResponseEnvelope,
+  type SymbolReference
+} from "../contracts/index.js";
 import type { ComputeImpactResult } from "../application/use-cases/compute-impact.js";
 import { invalidResponseMeta } from "./metadata.js";
+import { redactPresentationText } from "./redaction.js";
 
 export function buildImpactEnvelope(result: ComputeImpactResult): ResponseEnvelope<ImpactResult> {
   return makeEnvelope({
-    data: result.impact,
+    data: impactResultSchema.parse({
+      ...result.impact,
+      affected_symbols: result.impact.affected_symbols.map(sanitizeSymbolReference)
+    }),
     meta: result.meta
   });
 }
@@ -33,5 +45,17 @@ export function buildInvalidImpactInputEnvelope(input: {
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
     errors: [{ code: "invalid_input", message: input.message, retryable: false }]
+  });
+}
+
+function sanitizeSymbolReference(input: SymbolReference): SymbolReference {
+  return symbolReferenceSchema.parse({
+    ...input,
+    source_section: input.source_section === undefined
+      ? undefined
+      : sourceSectionSchema.parse({
+          ...input.source_section,
+          text: redactPresentationText(input.source_section.text, { context: "source" })
+        })
   });
 }

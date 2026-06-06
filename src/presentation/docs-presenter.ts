@@ -35,6 +35,7 @@ import type {
   DocsSearchUseCaseResult
 } from "../application/use-cases/query-docs.js";
 import { invalidResponseMeta } from "./metadata.js";
+import { redactPresentationText } from "./redaction.js";
 
 export function buildDocsOverviewEnvelope(
   result: DocsOverviewUseCaseResult
@@ -238,7 +239,8 @@ function sanitizeDocsReadSection(input: DocsReadSectionResult): DocsReadSectionR
       ? undefined
       : sourceSectionSchema.parse({
           ...input.section,
-          path: normalizeRepoPath(input.section.path)
+          path: normalizeRepoPath(input.section.path),
+          text: redactPresentationText(input.section.text, { context: "source" })
         }),
     warnings: sortWarnings(input.warnings).map(sanitizeWarning),
     next_actions: input.next_actions.map((action) => nextActionSchema.parse(action))
@@ -281,7 +283,7 @@ function sanitizeSearchHit(input: DocsSearchHit): DocsSearchHit {
     title: input.title,
     heading_id: input.heading_id,
     heading: input.heading,
-    snippet: input.snippet,
+    snippet: input.snippet === undefined ? undefined : redactPresentationText(input.snippet, { context: "source" }),
     score: input.score,
     evidence_kinds: [...input.evidence_kinds].sort(),
     direct_read_caveat: input.direct_read_caveat

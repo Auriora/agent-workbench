@@ -568,10 +568,14 @@ Post-closure dogfood caveats from large mixed-language repositories:
   was driven by path terms, package boundaries, workspace config,
   route/controller/service conventions, or lexical snippets rather than
   semantic graph edges.
-- Promoted to [Spec 007](../specs/007-redaction-boundary-polish/requirements.md):
-  avoid redacting ordinary in-repo string snippets such as URL paths as
-  outside-repo paths. Workspace safety redaction should apply to filesystem
-  paths or secret-like values, not normal source text fragments.
+- Done: avoid redacting ordinary in-repo source snippets such as URL paths,
+  route fragments, and API route strings as outside-repo filesystem paths.
+  Presentation redaction preserves source text by default, redacts embedded
+  absolute host paths, workspace escapes, and secret-like values in source
+  sections and snippets, and treats repo-relative paths as path evidence only
+  when the field is path-typed. Workspace safety path containment remains the
+  authority for reads and writes. The delivery record is
+  [Spec 007](../specs/007-redaction-boundary-polish/requirements.md).
 - Done: improve exact-first symbol filtering for caller-supplied symbols before
   broad fuzzy fallback. Exact mode now applies language filters before deciding
   whether exact evidence exists and treats SAM logical IDs and Lambda handler

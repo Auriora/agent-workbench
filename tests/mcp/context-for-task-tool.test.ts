@@ -900,7 +900,7 @@ describe("context_for_task MCP tool", () => {
                     end_line: 20,
                     byte_count: 200,
                     truncated: false,
-                    text: "class Runner:\n    pass",
+                    text: "class Runner:\n    route = '/api/orders'\n    token = 'TOKEN=abc123'\n    path = '/home/example/.ssh/id_rsa'",
                     __raw_diagnostic_record: {
                       origin: "lsp",
                       code: "PY123"
@@ -967,6 +967,10 @@ describe("context_for_task MCP tool", () => {
       task: "Inspect parser-backed task"
     });
     expect(parsed.meta).toMatchObject({ analysis_validity: "valid" });
+    expect(JSON.stringify(parsed)).toContain("/api/orders");
+    expect(JSON.stringify(parsed)).toContain("TOKEN=[REDACTED]");
+    expect(JSON.stringify(parsed)).toContain("[REDACTED_ABSOLUTE_PATH]");
+    expect(JSON.stringify(parsed)).not.toContain("/home/example");
     expect(JSON.stringify(parsed)).not.toContain("__raw_parser_payload");
     expect(JSON.stringify(parsed)).not.toContain("__raw_diagnostic_record");
     expect(JSON.stringify(parsed)).not.toContain("__backend_worker_trace");

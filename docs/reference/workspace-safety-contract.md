@@ -75,6 +75,17 @@ Skip or redact:
 Infrastructure adapters may store environment variable names and permission
 shape, but not secret-like values.
 
+Presentation-time redaction is a display boundary, not a path-containment
+decision. Source sections, docs snippets, and compact findings preserve
+ordinary source text such as `/api/orders`, route fragments, URL paths, and
+fixture strings unless the value contains secret-like material, an absolute host
+path, or a workspace-escape token. Repo-relative filesystem paths are preserved
+when they come from path-typed fields. Absolute host paths, traversal-like
+workspace escapes, private keys, and token/password/secret assignments are
+redacted in presentation output. The stricter workspace path resolver remains
+the authority for reads, writes, symlink handling, generated/vendor write
+refusal, and workspace-escape blocking.
+
 ## Generated Writes
 
 - Runtime caches should live under generated cache roots such as `.cache/`.

@@ -17,6 +17,7 @@ import {
 } from "../contracts/index.js";
 import type { GetTaskContextResult } from "../application/use-cases/get-task-context.js";
 import { invalidResponseMeta } from "./metadata.js";
+import { redactPresentationText } from "./redaction.js";
 
 export function buildTaskContextEnvelope(
   result: GetTaskContextResult
@@ -153,7 +154,7 @@ function sanitizeSourceSection(
     end_line: input.end_line,
     byte_count: input.byte_count,
     truncated: input.truncated,
-    text: input.text,
+    text: redactPresentationText(input.text, { context: "source" }),
     caveat: input.caveat
   });
 }

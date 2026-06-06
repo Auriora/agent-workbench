@@ -2,14 +2,19 @@
 title: Redaction boundary polish requirements
 doc_type: spec
 artifact_type: requirements
-status: active
+status: archived
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Requirements
 
 ## Introduction
+
+Spec 007 closed on 2026-06-06. Accepted redaction-boundary behavior was
+promoted to [MCP surface design](../../design/mcp-surface-design.md),
+[Workspace safety contract](../../reference/workspace-safety-contract.md), and
+[Documentation map](../../reference/documentation-map.md).
 
 This spec promotes the open MCP surface backlog item about over-redaction into
 active work. Some presentation paths can treat ordinary in-repository string

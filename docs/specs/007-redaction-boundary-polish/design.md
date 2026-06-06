@@ -2,12 +2,16 @@
 title: Redaction boundary polish design
 doc_type: spec
 artifact_type: design
-status: active
+status: archived
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Technical Design
+
+Spec 007 closed on 2026-06-06. Current presentation redaction behavior lives in
+[MCP surface design](../../design/mcp-surface-design.md) and
+[Workspace safety contract](../../reference/workspace-safety-contract.md).
 
 ## Overview
 
