@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "commands": [
+    {
+      "id": "sam-validate-orders",
+      "command": "sam",
+      "args": ["validate", "--template-file", "infra/orders/template.yaml"],
+      "paths": ["infra/orders/template.yaml"],
+      "reason": "Repository-approved SAM validation for the orders stack."
+    },
+    {
+      "id": "cfn-lint-shared",
+      "command": "cfn-lint",
+      "args": ["infra/shared/template.json"],
+      "paths": ["infra/shared/template.json"],
+      "reason": "Repository-approved CloudFormation lint for shared resources."
+    }
+  ],
+  "blocked_host_commands": [
+    {
+      "command": "sam deploy",
+      "reason": "Deployment requires AWS credentials and is outside validation."
+    }
+  ]
+}

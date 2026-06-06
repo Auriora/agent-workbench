@@ -15,19 +15,36 @@ last_reviewed: 2026-06-06
 T001 -> T002 -> T003 -> T004 -> T005 -> T006
 ```
 
-- [ ] T001 Add SAM/CloudFormation intrinsic fixtures.
+- [x] T001 Add SAM/CloudFormation intrinsic fixtures.
   - Files: `tests/fixtures/`, `tests/infrastructure/`, `tests/graph/`
   - Acceptance: Fixtures cover JSON/YAML templates, long/short intrinsics,
     nested expressions, `DependsOn`, Lambda events, handler bindings, redaction,
     tests, and validation-policy evidence.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Added
+    `tests/fixtures/fixture-sam-intrinsic-repo/` with YAML and JSON templates,
+    long and short intrinsic forms, nested expressions, `DependsOn`, SAM Lambda
+    events, handler source files, nearby tests, secret-like dynamic reference
+    material for redaction checks, and repo-local validation policy evidence.
+    Added `tests/workspace/sam-intrinsic-fixtures.test.ts`. Validation:
+    `pnpm exec vitest run tests/workspace/sam-intrinsic-fixtures.test.ts`
+    passed.
 
-- [ ] T002 Implement intrinsic and dependency extraction.
+- [x] T002 Implement intrinsic and dependency extraction.
   - Depends on: T001
   - Files: `src/infrastructure/`, `tests/infrastructure/`, `tests/graph/`
   - Acceptance: Adapter emits resource-backed edges with expression provenance,
     confidence, and compact unsupported-intrinsic caveats.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Added the `yaml` parser dependency and
+    replaced SAM/CloudFormation resource detection with a structured YAML/JSON
+    template walk that preserves short-form tag evidence. The resource adapter
+    now emits resource-backed unresolved references for `Ref`, `Fn::GetAtt`,
+    `Fn::Sub`, `Fn::Join` nested references, `Fn::ImportValue`, and
+    `DependsOn`; the shared graph resolver turns unambiguous logical-resource
+    references into confidence-labeled edges while leaving parameters/imports
+    unresolved. Secret-like values are omitted from reference metadata.
+    Validation: `pnpm typecheck` and `pnpm exec vitest run
+    tests/workspace/sam-intrinsic-fixtures.test.ts
+    tests/graph/extraction-pipeline.test.ts` passed.
 
 - [ ] T003 Implement event-source and handler context grouping.
   - Depends on: T002

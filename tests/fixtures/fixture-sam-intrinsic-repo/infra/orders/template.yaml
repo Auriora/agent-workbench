@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+  StageName:
+    Type: String
+    Default: test
+  PaymentTopicArn:
+    Type: String
+Resources:
+  OrdersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AWS::StackName}-${StageName}-orders'
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+
+  OrdersQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      Tags:
+        - Key: retention
+          Value:
+            Fn::If:
+              - IsProd
+              - long
+              - short
+      QueueName:
+        Fn::Join:
+          - '-'
+          - - !Ref AWS::StackName
+            - !Ref StageName
+            - orders
+
+  OrdersTopicSubscription:
+    Type: AWS::SNS::Subscription
+    DependsOn:
+      - OrdersQueue
+    Properties:
+      TopicArn:
+        Fn::ImportValue: SharedOrdersTopicArn
+      Protocol: sqs
+      Endpoint: !GetAtt OrdersQueue.Arn
+
+  OrdersFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: OrdersTable
+    Properties:
+      Handler: src/orders/app.handler
+      Runtime: python3.12
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref OrdersTable
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref OrdersTable
+          QUEUE_URL: !Ref OrdersQueue
+          SECRET_TOKEN: '{{resolve:secretsmanager:orders/token:SecretString:value}}'
+      Events:
+        ApiCreateOrder:
+          Type: Api
+          Properties:
+            Path: /orders
+            Method: post
+        StreamOrders:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt OrdersTable.StreamArn
+            StartingPosition: TRIM_HORIZON
+        QueueOrders:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt OrdersQueue.Arn
+
+  PaymentNotifierFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/payments/notifier.handler
+      Runtime: python3.12
+      Events:
+        PaymentTopic:
+          Type: SNS
+          Properties:
+            Topic: !Ref PaymentTopicArn
+
+Outputs:
+  OrdersFunctionArn:
+    Value: !GetAtt OrdersFunction.Arn
+  OrdersEndpoint:
+    Value:
+      Fn::Sub:
+        - 'https://${ApiId}.execute-api.${AWS::Region}.amazonaws.com/${StageName}/orders'
+        - ApiId: !Ref ServerlessRestApi

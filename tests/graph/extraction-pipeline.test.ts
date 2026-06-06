@@ -680,6 +680,166 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
+  it("indexes SAM and CloudFormation intrinsic references as resource-backed edges", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-sam-intrinsic-repo");
+    const store = openGraphStore(path.join(dir, "sam-intrinsic.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new PythonTreeSitterExtractorAdapter());
+
+    try {
+      const result = await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "112"
+      });
+
+      expect(result).toMatchObject({
+        snapshot_id: "112",
+        scanned_files: 7,
+        extracted_files: 7,
+        resource_backed_files: 3,
+        unsupported_files: 0,
+        truncated: false
+      });
+      expect(result.edge_count).toBeGreaterThanOrEqual(13);
+      expect(result.unresolved_reference_count).toBeGreaterThanOrEqual(4);
+
+      const ordersFunction = await store.findNodesByName({
+        snapshot_id: "112",
+        query: "OrdersFunction",
+        exact: true
+      });
+      expect(ordersFunction).toEqual([
+        expect.objectContaining({
+          kind: "lambda_function",
+          file_path: "infra/orders/template.yaml",
+          metadata: expect.objectContaining({
+            provenance: "cloudformation_resource_scan",
+            handler: "src/orders/app.handler"
+          })
+        })
+      ]);
+      const ordersFunctionEdges = await store.getOutgoingEdges({
+        snapshot_id: "112",
+        node_id: ordersFunction[0]?.id ?? "",
+        max_rows: 20
+      });
+      expect(ordersFunctionEdges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "cloudformation_depends_on",
+            confidence: 0.85,
+            provenance: "cloudformation_intrinsic_scan",
+            metadata: expect.objectContaining({
+              intrinsic: "DependsOn",
+              reference_name: "OrdersTable",
+              expression_path: "Resources.OrdersFunction.DependsOn"
+            })
+          }),
+          expect.objectContaining({
+            kind: "cloudformation_ref",
+            confidence: 0.75,
+            metadata: expect.objectContaining({
+              intrinsic: "Ref",
+              reference_name: "OrdersQueue"
+            })
+          }),
+          expect.objectContaining({
+            kind: "cloudformation_getatt",
+            confidence: 0.75,
+            metadata: expect.objectContaining({
+              intrinsic: "Fn::GetAtt",
+              reference_name: "OrdersTable"
+            })
+          })
+        ])
+      );
+
+      const ordersQueue = await store.findNodesByName({
+        snapshot_id: "112",
+        query: "OrdersQueue",
+        exact: true
+      });
+      expect(ordersQueue).toEqual([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            unsupported_intrinsics: ["Fn::If"]
+          })
+        })
+      ]);
+
+      const topicPolicy = await store.findNodesByName({
+        snapshot_id: "112",
+        query: "SharedTopicPolicy",
+        exact: true
+      });
+      expect(topicPolicy).toEqual([
+        expect.objectContaining({
+          kind: "cloudformation_resource",
+          file_path: "infra/shared/template.json"
+        })
+      ]);
+      const topicPolicyEdges = await store.getOutgoingEdges({
+        snapshot_id: "112",
+        node_id: topicPolicy[0]?.id ?? "",
+        max_rows: 10
+      });
+      expect(topicPolicyEdges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "cloudformation_depends_on",
+            metadata: expect.objectContaining({
+              reference_name: "SharedOrdersTopic"
+            })
+          }),
+          expect.objectContaining({
+            kind: "cloudformation_getatt",
+            metadata: expect.objectContaining({
+              expression_path: "Resources.SharedTopicPolicy.Properties.PolicyDocument.Statement.0.Resource.Fn::GetAtt"
+            })
+          })
+        ])
+      );
+
+      const unresolved = await store.getUnresolvedReferences({
+        snapshot_id: "112",
+        file_path: "infra/orders/template.yaml",
+        max_rows: 20
+      });
+      expect(unresolved).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            reference_name: "SharedOrdersTopicArn",
+            reference_kind: "cloudformation_import_value",
+            candidate_metadata: expect.objectContaining({
+              semantic_scope: "external_stack_reference",
+              intrinsic: "Fn::ImportValue",
+              resolution: "unresolved"
+            })
+          }),
+          expect.objectContaining({
+            reference_name: "StageName",
+            candidate_metadata: expect.objectContaining({
+              target_kind: "external_or_parameter"
+            })
+          })
+        ])
+      );
+      expect(JSON.stringify([...ordersFunctionEdges, ...topicPolicyEdges, ...unresolved])).not.toContain("orders/token");
+      expect(JSON.stringify([...ordersFunctionEdges, ...topicPolicyEdges, ...unresolved])).not.toContain("secretsmanager");
+    } finally {
+      store.close();
+    }
+  });
+
   it("indexes .NET solution and project metadata as resource-backed routing evidence", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-dotnet-web-repo");
     const store = openGraphStore(path.join(dir, "dotnet.sqlite"));

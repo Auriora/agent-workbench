@@ -1,0 +1,45 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Resources": {
+    "SharedOrdersTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Fn::Sub": "${AWS::StackName}-orders"
+        }
+      }
+    },
+    "SharedTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "DependsOn": "SharedOrdersTopic",
+      "Properties": {
+        "Topics": [
+          {
+            "Ref": "SharedOrdersTopic"
+          }
+        ],
+        "PolicyDocument": {
+          "Statement": [
+            {
+              "Action": "sns:Publish",
+              "Effect": "Allow",
+              "Resource": {
+                "Fn::GetAtt": ["SharedOrdersTopic", "TopicArn"]
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "Outputs": {
+    "SharedOrdersTopicArn": {
+      "Value": {
+        "Ref": "SharedOrdersTopic"
+      },
+      "Export": {
+        "Name": "SharedOrdersTopicArn"
+      }
+    }
+  }
+}
