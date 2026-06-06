@@ -1,0 +1,25 @@
+{
+  "name": "agent-workbench",
+  "version": "0.1.0",
+  "registry": "ghcr.io",
+  "image": "ghcr.io/bcherrington/agent-workbench",
+  "containerfile": "packaging/agent-workbench/Containerfile",
+  "installer": "scripts/install-agent-workbench-package.sh",
+  "entrypoint": "node --import tsx /opt/agent-workbench/src/mcp/stdio.ts",
+  "components": [
+    "src",
+    "docs",
+    "plugins/agent-workbench",
+    "plugins/agent-workbench/hooks",
+    "plugins/agent-workbench/skills",
+    "package.json",
+    "pnpm-lock.yaml",
+    "tsconfig.json",
+    "AGENTS.md"
+  ],
+  "codex": {
+    "mcp_server_id": "agent-workbench",
+    "plugin_manifest": "plugins/agent-workbench/.codex-plugin/plugin.json",
+    "hook_config_fallback": "scripts/install-agent-workbench-package.sh"
+  }
+}

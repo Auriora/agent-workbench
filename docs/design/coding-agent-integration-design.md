@@ -101,12 +101,14 @@ configuration, but each agent has different packaging rules.
 The runtime must not make any plugin format the core abstraction.
 
 For Codex local development, Agent Workbench uses host-level MCP configuration
-as the single executable runtime path. The Codex plugin is skill/hook-only: it
-does not register an MCP server, does not launch copied runtime code, and does
-not point Codex at a cache-relative checkout. This keeps runtime updates tied to
-this repository checkout: source changes require a Codex restart, while
-dependency changes require `pnpm install` in this checkout followed by restart.
-Operational setup lives in
+as the single executable runtime path. For packaged installs, the GHCR package
+installs the same runtime under a stable host prefix and writes host-level MCP
+configuration for that prefix. The Codex plugin is skill/hook-only: it does not
+register an MCP server, does not launch copied runtime code, and does not point
+Codex at a cache-relative checkout. Local source changes require a Codex
+restart, while local dependency changes require `pnpm install` in this checkout
+followed by restart. Packaged dependency or source changes require a rebuilt
+GHCR package install followed by restart. Operational setup lives in
 [Codex Agent Workbench plugin and MCP setup](../runbooks/codex-agent-workbench-plugin.md).
 
 ### Hooks

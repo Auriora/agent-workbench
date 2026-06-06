@@ -1,0 +1,9 @@
+.cache
+.git
+.github
+.pnpm-store
+coverage
+dist
+node_modules
+tmp
+*.log

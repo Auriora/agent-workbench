@@ -136,21 +136,41 @@ describe("Codex integration profile", () => {
     );
 
     expect(profile.runtime_source).toBe("repository_checkout");
-    expect(profile.plugin.runtime_source).toBe("repository_checkout");
-    expect(profile.plugin.packaging_model).toBe("skill_and_hook_wrapper_only");
+    expect(profile.plugin.runtime_source).toBe("repository_checkout_or_installed_package");
+    expect(profile.plugin.packaging_model).toBe("skill_and_hook_wrapper_plus_ghcr_install_package");
     expect(profile.plugin.mcp_binding_model).toBe("host_level_config_required");
     expect(profile.plugin.mcp_config_path).toBeUndefined();
     expect(profile.plugin.update_model.source_changes).toMatch(/Restart Codex/i);
     expect(profile.plugin.update_model.source_changes).toContain("updated repository source");
+    expect(profile.plugin.update_model.source_changes).toMatch(/GHCR package/i);
     expect(profile.plugin.update_model.dependency_changes).toMatch(/pnpm install/i);
     expect(profile.plugin.update_model.dependency_changes).toMatch(/restart Codex/i);
-    expect(profile.plugin.update_model.dependency_changes).toContain(
-      "Plugin/package reinstall is not the update mechanism."
+    expect(profile.plugin.update_model.dependency_changes).toMatch(/rebuilt dependencies/i);
+    expect(profile.install_package).toMatchObject({
+      registry: "ghcr.io",
+      image: "ghcr.io/bcherrington/agent-workbench",
+      containerfile_path: "packaging/agent-workbench/Containerfile",
+      installer_path: "scripts/install-agent-workbench-package.sh",
+      release_workflow_path: ".github/workflows/release-ghcr.yml"
+    });
+    expect(profile.install_package.installed_components).toEqual(
+      expect.arrayContaining([
+        "src",
+        "docs",
+        "plugins/agent-workbench",
+        "plugins/agent-workbench/hooks",
+        "plugins/agent-workbench/skills",
+        "package.json",
+        "pnpm-lock.yaml",
+        "tsconfig.json",
+        "AGENTS.md"
+      ])
     );
+    expect(profile.install_package.hook_install_model).toMatch(/config\.toml/);
     expect(profile.guardrails).toEqual(
       expect.arrayContaining([
         "Source edits require Codex restart to reload MCP source behavior.",
-        "Dependency changes require pnpm install in this repository checkout, then restart Codex."
+        "The GHCR package must include runtime source, docs, plugin manifest, skills, hooks, installer, and release metadata."
       ])
     );
     expect(profile.runtime_version).toBe("0.1.0");
@@ -420,11 +440,66 @@ describe("Codex plugin artifacts", () => {
     expect(pluginSurface?.behavior).toEqual(
       expect.arrayContaining([
         "Does not register an MCP server for local development.",
-        "Relies on host-level Codex MCP configuration to launch the repository checkout runtime."
+        "Relies on host-level Codex MCP configuration to launch the repository checkout runtime.",
+        "The GHCR install package ships a host installer that writes MCP and hook configuration when plugin installation does not install hooks."
       ])
     );
     expect(profile.plugin.mcp_config_path).toBeUndefined();
     expect(profile.plugin.mcp_binding_model).toBe("host_level_config_required");
+  });
+
+  it("ships GHCR package metadata and an installer that covers runtime, plugin, skills, and hooks", () => {
+    const manifestPath = path.resolve("packaging/agent-workbench/package-manifest.json");
+    const containerfilePath = path.resolve("packaging/agent-workbench/Containerfile");
+    const installerPath = path.resolve("scripts/install-agent-workbench-package.sh");
+    const workflowPath = path.resolve(".github/workflows/release-ghcr.yml");
+    const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
+      registry: string;
+      image: string;
+      containerfile: string;
+      installer: string;
+      components: string[];
+      codex: {
+        hook_config_fallback: string;
+      };
+    };
+    const containerfile = fs.readFileSync(containerfilePath, "utf8");
+    const installer = fs.readFileSync(installerPath, "utf8");
+    const workflow = fs.readFileSync(workflowPath, "utf8");
+
+    expect(manifest).toMatchObject({
+      registry: "ghcr.io",
+      image: "ghcr.io/bcherrington/agent-workbench",
+      containerfile: "packaging/agent-workbench/Containerfile",
+      installer: "scripts/install-agent-workbench-package.sh"
+    });
+    expect(manifest.components).toEqual(
+      expect.arrayContaining([
+        "src",
+        "docs",
+        "plugins/agent-workbench",
+        "plugins/agent-workbench/hooks",
+        "plugins/agent-workbench/skills",
+        "package.json",
+        "pnpm-lock.yaml",
+        "tsconfig.json",
+        "AGENTS.md"
+      ])
+    );
+    expect(manifest.codex.hook_config_fallback).toBe("scripts/install-agent-workbench-package.sh");
+    expect(containerfile).toContain("FROM node:24-bookworm-slim");
+    expect(containerfile).toContain("COPY src ./src");
+    expect(containerfile).toContain("COPY docs ./docs");
+    expect(containerfile).toContain("COPY plugins ./plugins");
+    expect(containerfile).toContain("pnpm install --frozen-lockfile");
+    expect(containerfile).toContain("/opt/agent-workbench/src/mcp/stdio.ts");
+    expect(installer).toContain("plugins/agent-workbench/hooks/session-start.js");
+    expect(installer).toContain("plugins/agent-workbench/hooks/post-edit-feedback.js");
+    expect(installer).toContain("[mcp_servers.agent-workbench]");
+    expect(installer).toContain("[[hooks.SessionStart]]");
+    expect(installer).toContain("[[hooks.PostToolUse]]");
+    expect(workflow).toContain("registry: ghcr.io");
+    expect(workflow).toContain("packaging/agent-workbench/Containerfile");
   });
 
   it("keeps plugin wrappers out of concrete runtime implementation paths", () => {

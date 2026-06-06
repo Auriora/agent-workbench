@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1.7
+
+FROM node:24-bookworm-slim AS runtime
+
+LABEL org.opencontainers.image.title="Agent Workbench"
+LABEL org.opencontainers.image.description="Agent Workbench MCP runtime, Codex plugin wrapper, and hook installer package."
+LABEL org.opencontainers.image.source="https://github.com/bcherrington/agent-workbench"
+LABEL org.opencontainers.image.licenses="MIT"
+
+ENV PNPM_HOME="/opt/pnpm"
+ENV PATH="${PNPM_HOME}:${PATH}"
+ENV NODE_ENV="development"
+
+WORKDIR /opt/agent-workbench
+
+RUN corepack enable \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    g++ \
+    git \
+    make \
+    python3 \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY package.json pnpm-lock.yaml tsconfig.json ./
+COPY AGENTS.md ./
+COPY src ./src
+COPY docs ./docs
+COPY plugins ./plugins
+COPY packaging ./packaging
+COPY scripts ./scripts
+
+RUN pnpm install --frozen-lockfile \
+  && pnpm rebuild:native
+
+ENTRYPOINT ["node", "--import", "tsx", "/opt/agent-workbench/src/mcp/stdio.ts"]
