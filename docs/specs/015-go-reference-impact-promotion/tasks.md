@@ -69,12 +69,19 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     tests/graph/extraction-pipeline.test.ts tests/graph/query-tools.test.ts`
     passed.
 
-- [ ] T004 Harden Go validation planning.
+- [x] T004 Harden Go validation planning.
   - Depends on: T001
   - Files: `src/application/use-cases/`, `tests/validation/`, `tests/mcp/`
   - Acceptance: Docker/devcontainer/CI/repo guidance suppresses unsafe generic
     host `go test ./...` suggestions.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Go validation planning now prefers
+    GitHub Actions run-step evidence, then Makefile evidence, before generic
+    host `go test ./...`. CI run steps for `make test`, `go test ./...`, and
+    Docker Compose Go test commands are parsed as non-executed planned
+    commands. When repo guidance or validation policy blocks host commands, the
+    planner suppresses generic Go commands and returns blocked guidance unless
+    repo policy supplies replacement commands. Validation:
+    `pnpm exec vitest run tests/mcp/verification-plan-tool.test.ts` passed.
 
 - [ ] T005 Run read-only Go dogfood comparison.
   - Depends on: T003, T004

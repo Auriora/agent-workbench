@@ -294,6 +294,10 @@ async function discoverValidationEvidence(input: {
     dotnetTestProjects: [...paths].filter((filePath) => isDotnetProjectPath(filePath) && isDotnetTestProjectPath(filePath)).sort(),
     samTemplates: [...paths].filter(isSamTemplatePath).sort(),
     samInfraTests: [...paths].filter(isSamInfraTestPath).sort(),
+    goCiCommands: await discoverGoCiCommands({
+      workflowPaths: [...paths].filter(isGithubWorkflowPath).sort(),
+      workspace: input.workspace
+    }),
     pythonNearestTests: await discoverPythonNearestTests({
       files: input.files,
       selectedEntries: input.selectedEntries,
@@ -318,6 +322,7 @@ type ValidationDiscovery = {
   dotnetTestProjects: string[];
   samTemplates: string[];
   samInfraTests: string[];
+  goCiCommands: PlannedValidationCommand[];
   pythonNearestTests: PlannedValidationCommand[];
 };
 
@@ -406,7 +411,9 @@ function planValidationCommands(input: {
         blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "Go"));
       }
     } else {
-      if (input.discovery.hasMakefile) {
+      if (input.discovery.goCiCommands.length > 0) {
+        commands.push(...input.discovery.goCiCommands);
+      } else if (input.discovery.hasMakefile) {
         commands.push({
           command: "make",
           args: ["test"],
@@ -415,17 +422,18 @@ function planValidationCommands(input: {
           status: "planned",
           execution: "not_executed"
         });
+      } else {
+        commands.push({
+          command: "go",
+          args: ["test", "./..."],
+          display: "go test ./...",
+          reason: input.discovery.hasGoWork
+            ? "go.work/go.mod and Go source files indicate workspace-wide Go tests are the primary validation path."
+            : "go.mod and Go source files indicate Go tests are the primary validation path.",
+          status: "planned",
+          execution: "not_executed"
+        });
       }
-      commands.push({
-        command: "go",
-        args: ["test", "./..."],
-        display: "go test ./...",
-        reason: input.discovery.hasGoWork
-          ? "go.work/go.mod and Go source files indicate workspace-wide Go tests are the primary validation path."
-          : "go.mod and Go source files indicate Go tests are the primary validation path.",
-        status: "planned",
-        execution: "not_executed"
-      });
     }
   }
 
@@ -1286,6 +1294,11 @@ function isSamInfraTestPath(filePath: string): boolean {
   return lower.endsWith(".py") && (lower.startsWith("tests/infra/") || lower.startsWith("test/infra/") || lower.includes("/tests/infra/") || lower.includes("/test/infra/"));
 }
 
+function isGithubWorkflowPath(filePath: string): boolean {
+  const lower = normalizeRepoPath(filePath).toLowerCase();
+  return lower.startsWith(".github/workflows/") && (lower.endsWith(".yml") || lower.endsWith(".yaml"));
+}
+
 function lowerExtension(filePath: string): string {
   const basename = path.posix.basename(filePath).toLowerCase();
   const dot = basename.lastIndexOf(".");
@@ -1412,6 +1425,81 @@ function parseCMakeTargets(filePath: string, content: string): CMakeTargetEviden
     });
   }
   return targets;
+}
+
+async function discoverGoCiCommands(input: {
+  workflowPaths: readonly string[];
+  workspace: WorkspaceFilePort;
+}): Promise<PlannedValidationCommand[]> {
+  const commands: PlannedValidationCommand[] = [];
+  const seen = new Set<string>();
+  for (const workflowPath of input.workflowPaths.slice(0, 5)) {
+    const stat = await statIfPresent(input.workspace, workflowPath);
+    if (!stat.exists || !stat.is_file || stat.size_bytes > 128_000) {
+      continue;
+    }
+    let content: string;
+    try {
+      content = await input.workspace.readText({ path: workflowPath });
+    } catch (_error) {
+      continue;
+    }
+    for (const rawLine of content.split(/\r?\n/u)) {
+      const command = goCiCommandFromWorkflowLine(rawLine);
+      if (command === null || seen.has(command.display)) {
+        continue;
+      }
+      seen.add(command.display);
+      commands.push({
+        ...command,
+        reason: `${workflowPath} plans Go validation through CI run-step evidence.`,
+        status: "planned",
+        execution: "not_executed"
+      });
+      if (commands.length >= 3) {
+        return commands;
+      }
+    }
+  }
+  return commands;
+}
+
+function goCiCommandFromWorkflowLine(rawLine: string): Omit<PlannedValidationCommand, "reason" | "status" | "execution"> | null {
+  const match = /^\s*-\s*run:\s*(.+)$/u.exec(rawLine);
+  const commandText = stripYamlScalarQuotes(match?.[1]?.trim() ?? "");
+  if (commandText === "make test") {
+    return {
+      command: "make",
+      args: ["test"],
+      display: "make test"
+    };
+  }
+  if (commandText === "go test ./...") {
+    return {
+      command: "go",
+      args: ["test", "./..."],
+      display: "go test ./..."
+    };
+  }
+  const dockerCompose = /^docker\s+compose\s+run\s+--rm\s+([A-Za-z0-9_.-]+)\s+go\s+test\s+(.+)$/u.exec(commandText);
+  if (dockerCompose?.[1] !== undefined && dockerCompose[2] !== undefined) {
+    return {
+      command: "docker",
+      args: ["compose", "run", "--rm", dockerCompose[1], "go", "test", dockerCompose[2]],
+      display: commandText
+    };
+  }
+  return null;
+}
+
+function stripYamlScalarQuotes(value: string): string {
+  if (
+    (value.startsWith("\"") && value.endsWith("\"")) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    return value.slice(1, -1);
+  }
+  return value;
 }
 
 async function discoverPythonNearestTests(input: {

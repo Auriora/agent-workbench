@@ -493,13 +493,13 @@ describe("verification_plan use case", () => {
     expect(result.plan.status).toBe("planned");
     expect(result.plan.static_feedback).toBeUndefined();
     expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
-      "make test",
-      "go test ./..."
+      "make test"
     ]);
+    expect(result.plan.planned_commands.map((command) => command.display)).not.toContain("go test ./...");
     expect(result.plan.planned_commands).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          reason: expect.stringContaining("Go")
+          reason: expect.stringContaining(".github/workflows/go.yml")
         })
       ])
     );
@@ -511,6 +511,42 @@ describe("verification_plan use case", () => {
         })
       ])
     );
+  });
+
+  it("uses Go CI command evidence instead of generic host go test", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-go-ci-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, ".github", "workflows"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "internal", "service"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "go.mod"), "module example.com/ci-go\n");
+      fs.writeFileSync(
+        path.join(repoRoot, ".github", "workflows", "go.yml"),
+        ["name: go", "jobs:", "  test:", "    steps:", "      - run: docker compose run --rm app go test ./..."].join("\n")
+      );
+      fs.writeFileSync(path.join(repoRoot, "internal", "service", "service.go"), "package service\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["internal/service/service.go"],
+          changed_files: ["internal/service/service.go"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
+        "docker compose run --rm app go test ./..."
+      ]);
+      expect(result.plan.planned_commands[0]?.reason).toContain(".github/workflows/go.yml");
+      expect(result.plan.planned_commands.map((command) => command.display)).not.toContain("go test ./...");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 
   it("blocks host Go commands when repo guidance requires Docker validation", async () => {
