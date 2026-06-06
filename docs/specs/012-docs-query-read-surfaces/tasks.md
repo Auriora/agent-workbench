@@ -15,11 +15,19 @@ last_reviewed: 2026-06-05
 T001 -> T002 -> T003 -> T004 -> T005 -> T006
 ```
 
-- [ ] T001 Add docs query fixtures.
+- [x] T001 Add docs query fixtures.
   - Files: `tests/fixtures/`, `tests/docs/`
   - Acceptance: Fixtures cover headings, duplicate headings, links, missing
     docs, unreadable docs, generated/vendor docs, and large docs sets.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Added
+    `tests/fixtures/fixture-docs-query-repo/` with nested Markdown docs,
+    duplicate headings, valid and missing links, test-created unreadable docs,
+    generated-output/vendor Markdown, and a 10-file reference set for row-cap
+    tests. Added
+    `tests/docs/docs-query-fixtures.test.ts` to prove fixture coverage and
+    generated/vendor skip evidence. Validation:
+    `pnpm exec vitest run tests/docs/docs-query-fixtures.test.ts` and
+    `pnpm typecheck` passed.
 
 - [ ] T002 Implement docs index/query application contracts.
   - Depends on: T001

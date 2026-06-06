@@ -23,6 +23,7 @@ last_reviewed: 2026-06-05
 | Date | Activity | Result |
 | --- | --- | --- |
 | 2026-06-05 | Spec created from Spec 010 T005 follow-up planning | Pending implementation |
+| 2026-06-06 | T001 docs query fixtures | Added `tests/fixtures/fixture-docs-query-repo/` and `tests/docs/docs-query-fixtures.test.ts`; focused fixture test and `pnpm typecheck` passed |
 
 ## Residual Risks
 
