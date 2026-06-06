@@ -3,7 +3,7 @@ title: Language capability matrix
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Language Capability Matrix
@@ -43,7 +43,7 @@ promotion gates are owned by [Language adapter design](../design/language-adapte
 | 3 | TypeScript/JavaScript | `partial_semantic`, then `semantic` | `tree-sitter-javascript` and `tree-sitter-typescript` declaration/import/export extraction, package/workspace/`tsconfig` routing, package-local validation planning, optional TypeScript compiler API or `tsserver` only after promotion fixtures |
 | 4 | C#/.NET | `resource_backed`, then `partial_semantic`, then `semantic` | `.sln`/`.csproj`/`.fsproj`/`.vbproj` project metadata, NuGet and test project discovery, generated-output policy, then `tree-sitter` and optional C# LSP |
 | 5 | CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser plus intrinsic resolver and source handler linking |
-| 6 | Go | `resource_backed`, then `partial_semantic`, then `semantic` | `.go` file identity, `go.mod`/Makefile/Docker test discovery, routing-only package/function/type/method extraction, then parser-backed references, `gopls`, `go list`, `go test` |
+| 6 | Go | `partial_semantic`, then `semantic` | `tree-sitter-go` package/import/function/type/method extraction, parser-backed selector and identifier references, low-confidence impact traversal, `go.mod`/Makefile/CI/Docker validation planning, optional `gopls`, `go list`, and `go test` enrichers only after promotion fixtures |
 | 7 | C/C++ | `resource_backed`, then `partial_semantic` | C/C++ header/source classification, Python stub routing where applicable, routing-only classes/functions/methods/includes, heuristic include/local-call edges with low confidence, CMake target membership, non-executed CMake configure/build/test planning, `tree-sitter` (mandatory), clangd/libclang when `compile_commands.json` exists |
 | 8 | Rust | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Rust parser/enrichment, Cargo metadata, `rust-analyzer`, `cargo test` |
 | 9 | SQL | `resource_backed`, then `partial_semantic` | dialect-aware parser, migration-tool integration, schema/table/column references |

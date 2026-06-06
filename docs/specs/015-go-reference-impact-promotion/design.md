@@ -2,7 +2,7 @@
 title: Go reference impact promotion design
 doc_type: spec
 artifact_type: design
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -58,6 +58,8 @@ It should not resolve:
 - Resolved for T002: the approved parser package is `tree-sitter-go`, wired
   through the existing TypeScript tree-sitter runtime path and native rebuild
   policy.
-- How much `go.mod` import-path normalization is safe without running `go list`?
-- Should build tags be modeled now as unresolved caveats or left to a future Go
-  semantic promotion spec?
+- Resolved for T003: import-selector references may use indexed first-party
+  path suffixes as low-confidence parser evidence; anything requiring
+  `go list`, build tags, or type checking remains unresolved or low confidence.
+- Deferred: build tags, compiler package loading, and type-inferred method
+  resolution belong in a future Go semantic promotion spec.

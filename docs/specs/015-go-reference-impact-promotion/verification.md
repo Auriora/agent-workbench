@@ -2,7 +2,7 @@
 title: Go reference impact promotion verification
 doc_type: spec
 artifact_type: verification
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -28,6 +28,7 @@ last_reviewed: 2026-06-06
 | 2026-06-06 | T003 Go reference and impact query wiring | Added Go-aware filtering to shared reference resolution for imported package selectors and receiver-style method selectors. Proved `find_references` and low-confidence `impact` traversal with parser-backed Go evidence. Focused graph/query Vitest tests passed. |
 | 2026-06-06 | T004 Go validation planning hardening | Preferred GitHub Actions and Makefile evidence over generic host `go test ./...`, added CI run-step parsing for Go validation commands, and retained blocking behavior for Docker/devcontainer/repo guidance that forbids host commands. Focused verification-plan Vitest tests passed. |
 | 2026-06-06 | T005 read-only OneMount dogfood | Indexed and queried OneMount without modifying it. Go scope, symbol search, reference lookup, and validation safety improved over prior feedback; impact remains low-confidence local-only and blocked Docker validation needs approved command inference. Report: `.tmp/spec-015-go-dogfood-onemount-2026-06-06.md`. |
+| 2026-06-06 | T006 durable docs and closure | Promoted accepted Go parser-backed partial-semantic behavior, validation safety, and residual limits to durable docs. `pnpm typecheck`, `pnpm test`, `git diff --check`, and spec lifecycle scan passed before archival. |
 
 ## Residual Risks
 
@@ -35,3 +36,5 @@ last_reviewed: 2026-06-06
   selector edges. Keep unresolved or low-confidence evidence where needed.
 - Validation policy can be repository-specific; use generic policy detection
   and fixture-backed examples rather than sampled-repo special cases.
+- Docker-only repositories may need explicit validation policy or CI/Makefile
+  commands before Agent Workbench can plan the replacement container command.

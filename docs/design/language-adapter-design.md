@@ -3,7 +3,7 @@ title: Language adapter design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Language Adapter Design
@@ -69,7 +69,7 @@ routing, freshness behavior, and degraded-mode reporting.
 | TypeScript/JavaScript | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
 | C#/.NET | `resource_backed`, then `partial_semantic`, then `semantic` | `.sln`/`.csproj`/`.fsproj`/`.vbproj` project metadata, NuGet and test project discovery, generated-output policy, then `tree-sitter` and optional C# LSP |
 | CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser plus intrinsic resolver and source handler linking |
-| Go | `partial_semantic`, then `semantic` | Go parser, `gopls`, `go list`, `go test` |
+| Go | `partial_semantic`, then `semantic` | `tree-sitter-go` declarations/references, `go.mod`/Makefile/CI/Docker validation evidence, optional `gopls`, `go list`, `go test` enrichers only after promotion fixtures |
 | C/C++ | `resource_backed`, then `partial_semantic` | `tree-sitter` (mandatory), clangd/libclang when `compile_commands.json` exists |
 | Rust | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Rust parser/enrichment, Cargo metadata, `rust-analyzer`, `cargo test` |
 | SQL | `resource_backed`, then `partial_semantic` | dialect-aware parser, migration-tool integration, schema/table/column references |
@@ -146,10 +146,33 @@ OneMount dogfood confirmed the first Go slice should start before deep
 reference/impact work with file identity, project discovery, and basic routing
 symbols. A Go-heavy repository must surface `.go` files in scope, recognize
 `go.mod` and test/build configuration, and expose package-level declarations
-such as functions, types, methods, and `main` as `resource_backed` routing
-evidence. This first slice is not semantic Go support; references and impact
-must stay low confidence until parser-backed reference resolution and promotion
-fixtures prove stronger behavior.
+such as functions, types, methods, and `main` as routing evidence.
+
+The delivered Go promotion slice uses `tree-sitter-go` for parser-backed
+`partial_semantic` extraction. It records package names, imports, functions,
+types, methods with receiver metadata, selector references, and identifier
+references with parser provenance. The shared resolver may resolve same-package
+references and explicit import-selector references when first-party indexed
+files make the candidate unambiguous. Receiver-style method references and
+other parser-only edges remain low confidence, and unresolved ambiguity stays
+explicit rather than being promoted to whole-program Go semantics.
+
+Go query surfaces now consume the common graph path for `symbol_search`,
+`find_references`, `impact`, and `context_for_task`. `find_references` can
+return direct parser-backed Go references for package symbols. `impact`
+traverses those edges conservatively and labels low-confidence local or graph
+scope caveats. Build tags, generated symbols, type-inferred method calls, and
+compiler-backed package loading remain deferred until a separate promotion gate
+introduces optional `gopls`, `go list`, or compiler evidence.
+
+Go validation planning reads repo-local guidance and validation policy before
+generic language defaults. It prefers non-executed commands from GitHub Actions
+run steps, Makefile evidence, or explicit validation policy before suggesting
+generic host `go test ./...`. If repo guidance requires Docker, devcontainer,
+Nix, Bazel, or another constrained environment and no approved replacement
+command is available, the plan blocks generic host commands and reports the
+governing evidence. Docker Compose and devcontainer files are environment
+evidence, not proof that host commands are forbidden by themselves.
 
 The Modena AEC .NET dogfood comparison in
 [`docs/reference/dotnet/modena-aec-dotnet-evaluation-2026-06-05.md`](../reference/dotnet/modena-aec-dotnet-evaluation-2026-06-05.md)

@@ -2,7 +2,7 @@
 title: Go reference impact promotion tasks
 doc_type: spec
 artifact_type: tasks
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -96,7 +96,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     local-only for the sampled symbol, and validation planning blocks unsafe
     host commands without yet inferring a replacement Docker command.
 
-- [ ] T006 Promote docs, validate, and close.
+- [x] T006 Promote docs, validate, and close.
   - Depends on: T005
   - Files: `docs/design/language-adapter-design.md`,
     `docs/reference/language-capability-matrix.md`,
@@ -106,4 +106,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
   - Acceptance: Durable docs describe accepted Go reference, impact, and
     validation-planning behavior; full relevant validation passes before
     archival.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Promoted accepted Go behavior and
+    residual limits to durable language, MCP surface, capability-matrix, and
+    documentation-map docs. Full validation passed before archival:
+    `pnpm typecheck`, `pnpm test`, `git diff --check`, and spec lifecycle scan.

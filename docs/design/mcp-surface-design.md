@@ -3,7 +3,7 @@ title: MCP surface design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # MCP Surface Design
@@ -371,8 +371,12 @@ OneMount dogfood left Go and broad-scan follow-up items:
   result should return blocked/planned validation evidence rather than zero
   commands with no useful explanation.
 - Done: expose Go package, function, type, method, and `main` declarations as
-  `resource_backed` routing symbols while keeping references and impact low
-  confidence until semantic edges exist.
+  parser-backed partial-semantic routing symbols with package/import metadata.
+- Done: promote Go reference lookup and impact from declaration-only routing to
+  parser-backed low-confidence graph evidence. `find_references` can return
+  direct references for same-package and explicit import-selector cases, while
+  `impact` keeps local or graph-scope caveats instead of claiming whole-program
+  Go semantics.
 
 FreeCAD dogfood left C++ monorepo and Codex-discoverability follow-up items:
 
@@ -629,9 +633,13 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Future: add C# and Razor fixture-backed partial semantic support for
   controllers, services, Razor/Blazor components, EF contexts, migrations, and
   shared models using one approved implementation path.
-- Future: add Go parser-backed symbols and C/C++ reference/impact edges after
-  the language-adapter contract defines confidence, provenance, and integration
-  boundaries. Routing-only hits must stay clearly marked until then.
+- Done: add Go parser-backed symbols, direct references, and conservative
+  impact edges with confidence, provenance, and ambiguity caveats. The delivery
+  record is
+  [Spec 015](../specs/015-go-reference-impact-promotion/requirements.md).
+- Future: add C/C++ reference/impact edges after the language-adapter contract
+  defines confidence, provenance, and integration boundaries. Routing-only hits
+  must stay clearly marked until then.
 - Done: improve CMake/C++ routing and validation by prioritizing first-party
   source, adding heuristic include/same-file routing edges, and identifying
   likely CMake target command templates without executing commands or guessing
