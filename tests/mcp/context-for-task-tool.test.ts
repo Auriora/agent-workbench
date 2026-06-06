@@ -591,6 +591,86 @@ describe("context_for_task use case", () => {
     }
   });
 
+  it("surfaces grouped Lambda handler symbols and nearby files for Lambda-heavy tasks", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-lambda-context-"));
+    const repoRoot = path.resolve("tests/fixtures/fixture-sam-lambda-heavy-repo");
+    const store = openGraphStore(path.join(tempDir, "graph.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new PythonTreeSitterExtractorAdapter());
+    const scanner = new FileCatalogScannerAdapter();
+    const workspace = new WorkspaceFileAdapter({ repoRoot });
+    try {
+      await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner,
+        workspace,
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "2022"
+      });
+
+      const result = await getTaskContext({
+        request: {
+          task: "Update Lambda app.handler routing for orders and billing templates",
+          repo_root: repoRoot,
+          files: [],
+          symbols: ["app.handler"],
+          max_files: 8,
+          max_docs: 2
+        },
+        scanner,
+        graph: store,
+        snapshots: store,
+        catalog: store,
+        workspace,
+        default_repo_root: repoRoot
+      });
+
+      expect(result.context.related_files.map((file) => file.path)).toEqual(
+        expect.arrayContaining([
+          "infra/sam/orders/template.yaml",
+          "infra/sam/billing/template.yaml",
+          "src/orders/create/app.py",
+          "tests/orders/test_create_app.py"
+        ])
+      );
+      expect(result.context.ranked_symbols.map((candidate) => ({
+        name: candidate.symbol.name,
+        kind: candidate.symbol.kind,
+        signature: candidate.symbol.signature
+      })).slice(0, 4)).toEqual([
+        {
+          name: "src/billing/webhook/app.handler",
+          kind: "lambda_handler_binding",
+          signature: "BillingWebhookFunction -> src/billing/webhook/app.handler (template infra/sam/billing/template.yaml, handler file src/billing/webhook/app.py)"
+        },
+        {
+          name: "src/billing/webhook/app.py",
+          kind: "lambda_handler_file",
+          signature: "BillingWebhookFunction -> src/billing/webhook/app.py#handler (template infra/sam/billing/template.yaml)"
+        },
+        {
+          name: "src/orders/cancel/app.handler",
+          kind: "lambda_handler_binding",
+          signature: "OrdersCancelFunction -> src/orders/cancel/app.handler (template infra/sam/orders/template.yaml, handler file src/orders/cancel/app.py)"
+        },
+        {
+          name: "src/orders/cancel/app.py",
+          kind: "lambda_handler_file",
+          signature: "OrdersCancelFunction -> src/orders/cancel/app.py#handler (template infra/sam/orders/template.yaml)"
+        }
+      ]);
+    } finally {
+      store.close();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it("routes docs/config and test planning without predecessor backend names", async () => {
     const result = await getTaskContext({
       request: {

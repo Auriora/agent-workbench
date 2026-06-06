@@ -2,14 +2,19 @@
 title: Lambda result presentation requirements
 doc_type: spec
 artifact_type: requirements
-status: active
+status: archived
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Requirements
 
 ## Introduction
+
+Spec 008 closed on 2026-06-06. Accepted Lambda handler result presentation
+behavior was promoted to [MCP surface design](../../design/mcp-surface-design.md),
+[Language adapter design](../../design/language-adapter-design.md), and
+[Documentation map](../../reference/documentation-map.md).
 
 This spec promotes the Lambda-heavy repository presentation backlog into active
 work. The current SAM/CloudFormation resource-backed graph can expose logical

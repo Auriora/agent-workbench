@@ -295,6 +295,74 @@ describe("graph query use cases", () => {
     }
   });
 
+  it("groups generic Lambda handler results by logical ID, template, and handler file evidence", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-sam-lambda-heavy-repo", "223");
+    try {
+      const result = await searchSymbols({
+        request: {
+          query: "app.handler",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: [],
+          max_results: 10,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(result.symbols.symbols.map((symbol) => ({
+        kind: symbol.kind,
+        name: symbol.name,
+        signature: symbol.signature,
+        path: symbol.path
+      }))).toEqual([
+        {
+          kind: "lambda_handler_binding",
+          name: "src/billing/webhook/app.handler",
+          signature: "BillingWebhookFunction -> src/billing/webhook/app.handler (template infra/sam/billing/template.yaml, handler file src/billing/webhook/app.py)",
+          path: "infra/sam/billing/template.yaml"
+        },
+        {
+          kind: "lambda_handler_file",
+          name: "src/billing/webhook/app.py",
+          signature: "BillingWebhookFunction -> src/billing/webhook/app.py#handler (template infra/sam/billing/template.yaml)",
+          path: "src/billing/webhook/app.py"
+        },
+        {
+          kind: "lambda_handler_binding",
+          name: "src/orders/cancel/app.handler",
+          signature: "OrdersCancelFunction -> src/orders/cancel/app.handler (template infra/sam/orders/template.yaml, handler file src/orders/cancel/app.py)",
+          path: "infra/sam/orders/template.yaml"
+        },
+        {
+          kind: "lambda_handler_file",
+          name: "src/orders/cancel/app.py",
+          signature: "OrdersCancelFunction -> src/orders/cancel/app.py#handler (template infra/sam/orders/template.yaml)",
+          path: "src/orders/cancel/app.py"
+        },
+        {
+          kind: "lambda_handler_binding",
+          name: "src/orders/create/app.handler",
+          signature: "OrdersCreateFunction -> src/orders/create/app.handler (template infra/sam/orders/template.yaml, handler file src/orders/create/app.py)",
+          path: "infra/sam/orders/template.yaml"
+        },
+        {
+          kind: "lambda_handler_file",
+          name: "src/orders/create/app.py",
+          signature: "OrdersCreateFunction -> src/orders/create/app.py#handler (template infra/sam/orders/template.yaml)",
+          path: "src/orders/create/app.py"
+        }
+      ]);
+      expect(result.symbols.symbols.every((symbol) => symbol.capability_level === "resource_backed")).toBe(true);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
   it("falls back when exact matches exist only outside the requested languages", async () => {
     const fixture = await indexedFixture("tests/fixtures/fixture-sam-lambda-repo", "221");
     try {

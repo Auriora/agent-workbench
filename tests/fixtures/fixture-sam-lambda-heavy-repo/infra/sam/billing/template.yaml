@@ -1,0 +1,14 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  BillingWebhookFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/billing/webhook/app.handler
+      Runtime: python3.12
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /billing/webhook
+            Method: post

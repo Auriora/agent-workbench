@@ -1,0 +1,25 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  OrdersCreateFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/orders/create/app.handler
+      Runtime: python3.12
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /orders
+            Method: post
+  OrdersCancelFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: src/orders/cancel/app.handler
+      Runtime: python3.12
+      Events:
+        Api:
+          Type: Api
+          Properties:
+            Path: /orders/{orderId}/cancel
+            Method: post

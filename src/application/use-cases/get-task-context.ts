@@ -335,9 +335,14 @@ async function selectRankedSymbols(input: {
     }
   }
 
+  const expandedCandidates = await expandLambdaRankedSymbolCandidates({
+    graph: input.graph,
+    snapshot_id: resolved.snapshot_id,
+    candidates: Array.from(candidates.values()),
+    limit: input.limit
+  });
   const ranked = await Promise.all(
-    Array.from(candidates.values())
-      .sort((left, right) => right.score - left.score || left.node.file_path.localeCompare(right.node.file_path))
+    expandedCandidates
       .slice(0, input.limit)
       .map(async (candidate, index) => ({
         rank: index + 1,
@@ -370,6 +375,108 @@ async function selectRankedSymbols(input: {
           ]
         : []
   };
+}
+
+async function expandLambdaRankedSymbolCandidates(input: {
+  graph: GraphQueryPort;
+  snapshot_id: string;
+  candidates: Array<{ node: GraphNode; score: number; reason: string }>;
+  limit: number;
+}): Promise<Array<{ node: GraphNode; score: number; reason: string }>> {
+  const sorted = [...input.candidates].sort(compareRankedSymbolCandidates);
+  const expanded: Array<{ node: GraphNode; score: number; reason: string }> = [];
+  const seen = new Set<string>();
+  for (const candidate of sorted) {
+    if (!seen.has(candidate.node.id)) {
+      expanded.push(candidate);
+      seen.add(candidate.node.id);
+    }
+    if (candidate.node.kind === "lambda_handler_binding") {
+      const anchors = await lambdaHandlerFileAnchors({
+        graph: input.graph,
+        snapshot_id: input.snapshot_id,
+        node: candidate.node
+      });
+      for (const anchor of anchors) {
+        if (!seen.has(anchor.id)) {
+          expanded.push({
+            node: anchor,
+            score: candidate.score,
+            reason: "Matched Lambda handler file routing evidence for a grouped handler result."
+          });
+          seen.add(anchor.id);
+        }
+      }
+    }
+    if (expanded.length >= input.limit) {
+      break;
+    }
+  }
+  return expanded.slice(0, input.limit);
+}
+
+async function lambdaHandlerFileAnchors(input: {
+  graph: GraphQueryPort;
+  snapshot_id: string;
+  node: GraphNode;
+}): Promise<readonly GraphNode[]> {
+  const edges = await input.graph.getOutgoingEdges({
+    snapshot_id: input.snapshot_id,
+    node_id: input.node.id,
+    max_rows: 5
+  });
+  const anchors = await Promise.all(
+    edges
+      .filter((edge) => edge.kind === "routes_to_handler_file" && edge.target_node_id !== undefined)
+      .map((edge) =>
+        input.graph.getNode({
+          snapshot_id: input.snapshot_id,
+          node_id: edge.target_node_id ?? ""
+        })
+      )
+  );
+  return anchors.filter((node): node is GraphNode => node !== null).sort(compareLambdaNodes);
+}
+
+function compareRankedSymbolCandidates(
+  left: { node: GraphNode; score: number },
+  right: { node: GraphNode; score: number }
+): number {
+  if (isLambdaHandlerNode(left.node) && isLambdaHandlerNode(right.node)) {
+    return compareLambdaNodes(left.node, right.node) ||
+      right.score - left.score;
+  }
+  return right.score - left.score ||
+    compareLambdaNodes(left.node, right.node);
+}
+
+function isLambdaHandlerNode(node: GraphNode): boolean {
+  return node.kind === "lambda_handler_binding" || node.kind === "lambda_handler_file";
+}
+
+function compareLambdaNodes(left: GraphNode, right: GraphNode): number {
+  return lambdaTemplateKey(left).localeCompare(lambdaTemplateKey(right)) ||
+    lambdaLogicalId(left).localeCompare(lambdaLogicalId(right)) ||
+    lambdaKindRank(left) - lambdaKindRank(right) ||
+    left.name.localeCompare(right.name) ||
+    left.file_path.localeCompare(right.file_path);
+}
+
+function lambdaTemplateKey(node: GraphNode): string {
+  const value = node.metadata.template_path;
+  return typeof value === "string" ? value : node.file_path;
+}
+
+function lambdaLogicalId(node: GraphNode): string {
+  const value = node.metadata.logical_id;
+  return typeof value === "string" ? value : "";
+}
+
+function lambdaKindRank(node: GraphNode): number {
+  if (node.kind === "lambda_handler_binding") return 0;
+  if (node.kind === "lambda_handler_file") return 1;
+  if (node.kind === "lambda_function") return 2;
+  return 5;
 }
 
 function skippedWorkForCatalog(input: {

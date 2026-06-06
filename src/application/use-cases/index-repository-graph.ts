@@ -354,6 +354,7 @@ function lambdaHandlerFileAnchor(input: {
       semantic_scope: "file_level_handler_routing",
       handler: input.sourceNode.name,
       logical_id: input.sourceNode.metadata.logical_id,
+      template_path: input.sourceNode.file_path,
       handler_export_candidate: exportName
     }
   };

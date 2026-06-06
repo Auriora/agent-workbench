@@ -600,10 +600,13 @@ Post-closure dogfood caveats from large mixed-language repositories:
   low-confidence resource-backed template-to-handler-file routing rather than
   isolated zero-edge template evidence. Event-source, intrinsic-function, and
   dependency semantics remain future work.
-- Promoted to [Spec 008](../specs/008-lambda-result-presentation/requirements.md):
-  add Lambda-heavy repository presentation that groups generic `handler`
-  results by stack/service/logical ID, handler file, and event source while
-  preserving the compact graph contract.
+- Done: add Lambda-heavy repository presentation that groups generic
+  `handler` results by template path, logical ID, handler binding, and resolved
+  handler file while preserving the compact graph contract. Grouping uses
+  existing resource-backed metadata and bounded handler-file routing edges; it
+  does not infer stack, event-source, dependency, IAM, or deployment semantics.
+  The delivery record is
+  [Spec 008](../specs/008-lambda-result-presentation/requirements.md).
 - Done: add first-slice AWS validation planning evidence for SAM/CloudFormation
   repositories, including non-executed `cfn-lint`, `sam validate`, and nearby
   infrastructure pytest candidates when template/test evidence exists.

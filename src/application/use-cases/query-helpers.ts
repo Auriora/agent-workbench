@@ -109,7 +109,7 @@ export async function toSymbolReference(input: {
     path: input.node.file_path,
     language: input.node.language,
     source_range: input.node.source_range,
-    signature: input.node.signature,
+    signature: groupedLambdaSignature(input.node) ?? input.node.signature,
     docstring: input.node.docstring,
     capability_level: capabilityLevel,
     evidence_kinds: evidenceKinds,
@@ -169,6 +169,46 @@ function capabilityFromNode(node: GraphNode): CapabilityLevel {
     return value;
   }
   return capabilityForLanguage(node.language);
+}
+
+function groupedLambdaSignature(node: GraphNode): string | undefined {
+  if (node.kind === "lambda_handler_binding") {
+    const logicalId = stringMetadata(node, "logical_id");
+    const handlerFile = stringMetadata(node, "handler_file_candidate");
+    const base = `${logicalId ?? "Lambda handler"} -> ${node.name}`;
+    return handlerFile === undefined
+      ? `${base} (template ${node.file_path})`
+      : `${base} (template ${node.file_path}, handler file ${handlerFile})`;
+  }
+  if (node.kind === "lambda_handler_file") {
+    const logicalId = stringMetadata(node, "logical_id");
+    const exportName = stringMetadata(node, "handler_export_candidate");
+    const templatePath = stringMetadata(node, "template_path") ?? lambdaTemplatePathFromQualifiedName(node.qualified_name);
+    const target = exportName === undefined ? node.name : `${node.name}#${exportName}`;
+    return templatePath === undefined
+      ? `${logicalId ?? "Lambda handler"} -> ${target}`
+      : `${logicalId ?? "Lambda handler"} -> ${target} (template ${templatePath})`;
+  }
+  return undefined;
+}
+
+function stringMetadata(node: GraphNode, key: string): string | undefined {
+  const value = node.metadata[key];
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function lambdaTemplatePathFromQualifiedName(qualifiedName: string | undefined): string | undefined {
+  if (qualifiedName === undefined) {
+    return undefined;
+  }
+  const marker = ":file:";
+  const markerIndex = qualifiedName.indexOf(marker);
+  const prefix = markerIndex >= 0 ? qualifiedName.slice(0, markerIndex) : qualifiedName;
+  const logicalSeparator = prefix.lastIndexOf(":");
+  if (logicalSeparator <= 0) {
+    return undefined;
+  }
+  return prefix.slice(0, logicalSeparator);
 }
 
 function evidenceFromNode(node: GraphNode): EvidenceKind[] {

@@ -276,6 +276,14 @@ routing edges are low-confidence file-level evidence. The adapter does not yet
 resolve intrinsic functions, event-source dependencies, or template-to-source
 handler symbols as semantic graph relationships.
 
+Lambda-heavy result presentation groups generic handler queries using existing
+resource-backed metadata. `symbol_search` and `context_for_task` order handler
+binding and handler-file anchor results by template path, logical ID, and
+handler file, and annotate signatures with compact routing context such as the
+logical ID, template path, and resolved handler file. This grouping uses
+existing graph nodes and bounded outgoing handler-file edges only; it does not
+add stack, event-source, IAM, dependency, or deployment semantics.
+
 ## Promotion Gates
 
 - exact-symbol correctness

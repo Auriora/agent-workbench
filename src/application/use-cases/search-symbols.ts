@@ -68,7 +68,12 @@ export async function searchSymbols(input: {
         }),
         exactMiss: false
       };
-  const nodes = searchResult.nodes;
+  const nodes = await expandLambdaHandlerGroups({
+    graph: input.graph,
+    snapshot_id: resolved.snapshot_id,
+    nodes: searchResult.nodes,
+    max_rows: input.request.max_results
+  });
   const exactMiss = searchResult.exactMiss;
   const filtered = filterByLanguages(nodes, input.request.languages);
 
@@ -231,6 +236,91 @@ function filterByLanguages(nodes: readonly GraphNode[], languages: readonly stri
   return languages.length > 0
     ? nodes.filter((node) => languages.includes(node.language))
     : nodes;
+}
+
+async function expandLambdaHandlerGroups(input: {
+  graph: GraphQueryPort;
+  snapshot_id: string;
+  nodes: readonly GraphNode[];
+  max_rows: number;
+}): Promise<readonly GraphNode[]> {
+  const grouped: GraphNode[] = [];
+  const seen = new Set<string>();
+  for (const node of rankLambdaHandlerNodes(input.nodes)) {
+    if (!seen.has(node.id)) {
+      grouped.push(node);
+      seen.add(node.id);
+    }
+    if (node.kind === "lambda_handler_binding") {
+      const anchors = await lambdaHandlerFileAnchors({
+        graph: input.graph,
+        snapshot_id: input.snapshot_id,
+        node
+      });
+      for (const anchor of anchors) {
+        if (!seen.has(anchor.id)) {
+          grouped.push(anchor);
+          seen.add(anchor.id);
+        }
+      }
+    }
+    if (grouped.length >= input.max_rows) {
+      break;
+    }
+  }
+  return grouped.slice(0, input.max_rows);
+}
+
+async function lambdaHandlerFileAnchors(input: {
+  graph: GraphQueryPort;
+  snapshot_id: string;
+  node: GraphNode;
+}): Promise<readonly GraphNode[]> {
+  const edges = await input.graph.getOutgoingEdges({
+    snapshot_id: input.snapshot_id,
+    node_id: input.node.id,
+    max_rows: 5
+  });
+  const anchors = await Promise.all(
+    edges
+      .filter((edge) => edge.kind === "routes_to_handler_file" && edge.target_node_id !== undefined)
+      .map((edge) =>
+        input.graph.getNode({
+          snapshot_id: input.snapshot_id,
+          node_id: edge.target_node_id ?? ""
+        })
+      )
+  );
+  return anchors.filter((node): node is GraphNode => node !== null).sort(compareLambdaGroupNodes);
+}
+
+function rankLambdaHandlerNodes(nodes: readonly GraphNode[]): GraphNode[] {
+  return [...nodes].sort(compareLambdaGroupNodes);
+}
+
+function compareLambdaGroupNodes(left: GraphNode, right: GraphNode): number {
+  return lambdaTemplateKey(left).localeCompare(lambdaTemplateKey(right)) ||
+    lambdaLogicalId(left).localeCompare(lambdaLogicalId(right)) ||
+    lambdaKindRank(left) - lambdaKindRank(right) ||
+    left.name.localeCompare(right.name) ||
+    left.file_path.localeCompare(right.file_path);
+}
+
+function lambdaTemplateKey(node: GraphNode): string {
+  const value = node.metadata.template_path;
+  return typeof value === "string" ? value : node.file_path;
+}
+
+function lambdaLogicalId(node: GraphNode): string {
+  const value = node.metadata.logical_id;
+  return typeof value === "string" ? value : "";
+}
+
+function lambdaKindRank(node: GraphNode): number {
+  if (node.kind === "lambda_handler_binding") return 0;
+  if (node.kind === "lambda_handler_file") return 1;
+  if (node.kind === "lambda_function") return 2;
+  return 5;
 }
 
 function dedupeNodes<T extends { id: string }>(nodes: readonly T[]): T[] {
