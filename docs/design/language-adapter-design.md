@@ -124,6 +124,24 @@ conventions, React page/component areas, and nearby tests. Symbol, export,
 import, and route-level navigation should be promoted only after fixture-backed
 adapter tests prove the extracted evidence and confidence labels.
 
+The delivered TypeScript/JavaScript partial-semantic slice uses
+`tree-sitter-javascript` for JS/JSX and `tree-sitter-typescript` for TS/TSX.
+It classifies `.js`, `.jsx`, `.mjs`, `.cjs`, `.ts`, `.tsx`, `.mts`, and `.cts`
+files as parser-backed `partial_semantic` evidence, extracts module, function,
+class, method, constant, and type declarations, and records import/export
+references with parser provenance, confidence, and module-specifier metadata.
+Relative import references are resolved by the shared graph resolver when the
+target name is unique; ambiguous or unresolved imports remain explicit
+unresolved references. Query and context surfaces use the common graph path for
+`symbol_search`, `find_references`, `impact`, and `context_for_task`, including
+low-confidence parser-backed impact caveats when an edge is useful but not
+semantic proof. Package-manager validation planning uses package-local
+`package.json`, lockfile, workspace, and `tsconfig` evidence, and repo-local
+validation policy or blocked host-command evidence takes precedence over
+generic package-manager commands. Compiler APIs, `tsserver`, bundler execution,
+framework-specific route/component hierarchy edges, and cross-language JS/TS
+symbols remain deferred until separate fixture-backed promotion gates exist.
+
 OneMount dogfood confirmed the first Go slice should start before deep
 reference/impact work with file identity, project discovery, and basic routing
 symbols. A Go-heavy repository must surface `.go` files in scope, recognize

@@ -2,12 +2,15 @@
 title: TypeScript JavaScript partial semantic routing design
 doc_type: spec
 artifact_type: design
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
 
 # Technical Design
+
+Spec 014 closed on 2026-06-06. Accepted behavior was promoted to durable
+design/reference docs; this package remains as delivery evidence.
 
 ## Overview
 

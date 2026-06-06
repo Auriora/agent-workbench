@@ -568,6 +568,11 @@ Post-closure dogfood caveats from large mixed-language repositories:
   was driven by path terms, package boundaries, workspace config,
   route/controller/service conventions, or lexical snippets rather than
   semantic graph edges.
+- Done: promote TypeScript/JavaScript query surfaces to parser-backed
+  partial-semantic evidence. `symbol_search`, `find_references`, `impact`, and
+  `context_for_task` now consume JS/TS declaration and import/export graph
+  evidence through the shared presenters, with low-confidence parser-backed
+  caveats instead of resource-backed infrastructure wording.
 - Done: avoid redacting ordinary in-repo source snippets such as URL paths,
   route fragments, and API route strings as outside-repo filesystem paths.
   Presentation redaction preserves source text by default, redacts embedded

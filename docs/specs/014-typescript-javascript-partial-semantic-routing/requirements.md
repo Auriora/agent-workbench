@@ -2,12 +2,19 @@
 title: TypeScript JavaScript partial semantic routing requirements
 doc_type: spec
 artifact_type: requirements
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
 
 # Requirements
+
+Spec 014 closed on 2026-06-06. Accepted TypeScript/JavaScript
+partial-semantic routing behavior was promoted to
+[Language adapter design](../../design/language-adapter-design.md),
+[MCP surface design](../../design/mcp-surface-design.md),
+[Language capability matrix](../../reference/language-capability-matrix.md),
+and [Documentation map](../../reference/documentation-map.md).
 
 ## Introduction
 

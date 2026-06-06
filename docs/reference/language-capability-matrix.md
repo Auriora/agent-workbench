@@ -40,7 +40,7 @@ promotion gates are owned by [Language adapter design](../design/language-adapte
 | --- | --- | --- | --- |
 | 1 | Markdown/config | `resource_backed` | deterministic parsers, path/link extraction, project config discovery |
 | 2 | Python | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Python AST enrichment, Pyright/LSP, Ruff, pytest |
-| 3 | TypeScript/JavaScript | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
+| 3 | TypeScript/JavaScript | `partial_semantic`, then `semantic` | `tree-sitter-javascript` and `tree-sitter-typescript` declaration/import/export extraction, package/workspace/`tsconfig` routing, package-local validation planning, optional TypeScript compiler API or `tsserver` only after promotion fixtures |
 | 4 | C#/.NET | `resource_backed`, then `partial_semantic`, then `semantic` | `.sln`/`.csproj`/`.fsproj`/`.vbproj` project metadata, NuGet and test project discovery, generated-output policy, then `tree-sitter` and optional C# LSP |
 | 5 | CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser plus intrinsic resolver and source handler linking |
 | 6 | Go | `resource_backed`, then `partial_semantic`, then `semantic` | `.go` file identity, `go.mod`/Makefile/Docker test discovery, routing-only package/function/type/method extraction, then parser-backed references, `gopls`, `go list`, `go test` |

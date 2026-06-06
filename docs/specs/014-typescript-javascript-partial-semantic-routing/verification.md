@@ -2,7 +2,7 @@
 title: TypeScript JavaScript partial semantic routing verification
 doc_type: spec
 artifact_type: verification
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -27,6 +27,7 @@ last_reviewed: 2026-06-06
 | 2026-06-06 | T004 parser-backed declaration, import, and export extraction | Added JS/TS tree-sitter extractor registration, parser-backed partial-semantic capability labels, declaration nodes, and unresolved import/export references with provenance and confidence metadata. `pnpm typecheck`, `pnpm exec vitest run tests/graph/extraction-pipeline.test.ts`, and focused affected MCP/runtime/integration tests passed. |
 | 2026-06-06 | T005 JS/TS query and context surfaces | Proved JS/TS parser-backed symbols, resolved import references, bounded impact, and graph-ranked task context through shared query surfaces. Corrected impact caveats for low-confidence parser-backed graph edges. `pnpm exec vitest run tests/graph/query-tools.test.ts` passed. |
 | 2026-06-06 | T006 JS/TS validation planning evidence review | Confirmed existing planner coverage for package-local JS/TS scripts, workspace/lockfile/tsconfig evidence, repo-local validation policy commands, host-command blocking, and advisory Docker/devcontainer evidence. `pnpm test` passed after T005, covering the relevant verification-plan cases. |
+| 2026-06-06 | T007 durable promotion and archival | Promoted accepted JS/TS behavior and semantic limits into durable language-adapter, MCP-surface, language-matrix, and documentation-map docs, then archived the spec package. `pnpm typecheck`, `pnpm test`, spec lifecycle scan, and `git diff --check` passed. |
 
 ## Residual Risks
 

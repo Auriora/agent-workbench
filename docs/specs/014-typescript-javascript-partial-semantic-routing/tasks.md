@@ -2,12 +2,15 @@
 title: TypeScript JavaScript partial semantic routing tasks
 doc_type: spec
 artifact_type: tasks
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
 
 # Tasks
+
+Spec 014 closed on 2026-06-06. All tasks are complete and accepted behavior
+was promoted to durable design/reference docs.
 
 ## Task Dependency Graph
 
@@ -105,7 +108,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
     commands, Docker-only host blocking, and advisory Docker/devcontainer
     evidence. Validation: `pnpm test` passed after T005, covering these cases.
 
-- [ ] T007 Promote docs, validate, and close.
+- [x] T007 Promote docs, validate, and close.
   - Depends on: T005, T006
   - Files: `docs/design/language-adapter-design.md`,
     `docs/reference/language-capability-matrix.md`,
@@ -114,4 +117,8 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
     `docs/specs/014-typescript-javascript-partial-semantic-routing/`
   - Acceptance: Durable docs describe accepted behavior and remaining JS/TS
     semantic gaps; full relevant validation passes before archival.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Promoted JS/TS parser-backed
+    partial-semantic behavior, query/context surfaces, validation planning, and
+    deferred semantic limits into durable design/reference docs, then archived
+    the spec package. Validation: `pnpm typecheck`, `pnpm test`, spec lifecycle
+    scan, and `git diff --check` passed before closure.
