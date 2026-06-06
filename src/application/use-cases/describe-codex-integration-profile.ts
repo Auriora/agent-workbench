@@ -140,6 +140,13 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         description: "Codex feature, plugin, skill, hook, and update-path profile."
       },
       {
+        name: "integration-health",
+        uri: "integration:///health/agent-workbench",
+        kind: "resource",
+        capability_class: "read_only",
+        description: "Configured Agent Workbench MCP health for registered, advertised, caller-discovered, and callable surfaces."
+      },
+      {
         name: "context_for_task",
         kind: "tool",
         capability_class: "read_only",

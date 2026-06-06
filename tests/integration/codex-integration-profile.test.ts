@@ -99,6 +99,12 @@ describe("Codex integration profile", () => {
           capability_class: "workspace_write"
         }),
         expect.objectContaining({
+          name: "integration-health",
+          uri: "integration:///health/agent-workbench",
+          kind: "resource",
+          capability_class: "read_only"
+        }),
+        expect.objectContaining({
           name: "scope",
           uri: "repo:///scope",
           kind: "resource",
@@ -227,6 +233,7 @@ describe("Codex integration profile", () => {
     };
 
     expect(Object.keys(server._registeredResources).sort()).toEqual([
+      "integration:///health/agent-workbench",
       "integration:///profiles/codex",
       "repo:///docs/map",
       "repo:///docs/overview",

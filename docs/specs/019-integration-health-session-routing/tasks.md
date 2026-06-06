@@ -15,27 +15,41 @@ last_reviewed: 2026-06-06
 T001 -> T002 -> T003 -> T004 -> T005 -> T006
 ```
 
-- [ ] T001 Decide contextual routing model.
+- [x] T001 Decide contextual routing model.
   - Files: `docs/specs/019-integration-health-session-routing/design.md`,
     `docs/design/mcp-surface-design.md`
   - Acceptance: Design records stable router/startup/session/hybrid decision
     and explains hidden, unavailable, blocked, and available capabilities.
-  - Evidence: Pending.
+  - Evidence: Chose a conservative hybrid in `design.md` and promoted the
+    routing decision to `docs/design/mcp-surface-design.md`: keep explicit
+    startup registration, add stable integration-health state, use shared
+    session-aware next-action filtering, and defer generic dynamic invocation.
 
-- [ ] T002 Add integration health contracts and fixtures.
+- [x] T002 Add integration health contracts and fixtures.
   - Depends on: T001
   - Files: `src/contracts/`, `tests/mcp/`, `tests/integration/`
   - Acceptance: Contract supports configured, registered, advertised,
     discovered, callable, unavailable, blocked, and unknown states.
-  - Evidence: Pending.
+  - Evidence: Added `integrationHealthSchema`,
+    `integrationSurfaceHealthSchema`, session evidence, caller discovery, and
+    callable-state contracts in `src/contracts/runtime-contracts.ts`; added
+    contract and MCP fixture tests in
+    `tests/contracts/runtime-contracts.test.ts` and
+    `tests/mcp/integration-health-contract.test.ts`.
+  - Evidence: Validation passed with focused contract/MCP/profile tests and
+    `pnpm typecheck`.
 
-- [ ] T003 Implement integration health provider and MCP surface.
+- [x] T003 Implement integration health provider and MCP surface.
   - Depends on: T002
   - Files: `src/application/`, `src/presentation/`, `src/interface-adapters/mcp/`,
     `src/server.ts`, `tests/mcp/`
   - Acceptance: Health surface returns compact repo/session/runtime health
     without executing tools.
-  - Evidence: Pending.
+  - Evidence: Added `getIntegrationHealth`, integration health presenter,
+    `integration:///health/agent-workbench` MCP resource, composed-server
+    wiring, profile/registry alignment updates, and MCP resource tests.
+    Validation passed with focused contract/MCP/profile tests and
+    `pnpm typecheck`.
 
 - [ ] T004 Add shared session-aware next-action presenter helper.
   - Depends on: T002

@@ -959,6 +959,92 @@ export type ResponseEnvelope<T> = {
   errors: RuntimeError[];
 };
 
+export const mcpSurfaceKindSchema = z.enum(["tool", "resource", "prompt"]);
+export type McpSurfaceKind = z.infer<typeof mcpSurfaceKindSchema>;
+
+export const integrationSurfaceStatusSchema = z.enum([
+  "available",
+  "unavailable",
+  "blocked",
+  "hidden",
+  "unknown"
+]);
+export type IntegrationSurfaceStatus = z.infer<typeof integrationSurfaceStatusSchema>;
+
+export const callerDiscoveryStateSchema = z.enum([
+  "discovered",
+  "not_discovered",
+  "unknown"
+]);
+export type CallerDiscoveryState = z.infer<typeof callerDiscoveryStateSchema>;
+
+export const callableStateSchema = z.enum(["callable", "not_callable", "unknown"]);
+export type CallableState = z.infer<typeof callableStateSchema>;
+
+export const integrationSurfaceHealthSchema = z
+  .object({
+    name: z.string(),
+    kind: mcpSurfaceKindSchema,
+    uri: z.string().optional(),
+    configured: z.boolean(),
+    registered: z.boolean(),
+    advertised: z.boolean(),
+    caller_discovery: callerDiscoveryStateSchema,
+    callable: callableStateSchema,
+    status: integrationSurfaceStatusSchema,
+    reason: z.string(),
+    evidence_kinds: z.array(evidenceKindSchema),
+    capability_class: toolCapabilityClassSchema.optional(),
+    discovery_action: nextActionSchema.optional(),
+    replacement_action: nextActionSchema.optional()
+  })
+  .strict();
+export type IntegrationSurfaceHealth = z.infer<typeof integrationSurfaceHealthSchema>;
+
+export const integrationSessionEvidenceSchema = z
+  .object({
+    client: z.string().optional(),
+    discovery_state: z.enum(["provided", "unknown"]),
+    discovered_tools: z.array(z.string()).default([]),
+    discovered_resources: z.array(z.string()).default([]),
+    discovered_prompts: z.array(z.string()).default([])
+  })
+  .strict();
+export type IntegrationSessionEvidence = z.infer<typeof integrationSessionEvidenceSchema>;
+
+export const integrationHealthSchema = z
+  .object({
+    repo_root: z.string(),
+    runtime_version: z.string(),
+    profile: z.string(),
+    session: integrationSessionEvidenceSchema,
+    surfaces: z.array(integrationSurfaceHealthSchema),
+    counts: z
+      .object({
+        available: z.number().int().nonnegative(),
+        unavailable: z.number().int().nonnegative(),
+        blocked: z.number().int().nonnegative(),
+        hidden: z.number().int().nonnegative(),
+        unknown: z.number().int().nonnegative()
+      })
+      .strict(),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type IntegrationHealth = z.infer<typeof integrationHealthSchema>;
+
+export const integrationHealthRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    client: z.string().optional(),
+    discovery_state: z.enum(["provided", "unknown"]).default("unknown"),
+    discovered_tools: z.array(z.string()).default([]),
+    discovered_resources: z.array(z.string()).default([]),
+    discovered_prompts: z.array(z.string()).default([])
+  })
+  .strict();
+export type IntegrationHealthRequest = z.infer<typeof integrationHealthRequestSchema>;
+
 export const agentIntegrationSurfaceSchema = z.enum([
   "mcp",
   "instructions",

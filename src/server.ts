@@ -8,6 +8,10 @@ import {
 import { computeImpact } from "./application/use-cases/compute-impact.js";
 import { diagnoseChangedFiles } from "./application/use-cases/diagnose-changed-files.js";
 import { findReferences } from "./application/use-cases/find-references.js";
+import {
+  getIntegrationHealth,
+  type IntegrationSurfaceInput
+} from "./application/use-cases/get-integration-health.js";
 import { getTaskContext } from "./application/use-cases/get-task-context.js";
 import { getRepoOverview } from "./application/use-cases/get-repo-overview.js";
 import { getRepoScope } from "./application/use-cases/get-repo-scope.js";
@@ -52,6 +56,12 @@ import {
 } from "./infrastructure/tree-sitter/index.js";
 import { SystemClockAdapter } from "./infrastructure/time/index.js";
 import { createAgentWorkbenchServer as createAgentWorkbenchMcpServer } from "./interface-adapters/mcp/server.js";
+import {
+  mcpPrompts,
+  mcpResources,
+  mcpTools
+} from "./interface-adapters/mcp/registries/index.js";
+import { describeCodexIntegrationProfile } from "./application/use-cases/describe-codex-integration-profile.js";
 
 export type AgentWorkbenchServerOptions = {
   startGraphWarmup?: boolean;
@@ -222,6 +232,14 @@ export function createAgentWorkbenchServer(
         scanner,
         workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
+      }),
+    getIntegrationHealth: ({ request }) =>
+      getIntegrationHealth({
+        request,
+        default_repo_root: absoluteRepoRoot,
+        runtime_version: "0.1.0",
+        profile: "codex",
+        surfaces: registeredIntegrationSurfaces()
       })
   });
 
@@ -269,4 +287,24 @@ function graphStorePath(repoRoot: string): string {
   const cacheDir = path.join(repoRoot, ".cache", "agent-workbench");
   fs.mkdirSync(cacheDir, { recursive: true });
   return path.join(cacheDir, "graph.sqlite");
+}
+
+function registeredIntegrationSurfaces(): IntegrationSurfaceInput[] {
+  const profile = describeCodexIntegrationProfile();
+  const advertised = new Set(
+    profile.mcp_bindings.map((binding) => `${binding.kind}:${binding.name}`)
+  );
+
+  return [...mcpResources, ...mcpTools, ...mcpPrompts].map((surface) => {
+    const key = `${surface.kind}:${surface.name}`;
+    return {
+      name: surface.name,
+      kind: surface.kind,
+      uri: "uri" in surface ? surface.uri : undefined,
+      configured: advertised.has(key),
+      registered: true,
+      advertised: advertised.has(key),
+      capability_class: surface.metadata.capability_class
+    };
+  });
 }

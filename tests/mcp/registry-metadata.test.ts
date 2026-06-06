@@ -15,6 +15,7 @@ describe("MCP registry metadata", () => {
       "resource:codex-integration-profile",
       "resource:docs-map",
       "resource:docs-overview",
+      "resource:integration-health",
       "resource:overview",
       "resource:scope",
       "resource:status",
@@ -78,7 +79,8 @@ describe("MCP registry metadata", () => {
       "overview",
       "docs-overview",
       "docs-map",
-      "codex-integration-profile"
+      "codex-integration-profile",
+      "integration-health"
     ]) {
       expect(byName.get(name)).toMatchObject({
         capability_class: "read_only",

@@ -12,6 +12,7 @@ import type {
   DocsSearchRequest,
   FindReferencesRequest,
   ImpactRequest,
+  IntegrationHealthRequest,
   PreviewWorkspaceEditRequest,
   SymbolSearchRequest,
   TaskContextRequest,
@@ -33,6 +34,7 @@ import type {
   DocsSearchUseCaseResult
 } from "../../../application/use-cases/query-docs.js";
 import type { FindReferencesUseCaseResult } from "../../../application/use-cases/find-references.js";
+import type { GetIntegrationHealthResult } from "../../../application/use-cases/get-integration-health.js";
 import type { GetRepoOverviewResult } from "../../../application/use-cases/get-repo-overview.js";
 import type { GetRepoScopeResult } from "../../../application/use-cases/get-repo-scope.js";
 import type { GetTaskContextResult } from "../../../application/use-cases/get-task-context.js";
@@ -41,6 +43,7 @@ import type { PlanVerificationResult } from "../../../application/use-cases/plan
 import type { PreviewWorkspaceEditUseCaseResult } from "../../../application/use-cases/preview-workspace-edit.js";
 import type { SearchSymbolsResult } from "../../../application/use-cases/search-symbols.js";
 import { codexIntegrationProfileResource } from "./resources/codex-integration-profile.js";
+import { integrationHealthResource } from "./resources/integration-health.js";
 import { checkMarkdownDocumentTool } from "./tools/check-markdown-document.js";
 import { checkMarkdownSetTool } from "./tools/check-markdown-set.js";
 import { docsMapResource } from "./resources/docs-map.js";
@@ -81,6 +84,7 @@ export type McpRegistryContext = {
   applyWorkspaceEdit?: (input: { request: ApplyWorkspaceEditRequest }) => Promise<ApplyWorkspaceEditUseCaseResult> | ApplyWorkspaceEditUseCaseResult;
   planVerification?: (input: { request: VerificationPlanRequest }) => Promise<PlanVerificationResult> | PlanVerificationResult;
   describeCodexIntegrationProfile?: () => CodexIntegrationProfile;
+  getIntegrationHealth?: (input: { request: IntegrationHealthRequest }) => Promise<GetIntegrationHealthResult> | GetIntegrationHealthResult;
 };
 
 export type McpResourceDeclaration = {
@@ -128,7 +132,8 @@ export const mcpResources: McpResourceDeclaration[] = [
   repoOverviewResource,
   docsOverviewResource,
   docsMapResource,
-  codexIntegrationProfileResource
+  codexIntegrationProfileResource,
+  integrationHealthResource
 ];
 
 export const mcpTools: McpToolDeclaration[] = [

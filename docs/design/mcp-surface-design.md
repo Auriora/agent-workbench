@@ -50,6 +50,16 @@ public name, description, parameter descriptions, and expected return
 structure. Names should describe the action in agent terms, not backend
 implementation terms.
 
+Contextual routing uses a conservative hybrid model. Public resources and tools
+remain explicitly registered at startup for discoverability, while a stable
+integration-health surface reports configured, registered, advertised,
+caller-discovered, callable, unavailable, blocked, hidden, and unknown states.
+Presenters must use shared session-aware filtering before emitting executable
+`next_actions`; useful unavailable actions are labeled as unavailable caveats
+instead of being presented as callable. A generic dynamic invocation router is
+deferred until fixture evidence proves it improves agent outcomes without
+becoming a fallback shell.
+
 Shared argument parsers must handle repo paths, file paths, line/column pairs,
 booleans, enums, limits, payload modes, and usage context. Invalid input returns
 structured contract errors before any use case runs.
@@ -98,6 +108,8 @@ analysis or the failure changes the recommended next action.
 - `repo:///scope`
 - `repo:///docs/overview`
 - `repo:///docs/map`
+- `integration:///health/agent-workbench`
+- `integration:///profiles/codex`
 
 These resources must be cheap, bounded, and backed by current snapshot metadata.
 They must not trigger broad graph analysis.
@@ -136,6 +148,19 @@ templates, update notes, generated output, vendor docs, and fixture material.
 headings. Both resources preserve skipped-path evidence for unreadable,
 generated, vendor, hidden, gitignored, missing, or permission-denied docs
 without failing the whole resource.
+
+`integration:///health/agent-workbench` is the stable read-only MCP health
+surface. It reports configured, registered, advertised, caller-discovered,
+callable, unavailable, blocked, hidden, and unknown state for public resources,
+tools, and prompts. It accepts optional caller discovery evidence; absent
+evidence remains `unknown` and must not be treated as callable proof. The
+health resource does not execute tools, inspect client internals, or mutate the
+workspace.
+
+`integration:///profiles/codex` describes the configured Codex wrapper,
+plugin, skill, hook, packaging, and MCP binding model. It is documentation and
+configuration evidence, not proof that a specific Codex session exposed every
+configured binding.
 
 ## MVP Tools
 

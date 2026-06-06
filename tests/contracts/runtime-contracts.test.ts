@@ -15,6 +15,7 @@ import {
   findReferencesResultSchema,
   impactRequestSchema,
   impactResultSchema,
+  integrationHealthSchema,
   previewWorkspaceEditRequestSchema,
   previewWorkspaceEditResultSchema,
   repoOverviewSchema,
@@ -150,6 +151,123 @@ describe("runtime contracts", () => {
     expect(responseEnvelopeSchema(z.object({ ok: z.literal(true) })).parse(envelope)).toEqual(
       envelope
     );
+  });
+
+  it("models integration health with explicit session callability states", () => {
+    const health = integrationHealthSchema.parse({
+      repo_root: "/repo",
+      runtime_version: "0.1.0",
+      profile: "codex",
+      session: {
+        client: "codex",
+        discovery_state: "provided",
+        discovered_tools: ["context_for_task"],
+        discovered_resources: ["repo:///status"]
+      },
+      surfaces: [
+        {
+          name: "context_for_task",
+          kind: "tool",
+          configured: true,
+          registered: true,
+          advertised: true,
+          caller_discovery: "discovered",
+          callable: "callable",
+          status: "available",
+          reason: "The active client session discovered this registered tool.",
+          evidence_kinds: ["config"],
+          capability_class: "read_only"
+        },
+        {
+          name: "impact",
+          kind: "tool",
+          configured: true,
+          registered: true,
+          advertised: true,
+          caller_discovery: "not_discovered",
+          callable: "not_callable",
+          status: "unavailable",
+          reason: "The configured tool was not discovered by the active client session.",
+          evidence_kinds: ["config"],
+          capability_class: "read_only",
+          discovery_action: {
+            tool: "context_for_task",
+            args: { task: "Check available Agent Workbench tools" }
+          }
+        },
+        {
+          name: "find_references",
+          kind: "tool",
+          configured: true,
+          registered: true,
+          advertised: true,
+          caller_discovery: "unknown",
+          callable: "unknown",
+          status: "unknown",
+          reason: "Caller-discovered tool evidence was not provided.",
+          evidence_kinds: ["config"],
+          capability_class: "read_only"
+        },
+        {
+          name: "apply_workspace_edit",
+          kind: "tool",
+          configured: true,
+          registered: true,
+          advertised: true,
+          caller_discovery: "discovered",
+          callable: "not_callable",
+          status: "blocked",
+          reason: "Workspace mutation is blocked until a matching preview token is supplied.",
+          evidence_kinds: ["config"],
+          capability_class: "workspace_write",
+          replacement_action: {
+            tool: "preview_workspace_edit",
+            args: { edits: [] }
+          }
+        },
+        {
+          name: "dynamic",
+          kind: "tool",
+          configured: false,
+          registered: false,
+          advertised: false,
+          caller_discovery: "unknown",
+          callable: "not_callable",
+          status: "hidden",
+          reason: "Generic dynamic invocation is intentionally deferred.",
+          evidence_kinds: ["docs"]
+        }
+      ],
+      counts: {
+        available: 1,
+        unavailable: 1,
+        blocked: 1,
+        hidden: 1,
+        unknown: 1
+      },
+      next_actions: [{ tool: "context_for_task", args: { task: "Inspect repository" } }]
+    });
+
+    expect(health.session.discovered_prompts).toEqual([]);
+    expect(health.surfaces.map((surface) => surface.status).sort()).toEqual([
+      "available",
+      "blocked",
+      "hidden",
+      "unavailable",
+      "unknown"
+    ]);
+    expect(() =>
+      integrationHealthSchema.parse({
+        ...health,
+        surfaces: [
+          {
+            ...health.surfaces[0],
+            caller_discovery: "discovered",
+            callable: "maybe"
+          }
+        ]
+      })
+    ).toThrow();
   });
 
   it("models bounded task context requests and responses", () => {
