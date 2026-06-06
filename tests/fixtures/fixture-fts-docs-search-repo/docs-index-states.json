@@ -1,0 +1,24 @@
+{
+  "states": [
+    {
+      "state": "cold",
+      "expected_status": "degraded",
+      "reason": "Docs FTS index has not been built for this repository."
+    },
+    {
+      "state": "stale",
+      "expected_status": "degraded",
+      "reason": "Docs FTS index snapshot does not match the current catalog snapshot."
+    },
+    {
+      "state": "invalid",
+      "expected_status": "blocked",
+      "reason": "Docs FTS schema version is incompatible with the runtime schema."
+    },
+    {
+      "state": "unavailable",
+      "expected_status": "blocked",
+      "reason": "Docs FTS query provider is not configured."
+    }
+  ]
+}
