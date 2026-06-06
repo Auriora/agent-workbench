@@ -51,12 +51,16 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     Validation passed with focused contract/MCP/profile tests and
     `pnpm typecheck`.
 
-- [ ] T004 Add shared session-aware next-action presenter helper.
+- [x] T004 Add shared session-aware next-action presenter helper.
   - Depends on: T002
   - Files: `src/presentation/`, `tests/contracts/`, `tests/mcp/`
   - Acceptance: Helper filters callable actions, labels unavailable actions,
     and handles unknown session evidence conservatively.
-  - Evidence: Pending.
+  - Evidence: Added `sessionAwareNextActions` in
+    `src/presentation/metadata.ts` with callable filtering, unavailable action
+    labels, and unknown-discovery assumptions while preserving existing
+    `capNextActions` behavior. Validation passed with focused presentation,
+    contract, and integration-health tests plus `pnpm typecheck`.
 
 - [ ] T005 Apply helper to public presenters.
   - Depends on: T004

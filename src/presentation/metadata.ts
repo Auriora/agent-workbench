@@ -5,6 +5,8 @@ import type {
   EvidenceKind,
   Freshness,
   FileReference,
+  IntegrationHealth,
+  IntegrationSurfaceHealth,
   NextAction,
   ResponseMetadata,
   RuntimeStatusCaveat,
@@ -68,6 +70,19 @@ export const PUBLIC_NEXT_ACTION_TOOLS = [
 ] as const;
 
 const publicNextActionTools = new Set<string>(PUBLIC_NEXT_ACTION_TOOLS);
+
+export type UnavailableNextAction = {
+  action: NextAction;
+  status: "unavailable" | "blocked" | "hidden" | "unknown";
+  reason: string;
+  evidence_kinds: EvidenceKind[];
+};
+
+export type SessionAwareNextActionResult = {
+  next_actions: NextAction[];
+  unavailable_actions: UnavailableNextAction[];
+  assumptions: string[];
+};
 
 export function classifyRuntimeTrust(input: {
   snapshot?: SnapshotState | null;
@@ -305,23 +320,134 @@ function dedupeRuntimeCaveats(caveats: readonly RuntimeStatusCaveat[]): RuntimeS
 }
 
 export function capNextActions(actions: readonly NextAction[], limit = 3): NextAction[] {
+  return sessionAwareNextActions(actions, { limit }).next_actions;
+}
+
+export function sessionAwareNextActions(
+  actions: readonly NextAction[],
+  input: {
+    integrationHealth?: IntegrationHealth;
+    limit?: number;
+  } = {}
+): SessionAwareNextActionResult {
   const seen = new Set<string>();
   const capped: NextAction[] = [];
+  const unavailable: UnavailableNextAction[] = [];
+  const assumptions: string[] = [];
+  const surfaceByTool = integrationSurfaceByTool(input.integrationHealth);
+  const hasKnownSessionDiscovery = input.integrationHealth?.session.discovery_state === "provided";
+
   for (const action of actions) {
     if (!publicNextActionTools.has(action.tool)) {
       continue;
     }
-    const key = `${action.tool}:${JSON.stringify(action.args)}`;
-    if (seen.has(key)) {
+
+    const surface = surfaceByTool.get(action.tool);
+    if (surface !== undefined) {
+      if (surface.callable === "callable" && surface.status === "available") {
+        pushUniqueAction({ action, seen, capped, limit: input.limit ?? 3 });
+        continue;
+      }
+
+      if (surface.callable === "unknown" || surface.status === "unknown") {
+        if (!hasKnownSessionDiscovery) {
+          assumptions.push(
+            `Callable state for ${action.tool} is unknown because caller discovery evidence was not provided.`
+          );
+          pushUniqueAction({ action, seen, capped, limit: input.limit ?? 3 });
+        } else {
+          unavailable.push(unavailableFromSurface(action, surface));
+        }
+        continue;
+      }
+
+      unavailable.push(unavailableFromSurface(action, surface));
       continue;
     }
-    seen.add(key);
-    capped.push(action);
-    if (capped.length >= limit) {
-      break;
+
+    if (input.integrationHealth !== undefined && hasKnownSessionDiscovery) {
+      unavailable.push({
+        action,
+        status: "unavailable",
+        reason: "The MCP tool is public but was not present in integration health evidence.",
+        evidence_kinds: ["config"]
+      });
+      continue;
+    }
+
+    if (input.integrationHealth !== undefined) {
+      assumptions.push(
+        `No integration health evidence was found for ${action.tool}; preserving public next action with unknown callability.`
+      );
+    }
+    pushUniqueAction({ action, seen, capped, limit: input.limit ?? 3 });
+  }
+
+  return {
+    next_actions: capped,
+    unavailable_actions: dedupeUnavailableNextActions(unavailable),
+    assumptions: uniqueSorted(assumptions)
+  };
+}
+
+function integrationSurfaceByTool(
+  health: IntegrationHealth | undefined
+): Map<string, IntegrationSurfaceHealth> {
+  const surfaces = new Map<string, IntegrationSurfaceHealth>();
+  for (const surface of health?.surfaces ?? []) {
+    if (surface.kind === "tool") {
+      surfaces.set(surface.name, surface);
     }
   }
-  return capped;
+  return surfaces;
+}
+
+function pushUniqueAction(input: {
+  action: NextAction;
+  seen: Set<string>;
+  capped: NextAction[];
+  limit: number;
+}): void {
+  if (input.capped.length >= input.limit) {
+    return;
+  }
+
+  const key = `${input.action.tool}:${JSON.stringify(input.action.args)}`;
+  if (input.seen.has(key)) {
+    return;
+  }
+  input.seen.add(key);
+  input.capped.push(input.action);
+}
+
+function unavailableFromSurface(
+  action: NextAction,
+  surface: IntegrationSurfaceHealth
+): UnavailableNextAction {
+  const status = surface.status === "available" ? "unknown" : surface.status;
+  return {
+    action,
+    status,
+    reason: surface.reason,
+    evidence_kinds: uniqueSorted(surface.evidence_kinds)
+  };
+}
+
+function dedupeUnavailableNextActions(
+  actions: readonly UnavailableNextAction[]
+): UnavailableNextAction[] {
+  const seen = new Set<string>();
+  const result: UnavailableNextAction[] = [];
+  for (const item of actions) {
+    const action = item.action;
+    const itemKey = `${action.tool}:${JSON.stringify(action.args)}:${item.status}`;
+    if (seen.has(itemKey)) {
+      continue;
+    }
+    seen.add(itemKey);
+    result.push(item);
+  }
+  return result;
 }
 
 export function invalidResponseMeta(input: {
