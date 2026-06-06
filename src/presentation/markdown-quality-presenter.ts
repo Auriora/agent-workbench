@@ -15,23 +15,29 @@ import type {
   CheckMarkdownDocumentUseCaseResult,
   CheckMarkdownSetUseCaseResult
 } from "../application/use-cases/check-markdown-quality.js";
-import { invalidResponseMeta } from "./metadata.js";
+import {
+  invalidResponseMeta,
+  presentNextActions,
+  type PresentationSessionContext
+} from "./metadata.js";
 import { redactPresentationText } from "./redaction.js";
 
 export function buildCheckMarkdownDocumentEnvelope(
-  result: CheckMarkdownDocumentUseCaseResult
+  result: CheckMarkdownDocumentUseCaseResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<CheckMarkdownDocumentResult> {
   return makeEnvelope({
-    data: sanitizeCheckMarkdownDocument(result.check),
+    data: sanitizeCheckMarkdownDocument(result.check, context),
     meta: responseMetadataSchema.strip().parse(result.meta)
   });
 }
 
 export function buildCheckMarkdownSetEnvelope(
-  result: CheckMarkdownSetUseCaseResult
+  result: CheckMarkdownSetUseCaseResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<CheckMarkdownSetResult> {
   return makeEnvelope({
-    data: sanitizeCheckMarkdownSet(result.check),
+    data: sanitizeCheckMarkdownSet(result.check, context),
     meta: responseMetadataSchema.strip().parse(result.meta)
   });
 }
@@ -90,7 +96,10 @@ export function buildInvalidCheckMarkdownSetInputEnvelope(input: {
   });
 }
 
-function sanitizeCheckMarkdownDocument(input: CheckMarkdownDocumentResult): CheckMarkdownDocumentResult {
+function sanitizeCheckMarkdownDocument(
+  input: CheckMarkdownDocumentResult,
+  context: PresentationSessionContext
+): CheckMarkdownDocumentResult {
   return checkMarkdownDocumentResultSchema.parse({
     repo_root: input.repo_root,
     path: normalizeRepoPath(input.path),
@@ -115,11 +124,14 @@ function sanitizeCheckMarkdownDocument(input: CheckMarkdownDocumentResult): Chec
       ),
     warnings: [...input.warnings].sort((left, right) => (left.path ?? "").localeCompare(right.path ?? "")),
     truncated: input.truncated,
-    next_actions: input.next_actions.map((action) => nextActionSchema.parse(action))
+    next_actions: presentNextActions(input.next_actions, context).map((action) => nextActionSchema.parse(action))
   });
 }
 
-function sanitizeCheckMarkdownSet(input: CheckMarkdownSetResult): CheckMarkdownSetResult {
+function sanitizeCheckMarkdownSet(
+  input: CheckMarkdownSetResult,
+  context: PresentationSessionContext
+): CheckMarkdownSetResult {
   return checkMarkdownSetResultSchema.parse({
     repo_root: input.repo_root,
     status: input.status,
@@ -145,7 +157,7 @@ function sanitizeCheckMarkdownSet(input: CheckMarkdownSetResult): CheckMarkdownS
       ),
     warnings: [...input.warnings].sort((left, right) => (left.path ?? "").localeCompare(right.path ?? "")),
     truncated: input.truncated,
-    next_actions: input.next_actions.map((action) => nextActionSchema.parse(action))
+    next_actions: presentNextActions(input.next_actions, context).map((action) => nextActionSchema.parse(action))
   });
 }
 

@@ -16,13 +16,18 @@ import {
   type TaskContext
 } from "../contracts/index.js";
 import type { GetTaskContextResult } from "../application/use-cases/get-task-context.js";
-import { invalidResponseMeta } from "./metadata.js";
+import {
+  invalidResponseMeta,
+  presentNextActions,
+  type PresentationSessionContext
+} from "./metadata.js";
 import { redactPresentationText } from "./redaction.js";
 
 export function buildTaskContextEnvelope(
-  result: GetTaskContextResult
+  result: GetTaskContextResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<TaskContext> {
-  const data = sanitizeTaskContext(result.context);
+  const data = sanitizeTaskContext(result.context, context);
   const meta = responseMetadataSchema.strip().parse(result.meta);
   return makeEnvelope({
     data,
@@ -64,7 +69,10 @@ export function buildInvalidTaskContextInputEnvelope(input: {
   });
 }
 
-function sanitizeTaskContext(context: GetTaskContextResult["context"]): TaskContext {
+function sanitizeTaskContext(
+  context: GetTaskContextResult["context"],
+  sessionContext: PresentationSessionContext
+): TaskContext {
   return taskContextSchema.parse({
     task: context.task,
     repo_root: context.repo_root,
@@ -77,7 +85,7 @@ function sanitizeTaskContext(context: GetTaskContextResult["context"]): TaskCont
     skipped_work: context.skipped_work.map(sanitizeSkippedWork),
     completeness: sanitizeCompleteness(context.completeness),
     risks: context.risks.map(sanitizeRisk),
-    next_actions: context.next_actions.map(sanitizeNextAction)
+    next_actions: presentNextActions(context.next_actions, sessionContext).map(sanitizeNextAction)
   });
 }
 

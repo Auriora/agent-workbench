@@ -62,14 +62,19 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     `capNextActions` behavior. Validation passed with focused presentation,
     contract, and integration-health tests plus `pnpm typecheck`.
 
-- [ ] T005 Apply helper to public presenters.
+- [x] T005 Apply helper to public presenters.
   - Depends on: T004
   - Files: `src/presentation/`, `src/application/use-cases/`,
     `tests/mcp/`, `tests/docs/`, `tests/graph/`
   - Acceptance: Golden responses for context, docs, symbols, references,
     impact, diagnostics, verification, and integration profile do not present
     unavailable tools as executable.
-  - Evidence: Pending.
+  - Evidence: Applied `presentNextActions` across public MCP presenters for
+    context, docs, symbols, references, impact, diagnostics, verification,
+    Markdown quality, and workspace edit envelopes. Added
+    `tests/presentation/session-aware-presenters.test.ts` to prove unavailable
+    actions are filtered when discovery is known and preserved when discovery
+    is unknown. Focused presenter/MCP tests and `pnpm typecheck` passed.
 
 - [ ] T006 Promote docs, validate, and close.
   - Depends on: T003, T005

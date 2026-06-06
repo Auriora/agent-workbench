@@ -34,50 +34,59 @@ import type {
   DocsReadSectionUseCaseResult,
   DocsSearchUseCaseResult
 } from "../application/use-cases/query-docs.js";
-import { invalidResponseMeta } from "./metadata.js";
+import {
+  invalidResponseMeta,
+  presentNextActions,
+  type PresentationSessionContext
+} from "./metadata.js";
 import { redactPresentationText } from "./redaction.js";
 
 export function buildDocsOverviewEnvelope(
-  result: DocsOverviewUseCaseResult
+  result: DocsOverviewUseCaseResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<DocsOverview> {
   return makeEnvelope({
-    data: sanitizeDocsOverview(result.overview),
+    data: sanitizeDocsOverview(result.overview, context),
     meta: responseMetadataSchema.strip().parse(result.meta)
   });
 }
 
 export function buildDocsMapEnvelope(
-  result: DocsMapUseCaseResult
+  result: DocsMapUseCaseResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<DocsMap> {
   return makeEnvelope({
-    data: sanitizeDocsMap(result.map),
+    data: sanitizeDocsMap(result.map, context),
     meta: responseMetadataSchema.strip().parse(result.meta)
   });
 }
 
 export function buildDocsSearchEnvelope(
-  result: DocsSearchUseCaseResult
+  result: DocsSearchUseCaseResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<DocsSearchResult> {
   return makeEnvelope({
-    data: sanitizeDocsSearch(result.search),
+    data: sanitizeDocsSearch(result.search, context),
     meta: responseMetadataSchema.strip().parse(result.meta)
   });
 }
 
 export function buildDocsOutlineEnvelope(
-  result: DocsOutlineUseCaseResult
+  result: DocsOutlineUseCaseResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<DocsOutlineResult> {
   return makeEnvelope({
-    data: sanitizeDocsOutline(result.outline),
+    data: sanitizeDocsOutline(result.outline, context),
     meta: responseMetadataSchema.strip().parse(result.meta)
   });
 }
 
 export function buildDocsReadSectionEnvelope(
-  result: DocsReadSectionUseCaseResult
+  result: DocsReadSectionUseCaseResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<DocsReadSectionResult> {
   return makeEnvelope({
-    data: sanitizeDocsReadSection(result.read),
+    data: sanitizeDocsReadSection(result.read, context),
     meta: responseMetadataSchema.strip().parse(result.meta)
   });
 }
@@ -179,7 +188,10 @@ export function buildInvalidDocsReadSectionInputEnvelope(input: {
   });
 }
 
-function sanitizeDocsOverview(input: DocsOverview): DocsOverview {
+function sanitizeDocsOverview(
+  input: DocsOverview,
+  context: PresentationSessionContext
+): DocsOverview {
   return docsOverviewSchema.parse({
     repo_root: input.repo_root,
     status: input.status,
@@ -187,22 +199,28 @@ function sanitizeDocsOverview(input: DocsOverview): DocsOverview {
     important_docs: input.important_docs.map(sanitizeDocument),
     warnings: sortWarnings(input.warnings).map(sanitizeWarning),
     truncated: input.truncated,
-    next_actions: input.next_actions.map((action) => nextActionSchema.parse(action))
+    next_actions: presentNextActions(input.next_actions, context).map((action) => nextActionSchema.parse(action))
   });
 }
 
-function sanitizeDocsMap(input: DocsMap): DocsMap {
+function sanitizeDocsMap(
+  input: DocsMap,
+  context: PresentationSessionContext
+): DocsMap {
   return docsMapSchema.parse({
     repo_root: input.repo_root,
     status: input.status,
     docs: [...input.docs].sort(compareDocuments).map(sanitizeDocument),
     warnings: sortWarnings(input.warnings).map(sanitizeWarning),
     truncated: input.truncated,
-    next_actions: input.next_actions.map((action) => nextActionSchema.parse(action))
+    next_actions: presentNextActions(input.next_actions, context).map((action) => nextActionSchema.parse(action))
   });
 }
 
-function sanitizeDocsSearch(input: DocsSearchResult): DocsSearchResult {
+function sanitizeDocsSearch(
+  input: DocsSearchResult,
+  context: PresentationSessionContext
+): DocsSearchResult {
   return docsSearchResultSchema.parse({
     repo_root: input.repo_root,
     query: input.query,
@@ -212,11 +230,14 @@ function sanitizeDocsSearch(input: DocsSearchResult): DocsSearchResult {
     truncated: input.truncated,
     cursor: input.cursor,
     result_count: input.result_count,
-    next_actions: input.next_actions.map((action) => nextActionSchema.parse(action))
+    next_actions: presentNextActions(input.next_actions, context).map((action) => nextActionSchema.parse(action))
   });
 }
 
-function sanitizeDocsOutline(input: DocsOutlineResult): DocsOutlineResult {
+function sanitizeDocsOutline(
+  input: DocsOutlineResult,
+  context: PresentationSessionContext
+): DocsOutlineResult {
   return docsOutlineResultSchema.parse({
     repo_root: input.repo_root,
     path: normalizeRepoPath(input.path),
@@ -224,11 +245,14 @@ function sanitizeDocsOutline(input: DocsOutlineResult): DocsOutlineResult {
     title: input.title,
     headings: sortHeadings(input.headings).map(sanitizeHeading),
     warnings: sortWarnings(input.warnings).map(sanitizeWarning),
-    next_actions: input.next_actions.map((action) => nextActionSchema.parse(action))
+    next_actions: presentNextActions(input.next_actions, context).map((action) => nextActionSchema.parse(action))
   });
 }
 
-function sanitizeDocsReadSection(input: DocsReadSectionResult): DocsReadSectionResult {
+function sanitizeDocsReadSection(
+  input: DocsReadSectionResult,
+  context: PresentationSessionContext
+): DocsReadSectionResult {
   return docsReadSectionResultSchema.parse({
     repo_root: input.repo_root,
     path: normalizeRepoPath(input.path),
@@ -243,7 +267,7 @@ function sanitizeDocsReadSection(input: DocsReadSectionResult): DocsReadSectionR
           text: redactPresentationText(input.section.text, { context: "source" })
         }),
     warnings: sortWarnings(input.warnings).map(sanitizeWarning),
-    next_actions: input.next_actions.map((action) => nextActionSchema.parse(action))
+    next_actions: presentNextActions(input.next_actions, context).map((action) => nextActionSchema.parse(action))
   });
 }
 

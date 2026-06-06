@@ -1,16 +1,25 @@
 import {
+  findReferencesResultSchema,
   makeEnvelope,
   type FindReferencesResult,
   type ResponseEnvelope
 } from "../contracts/index.js";
 import type { FindReferencesUseCaseResult } from "../application/use-cases/find-references.js";
-import { invalidResponseMeta } from "./metadata.js";
+import {
+  invalidResponseMeta,
+  presentNextActions,
+  type PresentationSessionContext
+} from "./metadata.js";
 
 export function buildFindReferencesEnvelope(
-  result: FindReferencesUseCaseResult
+  result: FindReferencesUseCaseResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<FindReferencesResult> {
   return makeEnvelope({
-    data: result.references,
+    data: findReferencesResultSchema.parse({
+      ...result.references,
+      next_actions: presentNextActions(result.references.next_actions, context)
+    }),
     meta: result.meta
   });
 }

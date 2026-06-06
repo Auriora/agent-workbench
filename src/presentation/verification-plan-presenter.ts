@@ -12,12 +12,17 @@ import {
   type VerificationPlan
 } from "../contracts/index.js";
 import type { PlanVerificationResult } from "../application/use-cases/plan-verification.js";
-import { invalidResponseMeta } from "./metadata.js";
+import {
+  invalidResponseMeta,
+  presentNextActions,
+  type PresentationSessionContext
+} from "./metadata.js";
 
 export function buildVerificationPlanEnvelope(
-  result: PlanVerificationResult
+  result: PlanVerificationResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<VerificationPlan> {
-  const data = sanitizeVerificationPlan(result.plan);
+  const data = sanitizeVerificationPlan(result.plan, context);
   const meta = responseMetadataSchema.strip().parse(result.meta);
   return makeEnvelope({
     data,
@@ -49,7 +54,10 @@ export function buildInvalidVerificationPlanInputEnvelope(input: {
   });
 }
 
-function sanitizeVerificationPlan(plan: PlanVerificationResult["plan"]): VerificationPlan {
+function sanitizeVerificationPlan(
+  plan: PlanVerificationResult["plan"],
+  context: PresentationSessionContext
+): VerificationPlan {
   return verificationPlanSchema.parse({
     repo_root: plan.repo_root,
     status: plan.status,
@@ -58,7 +66,7 @@ function sanitizeVerificationPlan(plan: PlanVerificationResult["plan"]): Verific
     static_feedback: plan.static_feedback === undefined ? undefined : sanitizeStaticFeedback(plan.static_feedback),
     risks: plan.risks.map(sanitizeRisk),
     skipped_paths: plan.skipped_paths?.map(sanitizeSkippedPath),
-    next_actions: plan.next_actions.map(sanitizeNextAction),
+    next_actions: presentNextActions(plan.next_actions, context).map(sanitizeNextAction),
     task: plan.task
   });
 }

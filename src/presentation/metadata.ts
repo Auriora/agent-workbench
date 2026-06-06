@@ -84,6 +84,10 @@ export type SessionAwareNextActionResult = {
   assumptions: string[];
 };
 
+export type PresentationSessionContext = {
+  integrationHealth?: IntegrationHealth;
+};
+
 export function classifyRuntimeTrust(input: {
   snapshot?: SnapshotState | null;
   warmup?: WarmupExecution | null;
@@ -388,6 +392,17 @@ export function sessionAwareNextActions(
     unavailable_actions: dedupeUnavailableNextActions(unavailable),
     assumptions: uniqueSorted(assumptions)
   };
+}
+
+export function presentNextActions(
+  actions: readonly NextAction[],
+  context: PresentationSessionContext = {},
+  limit = 3
+): NextAction[] {
+  return sessionAwareNextActions(actions, {
+    integrationHealth: context.integrationHealth,
+    limit
+  }).next_actions;
 }
 
 function integrationSurfaceByTool(

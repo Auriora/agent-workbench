@@ -8,16 +8,22 @@ import {
   type SymbolSearchResult
 } from "../contracts/index.js";
 import type { SearchSymbolsResult } from "../application/use-cases/search-symbols.js";
-import { invalidResponseMeta } from "./metadata.js";
+import {
+  invalidResponseMeta,
+  presentNextActions,
+  type PresentationSessionContext
+} from "./metadata.js";
 import { redactPresentationText } from "./redaction.js";
 
 export function buildSymbolSearchEnvelope(
-  result: SearchSymbolsResult
+  result: SearchSymbolsResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<SymbolSearchResult> {
   return makeEnvelope({
     data: symbolSearchResultSchema.parse({
       ...result.symbols,
-      symbols: result.symbols.symbols.map(sanitizeSymbolReference)
+      symbols: result.symbols.symbols.map(sanitizeSymbolReference),
+      next_actions: presentNextActions(result.symbols.next_actions, context)
     }),
     meta: result.meta
   });

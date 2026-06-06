@@ -8,13 +8,18 @@ import {
   type DiagnosticsForFilesResult,
   type ResponseEnvelope
 } from "../contracts/index.js";
-import { invalidResponseMeta } from "./metadata.js";
+import {
+  invalidResponseMeta,
+  presentNextActions,
+  type PresentationSessionContext
+} from "./metadata.js";
 
 export function buildDiagnosticsForFilesEnvelope(
-  result: DiagnoseChangedFilesResult
+  result: DiagnoseChangedFilesResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<DiagnosticsForFilesResult> {
   return makeEnvelope({
-    data: sanitizeDiagnosticsResult(result.diagnostics),
+    data: sanitizeDiagnosticsResult(result.diagnostics, context),
     meta: responseMetadataSchema.strip().parse(result.meta)
   });
 }
@@ -59,7 +64,10 @@ export function buildInvalidDiagnosticsForFilesInputEnvelope(input: {
   });
 }
 
-function sanitizeDiagnosticsResult(input: DiagnosticsForFilesResult): DiagnosticsForFilesResult {
+function sanitizeDiagnosticsResult(
+  input: DiagnosticsForFilesResult,
+  context: PresentationSessionContext
+): DiagnosticsForFilesResult {
   return diagnosticsForFilesResultSchema.parse({
     repo_root: input.repo_root,
     status: input.status,
@@ -69,6 +77,6 @@ function sanitizeDiagnosticsResult(input: DiagnosticsForFilesResult): Diagnostic
     provider_statuses: input.provider_statuses.map((status) =>
       diagnosticsProviderStatusSchema.parse(status)
     ),
-    next_actions: input.next_actions
+    next_actions: presentNextActions(input.next_actions, context)
   });
 }

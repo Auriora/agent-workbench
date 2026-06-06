@@ -6,22 +6,34 @@ import {
 } from "../contracts/index.js";
 import type { ApplyWorkspaceEditUseCaseResult } from "../application/use-cases/apply-workspace-edit.js";
 import type { PreviewWorkspaceEditUseCaseResult } from "../application/use-cases/preview-workspace-edit.js";
-import { invalidResponseMeta } from "./metadata.js";
+import {
+  invalidResponseMeta,
+  presentNextActions,
+  type PresentationSessionContext
+} from "./metadata.js";
 
 export function buildPreviewWorkspaceEditEnvelope(
-  result: PreviewWorkspaceEditUseCaseResult
+  result: PreviewWorkspaceEditUseCaseResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<PreviewWorkspaceEditResult> {
   return makeEnvelope({
-    data: result.preview,
+    data: {
+      ...result.preview,
+      next_actions: presentNextActions(result.preview.next_actions, context)
+    },
     meta: result.meta
   });
 }
 
 export function buildApplyWorkspaceEditEnvelope(
-  result: ApplyWorkspaceEditUseCaseResult
+  result: ApplyWorkspaceEditUseCaseResult,
+  context: PresentationSessionContext = {}
 ): ResponseEnvelope<ApplyWorkspaceEditResult> {
   return makeEnvelope({
-    data: result.result,
+    data: {
+      ...result.result,
+      next_actions: presentNextActions(result.result.next_actions, context)
+    },
     meta: result.meta
   });
 }

@@ -8,14 +8,22 @@ import {
   type SymbolReference
 } from "../contracts/index.js";
 import type { ComputeImpactResult } from "../application/use-cases/compute-impact.js";
-import { invalidResponseMeta } from "./metadata.js";
+import {
+  invalidResponseMeta,
+  presentNextActions,
+  type PresentationSessionContext
+} from "./metadata.js";
 import { redactPresentationText } from "./redaction.js";
 
-export function buildImpactEnvelope(result: ComputeImpactResult): ResponseEnvelope<ImpactResult> {
+export function buildImpactEnvelope(
+  result: ComputeImpactResult,
+  context: PresentationSessionContext = {}
+): ResponseEnvelope<ImpactResult> {
   return makeEnvelope({
     data: impactResultSchema.parse({
       ...result.impact,
-      affected_symbols: result.impact.affected_symbols.map(sanitizeSymbolReference)
+      affected_symbols: result.impact.affected_symbols.map(sanitizeSymbolReference),
+      next_actions: presentNextActions(result.impact.next_actions, context)
     }),
     meta: result.meta
   });
