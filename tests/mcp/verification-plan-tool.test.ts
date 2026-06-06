@@ -699,13 +699,22 @@ describe("verification_plan use case", () => {
     expect(result.plan.status).toBe("planned");
     expect(result.plan.static_feedback).toBeUndefined();
     expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
-      "planned CMake build/test review"
+      "cmake -S . -B build",
+      "cmake --build build --target App",
+      "ctest --test-dir build"
     ]);
     expect(result.plan.planned_commands[0]).toEqual(
       expect.objectContaining({
-        command: "manual_review",
-        args: ["cmake-build-test"],
+        command: "cmake",
+        args: ["-S", ".", "-B", "build"],
         reason: expect.stringContaining("src/App/CMakeLists.txt")
+      })
+    );
+    expect(result.plan.planned_commands[1]).toEqual(
+      expect.objectContaining({
+        command: "cmake",
+        args: ["--build", "build", "--target", "App"],
+        reason: expect.stringContaining("DocumentObject.cpp")
       })
     );
     expect(result.plan.planned_commands.map((command) => command.display)).not.toContain("pnpm run typecheck");

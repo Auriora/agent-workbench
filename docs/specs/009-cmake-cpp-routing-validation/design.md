@@ -2,12 +2,18 @@
 title: CMake C++ routing and validation design
 doc_type: spec
 artifact_type: design
-status: active
+status: archived
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Technical Design
+
+Spec 009 closed on 2026-06-06. Current CMake/C++ routing, heuristic edge,
+validation-planning, and semantic-limit behavior lives in
+[MCP surface design](../../design/mcp-surface-design.md),
+[Language adapter design](../../design/language-adapter-design.md), and
+[Language capability matrix](../../reference/language-capability-matrix.md).
 
 ## Overview
 

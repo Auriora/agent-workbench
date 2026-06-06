@@ -160,6 +160,25 @@ should extract classes, functions, methods, includes, and CMake target
 membership before reference and impact results are promoted beyond low
 confidence.
 
+The delivered CMake/C++ slice remains `resource_backed`. Broad
+`context_for_task` ranking prefers first-party C/C++ source roots, tests,
+adjacent headers/sources, and local/root `CMakeLists.txt` files ahead of
+third-party, vendor, generated, fixture, and installer noise unless the task
+names those areas. C/C++ extractor output includes declaration-only classes,
+functions, methods, includes, and routing-only unresolved references for include
+stems and same-file local call names. Resolved edges from those references keep
+their adapter-provided heuristic provenance, low confidence, and
+resource-backed metadata. Ambiguous include or call names remain unresolved
+with ambiguity metadata instead of being promoted to semantic evidence.
+
+CMake target evidence is parsed from catalog-visible `CMakeLists.txt` files and
+records target kind, name, and listed source files. Validation planning may use
+that evidence to produce non-executed host command templates such as
+`cmake -S . -B build`, `cmake --build build --target <target>`, and
+`ctest --test-dir build` when repo-local policy allows host commands. Repo-local
+validation policy, Docker/devcontainer/Nix/Bazel guidance, or explicit blocked
+host-command evidence takes precedence over generic CMake templates.
+
 Cross-language symbols are deferred. Mixed-language repositories should expose
 per-language routing evidence and project-shape validation now, but references
 across Python stubs, generated bindings, C/C++ extension modules, Go services,

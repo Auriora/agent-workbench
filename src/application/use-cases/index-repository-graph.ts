@@ -535,15 +535,22 @@ function resolveReferences(batches: readonly ExtractionBatch[]): {
       const candidates = nodesByName.get(reference.reference_name.toLowerCase()) ?? [];
       const unique = candidates.length === 1 ? candidates[0] : undefined;
       if (unique) {
+        const provenance = typeof reference.candidate_metadata.provenance === "string"
+          ? reference.candidate_metadata.provenance
+          : "tree-sitter-reference-resolution";
+        const confidence = typeof reference.candidate_metadata.confidence === "number"
+          ? reference.candidate_metadata.confidence
+          : 0.8;
         edges.push({
           id: `${reference.id}:resolved`,
           source_node_id: reference.source_node_id,
           target_node_id: unique.id,
           kind: reference.reference_kind,
           source_range: reference.source_range,
-          provenance: "tree-sitter-reference-resolution",
-          confidence: 0.8,
+          provenance,
+          confidence,
           metadata: {
+            ...reference.candidate_metadata,
             reference_name: reference.reference_name
           }
         });

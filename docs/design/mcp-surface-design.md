@@ -389,6 +389,19 @@ FreeCAD dogfood left C++ monorepo and Codex-discoverability follow-up items:
 - Done: expose C/C++ classes, functions, methods, includes, Python stubs, and
   CMake target declarations as routing evidence while keeping references and
   impact low confidence until semantic edges exist.
+- Done: rank first-party C/C++ source, tests, adjacent headers/sources, and
+  local/root `CMakeLists.txt` files ahead of third-party, vendor, generated,
+  fixture, and installer noise for broad CMake/C++ implementation prompts.
+- Done: emit C/C++ include-stem and same-file local-call routing references
+  with heuristic provenance, resource-backed evidence, and low confidence.
+  Ambiguous names stay unresolved; resolved edges preserve the adapter-provided
+  low-confidence labels rather than becoming compiler-backed semantics.
+- Done: plan concrete non-executed CMake validation templates from bounded
+  target evidence when host commands are allowed: `cmake -S . -B build`,
+  `cmake --build build --target <target>`, and `ctest --test-dir build`.
+  Repo-local validation policy and environment guidance still suppress generic
+  host CMake commands when they require Docker, devcontainer, Nix, Bazel, or
+  another non-host workflow.
 - Done: ensure `next_action` values only reference tools visible in the active Codex
   discovery path, or adjust the integration profile/tool metadata so advertised
   tools are discoverable on first use.
@@ -607,11 +620,11 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Future: add Go parser-backed symbols and C/C++ reference/impact edges after
   the language-adapter contract defines confidence, provenance, and integration
   boundaries. Routing-only hits must stay clearly marked until then.
-- Promoted to [Spec 009](../specs/009-cmake-cpp-routing-validation/requirements.md):
-  improve CMake/C++ routing and validation by prioritizing first-party source,
-  adding heuristic include/same-file routing edges, and identifying likely
-  CMake target command templates without executing commands or guessing unsafe
-  build directories.
+- Done: improve CMake/C++ routing and validation by prioritizing first-party
+  source, adding heuristic include/same-file routing edges, and identifying
+  likely CMake target command templates without executing commands or guessing
+  unsafe build directories. The delivery record is
+  [Spec 009](../specs/009-cmake-cpp-routing-validation/requirements.md).
 - Done: performed a detailed predecessor `agent-ide` capability analysis,
   mapped which lessons are already implemented, and promoted only
   language-neutral replacement gaps into tool, presenter, provider, roadmap, or

@@ -403,10 +403,12 @@ describe("repository graph extraction pipeline", () => {
       });
 
       expect(result).toMatchObject({
-        scanned_files: 7,
-        extracted_files: 7,
+        scanned_files: 8,
+        extracted_files: 8,
         unsupported_files: 0
       });
+      expect(result.edge_count).toBeGreaterThan(0);
+      expect(result.unresolved_reference_count).toBeGreaterThan(0);
 
       const documentObject = await store.findNodesByName({
         snapshot_id: "110",
@@ -465,6 +467,58 @@ describe("repository graph extraction pipeline", () => {
         ])
       );
 
+      const runExecution = await store.findNodesByName({
+        snapshot_id: "110",
+        query: "runExecution",
+        exact: true
+      });
+      expect(runExecution).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "function",
+            qualified_name: "src.App.ExecutionController.runExecution",
+            language: "cpp"
+          })
+        ])
+      );
+      const runExecutionEdges = await store.getOutgoingEdges({
+        snapshot_id: "110",
+        node_id: runExecution[0]?.id ?? "",
+        max_rows: 5
+      });
+      expect(runExecutionEdges).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "cpp_local_call",
+            provenance: "cpp-local-call-heuristic",
+            confidence: 0.4,
+            metadata: expect.objectContaining({
+              reference_name: "shouldRecompute",
+              semantic_scope: "same_file_call_name_routing"
+            })
+          })
+        ])
+      );
+
+      const unresolved = await store.getUnresolvedReferences({
+        snapshot_id: "110",
+        file_path: "src/App/DocumentObject.cpp",
+        max_rows: 5
+      });
+      expect(unresolved).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            reference_name: "DocumentObject",
+            reference_kind: "cpp_include",
+            candidate_metadata: expect.objectContaining({
+              provenance: "cpp-include-heuristic",
+              confidence: 0.35,
+              resolution: "ambiguous"
+            })
+          })
+        ])
+      );
+
       const appTarget = await store.findNodesByName({
         snapshot_id: "110",
         query: "App",
@@ -476,7 +530,7 @@ describe("repository graph extraction pipeline", () => {
           qualified_name: "src/App/CMakeLists.txt:App",
           metadata: expect.objectContaining({
             provenance: "cmake_target_scan",
-            sources: ["DocumentObject.cpp"]
+            sources: ["DocumentObject.cpp", "ExecutionController.cpp"]
           })
         })
       ]);

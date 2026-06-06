@@ -285,6 +285,10 @@ async function discoverValidationEvidence(input: {
     hasMakefile: paths.has("Makefile") || paths.has("makefile"),
     hasRootCMake: paths.has("CMakeLists.txt"),
     localCMakeFiles: [...paths].filter((filePath) => filePath.endsWith("/CMakeLists.txt")).sort(),
+    cmakeTargets: await discoverCMakeTargets({
+      workspace: input.workspace,
+      cmakeFiles: [...paths].filter((filePath) => filePath === "CMakeLists.txt" || filePath.endsWith("/CMakeLists.txt")).sort()
+    }),
     dotnetSolutions: [...paths].filter((filePath) => lowerExtension(filePath) === ".sln").sort(),
     dotnetProjects: [...paths].filter((filePath) => isDotnetProjectPath(filePath)).sort(),
     dotnetTestProjects: [...paths].filter((filePath) => isDotnetProjectPath(filePath) && isDotnetTestProjectPath(filePath)).sort(),
@@ -308,6 +312,7 @@ type ValidationDiscovery = {
   hasMakefile: boolean;
   hasRootCMake: boolean;
   localCMakeFiles: string[];
+  cmakeTargets: CMakeTargetEvidence[];
   dotnetSolutions: string[];
   dotnetProjects: string[];
   dotnetTestProjects: string[];
@@ -333,6 +338,13 @@ type ValidationProtocolDiscovery = {
   environmentEvidence: ValidationEnvironmentEvidence[];
   evidencePaths: string[];
   errors: string[];
+};
+
+type CMakeTargetEvidence = {
+  name: string;
+  kind: "library" | "executable";
+  path: string;
+  sources: string[];
 };
 
 type ValidationEnvironmentEvidence = {
@@ -423,14 +435,11 @@ function planValidationCommands(input: {
         blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "CMake"));
       }
     } else {
-      commands.push({
-        command: "manual_review",
-        args: ["cmake-build-test"],
-        display: "planned CMake build/test review",
-        reason: cmakeReason(input.discovery),
-        status: "planned",
-        execution: "not_executed"
-      });
+      commands.push(...cmakeValidationCommands({
+        discovery: input.discovery,
+        selectedEntries: input.selectedEntries,
+        includeAll
+      }));
     }
   }
 
@@ -1288,6 +1297,121 @@ function cmakeReason(discovery: ValidationDiscovery): string {
     ? ` Local CMake evidence: ${discovery.localCMakeFiles.slice(0, 3).join(", ")}.`
     : "";
   return `CMakeLists.txt and C/C++ files indicate CMake build/test validation is the primary path.${local}`;
+}
+
+function cmakeValidationCommands(input: {
+  discovery: ValidationDiscovery;
+  selectedEntries: readonly FileCatalogEntry[];
+  includeAll: boolean;
+}): PlannedValidationCommand[] {
+  const commands: PlannedValidationCommand[] = [
+    {
+      command: "cmake",
+      args: ["-S", ".", "-B", "build"],
+      display: "cmake -S . -B build",
+      reason: `${cmakeReason(input.discovery)} Configure command is a non-executed template.`,
+      status: "planned",
+      execution: "not_executed"
+    }
+  ];
+  const target = nearestCMakeTarget({
+    targets: input.discovery.cmakeTargets,
+    selectedEntries: input.selectedEntries,
+    includeAll: input.includeAll
+  });
+  if (target !== undefined) {
+    commands.push({
+      command: "cmake",
+      args: ["--build", "build", "--target", target.name],
+      display: `cmake --build build --target ${target.name}`,
+      reason: `${target.path} declares ${target.kind} target ${target.name} with source evidence: ${target.sources.slice(0, 5).join(", ") || "none listed"}. Command is planned but not executed.`,
+      status: "planned",
+      execution: "not_executed"
+    });
+  }
+  commands.push({
+    command: "ctest",
+    args: ["--test-dir", "build"],
+    display: "ctest --test-dir build",
+    reason: "CMake project evidence supports a non-executed CTest template after configure/build; inspect project policy before execution.",
+    status: "planned",
+    execution: "not_executed"
+  });
+  return commands;
+}
+
+function nearestCMakeTarget(input: {
+  targets: readonly CMakeTargetEvidence[];
+  selectedEntries: readonly FileCatalogEntry[];
+  includeAll: boolean;
+}): CMakeTargetEvidence | undefined {
+  if (input.targets.length === 0) {
+    return undefined;
+  }
+  const selectedPaths = input.selectedEntries.map((entry) => entry.path);
+  return [...input.targets].sort((left, right) => {
+    const leftScore = cmakeTargetScore(left, selectedPaths, input.includeAll);
+    const rightScore = cmakeTargetScore(right, selectedPaths, input.includeAll);
+    return rightScore - leftScore || left.path.localeCompare(right.path) || left.name.localeCompare(right.name);
+  })[0];
+}
+
+function cmakeTargetScore(target: CMakeTargetEvidence, selectedPaths: readonly string[], includeAll: boolean): number {
+  if (includeAll || selectedPaths.length === 0) {
+    return target.path === "CMakeLists.txt" ? 10 : 8;
+  }
+  const targetDir = path.posix.dirname(target.path);
+  let score = 0;
+  for (const selectedPath of selectedPaths) {
+    const selectedBase = path.posix.basename(selectedPath);
+    if (target.sources.includes(selectedBase)) {
+      score += 30;
+    }
+    if (target.sources.some((source) => path.posix.normalize(path.posix.join(targetDir, source)) === selectedPath)) {
+      score += 40;
+    }
+    if (selectedPath.startsWith(`${targetDir}/`)) {
+      score += 10;
+    }
+  }
+  return score;
+}
+
+async function discoverCMakeTargets(input: {
+  workspace: WorkspaceFilePort;
+  cmakeFiles: readonly string[];
+}): Promise<CMakeTargetEvidence[]> {
+  const targets: CMakeTargetEvidence[] = [];
+  for (const cmakeFile of input.cmakeFiles.slice(0, 20)) {
+    const stat = await statIfPresent(input.workspace, cmakeFile);
+    if (!stat.exists || !stat.is_file || stat.size_bytes > 256_000) {
+      continue;
+    }
+    const content = await input.workspace.readText({ path: cmakeFile });
+    targets.push(...parseCMakeTargets(cmakeFile, content));
+  }
+  return targets.sort((left, right) => left.path.localeCompare(right.path) || left.name.localeCompare(right.name));
+}
+
+function parseCMakeTargets(filePath: string, content: string): CMakeTargetEvidence[] {
+  const targets: CMakeTargetEvidence[] = [];
+  const lines = content.split(/\r?\n/u);
+  for (const line of lines) {
+    const match = /^\s*add_(library|executable)\s*\(\s*([A-Za-z_][A-Za-z0-9_.:-]*)\b([^)]*)\)/u.exec(line);
+    if (!match) {
+      continue;
+    }
+    targets.push({
+      kind: match[1] === "library" ? "library" : "executable",
+      name: match[2] ?? "",
+      path: filePath,
+      sources: (match[3] ?? "")
+        .trim()
+        .split(/\s+/u)
+        .filter((part) => part.length > 0 && !part.startsWith("$<"))
+    });
+  }
+  return targets;
 }
 
 async function discoverPythonNearestTests(input: {

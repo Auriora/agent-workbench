@@ -545,9 +545,12 @@ describe("repo scope and overview composed server resources", () => {
 
     expect(result.scope.languages).toEqual(expect.arrayContaining(["cpp", "json", "python", "text"]));
     expect(result.scope.file_counts).toMatchObject({
-      cpp: 3,
+      cpp: 4,
       python: 1
     });
+    expect(result.scope.generated_or_vendor_roots).toEqual(
+      expect.arrayContaining(["third_party", "vendor"])
+    );
     expect(result.scope.capability_counts).toMatchObject({
       partial_semantic: 1,
       resource_backed: expect.any(Number)

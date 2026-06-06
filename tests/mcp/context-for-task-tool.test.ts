@@ -643,8 +643,8 @@ describe("context_for_task use case", () => {
 
     expect(result.context.related_files.map((file) => file.path).slice(0, 3)).toEqual([
       "src/App/CMakeLists.txt",
-      "src/App/DocumentObject.pyi",
-      "src/App/DocumentObjectTest.cpp"
+      "src/App/DocumentObjectTest.cpp",
+      "src/App/DocumentObject.pyi"
     ]);
     expect(result.context.related_files).toEqual(
       expect.arrayContaining([
@@ -659,6 +659,57 @@ describe("context_for_task use case", () => {
       ])
     );
     expect(result.context.related_files.map((file) => file.path)).not.toContain("package.json");
+  });
+
+  it("ranks first-party C++ source, tests, and CMake evidence for broad CMake prompts", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-cmake-cpp-repo");
+    const result = await getTaskContext({
+      request: {
+        task: "Update DocumentObject recompute execution behavior in the C++ CMake app",
+        repo_root: repoRoot,
+        files: [],
+        symbols: [],
+        max_files: 6,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+
+    const paths = result.context.related_files.map((file) => file.path);
+    expect(paths.slice(0, 5)).toEqual([
+      "src/App/DocumentObjectTest.cpp",
+      "src/App/DocumentObject.cpp",
+      "src/App/DocumentObject.h",
+      "src/App/CMakeLists.txt",
+      "src/App/ExecutionController.cpp"
+    ]);
+    expect(result.context.related_files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "src/App/DocumentObjectTest.cpp",
+          reason: "Matched first-party C/C++ test routing evidence."
+        }),
+        expect.objectContaining({
+          path: "src/App/CMakeLists.txt",
+          reason: "Matched CMake build metadata for C/C++ routing."
+        }),
+        expect.objectContaining({
+          path: "src/App/ExecutionController.cpp",
+          reason: "Matched first-party C/C++ source routing evidence."
+        })
+      ])
+    );
+    expect(paths).not.toContain("third_party/noise/DocumentObject.cpp");
+    expect(paths).not.toContain("vendor/noise/DocumentObject.cpp");
+    expect(result.context.skipped_work).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "skipped_paths",
+          reason: expect.stringContaining("generated_or_vendor")
+        })
+      ])
+    );
   });
 });
 

@@ -2,14 +2,20 @@
 title: CMake C++ routing and validation requirements
 doc_type: spec
 artifact_type: requirements
-status: active
+status: archived
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Requirements
 
 ## Introduction
+
+Spec 009 closed on 2026-06-06. Accepted CMake/C++ routing and validation
+behavior was promoted to [MCP surface design](../../design/mcp-surface-design.md),
+[Language adapter design](../../design/language-adapter-design.md),
+[Language capability matrix](../../reference/language-capability-matrix.md), and
+[Documentation map](../../reference/documentation-map.md).
 
 This spec promotes the remaining CMake/C++ routing and validation backlog into
 active work. Current support classifies C/C++ files, extracts routing-only

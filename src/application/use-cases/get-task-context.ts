@@ -531,6 +531,7 @@ function scoreFile(file: FileCatalogEntry, terms: Set<string>): number {
   const pathTerms = tokenSet([file.path]);
   let score =
     firstPartyPathBoost(file.path) +
+    cppStructureBoost(file.path, terms) +
     jsTsStructureBoost(file.path, terms) +
     webAppStructureBoost(file.path, terms) +
     dotnetStructureBoost(file.path, terms) +
@@ -547,6 +548,9 @@ function scoreFile(file: FileCatalogEntry, terms: Set<string>): number {
   }
   if (file.file_identity.language === "typescript") {
     score += terms.has("typescript") || terms.has("codex") || terms.has("mcp") ? 2 : 0;
+  }
+  if (file.file_identity.language === "cpp" || file.file_identity.language === "c") {
+    score += hasAnyTerm(terms, ["c", "cpp", "cplusplus", "cmake"]) ? 2 : 0;
   }
   return Math.max(0, score - noisyArtifactPenalty(file.path));
 }
@@ -621,6 +625,10 @@ function reasonForRelatedFile(
   }
   const pathTerms = tokenSet([file.path]);
   const hasExactPathTerm = [...terms].some((term) => pathTerms.has(term));
+  const cppReason = cppStructureReason(file.path, terms);
+  if (cppReason !== undefined) {
+    return cppReason;
+  }
   const webReason = webAppStructureReason(file.path, terms);
   if (webReason !== undefined) {
     return webReason;
@@ -640,6 +648,38 @@ function reasonForRelatedFile(
   return hasExactPathTerm
     ? "Matched task terms in the repo-relative path."
     : "Weak path-term match; use as routing evidence only.";
+}
+
+function cppStructureBoost(filePath: string, terms: Set<string>): number {
+  const reason = cppStructureReason(filePath, terms);
+  if (reason === undefined) {
+    return 0;
+  }
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith("cmakelists.txt")) return 14;
+  if (isTestLikePath(lower)) return 12;
+  if (/^(src|lib|app|cmd|internal|include)\//u.test(lower)) return 9;
+  return 5;
+}
+
+function cppStructureReason(filePath: string, terms: Set<string>): string | undefined {
+  if (!hasAnyTerm(terms, ["c", "cpp", "cplusplus", "cmake", "recompute", "execute", "execution", "build", "test"])) {
+    return undefined;
+  }
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith("cmakelists.txt")) {
+    return "Matched CMake build metadata for C/C++ routing.";
+  }
+  if (!/\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx)$/u.test(lower)) {
+    return undefined;
+  }
+  if (isTestLikePath(lower)) {
+    return "Matched first-party C/C++ test routing evidence.";
+  }
+  if (/^(src|lib|app|cmd|internal|include)\//u.test(lower)) {
+    return "Matched first-party C/C++ source routing evidence.";
+  }
+  return undefined;
 }
 
 function jsTsStructureBoost(filePath: string, terms: Set<string>): number {
