@@ -235,6 +235,7 @@ type LoadedDocsIndex = {
   repoRoot: string;
   documents: Array<DocsDocument & { content: string }>;
   warnings: DocsWarning[];
+  skippedPaths: readonly FileCatalogSkippedPath[];
   truncated: boolean;
   scannedFiles: readonly FileCatalogEntry[];
 };
@@ -283,6 +284,7 @@ async function loadDocsIndex(input: {
     repoRoot: scanned.repo_root,
     documents: documents.sort((left, right) => left.path.localeCompare(right.path)),
     warnings,
+    skippedPaths: scanned.skipped_paths ?? [],
     truncated: scanned.truncated || markdownFiles.length > Math.max(input.request.max_docs, 200),
     scannedFiles: scanned.files
   };
@@ -343,27 +345,33 @@ function searchDocument(input: {
   includeSnippets: boolean;
 }): DocsSearchHit[] {
   const hits: DocsSearchHit[] = [];
-  const pathMatch = input.doc.path.toLowerCase().includes(input.query);
-  const titleMatch = input.doc.title.toLowerCase().includes(input.query);
-  if (pathMatch || titleMatch || input.doc.content.toLowerCase().includes(input.query)) {
+  const terms = tokenizeQuery(input.query);
+  const docPath = input.doc.path.toLowerCase();
+  const title = input.doc.title.toLowerCase();
+  const content = input.doc.content.toLowerCase();
+  const pathScore = scoreText(docPath, input.query, terms);
+  const titleScore = scoreText(title, input.query, terms);
+  const contentScore = scoreText(content, input.query, terms);
+  if (pathScore > 0 || titleScore > 0 || contentScore > 0) {
     hits.push({
       path: input.doc.path,
       title: input.doc.title,
-      snippet: input.includeSnippets ? snippetForQuery(input.doc.content, input.query) : undefined,
-      score: (titleMatch ? 50 : 0) + (pathMatch ? 20 : 0) + 5,
+      snippet: input.includeSnippets ? snippetForQuery(input.doc.content, firstSnippetNeedle(input.query, terms)) : undefined,
+      score: (titleScore * 10) + (pathScore * 6) + contentScore,
       evidence_kinds: ["docs"],
       direct_read_caveat: DIRECT_READ_CAVEAT
     });
   }
   for (const heading of input.doc.headings) {
-    if (heading.text.toLowerCase().includes(input.query)) {
+    const headingScore = scoreText(heading.text.toLowerCase(), input.query, terms);
+    if (headingScore > 0) {
       hits.push({
         path: input.doc.path,
         title: input.doc.title,
         heading_id: heading.id,
         heading: heading.text,
         snippet: input.includeSnippets ? snippetForQuery(input.doc.content, heading.text.toLowerCase()) : undefined,
-        score: 40 - heading.depth,
+        score: (headingScore * 8) + (6 - heading.depth),
         evidence_kinds: ["docs"],
         direct_read_caveat: DIRECT_READ_CAVEAT
       });
@@ -448,9 +456,22 @@ function docsNextActions(repoRoot: string, filePath?: string, headingId?: string
 }
 
 function mapSkippedPaths(skippedPaths: readonly FileCatalogSkippedPath[]): DocsWarning[] {
-  return skippedPaths
-    .filter((skipped) => ["permission_denied", "missing", "generated_or_vendor", "workspace_escape"].includes(skipped.reason))
-    .slice(0, 50)
+  const relevant = skippedPaths.filter((skipped) =>
+    ["permission_denied", "missing", "generated_or_vendor", "workspace_escape"].includes(skipped.reason)
+  );
+  const directWarnings = relevant.filter((skipped) => skipped.reason !== "generated_or_vendor");
+  const generatedWarnings = relevant.filter((skipped) => skipped.reason === "generated_or_vendor");
+  const compactGenerated = generatedWarnings.length <= 5
+    ? generatedWarnings
+    : [
+        {
+          path: undefined,
+          reason: "generated_or_vendor" as const,
+          detail: `${generatedWarnings.length} generated, dependency, cache, build, or vendor path(s) were excluded from catalog evidence; sample: ${generatedWarnings[0]?.path ?? "unknown"}.`
+        }
+      ];
+  return [...directWarnings, ...compactGenerated]
+    .slice(0, 20)
     .map((skipped) => ({
       path: skipped.path,
       reason: skipped.reason,
@@ -459,11 +480,15 @@ function mapSkippedPaths(skippedPaths: readonly FileCatalogSkippedPath[]): DocsW
 }
 
 function missingOrSkippedWarning(pathValue: string, index: LoadedDocsIndex): DocsWarning | undefined {
-  const skipped = index.warnings.find((warning) =>
-    warning.path === pathValue || (warning.path !== undefined && pathValue.startsWith(`${warning.path}/`))
+  const skipped = index.skippedPaths.find((warning) =>
+    warning.path === pathValue || pathValue.startsWith(`${warning.path}/`)
   );
   if (skipped !== undefined) {
-    return skipped;
+    return {
+      path: skipped.path,
+      reason: skipped.reason,
+      message: skipped.detail
+    };
   }
   if (index.documents.some((doc) => doc.path === pathValue)) {
     return undefined;
@@ -557,4 +582,22 @@ function snippetForQuery(content: string, query: string): string {
   const start = Math.max(0, index - 60);
   const end = Math.min(content.length, index + query.length + 100);
   return content.slice(start, end).replace(/\s+/gu, " ").trim();
+}
+
+function tokenizeQuery(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/[^a-z0-9_/-]+/u)
+    .map((term) => term.trim())
+    .filter((term) => term.length > 1);
+}
+
+function scoreText(text: string, query: string, terms: readonly string[]): number {
+  const phraseScore = text.includes(query) ? terms.length + 2 : 0;
+  const termScore = terms.reduce((score, term) => score + (text.includes(term) ? 1 : 0), 0);
+  return phraseScore + termScore;
+}
+
+function firstSnippetNeedle(query: string, terms: readonly string[]): string {
+  return terms[0] ?? query;
 }

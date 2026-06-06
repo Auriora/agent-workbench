@@ -140,6 +140,62 @@ describe("docs query application contracts", () => {
     }
   });
 
+  it("finds docs with multi-term queries without requiring an exact phrase", async () => {
+    const fixture = copyFixture();
+    try {
+      const result = await searchDocs({
+        request: {
+          repo_root: fixture.root,
+          query: "guide rollback",
+          max_results: 5,
+          include_snippets: true
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot: fixture.root }),
+        default_repo_root: "."
+      });
+      const search = docsSearchResultSchema.parse(result.search);
+
+      expect(search.hits.map((hit) => hit.path)).toEqual(
+        expect.arrayContaining(["docs/guide.md", "docs/operations/runbook.md"])
+      );
+      expect(search.hits.every((hit) => hit.direct_read_caveat.includes("docs_read_section"))).toBe(true);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  it("summarizes large generated skipped-path sets in public docs results", async () => {
+    const fixture = copyFixture();
+    try {
+      for (const generatedRoot of ["build", "coverage", "node_modules", "target", "bin", "obj"]) {
+        fs.mkdirSync(path.join(fixture.root, generatedRoot), { recursive: true });
+        fs.writeFileSync(path.join(fixture.root, generatedRoot, "generated.md"), "# Generated\n");
+      }
+
+      const result = await getDocsOverview({
+        request: {
+          repo_root: fixture.root,
+          max_docs: 3,
+          max_headings_per_doc: 3
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot: fixture.root }),
+        default_repo_root: "."
+      });
+      const overview = docsOverviewSchema.parse(result.overview);
+
+      expect(overview.warnings).toEqual([
+        expect.objectContaining({
+          reason: "generated_or_vendor",
+          message: expect.stringContaining("generated, dependency, cache, build, or vendor path(s)")
+        })
+      ]);
+    } finally {
+      fixture.dispose();
+    }
+  });
+
   it("returns outlines and direct section reads for stable heading identifiers", async () => {
     const fixture = copyFixture();
     try {
