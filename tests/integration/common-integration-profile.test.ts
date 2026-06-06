@@ -48,7 +48,7 @@ describe("common integration profile", () => {
           surface: "mcp",
           status: "supported",
           provenance: "runtime_source",
-          path: "src/mcp/stdio.ts",
+          path: "plugins/agent-workbench/.mcp.json",
           regeneration_safe: true
         })
       ])

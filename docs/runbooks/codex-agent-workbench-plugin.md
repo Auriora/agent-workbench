@@ -3,7 +3,7 @@ title: Codex Agent Workbench plugin and MCP setup
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Codex Agent Workbench Plugin And MCP Setup
@@ -15,25 +15,21 @@ Workbench from Codex without creating a second executable runtime path.
 
 ## Supported Model
 
-Agent Workbench has one executable Codex runtime path per install:
+Agent Workbench has one executable Codex runtime path per packaged install:
 
-- Local development: host-level Codex MCP configuration launches
-  `src/mcp/stdio.ts` from this repository checkout.
-- Packaged install: host-level Codex MCP configuration launches the installed
-  package prefix created by `scripts/install-agent-workbench-package.sh`.
-
-The Codex plugin is a wrapper only:
-
-- It installs the `agent-workbench` skill.
-- It may install optional quiet hook artifacts.
-- It must not register an MCP server for local development.
-- It must not launch a cache-relative runtime path.
+- The Codex plugin installs the `agent-workbench` skill.
+- The Codex plugin installs quiet lifecycle hooks from `hooks/hooks.json`.
+- The Codex plugin registers the `agent-workbench` MCP server through
+  `.mcp.json`.
+- The plugin MCP server launches the stable package prefix created by
+  `scripts/install-agent-workbench-package.sh`.
+- The plugin must not launch runtime code from Codex's plugin cache path.
 
 The GHCR package is the distribution wrapper for complete installs. It contains
-runtime source, docs, package metadata, the Codex plugin wrapper, skills, hooks,
-and an installer that writes host-level MCP and hook configuration. This is not
-a second runtime implementation; it is the same MCP entrypoint installed under a
-stable prefix.
+runtime source, docs, package metadata, the Codex plugin, skills, hooks, MCP
+configuration, and an installer that registers the plugin through the personal
+marketplace. This is not a second runtime implementation; the plugin MCP config
+launches the same MCP entrypoint installed under a stable prefix.
 
 Companion MCP servers, such as a spec lifecycle server for a separate docs
 repository, should also be configured as host-level Codex MCP entries. Keep
@@ -42,26 +38,10 @@ Workbench plugin should not package or proxy those companion runtimes.
 
 This keeps source updates explicit:
 
-- Local development: restart Codex after source changes. After dependency
-  changes, run `pnpm install` in this repository checkout, then restart Codex.
-- Packaged install: install a new GHCR package version, then restart Codex.
-
-Do not rely on plugin reinstall as the runtime update mechanism.
-
-## Host-Level MCP Configuration
-
-Configure Codex with an MCP server that points at this checkout:
-
-```toml
-[mcp_servers.agent-workbench]
-enabled = true
-command = "node"
-args = [
-  "--import",
-  "tsx",
-  "/absolute/path/to/agent-workbench/src/mcp/stdio.ts"
-]
-```
+- Install a new package version.
+- Reinstall `agent-workbench@<personal-marketplace>`.
+- Restart Codex so skills, hooks, and MCP tools are discovered from the updated
+  plugin cache.
 
 For normal Codex workspace sessions, leave
 `AGENT_WORKBENCH_DEFAULT_REPO_ROOT` unset. The MCP process should default to the
@@ -73,10 +53,9 @@ active workspace.
 
 The local plugin source lives at `plugins/agent-workbench/`.
 
-The plugin manifest should include skill metadata but no `mcpServers` entry.
-If `codex plugin list` or Codex UI shows a plugin-provided Agent Workbench MCP
-server, disable that plugin server and keep the host-level
-`mcp_servers.agent-workbench` entry as the single executable runtime path.
+The plugin manifest includes `skills` and `mcpServers`. Codex auto-discovers
+`hooks/hooks.json` when the plugin is enabled. The `.mcp.json` file launches the
+installed package launcher and must not point at a plugin-cache source path.
 
 When changing plugin packaging, update the plugin cachebuster and reinstall:
 
@@ -85,8 +64,8 @@ python3 /home/bcherrington/.codex/skills/.system/plugin-creator/scripts/update_p
 codex plugin add agent-workbench@auriora-local
 ```
 
-After reinstall, start a new Codex session to pick up changed skills or plugin
-metadata.
+After reinstall, start a new Codex session to pick up changed skills, hooks,
+MCP tools, and plugin metadata.
 
 ## GHCR Package Installation
 
@@ -103,7 +82,7 @@ integration:
 
 - runtime source and package metadata
 - documentation
-- Codex plugin manifest, skill, and hooks
+- Codex plugin manifest, MCP config, skill, and hooks
 - host launcher for the MCP stdio server
 - dependency manifest and lockfile
 
@@ -121,19 +100,17 @@ scripts/install-agent-workbench-package.sh \
   --codex-home "$HOME/.codex"
 ```
 
-The installer writes a marked MCP block to `~/.codex/config.toml` unless
-`--skip-codex-config` is passed. That block includes:
+Unless `--skip-codex-config` is passed, the installer:
 
-- `[mcp_servers.agent-workbench]` pointing at the installed package launcher
+- removes any old marked `# BEGIN Agent Workbench package install` host-level
+  MCP block from `~/.codex/config.toml`;
+- copies the plugin source to `~/plugins/agent-workbench`;
+- ensures the personal marketplace exposes `agent-workbench`;
+- cachebusts the local plugin version; and
+- runs `codex plugin add agent-workbench@<personal-marketplace>`.
 
-The installer merges `SessionStart` and `PostToolUse` entries into
-`~/.codex/hooks.json`, pointing at installed hook scripts. Keep user-layer
-hooks in `hooks.json` rather than mixing inline `[hooks]` TOML tables with a
-same-layer hooks file; Codex warns when both representations exist in the same
-config layer.
-
-This hook config is the fallback for package/plugin environments where the
-plugin manifest cannot declare or install hooks directly.
+Hooks remain plugin-bundled. They are not duplicated into `~/.codex/hooks.json`.
+Codex may require hook trust review before plugin hooks run.
 
 Dependency installation is explicit in
 `packaging/agent-workbench/package-manifest.json`. The package requires

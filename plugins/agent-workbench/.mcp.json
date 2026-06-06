@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "agent-workbench": {
+      "command": "bash",
+      "args": [
+        "-lc",
+        "exec \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp\""
+      ]
+    }
+  }
+}

@@ -64,6 +64,8 @@
   "codex": {
     "mcp_server_id": "agent-workbench",
     "plugin_manifest": "plugins/agent-workbench/.codex-plugin/plugin.json",
-    "hook_config_fallback": "scripts/install-agent-workbench-package.sh"
+    "plugin_mcp_config": "plugins/agent-workbench/.mcp.json",
+    "plugin_hooks": "plugins/agent-workbench/hooks/hooks.json",
+    "plugin_install_model": "scripts/install-agent-workbench-package.sh"
   }
 }

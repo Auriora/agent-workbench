@@ -24,33 +24,33 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       {
         surface: "mcp",
         status: "active",
-        artifact_path: "src/mcp/stdio.ts",
-        purpose: "Executable runtime surface for Codex through stdio MCP.",
+        artifact_path: "plugins/agent-workbench/.mcp.json",
+        purpose: "Executable runtime surface for Codex through plugin-bundled stdio MCP.",
         behavior: [
-          "Launches the production MCP server from this repository checkout.",
+          "Launches the production MCP server through the installed package launcher.",
           "Defaults omitted repo roots to the Codex session working directory.",
           "Supports explicit repo roots through arguments or AGENT_WORKBENCH_DEFAULT_REPO_ROOT for fixed-target launches.",
           "Lists configured public MCP bindings; a given Codex session may expose only the subset discovered by the active client configuration."
         ],
         constraints: [
-          "No copied runtime path.",
-          "Source edits in this repository are picked up on Codex restart."
+          "No plugin-cache runtime path.",
+          "Source edits are picked up after package reinstall and Codex restart."
         ]
       },
       {
         surface: "plugins",
         status: "available",
         artifact_path: "plugins/agent-workbench/.codex-plugin/plugin.json",
-        purpose: "Codex plugin wrapper that packages skill guidance and quiet hook scripts for local and packaged installs.",
+        purpose: "Codex plugin that packages skill guidance, quiet hook scripts, and MCP configuration for packaged installs.",
         behavior: [
-          "Does not register an MCP server for local development.",
-          "Relies on host-level Codex MCP configuration to launch the repository checkout runtime.",
-          "The GHCR install package ships a host installer that writes MCP and hook configuration when plugin installation does not install hooks."
+          "Registers the Agent Workbench MCP server through plugin-bundled .mcp.json.",
+          "Loads lifecycle hooks from plugin-bundled hooks/hooks.json.",
+          "Launches the installed package entrypoint instead of runtime code copied into the plugin cache."
         ],
         constraints: [
           "Plugin artifacts must not import runtime internals.",
           "Plugin installation must not create a copied or cache-relative MCP runtime path.",
-          "Packaged installs must use the installed package prefix, not a plugin cache path, as the MCP runtime source."
+          "Packaged installs must use the installed package prefix as the MCP runtime source."
         ]
       },
       {
@@ -228,12 +228,13 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
     plugin: {
       name: "agent-workbench",
       manifest_path: "plugins/agent-workbench/.codex-plugin/plugin.json",
+      mcp_config_path: "plugins/agent-workbench/.mcp.json",
       runtime_source: "repository_checkout_or_installed_package",
-      packaging_model: "skill_and_hook_wrapper_plus_ghcr_install_package",
-      mcp_binding_model: "host_level_config_required",
+      packaging_model: "plugin_bundled_skill_hooks_and_mcp_plus_install_package",
+      mcp_binding_model: "plugin_bundled_mcp_config",
       update_model: {
-        source_changes: "For local development, restart Codex to launch the updated repository source. For packaged installs, install a new GHCR package version and restart Codex.",
-        dependency_changes: "For local development, run pnpm install in the repository checkout, then restart Codex. For packaged installs, publish and install a package containing rebuilt dependencies.",
+        source_changes: "Install a package containing the updated runtime source, reinstall the Codex plugin, then restart Codex.",
+        dependency_changes: "Publish and install a package containing rebuilt dependencies, reinstall the Codex plugin, then restart Codex.",
         copied_runtime_allowed: false
       }
     },
@@ -256,8 +257,8 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         "AGENTS.md"
       ],
       dependency_install_model: "The package manifest defines Node, pnpm, runtime module, dev/test module, native tool, and native rebuild requirements; the installer runs pnpm install --frozen-lockfile and pnpm rebuild:native when dependencies are not already packaged.",
-      mcp_install_model: "The installer writes a host-level mcp_servers.agent-workbench entry that launches the installed package prefix.",
-      hook_install_model: "The installer merges SessionStart and PostToolUse hook entries into Codex hooks.json because user-layer hooks should use one representation per config layer."
+      mcp_install_model: "The installer registers the local Codex plugin; plugin-bundled .mcp.json launches the installed package prefix.",
+      hook_install_model: "Hooks are installed through plugin-bundled hooks/hooks.json and may require Codex hook trust review after plugin install."
     },
     skills: [
       {
@@ -304,9 +305,9 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       "MCP is the only executable runtime surface.",
       "Configured MCP bindings must not be treated as guaranteed client-discovered tools unless the active session exposes them.",
       "Plugin, skill, and hook artifacts are wrappers around MCP, not parallel implementations.",
-      "Source edits require Codex restart to reload MCP source behavior.",
-      "Dependency changes require pnpm install in this repository checkout for local development, or a rebuilt package for packaged installs, then restart Codex.",
-      "The GHCR package must include runtime source, docs, plugin manifest, skills, hooks, installer, and release metadata.",
+      "Source edits require package reinstall, plugin reinstall, and Codex restart to reload MCP source behavior.",
+      "Dependency changes require a package containing rebuilt dependencies, plugin reinstall, and Codex restart.",
+      "The GHCR package must include runtime source, docs, plugin manifest, plugin MCP config, skills, hooks, installer, and release metadata.",
       "No primary-plus-fallback routes are allowed unless the spec and fixture-backed tests require them.",
       "Timeouts and failures must not produce partial-success evidence.",
       "Root causes must be fixed or reported as structured degraded/blocked state with missing evidence."
@@ -337,7 +338,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         status: "supported",
         provenance: "codex_wrapper",
         regeneration_safe: true,
-        notes: ["Wrapper manifest only; runtime code stays in the checkout and MCP is configured at host level."]
+        notes: ["Plugin manifest points at bundled MCP config while runtime code stays in the installed package prefix."]
       },
       {
         target_agent: "codex",
@@ -346,7 +347,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         status: "supported",
         provenance: "ghcr_install_package",
         regeneration_safe: true,
-        notes: ["GHCR package manifest includes runtime source, docs, plugin wrapper, skills, hooks, and installer metadata."]
+        notes: ["GHCR package manifest includes runtime source, docs, plugin MCP config, skills, hooks, and installer metadata."]
       },
       {
         target_agent: "codex",

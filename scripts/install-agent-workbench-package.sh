@@ -15,7 +15,7 @@ Options:
   --source <path>       Package source root. Defaults to the checkout root.
   --prefix <path>       Install prefix. Defaults to ~/.local/share/agent-workbench.
   --codex-home <path>   Codex home. Defaults to $CODEX_HOME or ~/.codex.
-  --skip-codex-config   Copy files and launcher without editing Codex config.toml.
+  --skip-codex-config   Copy files and launcher without installing the Codex plugin.
   --dry-run             Print planned actions without writing files.
   -h, --help            Show this help.
 USAGE
@@ -63,6 +63,8 @@ required_paths=(
   "src"
   "docs"
   "plugins/agent-workbench/.codex-plugin/plugin.json"
+  "plugins/agent-workbench/.mcp.json"
+  "plugins/agent-workbench/hooks/hooks.json"
   "plugins/agent-workbench/hooks/session-start.js"
   "plugins/agent-workbench/hooks/post-edit-feedback.js"
   "plugins/agent-workbench/skills/agent-workbench/SKILL.md"
@@ -137,80 +139,101 @@ ensure_native_build_prerequisites() {
   fi
 }
 
-write_user_hooks_json() {
-  local hooks_json="$1"
+remove_legacy_agent_workbench_mcp_block() {
+  local codex_config="$1"
   if [ "$DRY_RUN" -eq 1 ]; then
-    echo "dry-run: merge Agent Workbench hooks into $hooks_json"
+    echo "dry-run: remove legacy Agent Workbench MCP config block from $codex_config"
     return
   fi
 
-  HOOKS_JSON="$hooks_json" INSTALL_ROOT="$INSTALL_ROOT" node <<'NODE'
+  touch "$codex_config"
+  if grep -q "BEGIN Agent Workbench package install" "$codex_config"; then
+    temp_config="$(mktemp)"
+    awk '
+      /# BEGIN Agent Workbench package install/ { skipping = 1; next }
+      /# END Agent Workbench package install/ { skipping = 0; next }
+      !skipping { print }
+    ' "$codex_config" > "$temp_config"
+    mv "$temp_config" "$codex_config"
+  fi
+}
+
+install_codex_plugin() {
+  local marketplace_path="$HOME/.agents/plugins/marketplace.json"
+  local plugin_root="$HOME/plugins/agent-workbench"
+
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "dry-run: copy $INSTALL_ROOT/plugins/agent-workbench to $plugin_root"
+    echo "dry-run: ensure Agent Workbench marketplace entry in $marketplace_path"
+    echo "dry-run: cachebust plugin version in $plugin_root/.codex-plugin/plugin.json"
+    echo "dry-run: codex plugin add agent-workbench@<personal-marketplace-name>"
+    return
+  fi
+
+  rm -rf "$plugin_root"
+  mkdir -p "$(dirname "$plugin_root")"
+  cp -a "$INSTALL_ROOT/plugins/agent-workbench" "$plugin_root"
+
+  MARKETPLACE_PATH="$marketplace_path" PLUGIN_ROOT="$plugin_root" node <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
 
-const hooksJson = process.env.HOOKS_JSON;
-const installRoot = process.env.INSTALL_ROOT;
+const marketplacePath = process.env.MARKETPLACE_PATH;
+const pluginRoot = process.env.PLUGIN_ROOT;
 
-let data = { hooks: {} };
-if (fs.existsSync(hooksJson)) {
-  data = JSON.parse(fs.readFileSync(hooksJson, "utf8"));
+let marketplace = {
+  name: "personal",
+  interface: { displayName: "Personal" },
+  plugins: []
+};
+if (fs.existsSync(marketplacePath)) {
+  marketplace = JSON.parse(fs.readFileSync(marketplacePath, "utf8"));
 }
-if (!data || typeof data !== "object" || Array.isArray(data)) {
-  data = { hooks: {} };
+if (!Array.isArray(marketplace.plugins)) {
+  marketplace.plugins = [];
 }
-if (!data.hooks || typeof data.hooks !== "object" || Array.isArray(data.hooks)) {
-  data.hooks = {};
-}
-
-const sessionCommand = `AGENT_WORKBENCH_HOOK_FEEDBACK=basic node "${path.join(
-  installRoot,
-  "plugins/agent-workbench/hooks/session-start.js"
-)}"`;
-const postEditCommand = `AGENT_WORKBENCH_HOOK_FEEDBACK=basic node "${path.join(
-  installRoot,
-  "plugins/agent-workbench/hooks/post-edit-feedback.js"
-)}"`;
-
-function withoutAgentWorkbench(entries) {
-  return (Array.isArray(entries) ? entries : [])
-    .map((entry) => {
-      const hooks = (Array.isArray(entry.hooks) ? entry.hooks : []).filter(
-        (hook) => !String(hook.command ?? "").includes("/plugins/agent-workbench/hooks/")
-      );
-      return { ...entry, hooks };
-    })
-    .filter((entry) => entry.hooks.length > 0);
+if (!marketplace.interface || typeof marketplace.interface !== "object") {
+  marketplace.interface = { displayName: marketplace.name ?? "Personal" };
 }
 
-data.hooks.SessionStart = withoutAgentWorkbench(data.hooks.SessionStart);
-data.hooks.SessionStart.push({
-  matcher: "startup|resume|clear|compact",
-  hooks: [
-    {
-      type: "command",
-      command: sessionCommand,
-      timeout: 10,
-      statusMessage: "Loading Agent Workbench context"
-    }
-  ]
-});
+const entry = {
+  name: "agent-workbench",
+  source: {
+    source: "local",
+    path: "./plugins/agent-workbench"
+  },
+  policy: {
+    installation: "AVAILABLE",
+    authentication: "ON_INSTALL"
+  },
+  category: "Developer Tools"
+};
 
-data.hooks.PostToolUse = withoutAgentWorkbench(data.hooks.PostToolUse);
-data.hooks.PostToolUse.push({
-  matcher: "^(apply_patch|Edit|Write|write_file|create_file|rename_file)$",
-  hooks: [
-    {
-      type: "command",
-      command: postEditCommand,
-      timeout: 10,
-      statusMessage: "Checking Agent Workbench edit feedback"
-    }
-  ]
-});
+const existingIndex = marketplace.plugins.findIndex((plugin) => plugin.name === entry.name);
+if (existingIndex === -1) {
+  marketplace.plugins.push(entry);
+} else {
+  marketplace.plugins[existingIndex] = entry;
+}
 
-fs.mkdirSync(path.dirname(hooksJson), { recursive: true });
-fs.writeFileSync(hooksJson, `${JSON.stringify(data, null, 2)}\n`);
+fs.mkdirSync(path.dirname(marketplacePath), { recursive: true });
+fs.writeFileSync(marketplacePath, `${JSON.stringify(marketplace, null, 2)}\n`);
+
+const manifestPath = path.join(pluginRoot, ".codex-plugin", "plugin.json");
+const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+const baseVersion = String(manifest.version ?? "0.1.0").split("+")[0];
+const stamp = new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14);
+manifest.version = `${baseVersion}+codex.${stamp}`;
+fs.writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 NODE
+
+  if command -v codex >/dev/null 2>&1; then
+    local marketplace_name
+    marketplace_name="$(MARKETPLACE_PATH="$marketplace_path" node -e 'const fs = require("node:fs"); const data = JSON.parse(fs.readFileSync(process.env.MARKETPLACE_PATH, "utf8")); process.stdout.write(data.name);')"
+    codex plugin add "agent-workbench@$marketplace_name"
+  else
+    echo "Codex CLI not found; plugin source installed at $plugin_root but not added." >&2
+  fi
 }
 
 copy_component() {
@@ -257,31 +280,8 @@ fi
 
 if [ "$WRITE_CODEX_CONFIG" -eq 1 ]; then
   run mkdir -p "$CODEX_HOME"
-  CODEX_CONFIG="$CODEX_HOME/config.toml"
-  if [ "$DRY_RUN" -eq 1 ]; then
-    echo "dry-run: rewrite Agent Workbench MCP config block in $CODEX_CONFIG"
-  else
-    touch "$CODEX_CONFIG"
-    if grep -q "BEGIN Agent Workbench package install" "$CODEX_CONFIG"; then
-      temp_config="$(mktemp)"
-      awk '
-        /# BEGIN Agent Workbench package install/ { skipping = 1; next }
-        /# END Agent Workbench package install/ { skipping = 0; next }
-        !skipping { print }
-      ' "$CODEX_CONFIG" > "$temp_config"
-      mv "$temp_config" "$CODEX_CONFIG"
-    fi
-    cat >> "$CODEX_CONFIG" <<EOF
-
-# BEGIN Agent Workbench package install
-[mcp_servers.agent-workbench]
-enabled = true
-command = "$INSTALL_ROOT/bin/agent-workbench-mcp"
-args = []
-# END Agent Workbench package install
-EOF
-  fi
-  write_user_hooks_json "$CODEX_HOME/hooks.json"
+  remove_legacy_agent_workbench_mcp_block "$CODEX_HOME/config.toml"
+  install_codex_plugin
 fi
 
 echo "Agent Workbench installed at $INSTALL_ROOT"

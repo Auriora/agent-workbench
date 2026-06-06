@@ -2,13 +2,28 @@
   "hooks": {
     "SessionStart": [
       {
-        "command": "node plugins/agent-workbench/hooks/session-start.js"
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AGENT_WORKBENCH_HOOK_FEEDBACK=basic node \"${PLUGIN_ROOT}/hooks/session-start.js\"",
+            "timeout": 10,
+            "statusMessage": "Loading Agent Workbench context"
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "^(apply_patch|write_file|create_file|rename_file)$",
-        "command": "node plugins/agent-workbench/hooks/post-edit-feedback.js"
+        "matcher": "^(apply_patch|Edit|Write|write_file|create_file|rename_file)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "AGENT_WORKBENCH_HOOK_FEEDBACK=basic node \"${PLUGIN_ROOT}/hooks/post-edit-feedback.js\"",
+            "timeout": 10,
+            "statusMessage": "Checking Agent Workbench edit feedback"
+          }
+        ]
       }
     ]
   }

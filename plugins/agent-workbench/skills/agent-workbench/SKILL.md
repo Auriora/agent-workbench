@@ -27,8 +27,9 @@ are active:
 
 - `AGENTS.md` gives repository guidance.
 - The MCP server is the only executable runtime surface.
-- The plugin packages this skill and optional quiet hooks; host-level Codex MCP
-  config launches the executable runtime from the repository checkout.
+- The plugin packages this skill, quiet hooks, and MCP server configuration.
+- The plugin MCP server launches the installed Agent Workbench package
+  entrypoint; it must not launch runtime code from the plugin cache.
 - Hooks are wrappers and must stay silent unless configured for basic feedback.
 
 ## Failure Discipline

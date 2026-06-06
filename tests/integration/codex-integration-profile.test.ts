@@ -134,7 +134,7 @@ describe("Codex integration profile", () => {
     });
   });
 
-  it("documents host-level runtime update semantics for source and dependency changes", () => {
+  it("documents plugin-owned runtime update semantics for source and dependency changes", () => {
     const profile = codexIntegrationProfileSchema.parse(describeCodexIntegrationProfile());
     const mcpSurface = profile.active_surfaces.find((entry) => entry.surface === "mcp");
     const sourceDependencyArtifact = profile.artifacts.find(
@@ -143,13 +143,13 @@ describe("Codex integration profile", () => {
 
     expect(profile.runtime_source).toBe("repository_checkout");
     expect(profile.plugin.runtime_source).toBe("repository_checkout_or_installed_package");
-    expect(profile.plugin.packaging_model).toBe("skill_and_hook_wrapper_plus_ghcr_install_package");
-    expect(profile.plugin.mcp_binding_model).toBe("host_level_config_required");
-    expect(profile.plugin.mcp_config_path).toBeUndefined();
-    expect(profile.plugin.update_model.source_changes).toMatch(/Restart Codex/i);
-    expect(profile.plugin.update_model.source_changes).toContain("updated repository source");
-    expect(profile.plugin.update_model.source_changes).toMatch(/GHCR package/i);
-    expect(profile.plugin.update_model.dependency_changes).toMatch(/pnpm install/i);
+    expect(profile.plugin.packaging_model).toBe(
+      "plugin_bundled_skill_hooks_and_mcp_plus_install_package"
+    );
+    expect(profile.plugin.mcp_binding_model).toBe("plugin_bundled_mcp_config");
+    expect(profile.plugin.mcp_config_path).toBe("plugins/agent-workbench/.mcp.json");
+    expect(profile.plugin.update_model.source_changes).toMatch(/package containing the updated runtime source/i);
+    expect(profile.plugin.update_model.source_changes).toMatch(/reinstall the Codex plugin/i);
     expect(profile.plugin.update_model.dependency_changes).toMatch(/restart Codex/i);
     expect(profile.plugin.update_model.dependency_changes).toMatch(/rebuilt dependencies/i);
     expect(profile.install_package).toMatchObject({
@@ -176,20 +176,21 @@ describe("Codex integration profile", () => {
         "AGENTS.md"
       ])
     );
-    expect(profile.install_package.hook_install_model).toMatch(/hooks\.json/);
+    expect(profile.install_package.mcp_install_model).toMatch(/plugin-bundled \.mcp\.json/);
+    expect(profile.install_package.hook_install_model).toMatch(/plugin-bundled hooks\/hooks\.json/);
     expect(profile.guardrails).toEqual(
       expect.arrayContaining([
-        "Source edits require Codex restart to reload MCP source behavior.",
-        "The GHCR package must include runtime source, docs, plugin manifest, skills, hooks, installer, and release metadata."
+        "Source edits require package reinstall, plugin reinstall, and Codex restart to reload MCP source behavior.",
+        "The GHCR package must include runtime source, docs, plugin manifest, plugin MCP config, skills, hooks, installer, and release metadata."
       ])
     );
     expect(profile.runtime_version).toBe("0.1.0");
     expect(mcpSurface?.constraints).toEqual(
-      expect.arrayContaining(["Source edits in this repository are picked up on Codex restart."])
+      expect.arrayContaining(["Source edits are picked up after package reinstall and Codex restart."])
     );
     expect(mcpSurface?.behavior).toEqual(
       expect.arrayContaining([
-        "Launches the production MCP server from this repository checkout.",
+        "Launches the production MCP server through the installed package launcher.",
         "Defaults omitted repo roots to the Codex session working directory."
       ])
     );
@@ -247,14 +248,17 @@ describe("Codex integration profile", () => {
 describe("Codex plugin artifacts", () => {
   const pluginRoot = path.resolve("plugins/agent-workbench");
 
-  it("ships a valid skill-only wrapper manifest, skill, and hook config", () => {
+  it("ships a valid plugin manifest, MCP config, skill, and hook config", () => {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(pluginRoot, ".codex-plugin/plugin.json"), "utf8")
     ) as {
       name: string;
       skills: string;
-      mcpServers?: string;
+      mcpServers: string;
       hooks?: string;
+    };
+    const mcpConfig = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8")) as {
+      mcpServers: Record<string, { command: string; args: string[] }>;
     };
     const hooksConfig = JSON.parse(
       fs.readFileSync(path.join(pluginRoot, "hooks/hooks.json"), "utf8")
@@ -268,10 +272,16 @@ describe("Codex plugin artifacts", () => {
 
     expect(manifest).toMatchObject({
       name: "agent-workbench",
-      skills: "./skills/"
+      skills: "./skills/",
+      mcpServers: "./.mcp.json"
     });
-    expect(manifest.mcpServers).toBeUndefined();
     expect(manifest.hooks).toBeUndefined();
+    expect(mcpConfig.mcpServers["agent-workbench"]).toMatchObject({
+      command: "bash",
+      args: expect.arrayContaining([
+        "exec \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp\""
+      ])
+    });
     expect(Object.keys(hooksConfig.hooks).sort()).toEqual(["PostToolUse", "SessionStart"]);
     expect(skill).toContain("Agent Workbench is the executable runtime.");
     expect(skill).toContain("Do not add primary-plus-fallback routes");
@@ -431,32 +441,40 @@ describe("Codex plugin artifacts", () => {
     });
   });
 
-  it("keeps MCP launch owned by the host-level repository checkout entrypoint", () => {
+  it("keeps MCP launch owned by plugin config without using the plugin cache as runtime", () => {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(pluginRoot, ".codex-plugin/plugin.json"), "utf8")
     ) as {
-      mcpServers?: string;
+      mcpServers: string;
+    };
+    const mcpConfig = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8")) as {
+      mcpServers: Record<string, { command: string; args: string[] }>;
     };
     const profile = codexIntegrationProfileSchema.parse(describeCodexIntegrationProfile());
     const mcpSurface = profile.active_surfaces.find((entry) => entry.surface === "mcp");
     const pluginSurface = profile.active_surfaces.find((entry) => entry.surface === "plugins");
 
-    expect(manifest.mcpServers).toBeUndefined();
-    expect(fs.existsSync(path.join(pluginRoot, ".mcp.json"))).toBe(false);
+    expect(manifest.mcpServers).toBe("./.mcp.json");
+    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).toContain(
+      "/bin/agent-workbench-mcp"
+    );
+    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain(
+      "plugins/cache"
+    );
     expect(mcpSurface).toEqual(
       expect.objectContaining({
-        artifact_path: "src/mcp/stdio.ts"
+        artifact_path: "plugins/agent-workbench/.mcp.json"
       })
     );
     expect(pluginSurface?.behavior).toEqual(
       expect.arrayContaining([
-        "Does not register an MCP server for local development.",
-        "Relies on host-level Codex MCP configuration to launch the repository checkout runtime.",
-        "The GHCR install package ships a host installer that writes MCP and hook configuration when plugin installation does not install hooks."
+        "Registers the Agent Workbench MCP server through plugin-bundled .mcp.json.",
+        "Loads lifecycle hooks from plugin-bundled hooks/hooks.json.",
+        "Launches the installed package entrypoint instead of runtime code copied into the plugin cache."
       ])
     );
-    expect(profile.plugin.mcp_config_path).toBeUndefined();
-    expect(profile.plugin.mcp_binding_model).toBe("host_level_config_required");
+    expect(profile.plugin.mcp_config_path).toBe("plugins/agent-workbench/.mcp.json");
+    expect(profile.plugin.mcp_binding_model).toBe("plugin_bundled_mcp_config");
   });
 
   it("ships GHCR package metadata and an installer that covers runtime, plugin, skills, and hooks", () => {
@@ -481,7 +499,9 @@ describe("Codex plugin artifacts", () => {
       };
       components: string[];
       codex: {
-        hook_config_fallback: string;
+        plugin_mcp_config: string;
+        plugin_hooks: string;
+        plugin_install_model: string;
       };
     };
     const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as {
@@ -531,21 +551,26 @@ describe("Codex plugin artifacts", () => {
         "AGENTS.md"
       ])
     );
-    expect(manifest.codex.hook_config_fallback).toBe("scripts/install-agent-workbench-package.sh");
+    expect(manifest.codex.plugin_mcp_config).toBe("plugins/agent-workbench/.mcp.json");
+    expect(manifest.codex.plugin_hooks).toBe("plugins/agent-workbench/hooks/hooks.json");
+    expect(manifest.codex.plugin_install_model).toBe("scripts/install-agent-workbench-package.sh");
     expect(containerfile).toContain("FROM node:24-bookworm-slim");
     expect(containerfile).toContain("COPY src ./src");
     expect(containerfile).toContain("COPY docs ./docs");
     expect(containerfile).toContain("COPY plugins ./plugins");
     expect(containerfile).toContain("pnpm install --frozen-lockfile");
     expect(containerfile).toContain("/opt/agent-workbench/src/mcp/stdio.ts");
-    expect(installer).toContain("plugins/agent-workbench/hooks/session-start.js");
-    expect(installer).toContain("plugins/agent-workbench/hooks/post-edit-feedback.js");
+    expect(installer).toContain("plugins/agent-workbench/.mcp.json");
+    expect(installer).toContain("plugins/agent-workbench/hooks/hooks.json");
     expect(installer).toContain("Node.js 22 or newer is required");
     expect(installer).toContain("pnpm 10.18.1 is required");
     expect(installer).toContain("ensure_native_build_prerequisites");
-    expect(installer).toContain("write_user_hooks_json");
-    expect(installer).toContain("$CODEX_HOME/hooks.json");
-    expect(installer).toContain("[mcp_servers.agent-workbench]");
+    expect(installer).toContain("install_codex_plugin");
+    expect(installer).toContain("codex plugin add");
+    expect(installer).toContain("remove_legacy_agent_workbench_mcp_block");
+    expect(installer).not.toContain("write_user_hooks_json");
+    expect(installer).not.toContain("$CODEX_HOME/hooks.json");
+    expect(installer).not.toContain("[mcp_servers.agent-workbench]");
     expect(installer).not.toContain("[[hooks.SessionStart]]");
     expect(installer).not.toContain("[[hooks.PostToolUse]]");
     expect(workflow).toContain("registry: ghcr.io");

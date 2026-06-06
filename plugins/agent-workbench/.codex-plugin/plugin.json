@@ -1,7 +1,7 @@
 {
   "name": "agent-workbench",
   "version": "0.1.0+codex.20260606161840",
-  "description": "Codex wrapper for Agent Workbench workflow guidance and quiet hooks.",
+  "description": "Codex plugin for Agent Workbench workflow guidance, hooks, and MCP tools.",
   "author": {
     "name": "Auriora",
     "email": "noreply@example.com",
@@ -18,10 +18,11 @@
     "analysis"
   ],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "Agent Workbench",
-    "shortDescription": "Workflow guidance wrapper for the Agent Workbench MCP runtime.",
-    "longDescription": "Packages Codex guidance and quiet hook scripts for Agent Workbench. The executable MCP runtime is configured at the host level so local development launches the repository checkout directly instead of a copied plugin cache path.",
+    "shortDescription": "Agent Workbench guidance, hooks, and MCP runtime tools.",
+    "longDescription": "Packages Agent Workbench Codex guidance, lifecycle hooks, and an MCP server binding that launches the locally installed Agent Workbench runtime.",
     "developerName": "Auriora",
     "category": "Developer Tools",
     "capabilities": [

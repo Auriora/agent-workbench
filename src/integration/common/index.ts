@@ -33,11 +33,11 @@ export function buildCommonIntegrationProfile(): IntegrationProfile {
       {
         target_agent: "codex",
         surface: "mcp",
-        path: "src/mcp/stdio.ts",
+        path: "plugins/agent-workbench/.mcp.json",
         status: "supported",
         provenance: "runtime_source",
         regeneration_safe: true,
-        notes: ["Codex host-level configuration launches the repository checkout MCP runtime."]
+        notes: ["Codex plugin MCP configuration launches the installed Agent Workbench runtime."]
       },
       {
         target_agent: "claude_code",
