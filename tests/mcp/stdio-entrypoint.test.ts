@@ -292,6 +292,12 @@ describe("stdio MCP entrypoint", () => {
             name: "diagnostics_for_files"
           }),
           expect.objectContaining({
+            name: "check_markdown_document"
+          }),
+          expect.objectContaining({
+            name: "check_markdown_set"
+          }),
+          expect.objectContaining({
           name: "verification_plan"
         }),
         expect.objectContaining({
@@ -634,6 +640,8 @@ describe("stdio MCP entrypoint", () => {
           expect.objectContaining({ name: "diagnostics_for_files" }),
           expect.objectContaining({ name: "find_references" }),
           expect.objectContaining({ name: "impact" }),
+          expect.objectContaining({ name: "check_markdown_document" }),
+          expect.objectContaining({ name: "check_markdown_set" }),
           expect.objectContaining({ name: "preview_workspace_edit" }),
           expect.objectContaining({ name: "apply_workspace_edit" }),
           expect.objectContaining({ name: "verification_plan" })

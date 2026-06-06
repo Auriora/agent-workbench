@@ -41,7 +41,8 @@ import type {
   EditToken,
   Freshness,
   IntegrationArtifact,
-  IntegrationProfile
+  IntegrationProfile,
+  MarkdownQualityFinding
 } from "../contracts/index.js";
 
 export interface GraphQueryPort {
@@ -213,6 +214,69 @@ export interface WorkspaceSafetyPort {
   ): WorkspacePathDecision;
   isReadOnlyPath(requestedPath: string): boolean;
   redactSecretLikeText(value: string): string;
+}
+
+export type MarkdownDocumentAst = {
+  path: string;
+  lines: readonly string[];
+  frontmatter?: {
+    start_line: number;
+    end_line: number;
+    fields: ReadonlyMap<string, string>;
+  };
+  blocks: readonly MarkdownBlock[];
+  links: readonly MarkdownParsedLink[];
+};
+
+export type MarkdownBlock =
+  | {
+      kind: "heading";
+      line: number;
+      column: number;
+      depth: number;
+      text: string;
+      raw: string;
+    }
+  | {
+      kind: "ordered_list_item";
+      line: number;
+      column: number;
+      indent: number;
+      number: number;
+      raw: string;
+    }
+  | {
+      kind: "table_row";
+      line: number;
+      column: number;
+      cells: readonly string[];
+      raw: string;
+    };
+
+export type MarkdownParsedLink = {
+  line: number;
+  column: number;
+  label: string;
+  target: string;
+  raw: string;
+};
+
+export interface MarkdownParserPort {
+  parse(input: { path: string; content: string }): MarkdownDocumentAst;
+}
+
+export interface MarkdownStructureCheckPort {
+  check(input: {
+    document: MarkdownDocumentAst;
+    repo_root: string;
+    existing_markdown_paths: ReadonlySet<string>;
+    required_frontmatter: readonly string[];
+    max_findings: number;
+    max_evidence_bytes: number;
+  }): {
+    findings: readonly MarkdownQualityFinding[];
+    truncated: boolean;
+  };
 }
 
 export interface WorkspaceWatcherPort {

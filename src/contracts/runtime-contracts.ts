@@ -396,6 +396,61 @@ export const docsReadSectionRequestSchema = z
   .strict();
 export type DocsReadSectionRequest = z.infer<typeof docsReadSectionRequestSchema>;
 
+export const markdownQualityRuleSchema = z.enum([
+  "markdown.heading.skipped_level",
+  "markdown.heading.duplicate",
+  "markdown.frontmatter.missing_required",
+  "markdown.link.broken_relative",
+  "markdown.list.numbering",
+  "markdown.table.readability"
+]);
+export type MarkdownQualityRule = z.infer<typeof markdownQualityRuleSchema>;
+
+export const markdownQualityCheckStatusSchema = z.enum([
+  "done",
+  "skipped",
+  "blocked"
+]);
+export type MarkdownQualityCheckStatus = z.infer<typeof markdownQualityCheckStatusSchema>;
+
+export const checkMarkdownDocumentRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    path: z.string().min(1),
+    max_findings: z.number().int().positive().max(200).default(50),
+    max_evidence_bytes: z.number().int().positive().max(2000).default(240),
+    max_file_bytes: z.number().int().positive().max(1_000_000).default(200_000),
+    required_frontmatter: z.array(z.string().min(1)).default([
+      "title",
+      "doc_type",
+      "status",
+      "owner",
+      "last_reviewed"
+    ])
+  })
+  .strict();
+export type CheckMarkdownDocumentRequest = z.infer<typeof checkMarkdownDocumentRequestSchema>;
+
+export const checkMarkdownSetRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    paths: z.array(z.string().min(1)).default([]),
+    scope_path: z.string().min(1).optional(),
+    max_documents: z.number().int().positive().max(100).default(20),
+    max_findings: z.number().int().positive().max(500).default(100),
+    max_evidence_bytes: z.number().int().positive().max(2000).default(240),
+    max_file_bytes: z.number().int().positive().max(1_000_000).default(200_000),
+    required_frontmatter: z.array(z.string().min(1)).default([
+      "title",
+      "doc_type",
+      "status",
+      "owner",
+      "last_reviewed"
+    ])
+  })
+  .strict();
+export type CheckMarkdownSetRequest = z.infer<typeof checkMarkdownSetRequestSchema>;
+
 export const docsOverviewSchema = z
   .object({
     repo_root: z.string(),
@@ -1002,6 +1057,21 @@ export const codexPluginSpecSchema = z
   .strict();
 export type CodexPluginSpec = z.infer<typeof codexPluginSpecSchema>;
 
+export const codexInstallPackageSpecSchema = z
+  .object({
+    registry: z.literal("ghcr.io"),
+    image: z.string(),
+    containerfile_path: z.string(),
+    manifest_path: z.string(),
+    installer_path: z.string(),
+    release_workflow_path: z.string(),
+    installed_components: z.array(z.string()),
+    mcp_install_model: z.string(),
+    hook_install_model: z.string()
+  })
+  .strict();
+export type CodexInstallPackageSpec = z.infer<typeof codexInstallPackageSpecSchema>;
+
 export const codexIntegrationProfileSchema = z
   .object({
     target_agent: z.literal("codex"),
@@ -1021,6 +1091,7 @@ export const codexIntegrationProfileSchema = z
       })
     ),
     plugin: codexPluginSpecSchema,
+    install_package: codexInstallPackageSpecSchema,
     skills: z.array(codexSkillSpecSchema),
     hooks: z.array(codexHookSpecSchema),
     guardrails: z.array(z.string()),
@@ -1063,6 +1134,7 @@ export type MarkdownQualityCategory = z.infer<typeof markdownQualityCategorySche
 export const markdownQualityFindingSchema = z.object({
   category: markdownQualityCategorySchema,
   severity: attentionSeveritySchema,
+  rule_id: markdownQualityRuleSchema,
   code: z.string(),
   path: z.string(),
   start_line: z.number().int().positive(),
@@ -1070,10 +1142,49 @@ export const markdownQualityFindingSchema = z.object({
   end_line: z.number().int().positive(),
   end_column: z.number().int().nonnegative(),
   message: z.string(),
+  evidence: z.string().optional(),
   suggested_action: z.string().optional(),
   evidence_kinds: z.array(evidenceKindSchema)
 });
 export type MarkdownQualityFinding = z.infer<typeof markdownQualityFindingSchema>;
+
+export const markdownQualityWarningSchema = z
+  .object({
+    path: z.string().optional(),
+    reason: skippedPathReasonSchema,
+    message: z.string()
+  })
+  .strict();
+export type MarkdownQualityWarning = z.infer<typeof markdownQualityWarningSchema>;
+
+export const checkMarkdownDocumentResultSchema = z
+  .object({
+    repo_root: z.string(),
+    path: z.string(),
+    status: markdownQualityCheckStatusSchema,
+    summary: z.string(),
+    findings: z.array(markdownQualityFindingSchema),
+    warnings: z.array(markdownQualityWarningSchema),
+    truncated: z.boolean(),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type CheckMarkdownDocumentResult = z.infer<typeof checkMarkdownDocumentResultSchema>;
+
+export const checkMarkdownSetResultSchema = z
+  .object({
+    repo_root: z.string(),
+    status: markdownQualityCheckStatusSchema,
+    summary: z.string(),
+    checked_documents: z.array(z.string()),
+    skipped_documents: z.array(z.string()),
+    findings: z.array(markdownQualityFindingSchema),
+    warnings: z.array(markdownQualityWarningSchema),
+    truncated: z.boolean(),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type CheckMarkdownSetResult = z.infer<typeof checkMarkdownSetResultSchema>;
 
 export const markdownFormatStrategySchema = z.enum([
   "align_table",

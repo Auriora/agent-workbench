@@ -19,6 +19,8 @@ describe("MCP registry metadata", () => {
       "resource:scope",
       "resource:status",
       "tool:apply_workspace_edit",
+      "tool:check_markdown_document",
+      "tool:check_markdown_set",
       "tool:context_for_task",
       "tool:diagnostics_for_files",
       "tool:docs_outline",

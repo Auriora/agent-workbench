@@ -168,6 +168,18 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         description: "Configured bounded direct section read for precise documentation evidence."
       },
       {
+        name: "check_markdown_document",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Configured bounded read-only Markdown quality check for one repo-relative document."
+      },
+      {
+        name: "check_markdown_set",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Configured bounded read-only Markdown quality check for explicit or scoped document sets."
+      },
+      {
         name: "symbol_search",
         kind: "tool",
         capability_class: "read_only",

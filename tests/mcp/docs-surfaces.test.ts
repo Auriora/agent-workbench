@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type {
+  CheckMarkdownDocumentRequest,
+  CheckMarkdownSetRequest,
   DocsMapRequest,
   DocsOutlineRequest,
   DocsOverviewRequest,
@@ -8,12 +10,18 @@ import type {
   ResponseMetadata
 } from "../../src/contracts/index.js";
 import type {
+  CheckMarkdownDocumentUseCaseResult
+} from "../../src/application/use-cases/check-markdown-quality.js";
+import type { CheckMarkdownSetUseCaseResult } from "../../src/application/use-cases/check-markdown-quality.js";
+import type {
   DocsMapUseCaseResult,
   DocsOutlineUseCaseResult,
   DocsOverviewUseCaseResult,
   DocsReadSectionUseCaseResult,
   DocsSearchUseCaseResult
 } from "../../src/application/use-cases/query-docs.js";
+import { checkMarkdownDocumentTool } from "../../src/interface-adapters/mcp/registries/tools/check-markdown-document.js";
+import { checkMarkdownSetTool } from "../../src/interface-adapters/mcp/registries/tools/check-markdown-set.js";
 import { docsMapResource } from "../../src/interface-adapters/mcp/registries/resources/docs-map.js";
 import { docsOverviewResource } from "../../src/interface-adapters/mcp/registries/resources/docs-overview.js";
 import { docsOutlineTool } from "../../src/interface-adapters/mcp/registries/tools/docs-outline.js";
@@ -240,6 +248,139 @@ describe("docs MCP tools", () => {
       })
     ]);
   });
+
+  it("uses the injected check_markdown_document provider with default repo root", async () => {
+    let parsedRequest: CheckMarkdownDocumentRequest | undefined;
+    const registered = registerTool(checkMarkdownDocumentTool, {
+      checkMarkdownDocument: ({ request }) => {
+        parsedRequest = request;
+        return markdownCheckResult(request.repo_root ?? "/missing", request.path);
+      }
+    });
+
+    const response = await registered.handler({ path: "docs/guide.md" });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: CheckMarkdownDocumentUseCaseResult["check"];
+    };
+
+    expect(parsedRequest).toMatchObject({
+      repo_root: "/repo",
+      path: "docs/guide.md",
+      max_findings: 50,
+      max_evidence_bytes: 240,
+      max_file_bytes: 200_000
+    });
+    expect(parsed.data).toMatchObject({
+      repo_root: "/repo",
+      path: "docs/guide.md",
+      status: "done",
+      findings: [
+        expect.objectContaining({
+          rule_id: "markdown.heading.skipped_level",
+          path: "docs/guide.md"
+        })
+      ]
+    });
+  });
+
+  it("returns structured invalid input before check_markdown_document provider runs", async () => {
+    let providerCalled = false;
+    const registered = registerTool(checkMarkdownDocumentTool, {
+      checkMarkdownDocument: () => {
+        providerCalled = true;
+        throw new Error("provider should not run");
+      }
+    });
+
+    const response = await registered.handler({ path: "" });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: CheckMarkdownDocumentUseCaseResult["check"];
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; retryable: boolean }>;
+    };
+
+    expect(providerCalled).toBe(false);
+    expect(parsed.data.status).toBe("blocked");
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "invalid_input",
+        retryable: false
+      })
+    ]);
+  });
+
+  it("returns structured blocked output when check_markdown_document provider is unavailable", async () => {
+    const registered = registerTool(checkMarkdownDocumentTool, {});
+
+    const response = await registered.handler({ path: "docs/guide.md" });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: CheckMarkdownDocumentUseCaseResult["check"];
+      errors: Array<{ code: string; retryable: boolean }>;
+    };
+
+    expect(parsed.data).toMatchObject({
+      path: "docs/guide.md",
+      status: "blocked",
+      findings: []
+    });
+    expect(parsed.errors[0]).toMatchObject({
+      code: "invalid_input",
+      retryable: false
+    });
+  });
+
+  it("uses the injected check_markdown_set provider with default repo root", async () => {
+    let parsedRequest: CheckMarkdownSetRequest | undefined;
+    const registered = registerTool(checkMarkdownSetTool, {
+      checkMarkdownSet: ({ request }) => {
+        parsedRequest = request;
+        return markdownSetResult(request.repo_root ?? "/missing");
+      }
+    });
+
+    const response = await registered.handler({
+      paths: ["docs/guide.md"],
+      max_documents: 5
+    });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: CheckMarkdownSetUseCaseResult["check"];
+    };
+
+    expect(parsedRequest).toMatchObject({
+      repo_root: "/repo",
+      paths: ["docs/guide.md"],
+      max_documents: 5,
+      max_findings: 100
+    });
+    expect(parsed.data).toMatchObject({
+      repo_root: "/repo",
+      status: "done",
+      checked_documents: ["docs/guide.md"]
+    });
+  });
+
+  it("returns structured blocked output when check_markdown_set provider is unavailable", async () => {
+    const registered = registerTool(checkMarkdownSetTool, {});
+
+    const response = await registered.handler({ paths: ["docs/guide.md"] });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: CheckMarkdownSetUseCaseResult["check"];
+      errors: Array<{ code: string; retryable: boolean }>;
+    };
+
+    expect(parsed.data).toMatchObject({
+      status: "blocked",
+      findings: []
+    });
+    expect(parsed.errors[0]).toMatchObject({
+      code: "invalid_input",
+      retryable: false
+    });
+  });
 });
 
 function registerResource(
@@ -381,6 +522,55 @@ function readSectionResult(
         caveat: "Direct-read evidence for precise documentation claims."
       },
       warnings: [],
+      next_actions: []
+    },
+    meta: meta(repoRoot)
+  };
+}
+
+function markdownCheckResult(repoRoot: string, docPath: string): CheckMarkdownDocumentUseCaseResult {
+  return {
+    check: {
+      repo_root: repoRoot,
+      path: docPath,
+      status: "done",
+      summary: "Markdown document has 1 quality finding.",
+      findings: [
+        {
+          category: "heading_structure",
+          severity: "warning",
+          rule_id: "markdown.heading.skipped_level",
+          code: "markdown.heading.skipped_level",
+          path: docPath,
+          start_line: 4,
+          start_column: 0,
+          end_line: 4,
+          end_column: 12,
+          message: "Heading jumps from level 2 to level 4.",
+          evidence: "#### Details",
+          suggested_action: "Insert the missing intermediate heading level.",
+          evidence_kinds: ["docs", "direct_read"]
+        }
+      ],
+      warnings: [],
+      truncated: false,
+      next_actions: []
+    },
+    meta: meta(repoRoot)
+  };
+}
+
+function markdownSetResult(repoRoot: string): CheckMarkdownSetUseCaseResult {
+  return {
+    check: {
+      repo_root: repoRoot,
+      status: "done",
+      summary: "Markdown set check examined 1 document.",
+      checked_documents: ["docs/guide.md"],
+      skipped_documents: [],
+      findings: [],
+      warnings: [],
+      truncated: false,
       next_actions: []
     },
     meta: meta(repoRoot)

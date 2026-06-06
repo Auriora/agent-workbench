@@ -640,16 +640,24 @@ function planValidationCommands(input: {
     input.selectedEntries.some((file) => isDocsOrConfigLanguage(file.file_identity.language)) ||
     (includeAll && hasDocsOrConfigFiles)
   ) {
-    commands.push({
-      command: "manual_review",
-      args: ["docs-config-syntax"],
-      display: "planned docs/config syntax review",
-      reason: includeAll && input.selectedEntries.length === 0
-        ? "Repository documentation or configuration files are present; syntax/readability checks are planned, not executed."
-        : "Documentation or configuration files changed; syntax/readability checks are planned, not executed.",
-      status: "planned",
-      execution: "not_executed"
+    const markdownCommands = markdownQualityCommands({
+      files: input.files,
+      selectedEntries: input.selectedEntries,
+      includeAll
     });
+    commands.push(...markdownCommands);
+    if (markdownCommands.length === 0 || input.selectedEntries.some((file) => file.file_identity.language !== "markdown")) {
+      commands.push({
+        command: "manual_review",
+        args: ["docs-config-syntax"],
+        display: "planned docs/config syntax review",
+        reason: includeAll && input.selectedEntries.length === 0
+          ? "Repository documentation or configuration files are present; syntax/readability checks are planned, not executed."
+          : "Documentation or configuration files changed; syntax/readability checks are planned, not executed.",
+        status: "planned",
+        execution: "not_executed"
+      });
+    }
   }
 
   return {
@@ -739,6 +747,40 @@ function hasAny(values: Set<string>, expected: readonly string[]): boolean {
 
 function isDocsOrConfigLanguage(language: string): boolean {
   return ["config", "markdown", "json", "toml", "yaml"].includes(language);
+}
+
+function markdownQualityCommands(input: {
+  files: readonly FileCatalogEntry[];
+  selectedEntries: readonly FileCatalogEntry[];
+  includeAll: boolean;
+}): PlannedValidationCommand[] {
+  const markdownEntries = input.includeAll
+    ? input.files.filter((file) => file.file_identity.language === "markdown")
+    : input.selectedEntries.filter((file) => file.file_identity.language === "markdown");
+  if (markdownEntries.length === 0) {
+    return [];
+  }
+  if (input.includeAll) {
+    const scopePath = markdownEntries.some((entry) => entry.path === "docs" || entry.path.startsWith("docs/")) ? "docs" : ".";
+    return [
+      {
+        command: "check_markdown_set",
+        args: ["--scope-path", scopePath],
+        display: `check_markdown_set --scope-path ${scopePath}`,
+        reason: "Repository Markdown documents are present; bounded Markdown quality checks are planned, not executed.",
+        status: "planned",
+        execution: "not_executed"
+      }
+    ];
+  }
+  return markdownEntries.slice(0, 5).map((entry) => ({
+    command: "check_markdown_document",
+    args: [entry.path],
+    display: `check_markdown_document ${entry.path}`,
+    reason: `${entry.path} is a changed Markdown document; read-only Markdown quality checks are planned, not executed.`,
+    status: "planned" as const,
+    execution: "not_executed" as const
+  }));
 }
 
 function uniqueSorted(values: readonly string[]): string[] {

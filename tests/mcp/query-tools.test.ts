@@ -309,6 +309,8 @@ describe("graph query MCP tools", () => {
 
     expect(Object.keys(server._registeredTools).sort()).toEqual([
       "apply_workspace_edit",
+      "check_markdown_document",
+      "check_markdown_set",
       "context_for_task",
       "diagnostics_for_files",
       "docs_outline",

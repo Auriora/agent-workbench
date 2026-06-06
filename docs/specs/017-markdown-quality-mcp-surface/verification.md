@@ -23,6 +23,7 @@ last_reviewed: 2026-06-06
 | Date | Activity | Result |
 | --- | --- | --- |
 | 2026-06-06 | Spec created from post-MVP Markdown quality backlog | Pending implementation |
+| 2026-06-06 | T001-T005 implementation: fixtures, parser/checker ports, `check_markdown_document`, `check_markdown_set`, and verification-plan integration | Passed focused validation: `pnpm typecheck`; `pnpm exec vitest run tests/docs/markdown-quality.test.ts tests/mcp/docs-surfaces.test.ts tests/mcp/verification-plan-tool.test.ts tests/mcp/registry-metadata.test.ts`. Broader MCP/integration run passed except one shared SQLite lock under parallel load; the failing composed-server profile test passed when rerun alone. |
 
 ## Residual Risks
 

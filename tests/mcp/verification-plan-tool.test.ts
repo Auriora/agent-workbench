@@ -58,7 +58,7 @@ describe("verification_plan use case", () => {
     );
   });
 
-  it("plans documentation/config review for docs-only repositories when no files are selected", async () => {
+  it("plans bounded Markdown quality checks for docs-only repositories when no files are selected", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-docs-only-"));
     try {
       fs.mkdirSync(path.join(repoRoot, "docs", "specs", "001-example"), { recursive: true });
@@ -81,10 +81,10 @@ describe("verification_plan use case", () => {
       expect(result.plan.status).toBe("planned");
       expect(result.plan.planned_commands).toEqual([
         expect.objectContaining({
-          command: "manual_review",
-          args: ["docs-config-syntax"],
-          display: "planned docs/config syntax review",
-          reason: expect.stringContaining("Repository documentation or configuration files are present")
+          command: "check_markdown_set",
+          args: ["--scope-path", "docs"],
+          display: "check_markdown_set --scope-path docs",
+          reason: expect.stringContaining("Repository Markdown documents are present")
         })
       ]);
       expect(result.plan.static_feedback).toBeUndefined();
@@ -1359,6 +1359,8 @@ describe("verification_plan MCP tool", () => {
 
     expect(Object.keys(server._registeredTools).sort()).toEqual([
       "apply_workspace_edit",
+      "check_markdown_document",
+      "check_markdown_set",
       "context_for_task",
       "diagnostics_for_files",
       "docs_outline",

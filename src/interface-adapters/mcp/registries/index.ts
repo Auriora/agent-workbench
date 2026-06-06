@@ -2,6 +2,8 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type {
   CodexIntegrationProfile,
   ApplyWorkspaceEditRequest,
+  CheckMarkdownDocumentRequest,
+  CheckMarkdownSetRequest,
   DiagnosticsForFilesRequest,
   DocsMapRequest,
   DocsOutlineRequest,
@@ -17,6 +19,10 @@ import type {
   VerificationPlanRequest
 } from "../../../contracts/index.js";
 import type { ApplyWorkspaceEditUseCaseResult } from "../../../application/use-cases/apply-workspace-edit.js";
+import type {
+  CheckMarkdownDocumentUseCaseResult,
+  CheckMarkdownSetUseCaseResult
+} from "../../../application/use-cases/check-markdown-quality.js";
 import type { ComputeImpactResult } from "../../../application/use-cases/compute-impact.js";
 import type { DiagnoseChangedFilesResult } from "../../../application/use-cases/diagnose-changed-files.js";
 import type {
@@ -35,6 +41,8 @@ import type { PlanVerificationResult } from "../../../application/use-cases/plan
 import type { PreviewWorkspaceEditUseCaseResult } from "../../../application/use-cases/preview-workspace-edit.js";
 import type { SearchSymbolsResult } from "../../../application/use-cases/search-symbols.js";
 import { codexIntegrationProfileResource } from "./resources/codex-integration-profile.js";
+import { checkMarkdownDocumentTool } from "./tools/check-markdown-document.js";
+import { checkMarkdownSetTool } from "./tools/check-markdown-set.js";
 import { docsMapResource } from "./resources/docs-map.js";
 import { docsOverviewResource } from "./resources/docs-overview.js";
 import { repoOverviewResource } from "./resources/repo-overview.js";
@@ -62,6 +70,8 @@ export type McpRegistryContext = {
   searchDocs?: (input: { request: DocsSearchRequest }) => Promise<DocsSearchUseCaseResult> | DocsSearchUseCaseResult;
   getDocsOutline?: (input: { request: DocsOutlineRequest }) => Promise<DocsOutlineUseCaseResult> | DocsOutlineUseCaseResult;
   readDocsSection?: (input: { request: DocsReadSectionRequest }) => Promise<DocsReadSectionUseCaseResult> | DocsReadSectionUseCaseResult;
+  checkMarkdownDocument?: (input: { request: CheckMarkdownDocumentRequest }) => Promise<CheckMarkdownDocumentUseCaseResult> | CheckMarkdownDocumentUseCaseResult;
+  checkMarkdownSet?: (input: { request: CheckMarkdownSetRequest }) => Promise<CheckMarkdownSetUseCaseResult> | CheckMarkdownSetUseCaseResult;
   getTaskContext?: (input: { request: TaskContextRequest }) => Promise<GetTaskContextResult> | GetTaskContextResult;
   diagnoseChangedFiles?: (input: { request: DiagnosticsForFilesRequest }) => Promise<DiagnoseChangedFilesResult> | DiagnoseChangedFilesResult;
   searchSymbols?: (input: { request: SymbolSearchRequest }) => Promise<SearchSymbolsResult> | SearchSymbolsResult;
@@ -127,6 +137,8 @@ export const mcpTools: McpToolDeclaration[] = [
   docsSearchTool,
   docsOutlineTool,
   docsReadSectionTool,
+  checkMarkdownDocumentTool,
+  checkMarkdownSetTool,
   symbolSearchTool,
   findReferencesTool,
   impactTool,

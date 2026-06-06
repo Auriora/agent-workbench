@@ -1,6 +1,10 @@
 import fs from "node:fs";
 import path from "node:path";
 import { applyWorkspaceEdit } from "./application/use-cases/apply-workspace-edit.js";
+import {
+  checkMarkdownDocument,
+  checkMarkdownSet
+} from "./application/use-cases/check-markdown-quality.js";
 import { computeImpact } from "./application/use-cases/compute-impact.js";
 import { diagnoseChangedFiles } from "./application/use-cases/diagnose-changed-files.js";
 import { findReferences } from "./application/use-cases/find-references.js";
@@ -30,6 +34,10 @@ import {
   WorkspaceFileAdapter,
   WorkspaceSafetyAdapter
 } from "./infrastructure/filesystem/index.js";
+import {
+  MarkdownParserAdapter,
+  MarkdownStructureCheckerAdapter
+} from "./infrastructure/markdown/index.js";
 import { InMemoryRuntimeOperationsAdapter } from "./infrastructure/runtime/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "./infrastructure/sqlite/index.js";
 import {
@@ -59,6 +67,8 @@ export function createAgentWorkbenchServer(
   const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
   const previews = new InMemoryEditPreviewStoreAdapter();
   const diagnosticsProviders = [new JsonSyntaxDiagnosticsProviderAdapter()];
+  const markdownParser = new MarkdownParserAdapter();
+  const markdownChecker = new MarkdownStructureCheckerAdapter();
   const graphStore = openGraphStore(graphStorePath(absoluteRepoRoot));
   const extractors = new ExtractorRegistryAdapter();
   extractors.register(new CppDeclarationExtractorAdapter({ language: "c" }));
@@ -124,6 +134,24 @@ export function createAgentWorkbenchServer(
         request,
         scanner,
         workspace: workspaceForRepoRoot(request.repo_root),
+        default_repo_root: absoluteRepoRoot
+      }),
+    checkMarkdownDocument: ({ request }) =>
+      checkMarkdownDocument({
+        request,
+        scanner,
+        workspace: workspaceForRepoRoot(request.repo_root),
+        parser: markdownParser,
+        checker: markdownChecker,
+        default_repo_root: absoluteRepoRoot
+      }),
+    checkMarkdownSet: ({ request }) =>
+      checkMarkdownSet({
+        request,
+        scanner,
+        workspace: workspaceForRepoRoot(request.repo_root),
+        parser: markdownParser,
+        checker: markdownChecker,
         default_repo_root: absoluteRepoRoot
       }),
     getTaskContext: ({ request }) =>
