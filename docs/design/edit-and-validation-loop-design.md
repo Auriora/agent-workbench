@@ -101,6 +101,9 @@ Validation architecture is split from the start:
 
 - validation discovery identifies available diagnostics, formatters, linters,
   and tests
+- diagnostics providers inspect explicit touched files and return normalized
+  findings with relative path, optional range, severity, category, provider ID,
+  capability, evidence, blocking status, and concise fix hints
 - validation planning chooses commands/checks and blocked reasons
 - command safety policy classifies whether execution is allowed
 - validation execution and result capture are post-MVP
@@ -114,9 +117,10 @@ Validation architecture is split from the start:
 File-change feedback is a retained post-edit workflow from the predecessor
 runtime, but the restart should make it less distracting:
 
-- Run static checks only through explicit provider contracts.
-- Translate provider output into the public feedback schema; do not pass through
-  backend tool names or raw output.
+- Run diagnostics through explicit provider contracts exposed by
+  `diagnostics_for_files` for changed-file checks.
+- Translate provider output into shared diagnostics and feedback schemas; do not
+  pass through backend tool names or raw output.
 - Return actionable findings, blockers, concise next actions, and affected
   paths only.
 - Return nothing, or minimal metadata, when all checked files are clean.
@@ -124,6 +128,20 @@ runtime, but the restart should make it less distracting:
   tool promised analysis for those files.
 - Keep check selection focused on touched files and known impact; do not expand
   into broad diagnostics or test execution without an explicit tool call.
+
+`diagnostics_for_files` is the public changed-file diagnostics MCP surface. It
+is bounded by explicit file input and provider budgets, never executes
+validation commands, and returns unsupported or not-applicable provider status
+instead of implying validation coverage. The composed server currently includes
+a JSON syntax diagnostics provider; additional providers must use the same
+language-neutral contract.
+
+Post-edit feedback is an internal application and hook-facing path, not a
+separate public MCP tool. It combines diagnostics findings, edit-risk signals,
+validation status, quiet visible messages, and next actions toward
+`diagnostics_for_files` and `verification_plan`. Codex hooks call this policy
+through their adapter and emit only concise actionable findings in basic mode;
+clean edits, failed tool calls, and optional analyzer failures stay silent.
 
 Candidate checks include parser syntax checks, formatter/lint planning,
 type-check routing, documentation structure checks, config validation, and

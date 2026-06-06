@@ -127,6 +127,7 @@ file has semantic support.
 - `symbol_search`
 - `find_references`
 - `impact` with explicit traversal and result caps
+- `diagnostics_for_files`
 - `verification_plan`
 - `preview_workspace_edit`
 - `apply_workspace_edit`
@@ -142,6 +143,14 @@ skipped-work metadata, and exact next actions.
 `verification_plan` plans checks but does not execute them. It must distinguish
 planned checks from proven runnable checks and route low-confidence test
 discovery to explicit follow-up instead of implying nearest-test proof.
+
+`diagnostics_for_files` runs compact provider-backed diagnostics for explicit
+repo-relative files. It is read-only, bounded by file count and provider
+budgets, and never executes validation commands. Provider findings are
+normalized to relative paths, severity, category, provider ID, capability,
+evidence, blocking status, and concise fix hints. Clean results are compact;
+unsupported file types report not-applicable or unsupported evidence without
+claiming validation completion.
 
 Documentation/config routing and test/validation planning are usage-proven
 workflows from the predecessor system and must remain first-class. The MVP
@@ -167,7 +176,6 @@ than duplicating predecessor tool names or backend payloads.
 - `plan_markdown_format`
 - `preview_markdown_format`
 - `apply_markdown_format`
-- `diagnostics_for_files`
 - `post_edit_feedback`
 - `run_nearest_tests`
 
@@ -565,6 +573,10 @@ Post-closure dogfood caveats from large mixed-language repositories:
   add a language-neutral diagnostics and quiet post-edit feedback workflow using
   provider contracts and shared presenters rather than Python-specific analyzer
   output.
+- Done: Spec 011 exposed `diagnostics_for_files` as the compact public MCP
+  diagnostics surface and kept `post_edit_feedback` internal/hook-facing. The
+  public repair loop is `diagnostics_for_files` followed by `verification_plan`;
+  hooks reuse the quiet feedback presenter and emit only actionable findings.
 - Promoted to [Spec 012](../specs/012-docs-query-read-surfaces/requirements.md):
   add compact documentation overview, map, search, outline, and read-section
   surfaces before considering crosslink graphs or generated reports.

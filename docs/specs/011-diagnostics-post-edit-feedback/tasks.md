@@ -79,14 +79,19 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     `pnpm exec vitest run tests/feedback/post-edit-feedback.test.ts tests/integration/codex-integration-profile.test.ts`
     passed with 12 tests; `pnpm typecheck` passed.
 
-- [ ] T006 Promote accepted behavior to durable docs.
+- [x] T006 Promote accepted behavior to durable docs.
   - Depends on: T004, T005
   - Files: `docs/design/edit-and-validation-loop-design.md`,
     `docs/design/mcp-surface-design.md`,
     `docs/design/coding-agent-integration-design.md`
   - Acceptance: Durable docs describe provider contracts, surface decisions,
     presenter behavior, and hook boundaries.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Promoted accepted behavior into
+    durable edit/validation, MCP surface, and coding-agent integration design
+    docs. Durable docs now describe normalized diagnostics providers,
+    `diagnostics_for_files` as the public changed-file diagnostics surface,
+    internal/hook-facing post-edit feedback, quiet presenter behavior, and
+    hook boundaries. Validation: pending final T007 gates.
 
 - [ ] T007 Validate and close the spec.
   - Depends on: T006
