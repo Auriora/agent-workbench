@@ -52,10 +52,10 @@ Public surface decision is part of implementation:
 
 - Accepted for T004: add `diagnostics_for_files` because it is compact and
   provider-backed.
-- Add `post_edit_feedback` only when it provides value beyond
-  `verification_plan.static_feedback`.
-- If the implementation can carry feedback through `verification_plan`, record
-  why a standalone post-edit tool was deferred.
+- Accepted for T005: keep `post_edit_feedback` internal and hook-facing rather
+  than adding a public MCP tool. The public workflow stays
+  `diagnostics_for_files` plus `verification_plan`; the hook-facing path uses
+  the same quiet presenter policy for actionable feedback only.
 
 ## Operational Considerations
 
@@ -66,7 +66,5 @@ action.
 
 ## Open Questions
 
-- Should `post_edit_feedback` be public in the first implementation or remain a
-  hook/internal use case until diagnostics adoption is proven?
 - Which first code adapter should provide fixture-backed diagnostics beyond
   Markdown/config?

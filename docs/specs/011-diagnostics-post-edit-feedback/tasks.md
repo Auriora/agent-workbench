@@ -63,14 +63,21 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     passed with 70 tests; `pnpm exec vitest run tests/mcp/stdio-entrypoint.test.ts`
     passed with 7 tests; `pnpm typecheck` passed.
 
-- [ ] T005 Implement post-edit feedback use case and hook integration.
+- [x] T005 Implement post-edit feedback use case and hook integration.
   - Depends on: T003
   - Files: `src/application/use-cases/`, `src/presentation/`,
     `scripts/`, `.codex/`, `tests/hooks/`
   - Acceptance: Feedback combines diagnostics, edit risk, validation status,
     and next actions while hooks stay silent for clean/error-only optional
     cases.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Added internal
+    `buildPostEditFeedback` use case and `post-edit-feedback-presenter` for
+    combining diagnostics, edit risks, validation status, quiet hook messages,
+    and MCP next actions without exposing a new public MCP tool. Updated the
+    Codex post-edit hook wrapper to build structured feedback while preserving
+    silence for clean edits and tool failures. Validation:
+    `pnpm exec vitest run tests/feedback/post-edit-feedback.test.ts tests/integration/codex-integration-profile.test.ts`
+    passed with 12 tests; `pnpm typecheck` passed.
 
 - [ ] T006 Promote accepted behavior to durable docs.
   - Depends on: T004, T005

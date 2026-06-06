@@ -129,12 +129,32 @@ export function buildPostEditContext(payload, env = process.env) {
     return undefined;
   }
 
-  const findings = buildPostEditFindings(payload);
-  if (findings.length === 0) {
-    return undefined;
-  }
+  return buildPostEditFeedback(payload).visible_message;
+}
 
-  return findings.slice(0, 3).join(" ");
+export function buildPostEditFeedback(payload) {
+  const findings = buildPostEditFindings(payload).map((message) => ({
+    severity: message.startsWith("Workspace escape") ? "blocker" : "warning",
+    message,
+    category: message.includes("Generated/local artifact") ? "edit_risk" : "diagnostic",
+    blocking: message.startsWith("Workspace escape")
+  }));
+  const changedFiles = extractChangedFiles(payload)
+    .map((file) => normalizeRepoRelativePath(file, typeof payload.cwd === "string" ? payload.cwd : process.cwd()))
+    .filter((file) => file.status === "inside")
+    .map((file) => file.relativePath);
+
+  return {
+    status: findings.some((finding) => finding.blocking)
+      ? "blocked"
+      : findings.length > 0
+        ? "needed"
+        : "done",
+    checked_files: Array.from(new Set(changedFiles)).sort(),
+    findings,
+    visible_message: findings.length === 0 ? undefined : findings.slice(0, 3).map((finding) => finding.message).join(" "),
+    next_actions: []
+  };
 }
 
 function objectValue(value) {

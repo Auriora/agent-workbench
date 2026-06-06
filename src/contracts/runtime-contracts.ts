@@ -543,6 +543,53 @@ export const diagnosticsForFilesResultSchema = z
   .strict();
 export type DiagnosticsForFilesResult = z.infer<typeof diagnosticsForFilesResultSchema>;
 
+export const postEditFeedbackFindingSchema = z
+  .object({
+    path: z.string().optional(),
+    severity: attentionSeveritySchema,
+    message: z.string(),
+    category: z.enum(["diagnostic", "edit_risk", "validation"]),
+    blocking: z.boolean(),
+    suggested_action: z.string().optional()
+  })
+  .strict();
+export type PostEditFeedbackFinding = z.infer<typeof postEditFeedbackFindingSchema>;
+
+export const postEditFeedbackRiskSchema = z
+  .object({
+    path: z.string().optional(),
+    severity: attentionSeveritySchema,
+    message: z.string(),
+    blocking: z.boolean().default(false),
+    suggested_action: z.string().optional()
+  })
+  .strict();
+export type PostEditFeedbackRisk = z.infer<typeof postEditFeedbackRiskSchema>;
+
+export const postEditFeedbackRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    changed_files: z.array(z.string()).default([]),
+    diagnostics: diagnosticsForFilesResultSchema.optional(),
+    edit_risks: z.array(postEditFeedbackRiskSchema).default([]),
+    validation_status: verificationStatusSchema.optional()
+  })
+  .strict();
+export type PostEditFeedbackRequest = z.infer<typeof postEditFeedbackRequestSchema>;
+
+export const postEditFeedbackResultSchema = z
+  .object({
+    repo_root: z.string(),
+    status: verificationStatusSchema,
+    summary: z.string(),
+    checked_files: z.array(z.string()),
+    findings: z.array(postEditFeedbackFindingSchema),
+    visible_message: z.string().optional(),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type PostEditFeedbackResult = z.infer<typeof postEditFeedbackResultSchema>;
+
 export const scopeMetadataSchema = z.object({
   repo_root: z.string(),
   indexed_roots: z.array(z.string()),
