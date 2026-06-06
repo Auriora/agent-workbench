@@ -34,7 +34,7 @@ fixture-backed budget tests justify promotion.
 
 | Date | Activity | Result |
 | --- | --- | --- |
-| 2026-06-05 | Spec created from Spec 010 T005 follow-up planning | Pending implementation |
+| 2026-06-05 | Spec created from Spec 010 T005 follow-up planning | Implementation completed and spec archived on 2026-06-06 |
 | 2026-06-06 | T001 docs query fixtures | Added `tests/fixtures/fixture-docs-query-repo/` and `tests/docs/docs-query-fixtures.test.ts`; focused fixture test and `pnpm typecheck` passed |
 | 2026-06-06 | T002 docs index/query application contracts | Added shared docs contracts, `DocsIndexPort`, and docs query use cases for overview, map, search, outline, and read-section. `pnpm exec vitest run tests/docs/query-docs.test.ts tests/docs/docs-query-fixtures.test.ts tests/contracts/presentation-metadata.test.ts` passed with 11 tests; `pnpm typecheck` passed |
 | 2026-06-06 | T003 docs presenters | Added docs overview, map, search, outline, and read-section presenters plus invalid-input envelopes. `pnpm exec vitest run tests/docs/docs-presenter.test.ts tests/docs/query-docs.test.ts tests/docs/docs-query-fixtures.test.ts` passed with 9 tests; `pnpm typecheck` passed. |

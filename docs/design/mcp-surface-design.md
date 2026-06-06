@@ -637,33 +637,32 @@ Post-closure dogfood caveats from large mixed-language repositories:
   language-neutral replacement gaps into tool, presenter, provider, roadmap, or
   follow-up spec work. The delivery record is
   [Spec 010](../specs/010-agent-ide-capability-analysis/requirements.md).
-- Spec 010 first-pass recommendation: plan diagnostics/post-edit feedback next,
-  then docs query/read surfaces. Do not add `repo_preflight`, broad orientation,
-  runtime-path reports, usage resources, semantic refactor tools, or dependency
-  deep dives merely for predecessor surface parity. Improve existing resources
-  and workflow tools unless a new public tool has cross-language workflow value
-  and fixture-backed evidence.
-- Promoted to [Spec 011](../specs/011-diagnostics-post-edit-feedback/requirements.md):
-  add a language-neutral diagnostics and quiet post-edit feedback workflow using
-  provider contracts and shared presenters rather than Python-specific analyzer
-  output.
+- Spec 010 first-pass recommendation was delivered through Specs 011, 012, and
+  013. Do not add `repo_preflight`, broad orientation, runtime-path reports,
+  usage resources, semantic refactor tools, or dependency deep dives merely for
+  predecessor surface parity. Improve existing resources and workflow tools
+  unless a new public tool has cross-language workflow value and fixture-backed
+  evidence.
+- Done: Spec 011 added a language-neutral diagnostics and quiet post-edit
+  feedback workflow using provider contracts and shared presenters rather than
+  Python-specific analyzer output.
 - Done: Spec 011 exposed `diagnostics_for_files` as the compact public MCP
   diagnostics surface and kept `post_edit_feedback` internal/hook-facing. The
   public repair loop is `diagnostics_for_files` followed by `verification_plan`;
   hooks reuse the quiet feedback presenter and emit only actionable findings.
-- Promoted to [Spec 012](../specs/012-docs-query-read-surfaces/requirements.md):
-  add compact documentation overview, map, search, outline, and read-section
-  surfaces before considering crosslink graphs or generated reports.
+- Done: Spec 012 added compact documentation overview, map, search, outline,
+  and read-section surfaces before considering crosslink graphs or generated
+  reports.
 - Done: Spec 012 exposed `repo:///docs/overview`, `repo:///docs/map`,
   `docs_search`, `docs_outline`, and `docs_read_section` as bounded public MCP
   documentation surfaces. Search/overview/map remain routing evidence with
   direct-read caveats; precise documentation claims require section evidence
   from `docs_read_section`. Crosslink graphs and generated reports remain
   deferred until usage evidence proves they are needed.
-- Promoted to [Spec 013](../specs/013-fts-backed-docs-search/requirements.md):
-  replace scanner-backed `docs_search` ranking with a SQLite FTS-backed docs
-  index and objective Python Agent IDE parity evidence before claiming the docs
-  search surface is same-or-better.
+- Done: Spec 013 replaced scanner-backed `docs_search` ranking with a SQLite
+  FTS-backed docs index and recorded objective Python Agent IDE parity evidence
+  for docs-routing queries. Remaining broad-query ranking caveats belong to
+  durable docs search tuning, not a scanner fallback.
 
 ## Related Docs
 

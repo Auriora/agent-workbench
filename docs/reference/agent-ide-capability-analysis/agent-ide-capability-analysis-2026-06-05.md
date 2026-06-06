@@ -312,10 +312,11 @@ Recommended action:
 
 ## T004 Priority Result
 
-The next follow-up specs should be planned in this order:
+The first follow-up sequence was delivered in this order:
 
-1. Diagnostics and post-edit feedback.
-2. Docs query/read surfaces.
-3. Optional adoption telemetry, only after observability/storage design.
-4. Broad orientation/runtime-path reports and semantic refactors remain
+1. Diagnostics and post-edit feedback through archived Spec 011.
+2. Docs query/read surfaces through archived Spec 012.
+3. FTS-backed docs search parity through archived Spec 013.
+4. Optional adoption telemetry, only after observability/storage design.
+5. Broad orientation/runtime-path reports and semantic refactors remain
    deferred until stronger evidence exists.
