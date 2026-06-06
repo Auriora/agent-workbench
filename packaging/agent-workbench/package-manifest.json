@@ -6,6 +6,50 @@
   "containerfile": "packaging/agent-workbench/Containerfile",
   "installer": "scripts/install-agent-workbench-package.sh",
   "entrypoint": "node --import tsx /opt/agent-workbench/src/mcp/stdio.ts",
+  "dependency_install": {
+    "package_manager": "pnpm@10.18.1",
+    "node": ">=22",
+    "install_command": "pnpm install --frozen-lockfile",
+    "native_rebuild_command": "pnpm rebuild:native",
+    "native_build_tools": [
+      "python3",
+      "make",
+      "c++"
+    ],
+    "runtime_dependencies": [
+      "@modelcontextprotocol/sdk",
+      "@opentelemetry/api",
+      "@opentelemetry/exporter-trace-otlp-http",
+      "@opentelemetry/resources",
+      "@opentelemetry/sdk-trace-base",
+      "@opentelemetry/sdk-trace-node",
+      "@opentelemetry/semantic-conventions",
+      "better-sqlite3",
+      "tree-sitter",
+      "tree-sitter-go",
+      "tree-sitter-javascript",
+      "tree-sitter-python",
+      "tree-sitter-typescript",
+      "tsx",
+      "yaml",
+      "zod"
+    ],
+    "dev_dependencies": [
+      "@types/better-sqlite3",
+      "@types/node",
+      "typescript",
+      "vitest"
+    ],
+    "native_build_script_dependencies": [
+      "better-sqlite3",
+      "esbuild",
+      "tree-sitter",
+      "tree-sitter-go",
+      "tree-sitter-javascript",
+      "tree-sitter-python",
+      "tree-sitter-typescript"
+    ]
+  },
   "components": [
     "src",
     "docs",

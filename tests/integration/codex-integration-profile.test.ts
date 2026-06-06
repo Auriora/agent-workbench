@@ -153,6 +153,10 @@ describe("Codex integration profile", () => {
       installer_path: "scripts/install-agent-workbench-package.sh",
       release_workflow_path: ".github/workflows/release-ghcr.yml"
     });
+    expect(profile.install_package.dependency_install_model).toContain(
+      "pnpm install --frozen-lockfile"
+    );
+    expect(profile.install_package.dependency_install_model).toContain("pnpm rebuild:native");
     expect(profile.install_package.installed_components).toEqual(
       expect.arrayContaining([
         "src",
@@ -458,9 +462,26 @@ describe("Codex plugin artifacts", () => {
       image: string;
       containerfile: string;
       installer: string;
+      dependency_install: {
+        package_manager: string;
+        node: string;
+        install_command: string;
+        native_rebuild_command: string;
+        native_build_tools: string[];
+        runtime_dependencies: string[];
+        dev_dependencies: string[];
+        native_build_script_dependencies: string[];
+      };
       components: string[];
       codex: {
         hook_config_fallback: string;
+      };
+    };
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as {
+      dependencies: Record<string, string>;
+      devDependencies: Record<string, string>;
+      pnpm: {
+        onlyBuiltDependencies: string[];
       };
     };
     const containerfile = fs.readFileSync(containerfilePath, "utf8");
@@ -473,6 +494,23 @@ describe("Codex plugin artifacts", () => {
       containerfile: "packaging/agent-workbench/Containerfile",
       installer: "scripts/install-agent-workbench-package.sh"
     });
+    expect(manifest.dependency_install).toMatchObject({
+      package_manager: "pnpm@10.18.1",
+      node: ">=22",
+      install_command: "pnpm install --frozen-lockfile",
+      native_rebuild_command: "pnpm rebuild:native"
+    });
+    expect(manifest.dependency_install.runtime_dependencies.sort()).toEqual(
+      Object.keys(packageJson.dependencies).sort()
+    );
+    expect(manifest.dependency_install.dev_dependencies.sort()).toEqual(
+      Object.keys(packageJson.devDependencies).sort()
+    );
+    expect(manifest.dependency_install.native_build_script_dependencies.sort()).toEqual(
+      [...packageJson.pnpm.onlyBuiltDependencies].sort()
+    );
+    expect(manifest.dependency_install.native_build_tools).toEqual(["python3", "make", "c++"]);
+    expect(packageJson.dependencies).toHaveProperty("tsx");
     expect(manifest.components).toEqual(
       expect.arrayContaining([
         "src",
@@ -495,6 +533,9 @@ describe("Codex plugin artifacts", () => {
     expect(containerfile).toContain("/opt/agent-workbench/src/mcp/stdio.ts");
     expect(installer).toContain("plugins/agent-workbench/hooks/session-start.js");
     expect(installer).toContain("plugins/agent-workbench/hooks/post-edit-feedback.js");
+    expect(installer).toContain("Node.js 22 or newer is required");
+    expect(installer).toContain("pnpm 10.18.1 is required");
+    expect(installer).toContain("ensure_native_build_prerequisites");
     expect(installer).toContain("[mcp_servers.agent-workbench]");
     expect(installer).toContain("[[hooks.SessionStart]]");
     expect(installer).toContain("[[hooks.PostToolUse]]");

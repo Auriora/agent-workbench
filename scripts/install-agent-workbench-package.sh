@@ -88,6 +88,55 @@ run() {
   fi
 }
 
+require_command() {
+  local command_name="$1"
+  local install_hint="$2"
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "Missing required dependency: $command_name. $install_hint" >&2
+    exit 1
+  fi
+}
+
+node_major_version() {
+  node -e 'const major = Number(process.versions.node.split(".")[0]); process.stdout.write(String(major));'
+}
+
+ensure_runtime_prerequisites() {
+  require_command node "Install Node.js 22 or newer before installing Agent Workbench."
+  local major
+  major="$(node_major_version)"
+  if [ "$major" -lt 22 ]; then
+    echo "Node.js 22 or newer is required; found $(node --version)." >&2
+    exit 1
+  fi
+}
+
+ensure_pnpm() {
+  if command -v pnpm >/dev/null 2>&1; then
+    return
+  fi
+  if command -v corepack >/dev/null 2>&1; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+      echo "dry-run: corepack enable pnpm"
+    else
+      corepack enable pnpm
+    fi
+  fi
+  if ! command -v pnpm >/dev/null 2>&1; then
+    echo "pnpm 10.18.1 is required to install Agent Workbench dependencies. Install pnpm or enable it with corepack." >&2
+    exit 1
+  fi
+}
+
+ensure_native_build_prerequisites() {
+  require_command python3 "Install Python 3 for native Node module builds."
+  require_command make "Install make for native Node module builds."
+  if ! command -v c++ >/dev/null 2>&1 && ! command -v g++ >/dev/null 2>&1; then
+    echo "Missing required dependency: c++ compiler. Install g++ or another C++20-capable compiler for native Node module builds." >&2
+    exit 1
+  fi
+}
+
 copy_component() {
   local relative_path="$1"
   run mkdir -p "$INSTALL_ROOT/$(dirname "$relative_path")"
@@ -95,6 +144,7 @@ copy_component() {
   run cp -a "$SOURCE_ROOT/$relative_path" "$INSTALL_ROOT/$relative_path"
 }
 
+ensure_runtime_prerequisites
 run mkdir -p "$INSTALL_ROOT"
 for component in src docs plugins packaging scripts package.json pnpm-lock.yaml tsconfig.json AGENTS.md; do
   if [ -e "$SOURCE_ROOT/$component" ]; then
@@ -120,15 +170,12 @@ EOF
 fi
 
 if [ ! -d "$SOURCE_ROOT/node_modules/tsx" ] && [ ! -d "$INSTALL_ROOT/node_modules/tsx" ]; then
-  if command -v pnpm >/dev/null 2>&1; then
-    if [ "$DRY_RUN" -eq 1 ]; then
-      echo "dry-run: cd $INSTALL_ROOT && pnpm install --frozen-lockfile && pnpm rebuild:native"
-    else
-      (cd "$INSTALL_ROOT" && pnpm install --frozen-lockfile && pnpm rebuild:native)
-    fi
+  ensure_pnpm
+  ensure_native_build_prerequisites
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "dry-run: cd $INSTALL_ROOT && pnpm install --frozen-lockfile && pnpm rebuild:native"
   else
-    echo "pnpm is required to install runtime dependencies because node_modules was not packaged." >&2
-    exit 1
+    (cd "$INSTALL_ROOT" && pnpm install --frozen-lockfile && pnpm rebuild:native)
   fi
 fi
 

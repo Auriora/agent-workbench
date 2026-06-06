@@ -105,6 +105,7 @@ integration:
 - documentation
 - Codex plugin manifest, skill, and hooks
 - host launcher for the MCP stdio server
+- dependency manifest and lockfile
 
 Run a package install from a checkout or unpacked package source:
 
@@ -128,6 +129,20 @@ The installer writes a marked block to `~/.codex/config.toml` unless
 
 This hook config is the fallback for package/plugin environments where the
 plugin manifest cannot declare or install hooks directly.
+
+Dependency installation is explicit in
+`packaging/agent-workbench/package-manifest.json`. The package requires
+Node.js 22 or newer and pnpm 10.18.1. If the source package does not already
+include `node_modules`, the installer runs:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm rebuild:native
+```
+
+Native module installation requires Python 3, `make`, and a C++20-capable
+compiler. Runtime dependencies must stay under `dependencies` in `package.json`;
+do not leave launcher-required packages such as `tsx` in `devDependencies`.
 
 Build and publish use the package containerfile:
 

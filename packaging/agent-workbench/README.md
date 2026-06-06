@@ -10,6 +10,19 @@ The image entrypoint launches the MCP stdio server:
 node --import tsx /opt/agent-workbench/src/mcp/stdio.ts
 ```
 
+Dependency installation is defined in `package-manifest.json`. The package
+requires Node.js 22 or newer and pnpm 10.18.1. When `node_modules` is not
+already packaged, the host installer runs:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm rebuild:native
+```
+
+Native runtime modules require Python 3, `make`, and a C++20-capable compiler.
+The runtime dependency set includes `tsx` because the installed MCP launcher
+uses the TypeScript stdio entrypoint directly.
+
 The host installer is `scripts/install-agent-workbench-package.sh`. It copies
 the package contents to a stable local prefix, writes a launcher, installs the
 Codex plugin wrapper files, and appends fallback Codex MCP and hook
