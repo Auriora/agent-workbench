@@ -159,6 +159,9 @@ flow through the repository's normal lifecycle:
 
 ## Current Product Signals
 
+The executable backlog for these signals is
+[Agent Workbench executable backlog](agent-workbench-executable-backlog.md).
+
 - Integration health: advertised MCP surfaces must match callable surfaces.
 - First-call reliability: status, scope, overview, context, diagnostics, and
   validation planning must return bounded responses.

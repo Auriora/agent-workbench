@@ -26,6 +26,7 @@ copying tables, schemas, or enum definitions.
 | Product narrative and source-project rationale | [Agent IDE restart concept](../design/agent-ide-restart-concept.md) | Narrative only; not the contract source of truth. |
 | System shape and component boundaries | [System architecture](../architecture/system-architecture.md) | Keep high-level and avoid schema detail. |
 | Product principles and VMOST | [Agent Workbench principles](../requirements/agent-workbench-principles.md) | Owns the project vision, mission, objectives, strategy, tactics, scope rules, governance relationship, and guiding principles for building an IDE for coding agents. |
+| Product executable backlog | [Agent Workbench executable backlog](../requirements/agent-workbench-executable-backlog.md) | Owns principle-derived backlog items, promotion rules, sequencing, acceptance criteria, and evidence requirements before work becomes an active implementation spec. |
 | Layered implementation architecture | [Layered runtime architecture](../design/layered-runtime-architecture.md) | Owns dependency direction, source layout, ports, presenters, policies, and boundary-test rules. |
 | Accepted target requirements | [Runtime requirements](../requirements/runtime-requirements.md) | Requirements are target-state until implementation evidence exists. |
 | Runtime response envelope, enums, and MCP contract rules | [Runtime contracts](runtime-contracts.md) | Single source for capability, trust, freshness, evidence, attention, edit-token, and error-shape vocabulary. |

@@ -17,7 +17,7 @@ T006 can run after T003.
 
 ## Tasks
 
-- [x] T001 Define project principles and MVOST.
+- [x] T001 Define project principles and VMOST.
   - Files: `docs/requirements/agent-workbench-principles.md`
   - Acceptance: Principles describe Agent Workbench as an IDE for coding
     agents and include the edit/verify/refactor feedback loop.
@@ -52,13 +52,15 @@ T006 can run after T003.
   - Evidence: `pnpm exec tsx src/debug/codex-history-mining.ts --repo-root . --limit 2`
     passed.
 
-- [ ] T006 Promote mined backlog items into follow-up specs.
+- [x] T006 Promote mined backlog items into executable backlog.
   - Depends on: T002, T003
-  - Files: future specs or durable design docs
+  - Files: `docs/requirements/agent-workbench-executable-backlog.md`
   - Acceptance: Highest-signal items such as integration health,
     session-aware next actions, multi-file post-edit diagnostics, and
-    spec/task traceability are promoted into scoped implementation specs.
-  - Evidence: Pending.
+    spec/task traceability are promoted into scoped executable backlog entries
+    and candidate implementation specs.
+  - Evidence: Added the executable backlog with item IDs, acceptance criteria,
+    validation expectations, sequencing, and promotion rules.
 
 - [ ] T007 Consider additional data sources.
   - Depends on: T005

@@ -29,6 +29,9 @@ last_reviewed: 2026-06-06
 
 - 2026-06-06: `pnpm exec tsx src/debug/codex-history-mining.ts --repo-root . --limit 2`
   passed and printed a bounded Markdown report.
+- 2026-06-06: Promoted mined principles and history signals into executable
+  backlog by adding `docs/requirements/agent-workbench-executable-backlog.md`
+  and linking it from the principles document and documentation map.
 
 ## Residual Risks
 
