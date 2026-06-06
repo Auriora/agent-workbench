@@ -624,6 +624,10 @@ Post-closure dogfood caveats from large mixed-language repositories:
   direct-read caveats; precise documentation claims require section evidence
   from `docs_read_section`. Crosslink graphs and generated reports remain
   deferred until usage evidence proves they are needed.
+- Promoted to [Spec 013](../specs/013-fts-backed-docs-search/requirements.md):
+  replace scanner-backed `docs_search` ranking with a SQLite FTS-backed docs
+  index and objective Python Agent IDE parity evidence before claiming the docs
+  search surface is same-or-better.
 
 ## Related Docs
 
