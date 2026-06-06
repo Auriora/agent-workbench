@@ -3,7 +3,7 @@ title: Coding agent integration design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Coding Agent Integration Design
@@ -41,11 +41,22 @@ The runtime should expose:
 
 - tools for context, symbol search, references, impact, preview/apply, and
   validation planning
-- resources for status, scope, overview, and future integration metadata
+- resources for status, scope, overview, integration health, and integration
+  metadata
 - prompts for reusable high-level workflows when client support is available
 
 MCP remains an interface adapter. Application, domain, graph, extraction,
 cache, and validation code must not know which agent is connected.
+
+`integration:///health/agent-workbench` is the runtime health surface for
+coding agents. It reports configured, registered, advertised,
+caller-discovered, callable, unavailable, blocked, hidden, and unknown state
+for MCP resources, tools, and prompts. Agents should treat configured bindings
+as documentation until caller-discovered evidence proves a surface is callable
+in the active session. Public presenters use the same session-aware
+next-action rules: known unavailable actions are not emitted as executable
+`next_actions`, while unknown caller discovery preserves conservative guidance
+with explicit assumptions inside the integration-health result.
 
 ### Repository Instructions
 

@@ -122,7 +122,7 @@ or runtime telemetry.
 ### EB001: Integration Health Surface
 
 - Priority: P0
-- Status: active Spec 019
+- Status: closed Spec 019
 - Friction signal: agents saw mismatches between advertised, discovered, and
   callable MCP surfaces, and received next actions for tools unavailable in the
   active session.
@@ -141,14 +141,14 @@ or runtime telemetry.
   - Codex-profile fixture tests for discovered versus callable surfaces.
   - Golden MCP responses that suppress unavailable tools from executable next
     actions.
-- Promotion target: active
-  [Spec 019](../specs/019-integration-health-session-routing/requirements.md),
+- Promotion target: closed
+  [Spec 019](../history/spec-closure-log.md),
   combined with EB002 and EB011.
 
 ### EB002: Session-Aware Next Actions
 
 - Priority: P0
-- Status: active Spec 019
+- Status: closed Spec 019
 - Friction signal: agents follow runtime next actions literally; unavailable
   next actions weaken trust and force shell fallback.
 - Runtime surface: presenters for `context_for_task`, verification planning,
@@ -164,8 +164,8 @@ or runtime telemetry.
     diagnostics, and docs surfaces.
   - Contract tests ensuring unavailable actions are not presented as executable
     commands.
-- Promotion target: active
-  [Spec 019](../specs/019-integration-health-session-routing/requirements.md),
+- Promotion target: closed
+  [Spec 019](../history/spec-closure-log.md),
   combined with EB001 and EB011.
 
 ### EB003: First-Read Reliability And Bounded Tool Behavior
@@ -341,7 +341,7 @@ or runtime telemetry.
 ### EB011: Contextual Tool Exposure And Dynamic Router
 
 - Priority: P0
-- Status: active Spec 019
+- Status: closed Spec 019
 - Friction signal: large static tool catalogs create discovery burden, while
   hidden or unavailable tools create trust failures. Agents need the currently
   relevant tool surface without losing access to advanced capabilities that are
@@ -371,8 +371,8 @@ or runtime telemetry.
     consistently across startup and runtime surfaces.
   - Regression tests ensuring exact next actions only reference callable tools
     or explicitly labeled unavailable capabilities.
-- Promotion target: active
-  [Spec 019](../specs/019-integration-health-session-routing/requirements.md),
+- Promotion target: closed
+  [Spec 019](../history/spec-closure-log.md),
   combined with EB001 and EB002.
 
 ### EB012: TODO And Annotation Tag Surfacing
@@ -450,8 +450,6 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-1. Spec 019: integration health, session-aware next actions, and contextual
-   tool exposure.
-2. Spec 020: multi-file post-edit repair loop.
-3. Spec 021: spec/task traceability integration.
-4. Spec 022: MCP-server repository support.
+1. Spec 020: multi-file post-edit repair loop.
+2. Spec 021: spec/task traceability integration.
+3. Spec 022: MCP-server repository support.

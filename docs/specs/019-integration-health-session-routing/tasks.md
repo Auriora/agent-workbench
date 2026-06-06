@@ -76,7 +76,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     actions are filtered when discovery is known and preserved when discovery
     is unknown. Focused presenter/MCP tests and `pnpm typecheck` passed.
 
-- [ ] T006 Promote docs, validate, and close.
+- [x] T006 Promote docs, validate, and close.
   - Depends on: T003, T005
   - Files: `docs/design/mcp-surface-design.md`,
     `docs/design/coding-agent-integration-design.md`,
@@ -84,4 +84,8 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     `docs/specs/019-integration-health-session-routing/`
   - Acceptance: Durable docs describe health/routing behavior and validation
     passes before archival.
-  - Evidence: Pending.
+  - Evidence: Promoted integration-health and session-aware next-action
+    behavior to `docs/design/mcp-surface-design.md` and
+    `docs/design/coding-agent-integration-design.md`; updated executable
+    backlog routing for EB001, EB002, and EB011. Full `pnpm test` passed with
+    57 files and 360 tests; `git diff --check` passed.
