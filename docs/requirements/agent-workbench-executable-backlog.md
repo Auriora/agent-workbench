@@ -87,11 +87,12 @@ part of the workflow:
 ## Sequencing
 
 1. Integration health and session-aware next actions.
-2. First-read reliability and bounded tool behavior.
-3. Edit, diagnostics, validation, and repair loop.
-4. Spec/task traceability and MCP-server repo support.
-5. Fallback telemetry and mined evidence automation.
-6. Language and ecosystem semantic depth.
+2. Contextual tool exposure and dynamic routing.
+3. First-read reliability and bounded tool behavior.
+4. Edit, diagnostics, validation, and repair loop.
+5. Spec/task traceability and MCP-server repo support.
+6. Fallback telemetry and mined evidence automation.
+7. Language and ecosystem semantic depth.
 
 ## Backlog Items
 
@@ -310,6 +311,43 @@ part of the workflow:
     .NET, Markdown, and future ecosystems.
 - Promotion target: continue active language and ecosystem specs.
 
+### EB011: Contextual Tool Exposure And Dynamic Router
+
+- Priority: P0
+- Status: proposed design decision and spec
+- Friction signal: large static tool catalogs create discovery burden, while
+  hidden or unavailable tools create trust failures. Agents need the currently
+  relevant tool surface without losing access to advanced capabilities that are
+  only useful in specific repo, task, or session contexts.
+- Runtime surface: either an always-present `dynamic` router tool that exposes
+  or invokes context-appropriate subtools, startup/session-time tool exposure
+  that adds or hides tools based on context, or a documented hybrid of both.
+- Acceptance:
+  - Define whether contextual tool access is implemented through one stable
+    `dynamic` tool, startup-time tool registration, session-time tool
+    registration, or a hybrid.
+  - The always-present surface must explain what capabilities are available,
+    hidden, unavailable, or blocked for the current repo and task context.
+  - Hidden tools must remain discoverable through an explicit capability
+    explanation, not disappear without evidence.
+  - Contextual routing must not present unavailable actions as executable.
+  - Tool exposure decisions must include repo root, project shape, active
+    profile, cache freshness, and relevant policy constraints.
+  - Agents must be able to ask why a tool is hidden, why it is available, and
+    what evidence would make another tool available.
+- Validation:
+  - Contract tests for always-present `dynamic` routing, context-shaped tool
+    lists, and hybrid behavior.
+  - Golden responses for small repos, large polyglot repos, docs-only repos,
+    MCP-server repos, dirty worktrees, and degraded caches.
+  - Session-profile tests proving unavailable tools are hidden or labeled
+    consistently across startup and runtime surfaces.
+  - Regression tests ensuring exact next actions only reference callable tools
+    or explicitly labeled unavailable capabilities.
+- Promotion target: create a design-decision spec before implementation,
+  likely paired with EB001 and EB002 because integration health and
+  session-aware next actions are prerequisites.
+
 ## Backlog To Spec Promotion Rules
 
 Promote a backlog item into an implementation spec when:
@@ -336,6 +374,7 @@ Do not promote an item when:
 | --- | --- |
 | Repo readiness packet | EB003, with EB001 and EB002 for capability visibility. |
 | Integration health | EB001 and EB002. |
+| Dynamic/contextual tool exposure | EB011, with EB001 and EB002 as prerequisites. |
 | Validation planner with policy | EB004. |
 | Post-edit repair panel | EB005, with EB008 for workspace risk. |
 | Spec/task context | EB006. |
@@ -347,7 +386,8 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-1. EB001 and EB002: integration health and session-aware next actions.
+1. EB001, EB002, and EB011: integration health, session-aware next actions, and
+   contextual tool exposure.
 2. EB005: multi-file post-edit repair loop.
 3. EB006: spec/task traceability integration.
 4. EB007: MCP-server repository support.
