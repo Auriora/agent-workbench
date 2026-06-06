@@ -15,12 +15,26 @@ last_reviewed: 2026-06-06
 T001 -> T002 -> T003 -> T004 -> T005 -> T006
 ```
 
-- [ ] T001 Add Go reference and validation-policy fixtures.
+- [x] T001 Add Go reference and validation-policy fixtures.
   - Files: `tests/fixtures/`, `tests/language/`, `tests/validation/`
   - Acceptance: Fixtures cover packages, imports, methods, selectors,
     ambiguous references, generated skips, tests, Docker-only policy, Makefile,
     and CI evidence.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Expanded
+    `tests/fixtures/fixture-go-service-repo/` with same-package declarations,
+    imports, receiver methods, selector calls, package-level and method
+    `LoadConfig` ambiguity, duplicate `Reset` declarations across packages,
+    generated/cache noise, Go tests, Makefile evidence, and GitHub Actions CI.
+    Added `tests/fixtures/fixture-go-docker-policy-repo/` with Docker Compose
+    guidance that forbids host `go test`. Added
+    `tests/workspace/go-reference-fixtures.test.ts` and updated existing Go
+    fixture count assertions. Validation:
+    `pnpm exec vitest run tests/workspace/go-reference-fixtures.test.ts
+    tests/workspace/file-catalog-scanner.test.ts
+    tests/mcp/repo-scope-overview-resource.test.ts
+    tests/mcp/verification-plan-tool.test.ts
+    tests/graph/extraction-pipeline.test.ts tests/graph/query-tools.test.ts`
+    passed.
 
 - [ ] T002 Implement Go package and reference extraction.
   - Depends on: T001

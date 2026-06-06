@@ -1,0 +1,6 @@
+services:
+  app:
+    image: golang:1.22
+    working_dir: /workspace
+    volumes:
+      - .:/workspace

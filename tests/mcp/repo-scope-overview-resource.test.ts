@@ -533,9 +533,9 @@ describe("repo scope and overview composed server resources", () => {
     );
     expect(result.scope.languages).toEqual(expect.arrayContaining(["go", "text"]));
     expect(result.scope.file_counts).toMatchObject({
-      go: 2
+      go: 6
     });
-    expect(result.scope.capability_counts.resource_backed).toBeGreaterThanOrEqual(2);
+    expect(result.scope.capability_counts.resource_backed).toBeGreaterThanOrEqual(6);
   });
 
   it("reports C++ headers, sources, and Python stubs in CMake C++ shaped scope", async () => {

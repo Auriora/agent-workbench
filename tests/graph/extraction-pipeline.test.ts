@@ -445,9 +445,9 @@ describe("repository graph extraction pipeline", () => {
       });
 
       expect(result).toMatchObject({
-        scanned_files: 4,
-        extracted_files: 4,
-        resource_backed_files: 2,
+        scanned_files: 9,
+        extracted_files: 9,
+        resource_backed_files: 3,
         unsupported_files: 0,
         edge_count: 0,
         unresolved_reference_count: 0
@@ -477,13 +477,15 @@ describe("repository graph extraction pipeline", () => {
         query: "LoadConfig",
         exact: true
       });
-      expect(loadConfig).toEqual([
-        expect.objectContaining({
-          kind: "method",
-          name: "LoadConfig",
-          qualified_name: "graph.ResponseCache.LoadConfig"
-        })
-      ]);
+      expect(loadConfig).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "method",
+            name: "LoadConfig",
+            qualified_name: "graph.ResponseCache.LoadConfig"
+          })
+        ])
+      );
 
       const main = await store.findNodesByName({
         snapshot_id: "109",
