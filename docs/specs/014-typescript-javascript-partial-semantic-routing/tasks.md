@@ -89,12 +89,21 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
     JS/TS edges do not reuse resource-backed SAM/CloudFormation caveats.
     Validation: `pnpm exec vitest run tests/graph/query-tools.test.ts` passed.
 
-- [ ] T006 Improve JS/TS validation planning.
+- [x] T006 Improve JS/TS validation planning.
   - Depends on: T003
   - Files: `src/application/use-cases/`, `tests/validation/`, `tests/mcp/`
   - Acceptance: Plans repo-policy and package-local checks without executing
     package managers or ignoring host-blocking evidence.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Existing planner behavior satisfies the
+    acceptance criteria: selected JS/TS files route to package-local scripts
+    using package, lockfile, workspace, and `tsconfig` evidence; repo-local
+    validation policy commands replace generic host commands; and host-blocking
+    policy evidence blocks unsafe generic JS/TS command planning unless policy
+    commands cover validation. Validation coverage lives in
+    `tests/mcp/verification-plan-tool.test.ts`, including package-local
+    monorepo cases, the fixture JS/TS monorepo, repo-local validation policy
+    commands, Docker-only host blocking, and advisory Docker/devcontainer
+    evidence. Validation: `pnpm test` passed after T005, covering these cases.
 
 - [ ] T007 Promote docs, validate, and close.
   - Depends on: T005, T006
