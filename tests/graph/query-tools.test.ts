@@ -477,41 +477,104 @@ describe("graph query use cases", () => {
         {
           kind: "lambda_handler_binding",
           name: "src/billing/webhook/app.handler",
-          signature: "BillingWebhookFunction -> src/billing/webhook/app.handler (template infra/sam/billing/template.yaml, handler file src/billing/webhook/app.py)",
+          signature: "BillingWebhookFunction -> src/billing/webhook/app.handler (template infra/sam/billing/template.yaml, handler file src/billing/webhook/app.py, events Api:Api)",
           path: "infra/sam/billing/template.yaml"
         },
         {
           kind: "lambda_handler_file",
           name: "src/billing/webhook/app.py",
-          signature: "BillingWebhookFunction -> src/billing/webhook/app.py#handler (template infra/sam/billing/template.yaml)",
+          signature: "BillingWebhookFunction -> src/billing/webhook/app.py#handler (template infra/sam/billing/template.yaml, events Api:Api)",
           path: "src/billing/webhook/app.py"
         },
         {
           kind: "lambda_handler_binding",
           name: "src/orders/cancel/app.handler",
-          signature: "OrdersCancelFunction -> src/orders/cancel/app.handler (template infra/sam/orders/template.yaml, handler file src/orders/cancel/app.py)",
+          signature: "OrdersCancelFunction -> src/orders/cancel/app.handler (template infra/sam/orders/template.yaml, handler file src/orders/cancel/app.py, events Api:Api)",
           path: "infra/sam/orders/template.yaml"
         },
         {
           kind: "lambda_handler_file",
           name: "src/orders/cancel/app.py",
-          signature: "OrdersCancelFunction -> src/orders/cancel/app.py#handler (template infra/sam/orders/template.yaml)",
+          signature: "OrdersCancelFunction -> src/orders/cancel/app.py#handler (template infra/sam/orders/template.yaml, events Api:Api)",
           path: "src/orders/cancel/app.py"
         },
         {
           kind: "lambda_handler_binding",
           name: "src/orders/create/app.handler",
-          signature: "OrdersCreateFunction -> src/orders/create/app.handler (template infra/sam/orders/template.yaml, handler file src/orders/create/app.py)",
+          signature: "OrdersCreateFunction -> src/orders/create/app.handler (template infra/sam/orders/template.yaml, handler file src/orders/create/app.py, events Api:Api)",
           path: "infra/sam/orders/template.yaml"
         },
         {
           kind: "lambda_handler_file",
           name: "src/orders/create/app.py",
-          signature: "OrdersCreateFunction -> src/orders/create/app.py#handler (template infra/sam/orders/template.yaml)",
+          signature: "OrdersCreateFunction -> src/orders/create/app.py#handler (template infra/sam/orders/template.yaml, events Api:Api)",
           path: "src/orders/create/app.py"
         }
       ]);
       expect(result.symbols.symbols.every((symbol) => symbol.capability_level === "resource_backed")).toBe(true);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
+  it("surfaces SAM event-source evidence in handler grouping and symbol lookup", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-sam-intrinsic-repo", "224");
+    try {
+      const handler = await searchSymbols({
+        request: {
+          query: "src/orders/app.handler",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: [],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+      expect(handler.symbols.symbols).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "lambda_handler_binding",
+            name: "src/orders/app.handler",
+            signature: "OrdersFunction -> src/orders/app.handler (template infra/orders/template.yaml, handler file src/orders/app.py, events ApiCreateOrder:Api, QueueOrders:SQS, StreamOrders:DynamoDB)"
+          }),
+          expect.objectContaining({
+            kind: "lambda_handler_file",
+            path: "src/orders/app.py",
+            signature: "OrdersFunction -> src/orders/app.py#handler (template infra/orders/template.yaml, events ApiCreateOrder:Api, QueueOrders:SQS, StreamOrders:DynamoDB)"
+          })
+        ])
+      );
+
+      const event = await searchSymbols({
+        request: {
+          query: "QueueOrders",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: [],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+      expect(event.symbols.symbols).toEqual([
+        expect.objectContaining({
+          kind: "lambda_event_source",
+          name: "QueueOrders",
+          signature: "QueueOrders:SQS",
+          path: "infra/orders/template.yaml",
+          capability_level: "resource_backed",
+          evidence_kinds: expect.arrayContaining(["config", "infra_parser"])
+        })
+      ]);
     } finally {
       fixture.store.close();
     }

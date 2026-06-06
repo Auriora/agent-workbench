@@ -176,20 +176,33 @@ function groupedLambdaSignature(node: GraphNode): string | undefined {
     const logicalId = stringMetadata(node, "logical_id");
     const handlerFile = stringMetadata(node, "handler_file_candidate");
     const base = `${logicalId ?? "Lambda handler"} -> ${node.name}`;
+    const events = eventSourcesText(node);
+    const suffix = events === undefined ? "" : `, events ${events}`;
     return handlerFile === undefined
-      ? `${base} (template ${node.file_path})`
-      : `${base} (template ${node.file_path}, handler file ${handlerFile})`;
+      ? `${base} (template ${node.file_path}${suffix})`
+      : `${base} (template ${node.file_path}, handler file ${handlerFile}${suffix})`;
   }
   if (node.kind === "lambda_handler_file") {
     const logicalId = stringMetadata(node, "logical_id");
     const exportName = stringMetadata(node, "handler_export_candidate");
     const templatePath = stringMetadata(node, "template_path") ?? lambdaTemplatePathFromQualifiedName(node.qualified_name);
     const target = exportName === undefined ? node.name : `${node.name}#${exportName}`;
+    const events = eventSourcesText(node);
+    const suffix = events === undefined ? "" : `, events ${events}`;
     return templatePath === undefined
       ? `${logicalId ?? "Lambda handler"} -> ${target}`
-      : `${logicalId ?? "Lambda handler"} -> ${target} (template ${templatePath})`;
+      : `${logicalId ?? "Lambda handler"} -> ${target} (template ${templatePath}${suffix})`;
   }
   return undefined;
+}
+
+function eventSourcesText(node: GraphNode): string | undefined {
+  const value = node.metadata.event_sources;
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+  const events = value.filter((item): item is string => typeof item === "string" && item.length > 0);
+  return events.length === 0 ? undefined : events.join(", ");
 }
 
 function stringMetadata(node: GraphNode, key: string): string | undefined {

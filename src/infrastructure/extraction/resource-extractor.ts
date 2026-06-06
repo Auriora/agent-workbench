@@ -11,6 +11,7 @@ import {
 import type {
   ExtractionBatch,
   ExtractionRequest,
+  GraphEdgeWriteModel,
   GraphNodeWriteModel,
   UnresolvedReferenceWriteModel
 } from "../../domain/models/index.js";
@@ -72,7 +73,7 @@ export class ResourceExtractorAdapter implements ExtractorPort {
         indexed_at: extractedAt
       },
       nodes,
-      edges: [],
+      edges: cloudFormation.edges,
       unresolved_references: cloudFormation.unresolved_references,
       diagnostics_hints: [],
       test_hints: [],
@@ -230,11 +231,13 @@ function xmlDecode(value: string): string {
 
 function cloudFormationTemplateExtraction(input: ExtractionRequest): {
   nodes: GraphNodeWriteModel[];
+  edges: GraphEdgeWriteModel[];
   unresolved_references: UnresolvedReferenceWriteModel[];
 } {
   if (!isCloudFormationTemplate(input)) {
     return {
       nodes: [],
+      edges: [],
       unresolved_references: []
     };
   }
@@ -249,6 +252,7 @@ function cloudFormationTemplateExtraction(input: ExtractionRequest): {
 
 function cloudFormationTemplateLineScan(input: ExtractionRequest): {
   nodes: GraphNodeWriteModel[];
+  edges: GraphEdgeWriteModel[];
   unresolved_references: UnresolvedReferenceWriteModel[];
 } {
   const nodes: GraphNodeWriteModel[] = [];
@@ -352,12 +356,14 @@ function cloudFormationTemplateLineScan(input: ExtractionRequest): {
   flushResource();
   return {
     nodes,
+    edges: [],
     unresolved_references: []
   };
 }
 
 function parseCloudFormationTemplate(input: ExtractionRequest): {
   nodes: GraphNodeWriteModel[];
+  edges: GraphEdgeWriteModel[];
   unresolved_references: UnresolvedReferenceWriteModel[];
 } | undefined {
   const document = parseDocument(input.content, {
@@ -379,6 +385,7 @@ function parseCloudFormationTemplate(input: ExtractionRequest): {
       .filter((name): name is string => name !== undefined)
   );
   const nodes: GraphNodeWriteModel[] = [];
+  const edges: GraphEdgeWriteModel[] = [];
   const unresolvedReferences: UnresolvedReferenceWriteModel[] = [];
   const lineStarts = lineStartOffsets(input.content);
 
@@ -392,12 +399,14 @@ function parseCloudFormationTemplate(input: ExtractionRequest): {
     const resource = resourceYamlNode;
     const resourceType = scalarString(mapValue(resource, "Type"));
     const handler = scalarString(findMapValue(resource, ["Properties", "Handler"]));
+    const eventSources = lambdaEventSources(resource);
     const unsupportedIntrinsics = new Set<string>();
     const resourceNode = cloudFormationResourceNode({
       input,
       logicalId,
       resourceType,
       handler,
+      eventSources,
       sourceRange: nodeRange(item.key, input.content, lineStarts),
       unsupportedIntrinsics
     });
@@ -408,8 +417,36 @@ function parseCloudFormationTemplate(input: ExtractionRequest): {
         input,
         logicalId,
         handler,
+        eventSources,
         sourceRange: nodeRange(item.key, input.content, lineStarts)
       }));
+    }
+
+    for (const eventSource of eventSources) {
+      const eventNode = cloudFormationEventSourceNode({
+        input,
+        logicalId,
+        eventSource,
+        sourceRange: nodeRange(eventSource.node, input.content, lineStarts)
+      });
+      nodes.push(eventNode);
+      edges.push({
+        id: `${resourceNode.id}:event-source:${eventSource.name}`,
+        source_node_id: resourceNode.id,
+        target_node_id: eventNode.id,
+        kind: "lambda_event_source",
+        source_range: nodeRange(eventSource.node, input.content, lineStarts),
+        provenance: "cloudformation_event_source_scan",
+        confidence: 0.7,
+        metadata: {
+          provenance: "cloudformation_event_source_scan",
+          semantic_scope: "template_event_source_routing",
+          logical_id: logicalId,
+          event_name: eventSource.name,
+          event_type: eventSource.type,
+          resource_backed: true
+        }
+      });
     }
 
     collectTemplateReferences({
@@ -432,6 +469,7 @@ function parseCloudFormationTemplate(input: ExtractionRequest): {
 
   return {
     nodes,
+    edges,
     unresolved_references: unresolvedReferences
   };
 }
@@ -441,6 +479,7 @@ function cloudFormationResourceNode(input: {
   logicalId: string;
   resourceType?: string;
   handler?: string;
+  eventSources: readonly CloudFormationEventSource[];
   sourceRange: ReturnType<typeof lineRange>;
   unsupportedIntrinsics: Set<string>;
 }): GraphNodeWriteModel {
@@ -462,7 +501,8 @@ function cloudFormationResourceNode(input: {
       evidence_kinds: ["config", "infra_parser"],
       provenance: "cloudformation_resource_scan",
       semantic_scope: "template_declarations_only",
-      handler: input.handler
+      handler: input.handler,
+      event_sources: eventSourceSummaries(input.eventSources)
     }
   };
 }
@@ -471,6 +511,7 @@ function cloudFormationHandlerNode(input: {
   input: ExtractionRequest;
   logicalId: string;
   handler: string;
+  eventSources: readonly CloudFormationEventSource[];
   sourceRange: ReturnType<typeof lineRange>;
 }): GraphNodeWriteModel {
   const handlerTarget = lambdaHandlerTarget(input.handler);
@@ -493,9 +534,71 @@ function cloudFormationHandlerNode(input: {
       handler_file_candidate: handlerTarget?.file_paths[0],
       handler_file_candidates: handlerTarget?.file_paths,
       handler_export_candidate: handlerTarget?.export_name,
-      handler_resolution: "pending_file_match"
+      handler_resolution: "pending_file_match",
+      event_sources: eventSourceSummaries(input.eventSources)
     }
   };
+}
+
+type CloudFormationEventSource = {
+  name: string;
+  type?: string;
+  node: Node;
+};
+
+function lambdaEventSources(resource: YAMLMap): CloudFormationEventSource[] {
+  const events = findMapValue(resource, ["Properties", "Events"]);
+  if (!isMap(events)) {
+    return [];
+  }
+  return events.items.flatMap((item) => {
+    const name = scalarString(yamlNode(item.key));
+    const eventNode = yamlNode(item.value);
+    if (name === undefined || !isMap(eventNode)) {
+      return [];
+    }
+    return [{
+      name,
+      type: scalarString(mapValue(eventNode, "Type")),
+      node: eventNode
+    }];
+  });
+}
+
+function cloudFormationEventSourceNode(input: {
+  input: ExtractionRequest;
+  logicalId: string;
+  eventSource: CloudFormationEventSource;
+  sourceRange: ReturnType<typeof lineRange>;
+}): GraphNodeWriteModel {
+  return {
+    id: nodeId(input.input.snapshot_id, input.input.path, "lambda_event_source", `${input.logicalId}:${input.eventSource.name}`),
+    kind: "lambda_event_source",
+    name: input.eventSource.name,
+    qualified_name: `${input.input.path}:${input.logicalId}:${input.eventSource.name}`,
+    file_path: input.input.path,
+    language: input.input.language,
+    source_range: input.sourceRange,
+    signature: eventSourceLabel(input.eventSource),
+    metadata: {
+      domain: "infrastructure",
+      capability_level: "resource_backed",
+      evidence_kinds: ["config", "infra_parser"],
+      provenance: "cloudformation_event_source_scan",
+      semantic_scope: "template_event_source_routing",
+      logical_id: input.logicalId,
+      event_name: input.eventSource.name,
+      event_type: input.eventSource.type
+    }
+  };
+}
+
+function eventSourceSummaries(eventSources: readonly CloudFormationEventSource[]): string[] {
+  return eventSources.map(eventSourceLabel).sort();
+}
+
+function eventSourceLabel(eventSource: CloudFormationEventSource): string {
+  return eventSource.type === undefined ? eventSource.name : `${eventSource.name}:${eventSource.type}`;
 }
 
 function collectTemplateReferences(input: {

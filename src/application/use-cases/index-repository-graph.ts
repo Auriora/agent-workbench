@@ -355,7 +355,8 @@ function lambdaHandlerFileAnchor(input: {
       handler: input.sourceNode.name,
       logical_id: input.sourceNode.metadata.logical_id,
       template_path: input.sourceNode.file_path,
-      handler_export_candidate: exportName
+      handler_export_candidate: exportName,
+      event_sources: input.sourceNode.metadata.event_sources
     }
   };
 }

@@ -46,13 +46,20 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     tests/workspace/sam-intrinsic-fixtures.test.ts
     tests/graph/extraction-pipeline.test.ts` passed.
 
-- [ ] T003 Implement event-source and handler context grouping.
+- [x] T003 Implement event-source and handler context grouping.
   - Depends on: T002
   - Files: `src/application/`, `src/presentation/`, `tests/mcp/`
   - Acceptance: `context_for_task`, `symbol_search`, and template grouping show
     logical ID, handler, handler file, and related event-source evidence within
     budgets.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. SAM function extraction now emits
+    `lambda_event_source` nodes, direct resource-backed event-source routing
+    edges, and compact event summaries on Lambda function, handler binding, and
+    resolved handler-file metadata. Handler grouping signatures include bounded
+    event-source evidence, and exact event-source symbol lookup is covered by
+    query tests. Validation: `pnpm typecheck` and `pnpm exec vitest run
+    tests/graph/extraction-pipeline.test.ts tests/graph/query-tools.test.ts`
+    passed.
 
 - [ ] T004 Wire template-aware impact and references.
   - Depends on: T002, T003
