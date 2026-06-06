@@ -83,12 +83,18 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     repo policy supplies replacement commands. Validation:
     `pnpm exec vitest run tests/mcp/verification-plan-tool.test.ts` passed.
 
-- [ ] T005 Run read-only Go dogfood comparison.
+- [x] T005 Run read-only Go dogfood comparison.
   - Depends on: T003, T004
   - Files: `.tmp/`, `docs/specs/015-go-reference-impact-promotion/verification.md`
   - Acceptance: Evidence records same, better, weaker, and remaining blocked
     cases against at least one Go-heavy sample repository without modifying it.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Ran read-only dogfood against
+    `/home/bcherrington/Projects/Auriora/OneMount`, wrote the comparison note
+    to `.tmp/spec-015-go-dogfood-onemount-2026-06-06.md`, and left the sample
+    repository clean. Results improved Go scope, parser-backed symbol search,
+    reference lookup, and validation safety; impact remains low-confidence
+    local-only for the sampled symbol, and validation planning blocks unsafe
+    host commands without yet inferring a replacement Docker command.
 
 - [ ] T006 Promote docs, validate, and close.
   - Depends on: T005

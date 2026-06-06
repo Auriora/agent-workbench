@@ -27,6 +27,7 @@ last_reviewed: 2026-06-06
 | 2026-06-06 | T002 Go parser-backed extraction | Added `tree-sitter-go`, native rebuild wiring, parser-backed Go capability labels, package/import/declaration/receiver extraction, and unresolved selector/identifier references with package/import provenance. `pnpm rebuild:native`, `pnpm typecheck`, and focused Go-adjacent Vitest suite passed. |
 | 2026-06-06 | T003 Go reference and impact query wiring | Added Go-aware filtering to shared reference resolution for imported package selectors and receiver-style method selectors. Proved `find_references` and low-confidence `impact` traversal with parser-backed Go evidence. Focused graph/query Vitest tests passed. |
 | 2026-06-06 | T004 Go validation planning hardening | Preferred GitHub Actions and Makefile evidence over generic host `go test ./...`, added CI run-step parsing for Go validation commands, and retained blocking behavior for Docker/devcontainer/repo guidance that forbids host commands. Focused verification-plan Vitest tests passed. |
+| 2026-06-06 | T005 read-only OneMount dogfood | Indexed and queried OneMount without modifying it. Go scope, symbol search, reference lookup, and validation safety improved over prior feedback; impact remains low-confidence local-only and blocked Docker validation needs approved command inference. Report: `.tmp/spec-015-go-dogfood-onemount-2026-06-06.md`. |
 
 ## Residual Risks
 
