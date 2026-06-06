@@ -122,7 +122,7 @@ or runtime telemetry.
 ### EB001: Integration Health Surface
 
 - Priority: P0
-- Status: proposed spec
+- Status: active Spec 019
 - Friction signal: agents saw mismatches between advertised, discovered, and
   callable MCP surfaces, and received next actions for tools unavailable in the
   active session.
@@ -141,13 +141,14 @@ or runtime telemetry.
   - Codex-profile fixture tests for discovered versus callable surfaces.
   - Golden MCP responses that suppress unavailable tools from executable next
     actions.
-- Promotion target: create a follow-up integration-health spec, or combine with
-  EB002 if the implementation is primarily presenter and contract work.
+- Promotion target: active
+  [Spec 019](../specs/019-integration-health-session-routing/requirements.md),
+  combined with EB002 and EB011.
 
 ### EB002: Session-Aware Next Actions
 
 - Priority: P0
-- Status: proposed spec
+- Status: active Spec 019
 - Friction signal: agents follow runtime next actions literally; unavailable
   next actions weaken trust and force shell fallback.
 - Runtime surface: presenters for `context_for_task`, verification planning,
@@ -163,8 +164,9 @@ or runtime telemetry.
     diagnostics, and docs surfaces.
   - Contract tests ensuring unavailable actions are not presented as executable
     commands.
-- Promotion target: combine with EB001 unless implementation stays narrow to a
-  presenter update.
+- Promotion target: active
+  [Spec 019](../specs/019-integration-health-session-routing/requirements.md),
+  combined with EB001 and EB011.
 
 ### EB003: First-Read Reliability And Bounded Tool Behavior
 
@@ -213,7 +215,7 @@ or runtime telemetry.
 ### EB005: Multi-File Post-Edit Repair Loop
 
 - Priority: P1
-- Status: proposed spec
+- Status: active Spec 020
 - Friction signal: hook logs show `too_many_files` and
   `too_many_files_for_inline_hook`; Agent IDE diagnostics and post-edit
   feedback were high-value signals.
@@ -232,13 +234,13 @@ or runtime telemetry.
     cases.
   - Provider tests for bounded diagnostics and structured skipped results.
   - Telemetry for deferred diagnostic reasons.
-- Promotion target: create a follow-up spec extending the archived diagnostics
-  and post-edit feedback delivery record.
+- Promotion target: active
+  [Spec 020](../specs/020-multi-file-post-edit-repair/requirements.md).
 
 ### EB006: Spec And Task Traceability Lookup
 
 - Priority: P1
-- Status: proposed integration with spec-lifecycle-manager
+- Status: active Spec 021
 - Friction signal: spec-driven work needs fast mapping from task IDs to
   requirements, design sections, files, validation gates, open decisions, and
   closure requirements.
@@ -254,13 +256,13 @@ or runtime telemetry.
   - Fixture specs for active, archived, malformed, and traceability-rich
     packages.
   - Golden task lookup responses that route agents to files and checks.
-- Promotion target: create a scoped integration spec after confirming the
-  ownership boundary with spec-lifecycle-manager.
+- Promotion target: active
+  [Spec 021](../specs/021-spec-task-traceability-lookup/requirements.md).
 
 ### EB007: MCP Server Repository Support
 
 - Priority: P1
-- Status: proposed spec
+- Status: active Spec 022
 - Friction signal: MCP server repos require transport, session, tool-list,
   HTTP/SSE, stdio, Docker, and log debugging context.
 - Runtime surface: repo-shape detection, context packets, docs routing,
@@ -274,8 +276,8 @@ or runtime telemetry.
 - Validation:
   - Fixture MCP server repos for stdio, HTTP/SSE, and streamable HTTP shapes.
   - Golden context and validation-plan responses.
-- Promotion target: create a future MCP-server repo support spec after EB001
-  and EB002 establish integration health behavior.
+- Promotion target: active
+  [Spec 022](../specs/022-mcp-server-repository-support/requirements.md).
 
 ### EB008: Workspace Hygiene And Wrong-Repo Guard
 
@@ -300,7 +302,7 @@ or runtime telemetry.
 ### EB009: Fallback Telemetry And History Mining
 
 - Priority: P2
-- Status: active Spec 018
+- Status: archived Spec 018 plus future follow-up work
 - Friction signal: local history scans and hook logs expose repeated product
   issues that do not appear in static repo fixtures.
 - Runtime surface: `src/debug/codex-history-mining.ts`, OpenTelemetry, hooks,
@@ -313,8 +315,10 @@ or runtime telemetry.
 - Validation:
   - Spec 018 scanner run against Agent Workbench.
   - Future synthetic history fixture report tests.
-- Promotion target: continue Spec 018; defer public MCP usage resources until
-  privacy and storage policy are explicit.
+- Promotion target: archived
+  [Spec 018](../specs/018-history-mining-agent-ide-signals/requirements.md);
+  defer public MCP usage resources until privacy and storage policy are
+  explicit.
 
 ### EB010: Language And Ecosystem Semantic Promotion
 
@@ -337,7 +341,7 @@ or runtime telemetry.
 ### EB011: Contextual Tool Exposure And Dynamic Router
 
 - Priority: P0
-- Status: proposed design decision and spec
+- Status: active Spec 019
 - Friction signal: large static tool catalogs create discovery burden, while
   hidden or unavailable tools create trust failures. Agents need the currently
   relevant tool surface without losing access to advanced capabilities that are
@@ -367,9 +371,9 @@ or runtime telemetry.
     consistently across startup and runtime surfaces.
   - Regression tests ensuring exact next actions only reference callable tools
     or explicitly labeled unavailable capabilities.
-- Promotion target: create a design-decision spec before implementation,
-  likely paired with EB001 and EB002 because integration health and
-  session-aware next actions are prerequisites.
+- Promotion target: active
+  [Spec 019](../specs/019-integration-health-session-routing/requirements.md),
+  combined with EB001 and EB002.
 
 ## Backlog To Spec Promotion Rules
 
@@ -409,8 +413,8 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-1. EB001, EB002, and EB011: integration health, session-aware next actions, and
-   contextual tool exposure.
-2. EB005: multi-file post-edit repair loop.
-3. EB006: spec/task traceability integration.
-4. EB007: MCP-server repository support.
+1. Spec 019: integration health, session-aware next actions, and contextual
+   tool exposure.
+2. Spec 020: multi-file post-edit repair loop.
+3. Spec 021: spec/task traceability integration.
+4. Spec 022: MCP-server repository support.
