@@ -12,6 +12,16 @@ import type {
 } from "../../domain/models/index.js";
 import type { SnapshotState } from "../../domain/models/runtime.js";
 import type {
+  DocsHeading,
+  DocsSearchHit,
+  Freshness
+} from "../../contracts/index.js";
+import type {
+  DocsIndexDocumentWrite,
+  DocsIndexPort,
+  DocsIndexSearchRequest,
+  DocsIndexSearchResult,
+  DocsIndexState,
   FileCatalogPort,
   GraphQueryPort,
   GraphWritePort,
@@ -100,11 +110,30 @@ type ReferenceRow = {
   target_file_path: string | null;
 };
 
+type DocsDocumentRow = {
+  id: number;
+  snapshot_id: number;
+  path: string;
+  title: string;
+  content_hash: string;
+  byte_count: number;
+  indexed_at: string;
+  selected_text_truncated: number;
+};
+
+type DocsSearchRow = {
+  path: string;
+  title: string;
+  headings_text: string;
+  selected_text: string;
+  rank_score: number;
+};
+
 export type GraphStoreOptions = {
   enforceForeignKeys?: boolean;
 };
 
-export interface GraphStore extends GraphWritePort, GraphQueryPort, SnapshotPort, FileCatalogPort {
+export interface GraphStore extends GraphWritePort, GraphQueryPort, SnapshotPort, FileCatalogPort, DocsIndexPort {
   db: Database.Database;
   close(): void;
   validateSchema(): boolean;
@@ -1158,6 +1187,272 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     });
   }
 
+  public async replaceSnapshotDocs(input: {
+    snapshot_id: string;
+    repo_root: string;
+    documents: readonly DocsIndexDocumentWrite[];
+  }): Promise<void> {
+    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "replaceSnapshotDocs");
+    if (snapshotId == null) {
+      throw new Error(`Unknown snapshot id: ${input.snapshot_id}`);
+    }
+
+    const tx = this.db.transaction(() => {
+      this.db.prepare("DELETE FROM docs_fts WHERE rowid IN (SELECT id FROM docs_documents WHERE snapshot_id = @snapshotId)").run({
+        snapshotId
+      });
+      this.db.prepare("DELETE FROM docs_documents WHERE snapshot_id = @snapshotId").run({ snapshotId });
+
+      const insertDoc = this.db.prepare(`
+        INSERT INTO docs_documents (
+          snapshot_id,
+          path,
+          title,
+          content_hash,
+          byte_count,
+          indexed_at,
+          selected_text_truncated
+        ) VALUES (
+          @snapshotId,
+          @path,
+          @title,
+          @contentHash,
+          @byteCount,
+          @indexedAt,
+          @selectedTextTruncated
+        )
+      `);
+      const insertHeading = this.db.prepare(`
+        INSERT INTO docs_headings (
+          document_id,
+          heading_id,
+          heading_text,
+          depth,
+          line
+        ) VALUES (
+          @documentId,
+          @headingId,
+          @headingText,
+          @depth,
+          @line
+        )
+      `);
+      const insertFts = this.db.prepare(`
+        INSERT INTO docs_fts (
+          rowid,
+          path,
+          title,
+          headings_text,
+          selected_text
+        ) VALUES (
+          @rowid,
+          @path,
+          @title,
+          @headingsText,
+          @selectedText
+        )
+      `);
+
+      for (const doc of input.documents) {
+        const result = insertDoc.run({
+          snapshotId,
+          path: doc.path,
+          title: doc.title,
+          contentHash: doc.content_hash,
+          byteCount: doc.byte_count,
+          indexedAt: doc.indexed_at,
+          selectedTextTruncated: doc.truncated ? 1 : 0
+        });
+        const documentId = Number(result.lastInsertRowid);
+        for (const heading of doc.headings) {
+          insertHeading.run({
+            documentId,
+            headingId: heading.id,
+            headingText: heading.text,
+            depth: heading.depth,
+            line: heading.line
+          });
+        }
+        insertFts.run({
+          rowid: documentId,
+          path: doc.path,
+          title: doc.title,
+          headingsText: doc.headings.map((heading) => heading.text).join("\n"),
+          selectedText: doc.selected_text
+        });
+      }
+    });
+
+    tx();
+  }
+
+  public async getState(input: { repo_root: string; snapshot_id?: string }): Promise<DocsIndexState> {
+    const snapshot = await this.getSnapshot(input);
+    if (snapshot === null) {
+      return {
+        repo_root: input.repo_root,
+        freshness: "cold",
+        status: "cold",
+        reason: "No graph snapshot is available, so docs FTS evidence is cold.",
+        document_count: 0
+      };
+    }
+
+    const snapshotId = this.resolveSnapshotId(snapshot.id, "getDocsIndexState", { fallbackByRepo: false });
+    if (snapshotId == null) {
+      return {
+        repo_root: snapshot.repo_root,
+        snapshot_id: snapshot.id,
+        freshness: snapshot.freshness,
+        status: "invalid",
+        reason: "Snapshot id could not be resolved for docs FTS evidence.",
+        document_count: 0
+      };
+    }
+
+    const row = this.db
+      .prepare("SELECT COUNT(*) AS count FROM docs_documents WHERE snapshot_id = @snapshotId")
+      .get({ snapshotId }) as { count: number } | undefined;
+    const documentCount = row?.count ?? 0;
+    if (snapshot.freshness !== "fresh") {
+      return {
+        repo_root: snapshot.repo_root,
+        snapshot_id: snapshot.id,
+        freshness: snapshot.freshness,
+        status: "stale",
+        reason: `Docs FTS evidence depends on a ${snapshot.freshness} graph snapshot.`,
+        document_count: documentCount
+      };
+    }
+    if (documentCount === 0) {
+      return {
+        repo_root: snapshot.repo_root,
+        snapshot_id: snapshot.id,
+        freshness: "cold",
+        status: "cold",
+        reason: "No Markdown documents were indexed into docs FTS for this snapshot.",
+        document_count: 0
+      };
+    }
+    return {
+      repo_root: snapshot.repo_root,
+      snapshot_id: snapshot.id,
+      freshness: "fresh",
+      status: "usable",
+      document_count: documentCount
+    };
+  }
+
+  public async search(input: DocsIndexSearchRequest): Promise<DocsIndexSearchResult> {
+    const state = await this.getState({ repo_root: input.repo_root });
+    if (state.status !== "usable" || state.snapshot_id === undefined) {
+      return {
+        status: "blocked",
+        repo_root: state.repo_root,
+        snapshot_id: state.snapshot_id,
+        freshness: state.freshness,
+        reason: state.status === "usable" ? "invalid" : state.status,
+        message: state.reason ?? "Docs FTS evidence is not usable.",
+        hits: [],
+        truncated: false,
+        result_count: 0
+      };
+    }
+
+    const snapshotId = this.resolveSnapshotId(state.snapshot_id, "searchDocsIndex", { fallbackByRepo: false });
+    if (snapshotId == null) {
+      return {
+        status: "blocked",
+        repo_root: state.repo_root,
+        snapshot_id: state.snapshot_id,
+        freshness: state.freshness,
+        reason: "invalid",
+        message: "Snapshot id could not be resolved for docs FTS search.",
+        hits: [],
+        truncated: false,
+        result_count: 0
+      };
+    }
+
+    const cursor = decodeDocsCursor(input.cursor);
+    if (cursor !== undefined && cursor.snapshot_id !== state.snapshot_id) {
+      return {
+        status: "blocked",
+        repo_root: state.repo_root,
+        snapshot_id: state.snapshot_id,
+        freshness: state.freshness,
+        reason: "stale",
+        message: "Docs search cursor belongs to a different snapshot.",
+        hits: [],
+        truncated: false,
+        result_count: 0
+      };
+    }
+
+    const offset = cursor?.offset ?? 0;
+    const ftsQuery = buildDocsFtsQuery(input.query);
+    if (ftsQuery.length === 0) {
+      return {
+        status: "done",
+        repo_root: state.repo_root,
+        snapshot_id: state.snapshot_id,
+        freshness: state.freshness,
+        hits: [],
+        truncated: false,
+        result_count: 0
+      };
+    }
+
+    const candidateLimit = Math.max(input.max_results + 1, 500);
+    const rows = this.db
+      .prepare(
+        `
+        SELECT
+          docs_documents.path,
+          docs_documents.title,
+          docs_fts.headings_text,
+          docs_fts.selected_text,
+          bm25(docs_fts, -7.0, -9.0, -6.0, -1.0) AS rank_score
+        FROM docs_fts
+        INNER JOIN docs_documents ON docs_documents.id = docs_fts.rowid
+        WHERE docs_documents.snapshot_id = @snapshotId
+          AND docs_fts MATCH @ftsQuery
+        ORDER BY rank_score DESC, docs_documents.path ASC
+        LIMIT @limit
+        OFFSET @offset
+      `
+      )
+      .all({
+        snapshotId,
+        ftsQuery,
+        limit: candidateLimit,
+        offset
+      }) as DocsSearchRow[];
+
+    const rankedHits = rows
+      .map((row) => this.mapDocsSearchRow({ row, query: input.query, includeSnippets: input.include_snippets }))
+      .sort((left, right) => right.score - left.score || left.path.localeCompare(right.path));
+    const hits = rankedHits.slice(0, input.max_results);
+    const truncated = rows.length > input.max_results;
+
+    return {
+      status: "done",
+      repo_root: state.repo_root,
+      snapshot_id: state.snapshot_id,
+      freshness: state.freshness,
+      hits,
+      truncated,
+      cursor: truncated
+        ? encodeDocsCursor({
+            snapshot_id: state.snapshot_id,
+            query: input.query,
+            offset: offset + input.max_results
+          })
+        : undefined,
+      result_count: hits.length
+    };
+  }
+
   private resolveSnapshotId(snapshotId: string, context: string, options: { fallbackByRepo?: boolean } = {}): number | null {
     const fallbackByRepo = options.fallbackByRepo !== false;
     const byId = this.parseNumericId(snapshotId);
@@ -1327,6 +1622,39 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     };
   }
 
+  private mapDocsSearchRow(input: {
+    row: DocsSearchRow;
+    query: string;
+    includeSnippets: boolean;
+  }): DocsSearchHit {
+    const terms = tokenizeDocsQuery(input.query);
+    const heading = bestHeadingMatch(input.row.headings_text, terms, input.query);
+    const normalizedQuery = input.query.toLowerCase();
+    const score =
+      Math.max(0, Number(input.row.rank_score)) +
+      docsPathCategoryBoost(input.row.path) +
+      docsFieldBoost({
+        path: input.row.path,
+        title: input.row.title,
+        headingsText: input.row.headings_text,
+        selectedText: input.row.selected_text,
+        query: normalizedQuery,
+        terms
+      });
+    return {
+      path: input.row.path,
+      title: input.row.title,
+      heading_id: heading?.id,
+      heading: heading?.text,
+      snippet: input.includeSnippets
+        ? snippetForDocsQuery(input.row.selected_text, heading?.text ?? firstDocsSnippetNeedle(input.query, terms))
+        : undefined,
+      score,
+      evidence_kinds: ["docs", "fts"],
+      direct_read_caveat: "Docs search is routing evidence; use docs_read_section for precise claims."
+    };
+  }
+
   private parseNumericId(value: string): number | null {
     if (!/^-?\d+$/.test(value)) {
       return null;
@@ -1334,6 +1662,132 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     const id = Number.parseInt(value, 10);
     return Number.isNaN(id) ? null : id;
   }
+}
+
+type DocsCursor = {
+  snapshot_id: string;
+  query: string;
+  offset: number;
+};
+
+function buildDocsFtsQuery(query: string): string {
+  return tokenizeDocsQuery(query)
+    .map((term) => `"${term.replaceAll('"', '""')}"`)
+    .join(" OR ");
+}
+
+function tokenizeDocsQuery(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/[^a-z0-9_/-]+/u)
+    .map((term) => term.trim())
+    .filter((term) => term.length > 1)
+    .slice(0, 12);
+}
+
+function bestHeadingMatch(headingsText: string, terms: readonly string[], query: string): DocsHeading | undefined {
+  return headingsText
+    .split(/\r?\n/u)
+    .map((text, index) => ({
+      id: slugifyDocsHeading(text),
+      text,
+      depth: 1,
+      line: index + 1,
+      score: scoreDocsText(text.toLowerCase(), query.toLowerCase(), terms)
+    }))
+    .filter((heading) => heading.text.trim().length > 0 && heading.score > 0)
+    .sort((left, right) => right.score - left.score || left.line - right.line)[0];
+}
+
+function scoreDocsText(text: string, query: string, terms: readonly string[]): number {
+  const phraseScore = text.includes(query) ? terms.length + 2 : 0;
+  const termScore = terms.reduce((score, term) => score + (text.includes(term) ? 1 : 0), 0);
+  return phraseScore + termScore;
+}
+
+function docsPathCategoryBoost(filePath: string): number {
+  const lower = filePath.toLowerCase();
+  let score = 0;
+  if (lower === "readme.md") score += 1.5;
+  if (lower.includes("/reference/") || lower.includes("/design/") || lower.includes("/spec")) score += 1.25;
+  if (lower.includes("template") || lower.includes("/examples/")) score -= 2;
+  if (lower.includes("/ai-agent/") || lower.includes("/agents/")) score -= 0.75;
+  return score;
+}
+
+function docsFieldBoost(input: {
+  path: string;
+  title: string;
+  headingsText: string;
+  selectedText: string;
+  query: string;
+  terms: readonly string[];
+}): number {
+  const pathText = input.path.toLowerCase();
+  const titleText = input.title.toLowerCase();
+  const headingsText = input.headingsText.toLowerCase();
+  const selectedText = input.selectedText.toLowerCase();
+  return (
+    scoreDocsText(titleText, input.query, input.terms) * 8 +
+    scoreDocsText(pathText, input.query, input.terms) * 6 +
+    scoreDocsText(headingsText, input.query, input.terms) * 5 +
+    scoreDocsText(selectedText, input.query, input.terms)
+  );
+}
+
+function snippetForDocsQuery(content: string, query: string): string {
+  const lower = content.toLowerCase();
+  const index = lower.indexOf(query.toLowerCase());
+  if (index === -1) {
+    return content.slice(0, 220).replace(/\s+/gu, " ").trim();
+  }
+  const start = Math.max(0, index - 70);
+  const end = Math.min(content.length, index + query.length + 130);
+  return content.slice(start, end).replace(/\s+/gu, " ").trim();
+}
+
+function firstDocsSnippetNeedle(query: string, terms: readonly string[]): string {
+  return terms[0] ?? query;
+}
+
+function encodeDocsCursor(cursor: DocsCursor): string {
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodeDocsCursor(value: string | undefined): DocsCursor | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<DocsCursor>;
+    if (
+      typeof parsed.snapshot_id === "string" &&
+      typeof parsed.query === "string" &&
+      typeof parsed.offset === "number" &&
+      Number.isInteger(parsed.offset) &&
+      parsed.offset >= 0
+    ) {
+      return {
+        snapshot_id: parsed.snapshot_id,
+        query: parsed.query,
+        offset: parsed.offset
+      };
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function slugifyDocsHeading(value: string): string {
+  const slug = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/gu, "")
+    .replace(/\s+/gu, "-")
+    .replace(/-+/gu, "-")
+    .replace(/^-|-$/gu, "");
+  return slug.length === 0 ? "section" : slug;
 }
 
 export function openGraphStore(databasePath: string, options: GraphStoreOptions = {}): GraphStore {
@@ -1424,6 +1878,34 @@ function migrate(db: Database.Database): void {
       docstring
     );
 
+    CREATE TABLE IF NOT EXISTS docs_documents (
+      id INTEGER PRIMARY KEY,
+      snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
+      path TEXT NOT NULL,
+      title TEXT NOT NULL,
+      content_hash TEXT NOT NULL,
+      byte_count INTEGER NOT NULL,
+      indexed_at TEXT NOT NULL,
+      selected_text_truncated INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(snapshot_id, path)
+    );
+
+    CREATE TABLE IF NOT EXISTS docs_headings (
+      id INTEGER PRIMARY KEY,
+      document_id INTEGER NOT NULL REFERENCES docs_documents(id) ON DELETE CASCADE,
+      heading_id TEXT NOT NULL,
+      heading_text TEXT NOT NULL,
+      depth INTEGER NOT NULL,
+      line INTEGER NOT NULL
+    );
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS docs_fts USING fts5(
+      path,
+      title,
+      headings_text,
+      selected_text
+    );
+
     CREATE INDEX IF NOT EXISTS idx_files_path ON files(path);
     CREATE INDEX IF NOT EXISTS idx_nodes_lower_name ON nodes(lower_name);
     CREATE INDEX IF NOT EXISTS idx_nodes_qualified_name ON nodes(qualified_name);
@@ -1431,13 +1913,25 @@ function migrate(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_node_id);
     CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_node_id);
     CREATE INDEX IF NOT EXISTS idx_files_snapshot_path ON files(snapshot_id, path);
+    CREATE INDEX IF NOT EXISTS idx_docs_documents_snapshot_path ON docs_documents(snapshot_id, path);
+    CREATE INDEX IF NOT EXISTS idx_docs_headings_document ON docs_headings(document_id, line);
 
     INSERT OR IGNORE INTO schema_migrations(version) VALUES (${SCHEMA_VERSION});
   `);
 }
 
 function validateSchema(db: Database.Database): boolean {
-  const expected = ["files", "nodes", "edges", "unresolved_refs", "snapshots", "node_fts"];
+  const expected = [
+    "files",
+    "nodes",
+    "edges",
+    "unresolved_refs",
+    "snapshots",
+    "node_fts",
+    "docs_documents",
+    "docs_headings",
+    "docs_fts"
+  ];
   const rows = db
     .prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'virtual table')")
     .all() as Array<{ name: string }>;

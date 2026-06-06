@@ -2,7 +2,7 @@
 title: FTS-backed docs search traceability
 doc_type: spec
 artifact_type: traceability
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---

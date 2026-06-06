@@ -46,6 +46,7 @@ validate and persist through graph ports.
 | Reference store | Retain unresolved references for later resolution and caveats | adapter output | `unresolved_refs` rows |
 | Snapshot manager | Track repo/config identity and freshness | sync events, config | `snapshots` rows |
 | FTS indexer | Index names, qualified names, signatures, and selected non-secret text | selected graph rows | FTS tables and search results |
+| Docs FTS indexer | Index Markdown path, title, headings, and bounded selected body text | cataloged Markdown docs | `docs_documents`, `docs_headings`, and `docs_fts` rows |
 
 ## Ports And Read Models
 
@@ -97,10 +98,15 @@ watcher or scan event
 - `unresolved_refs`: source node, reference name, reference kind, file, range,
   and candidate metadata.
 - `snapshots`: repo/config identity, created_at, freshness, and schema version.
+- `docs_documents`: snapshot id, repo-relative Markdown path, title, content
+  hash, byte count, indexed-at timestamp, and selected-text truncation flag.
+- `docs_headings`: document id, stable heading id, heading text, depth, and
+  line number.
+- `docs_fts`: SQLite FTS5 virtual table over docs path, title, headings text,
+  and bounded selected body text.
 
-Post-MVP tables such as `docs`, `tests`, `attention_items`, `usage_events`, and
-report caches should be added only when a concrete query requires relational
-storage.
+Post-MVP tables such as `tests`, `attention_items`, `usage_events`, and report
+caches should be added only when a concrete query requires relational storage.
 
 ## Schema Invariants
 
@@ -108,11 +114,15 @@ storage.
 - Stable node ids are derived from repo identity, file path, node kind,
   qualified name, and source range where available.
 - `files.path` is unique within a snapshot.
+- `docs_documents.path` is unique within a snapshot.
 - `nodes.file_id` references `files`.
+- `docs_headings.document_id` references `docs_documents`.
 - `edges.source_node_id` and `edges.target_node_id` reference `nodes` when both
   endpoints are resolved.
 - Deletes and renames remove stale file, node, edge, FTS, and unresolved-ref
   rows in the same transaction.
+- Docs FTS rows are replaced transactionally for a snapshot and are treated as
+  derived evidence tied to snapshot freshness.
 - Metadata fields must be typed JSON with schema-versioned interpretation.
 - FTS rows are refreshed in the same transaction as node writes when possible.
 
@@ -136,6 +146,7 @@ MVP hot-path tools must publish and enforce draft budgets:
 | --- | --- | --- |
 | status/scope | 50 ms | no source scan |
 | symbol search | 100 ms | max 100 rows |
+| docs search | 100 ms | bounded FTS candidate window, max 50 returned hits |
 | reference lookup | 150 ms | max depth 1 unless requested |
 | context build | 250 ms | max 5 files and source-byte cap |
 | impact | 250 ms | max depth 2 and 100 nodes |

@@ -20,8 +20,16 @@ import {
   FileCatalogScannerAdapter,
   WorkspaceFileAdapter
 } from "../../src/infrastructure/filesystem/index.js";
+import {
+  markdownTitleFromPath,
+  parseMarkdownHeadings,
+  selectedMarkdownText
+} from "../../src/infrastructure/markdown/docs.js";
+import { openGraphStore, SCHEMA_VERSION, type GraphStore } from "../../src/infrastructure/sqlite/index.js";
+import type { DocsIndexPort, DocsIndexSearchResult } from "../../src/ports/index.js";
 
 const fixtureRoot = path.resolve("tests/fixtures/fixture-docs-query-repo");
+const scanner = new FileCatalogScannerAdapter();
 
 describe("docs query application contracts", () => {
   it("builds a compact docs overview with docs evidence labels and skipped-doc warnings", async () => {
@@ -96,6 +104,7 @@ describe("docs query application contracts", () => {
 
   it("searches path, title, heading, and content with direct-read caveats and truncation", async () => {
     const fixture = copyFixture();
+    const store = await indexFixtureDocs(fixture.root);
     try {
       const result = await searchDocs({
         request: {
@@ -104,8 +113,7 @@ describe("docs query application contracts", () => {
           max_results: 1,
           include_snippets: true
         },
-        scanner: new FileCatalogScannerAdapter(),
-        workspace: new WorkspaceFileAdapter({ repoRoot: fixture.root }),
+        docs_index: store,
         default_repo_root: "."
       });
       const search = docsSearchResultSchema.parse(result.search);
@@ -113,11 +121,11 @@ describe("docs query application contracts", () => {
       expect(search.hits).toHaveLength(1);
       expect(search.hits[0]).toMatchObject({
         path: "docs/operations/runbook.md",
-        evidence_kinds: ["docs"],
+        evidence_kinds: ["docs", "fts"],
         direct_read_caveat: expect.stringContaining("routing evidence")
       });
       expect(search.hits[0]?.snippet).toContain("Rollback");
-      expect(search.truncated).toBe(true);
+      expect(search.truncated).toBe(false);
       expect(search.next_actions).toEqual([
         {
           tool: "docs_outline",
@@ -136,12 +144,40 @@ describe("docs query application contracts", () => {
         }
       ]);
     } finally {
+      store.close();
+      fixture.dispose();
+    }
+  });
+
+  it("returns a cursor when FTS docs search has more results", async () => {
+    const fixture = copyFixture();
+    const store = await indexFixtureDocs(fixture.root);
+    try {
+      const firstPage = await searchDocs({
+        request: {
+          repo_root: fixture.root,
+          query: "docs",
+          max_results: 1,
+          include_snippets: false
+        },
+        docs_index: store,
+        default_repo_root: "."
+      });
+      const search = docsSearchResultSchema.parse(firstPage.search);
+
+      expect(search.hits).toHaveLength(1);
+      expect(search.truncated).toBe(true);
+      expect(search.cursor).toEqual(expect.any(String));
+      expect(search.result_count).toBe(1);
+    } finally {
+      store.close();
       fixture.dispose();
     }
   });
 
   it("finds docs with multi-term queries without requiring an exact phrase", async () => {
     const fixture = copyFixture();
+    const store = await indexFixtureDocs(fixture.root);
     try {
       const result = await searchDocs({
         request: {
@@ -150,8 +186,7 @@ describe("docs query application contracts", () => {
           max_results: 5,
           include_snippets: true
         },
-        scanner: new FileCatalogScannerAdapter(),
-        workspace: new WorkspaceFileAdapter({ repoRoot: fixture.root }),
+        docs_index: store,
         default_repo_root: "."
       });
       const search = docsSearchResultSchema.parse(result.search);
@@ -161,8 +196,79 @@ describe("docs query application contracts", () => {
       );
       expect(search.hits.every((hit) => hit.direct_read_caveat.includes("docs_read_section"))).toBe(true);
     } finally {
+      store.close();
       fixture.dispose();
     }
+  });
+
+  it("blocks docs search when the FTS index is cold instead of scanning files", async () => {
+    const fixture = copyFixture();
+    const store = openGraphStore(path.join(fixture.root, "cold.sqlite"));
+    try {
+      const result = await searchDocs({
+        request: {
+          repo_root: fixture.root,
+          query: "guide",
+          max_results: 5,
+          include_snippets: true
+        },
+        docs_index: store,
+        default_repo_root: "."
+      });
+      const search = docsSearchResultSchema.parse(result.search);
+
+      expect(search).toMatchObject({
+        status: "blocked",
+        hits: [],
+        warnings: [
+          expect.objectContaining({
+            message: expect.stringContaining("docs FTS")
+          })
+        ]
+      });
+    } finally {
+      store.close();
+      fixture.dispose();
+    }
+  });
+
+  it.each([
+    ["stale", "stale graph snapshot"],
+    ["invalid", "schema-incompatible docs index"],
+    ["unavailable", "docs index storage is unavailable"]
+  ] as const)("returns compact blocked docs search output for %s FTS state", async (reason, message) => {
+    const result = await searchDocs({
+      request: {
+        repo_root: "/tmp/docs-fixture",
+        query: "guide",
+        max_results: 5,
+        include_snippets: true
+      },
+      docs_index: blockedDocsIndex({
+        reason,
+        message
+      }),
+      default_repo_root: "."
+    });
+    const search = docsSearchResultSchema.parse(result.search);
+
+    expect(search).toMatchObject({
+      repo_root: "/tmp/docs-fixture",
+      status: "blocked",
+      hits: [],
+      warnings: [
+        expect.objectContaining({
+          message
+        })
+      ],
+      truncated: false
+    });
+    expect(result.meta).toMatchObject({
+      analysis_validity: "invalid",
+      capability_level: "unsupported",
+      evidence_kinds: [],
+      verification_status: "blocked"
+    });
   });
 
   it("summarizes large generated skipped-path sets in public docs results", async () => {
@@ -293,6 +399,91 @@ function copyFixture(): {
     root,
     dispose() {
       fs.rmSync(root, { recursive: true, force: true });
+    }
+  };
+}
+
+async function indexFixtureDocs(root: string): Promise<GraphStore> {
+  const cacheDir = path.join(root, ".cache");
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const store = openGraphStore(path.join(cacheDir, "agent-workbench-test.sqlite"));
+  const snapshotId = "9001";
+  const indexedAt = "2026-06-06T00:00:00.000Z";
+  await store.upsertSnapshot({
+    snapshot: {
+      id: snapshotId,
+      repo_root: root,
+      workspace_root: root,
+      repo_identity: root,
+      config_identity: "test",
+      schema_version: SCHEMA_VERSION,
+      freshness: "fresh",
+      owner_state: "owner",
+      created_at: indexedAt,
+      updated_at: indexedAt
+    }
+  });
+  const scanned = await scanner.scan({
+    repo_root: root,
+    indexed_roots: ["."],
+    skipped_roots: [],
+    max_files: 2000
+  });
+  const workspace = new WorkspaceFileAdapter({ repoRoot: root });
+  const documents = [];
+  for (const file of scanned.files.filter((candidate) => candidate.file_identity.language === "markdown")) {
+    const content = await workspace.readText({ path: file.path });
+    const headings = parseMarkdownHeadings(content);
+    const selected = selectedMarkdownText({ content, max_bytes: 120_000 });
+    documents.push({
+      path: file.path,
+      title: headings[0]?.text ?? markdownTitleFromPath(file.path),
+      headings,
+      selected_text: selected.text,
+      content_hash: file.file_identity.content_hash,
+      byte_count: file.file_identity.size_bytes,
+      indexed_at: indexedAt,
+      truncated: selected.truncated
+    });
+  }
+  await store.replaceSnapshotDocs({
+    snapshot_id: snapshotId,
+    repo_root: root,
+    documents
+  });
+  return store;
+}
+
+function blockedDocsIndex(input: {
+  reason: "stale" | "invalid" | "unavailable";
+  message: string;
+}): DocsIndexPort {
+  return {
+    async replaceSnapshotDocs() {
+      throw new Error("replaceSnapshotDocs should not be called by docs search.");
+    },
+    async getState() {
+      return {
+        repo_root: "/tmp/docs-fixture",
+        snapshot_id: "blocked-snapshot",
+        freshness: input.reason === "stale" ? "stale" : "unknown",
+        status: input.reason,
+        reason: input.message,
+        document_count: 0
+      };
+    },
+    async search(): Promise<DocsIndexSearchResult> {
+      return {
+        status: "blocked",
+        repo_root: "/tmp/docs-fixture",
+        snapshot_id: "blocked-snapshot",
+        freshness: input.reason === "stale" ? "stale" : "unknown",
+        reason: input.reason,
+        message: input.message,
+        hits: [],
+        truncated: false,
+        result_count: 0
+      };
     }
   };
 }

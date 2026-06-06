@@ -36,7 +36,10 @@ import type {
   DiagnosticFinding,
   DiagnosticsProviderStatus,
   DocsDocument,
+  DocsHeading,
+  DocsSearchHit,
   EditToken,
+  Freshness,
   IntegrationArtifact,
   IntegrationProfile
 } from "../contracts/index.js";
@@ -263,20 +266,66 @@ export interface DiagnosticsProviderPort {
 }
 
 export interface DocsIndexPort {
-  load(input: {
+  replaceSnapshotDocs(input: {
+    snapshot_id: string;
     repo_root: string;
-    max_docs: number;
-    max_headings_per_doc: number;
-  }): Promise<{
-    documents: readonly DocsDocument[];
-    warnings: readonly {
-      path?: string;
-      reason: FileCatalogSkippedPath["reason"];
-      message: string;
-    }[];
-    truncated: boolean;
-  }>;
+    documents: readonly DocsIndexDocumentWrite[];
+  }): Promise<void>;
+  search(input: DocsIndexSearchRequest): Promise<DocsIndexSearchResult>;
+  getState(input: { repo_root: string; snapshot_id?: string }): Promise<DocsIndexState>;
 }
+
+export type DocsIndexDocumentWrite = {
+  path: string;
+  title: string;
+  headings: readonly DocsHeading[];
+  selected_text: string;
+  content_hash: string;
+  byte_count: number;
+  indexed_at: string;
+  truncated: boolean;
+};
+
+export type DocsIndexState = {
+  repo_root: string;
+  snapshot_id?: string;
+  freshness: Freshness;
+  status: "usable" | "cold" | "stale" | "invalid" | "unavailable";
+  reason?: string;
+  document_count: number;
+};
+
+export type DocsIndexSearchRequest = {
+  repo_root: string;
+  query: string;
+  max_results: number;
+  include_snippets: boolean;
+  cursor?: string;
+};
+
+export type DocsIndexSearchResult =
+  | {
+      status: "done";
+      repo_root: string;
+      snapshot_id: string;
+      freshness: Freshness;
+      hits: readonly DocsSearchHit[];
+      truncated: boolean;
+      cursor?: string;
+      result_count: number;
+    }
+  | {
+      status: "blocked";
+      repo_root: string;
+      snapshot_id?: string;
+      freshness: Freshness;
+      reason: "cold" | "stale" | "invalid" | "unavailable";
+      message: string;
+      hits: readonly DocsSearchHit[];
+      truncated: false;
+      cursor?: undefined;
+      result_count: 0;
+    };
 
 export interface EditPreviewStorePort {
   put(input: { preview: EditToken }): Promise<void>;

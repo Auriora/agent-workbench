@@ -1,9 +1,22 @@
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/index.js";
+import { searchDocs } from "../../src/application/use-cases/query-docs.js";
+import { docsSearchResultSchema } from "../../src/contracts/index.js";
+import {
+  FileCatalogScannerAdapter,
+  WorkspaceFileAdapter
+} from "../../src/infrastructure/filesystem/index.js";
+import {
+  markdownTitleFromPath,
+  parseMarkdownHeadings,
+  selectedMarkdownText
+} from "../../src/infrastructure/markdown/docs.js";
+import { openGraphStore, SCHEMA_VERSION, type GraphStore } from "../../src/infrastructure/sqlite/index.js";
 
 const fixtureRoot = path.resolve("tests/fixtures/fixture-fts-docs-search-repo");
+const scanner = new FileCatalogScannerAdapter();
 
 describe("FTS docs search fixtures", () => {
   it("covers ranking, pagination, skipped docs, and degraded index state cases", async () => {
@@ -13,7 +26,7 @@ describe("FTS docs search fixtures", () => {
     const textByPath = new Map(
       markdownFiles.map((file) => [file, fs.readFileSync(path.join(fixtureRoot, file), "utf8")])
     );
-    const scanned = await new FileCatalogScannerAdapter().scan({
+    const scanned = await scanner.scan({
       repo_root: fixtureRoot,
       indexed_roots: ["."],
       skipped_roots: [],
@@ -65,7 +78,133 @@ describe("FTS docs search fixtures", () => {
       "unavailable"
     ]);
   });
+
+  it("uses FTS docs search ranking, downranking, and cursor behavior", async () => {
+    const fixture = copyFixture();
+    const store = await indexFixtureDocs(fixture.root);
+    try {
+      const phraseResult = await searchDocs({
+        request: {
+          repo_root: fixture.root,
+          query: "docs query read surfaces",
+          max_results: 5,
+          include_snippets: true
+        },
+        docs_index: store,
+        default_repo_root: "."
+      });
+      const phraseSearch = docsSearchResultSchema.parse(phraseResult.search);
+
+      expect(phraseSearch.hits[0]).toMatchObject({
+        path: "docs/reference/docs-query-read-surfaces.md",
+        evidence_kinds: ["docs", "fts"]
+      });
+      expect(phraseSearch.hits[0]?.snippet?.toLowerCase()).toContain("docs query read surfaces");
+
+      const genericResult = await searchDocs({
+        request: {
+          repo_root: fixture.root,
+          query: "agent guide workbench",
+          max_results: 5,
+          include_snippets: false
+        },
+        docs_index: store,
+        default_repo_root: "."
+      });
+      const genericSearch = docsSearchResultSchema.parse(genericResult.search);
+      const templateIndex = genericSearch.hits.findIndex((hit) => hit.path === "docs/guides/ai-agent/template.md");
+      const evaluationIndex = genericSearch.hits.findIndex(
+        (hit) => hit.path === "docs/evaluations/agent-workbench-python-agent-ide.md"
+      );
+
+      expect(evaluationIndex).toBeGreaterThanOrEqual(0);
+      expect(templateIndex).toBeGreaterThan(evaluationIndex);
+
+      const pageResult = await searchDocs({
+        request: {
+          repo_root: fixture.root,
+          query: "pagination",
+          max_results: 2,
+          include_snippets: false
+        },
+        docs_index: store,
+        default_repo_root: "."
+      });
+      const pageSearch = docsSearchResultSchema.parse(pageResult.search);
+
+      expect(pageSearch.truncated).toBe(true);
+      expect(pageSearch.cursor).toEqual(expect.any(String));
+    } finally {
+      store.close();
+      fixture.dispose();
+    }
+  });
 });
+
+function copyFixture(): {
+  root: string;
+  dispose: () => void;
+} {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-fts-docs-"));
+  fs.cpSync(fixtureRoot, root, { recursive: true });
+  return {
+    root,
+    dispose() {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  };
+}
+
+async function indexFixtureDocs(root: string): Promise<GraphStore> {
+  const cacheDir = path.join(root, ".cache");
+  fs.mkdirSync(cacheDir, { recursive: true });
+  const store = openGraphStore(path.join(cacheDir, "agent-workbench-test.sqlite"));
+  const snapshotId = "9101";
+  const indexedAt = "2026-06-06T00:00:00.000Z";
+  await store.upsertSnapshot({
+    snapshot: {
+      id: snapshotId,
+      repo_root: root,
+      workspace_root: root,
+      repo_identity: root,
+      config_identity: "test",
+      schema_version: SCHEMA_VERSION,
+      freshness: "fresh",
+      owner_state: "owner",
+      created_at: indexedAt,
+      updated_at: indexedAt
+    }
+  });
+  const scanned = await scanner.scan({
+    repo_root: root,
+    indexed_roots: ["."],
+    skipped_roots: [],
+    max_files: 2000
+  });
+  const workspace = new WorkspaceFileAdapter({ repoRoot: root });
+  const documents = [];
+  for (const file of scanned.files.filter((candidate) => candidate.file_identity.language === "markdown")) {
+    const content = await workspace.readText({ path: file.path });
+    const headings = parseMarkdownHeadings(content);
+    const selected = selectedMarkdownText({ content, max_bytes: 120_000 });
+    documents.push({
+      path: file.path,
+      title: headings[0]?.text ?? markdownTitleFromPath(file.path),
+      headings,
+      selected_text: selected.text,
+      content_hash: file.file_identity.content_hash,
+      byte_count: file.file_identity.size_bytes,
+      indexed_at: indexedAt,
+      truncated: selected.truncated
+    });
+  }
+  await store.replaceSnapshotDocs({
+    snapshot_id: snapshotId,
+    repo_root: root,
+    documents
+  });
+  return store;
+}
 
 function listMarkdownFiles(directory: string): string[] {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

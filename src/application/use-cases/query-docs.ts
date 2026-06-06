@@ -2,7 +2,6 @@ import path from "node:path";
 import type {
   DocsDocument,
   DocsHeading,
-  DocsLink,
   DocsMap,
   DocsMapRequest,
   DocsOutlineRequest,
@@ -11,7 +10,6 @@ import type {
   DocsOverviewRequest,
   DocsReadSectionRequest,
   DocsReadSectionResult,
-  DocsSearchHit,
   DocsSearchRequest,
   DocsSearchResult,
   DocsWarning,
@@ -20,10 +18,16 @@ import type {
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import type {
+  DocsIndexPort,
   FileCatalogScanPort,
   FileCatalogSkippedPath,
   WorkspaceFilePort
 } from "../../ports/index.js";
+import {
+  extractMarkdownDocLinks,
+  markdownTitleFromPath,
+  parseMarkdownHeadings
+} from "../../infrastructure/markdown/docs.js";
 import { capNextActions } from "../../presentation/metadata.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 
@@ -116,33 +120,46 @@ export async function getDocsMap(input: {
 
 export async function searchDocs(input: {
   request: DocsSearchRequest;
-  scanner: FileCatalogScanPort;
-  workspace: WorkspaceFilePort;
+  docs_index: DocsIndexPort;
   default_repo_root: string;
 }): Promise<DocsSearchUseCaseResult> {
-  const index = await loadDocsIndex({
-    request: { repo_root: input.request.repo_root, max_docs: 200, max_headings_per_doc: 50 },
-    scanner: input.scanner,
-    workspace: input.workspace,
-    default_repo_root: input.default_repo_root
+  const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
+  const result = await input.docs_index.search({
+    repo_root: repoRoot,
+    query: input.request.query,
+    max_results: input.request.max_results,
+    include_snippets: input.request.include_snippets,
+    cursor: input.request.cursor
   });
-  const query = input.request.query.toLowerCase();
-  const hits = index.documents
-    .flatMap((doc) => searchDocument({ doc, query, includeSnippets: input.request.include_snippets }))
-    .sort((left, right) => right.score - left.score || left.path.localeCompare(right.path))
-    .slice(0, input.request.max_results);
+  const blockedWarning: DocsWarning[] = result.status === "blocked"
+    ? [
+        {
+          reason: result.reason === "unavailable" ? "missing" : "missing",
+          message: result.message
+        }
+      ]
+    : [];
+  const hits = [...result.hits];
 
   return {
     search: {
-      repo_root: index.repoRoot,
+      repo_root: result.repo_root,
       query: input.request.query,
-      status: index.warnings.length > 0 ? "needed" : hits.length > 0 ? "done" : "not_applicable",
+      status: result.status === "blocked" ? "blocked" : hits.length > 0 ? "done" : "not_applicable",
       hits,
-      warnings: index.warnings,
-      truncated: index.truncated || hits.length >= input.request.max_results,
-      next_actions: hits.length > 0 ? docsNextActions(index.repoRoot, hits[0]?.path, hits[0]?.heading_id) : []
+      warnings: blockedWarning,
+      truncated: result.truncated,
+      cursor: result.cursor,
+      result_count: result.result_count,
+      next_actions: hits.length > 0 ? docsNextActions(result.repo_root, hits[0]?.path, hits[0]?.heading_id) : []
     },
-    meta: docsMeta(index)
+    meta: docsSearchMeta({
+      repoRoot: result.repo_root,
+      freshness: result.freshness,
+      status: result.status === "blocked" ? "blocked" : hits.length > 0 ? "done" : "not_applicable",
+      truncated: result.truncated,
+      blocked: result.status === "blocked"
+    })
   };
 }
 
@@ -168,7 +185,7 @@ export async function getDocsOutline(input: {
       repo_root: index.repoRoot,
       path: normalizedPath,
       status: warning === undefined && doc !== undefined ? "done" : "blocked",
-      title: doc?.title ?? titleFromPath(normalizedPath),
+      title: doc?.title ?? markdownTitleFromPath(normalizedPath),
       headings: doc?.headings ?? [],
       warnings,
       next_actions: warning === undefined && doc !== undefined
@@ -261,12 +278,12 @@ async function loadDocsIndex(input: {
   for (const file of markdownFiles.slice(0, Math.max(input.request.max_docs, 200))) {
     try {
       const content = await input.workspace.readText({ path: file.path });
-      const headings = parseHeadings(content);
+      const headings = parseMarkdownHeadings(content);
       documents.push({
         path: file.path,
-        title: headings[0]?.text ?? titleFromPath(file.path),
+        title: headings[0]?.text ?? markdownTitleFromPath(file.path),
         headings: headings.slice(0, Math.max(input.request.max_headings_per_doc, 100)),
-        links: extractLinks({ fromPath: file.path, content, docs: markdownFiles }),
+        links: extractMarkdownDocLinks({ fromPath: file.path, content, docs: markdownFiles }),
         capability_level: "resource_backed",
         evidence_kinds: ["docs"],
         direct_read_caveat: DIRECT_READ_CAVEAT,
@@ -288,96 +305,6 @@ async function loadDocsIndex(input: {
     truncated: scanned.truncated || markdownFiles.length > Math.max(input.request.max_docs, 200),
     scannedFiles: scanned.files
   };
-}
-
-function parseHeadings(content: string): DocsHeading[] {
-  const slugCounts = new Map<string, number>();
-  return content
-    .split(/\r?\n/u)
-    .map((line, index) => ({ line, index }))
-    .map(({ line, index }) => {
-      const match = /^(#{1,6})\s+(.+)$/u.exec(line);
-      if (match === null) return undefined;
-      const text = match[2] ?? "";
-      const slug = slugify(text);
-      const count = slugCounts.get(slug) ?? 0;
-      slugCounts.set(slug, count + 1);
-      return {
-        id: count === 0 ? slug : `${slug}-${count + 1}`,
-        text,
-        depth: match[1]?.length ?? 1,
-        line: index + 1
-      };
-    })
-    .filter((heading): heading is DocsHeading => heading !== undefined);
-}
-
-function extractLinks(input: {
-  fromPath: string;
-  content: string;
-  docs: readonly FileCatalogEntry[];
-}): DocsLink[] {
-  const docPaths = new Set(input.docs.map((file) => file.path));
-  const links: DocsLink[] = [];
-  const pattern = /(?<!!)\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/gu;
-  for (const match of input.content.matchAll(pattern)) {
-    const label = match[1];
-    const target = match[2];
-    if (label === undefined || target === undefined || /^(?:https?:|mailto:|#)/u.test(target)) {
-      continue;
-    }
-    const resolvedPath = path
-      .normalize(path.join(path.dirname(input.fromPath), target.split("#", 1)[0] ?? ""))
-      .replaceAll("\\", "/");
-    links.push({
-      label,
-      target,
-      resolved_path: resolvedPath,
-      exists: docPaths.has(resolvedPath)
-    });
-  }
-  return links.sort((left, right) => left.target.localeCompare(right.target));
-}
-
-function searchDocument(input: {
-  doc: DocsDocument & { content: string };
-  query: string;
-  includeSnippets: boolean;
-}): DocsSearchHit[] {
-  const hits: DocsSearchHit[] = [];
-  const terms = tokenizeQuery(input.query);
-  const docPath = input.doc.path.toLowerCase();
-  const title = input.doc.title.toLowerCase();
-  const content = input.doc.content.toLowerCase();
-  const pathScore = scoreText(docPath, input.query, terms);
-  const titleScore = scoreText(title, input.query, terms);
-  const contentScore = scoreText(content, input.query, terms);
-  if (pathScore > 0 || titleScore > 0 || contentScore > 0) {
-    hits.push({
-      path: input.doc.path,
-      title: input.doc.title,
-      snippet: input.includeSnippets ? snippetForQuery(input.doc.content, firstSnippetNeedle(input.query, terms)) : undefined,
-      score: (titleScore * 10) + (pathScore * 6) + contentScore,
-      evidence_kinds: ["docs"],
-      direct_read_caveat: DIRECT_READ_CAVEAT
-    });
-  }
-  for (const heading of input.doc.headings) {
-    const headingScore = scoreText(heading.text.toLowerCase(), input.query, terms);
-    if (headingScore > 0) {
-      hits.push({
-        path: input.doc.path,
-        title: input.doc.title,
-        heading_id: heading.id,
-        heading: heading.text,
-        snippet: input.includeSnippets ? snippetForQuery(input.doc.content, heading.text.toLowerCase()) : undefined,
-        score: (headingScore * 8) + (6 - heading.depth),
-        evidence_kinds: ["docs"],
-        direct_read_caveat: DIRECT_READ_CAVEAT
-      });
-    }
-  }
-  return hits;
 }
 
 function buildSourceSection(input: {
@@ -424,6 +351,32 @@ function docsMeta(index: LoadedDocsIndex): ResponseMetadata {
     evidence_kinds: ["docs"],
     verification_status: index.warnings.length > 0 ? "needed" : "done",
     truncated: index.truncated,
+    budget: {
+      row_limit: DOC_ROW_LIMIT
+    }
+  };
+}
+
+function docsSearchMeta(input: {
+  repoRoot: string;
+  freshness: ResponseMetadata["freshness"];
+  status: ResponseMetadata["verification_status"];
+  truncated: boolean;
+  blocked: boolean;
+}): ResponseMetadata {
+  return {
+    analysis_validity: input.blocked ? "invalid" : "valid",
+    freshness: input.freshness,
+    scope: {
+      repo_root: input.repoRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      languages: ["markdown"]
+    },
+    capability_level: input.blocked ? "unsupported" : "resource_backed",
+    evidence_kinds: input.blocked ? [] : ["docs", "fts"],
+    verification_status: input.status,
+    truncated: input.truncated,
     budget: {
       row_limit: DOC_ROW_LIMIT
     }
@@ -554,50 +507,6 @@ function publicDocument(doc: DocsDocument & { content?: string }): DocsDocument 
   };
 }
 
-function titleFromPath(value: string): string {
-  return path.basename(value, path.extname(value)).replace(/[-_]+/gu, " ");
-}
-
 function normalizeRepoPath(value: string): string {
   return value.replaceAll("\\", "/").replace(/^\.\/+/, "");
-}
-
-function slugify(value: string): string {
-  const slug = value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/gu, "")
-    .replace(/\s+/gu, "-")
-    .replace(/-+/gu, "-")
-    .replace(/^-|-$/gu, "");
-  return slug.length === 0 ? "section" : slug;
-}
-
-function snippetForQuery(content: string, query: string): string {
-  const lower = content.toLowerCase();
-  const index = lower.indexOf(query);
-  if (index === -1) {
-    return content.slice(0, 160).replace(/\s+/gu, " ").trim();
-  }
-  const start = Math.max(0, index - 60);
-  const end = Math.min(content.length, index + query.length + 100);
-  return content.slice(start, end).replace(/\s+/gu, " ").trim();
-}
-
-function tokenizeQuery(query: string): string[] {
-  return query
-    .toLowerCase()
-    .split(/[^a-z0-9_/-]+/u)
-    .map((term) => term.trim())
-    .filter((term) => term.length > 1);
-}
-
-function scoreText(text: string, query: string, terms: readonly string[]): number {
-  const phraseScore = text.includes(query) ? terms.length + 2 : 0;
-  const termScore = terms.reduce((score, term) => score + (text.includes(term) ? 1 : 0), 0);
-  return phraseScore + termScore;
-}
-
-function firstSnippetNeedle(query: string, terms: readonly string[]): string {
-  return terms[0] ?? query;
 }

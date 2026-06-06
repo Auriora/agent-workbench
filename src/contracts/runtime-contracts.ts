@@ -372,7 +372,8 @@ export const docsSearchRequestSchema = z
     repo_root: z.string().optional(),
     query: z.string().min(1),
     max_results: z.number().int().positive().max(50).default(10),
-    include_snippets: z.boolean().default(true)
+    include_snippets: z.boolean().default(true),
+    cursor: z.string().optional()
   })
   .strict();
 export type DocsSearchRequest = z.infer<typeof docsSearchRequestSchema>;
@@ -428,6 +429,8 @@ export const docsSearchResultSchema = z
     hits: z.array(docsSearchHitSchema),
     warnings: z.array(docsWarningSchema),
     truncated: z.boolean(),
+    cursor: z.string().optional(),
+    result_count: z.number().int().nonnegative().optional(),
     next_actions: z.array(nextActionSchema)
   })
   .strict();

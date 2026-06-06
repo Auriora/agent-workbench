@@ -209,6 +209,8 @@ function sanitizeDocsSearch(input: DocsSearchResult): DocsSearchResult {
     hits: [...input.hits].sort(compareSearchHits).map(sanitizeSearchHit),
     warnings: sortWarnings(input.warnings).map(sanitizeWarning),
     truncated: input.truncated,
+    cursor: input.cursor,
+    result_count: input.result_count,
     next_actions: input.next_actions.map((action) => nextActionSchema.parse(action))
   });
 }

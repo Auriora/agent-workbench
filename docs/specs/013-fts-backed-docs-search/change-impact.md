@@ -2,7 +2,7 @@
 title: FTS-backed docs search change impact
 doc_type: spec
 artifact_type: change-impact
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---

@@ -2,7 +2,7 @@
 title: FTS-backed docs search requirements
 doc_type: spec
 artifact_type: requirements
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -10,6 +10,12 @@ last_reviewed: 2026-06-06
 # Requirements
 
 ## Introduction
+
+Spec 013 closed on 2026-06-06. Accepted FTS-backed docs search behavior was
+promoted to [MCP surface design](../../design/mcp-surface-design.md),
+[Graph store design](../../design/graph-store-design.md),
+[Runtime operations design](../../design/runtime-operations-design.md), and
+[Documentation map](../../reference/documentation-map.md).
 
 Spec 012 added public docs overview, map, search, outline, and read-section
 surfaces. Post-reload comparison against Python Agent IDE showed that the

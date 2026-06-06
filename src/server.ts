@@ -106,8 +106,7 @@ export function createAgentWorkbenchServer(
     searchDocs: ({ request }) =>
       searchDocs({
         request,
-        scanner,
-        workspace: workspaceForRepoRoot(request.repo_root),
+        docs_index: graphStore,
         default_repo_root: absoluteRepoRoot
       }),
     getDocsOutline: ({ request }) =>
@@ -221,6 +220,7 @@ export function createAgentWorkbenchServer(
       resource_extractor: resourceExtractor,
       graph: graphStore,
       catalog: graphStore,
+      docs_index: graphStore,
       snapshots: graphStore,
       warmups: runtime,
       cache: runtime,

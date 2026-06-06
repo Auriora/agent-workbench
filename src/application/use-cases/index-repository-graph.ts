@@ -8,6 +8,7 @@ import type {
 import type { SnapshotState } from "../../domain/models/runtime.js";
 import type {
   ClockPort,
+  DocsIndexPort,
   ExtractorPort,
   ExtractorRegistryPort,
   FileCatalogPort,
@@ -20,8 +21,14 @@ import type {
   CachePort,
   WarmupCoordinatorPort
 } from "../../ports/index.js";
+import {
+  markdownTitleFromPath,
+  parseMarkdownHeadings,
+  selectedMarkdownText
+} from "../../infrastructure/markdown/docs.js";
 
 const MAX_TEXT_EXTRACTION_BYTES = 2_000_000;
+const MAX_DOCS_INDEX_BYTES = 120_000;
 const INDEXING_YIELD_INTERVAL = 25;
 
 export type IndexRepositoryGraphResult = {
@@ -50,6 +57,7 @@ export async function indexRepositoryGraph(input: {
   resource_extractor: ExtractorPort;
   graph: GraphWritePort;
   catalog: FileCatalogPort;
+  docs_index?: DocsIndexPort;
   snapshots: SnapshotPort;
   clock: ClockPort;
   schema_version: number;
@@ -150,6 +158,36 @@ export async function indexRepositoryGraph(input: {
         indexed_at: now
       },
       extracted_at: now
+    });
+  }
+
+  if (input.docs_index !== undefined) {
+    const documents = [];
+    for (const [index, file] of scanned.files
+      .filter((candidate) => candidate.file_identity.language === "markdown")
+      .entries()) {
+      await yieldToEventLoop(index);
+      const content = await input.workspace.readText({ path: file.path });
+      const headings = parseMarkdownHeadings(content);
+      const selected = selectedMarkdownText({
+        content,
+        max_bytes: MAX_DOCS_INDEX_BYTES
+      });
+      documents.push({
+        path: file.path,
+        title: headings[0]?.text ?? markdownTitleFromPath(file.path),
+        headings,
+        selected_text: selected.text,
+        content_hash: file.file_identity.content_hash,
+        byte_count: file.file_identity.size_bytes,
+        indexed_at: now,
+        truncated: selected.truncated
+      });
+    }
+    await input.docs_index.replaceSnapshotDocs({
+      snapshot_id: snapshotId,
+      repo_root: scanned.repo_root,
+      documents
     });
   }
 
@@ -338,6 +376,7 @@ export async function warmupRepositoryGraph(input: {
   resource_extractor: ExtractorPort;
   graph: GraphWritePort;
   catalog: FileCatalogPort;
+  docs_index?: DocsIndexPort;
   snapshots: SnapshotPort;
   warmups: WarmupCoordinatorPort;
   clock: ClockPort;
@@ -367,6 +406,7 @@ export async function warmupRepositoryGraph(input: {
       resource_extractor: input.resource_extractor,
       graph: input.graph,
       catalog: input.catalog,
+      docs_index: input.docs_index,
       snapshots: input.snapshots,
       clock: input.clock,
       schema_version: input.schema_version,

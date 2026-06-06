@@ -61,6 +61,7 @@ bind repo
 -> ingest extraction batches through graph ports
 -> resolve references
 -> refresh FTS
+-> refresh docs FTS for Markdown path/title/headings/selected text
 -> publish watcher-clean snapshot
 -> expose fresh status
 ```
@@ -84,6 +85,13 @@ Agent-facing MCP resources and tools must report cold, refreshing, fresh,
 stale, or degraded state instead of recommending hidden worker actions.
 Internal operations such as graph prewarm are not public MCP `next_action`
 values unless they are exposed through a documented public tool.
+
+Docs search depends on this warm-up path. `docs_search` reads the warm docs FTS
+index and reports cold, stale, invalid, or unavailable index state when that
+evidence is not usable; it does not trigger a broad Markdown scan on the hot
+path. Direct docs overview, map, outline, and read-section surfaces may still
+perform bounded scanner/read work because those surfaces provide direct
+documentation evidence rather than search acceleration.
 
 A future CLI may expose an explicit prewarm entry point so clients can prepare
 repo caches before interactive agent work starts.

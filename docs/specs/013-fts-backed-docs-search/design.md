@@ -2,7 +2,7 @@
 title: FTS-backed docs search design
 doc_type: spec
 artifact_type: design
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -111,9 +111,15 @@ later spec promotes indexed overview/map. This spec only replaces the
 
 ## Open Questions
 
-- Should docs FTS live in the existing graph SQLite database or a separate
-  docs-index namespace/table set inside the same database?
-- Should `repo:///docs/overview` and `repo:///docs/map` later read from the
-  indexed docs tables for consistency and hot-path speed?
-- What cursor shape should be contract-stable: opaque offset token, snapshot
-  plus rank offset, or query hash plus offset?
+Resolved for this implementation slice:
+
+- OD-001: Docs FTS lives in the existing graph SQLite database, using dedicated
+  `docs_documents`, `docs_headings`, and `docs_fts` tables. Public contracts
+  expose docs index state and hits, not raw table names or rows.
+- OD-002: `docs_search` uses an opaque cursor that encodes snapshot identity,
+  query, and offset. Cursor internals are not contract-stable; clients only
+  treat the value as an opaque continuation token.
+- OD-003: `repo:///docs/overview`, `repo:///docs/map`, `docs_outline`, and
+  `docs_read_section` stay on the direct scanner/read path for this spec.
+  Indexed overview/map can be planned later if dogfood evidence shows that is
+  worth doing.
