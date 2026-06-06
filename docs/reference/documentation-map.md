@@ -25,6 +25,7 @@ copying tables, schemas, or enum definitions.
 | --- | --- | --- |
 | Product narrative and source-project rationale | [Agent IDE restart concept](../design/agent-ide-restart-concept.md) | Narrative only; not the contract source of truth. |
 | System shape and component boundaries | [System architecture](../architecture/system-architecture.md) | Keep high-level and avoid schema detail. |
+| Product principles and MVOST | [Agent Workbench principles](../requirements/agent-workbench-principles.md) | Owns the project mission, vision, objectives, strategy, tactics, and guiding principles for building an IDE for coding agents. |
 | Layered implementation architecture | [Layered runtime architecture](../design/layered-runtime-architecture.md) | Owns dependency direction, source layout, ports, presenters, policies, and boundary-test rules. |
 | Accepted target requirements | [Runtime requirements](../requirements/runtime-requirements.md) | Requirements are target-state until implementation evidence exists. |
 | Runtime response envelope, enums, and MCP contract rules | [Runtime contracts](runtime-contracts.md) | Single source for capability, trust, freshness, evidence, attention, edit-token, and error-shape vocabulary. |
@@ -60,6 +61,7 @@ copying tables, schemas, or enum definitions.
 | Go reference and impact promotion work | [Go reference and impact promotion requirements](../specs/015-go-reference-impact-promotion/requirements.md) | Active Spec 015. Promotes the Go backlog from routing-only declarations toward parser-backed references, confidence labels, impact evidence, and safer validation planning. |
 | SAM/CloudFormation intrinsic routing work | [SAM CloudFormation intrinsic routing requirements](../specs/016-sam-cloudformation-intrinsic-routing/requirements.md) | Active Spec 016. Promotes the infrastructure backlog for intrinsic functions, event-source edges, template-to-handler routing, and validation planning without executing AWS or SAM commands. |
 | Markdown quality MCP surface work | [Markdown quality MCP surface requirements](../specs/017-markdown-quality-mcp-surface/requirements.md) | Active Spec 017. Promotes the post-MVP Markdown quality backlog into bounded read-only check tools before formatter or generated-report work. |
+| History mining for agent IDE signals work | [History mining for agent IDE signals requirements](../specs/018-history-mining-agent-ide-signals/requirements.md) | Active Spec 018. Captures local Codex history and hook-log mining as a repeatable evidence source for Agent Workbench product backlog signals. |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) | Owns fixture, budget, degraded-mode, and acceptance evidence. |
 | Architectural decisions | [ADRs](../adr/) | ADR status must match frontmatter and body text. |
 
