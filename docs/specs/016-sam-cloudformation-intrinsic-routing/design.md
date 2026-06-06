@@ -2,7 +2,7 @@
 title: SAM CloudFormation intrinsic routing design
 doc_type: spec
 artifact_type: design
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -52,9 +52,11 @@ counted as skipped evidence with a compact caveat.
 
 ## Open Questions
 
-- Should `Fn::Sub` support be limited to `${LogicalId}` and
-  `${LogicalId.Attribute}` patterns in the first slice?
-- Should nested stack outputs be modeled as unresolved external edges now or
-  left entirely as caveats?
-- How should event-source edge kinds be named so they remain useful without
-  leaking AWS-specific fields into runtime contracts?
+- Resolved: first-slice `Fn::Sub` support is limited to structural
+  `${LogicalId}` and `${LogicalId.Attribute}` style substitutions; pseudo
+  parameters are ignored and other values remain unresolved.
+- Resolved: `Fn::ImportValue` is modeled as unresolved external stack evidence
+  with low confidence.
+- Resolved: event-source evidence uses adapter-domain metadata on
+  resource-backed `lambda_event_source` nodes and `lambda_event_source` edges,
+  without adding AWS-specific shared contract fields.

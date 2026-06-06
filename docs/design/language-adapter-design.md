@@ -68,7 +68,7 @@ routing, freshness behavior, and degraded-mode reporting.
 | Python | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Python AST enrichment, Pyright/LSP, Ruff, pytest |
 | TypeScript/JavaScript | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
 | C#/.NET | `resource_backed`, then `partial_semantic`, then `semantic` | `.sln`/`.csproj`/`.fsproj`/`.vbproj` project metadata, NuGet and test project discovery, generated-output policy, then `tree-sitter` and optional C# LSP |
-| CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser plus intrinsic resolver and source handler linking |
+| CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser, intrinsic/dependency/event routing, source handler linking, optional deeper template semantics only after promotion fixtures |
 | Go | `partial_semantic`, then `semantic` | `tree-sitter-go` declarations/references, `go.mod`/Makefile/CI/Docker validation evidence, optional `gopls`, `go list`, `go test` enrichers only after promotion fixtures |
 | C/C++ | `resource_backed`, then `partial_semantic` | `tree-sitter` (mandatory), clangd/libclang when `compile_commands.json` exists |
 | Rust | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Rust parser/enrichment, Cargo metadata, `rust-analyzer`, `cargo test` |
@@ -307,23 +307,29 @@ is the current concrete reference for this adapter's missing behavior: SAM
 logical ID lookup, template-to-handler edges, Lambda handler grouping,
 template-aware impact, and AWS validation planning.
 
-The delivered SAM/CloudFormation slice is resource-backed. It emits routing
-nodes for template logical IDs, Lambda handler strings, and resolved
-handler-file anchors; records unresolved handler-file candidates when the file
-cannot be found; promotes SAM templates, handler files, and infrastructure tests
-in overview/context; and plans non-executed repo-approved commands,
-`cfn-lint`, `sam validate`, and nearby infrastructure pytest commands. Handler
-routing edges are low-confidence file-level evidence. The adapter does not yet
-resolve intrinsic functions, event-source dependencies, or template-to-source
-handler symbols as semantic graph relationships.
+The delivered SAM/CloudFormation support is resource-backed. It emits routing
+nodes for template logical IDs, Lambda handler strings, resolved handler-file
+anchors, and explicit SAM event sources. It records unresolved handler-file
+candidates when the file cannot be found; promotes SAM templates, handler
+files, infrastructure tests, and event-source evidence in overview/context; and
+plans non-executed repo-approved commands, `cfn-lint`, `sam validate`, and
+nearby infrastructure pytest commands.
+
+The structured YAML/JSON template walk understands `Ref`, `Fn::GetAtt`,
+`Fn::Sub`, `Fn::Join` nested references, `Fn::ImportValue`, and `DependsOn`.
+Unambiguous logical-resource references become low-confidence resource-backed
+graph edges with expression-path provenance. Parameters, pseudo parameters,
+imports, unsupported intrinsics, and values requiring account/region/stack
+evaluation remain unresolved or compact caveats. Secret-like dynamic reference
+values are omitted from stored reference metadata.
 
 Lambda-heavy result presentation groups generic handler queries using existing
 resource-backed metadata. `symbol_search` and `context_for_task` order handler
-binding and handler-file anchor results by template path, logical ID, and
-handler file, and annotate signatures with compact routing context such as the
-logical ID, template path, and resolved handler file. This grouping uses
-existing graph nodes and bounded outgoing handler-file edges only; it does not
-add stack, event-source, IAM, dependency, or deployment semantics.
+binding and handler-file anchor results by template path, logical ID, handler
+file, and compact event-source evidence. Handler impact can traverse to handler
+files, event sources, Lambda function resources, and directly referenced
+template resources with low-confidence infrastructure caveats. This does not
+claim stack, IAM, deployment, account, region, or runtime event semantics.
 
 ## Promotion Gates
 

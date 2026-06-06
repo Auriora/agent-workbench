@@ -647,22 +647,22 @@ describe("context_for_task use case", () => {
         {
           name: "src/billing/webhook/app.handler",
           kind: "lambda_handler_binding",
-          signature: "BillingWebhookFunction -> src/billing/webhook/app.handler (template infra/sam/billing/template.yaml, handler file src/billing/webhook/app.py)"
+          signature: "BillingWebhookFunction -> src/billing/webhook/app.handler (template infra/sam/billing/template.yaml, handler file src/billing/webhook/app.py, events Api:Api)"
         },
         {
           name: "src/billing/webhook/app.py",
           kind: "lambda_handler_file",
-          signature: "BillingWebhookFunction -> src/billing/webhook/app.py#handler (template infra/sam/billing/template.yaml)"
+          signature: "BillingWebhookFunction -> src/billing/webhook/app.py#handler (template infra/sam/billing/template.yaml, events Api:Api)"
         },
         {
           name: "src/orders/cancel/app.handler",
           kind: "lambda_handler_binding",
-          signature: "OrdersCancelFunction -> src/orders/cancel/app.handler (template infra/sam/orders/template.yaml, handler file src/orders/cancel/app.py)"
+          signature: "OrdersCancelFunction -> src/orders/cancel/app.handler (template infra/sam/orders/template.yaml, handler file src/orders/cancel/app.py, events Api:Api)"
         },
         {
           name: "src/orders/cancel/app.py",
           kind: "lambda_handler_file",
-          signature: "OrdersCancelFunction -> src/orders/cancel/app.py#handler (template infra/sam/orders/template.yaml)"
+          signature: "OrdersCancelFunction -> src/orders/cancel/app.py#handler (template infra/sam/orders/template.yaml, events Api:Api)"
         }
       ]);
     } finally {

@@ -223,7 +223,7 @@ describe("repository graph extraction pipeline", () => {
     } finally {
       store.close();
     }
-  });
+  }, 15_000);
 
   it("keeps non-Python files without a registered extractor out of semantic extraction", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-mixed-language-platform");

@@ -2,7 +2,7 @@
 title: SAM CloudFormation intrinsic routing tasks
 doc_type: spec
 artifact_type: tasks
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -93,7 +93,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     `pnpm typecheck` and
     `pnpm exec vitest run tests/mcp/verification-plan-tool.test.ts` passed.
 
-- [ ] T006 Promote docs, validate, and close.
+- [x] T006 Promote docs, validate, and close.
   - Depends on: T004, T005
   - Files: `docs/design/language-adapter-design.md`,
     `docs/design/mcp-surface-design.md`,
@@ -103,4 +103,9 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
   - Acceptance: Durable docs describe accepted intrinsic, event-source,
     handler, impact, and validation behavior; full relevant validation passes
     before archival.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Promoted accepted
+    SAM/CloudFormation intrinsic, dependency, event-source, handler impact, and
+    validation-planning behavior to durable language, MCP surface,
+    capability-matrix, and documentation-map docs. Full validation passed
+    before archival: `pnpm typecheck`, `pnpm test`, `git diff --check`, and
+    spec lifecycle scan.

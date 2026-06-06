@@ -607,8 +607,15 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Done: connect SAM/CloudFormation templates to source handlers, tests, and
   validation evidence. Impact from a Lambda handler binding now exposes
   low-confidence resource-backed template-to-handler-file routing rather than
-  isolated zero-edge template evidence. Event-source, intrinsic-function, and
-  dependency semantics remain future work.
+  isolated zero-edge template evidence.
+- Done: add structured SAM/CloudFormation intrinsic, dependency, and event
+  source routing. `Ref`, `Fn::GetAtt`, `Fn::Sub`, nested `Fn::Join` references,
+  `Fn::ImportValue`, and `DependsOn` produce resource-backed reference evidence
+  when structurally supported. Handler grouping includes compact event-source
+  summaries, and handler impact reaches event sources and directly referenced
+  template resources with low-confidence infrastructure caveats. The delivery
+  record is
+  [Spec 016](../specs/016-sam-cloudformation-intrinsic-routing/requirements.md).
 - Done: add Lambda-heavy repository presentation that groups generic
   `handler` results by template path, logical ID, handler binding, and resolved
   handler file while preserving the compact graph contract. Grouping uses
@@ -624,6 +631,10 @@ Post-closure dogfood caveats from large mixed-language repositories:
   generic template checks, generic `cfn-lint`/`sam validate` and nearby
   infrastructure pytest candidates remain non-executed planned evidence, and
   host-blocking policy suppresses generic host commands.
+- Done: prioritize explicitly selected SAM/CloudFormation templates before
+  broader discovered templates when planning generic `cfn-lint` and
+  `sam validate` commands. Nearest infrastructure tests remain conservative
+  when no explicit template-to-test mapping exists.
 - Done: add first-slice resource-backed `.sln`/`.csproj` discovery as project
   graph routing and validation evidence.
 - Done: deepen resource-backed `.sln`/`.csproj` extraction for SDK type, target
