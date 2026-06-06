@@ -2,9 +2,9 @@
 title: Diagnostics and post-edit feedback requirements
 doc_type: spec
 artifact_type: requirements
-status: active
+status: archived
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Requirements

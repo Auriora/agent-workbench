@@ -2,9 +2,9 @@
 title: Diagnostics and post-edit feedback tasks
 doc_type: spec
 artifact_type: tasks
-status: active
+status: archived
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-06
 ---
 
 # Tasks
@@ -93,9 +93,14 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     internal/hook-facing post-edit feedback, quiet presenter behavior, and
     hook boundaries. Validation: pending final T007 gates.
 
-- [ ] T007 Validate and close the spec.
+- [x] T007 Validate and close the spec.
   - Depends on: T006
   - Files: `docs/specs/011-diagnostics-post-edit-feedback/`
   - Acceptance: Focused tests, `pnpm typecheck`, relevant docs checks, and spec
     lint pass before archival.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Added traceability, ran final closure
+    gates, and archived the spec package. Validation: `pnpm typecheck` passed;
+    `pnpm test` passed with 41 files and 283 tests; `pnpm exec vitest run
+    tests/docs/docs-links-metadata.test.ts` passed with 2 tests;
+    `spec_runtime.py lint docs/specs/011-diagnostics-post-edit-feedback`
+    passed with no diagnostics; `git diff --check` passed.
