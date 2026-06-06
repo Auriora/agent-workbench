@@ -15,9 +15,8 @@ been promoted to durable docs, backlog items, roadmap entries, tests, or code.
 Closed packages are removed from `docs/specs/` so that directory only contains
 active implementation scaffolding.
 
-The final pre-removal tree commit for the packages listed below is `77e0fda`.
-That commit contains the completed packages before the closure cleanup removed
-them from the active docs tree.
+The final pre-removal tree commit for Specs 001-018 is `77e0fda`. Later rows
+name their own final pre-removal tree commits.
 
 ## Closed Specs
 
@@ -41,6 +40,7 @@ them from the active docs tree.
 | Spec 016: SAM CloudFormation intrinsic routing | Removed from `docs/specs/` on 2026-06-06 after SAM/CloudFormation routing behavior was promoted. | Language adapter design, MCP surface design, and language capability matrix. |
 | Spec 017: Markdown quality MCP surface | Removed from `docs/specs/` on 2026-06-06 after Markdown quality behavior was promoted. | Markdown document quality design, MCP surface design, and edit and validation loop design. |
 | Spec 018: History mining for agent IDE signals | Removed from `docs/specs/` on 2026-06-06 after mining taxonomy and routed follow-up work were promoted. | Agent Workbench executable backlog and history-mining reference notes. |
+| Spec 019: Integration health and session routing | Removed from `docs/specs/` on 2026-06-06 after final pre-removal tree commit `787ec81` completed integration health, session-aware next-action filtering, and conservative contextual routing. | MCP surface design, coding agent integration design, executable backlog, runtime contracts, integration profiles, and presenter tests. |
 
 ## Closure Notes
 
