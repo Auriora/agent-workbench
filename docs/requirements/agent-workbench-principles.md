@@ -10,34 +10,25 @@ last_reviewed: 2026-06-06
 
 ## Purpose
 
-Agent Workbench exists to become an IDE for coding agents. It should do for
-agents what human IDEs do for human developers: maintain context, surface the
-right evidence at the right time, make edits safer, make validation obvious,
-and reduce the amount of repo-specific process each agent must rediscover.
+Agent Workbench exists to become an IDE for coding agents. Its purpose is to
+provide the runtime surfaces, evidence packets, and safety checks that let
+agents work inside repositories with less manual discovery and fewer
+trust-breaking guesses.
 
-## MVOST
+## VMOST
+
+### Vision
+
+Coding agents should experience a repository as an instrumented workspace, not
+as an unstructured filesystem. The workspace should expose current context,
+available capabilities, confidence levels, safe edit routes, and validation
+paths in forms that are compact enough for agents to act on.
 
 ### Mission
 
 Reduce the cognitive and operational load of coding agents by turning repeated
 repo exploration, edit planning, validation, repair, and handoff work into
 bounded, trustworthy runtime surfaces.
-
-### Vision
-
-A coding agent should be able to enter an unfamiliar repository and quickly
-know:
-
-- what repo it is in;
-- which files, docs, and symbols matter for the task;
-- what evidence is semantic, heuristic, stale, partial, or missing;
-- what edit path is safe;
-- what commands or checks would prove the change;
-- what still needs to be read, tested, or reported.
-
-The agent should spend its reasoning budget on the user change, not on
-rediscovering project shape, command conventions, validation policy, or tool
-availability.
 
 ### Objectives
 
@@ -79,9 +70,10 @@ availability.
 
 ### 1. Remove Agent Discovery Burden
 
-Agents should not have to repeatedly figure out repository roots, language
-mix, package boundaries, validation commands, generated paths, or project
-guidance. The runtime should expose these as compact, trustworthy packets.
+Agents should not have to rediscover stable repository facts on every task.
+Agent Workbench should cache and present repo roots, language mix, package
+boundaries, generated paths, project guidance, and capability availability as
+explicit evidence with freshness and scope metadata.
 
 ### 2. Make The Edit And Repair Loop Easy
 
@@ -120,7 +112,52 @@ The runtime should stay silent when no useful feedback exists. When there is a
 problem, it should report the smallest actionable finding, the missing
 evidence, and the next safe action.
 
-## Immediate Product Signals
+## Scope Rules
+
+### Include
+
+Agent Workbench owns coding-agent runtime support for:
+
+- repository context and first-read orientation;
+- language and project-shape evidence;
+- validation planning, diagnostics, and post-edit feedback;
+- edit safety, preview/apply behavior, drift checks, and workspace hygiene;
+- docs, symbols, references, impact, and other task-routing evidence;
+- MCP/tool integration health and session-aware next actions;
+- local telemetry and mined friction signals that improve coding-agent
+  workflows.
+
+### Exclude Or Defer
+
+Agent Workbench should not become the owner of unrelated governance or project
+management systems. Defer or integrate with existing owners for:
+
+- generic lifecycle governance outside coding-agent runtime needs;
+- spec template ownership where the spec-lifecycle-manager or repository
+  governance already owns the workflow;
+- broad project management, issue planning, roadmaps, or scheduling that is
+  not tied to coding-agent execution;
+- domain-specific business logic that belongs to a target repository;
+- human IDE UI replication that does not translate into an agent-facing tool,
+  resource, contract, or feedback packet.
+
+## Relationship To Governance
+
+Agent Workbench principles guide product and runtime design. They do not
+override repository governance, `AGENTS.md`, durable architecture decisions,
+active specs, security policies, or workspace safety contracts.
+
+When these principles identify a new direction, the implementation path should
+flow through the repository's normal lifecycle:
+
+- update durable source-of-truth docs when the principle changes project
+  direction;
+- create or update a spec when implementation work is non-trivial;
+- keep spec-template and closure-process decisions with the spec lifecycle
+  owner;
+- resolve conflicts with governance documents before changing code.
+
+## Current Product Signals
 
 - Integration health: advertised MCP surfaces must match callable surfaces.
 - First-call reliability: status, scope, overview, context, diagnostics, and
