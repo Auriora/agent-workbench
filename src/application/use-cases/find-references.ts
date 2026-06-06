@@ -99,7 +99,7 @@ export async function findReferences(input: {
       target_file_path: item.target_file_path,
       reference_kind: "resolved",
       confidence: item.confidence,
-      evidence_kinds: ["parser"] as EvidenceKind[],
+      evidence_kinds: evidenceKindsForProvenance(item.provenance),
       provenance: item.provenance,
       status: "resolved" as const
     })),
@@ -120,7 +120,7 @@ export async function findReferences(input: {
             reference_name: String(edge.metadata.reference_name ?? target.name),
             reference_kind: edge.kind,
             confidence: edge.confidence,
-            evidence_kinds: ["parser"] as EvidenceKind[],
+            evidence_kinds: evidenceKindsForProvenance(edge.provenance),
             provenance: edge.provenance,
             status: "resolved" as const
           };
@@ -175,6 +175,12 @@ export async function findReferences(input: {
       truncated: references.length >= input.request.max_results
     }
   };
+}
+
+function evidenceKindsForProvenance(provenance: string): EvidenceKind[] {
+  return provenance.includes("cloudformation")
+    ? ["config", "infra_parser"]
+    : ["parser"];
 }
 
 async function findLexicalReferences(input: {

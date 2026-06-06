@@ -580,6 +580,122 @@ describe("graph query use cases", () => {
     }
   });
 
+  it("returns template-aware references and impact for SAM intrinsic resources", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-sam-intrinsic-repo", "225");
+    try {
+      const ordersTable = await searchSymbols({
+        request: {
+          query: "OrdersTable",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: [],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+      const ordersTableId = ordersTable.symbols.symbols[0]?.node_id ?? "";
+      const references = await findReferences({
+        request: {
+          node_id: ordersTableId,
+          repo_root: fixture.repoRoot,
+          max_results: 10,
+          max_depth: 1
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(references.references.references).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            reference_kind: "cloudformation_depends_on",
+            reference_name: "OrdersTable",
+            confidence: 0.85,
+            evidence_kinds: ["config", "infra_parser"],
+            provenance: "cloudformation_intrinsic_scan",
+            status: "resolved"
+          }),
+          expect.objectContaining({
+            reference_kind: "cloudformation_getatt",
+            reference_name: "OrdersTable",
+            confidence: 0.75,
+            evidence_kinds: ["config", "infra_parser"],
+            status: "resolved"
+          })
+        ])
+      );
+
+      const handler = await searchSymbols({
+        request: {
+          query: "src/orders/app.handler",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: [],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+      const handlerId = handler.symbols.symbols.find((symbol) => symbol.kind === "lambda_handler_binding")?.node_id ?? "";
+      const impact = await computeImpact({
+        request: {
+          node_id: handlerId,
+          repo_root: fixture.repoRoot,
+          max_depth: 2,
+          max_nodes: 20,
+          direction: "both"
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(impact.impact.affected_symbols).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "lambda_handler_binding",
+            name: "src/orders/app.handler"
+          }),
+          expect.objectContaining({
+            kind: "lambda_handler_file",
+            path: "src/orders/app.py"
+          }),
+          expect.objectContaining({
+            kind: "lambda_event_source",
+            name: "QueueOrders"
+          }),
+          expect.objectContaining({
+            kind: "cloudformation_resource",
+            name: "OrdersQueue"
+          })
+        ])
+      );
+      expect(impact.impact.confidence).toEqual(
+        expect.objectContaining({
+          level: "low",
+          scope: "graph",
+          evidence_kinds: ["config", "infra_parser"]
+        })
+      );
+    } finally {
+      fixture.store.close();
+    }
+  });
+
   it("falls back when exact matches exist only outside the requested languages", async () => {
     const fixture = await indexedFixture("tests/fixtures/fixture-sam-lambda-repo", "221");
     try {

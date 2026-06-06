@@ -412,14 +412,33 @@ function parseCloudFormationTemplate(input: ExtractionRequest): {
     });
     nodes.push(resourceNode);
 
-    if (handler !== undefined) {
-      nodes.push(cloudFormationHandlerNode({
+    const handlerNode = handler === undefined
+      ? undefined
+      : cloudFormationHandlerNode({
         input,
         logicalId,
         handler,
         eventSources,
         sourceRange: nodeRange(item.key, input.content, lineStarts)
-      }));
+      });
+    if (handlerNode !== undefined) {
+      nodes.push(handlerNode);
+      edges.push({
+        id: `${handlerNode.id}:template-resource:${resourceNode.id}`,
+        source_node_id: handlerNode.id,
+        target_node_id: resourceNode.id,
+        kind: "routes_to_template_resource",
+        source_range: nodeRange(item.key, input.content, lineStarts),
+        provenance: "cloudformation_handler_template_resolution",
+        confidence: 0.7,
+        metadata: {
+          provenance: "cloudformation_handler_template_resolution",
+          semantic_scope: "template_resource_routing",
+          logical_id: logicalId,
+          resource_backed: true,
+          reference_name: logicalId
+        }
+      });
     }
 
     for (const eventSource of eventSources) {
@@ -447,6 +466,25 @@ function parseCloudFormationTemplate(input: ExtractionRequest): {
           resource_backed: true
         }
       });
+      if (handlerNode !== undefined) {
+        edges.push({
+          id: `${handlerNode.id}:event-source:${eventSource.name}`,
+          source_node_id: handlerNode.id,
+          target_node_id: eventNode.id,
+          kind: "lambda_event_source",
+          source_range: nodeRange(eventSource.node, input.content, lineStarts),
+          provenance: "cloudformation_event_source_scan",
+          confidence: 0.7,
+          metadata: {
+            provenance: "cloudformation_event_source_scan",
+            semantic_scope: "template_event_source_routing",
+            logical_id: logicalId,
+            event_name: eventSource.name,
+            event_type: eventSource.type,
+            resource_backed: true
+          }
+        });
+      }
     }
 
     collectTemplateReferences({

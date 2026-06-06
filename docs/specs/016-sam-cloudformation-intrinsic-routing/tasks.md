@@ -61,12 +61,20 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     tests/graph/extraction-pipeline.test.ts tests/graph/query-tools.test.ts`
     passed.
 
-- [ ] T004 Wire template-aware impact and references.
+- [x] T004 Wire template-aware impact and references.
   - Depends on: T002, T003
   - Files: `src/application/`, `tests/graph/`, `tests/mcp/`
   - Acceptance: `impact` and `find_references` return directly related
     template resources and handler files with confidence labels.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. `find_references` now labels
+    CloudFormation-backed graph hits with `config`/`infra_parser` evidence
+    instead of generic parser evidence. Handler bindings route to their
+    template resource and event sources, so bounded `impact` traversals from a
+    handler can reach the handler file, explicit SAM events, Lambda function,
+    and directly referenced template resources with low-confidence
+    resource-backed caveats. Validation: `pnpm typecheck` and
+    `pnpm exec vitest run tests/graph/query-tools.test.ts
+    tests/graph/extraction-pipeline.test.ts` passed.
 
 - [ ] T005 Improve IaC validation planning and dogfood.
   - Depends on: T003
