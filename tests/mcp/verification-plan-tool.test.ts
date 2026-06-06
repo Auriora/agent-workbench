@@ -892,6 +892,28 @@ describe("verification_plan use case", () => {
     );
   });
 
+  it("prefers explicitly selected SAM templates before broader repository templates", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-sam-lambda-heavy-repo");
+    const result = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["infra/sam/orders/template.yaml"],
+        changed_files: ["infra/sam/orders/template.yaml"],
+        include_static_feedback: true,
+        max_commands: 4
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+
+    expect(result.plan.status).toBe("planned");
+    expect(result.plan.planned_commands.slice(0, 2).map((command) => command.display)).toEqual([
+      "cfn-lint infra/sam/orders/template.yaml",
+      "sam validate --template-file infra/sam/orders/template.yaml"
+    ]);
+  });
+
   it("plans repo-approved SAM and CloudFormation commands before generic template checks", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-sam-policy-"));
     try {
@@ -948,6 +970,44 @@ describe("verification_plan use case", () => {
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
+  });
+
+  it("plans repo-approved intrinsic SAM and CloudFormation commands before generic checks", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-sam-intrinsic-repo");
+    const result = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["infra/orders/template.yaml", "infra/shared/template.json"],
+        changed_files: ["infra/orders/template.yaml"],
+        include_static_feedback: true,
+        max_commands: 6
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+
+    expect(result.plan.status).toBe("planned");
+    expect(result.plan.static_feedback).toBeUndefined();
+    expect(result.plan.planned_commands.slice(0, 2)).toEqual([
+      expect.objectContaining({
+        display: "sam validate --template-file infra/orders/template.yaml",
+        reason: expect.stringContaining(".agent-workbench/validation-policy.json"),
+        execution: "not_executed"
+      }),
+      expect.objectContaining({
+        display: "cfn-lint infra/shared/template.json",
+        reason: expect.stringContaining(".agent-workbench/validation-policy.json"),
+        execution: "not_executed"
+      })
+    ]);
+    expect(result.plan.planned_commands.map((command) => command.display)).toEqual(
+      expect.arrayContaining([
+        "sam validate --template-file infra/orders/template.yaml",
+        "cfn-lint infra/shared/template.json",
+        "cfn-lint infra/orders/template.yaml"
+      ])
+    );
   });
 
   it("blocks unsafe, too-broad, and low-confidence validation targets with quiet feedback", async () => {

@@ -28,6 +28,7 @@ last_reviewed: 2026-06-06
 | 2026-06-06 | T002 intrinsic and dependency extraction | Added parser-backed YAML/JSON template traversal for CloudFormation/SAM resources. Intrinsic and `DependsOn` references now resolve to resource-backed graph edges when logical IDs are unambiguous, while parameters/imports remain unresolved with provenance and confidence metadata. `pnpm typecheck` and focused graph extraction tests passed. |
 | 2026-06-06 | T003 event-source and handler grouping | Added `lambda_event_source` routing nodes and direct event-source edges for explicit SAM function events. Handler binding and handler-file grouping now includes compact event summaries. Focused graph/query tests passed. |
 | 2026-06-06 | T004 template-aware references and impact | CloudFormation-backed reference hits now use infrastructure evidence labels. Handler impact can traverse to handler files, event sources, Lambda function resources, and directly referenced template resources with low-confidence resource-backed caveats. Focused graph/query tests passed. |
+| 2026-06-06 | T005 validation planning and AWS IaC dogfood | Added fixture-backed selected-template precedence tests and fixed SAM validation planning so explicit templates outrank broader discovered templates. Read-only dogfood against `aws-datalake` planned the selected IIoT SAM template first; report stored under `.tmp/`. |
 
 ## Residual Risks
 
@@ -35,3 +36,5 @@ last_reviewed: 2026-06-06
   pretending to evaluate stacks.
 - IaC validation commands often require credentials, Docker, or network. Plans
   must stay non-executed and policy-aware.
+- Nearest infrastructure test selection can still be broad without explicit
+  template-to-test policy or stronger project conventions.

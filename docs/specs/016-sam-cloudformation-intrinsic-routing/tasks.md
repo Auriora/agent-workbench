@@ -76,13 +76,22 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     `pnpm exec vitest run tests/graph/query-tools.test.ts
     tests/graph/extraction-pipeline.test.ts` passed.
 
-- [ ] T005 Improve IaC validation planning and dogfood.
+- [x] T005 Improve IaC validation planning and dogfood.
   - Depends on: T003
   - Files: `src/application/use-cases/`, `tests/validation/`, `.tmp/`,
     `docs/specs/016-sam-cloudformation-intrinsic-routing/verification.md`
   - Acceptance: Planner prefers repo policy and records read-only dogfood
     evidence against at least one AWS IaC sample repository.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Added fixture-backed validation
+    planning coverage for repo-approved intrinsic SAM/CloudFormation commands
+    and selected-template precedence. Fixed SAM planning to prioritize
+    explicitly selected templates before broader repository templates. Ran
+    read-only dogfood against
+    `/home/bcherrington/Projects/Clients/Co-foundry/aws-datalake`; the selected
+    `infra/sam/iiot-ot-core/template.yaml` now plans first. Report:
+    `.tmp/spec-016-aws-iac-dogfood-2026-06-06.md`. Validation:
+    `pnpm typecheck` and
+    `pnpm exec vitest run tests/mcp/verification-plan-tool.test.ts` passed.
 
 - [ ] T006 Promote docs, validate, and close.
   - Depends on: T004, T005

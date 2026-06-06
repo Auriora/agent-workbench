@@ -518,7 +518,11 @@ function planValidationCommands(input: {
         blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "SAM/CloudFormation"));
       }
     } else {
-      for (const template of input.discovery.samTemplates.slice(0, 2)) {
+      for (const template of selectSamTemplates({
+        templates: input.discovery.samTemplates,
+        selectedEntries: input.selectedEntries,
+        includeAll
+      }).slice(0, 2)) {
         commands.push({
           command: "cfn-lint",
           args: [template],
@@ -842,6 +846,39 @@ function selectPackageScripts(input: {
     selectedPaths.some((filePath) => isPackageAncestor(pkg.directory, filePath) || filePath === pkg.package_json_path)
   );
   return prioritizePackageScripts(relevant.length > 0 ? relevant : input.packages.filter((pkg) => pkg.directory === "."), selectedPaths);
+}
+
+function selectSamTemplates(input: {
+  templates: readonly string[];
+  selectedEntries: readonly FileCatalogEntry[];
+  includeAll: boolean;
+}): string[] {
+  if (input.includeAll) {
+    return [...input.templates].sort();
+  }
+  const selectedPaths = new Set(input.selectedEntries.map((entry) => entry.path));
+  const selectedTemplates = input.templates.filter((template) => selectedPaths.has(template));
+  const selectedDirectories = new Set(
+    [...selectedPaths]
+      .map((filePath) => path.posix.dirname(filePath))
+      .flatMap((directory) => parentDirectories(directory))
+  );
+  const nearbyTemplates = input.templates.filter(
+    (template) => !selectedPaths.has(template) && selectedDirectories.has(path.posix.dirname(template))
+  );
+  const fallback = input.templates.filter((template) => !selectedPaths.has(template) && !nearbyTemplates.includes(template));
+  return [...selectedTemplates.sort(), ...nearbyTemplates.sort(), ...fallback.sort()];
+}
+
+function parentDirectories(directory: string): string[] {
+  const directories = [directory];
+  let current = directory;
+  while (current.includes("/")) {
+    current = current.slice(0, current.lastIndexOf("/"));
+    directories.push(current);
+  }
+  directories.push(".");
+  return [...new Set(directories)];
 }
 
 function prioritizePackageScripts(
