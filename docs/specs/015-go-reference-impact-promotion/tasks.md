@@ -53,12 +53,21 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     `pnpm rebuild:native`, `pnpm typecheck`, and focused Go-adjacent Vitest
     suite passed.
 
-- [ ] T003 Wire Go references into graph queries and impact.
+- [x] T003 Wire Go references into graph queries and impact.
   - Depends on: T002
   - Files: `src/graph/`, `src/application/`, `tests/graph/`, `tests/mcp/`
   - Acceptance: `find_references` and `impact` return useful Go evidence with
     confidence labels and ambiguity caveats.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Added Go-aware candidate filtering to
+    the shared reference resolver so imported package selectors resolve against
+    first-party files whose path matches the import suffix, while receiver-style
+    selectors prefer method candidates and unresolved ambiguity remains
+    explicit. `find_references` now returns parser-backed Go references from
+    the fixture service entrypoint to package symbols, and `impact` traverses
+    the resulting low-confidence parser-backed graph edges with local or graph
+    scope caveats. Validation: `pnpm exec vitest run
+    tests/graph/extraction-pipeline.test.ts tests/graph/query-tools.test.ts`
+    passed.
 
 - [ ] T004 Harden Go validation planning.
   - Depends on: T001

@@ -892,6 +892,31 @@ describe("graph query use cases", () => {
       ]);
 
       const nodeId = symbols.symbols.symbols[0]?.node_id ?? "";
+      const references = await findReferences({
+        request: {
+          node_id: nodeId,
+          max_depth: 1,
+          max_results: 10
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(references.references.references).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            source_file_path: "cmd/service/main.go",
+            target_file_path: "internal/graph/response_cache.go",
+            evidence_kinds: ["parser"],
+            provenance: "tree-sitter-go",
+            status: "resolved"
+          })
+        ])
+      );
+
       const impact = await computeImpact({
         request: {
           node_id: nodeId,

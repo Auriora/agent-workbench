@@ -222,6 +222,7 @@ function extractReferences(input: {
           selector_qualifier: qualifier.text,
           import_path: imported?.path,
           import_alias: imported?.alias,
+          confidence: imported === undefined ? 0.6 : 0.7,
           resolution: imported === undefined ? "receiver_or_package_local" : "import_selector"
         }
       });
@@ -236,6 +237,7 @@ function extractReferences(input: {
           node: callee,
           sourceQualifiedName: enclosingDeclarationQualifiedName(node, input.declarations),
           metadata: {
+            confidence: 0.7,
             resolution: "package_identifier"
           }
         });

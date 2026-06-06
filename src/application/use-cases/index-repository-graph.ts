@@ -533,7 +533,10 @@ function resolveReferences(batches: readonly ExtractionBatch[]): {
     const unresolved: UnresolvedReferenceWriteModel[] = [];
 
     for (const reference of batch.unresolved_references) {
-      const candidates = nodesByName.get(reference.reference_name.toLowerCase()) ?? [];
+      const candidates = filterReferenceCandidates({
+        reference,
+        candidates: nodesByName.get(reference.reference_name.toLowerCase()) ?? []
+      });
       const unique = candidates.length === 1 ? candidates[0] : undefined;
       if (unique) {
         const provenance = typeof reference.candidate_metadata.provenance === "string"
@@ -586,4 +589,38 @@ function resolveReferences(batches: readonly ExtractionBatch[]): {
     batches: resolvedBatches,
     edges: edgesByFile
   };
+}
+
+function filterReferenceCandidates(input: {
+  reference: UnresolvedReferenceWriteModel;
+  candidates: readonly GraphNodeWriteModel[];
+}): GraphNodeWriteModel[] {
+  if (input.candidates.length <= 1) {
+    return [...input.candidates];
+  }
+  if (input.reference.candidate_metadata.provenance !== "tree-sitter-go") {
+    return [...input.candidates];
+  }
+  const resolution = input.reference.candidate_metadata.resolution;
+  const importPath = input.reference.candidate_metadata.import_path;
+  if (resolution === "import_selector" && typeof importPath === "string") {
+    const imported = input.candidates.filter(
+      (candidate) => candidate.kind !== "method" && goNodeMatchesImportPath(candidate, importPath)
+    );
+    return imported.length > 0 ? imported : [...input.candidates];
+  }
+  if (resolution === "receiver_or_package_local") {
+    const methods = input.candidates.filter((candidate) => candidate.kind === "method");
+    return methods.length > 0 ? methods : [...input.candidates];
+  }
+  return [...input.candidates];
+}
+
+function goNodeMatchesImportPath(node: GraphNodeWriteModel, importPath: string): boolean {
+  const normalizedImport = importPath.replaceAll("\\", "/").replace(/^\/+|\/+$/gu, "");
+  const normalizedFile = node.file_path.replaceAll("\\", "/");
+  const directory = normalizedFile.includes("/")
+    ? normalizedFile.slice(0, normalizedFile.lastIndexOf("/"))
+    : ".";
+  return normalizedImport.endsWith(`/${directory}`) || normalizedImport === directory;
 }

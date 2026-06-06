@@ -502,22 +502,17 @@ describe("repository graph extraction pipeline", () => {
         ])
       );
       const mainFunction = main.find((node) => node.kind === "function");
-      const mainReferences = await store.getUnresolvedReferences({
+      const mainReferences = await store.getReferences({
         snapshot_id: "109",
-        file_path: "cmd/service/main.go",
-        max_rows: 10
+        node_id: mainFunction?.id ?? ""
       });
       expect(mainReferences).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             source_node_id: mainFunction?.id,
-            reference_name: "LoadConfig",
-            reference_kind: "go_selector",
-            candidate_metadata: expect.objectContaining({
-              import_path: "example.com/go-service/internal/graph",
-              provenance: "tree-sitter-go",
-              resolution: "ambiguous"
-            })
+            target_file_path: "internal/graph/response_cache.go",
+            provenance: "tree-sitter-go",
+            target_node_id: "109:internal/graph/response_cache.go:function:graph.LoadConfig"
           })
         ])
       );
