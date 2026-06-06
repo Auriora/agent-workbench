@@ -170,7 +170,7 @@ describe("Codex integration profile", () => {
         "AGENTS.md"
       ])
     );
-    expect(profile.install_package.hook_install_model).toMatch(/config\.toml/);
+    expect(profile.install_package.hook_install_model).toMatch(/hooks\.json/);
     expect(profile.guardrails).toEqual(
       expect.arrayContaining([
         "Source edits require Codex restart to reload MCP source behavior.",
@@ -536,9 +536,11 @@ describe("Codex plugin artifacts", () => {
     expect(installer).toContain("Node.js 22 or newer is required");
     expect(installer).toContain("pnpm 10.18.1 is required");
     expect(installer).toContain("ensure_native_build_prerequisites");
+    expect(installer).toContain("write_user_hooks_json");
+    expect(installer).toContain("$CODEX_HOME/hooks.json");
     expect(installer).toContain("[mcp_servers.agent-workbench]");
-    expect(installer).toContain("[[hooks.SessionStart]]");
-    expect(installer).toContain("[[hooks.PostToolUse]]");
+    expect(installer).not.toContain("[[hooks.SessionStart]]");
+    expect(installer).not.toContain("[[hooks.PostToolUse]]");
     expect(workflow).toContain("registry: ghcr.io");
     expect(workflow).toContain("packaging/agent-workbench/Containerfile");
   });

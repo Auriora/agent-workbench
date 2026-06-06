@@ -121,11 +121,16 @@ scripts/install-agent-workbench-package.sh \
   --codex-home "$HOME/.codex"
 ```
 
-The installer writes a marked block to `~/.codex/config.toml` unless
+The installer writes a marked MCP block to `~/.codex/config.toml` unless
 `--skip-codex-config` is passed. That block includes:
 
 - `[mcp_servers.agent-workbench]` pointing at the installed package launcher
-- `SessionStart` and `PostToolUse` hooks pointing at installed hook scripts
+
+The installer merges `SessionStart` and `PostToolUse` entries into
+`~/.codex/hooks.json`, pointing at installed hook scripts. Keep user-layer
+hooks in `hooks.json` rather than mixing inline `[hooks]` TOML tables with a
+same-layer hooks file; Codex warns when both representations exist in the same
+config layer.
 
 This hook config is the fallback for package/plugin environments where the
 plugin manifest cannot declare or install hooks directly.

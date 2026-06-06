@@ -25,8 +25,9 @@ uses the TypeScript stdio entrypoint directly.
 
 The host installer is `scripts/install-agent-workbench-package.sh`. It copies
 the package contents to a stable local prefix, writes a launcher, installs the
-Codex plugin wrapper files, and appends fallback Codex MCP and hook
-configuration when the plugin system does not install hooks itself.
+Codex plugin wrapper files, appends fallback Codex MCP configuration to
+`config.toml`, and merges hook configuration into `hooks.json` when the plugin
+system does not install hooks itself.
 
 Build locally:
 

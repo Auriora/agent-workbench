@@ -250,7 +250,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       ],
       dependency_install_model: "The package manifest defines Node, pnpm, runtime module, dev/test module, native tool, and native rebuild requirements; the installer runs pnpm install --frozen-lockfile and pnpm rebuild:native when dependencies are not already packaged.",
       mcp_install_model: "The installer writes a host-level mcp_servers.agent-workbench entry that launches the installed package prefix.",
-      hook_install_model: "The installer appends SessionStart and PostToolUse hook entries to Codex config.toml because Codex plugin manifests do not currently declare hooks."
+      hook_install_model: "The installer merges SessionStart and PostToolUse hook entries into Codex hooks.json because user-layer hooks should use one representation per config layer."
     },
     skills: [
       {

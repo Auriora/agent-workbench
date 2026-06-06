@@ -137,6 +137,82 @@ ensure_native_build_prerequisites() {
   fi
 }
 
+write_user_hooks_json() {
+  local hooks_json="$1"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "dry-run: merge Agent Workbench hooks into $hooks_json"
+    return
+  fi
+
+  HOOKS_JSON="$hooks_json" INSTALL_ROOT="$INSTALL_ROOT" node <<'NODE'
+const fs = require("node:fs");
+const path = require("node:path");
+
+const hooksJson = process.env.HOOKS_JSON;
+const installRoot = process.env.INSTALL_ROOT;
+
+let data = { hooks: {} };
+if (fs.existsSync(hooksJson)) {
+  data = JSON.parse(fs.readFileSync(hooksJson, "utf8"));
+}
+if (!data || typeof data !== "object" || Array.isArray(data)) {
+  data = { hooks: {} };
+}
+if (!data.hooks || typeof data.hooks !== "object" || Array.isArray(data.hooks)) {
+  data.hooks = {};
+}
+
+const sessionCommand = `AGENT_WORKBENCH_HOOK_FEEDBACK=basic node "${path.join(
+  installRoot,
+  "plugins/agent-workbench/hooks/session-start.js"
+)}"`;
+const postEditCommand = `AGENT_WORKBENCH_HOOK_FEEDBACK=basic node "${path.join(
+  installRoot,
+  "plugins/agent-workbench/hooks/post-edit-feedback.js"
+)}"`;
+
+function withoutAgentWorkbench(entries) {
+  return (Array.isArray(entries) ? entries : [])
+    .map((entry) => {
+      const hooks = (Array.isArray(entry.hooks) ? entry.hooks : []).filter(
+        (hook) => !String(hook.command ?? "").includes("/plugins/agent-workbench/hooks/")
+      );
+      return { ...entry, hooks };
+    })
+    .filter((entry) => entry.hooks.length > 0);
+}
+
+data.hooks.SessionStart = withoutAgentWorkbench(data.hooks.SessionStart);
+data.hooks.SessionStart.push({
+  matcher: "startup|resume|clear|compact",
+  hooks: [
+    {
+      type: "command",
+      command: sessionCommand,
+      timeout: 10,
+      statusMessage: "Loading Agent Workbench context"
+    }
+  ]
+});
+
+data.hooks.PostToolUse = withoutAgentWorkbench(data.hooks.PostToolUse);
+data.hooks.PostToolUse.push({
+  matcher: "^(apply_patch|Edit|Write|write_file|create_file|rename_file)$",
+  hooks: [
+    {
+      type: "command",
+      command: postEditCommand,
+      timeout: 10,
+      statusMessage: "Checking Agent Workbench edit feedback"
+    }
+  ]
+});
+
+fs.mkdirSync(path.dirname(hooksJson), { recursive: true });
+fs.writeFileSync(hooksJson, `${JSON.stringify(data, null, 2)}\n`);
+NODE
+}
+
 copy_component() {
   local relative_path="$1"
   run mkdir -p "$INSTALL_ROOT/$(dirname "$relative_path")"
@@ -183,39 +259,29 @@ if [ "$WRITE_CODEX_CONFIG" -eq 1 ]; then
   run mkdir -p "$CODEX_HOME"
   CODEX_CONFIG="$CODEX_HOME/config.toml"
   if [ "$DRY_RUN" -eq 1 ]; then
-    echo "dry-run: append Agent Workbench MCP and hook config to $CODEX_CONFIG if marker is absent"
+    echo "dry-run: rewrite Agent Workbench MCP config block in $CODEX_CONFIG"
   else
     touch "$CODEX_CONFIG"
-    if ! grep -q "BEGIN Agent Workbench package install" "$CODEX_CONFIG"; then
-      cat >> "$CODEX_CONFIG" <<EOF
+    if grep -q "BEGIN Agent Workbench package install" "$CODEX_CONFIG"; then
+      temp_config="$(mktemp)"
+      awk '
+        /# BEGIN Agent Workbench package install/ { skipping = 1; next }
+        /# END Agent Workbench package install/ { skipping = 0; next }
+        !skipping { print }
+      ' "$CODEX_CONFIG" > "$temp_config"
+      mv "$temp_config" "$CODEX_CONFIG"
+    fi
+    cat >> "$CODEX_CONFIG" <<EOF
 
 # BEGIN Agent Workbench package install
 [mcp_servers.agent-workbench]
 enabled = true
 command = "$INSTALL_ROOT/bin/agent-workbench-mcp"
 args = []
-
-[[hooks.SessionStart]]
-matcher = "startup|resume|clear|compact"
-
-[[hooks.SessionStart.hooks]]
-type = "command"
-command = 'AGENT_WORKBENCH_HOOK_FEEDBACK=basic node "$INSTALL_ROOT/plugins/agent-workbench/hooks/session-start.js"'
-timeout = 10
-statusMessage = "Loading Agent Workbench context"
-
-[[hooks.PostToolUse]]
-matcher = "^(apply_patch|Edit|Write|write_file|create_file|rename_file)$"
-
-[[hooks.PostToolUse.hooks]]
-type = "command"
-command = 'AGENT_WORKBENCH_HOOK_FEEDBACK=basic node "$INSTALL_ROOT/plugins/agent-workbench/hooks/post-edit-feedback.js"'
-timeout = 10
-statusMessage = "Checking Agent Workbench edit feedback"
 # END Agent Workbench package install
 EOF
-    fi
   fi
+  write_user_hooks_json "$CODEX_HOME/hooks.json"
 fi
 
 echo "Agent Workbench installed at $INSTALL_ROOT"
