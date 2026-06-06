@@ -153,8 +153,8 @@ describe("runtime status", () => {
         expect.objectContaining({
           domain: "language",
           name: "typescript",
-          capability_level: "resource_backed",
-          evidence_kinds: ["heuristic"]
+          capability_level: "partial_semantic",
+          evidence_kinds: ["parser"]
         }),
         expect.objectContaining({
           domain: "package_manager",
@@ -475,7 +475,7 @@ describe("runtime status", () => {
       expect.objectContaining({
         domain: "language",
         name: "typescript",
-        capability_level: "resource_backed"
+        capability_level: "partial_semantic"
       })
     ]);
   });

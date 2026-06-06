@@ -272,8 +272,8 @@ describe("stdio MCP entrypoint", () => {
       expect.arrayContaining(["python", "typescript", "json", "infrastructure", "yaml"])
     );
     expect(parsedScope.data.capability_counts).toMatchObject({
-      partial_semantic: 1,
-      resource_backed: 4,
+      partial_semantic: 2,
+      resource_backed: 3,
       unsupported: 0
     });
     expect(parsedOverview.data.platforms).toEqual(["docker", "github_actions", "node", "typescript"]);

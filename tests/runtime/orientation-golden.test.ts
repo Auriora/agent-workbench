@@ -125,15 +125,15 @@ describe("repo orientation golden responses", () => {
           ".github/workflows/ci.yml"
         ]),
         coverage("language", "python", "partial_semantic", ["parser"], ["src/service.py"]),
-        coverage("language", "typescript", "resource_backed", ["heuristic"], ["src/app.ts"]),
+        coverage("language", "typescript", "partial_semantic", ["parser"], ["src/app.ts"]),
         coverage("package_manager", "npm", "resource_backed", ["config"], ["package.json"])
       ],
       scopeCounts: {
         file_counts: { infrastructure: 1, json: 1, python: 1, typescript: 1, yaml: 1 },
         capability_counts: {
           semantic: 0,
-          partial_semantic: 1,
-          resource_backed: 4,
+          partial_semantic: 2,
+          resource_backed: 3,
           unsupported: 0
         }
       },
@@ -147,8 +147,8 @@ describe("repo orientation golden responses", () => {
           file(
             "src/app.ts",
             "typescript",
-            "resource_backed",
-            ["heuristic"],
+            "partial_semantic",
+            ["parser"],
             "Promoted as application entrypoint and first-party source evidence."
           ),
           file("package.json", "json", "resource_backed", ["config"], "Promoted as package configuration evidence."),
@@ -216,9 +216,7 @@ describe("repo orientation golden responses", () => {
         ? "partial_semantic"
         : "resource_backed",
       evidence_kinds: fixture.statusCoverage.some((item) => item.evidence_kinds.includes("parser"))
-        ? fixture.statusCoverage.some((item) => item.evidence_kinds.includes("heuristic"))
-          ? ["config", "heuristic", "parser"]
-          : ["config", "parser"]
+        ? ["config", "parser"]
         : ["config", "docs"],
       verification_status: "needed",
       truncated: false,

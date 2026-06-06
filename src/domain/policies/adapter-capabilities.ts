@@ -7,8 +7,8 @@ type FileCapabilityInput = {
   indexed?: boolean;
 };
 
-const partialSemanticLanguages = new Set(["python"]);
-const resourceBackedLanguageNames = new Set(["c", "cpp", "csharp", "go", "javascript", "typescript"]);
+const partialSemanticLanguages = new Set(["javascript", "python", "typescript"]);
+const resourceBackedLanguageNames = new Set(["c", "cpp", "csharp", "go"]);
 const unsupportedLanguageNames = new Set([
   "java",
   "rust"

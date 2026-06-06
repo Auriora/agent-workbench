@@ -39,6 +39,7 @@ import {
 import {
   CppDeclarationExtractorAdapter,
   GoDeclarationExtractorAdapter,
+  JavaScriptTypeScriptTreeSitterExtractorAdapter,
   PythonTreeSitterExtractorAdapter
 } from "./infrastructure/tree-sitter/index.js";
 import { SystemClockAdapter } from "./infrastructure/time/index.js";
@@ -63,6 +64,8 @@ export function createAgentWorkbenchServer(
   extractors.register(new CppDeclarationExtractorAdapter({ language: "c" }));
   extractors.register(new CppDeclarationExtractorAdapter({ language: "cpp" }));
   extractors.register(new GoDeclarationExtractorAdapter());
+  extractors.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "javascript" }));
+  extractors.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "typescript" }));
   extractors.register(new PythonTreeSitterExtractorAdapter());
   const resourceExtractor = new ResourceExtractorAdapter();
   const telemetry = createTelemetryAdapter(telemetryConfigFromEnv());

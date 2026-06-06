@@ -1116,7 +1116,10 @@ function capabilityFromLanguage(language: string): CapabilityLevel {
   if (language === "python") {
     return "partial_semantic";
   }
-  if (["csharp", "javascript", "markdown", "json", "toml", "typescript", "yaml", "infrastructure"].includes(language)) {
+  if (language === "javascript" || language === "typescript") {
+    return "partial_semantic";
+  }
+  if (["csharp", "markdown", "json", "toml", "yaml", "infrastructure"].includes(language)) {
     return "resource_backed";
   }
   return "unsupported";
@@ -1126,13 +1129,13 @@ function evidenceFromLanguage(language: string): EvidenceKind[] {
   if (language === "python") {
     return ["parser"];
   }
+  if (language === "javascript" || language === "typescript") {
+    return ["parser"];
+  }
   if (language === "markdown") {
     return ["docs"];
   }
   if (language === "csharp") {
-    return ["heuristic"];
-  }
-  if (language === "javascript" || language === "typescript") {
     return ["heuristic"];
   }
   if (["json", "toml", "yaml", "infrastructure"].includes(language)) {

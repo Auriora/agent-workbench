@@ -261,7 +261,7 @@ describe("usage-informed MVP validation", () => {
         expect.objectContaining({
           path: "src/app.ts",
           language: "typescript",
-          capability_level: "resource_backed"
+          capability_level: "partial_semantic"
         }),
         expect.objectContaining({
           path: ".github/workflows/ci.yml",

@@ -60,9 +60,10 @@ metadata provides enough deterministic evidence.
 
 - Resolved for T002: the approved parser path is `tree-sitter-javascript`
   for JS/JSX and `tree-sitter-typescript` for TS/TSX. Both are native grammar
-  dependencies and are included in `pnpm rebuild:native`; parser-backed
-  declaration/import extraction remains T004.
-- Should JSX/TSX component names be declaration evidence only, or should route
-  and component hierarchy edges wait for a framework-specific spec?
+  dependencies and are included in `pnpm rebuild:native`.
+- Resolved for T004: JSX/TSX component names are declaration evidence when
+  they appear as parser-visible functions, classes, constants, methods, or
+  types. Route and component hierarchy edges wait for framework-specific
+  evidence and remain outside this parser-only extraction slice.
 - What package-manager policy evidence is strong enough to plan `pnpm`,
   `npm`, `yarn`, or `bun` checks without overclaiming runnable validation?

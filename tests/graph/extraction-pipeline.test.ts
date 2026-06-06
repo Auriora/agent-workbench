@@ -15,6 +15,7 @@ import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/
 import {
   CppDeclarationExtractorAdapter,
   GoDeclarationExtractorAdapter,
+  JavaScriptTypeScriptTreeSitterExtractorAdapter,
   PythonTreeSitterExtractorAdapter
 } from "../../src/infrastructure/tree-sitter/index.js";
 import { InMemoryRuntimeOperationsAdapter } from "../../src/infrastructure/runtime/index.js";
@@ -224,7 +225,7 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
-  it("keeps non-Python resource-backed files out of semantic extraction", async () => {
+  it("keeps non-Python files without a registered extractor out of semantic extraction", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-mixed-language-platform");
     const store = openGraphStore(path.join(dir, "mixed.sqlite"));
     const registry = new ExtractorRegistryAdapter();
@@ -247,9 +248,9 @@ describe("repository graph extraction pipeline", () => {
 
       expect(result).toMatchObject({
         scanned_files: 5,
-        extracted_files: 5,
-        resource_backed_files: 4,
-        unsupported_files: 0
+        extracted_files: 4,
+        resource_backed_files: 3,
+        unsupported_files: 1
       });
 
       const files = await store.listFiles({ snapshot_id: "102", max_rows: 20 });
@@ -257,7 +258,7 @@ describe("repository graph extraction pipeline", () => {
         expect.arrayContaining([
           expect.objectContaining({
             path: "src/app.ts",
-            indexed: true,
+            indexed: false,
             file_identity: expect.objectContaining({
               language: "typescript"
             })
@@ -277,15 +278,7 @@ describe("repository graph extraction pipeline", () => {
         query: "app",
         max_rows: 20
       });
-      expect(typeScriptNodes.filter((node) => node.language === "typescript")).toEqual([
-        expect.objectContaining({
-          kind: "resource",
-          metadata: expect.objectContaining({
-            capability_level: "resource_backed",
-            evidence_kinds: ["heuristic"]
-          })
-        })
-      ]);
+      expect(typeScriptNodes.filter((node) => node.language === "typescript")).toEqual([]);
 
       const pythonNodes = await store.findNodesByName({
         snapshot_id: "102",
@@ -298,6 +291,129 @@ describe("repository graph extraction pipeline", () => {
             language: "python",
             metadata: expect.objectContaining({
               parser: "tree-sitter-python"
+            })
+          })
+        ])
+      );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("indexes JavaScript and TypeScript declarations, imports, and exports as parser-backed evidence", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-js-ts-monorepo");
+    const store = openGraphStore(path.join(dir, "js-ts.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "javascript" }));
+    registry.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "typescript" }));
+
+    try {
+      const result = await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "112"
+      });
+
+      expect(result).toMatchObject({
+        unsupported_files: 0
+      });
+      expect(result.node_count).toBeGreaterThan(20);
+      expect(result.edge_count).toBeGreaterThan(0);
+      expect(result.unresolved_reference_count).toBeGreaterThan(0);
+
+      const login = await store.findNodesByName({
+        snapshot_id: "112",
+        query: "Login",
+        exact: true
+      });
+      expect(login).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "function",
+            language: "typescript",
+            qualified_name: "apps.web.src.Login.Login",
+            metadata: expect.objectContaining({
+              capability_level: "partial_semantic",
+              evidence_kinds: ["parser"],
+              parser: "tree-sitter-js-ts"
+            })
+          })
+        ])
+      );
+
+      const controller = await store.findNodesByName({
+        snapshot_id: "112",
+        query: "AuthController",
+        exact: true
+      });
+      expect(controller).toEqual([
+        expect.objectContaining({
+          kind: "class",
+          qualified_name: "services.api.src.auth-controller.AuthController"
+        })
+      ]);
+
+      const route = await store.findNodesByName({
+        snapshot_id: "112",
+        query: "authRoute",
+        exact: true
+      });
+      expect(route).toEqual([
+        expect.objectContaining({
+          kind: "constant",
+          file_path: "services/api/src/routes/auth-route.ts"
+        })
+      ]);
+
+      const loginForm = await store.findNodesByName({
+        snapshot_id: "112",
+        query: "LoginForm",
+        exact: true
+      });
+      expect(loginForm).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "function",
+            file_path: "apps/web/src/components/LoginForm.tsx"
+          })
+        ])
+      );
+      const loginModule = login.find((node) => node.kind === "module");
+      expect(loginModule).toBeDefined();
+      const loginReferences = await store.getReferences({
+        snapshot_id: "112",
+        node_id: loginModule?.id ?? ""
+      });
+      expect(loginReferences).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            target_file_path: "services/api/src/auth-controller.ts",
+            provenance: "tree-sitter-js-ts-import"
+          })
+        ])
+      );
+
+      const unresolved = await store.getUnresolvedReferences({
+        snapshot_id: "112",
+        file_path: "apps/web/src/Login.tsx",
+        max_rows: 20
+      });
+      expect(unresolved).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            reference_name: "LoginForm",
+            reference_kind: "js_ts_import",
+            candidate_metadata: expect.objectContaining({
+              resolution: "ambiguous",
+              module_specifier: "./components/LoginForm"
             })
           })
         ])

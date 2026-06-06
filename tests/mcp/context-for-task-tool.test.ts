@@ -108,8 +108,8 @@ describe("context_for_task use case", () => {
         path: "src/app.ts",
         language: "typescript",
         exists: true,
-        capability_level: "resource_backed",
-        evidence_kinds: ["heuristic"]
+        capability_level: "partial_semantic",
+        evidence_kinds: ["parser"]
       })
     ]);
     expect(result.meta.scope.languages).toEqual(

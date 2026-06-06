@@ -136,8 +136,8 @@ describe("file catalog scanner", () => {
           adapter_evidence: expect.objectContaining({
             domain: "language",
             name: "typescript",
-            capability_level: "resource_backed",
-            evidence_kinds: ["heuristic"]
+            capability_level: "partial_semantic",
+            evidence_kinds: ["parser"]
           })
         }),
         expect.objectContaining({

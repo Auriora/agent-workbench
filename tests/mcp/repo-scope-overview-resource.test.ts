@@ -472,8 +472,8 @@ describe("repo scope and overview composed server resources", () => {
       yaml: 1
     });
     expect(scope.data.capability_counts).toMatchObject({
-      partial_semantic: 1,
-      resource_backed: 4,
+      partial_semantic: 2,
+      resource_backed: 3,
       unsupported: 0
     });
     expect(overview.data.platforms).toEqual(["docker", "github_actions", "node", "typescript"]);
@@ -481,7 +481,7 @@ describe("repo scope and overview composed server resources", () => {
       expect.arrayContaining([
         expect.objectContaining({ path: "Dockerfile", capability_level: "resource_backed" }),
         expect.objectContaining({ path: "package.json", capability_level: "resource_backed" }),
-        expect.objectContaining({ path: "src/app.ts", capability_level: "resource_backed" }),
+        expect.objectContaining({ path: "src/app.ts", capability_level: "partial_semantic" }),
         expect.objectContaining({ path: "src/service.py", capability_level: "partial_semantic" })
       ])
     );

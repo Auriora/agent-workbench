@@ -60,12 +60,20 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
     tests/mcp/context-for-task-tool.test.ts tests/graph/extraction-pipeline.test.ts
     tests/workspace/file-catalog-scanner.test.ts` passed.
 
-- [ ] T004 Implement declaration, import, and export extraction.
+- [x] T004 Implement declaration, import, and export extraction.
   - Depends on: T002
   - Files: `src/infrastructure/language/`, `tests/language/`, `tests/graph/`
   - Acceptance: Graph extraction persists declarations and unresolved
     references with confidence and provenance.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Added the
+    `JavaScriptTypeScriptTreeSitterExtractorAdapter`, promoted JS/TS to
+    parser-backed `partial_semantic` capability labels, and registered the JS
+    and TS extractors in the composed server. Extraction now persists module,
+    function, class, method, constant, and type declarations plus unresolved
+    import/export references with parser provenance, confidence, and module
+    specifier metadata. Validation: `pnpm typecheck`,
+    `pnpm exec vitest run tests/graph/extraction-pipeline.test.ts`, and the
+    focused affected MCP/runtime/integration suite passed.
 
 - [ ] T005 Wire JS/TS evidence into query and context surfaces.
   - Depends on: T003, T004
