@@ -2,7 +2,7 @@
 title: History mining for agent IDE signals tasks
 doc_type: spec
 artifact_type: tasks
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -62,11 +62,17 @@ T006 can run after T003.
   - Evidence: Added the executable backlog with item IDs, acceptance criteria,
     validation expectations, sequencing, and promotion rules.
 
-- [ ] T007 Consider additional data sources.
+- [x] T007 Consider additional data sources.
   - Depends on: T005
   - Files: `docs/requirements/agent-workbench-executable-backlog.md`
   - Acceptance: Decide whether to mine PR comments, CI logs, git history,
     shell command logs, MCP server logs, Jaeger traces, issue trackers,
     `AGENTS.md` files, spec/task docs, and human or agent tooling references.
-  - Evidence: Added a durable evidence-source list to the executable backlog;
-    implementation and automation remain pending.
+  - Evidence: Completed on 2026-06-06. Added an explicit durable source
+    decision matrix to
+    `docs/requirements/agent-workbench-executable-backlog.md`, covering Codex
+    histories, hook logs, Jaeger/OpenTelemetry traces, MCP logs, `AGENTS.md`,
+    spec/task docs, git history, PR comments, CI logs, shell logs, issue
+    trackers, human IDE references, and other agent tools. Automation remains
+    routed through backlog items such as EB001, EB005, EB006, EB007, EB008,
+    EB009, and EB010.

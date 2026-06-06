@@ -2,7 +2,7 @@
 title: History mining for agent IDE signals verification
 doc_type: spec
 artifact_type: verification
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -36,6 +36,9 @@ last_reviewed: 2026-06-06
   categories, external evidence sources, extension idea coverage, and the
   driving "what repo, what matters, what proves this, can I trust this, what
   did I miss" product question.
+- 2026-06-06: Completed T007 by adding the durable evidence-source decision
+  matrix and resolving the spec open questions. Validation passed with
+  `pnpm typecheck`, `git diff --check`, and spec lifecycle scan.
 
 ## Residual Risks
 

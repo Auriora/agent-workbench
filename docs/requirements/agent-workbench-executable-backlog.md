@@ -84,6 +84,29 @@ part of the workflow:
   MCP, ActivityWatch MCP, spec-lifecycle MCP, Figma MCP, Context7,
   sequential-thinking, and memory.
 
+### Evidence Source Decisions
+
+These sources are approved for future mining only when the implementation stays
+local-first, read-only by default, bounded, and redacted. They are planning
+evidence, not proof, until confirmed by direct repo inspection, fixture tests,
+or runtime telemetry.
+
+| Source | Decision | First automation shape | Guardrails | Backlog route |
+| --- | --- | --- | --- | --- |
+| Codex chat history and sessions | Mine now | Existing local JSONL scanner with repo filtering, category counts, and bounded excerpts | Do not emit full transcripts; keep generated reports under `.tmp/` unless manually promoted | EB009 |
+| Codex hook logs | Mine now | Existing scanner status/reason counts plus category matching | Clean and errored hooks remain quiet; use aggregate reasons, not noisy per-event output | EB005, EB009 |
+| Jaeger/OpenTelemetry traces | Mine next | Span summary for slow tools, degraded states, skipped evidence, retry/fallback chains, and shell fallback after tool availability | Local/exported traces only; redact attributes; never require a live Jaeger server for normal validation | EB001, EB003, EB009 |
+| MCP server logs | Mine next | Transport/session/tool-list error summaries and long-call aggregates | Treat protocol logs as operational evidence; redact arguments and paths outside the repo | EB001, EB007, EB009 |
+| `AGENTS.md` files | Mine next | Repo instruction inventory for repeated validation, safety, dependency, and workflow requirements | Read-only scan; preserve repository scope and precedence; do not rewrite instructions automatically | EB004, EB008, EB009 |
+| Spec and task docs | Mine next | Active/archived spec inventory, traceability gaps, stale open decisions, missing verification evidence | Defer generic lifecycle ownership to spec-lifecycle-manager; Agent Workbench only consumes task context | EB006, EB009 |
+| Git history | Mine later | Commit-message and changed-file summaries for generated-artifact cleanup, validation fixes, and recurring agent repair commits | Avoid mining private author intent; classify only local repo metadata and bounded diffs | EB008, EB009 |
+| PR review comments | Mine later | Review finding categories for missing tests, stale docs, risky diffs, and generated artifacts | Require explicit GitHub/PR context; do not make network access part of local default scans | EB005, EB008, EB009 |
+| CI logs | Mine later | Failed-check summaries for wrong validation slices, missing native builds, environment mismatch, and package-manager errors | Use bounded logs from explicit local files or approved GitHub context; redact secrets | EB004, EB009 |
+| Shell command logs | Defer | Optional command-frequency and failure-pattern summary when a reliable local source exists | Do not scrape interactive shell history by default; require explicit opt-in and redaction design | EB004, EB009 |
+| Issue trackers and backlogs | Defer | Category summary when a project provides exported local issue/backlog data | No network default; treat external tracker content as advisory planning evidence | EB009 |
+| Human IDE feature references | Mine manually | Reference matrix for problems panel, test explorer, SCM, call hierarchy, refactor preview, and task runner patterns | Do not copy product-specific UX; translate only agent-facing workflow needs | EB001, EB004, EB005, EB010 |
+| Other agent tools and MCPs | Mine manually | Capability comparison notes for portable behavior that Agent Workbench should match or exceed | Do not import Python-specific or deprecated implementations; use fixture-backed portable lessons only | EB007, EB010 |
+
 ## Sequencing
 
 1. Integration health and session-aware next actions.

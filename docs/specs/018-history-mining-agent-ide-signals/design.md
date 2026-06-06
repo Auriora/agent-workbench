@@ -2,7 +2,7 @@
 title: History mining for agent IDE signals design
 doc_type: spec
 artifact_type: design
-status: active
+status: archived
 owner: platform
 last_reviewed: 2026-06-06
 ---
@@ -95,9 +95,16 @@ Initial categories:
 
 ## Open Questions
 
-- Should fallback telemetry be captured live through OpenTelemetry spans rather
-  than mined after the fact?
-- Should reports link to transcript files and line numbers, or keep only
-  bounded excerpts?
-- Should Agent Workbench expose an opt-in `usage_gaps` resource later?
-- Should history mining also inspect CI logs, PR comments, and issue threads?
+No active open questions remain. Closure decisions:
+
+- Fallback telemetry should be captured through OpenTelemetry spans and mined
+  histories as complementary sources. The durable source-decision matrix routes
+  trace automation through EB001, EB003, and EB009.
+- Reports should keep bounded excerpts by default. Transcript file and line
+  links remain deferred until redaction and privacy rules are explicit.
+- An opt-in `usage_gaps` resource remains deferred until storage, privacy,
+  redaction, and payload budgets are designed.
+- CI logs, PR comments, issue trackers, git history, MCP server logs,
+  `AGENTS.md` files, spec/task docs, Jaeger traces, and tooling references are
+  classified in
+  [Agent Workbench executable backlog](../../requirements/agent-workbench-executable-backlog.md#evidence-source-decisions).
