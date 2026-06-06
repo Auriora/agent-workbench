@@ -663,6 +663,11 @@ Post-closure dogfood caveats from large mixed-language repositories:
   FTS-backed docs index and recorded objective Python Agent IDE parity evidence
   for docs-routing queries. Remaining broad-query ranking caveats belong to
   durable docs search tuning, not a scanner fallback.
+- Future: investigate smoke-test feedback where Agent Workbench context worked
+  but `verification_plan` timed out and the agent fell back to local
+  command-surface inspection. Capture the failing repo shape, host timeout, and
+  logs before changing runtime behavior; the target behavior is a bounded
+  structured planned, degraded, or blocked response.
 
 ## Related Docs
 
