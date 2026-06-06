@@ -55,8 +55,9 @@ It should not resolve:
 
 ## Open Questions
 
-- Which Go parser package fits the existing TypeScript runtime without adding a
-  parallel semantic implementation path?
+- Resolved for T002: the approved parser package is `tree-sitter-go`, wired
+  through the existing TypeScript tree-sitter runtime path and native rebuild
+  policy.
 - How much `go.mod` import-path normalization is safe without running `go list`?
 - Should build tags be modeled now as unresolved caveats or left to a future Go
   semantic promotion spec?

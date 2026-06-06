@@ -49,7 +49,8 @@ describe("Go reference and validation-policy fixtures", () => {
         "internal/graph/response_cache_test.go"
       ])
     );
-    expect(goFiles.every((file) => file.adapter_evidence?.capability_level === "resource_backed")).toBe(true);
+    expect(goFiles.every((file) => file.adapter_evidence?.capability_level === "partial_semantic")).toBe(true);
+    expect(goFiles.every((file) => file.adapter_evidence?.evidence_kinds.includes("parser"))).toBe(true);
   });
 
   it("blocks generic host Go validation for Docker-only policy fixture", async () => {

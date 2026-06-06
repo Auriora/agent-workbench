@@ -433,7 +433,7 @@ describe("runtime status", () => {
     expect(listFilesCalled).toBe(true);
     expect(result.status.adapter_coverage).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: "go", capability_level: "resource_backed" }),
+        expect.objectContaining({ name: "go", capability_level: "partial_semantic" }),
         expect.objectContaining({ name: "cpp", capability_level: "resource_backed" })
       ])
     );

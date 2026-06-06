@@ -861,7 +861,7 @@ describe("graph query use cases", () => {
     }
   });
 
-  it("returns Go routing symbols while impact remains low confidence without edges", async () => {
+  it("returns Go parser-backed symbols and low-confidence impact edges", async () => {
     const fixture = await indexedFixture("tests/fixtures/fixture-go-service-repo", "209", {
       registerGo: true,
       registerPython: false
@@ -886,8 +886,8 @@ describe("graph query use cases", () => {
         expect.objectContaining({
           name: "NewResponseCache",
           language: "go",
-          capability_level: "resource_backed",
-          evidence_kinds: ["heuristic"]
+          capability_level: "partial_semantic",
+          evidence_kinds: ["parser"]
         })
       ]);
 
@@ -909,10 +909,10 @@ describe("graph query use cases", () => {
       expect(impact.impact.confidence).toEqual(
         expect.objectContaining({
           level: "low",
-          scope: "empty"
+          scope: "local_only"
         })
       );
-      expect(impact.impact.edge_count).toBe(0);
+      expect(impact.impact.edge_count).toBeGreaterThan(0);
     } finally {
       fixture.store.close();
     }

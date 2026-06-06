@@ -36,12 +36,22 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006
     tests/graph/extraction-pipeline.test.ts tests/graph/query-tools.test.ts`
     passed.
 
-- [ ] T002 Implement Go package and reference extraction.
+- [x] T002 Implement Go package and reference extraction.
   - Depends on: T001
   - Files: `src/infrastructure/language/`, `tests/language/`
   - Acceptance: Extractor emits package, import, declaration, receiver,
     selector, and identifier-reference evidence with provenance.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-06-06. Added `tree-sitter-go`, included it in
+    the native rebuild and approved build-script dependency list, and replaced
+    the regex-only Go extractor with a `tree-sitter-go` extractor. Go files
+    now report parser-backed `partial_semantic` capability labels. Extraction
+    emits package, import, function, type, and method nodes with package and
+    receiver metadata, plus unresolved selector and identifier references with
+    package/import/provenance metadata. Same-file and unique name references
+    can resolve through the shared resolver; imported selector ambiguity stays
+    unresolved for T003. Validation:
+    `pnpm rebuild:native`, `pnpm typecheck`, and focused Go-adjacent Vitest
+    suite passed.
 
 - [ ] T003 Wire Go references into graph queries and impact.
   - Depends on: T002

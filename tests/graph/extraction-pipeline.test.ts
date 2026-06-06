@@ -423,7 +423,7 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
-  it("indexes Go declarations as routing evidence without semantic edges", async () => {
+  it("indexes Go declarations and references as parser-backed evidence", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-go-service-repo");
     const store = openGraphStore(path.join(dir, "go.sqlite"));
     const registry = new ExtractorRegistryAdapter();
@@ -448,10 +448,10 @@ describe("repository graph extraction pipeline", () => {
         scanned_files: 9,
         extracted_files: 9,
         resource_backed_files: 3,
-        unsupported_files: 0,
-        edge_count: 0,
-        unresolved_reference_count: 0
+        unsupported_files: 0
       });
+      expect(result.edge_count).toBeGreaterThan(0);
+      expect(result.unresolved_reference_count).toBeGreaterThan(0);
 
       const responseCache = await store.findNodesByName({
         snapshot_id: "109",
@@ -465,9 +465,9 @@ describe("repository graph extraction pipeline", () => {
           qualified_name: "graph.ResponseCache",
           language: "go",
           metadata: expect.objectContaining({
-            capability_level: "resource_backed",
-            evidence_kinds: ["heuristic"],
-            semantic_scope: "declarations_only"
+            capability_level: "partial_semantic",
+            evidence_kinds: ["parser"],
+            parser: "tree-sitter-go"
           })
         })
       ]);
@@ -498,6 +498,26 @@ describe("repository graph extraction pipeline", () => {
             kind: "function",
             name: "main",
             qualified_name: "main.main"
+          })
+        ])
+      );
+      const mainFunction = main.find((node) => node.kind === "function");
+      const mainReferences = await store.getUnresolvedReferences({
+        snapshot_id: "109",
+        file_path: "cmd/service/main.go",
+        max_rows: 10
+      });
+      expect(mainReferences).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            source_node_id: mainFunction?.id,
+            reference_name: "LoadConfig",
+            reference_kind: "go_selector",
+            candidate_metadata: expect.objectContaining({
+              import_path: "example.com/go-service/internal/graph",
+              provenance: "tree-sitter-go",
+              resolution: "ambiguous"
+            })
           })
         ])
       );
