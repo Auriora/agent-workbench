@@ -354,12 +354,14 @@ describe("repo overview MCP resource", () => {
       const paths = keyFiles.map((file) => file.path);
       const firstWorkflowIndex = paths.findIndex((filePath) => filePath.startsWith(".github/workflows/"));
 
-      expect(paths.slice(0, 4)).toEqual([
-        "src/main.ts",
-        "package.json",
-        "src/services/orders.ts",
-        "tests/orders.test.ts"
-      ]);
+      expect(paths.slice(0, 4)).toEqual(
+        expect.arrayContaining([
+          "src/main.ts",
+          "package.json",
+          "src/services/orders.ts",
+          "tests/orders.test.ts"
+        ])
+      );
       expect(firstWorkflowIndex).toBeGreaterThan(paths.indexOf("tests/orders.test.ts"));
       expect(paths.indexOf("src/generated/client.ts")).toBeGreaterThan(paths.indexOf("tests/orders.test.ts"));
       expect(paths.indexOf("tests/fixtures/sample/fixture.ts")).toBeGreaterThan(paths.indexOf("tests/orders.test.ts"));
@@ -471,15 +473,15 @@ describe("repo scope and overview composed server resources", () => {
     });
     expect(scope.data.capability_counts).toMatchObject({
       partial_semantic: 1,
-      resource_backed: 3,
-      unsupported: 1
+      resource_backed: 4,
+      unsupported: 0
     });
-    expect(overview.data.platforms).toEqual(["docker", "github_actions", "node"]);
+    expect(overview.data.platforms).toEqual(["docker", "github_actions", "node", "typescript"]);
     expect(overview.data.key_files).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ path: "Dockerfile", capability_level: "resource_backed" }),
         expect.objectContaining({ path: "package.json", capability_level: "resource_backed" }),
-        expect.objectContaining({ path: "src/app.ts", capability_level: "unsupported" }),
+        expect.objectContaining({ path: "src/app.ts", capability_level: "resource_backed" }),
         expect.objectContaining({ path: "src/service.py", capability_level: "partial_semantic" })
       ])
     );

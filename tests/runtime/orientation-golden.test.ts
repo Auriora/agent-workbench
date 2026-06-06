@@ -99,13 +99,18 @@ describe("repo orientation golden responses", () => {
         ],
         validation_hints: [
           {
+            command: "verification_plan",
+            reason: "package.json and JS/TS project-shape evidence indicate package-local validation should be planned without executing package managers.",
+            status: "needed"
+          },
+          {
             command: "pnpm typecheck",
-            reason: "package.json indicates TypeScript/JavaScript validation.",
+            reason: "TypeScript configuration or package scripts indicate a non-executed typecheck candidate; confirm repo policy and package manager before running.",
             status: "needed"
           },
           {
             command: "pnpm test",
-            reason: "package.json indicates JavaScript/TypeScript tests may be available.",
+            reason: "Package/test-root evidence indicates a non-executed JavaScript/TypeScript test candidate; confirm repo policy and package manager before running.",
             status: "needed"
           }
         ]
@@ -120,7 +125,7 @@ describe("repo orientation golden responses", () => {
           ".github/workflows/ci.yml"
         ]),
         coverage("language", "python", "partial_semantic", ["parser"], ["src/service.py"]),
-        coverage("language", "typescript", "unsupported", [], ["src/app.ts"]),
+        coverage("language", "typescript", "resource_backed", ["heuristic"], ["src/app.ts"]),
         coverage("package_manager", "npm", "resource_backed", ["config"], ["package.json"])
       ],
       scopeCounts: {
@@ -128,8 +133,8 @@ describe("repo orientation golden responses", () => {
         capability_counts: {
           semantic: 0,
           partial_semantic: 1,
-          resource_backed: 3,
-          unsupported: 1
+          resource_backed: 4,
+          unsupported: 0
         }
       },
       skippedPaths: [
@@ -137,13 +142,13 @@ describe("repo orientation golden responses", () => {
       ],
       overview: {
         summary: "Repository has 5 indexed file(s) across 5 language/category value(s).",
-        platforms: ["docker", "github_actions", "node"],
+        platforms: ["docker", "github_actions", "node", "typescript"],
         key_files: [
           file(
             "src/app.ts",
             "typescript",
-            "unsupported",
-            [],
+            "resource_backed",
+            ["heuristic"],
             "Promoted as application entrypoint and first-party source evidence."
           ),
           file("package.json", "json", "resource_backed", ["config"], "Promoted as package configuration evidence."),
@@ -154,13 +159,18 @@ describe("repo orientation golden responses", () => {
         key_docs: [],
         validation_hints: [
           {
+            command: "verification_plan",
+            reason: "package.json and JS/TS project-shape evidence indicate package-local validation should be planned without executing package managers.",
+            status: "needed"
+          },
+          {
             command: "pnpm typecheck",
-            reason: "package.json indicates TypeScript/JavaScript validation.",
+            reason: "TypeScript configuration or package scripts indicate a non-executed typecheck candidate; confirm repo policy and package manager before running.",
             status: "needed"
           },
           {
             command: "pnpm test",
-            reason: "package.json indicates JavaScript/TypeScript tests may be available.",
+            reason: "Package/test-root evidence indicates a non-executed JavaScript/TypeScript test candidate; confirm repo policy and package manager before running.",
             status: "needed"
           }
         ]
@@ -206,7 +216,9 @@ describe("repo orientation golden responses", () => {
         ? "partial_semantic"
         : "resource_backed",
       evidence_kinds: fixture.statusCoverage.some((item) => item.evidence_kinds.includes("parser"))
-        ? ["config", "parser"]
+        ? fixture.statusCoverage.some((item) => item.evidence_kinds.includes("heuristic"))
+          ? ["config", "heuristic", "parser"]
+          : ["config", "parser"]
         : ["config", "docs"],
       verification_status: "needed",
       truncated: false,

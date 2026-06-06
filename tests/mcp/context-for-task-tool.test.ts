@@ -108,8 +108,8 @@ describe("context_for_task use case", () => {
         path: "src/app.ts",
         language: "typescript",
         exists: true,
-        capability_level: "unsupported",
-        evidence_kinds: []
+        capability_level: "resource_backed",
+        evidence_kinds: ["heuristic"]
       })
     ]);
     expect(result.meta.scope.languages).toEqual(
@@ -159,15 +159,15 @@ describe("context_for_task use case", () => {
       expect.arrayContaining([
         expect.objectContaining({
           path: "apps/web/package.json",
-          reason: "Matched JavaScript/TypeScript package boundary evidence."
+          reason: "Package-local JavaScript/TypeScript configuration associated with an explicitly supplied source file."
         }),
         expect.objectContaining({
           path: "apps/web/tsconfig.json",
-          reason: "Matched TypeScript project configuration evidence."
+          reason: "Package-local JavaScript/TypeScript configuration associated with an explicitly supplied source file."
         }),
         expect.objectContaining({
           path: "pnpm-workspace.yaml",
-          reason: "Matched JavaScript/TypeScript workspace configuration evidence."
+          reason: "Workspace-level JavaScript/TypeScript configuration associated with an explicitly supplied source file."
         })
       ])
     );

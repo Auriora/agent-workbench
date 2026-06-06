@@ -273,10 +273,10 @@ describe("stdio MCP entrypoint", () => {
     );
     expect(parsedScope.data.capability_counts).toMatchObject({
       partial_semantic: 1,
-      resource_backed: 3,
-      unsupported: 1
+      resource_backed: 4,
+      unsupported: 0
     });
-    expect(parsedOverview.data.platforms).toEqual(["docker", "github_actions", "node"]);
+    expect(parsedOverview.data.platforms).toEqual(["docker", "github_actions", "node", "typescript"]);
     expect(parsedOverview.data.key_files).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ path: "package.json" }),

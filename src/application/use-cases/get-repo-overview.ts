@@ -14,6 +14,11 @@ import type {
   WarmupCoordinatorPort
 } from "../../ports/index.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
+import {
+  detectJsTsProjectShape,
+  isJsTsProjectConfigPath,
+  isJsTsTestPath
+} from "./js-ts-project-shape.js";
 
 export type GetRepoOverviewResult = {
   overview: RepoOverview;
@@ -162,6 +167,13 @@ function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHin
   const hasCpp = files.some((file) => file.file_identity.language === "c" || file.file_identity.language === "cpp");
   const hasGo = paths.has("go.mod") || paths.has("go.work");
   const hasPackage = paths.has("package.json");
+  const jsTsShape = detectJsTsProjectShape(files);
+  const hasJsTsShape =
+    jsTsShape.package_manifests.length > 0 ||
+    jsTsShape.workspace_files.length > 0 ||
+    jsTsShape.tsconfig_files.length > 0 ||
+    jsTsShape.source_files.length > 0 ||
+    jsTsShape.generated_files.length > 0;
   const hasDocsOrConfig = files.some((file) => ["config", "markdown", "json", "toml", "yaml"].includes(file.file_identity.language));
   const dotnetSolution = firstDotnetSolution(paths);
   const dotnetTestProject = firstDotnetTestProject(paths);
@@ -222,9 +234,23 @@ function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHin
       status: "needed"
     });
   }
-  if (hasPackage && !(hasCmake && hasCpp) && !hasGo) {
-    hints.push({ command: "pnpm typecheck", reason: "package.json indicates TypeScript/JavaScript validation.", status: "needed" });
-    hints.push({ command: "pnpm test", reason: "package.json indicates JavaScript/TypeScript tests may be available.", status: "needed" });
+  if (hasJsTsShape && !(hasCmake && hasCpp) && !hasGo) {
+    const packageEvidence = jsTsShape.package_manifests[0] ?? "package.json";
+    hints.push({
+      command: "verification_plan",
+      reason: `${packageEvidence} and JS/TS project-shape evidence indicate package-local validation should be planned without executing package managers.`,
+      status: "needed"
+    });
+    hints.push({
+      command: "pnpm typecheck",
+      reason: "TypeScript configuration or package scripts indicate a non-executed typecheck candidate; confirm repo policy and package manager before running.",
+      status: "needed"
+    });
+    hints.push({
+      command: "pnpm test",
+      reason: "Package/test-root evidence indicates a non-executed JavaScript/TypeScript test candidate; confirm repo policy and package manager before running.",
+      status: "needed"
+    });
   }
   if (paths.has("pyproject.toml")) {
     hints.push({ command: "python3 -m pytest", reason: "pyproject.toml indicates Python tests may be available.", status: "needed" });
@@ -252,6 +278,9 @@ function detectPlatforms(files: readonly FileCatalogEntry[]): string[] {
   const paths = new Set(files.map((file) => file.path));
   const platforms = new Set<string>();
   if (paths.has("package.json")) platforms.add("node");
+  const jsTsShape = detectJsTsProjectShape(files);
+  if (jsTsShape.has_typescript || jsTsShape.tsconfig_files.length > 0) platforms.add("typescript");
+  if (jsTsShape.has_javascript) platforms.add("javascript");
   if (paths.has("pyproject.toml")) platforms.add("python");
   if (firstDotnetSolution(paths) !== undefined || hasDotnetProject(paths)) platforms.add("dotnet");
   if (firstSamTemplate(paths) !== undefined) {
@@ -282,12 +311,18 @@ function isKeyFile(filePath: string): boolean {
     pathBasename(filePath).toLowerCase() === "program.cs" ||
     pathBasename(filePath).toLowerCase().startsWith("appsettings") ||
     pathBasename(filePath).toLowerCase().endsWith(".razor") ||
+    isJsTsProjectConfigPath(filePath) ||
     filePath.toLowerCase().includes("/controllers/") ||
+    filePath.toLowerCase().includes("/routes/") ||
+    filePath.toLowerCase().includes("/components/") ||
     filePath.toLowerCase().includes("/migrations/") ||
     pathBasename(filePath).toLowerCase() === "cmakelists.txt" ||
     filePath === "Dockerfile" ||
     filePath.startsWith(".devcontainer/") ||
     filePath.startsWith(".github/workflows/") ||
+    filePath.startsWith("apps/") ||
+    filePath.startsWith("packages/") ||
+    filePath.startsWith("services/") ||
     filePath.startsWith("src/") ||
     filePath.startsWith("tests/")
   );
@@ -323,6 +358,9 @@ function keyFileEvidence(file: FileCatalogEntry): { score: number; reason: strin
   if (lower === "pyproject.toml" || lower === "package.json") {
     reasons.push("package configuration");
   }
+  if (isJsTsProjectConfigPath(lower) && lower !== "package.json") {
+    reasons.push("JavaScript/TypeScript project configuration");
+  }
   if (isEntrypointPath(lower)) {
     score = Math.max(score, 115);
     reasons.push("application entrypoint");
@@ -335,6 +373,12 @@ function keyFileEvidence(file: FileCatalogEntry): { score: number; reason: strin
   }
   if (lower.includes("/controllers/")) {
     reasons.push("application route");
+  }
+  if (lower.includes("/routes/")) {
+    reasons.push("application route");
+  }
+  if (lower.includes("/components/")) {
+    reasons.push("application UI source");
   }
   if (lower.endsWith(".razor") || lower.includes("/pages/") || lower.includes("/shared/")) {
     reasons.push("application UI source");
@@ -420,14 +464,19 @@ function baseKeyFileRank(file: FileCatalogEntry): number {
   let score = 0;
   if (lower.endsWith("/program.cs")) score += 115;
   if (lower.includes("/controllers/")) score += 95;
+  if (lower.includes("/routes/")) score += 95;
   if (lower.endsWith(".razor") || lower.includes("/pages/") || lower.includes("/shared/")) score += 90;
+  if (lower.includes("/components/")) score += 88;
   if (lower.includes("/migrations/") || lower.includes("dbcontext")) score += 85;
   if (pathBasename(lower).startsWith("appsettings")) score += 82;
   if (lower === "go.mod" || lower === "go.work") score += 120;
   if (lower === "pyproject.toml" || lower === "package.json") score += 100;
+  if (isJsTsProjectConfigPath(lower) && lower !== "package.json") score += 96;
   if (lower === "dockerfile" || lower.startsWith(".devcontainer/")) score += 80;
+  if (lower.startsWith("apps/") || lower.startsWith("packages/") || lower.startsWith("services/")) score += 82;
   if (/^(src|lib|app|cmd|internal|include)\//u.test(lower)) score += 70;
   if (/^(test|tests)\//u.test(lower)) score += 55;
+  if (isJsTsTestPath(lower)) score += 55;
   if (lower.startsWith(".github/workflows/")) score += 20;
   if (file.file_identity.language === "cpp" || file.file_identity.language === "c" || file.file_identity.language === "go") score += 8;
   if (file.file_identity.language === "csharp") score += 8;

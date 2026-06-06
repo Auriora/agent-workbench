@@ -8,12 +8,10 @@ type FileCapabilityInput = {
 };
 
 const partialSemanticLanguages = new Set(["python"]);
-const resourceBackedLanguageNames = new Set(["c", "cpp", "csharp", "go"]);
+const resourceBackedLanguageNames = new Set(["c", "cpp", "csharp", "go", "javascript", "typescript"]);
 const unsupportedLanguageNames = new Set([
   "java",
-  "javascript",
-  "rust",
-  "typescript"
+  "rust"
 ]);
 const configLanguages = new Set(["config", "json", "toml", "yaml"]);
 const documentationLanguages = new Set(["markdown", "text"]);

@@ -17,7 +17,7 @@
     "debug:mcp-use-case": "tsx src/debug/mcp-use-case.ts",
     "debug:mcp-profile": "tsx src/debug/mcp-use-case.ts --profile",
     "debug:sample-smoke": "tsx src/debug/sample-smoke.ts",
-    "rebuild:native": "CXXFLAGS=-std=c++20 pnpm rebuild tree-sitter tree-sitter-python"
+    "rebuild:native": "CXXFLAGS=-std=c++20 pnpm rebuild tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-typescript"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
@@ -29,7 +29,9 @@
     "@opentelemetry/semantic-conventions": "^1.41.1",
     "better-sqlite3": "^12.9.0",
     "tree-sitter": "^0.25.0",
+    "tree-sitter-javascript": "^0.25.0",
     "tree-sitter-python": "^0.25.0",
+    "tree-sitter-typescript": "^0.23.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -44,7 +46,9 @@
       "better-sqlite3",
       "esbuild",
       "tree-sitter",
-      "tree-sitter-python"
+      "tree-sitter-javascript",
+      "tree-sitter-python",
+      "tree-sitter-typescript"
     ]
   }
 }

@@ -153,8 +153,8 @@ describe("runtime status", () => {
         expect.objectContaining({
           domain: "language",
           name: "typescript",
-          capability_level: "unsupported",
-          evidence_kinds: []
+          capability_level: "resource_backed",
+          evidence_kinds: ["heuristic"]
         }),
         expect.objectContaining({
           domain: "package_manager",
@@ -299,9 +299,9 @@ describe("runtime status", () => {
     });
     const unsupportedFile = buildFileCatalogEntry({
       file_identity: {
-        path: "src/app.ts",
-        language: "typescript",
-        content_hash: "sha256:typescript",
+        path: "src/App.java",
+        language: "java",
+        content_hash: "sha256:java",
         size_bytes: 10,
         mtime_ms: 1
       }
@@ -475,7 +475,7 @@ describe("runtime status", () => {
       expect.objectContaining({
         domain: "language",
         name: "typescript",
-        capability_level: "unsupported"
+        capability_level: "resource_backed"
       })
     ]);
   });

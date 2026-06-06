@@ -224,7 +224,7 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
-  it("keeps unsupported non-Python files out of semantic extraction", async () => {
+  it("keeps non-Python resource-backed files out of semantic extraction", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-mixed-language-platform");
     const store = openGraphStore(path.join(dir, "mixed.sqlite"));
     const registry = new ExtractorRegistryAdapter();
@@ -247,9 +247,9 @@ describe("repository graph extraction pipeline", () => {
 
       expect(result).toMatchObject({
         scanned_files: 5,
-        extracted_files: 4,
-        resource_backed_files: 3,
-        unsupported_files: 1
+        extracted_files: 5,
+        resource_backed_files: 4,
+        unsupported_files: 0
       });
 
       const files = await store.listFiles({ snapshot_id: "102", max_rows: 20 });
@@ -257,7 +257,7 @@ describe("repository graph extraction pipeline", () => {
         expect.arrayContaining([
           expect.objectContaining({
             path: "src/app.ts",
-            indexed: false,
+            indexed: true,
             file_identity: expect.objectContaining({
               language: "typescript"
             })
@@ -277,7 +277,15 @@ describe("repository graph extraction pipeline", () => {
         query: "app",
         max_rows: 20
       });
-      expect(typeScriptNodes.filter((node) => node.language === "typescript")).toEqual([]);
+      expect(typeScriptNodes.filter((node) => node.language === "typescript")).toEqual([
+        expect.objectContaining({
+          kind: "resource",
+          metadata: expect.objectContaining({
+            capability_level: "resource_backed",
+            evidence_kinds: ["heuristic"]
+          })
+        })
+      ]);
 
       const pythonNodes = await store.findNodesByName({
         snapshot_id: "102",

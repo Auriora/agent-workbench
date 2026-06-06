@@ -25,6 +25,13 @@ import type {
   WorkspaceFilePort
 } from "../../ports/index.js";
 import { resolveSnapshot, toSymbolReference } from "./query-helpers.js";
+import {
+  detectJsTsProjectShape,
+  isJsTsLanguage,
+  isJsTsProjectConfigPath,
+  isJsTsTestPath,
+  jsTsPackageRootForPath
+} from "./js-ts-project-shape.js";
 
 export type GetTaskContextResult = {
   context: TaskContext;
@@ -50,6 +57,7 @@ export async function getTaskContext(input: {
     max_files: 2000
   });
   const byPath = new Map(scanned.files.map((file) => [file.path, file]));
+  const jsTsShape = detectJsTsProjectShape(scanned.files);
   const directRequestedEntries = await resolveExplicitEntries({
     filePaths: input.request.files,
     byPath,
@@ -65,6 +73,7 @@ export async function getTaskContext(input: {
     requestedPaths: requestedFiles.filter((file) => file.exists).map((file) => file.path),
     files: scanned.files,
     exclude: new Set(requestedFiles.map((file) => file.path)),
+    jsTsPackageRoots: jsTsShape.package_roots,
     limit: maxFiles
   });
   const governingDocs = selectGoverningDocs({
@@ -218,6 +227,7 @@ function selectRelatedFiles(input: {
   requestedPaths: readonly string[];
   files: readonly FileCatalogEntry[];
   exclude: Set<string>;
+  jsTsPackageRoots: readonly string[];
   limit: number;
 }): FileReference[] {
   const terms = tokenSet([input.task, ...input.symbols]);
@@ -225,8 +235,8 @@ function selectRelatedFiles(input: {
     .filter((file) => input.exclude.has(file.path) === false)
     .map((file) => ({
       file,
-      score: scoreFile(file, terms) + scoreFileSeededEvidence(file, input.requestedPaths),
-      reason: reasonForRelatedFile(file, terms, input.requestedPaths)
+      score: scoreFile(file, terms) + scoreFileSeededEvidence(file, input.requestedPaths, input.jsTsPackageRoots),
+      reason: reasonForRelatedFile(file, terms, input.requestedPaths, input.jsTsPackageRoots)
     }))
     .filter((item) => item.score > 0)
     .sort((left, right) => right.score - left.score || left.file.path.localeCompare(right.file.path))
@@ -669,7 +679,11 @@ function firstPartyPathBoost(filePath: string): number {
   return 0;
 }
 
-function scoreFileSeededEvidence(file: FileCatalogEntry, requestedPaths: readonly string[]): number {
+function scoreFileSeededEvidence(
+  file: FileCatalogEntry,
+  requestedPaths: readonly string[],
+  jsTsPackageRoots: readonly string[]
+): number {
   if (requestedPaths.length === 0) {
     return 0;
   }
@@ -697,6 +711,22 @@ function scoreFileSeededEvidence(file: FileCatalogEntry, requestedPaths: readonl
     if (isSamTemplatePath(requestedPath) && isSamInfraTestPath(file.path)) {
       score = Math.max(score, 12);
     }
+    if (isJsTsRequestPath(requestedPath)) {
+      const requestedPackageRoot = jsTsPackageRootForPath(requestedPath, jsTsPackageRoots);
+      const candidatePackageRoot = jsTsPackageRootForPath(file.path, jsTsPackageRoots);
+      if (requestedPackageRoot !== undefined && requestedPackageRoot === candidatePackageRoot && isJsTsProjectConfigPath(file.path)) {
+        score = Math.max(score, 15);
+      }
+      if (isJsTsProjectConfigPath(file.path) && (file.path === "package.json" || file.path.includes("workspace"))) {
+        score = Math.max(score, 11);
+      }
+      if (isJsTsTestPath(file.path) && sameTopLevelWorkspace(requestedPath, file.path)) {
+        score = Math.max(score, 13);
+      }
+      if (sameTopLevelWorkspace(requestedPath, file.path) && isJsTsLanguage(file.file_identity.language)) {
+        score = Math.max(score, 8);
+      }
+    }
   }
   return score;
 }
@@ -704,13 +734,27 @@ function scoreFileSeededEvidence(file: FileCatalogEntry, requestedPaths: readonl
 function reasonForRelatedFile(
   file: FileCatalogEntry,
   terms: Set<string>,
-  requestedPaths: readonly string[]
+  requestedPaths: readonly string[],
+  jsTsPackageRoots: readonly string[]
 ): string {
   for (const requestedPath of requestedPaths) {
     const requestedDir = path.posix.dirname(requestedPath);
     const requestedStem = stemFromPath(requestedPath);
     const candidateDir = path.posix.dirname(file.path);
     const candidateStem = stemFromPath(file.path);
+    if (isJsTsRequestPath(requestedPath)) {
+      const requestedPackageRoot = jsTsPackageRootForPath(requestedPath, jsTsPackageRoots);
+      const candidatePackageRoot = jsTsPackageRootForPath(file.path, jsTsPackageRoots);
+      if (requestedPackageRoot !== undefined && requestedPackageRoot === candidatePackageRoot && isJsTsProjectConfigPath(file.path)) {
+        return "Package-local JavaScript/TypeScript configuration associated with an explicitly supplied source file.";
+      }
+      if (isJsTsProjectConfigPath(file.path) && (file.path === "package.json" || file.path.includes("workspace"))) {
+        return "Workspace-level JavaScript/TypeScript configuration associated with an explicitly supplied source file.";
+      }
+      if (isJsTsTestPath(file.path) && sameTopLevelWorkspace(requestedPath, file.path)) {
+        return "Package-local JavaScript/TypeScript test associated with an explicitly supplied source file.";
+      }
+    }
     if (candidateDir === requestedDir && path.posix.basename(file.path).toLowerCase() === "cmakelists.txt") {
       return "Local build file adjacent to an explicitly supplied source file.";
     }
@@ -1072,7 +1116,7 @@ function capabilityFromLanguage(language: string): CapabilityLevel {
   if (language === "python") {
     return "partial_semantic";
   }
-  if (["csharp", "markdown", "json", "toml", "yaml", "infrastructure"].includes(language)) {
+  if (["csharp", "javascript", "markdown", "json", "toml", "typescript", "yaml", "infrastructure"].includes(language)) {
     return "resource_backed";
   }
   return "unsupported";
@@ -1088,8 +1132,24 @@ function evidenceFromLanguage(language: string): EvidenceKind[] {
   if (language === "csharp") {
     return ["heuristic"];
   }
+  if (language === "javascript" || language === "typescript") {
+    return ["heuristic"];
+  }
   if (["json", "toml", "yaml", "infrastructure"].includes(language)) {
     return ["config"];
   }
   return [];
+}
+
+function isJsTsRequestPath(filePath: string): boolean {
+  return /\.[cm]?[jt]sx?$/u.test(filePath.toLowerCase());
+}
+
+function sameTopLevelWorkspace(left: string, right: string): boolean {
+  const leftParts = left.split("/");
+  const rightParts = right.split("/");
+  if (leftParts[0] === "apps" || leftParts[0] === "services" || leftParts[0] === "packages") {
+    return leftParts[0] === rightParts[0] && leftParts[1] === rightParts[1];
+  }
+  return leftParts[0] === rightParts[0];
 }

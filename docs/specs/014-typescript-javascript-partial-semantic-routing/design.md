@@ -58,8 +58,10 @@ metadata provides enough deterministic evidence.
 
 ## Open Questions
 
-- Which approved tree-sitter grammar package should be added for JS/TS, and
-  does it introduce native rebuild requirements similar to Python?
+- Resolved for T002: the approved parser path is `tree-sitter-javascript`
+  for JS/JSX and `tree-sitter-typescript` for TS/TSX. Both are native grammar
+  dependencies and are included in `pnpm rebuild:native`; parser-backed
+  declaration/import extraction remains T004.
 - Should JSX/TSX component names be declaration evidence only, or should route
   and component hierarchy edges wait for a framework-specific spec?
 - What package-manager policy evidence is strong enough to plan `pnpm`,
