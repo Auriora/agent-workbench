@@ -32,6 +32,11 @@ Resources:
             - !Ref StageName
             - orders
 
+  OrdersSubnetProbe:
+    Type: Custom::SubnetProbe
+    Properties:
+      FirstAvailabilityZone: !Select [0, !GetAZs ""]
+
   OrdersTopicSubscription:
     Type: AWS::SNS::Subscription
     DependsOn:

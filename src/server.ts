@@ -65,6 +65,7 @@ import { describeCodexIntegrationProfile } from "./application/use-cases/describ
 
 export type AgentWorkbenchServerOptions = {
   startGraphWarmup?: boolean;
+  onGraphWarmupFailure?: (error: unknown) => void;
 };
 
 export function createAgentWorkbenchServer(
@@ -277,8 +278,15 @@ export function createAgentWorkbenchServer(
       schema_version: SCHEMA_VERSION,
       owner_id: "agent-workbench:mcp-startup",
       config_identity: "default"
-    }).catch(() => {
+    }).catch((error) => {
       // The warmup use case records failed snapshot/warmup state before throwing.
+      if (options.onGraphWarmupFailure !== undefined) {
+        options.onGraphWarmupFailure(error);
+        return;
+      }
+      console.error(
+        `Agent Workbench startup graph warmup failed: ${error instanceof Error ? error.message : String(error)}`
+      );
     });
   }
 }

@@ -470,6 +470,44 @@ or runtime telemetry.
 - Promotion target: create a future language or web-markup quality spec under
   EB010 after current P0/P1 repair-loop and validation-planning work.
 
+### EB014: Large-Repo Graph Warmup Scale And Progress
+
+- Priority: P1
+- Status: proposed spec
+- Friction signal: `aws-datalake` startup warmup no longer stack-overflows
+  after the scalar intrinsic traversal fix, but full graph warmup remained
+  CPU-bound for more than four minutes while the snapshot stayed
+  `refreshing`; the run had already written roughly 159k nodes and 247k edges
+  before it was stopped.
+- Runtime surface: MCP startup warmup, `repo:///status`, graph extraction,
+  graph write batching, docs indexing, runtime telemetry, and cache/snapshot
+  state.
+- Acceptance:
+  - Large repositories return first-read status promptly without hiding active
+    warmup, failed warmup, or stale/cold graph evidence.
+  - Startup warmup exposes progress evidence such as scanned files, extracted
+    files, current phase, graph rows written, elapsed time, and next action.
+  - Graph writes and reference resolution are bounded or chunked so a large
+    repository cannot monopolize a session without observable progress.
+  - Warmup completion, cancellation, failure, and stale partial snapshots are
+    represented as structured states, not silent background work.
+  - Re-running warmup after an interrupted large-repo run should either resume
+    safely or replace the incomplete snapshot atomically with clear ownership
+    and freshness state.
+  - Performance fixes must not add parser, semantic, or command-execution
+    fallbacks; they should address the actual indexing/write bottleneck.
+- Validation:
+  - Fixture or synthetic large-repo graph warmup tests with bounded generated
+    files, resource-backed templates, Markdown docs, and parser-backed source.
+  - Regression using an `aws-datalake`-shaped fixture or recorded metrics for
+    the observed 159k-node/247k-edge warmup scale.
+  - Tests for interrupted warmup, stale refreshing snapshots, progress
+    reporting, and subsequent restart behavior.
+  - Telemetry or debug harness output that records phase timings and row-count
+    growth without requiring a live external tracing service.
+- Promotion target: create a future runtime operations or graph-store scale
+  spec under EB003, with telemetry evidence routed through EB009.
+
 ## Backlog To Spec Promotion Rules
 
 Promote a backlog item into an implementation spec when:
@@ -507,6 +545,7 @@ Do not promote an item when:
 | Generated/noise guard | EB008. |
 | TODO/FIXME annotation surfacing | EB012. |
 | HTML and web markup quality | EB013, under EB010. |
+| Large-repo graph warmup scale and progress | EB014, under EB003 and EB009. |
 
 ## Immediate Next Specs
 

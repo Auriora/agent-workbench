@@ -776,6 +776,19 @@ describe("repository graph extraction pipeline", () => {
         })
       ]);
 
+      const ordersSubnetProbe = await store.findNodesByName({
+        snapshot_id: "112",
+        query: "OrdersSubnetProbe",
+        exact: true
+      });
+      expect(ordersSubnetProbe).toEqual([
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            unsupported_intrinsics: ["GetAZs"]
+          })
+        })
+      ]);
+
       const topicPolicy = await store.findNodesByName({
         snapshot_id: "112",
         query: "SharedTopicPolicy",

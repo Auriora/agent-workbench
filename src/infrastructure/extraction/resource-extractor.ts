@@ -760,6 +760,9 @@ function emitIntrinsicReferences(input: {
   }
 
   input.unsupportedIntrinsics.add(intrinsic);
+  if (isScalar(input.value)) {
+    return;
+  }
   traverseIntrinsicValue(input);
 }
 

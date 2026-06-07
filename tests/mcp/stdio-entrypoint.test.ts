@@ -391,6 +391,65 @@ describe("stdio MCP entrypoint", () => {
     }
   });
 
+  it("reports startup graph warmup failures without hiding the failed runtime state", async () => {
+    const fixtureRoot = createCleanFixtureCopy({
+      prefix: "agent-workbench-mcp-warmup-failed-",
+      sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
+    });
+    const graphStore = openGraphStore(graphStorePath(fixtureRoot));
+    const failures: unknown[] = [];
+
+    await graphStore.upsertSnapshot({
+      snapshot: {
+        id: "9001",
+        repo_root: fixtureRoot,
+        workspace_root: fixtureRoot,
+        repo_identity: fixtureRoot,
+        config_identity: "default",
+        schema_version: 999,
+        freshness: "fresh",
+        owner_state: "owner",
+        created_at: "2026-06-07T12:00:00.000Z",
+        updated_at: "2026-06-07T12:00:00.000Z"
+      }
+    });
+    graphStore.close();
+
+    const session = await createStdioSession(fixtureRoot, {
+      onGraphWarmupFailure(error) {
+        failures.push(error);
+      }
+    });
+
+    try {
+      await waitForCondition(() => failures.length > 0);
+      expect(failures[0]).toBeInstanceOf(Error);
+      expect((failures[0] as Error).message).toBe(
+        "Existing snapshot schema version does not match the requested graph index schema version."
+      );
+
+      const status = parseResponseEnvelope<StatusEnvelope>(
+        await session.call({
+          jsonrpc: "2.0",
+          id: 100,
+          method: "resources/read",
+          params: {
+            uri: "repo:///status"
+          }
+        })
+      );
+      expect(status.data).toMatchObject({
+        repo_root: fixtureRoot,
+        snapshot_id: "9001",
+        warmup_state: "failed",
+        reason: "Existing snapshot schema version does not match the requested graph index schema version."
+      });
+    } finally {
+      await session.close();
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
   it("returns fixture MVP responses shaped by presenter envelopes", async () => {
     const fixtureRoot = createFixtureCopy("agent-workbench-mcp-server-");
     const expectedFixtureRoot = createFixtureCopy("agent-workbench-mcp-expected-");
@@ -763,13 +822,17 @@ type StdioSession = {
 
 async function createStdioSession(
   repoRoot: string,
-  options: { startGraphWarmup?: boolean } = {}
+  options: {
+    startGraphWarmup?: boolean;
+    onGraphWarmupFailure?: (error: unknown) => void;
+  } = {}
 ): Promise<StdioSession> {
   const input = new PassThrough();
   const output = new PassThrough();
   const transport = new StdioServerTransport(input, output);
   const server = createAgentWorkbenchServer(path.resolve(repoRoot), {
-    startGraphWarmup: options.startGraphWarmup
+    startGraphWarmup: options.startGraphWarmup,
+    onGraphWarmupFailure: options.onGraphWarmupFailure
   });
   let stdout = "";
   const pendingCalls = new Map<number, { resolve: (message: StdioMessage) => void; reject: (error: Error) => void }>();
@@ -829,6 +892,16 @@ async function createStdioSession(
       return Promise.resolve();
     }
   };
+}
+
+async function waitForCondition(predicate: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    if (predicate()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("Timed out waiting for condition.");
 }
 
 async function runStdioSmoke(repoRoot: string, inputMessages: unknown[]): Promise<StdioMessage[]> {
