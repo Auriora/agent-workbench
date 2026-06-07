@@ -3,7 +3,7 @@ title: Agent IDE restart concept
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-07
 ---
 
 # Agent IDE Restart Concept
@@ -164,17 +164,27 @@ Initial recommended language scope:
   freshness, and degraded behavior.
 - TypeScript/JavaScript: second partial-semantic target after the first
   language path proves the contracts.
+- PHP/Laravel: Level 1 dogfood target because an identified PHP developer can
+  test the tools and give feedback; start with Composer metadata, Laravel
+  route/controller/model evidence, and PHPUnit/Pest planning.
+- Nuxt/Vue web apps: Level 1 dogfood target for the same tester's JS/TS Nuxt
+  workflow; start with app shape, routes/pages/components, SSR/runtime config,
+  and Vite/Vitest/Playwright planning.
 - C#: post-MVP resource-backed or partial-semantic target.
 - CloudFormation/SAM: post-MVP infrastructure/resource-backed target for
   resource and handler relationships.
-- Go: next language after Python, TypeScript/JavaScript, C#, and SAM are stable.
+- Go: next language after the Level 1 language and framework targets plus C#
+  and SAM are stable.
 - C/C++: later priority because strong semantics require compile metadata and
   clangd/libclang readiness.
 - Rust: add after C/C++ as repo-language support using Cargo and
   `rust-analyzer`; keep distinct from any future Rust implementation core.
+- Ruby: add after Rust as repo and framework support using Bundler/Gemfile
+  evidence, Rails route/model/controller evidence where present, and
+  RSpec/Minitest planning.
 - Extended backlog, in order: SQL, Bash/Shell, Terraform/HCL,
-  Dockerfile/Compose, GitHub Actions/CI YAML, Kubernetes/Helm, Vue/Svelte,
-  PowerShell, Ruby/PHP, Swift/Kotlin/Dart, Java last.
+  Dockerfile/Compose, GitHub Actions/CI YAML, Kubernetes/Helm, Svelte,
+  PowerShell, Swift/Kotlin/Dart, Java last.
 
 Initial capability targets:
 
@@ -183,20 +193,22 @@ Initial capability targets:
 | Markdown/config | `resource_backed` | deterministic parsers, path/link extraction, project config discovery |
 | Python | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Python AST enrichment, Pyright/LSP, Ruff, pytest |
 | TypeScript/JavaScript | `partial_semantic`, then `semantic` | tree-sitter plus TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
+| PHP/Laravel | `resource_backed`, then `partial_semantic` | Level 1 dogfood priority; `tree-sitter` parser, Composer metadata, Laravel app/route/controller/model discovery, PHPUnit/Pest planning, optional PHP LSP |
+| Nuxt/Vue Web Apps | `resource_backed`, then `partial_semantic`, then `semantic` | Level 1 dogfood priority; Nuxt/Vue app shape, routes/pages/components, SSR/runtime config, Vite/Vitest/Playwright planning, optional framework language services |
 | C# | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), C# LSP as optional enrichment, `.sln`/`.csproj`, NuGet and test project discovery |
 | CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser plus intrinsic resolver and source handler linking |
 | Go | `partial_semantic`, then `semantic` | Go parser, `gopls`, `go list`, `go test` |
 | C/C++ | `resource_backed`, then `partial_semantic` | tree-sitter, clangd/libclang when `compile_commands.json` exists |
 | Rust | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Rust parser/enrichment, Cargo metadata, `rust-analyzer`, `cargo test` |
+| Ruby | `resource_backed`, then `partial_semantic` | `tree-sitter` parser, Bundler/Gemfile metadata, Rails route/model/controller discovery, RSpec/Minitest planning, optional Ruby LSP |
 | SQL | `resource_backed`, then `partial_semantic` | dialect-aware parser, migration-tool integration, schema/table/column references |
 | Bash/Shell | `partial_semantic` | shell parser, ShellCheck, sourced-file and command/function references |
 | Terraform/HCL | `partial_semantic` | HCL parser, provider/module/resource/variable/output graph |
 | Docker/Compose | `resource_backed` | Dockerfile and Compose parsers, service/env/port/volume graph |
 | CI YAML | `resource_backed` | GitHub Actions and workflow parsers, jobs, steps, validation commands |
 | Kubernetes/Helm | `resource_backed`, then `partial_semantic` | Kubernetes YAML and Helm chart parsing, resource/service/config relationships |
-| Vue/Svelte | `partial_semantic`, then `semantic` | framework language services, SFC parsing, route/component/template links |
+| Svelte | `partial_semantic`, then `semantic` | framework language services, SFC parsing, route/component/template links |
 | PowerShell | `partial_semantic` | PowerShell parser, script/function/module references |
-| Ruby/PHP | `resource_backed`, then `partial_semantic` | `tree-sitter` parser, optional LSP where project demand exists |
 | Swift/Kotlin/Dart | `resource_backed`, then `partial_semantic` | `tree-sitter` parser, optional LSP adapters when relevant repos appear |
 | Java | `resource_backed`, then `partial_semantic` | `tree-sitter` parser plus Maven/Gradle, optional Java LSP support, deferred until last |
 
@@ -244,19 +256,25 @@ After the slice works, deepen support one area at a time:
 3. TypeScript/JavaScript: `tsconfig` path aliases, JSX/TSX, package metadata,
    Jest/Vitest/Playwright discovery, and import maintenance after preview
    contracts are safe.
-4. CloudFormation/SAM: handler/resource linking, API routes, events, env vars,
+4. PHP/Laravel: Composer metadata, Laravel route/controller/model evidence,
+   framework-aware validation planning, and PHPUnit/Pest targeting.
+5. Nuxt/Vue web apps: app-shape detection, route/page/component links,
+   SSR/runtime config, and Vite/Vitest/Playwright targeting.
+6. CloudFormation/SAM: handler/resource linking, API routes, events, env vars,
    IAM relationships, and affected-handler/test mapping.
-5. C#: Roslyn/LSP semantic resolution, solution/project graph, NuGet context,
+7. C#: Roslyn/LSP semantic resolution, solution/project graph, NuGet context,
    partial classes, extension methods, xUnit/NUnit/MSTest targeting.
-6. Go: `gopls`, package graph, build tags, references, callers/callees, and
+8. Go: `gopls`, package graph, build tags, references, callers/callees, and
    `go test` targeting.
-7. C/C++: clangd/libclang integration, include graph, compile-unit readiness,
+9. C/C++: clangd/libclang integration, include graph, compile-unit readiness,
    callers/callees, and test routing where project metadata supports it.
-8. Rust: Cargo metadata, module graph, `rust-analyzer` references, macro caveats,
+10. Rust: Cargo metadata, module graph, `rust-analyzer` references, macro caveats,
    callers/callees, and `cargo test` targeting.
-9. Extended backlog in priority order: SQL; Bash/Shell; Terraform/HCL;
-   Dockerfile/Compose; GitHub Actions/CI YAML; Kubernetes/Helm; Vue/Svelte;
-   PowerShell; Ruby/PHP; Swift/Kotlin/Dart; Java last.
+11. Ruby: Bundler/Gemfile metadata, Rails route/model/controller evidence,
+   framework-aware validation planning, and RSpec/Minitest targeting.
+12. Extended backlog in priority order: SQL; Bash/Shell; Terraform/HCL;
+   Dockerfile/Compose; GitHub Actions/CI YAML; Kubernetes/Helm; Svelte;
+   PowerShell; Swift/Kotlin/Dart; Java last.
 
 Do not mark a language `semantic` because a parser can extract declarations.
 Semantic support requires trustworthy references, impact, diagnostics/test
@@ -578,7 +596,8 @@ Language adapters
   - Python tree-sitter extraction with optional AST/LSP/tooling enrichment
   - C# tree-sitter extraction with optional LSP enrichment
   - CloudFormation/SAM infra adapter
-  - future Go, C/C++, Rust, SQL, shell, infra, frontend, and other adapters
+  - future Go, C/C++, PHP/Laravel, Nuxt/Vue, Rust, Ruby, SQL, shell, infra,
+    frontend, and other adapters
 
 Optional future Rust core
   - high-volume parsing

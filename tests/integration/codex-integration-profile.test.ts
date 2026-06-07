@@ -568,6 +568,11 @@ describe("Codex plugin artifacts", () => {
     expect(installer).toContain("install_codex_plugin");
     expect(installer).toContain("codex plugin add");
     expect(installer).toContain("remove_legacy_agent_workbench_mcp_block");
+    expect(installer).toContain('if [ -z "\\${AGENT_WORKBENCH_DEFAULT_REPO_ROOT:-}" ]; then');
+    expect(installer).toContain('export AGENT_WORKBENCH_DEFAULT_REPO_ROOT="\\$PWD"');
+    expect(installer.indexOf('export AGENT_WORKBENCH_DEFAULT_REPO_ROOT="\\$PWD"')).toBeLessThan(
+      installer.indexOf('cd "$INSTALL_ROOT"')
+    );
     expect(installer).not.toContain("write_user_hooks_json");
     expect(installer).not.toContain("$CODEX_HOME/hooks.json");
     expect(installer).not.toContain("[mcp_servers.agent-workbench]");

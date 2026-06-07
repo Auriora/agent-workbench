@@ -3,7 +3,7 @@ title: Agent Workbench executable backlog
 doc_type: requirements
 status: draft
 owner: platform
-last_reviewed: 2026-06-06
+last_reviewed: 2026-06-07
 ---
 
 # Agent Workbench Executable Backlog
@@ -333,9 +333,29 @@ or runtime telemetry.
   - Label semantic proof, routing evidence, and heuristics distinctly.
   - Improve validation planning with project-shape evidence before command
     execution.
+  - Use recent active-project evidence when reviewing roadmap priority; do not
+    rank ecosystems by raw file counts, generated output, dependency trees, or
+    one unusually large repository.
+  - Allow identified tester availability to raise implementation priority when
+    the tester can exercise the priority tools and provide concrete feedback.
+  - Treat local project scans as advisory evidence until a candidate ecosystem
+    has representative fixture repositories and validation expectations.
 - Validation:
   - Active and archived specs for JavaScript/TypeScript, Go, SAM, CMake/C++,
-    .NET, Markdown, and future ecosystems.
+    .NET, Markdown, PHP/Laravel, Nuxt/Vue, Rust, Ruby, and future ecosystems.
+  - Local `/home/bcherrington/Projects` scan on 2026-06-07 recorded broad
+    ecosystem signals for HTML/web markup, Node/npm, Docker/Compose, CMake,
+    PlatformIO/Arduino, PHP/Laravel, Rust/Cargo, Ruby/Rails, Go, .NET, SQL,
+    CloudFormation/SAM, Helm, Nix, and MCP repositories.
+  - Recency review should count distinct recently touched projects per
+    ecosystem. The 30-day scan favored Markdown/config, Python, Docker/Compose,
+    Node/npm, HTML/CSS/JS/TS, C/C++/CMake, SQL, C#/.NET, Go, SAM, web test
+    tooling, and one PlatformIO/Arduino client project. PHP/Laravel is raised
+    to Level 1 priority because an identified PHP developer can test and give
+    feedback. Nuxt/Vue web-app support is also Level 1 because the same tester
+    works in JS/TS Nuxt and would exercise the same priority tool surfaces.
+    Rust appeared in the 90-day window; Ruby/Rails was present in the wider tree
+    but not recent.
 - Promotion target: continue active language and ecosystem specs.
 
 ### EB011: Contextual Tool Exposure And Dynamic Router
@@ -411,6 +431,45 @@ or runtime telemetry.
 - Promotion target: create a future context-routing or review-readiness spec
   after higher-priority integration, repair-loop, and validation-planning work.
 
+### EB013: HTML And Web Markup Quality Support
+
+- Priority: P2
+- Status: proposed spec
+- Friction signal: agents working in web repositories need fast evidence for
+  HTML and related markup syntax, lint, formatter, template, and accessibility
+  checks before broad test execution.
+- Runtime surface: language adapters, diagnostics providers,
+  `diagnostics_for_files`, `verification_plan`, post-edit feedback, and future
+  web-markup quality tools.
+- Acceptance:
+  - Detect HTML, XHTML, SVG, and common HTML-template files as explicit
+    repository evidence rather than generic text.
+  - Provide parser-backed syntax diagnostics where an approved HTML/markup
+    parser exists; otherwise return unsupported or blocked evidence instead of
+    silently falling back to string scanning.
+  - Plan repo-approved lint, formatter, template, accessibility, and browser or
+    component checks from package scripts, config files, and policy docs without
+    executing commands by default.
+  - Distinguish static HTML from framework templates whose correctness depends
+    on a specific templating engine or build step.
+  - Keep formatter or auto-fix behavior behind preview/apply workspace safety;
+    read-only diagnostics and validation planning must land first.
+  - Preserve capability labels for syntax diagnostics, lint planning,
+    formatting planning, template validation, accessibility hints, and runtime
+    browser checks separately.
+- Validation:
+  - Fixtures for valid HTML, malformed HTML, SVG, generated/vendor markup,
+    frontend package scripts, formatter/linter config, and missing-tool states.
+  - Template fixtures for at least one common server-side or component-template
+    shape, with engine-specific checks blocked unless repo evidence identifies
+    the engine.
+  - Golden diagnostics, post-edit feedback, and validation-plan responses for
+    clean, finding, unsupported, blocked, and budget-truncated states.
+  - Regression tests proving HTML/template evidence does not promote JavaScript
+    or TypeScript semantic capability by itself.
+- Promotion target: create a future language or web-markup quality spec under
+  EB010 after current P0/P1 repair-loop and validation-planning work.
+
 ## Backlog To Spec Promotion Rules
 
 Promote a backlog item into an implementation spec when:
@@ -447,6 +506,7 @@ Do not promote an item when:
 | Fallback telemetry | EB009. |
 | Generated/noise guard | EB008. |
 | TODO/FIXME annotation surfacing | EB012. |
+| HTML and web markup quality | EB013, under EB010. |
 
 ## Immediate Next Specs
 

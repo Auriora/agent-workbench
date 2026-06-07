@@ -262,6 +262,9 @@ else
   cat > "$INSTALL_ROOT/bin/agent-workbench-mcp" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+if [ -z "\${AGENT_WORKBENCH_DEFAULT_REPO_ROOT:-}" ]; then
+  export AGENT_WORKBENCH_DEFAULT_REPO_ROOT="\$PWD"
+fi
 cd "$INSTALL_ROOT"
 exec node --import tsx "$INSTALL_ROOT/src/mcp/stdio.ts" "\$@"
 EOF

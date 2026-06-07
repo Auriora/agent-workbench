@@ -3,7 +3,7 @@ title: Language adapter design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-06
+last_reviewed: 2026-06-07
 ---
 
 # Language Adapter Design
@@ -67,20 +67,22 @@ routing, freshness behavior, and degraded-mode reporting.
 | Markdown/config | `resource_backed` | deterministic parsers, path/link extraction, project config discovery, documentation-quality structure checks |
 | Python | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Python AST enrichment, Pyright/LSP, Ruff, pytest |
 | TypeScript/JavaScript | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional TypeScript compiler API or `tsserver`, `package.json`, `tsconfig` |
+| PHP/Laravel | `resource_backed`, then `partial_semantic` | Level 1 dogfood priority; `tree-sitter` parser, Composer metadata, Laravel app/route/controller/model discovery, PHPUnit/Pest planning, optional PHP LSP |
+| Nuxt/Vue Web Apps | `resource_backed`, then `partial_semantic`, then `semantic` | Level 1 dogfood priority; Nuxt/Vue app shape, routes/pages/components, SSR/runtime config, Vite/Vitest/Playwright planning, optional framework language services |
 | C#/.NET | `resource_backed`, then `partial_semantic`, then `semantic` | `.sln`/`.csproj`/`.fsproj`/`.vbproj` project metadata, NuGet and test project discovery, generated-output policy, then `tree-sitter` and optional C# LSP |
 | CloudFormation/SAM | `resource_backed`, then `partial_semantic` | YAML/JSON parser, intrinsic/dependency/event routing, source handler linking, optional deeper template semantics only after promotion fixtures |
 | Go | `partial_semantic`, then `semantic` | `tree-sitter-go` declarations/references, `go.mod`/Makefile/CI/Docker validation evidence, optional `gopls`, `go list`, `go test` enrichers only after promotion fixtures |
 | C/C++ | `resource_backed`, then `partial_semantic` | `tree-sitter` (mandatory), clangd/libclang when `compile_commands.json` exists |
 | Rust | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Rust parser/enrichment, Cargo metadata, `rust-analyzer`, `cargo test` |
+| Ruby | `resource_backed`, then `partial_semantic` | `tree-sitter` parser, Bundler/Gemfile metadata, Rails route/model/controller discovery, RSpec/Minitest planning, optional Ruby LSP |
 | SQL | `resource_backed`, then `partial_semantic` | dialect-aware parser, migration-tool integration, schema/table/column references |
 | Bash/Shell | `partial_semantic` | shell parser, ShellCheck, sourced-file and command/function references |
 | Terraform/HCL | `partial_semantic` | HCL parser, provider/module/resource/variable/output graph |
 | Docker/Compose | `resource_backed` | Dockerfile and Compose parsers, service/env/port/volume graph |
 | CI YAML | `resource_backed` | GitHub Actions and workflow parsers, jobs, steps, validation commands |
 | Kubernetes/Helm | `resource_backed`, then `partial_semantic` | Kubernetes YAML and Helm chart parsing, resource/service/config relationships |
-| Vue/Svelte | `partial_semantic`, then `semantic` | framework language services, SFC parsing, route/component/template links |
+| Svelte | `partial_semantic`, then `semantic` | framework language services, SFC parsing, route/component/template links |
 | PowerShell | `partial_semantic` | PowerShell parser, script/function/module references |
-| Ruby/PHP | `resource_backed`, then `partial_semantic` | `tree-sitter` parser, optional LSP where project demand exists |
 | Swift/Kotlin/Dart | `resource_backed`, then `partial_semantic` | `tree-sitter` parser, optional LSP adapters when relevant repos appear |
 | Java | `resource_backed`, then `partial_semantic` | `tree-sitter` parser plus Maven/Gradle, optional Java LSP support, deferred until last |
 
@@ -110,9 +112,11 @@ After the MVP slice works, deepen support in this order:
 1. first language path to `semantic` only after promotion fixtures pass
 2. TypeScript/JavaScript to `partial_semantic`
 3. TypeScript/JavaScript to `semantic` after promotion fixtures pass
-4. CloudFormation/SAM resource-backed discovery
-5. C#/.NET project discovery
-6. Go, C/C++, Rust, then the extended backlog
+4. PHP/Laravel resource-backed discovery and validation planning
+5. Nuxt/Vue web-app routing and validation planning
+6. CloudFormation/SAM resource-backed discovery
+7. C#/.NET project discovery
+8. Go, C/C++, Rust, Ruby, then the extended backlog
 
 JavaScript/TypeScript dogfood against a large web monorepo confirmed that the
 first useful slice should start with repository-shape and package-boundary
