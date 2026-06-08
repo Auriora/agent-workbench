@@ -333,7 +333,9 @@ describe("stdio MCP entrypoint", () => {
       prefix: "agent-workbench-mcp-warmup-",
       sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
     });
-    const session = await createStdioSession(fixtureRoot);
+    const session = await createStdioSession(fixtureRoot, {
+      startupWarmupDelayMs: 0
+    });
 
     try {
       await session.call({
@@ -385,6 +387,101 @@ describe("stdio MCP entrypoint", () => {
         freshness: "fresh",
         warmup_state: "complete"
       });
+    } finally {
+      await session.close();
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("returns initial status before delayed startup warmup begins", async () => {
+    const fixtureRoot = createCleanFixtureCopy({
+      prefix: "agent-workbench-mcp-delayed-warmup-",
+      sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
+    });
+    const session = await createStdioSession(fixtureRoot, {
+      startupWarmupDelayMs: 60_000
+    });
+
+    try {
+      await session.call({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: {
+            name: "agent-workbench-test",
+            version: "0.1.0"
+          }
+        }
+      });
+
+      const status = parseResponseEnvelope<StatusEnvelope>(
+        await session.call({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "resources/read",
+          params: {
+            uri: "repo:///status"
+          }
+        })
+      );
+      expect(status.data).toMatchObject({
+        repo_root: fixtureRoot,
+        runtime_state: "cold",
+        freshness: "cold"
+      });
+      expect(status.data.warmup_state).toBeUndefined();
+    } finally {
+      await session.close();
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("bounds startup graph warmup file count", async () => {
+    const fixtureRoot = createCleanFixtureCopy({
+      prefix: "agent-workbench-mcp-bounded-warmup-",
+      sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
+    });
+    const session = await createStdioSession(fixtureRoot, {
+      startupWarmupDelayMs: 0,
+      startupWarmupMaxFiles: 1
+    });
+
+    try {
+      await session.call({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: {
+            name: "agent-workbench-test",
+            version: "0.1.0"
+          }
+        }
+      });
+
+      const status = await waitForWarmupStatus(session, "complete");
+      expect(status.data).toMatchObject({
+        repo_root: fixtureRoot,
+        runtime_state: "fresh",
+        freshness: "fresh",
+        warmup_state: "complete"
+      });
+
+      const graphStore = openGraphStore(graphStorePath(fixtureRoot));
+      try {
+        const files = await graphStore.listFiles({
+          snapshot_id: status.data.snapshot_id ?? "",
+          max_rows: 10
+        });
+        expect(files).toHaveLength(1);
+      } finally {
+        graphStore.close();
+      }
     } finally {
       await session.close();
       fs.rmSync(fixtureRoot, { recursive: true, force: true });
@@ -723,6 +820,7 @@ type StatusEnvelope = {
     repo_root: string;
     runtime_state: string;
     freshness: string;
+    snapshot_id?: string;
     warmup_state?: string;
     adapter_coverage: Array<{ domain: string; name: string }>;
   };
@@ -825,6 +923,8 @@ async function createStdioSession(
   options: {
     startGraphWarmup?: boolean;
     onGraphWarmupFailure?: (error: unknown) => void;
+    startupWarmupDelayMs?: number;
+    startupWarmupMaxFiles?: number;
   } = {}
 ): Promise<StdioSession> {
   const input = new PassThrough();
@@ -832,7 +932,9 @@ async function createStdioSession(
   const transport = new StdioServerTransport(input, output);
   const server = createAgentWorkbenchServer(path.resolve(repoRoot), {
     startGraphWarmup: options.startGraphWarmup,
-    onGraphWarmupFailure: options.onGraphWarmupFailure
+    onGraphWarmupFailure: options.onGraphWarmupFailure,
+    startupWarmupDelayMs: options.startupWarmupDelayMs,
+    startupWarmupMaxFiles: options.startupWarmupMaxFiles
   });
   let stdout = "";
   const pendingCalls = new Map<number, { resolve: (message: StdioMessage) => void; reject: (error: Error) => void }>();
@@ -902,6 +1004,30 @@ async function waitForCondition(predicate: () => boolean): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   throw new Error("Timed out waiting for condition.");
+}
+
+async function waitForWarmupStatus(
+  session: StdioSession,
+  expectedState: string
+): Promise<StatusEnvelope> {
+  let lastStatus: StatusEnvelope | undefined;
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    lastStatus = parseResponseEnvelope<StatusEnvelope>(
+      await session.call({
+        jsonrpc: "2.0",
+        id: 2_000 + attempt,
+        method: "resources/read",
+        params: {
+          uri: "repo:///status"
+        }
+      })
+    );
+    if (lastStatus.data.warmup_state === expectedState) {
+      return lastStatus;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Timed out waiting for warmup_state=${expectedState}: ${JSON.stringify(lastStatus)}`);
 }
 
 async function runStdioSmoke(repoRoot: string, inputMessages: unknown[]): Promise<StdioMessage[]> {

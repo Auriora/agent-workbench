@@ -66,7 +66,12 @@ import { describeCodexIntegrationProfile } from "./application/use-cases/describ
 export type AgentWorkbenchServerOptions = {
   startGraphWarmup?: boolean;
   onGraphWarmupFailure?: (error: unknown) => void;
+  startupWarmupDelayMs?: number;
+  startupWarmupMaxFiles?: number;
 };
+
+const DEFAULT_STARTUP_WARMUP_DELAY_MS = 1000;
+const DEFAULT_STARTUP_WARMUP_MAX_FILES = 400;
 
 export function createAgentWorkbenchServer(
   repoRoot: string,
@@ -245,7 +250,11 @@ export function createAgentWorkbenchServer(
   });
 
   if (options.startGraphWarmup !== false) {
-    setImmediate(startInitialGraphWarmup);
+    const warmupTimer = setTimeout(
+      startInitialGraphWarmup,
+      options.startupWarmupDelayMs ?? DEFAULT_STARTUP_WARMUP_DELAY_MS
+    );
+    warmupTimer.unref?.();
   }
   return server;
 
@@ -277,7 +286,8 @@ export function createAgentWorkbenchServer(
       clock,
       schema_version: SCHEMA_VERSION,
       owner_id: "agent-workbench:mcp-startup",
-      config_identity: "default"
+      config_identity: "default",
+      max_files: options.startupWarmupMaxFiles ?? DEFAULT_STARTUP_WARMUP_MAX_FILES
     }).catch((error) => {
       // The warmup use case records failed snapshot/warmup state before throwing.
       if (options.onGraphWarmupFailure !== undefined) {
