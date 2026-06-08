@@ -96,6 +96,8 @@ function instrumentHandler(input: {
         runtime_state: envelope.runtime_state,
         cache_state: envelope.cache_state,
         quiet_feedback_suppression_count: countQuietFeedbackSuppressions(envelope.warnings),
+        repo_root: envelope.repo_root,
+        status: envelope.status,
         truncated: envelope.meta?.truncated,
         row_limit: envelope.meta?.budget?.row_limit,
         traversal_depth: envelope.meta?.budget?.traversal_depth,
@@ -130,6 +132,8 @@ function extractResponseEnvelope(response: unknown): {
   };
   runtime_state?: unknown;
   cache_state?: unknown;
+  repo_root?: unknown;
+  status?: unknown;
   errors: unknown[];
   warnings: unknown[];
 } {
@@ -154,17 +158,39 @@ function extractResponseEnvelope(response: unknown): {
       data !== undefined && data !== null && typeof data === "object" && "runtime_state" in data
         ? (data as { runtime_state?: unknown }).runtime_state
         : undefined;
+    const repoRoot =
+      data !== undefined && data !== null && typeof data === "object" && "repo_root" in data
+        ? (data as { repo_root?: unknown }).repo_root
+        : undefined;
+    const status =
+      data !== undefined && data !== null && typeof data === "object" && "status" in data
+        ? (data as { status?: unknown }).status
+        : undefined;
 
     return {
       meta: meta as ReturnType<typeof extractResponseEnvelope>["meta"],
       errors: Array.isArray(parsed.errors) ? parsed.errors : [],
       warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
       cache_state: cacheState,
-      runtime_state: runtimeState
+      runtime_state: runtimeState,
+      repo_root: repoRoot ?? extractNestedDataValue(data, "repo_root"),
+      status: status ?? extractNestedDataValue(data, "status")
     };
   } catch (_error) {
     return { errors: [], warnings: [] };
   }
+}
+
+function extractNestedDataValue(data: unknown, key: "repo_root" | "status"): unknown {
+  if (typeof data !== "object" || data === null) {
+    return undefined;
+  }
+  for (const value of Object.values(data)) {
+    if (typeof value === "object" && value !== null && key in value) {
+      return (value as Record<string, unknown>)[key];
+    }
+  }
+  return undefined;
 }
 
 function isInvalidInputError(error: unknown): boolean {

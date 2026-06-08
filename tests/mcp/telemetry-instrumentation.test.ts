@@ -145,6 +145,7 @@ describe("MCP telemetry instrumentation", () => {
           outcome: "ok",
           analysis_validity: "valid",
           verification_status: "needed",
+          repo_root: "/repo",
           error_count: 0,
           invalid_input_count: 0,
           degraded_mode_count: 0,
