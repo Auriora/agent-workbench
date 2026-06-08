@@ -8,6 +8,7 @@ It packages:
 - `skills/agent-workbench/SKILL.md` for workflow guidance
 - `hooks/` scripts and hook configuration for optional quiet lifecycle feedback
 - `.mcp.json` for the Agent Workbench MCP server binding
+- `kiro-power/` for Kiro Power, Agent Skills, MCP, and hook adapter packaging
 
 The plugin does not reimplement runtime code. Its MCP binding launches the
 stable installed package launcher, not runtime source copied into Codex's plugin
@@ -51,3 +52,18 @@ failures for Python, JavaScript, JSON, TOML, and shell files. The hooks never
 report clean edits, never suggest follow-up calls from file-edit events, never
 return partial results for timeouts or failures, and never block Codex editing.
 Runtime analysis remains MCP-owned.
+
+## Kiro Power
+
+The Kiro integration lives in `kiro-power/`. It packages `POWER.md`,
+`mcp.json`, a Kiro-importable copy of the Agent Workbench skill, a Kiro CLI
+custom-agent config, and Kiro-shaped hook adapters.
+
+Kiro hook payloads and output semantics differ from Codex hooks, so the Power
+uses adapter scripts instead of reusing `hooks/hooks.json`. The adapters reuse
+the same quiet hook checks and emit plain Kiro hook context only when basic
+feedback is enabled and an actionable message exists.
+
+Install the package-backed runtime first, then add `kiro-power/` as a local
+Power in Kiro. The MCP binding launches
+`${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp`.

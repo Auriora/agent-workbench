@@ -55,6 +55,7 @@
     "docs",
     "plugins/agent-workbench",
     "plugins/agent-workbench/hooks",
+    "plugins/agent-workbench/kiro-power",
     "plugins/agent-workbench/skills",
     "package.json",
     "pnpm-lock.yaml",
@@ -67,5 +68,17 @@
     "plugin_mcp_config": "plugins/agent-workbench/.mcp.json",
     "plugin_hooks": "plugins/agent-workbench/hooks/hooks.json",
     "plugin_install_model": "scripts/install-agent-workbench-package.sh"
+  },
+  "kiro": {
+    "power_root": "plugins/agent-workbench/kiro-power",
+    "power_manifest": "plugins/agent-workbench/kiro-power/POWER.md",
+    "power_mcp_config": "plugins/agent-workbench/kiro-power/mcp.json",
+    "power_skill": "plugins/agent-workbench/kiro-power/skills/agent-workbench/SKILL.md",
+    "power_agent_config": "plugins/agent-workbench/kiro-power/agents/agent-workbench.json",
+    "power_hooks": [
+      "plugins/agent-workbench/kiro-power/hooks/session-start.js",
+      "plugins/agent-workbench/kiro-power/hooks/post-edit-feedback.js"
+    ],
+    "install_model": "Add the local Power directory in Kiro after installing the package-backed runtime."
   }
 }

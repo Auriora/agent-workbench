@@ -1,0 +1,26 @@
+{
+  "name": "agent-workbench",
+  "description": "Use Agent Workbench MCP for repository status, scoped context, symbol navigation, edit planning, and validation planning.",
+  "includeMcpJson": true,
+  "resources": [
+    "skill://.kiro/skills/**/SKILL.md",
+    "skill://~/.kiro/skills/**/SKILL.md"
+  ],
+  "hooks": {
+    "agentSpawn": [
+      {
+        "command": "AGENT_WORKBENCH_HOOK_FEEDBACK=basic node \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/plugins/agent-workbench/kiro-power/hooks/session-start.js\""
+      }
+    ],
+    "postToolUse": [
+      {
+        "matcher": "fs_write",
+        "command": "AGENT_WORKBENCH_HOOK_FEEDBACK=basic node \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/plugins/agent-workbench/kiro-power/hooks/post-edit-feedback.js\""
+      },
+      {
+        "matcher": "write",
+        "command": "AGENT_WORKBENCH_HOOK_FEEDBACK=basic node \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/plugins/agent-workbench/kiro-power/hooks/post-edit-feedback.js\""
+      }
+    ]
+  }
+}

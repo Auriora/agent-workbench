@@ -156,3 +156,34 @@ For broader runtime-impacting changes, also run:
 pnpm typecheck
 pnpm test
 ```
+
+## Kiro Power Packaging
+
+The Kiro integration is packaged under
+`plugins/agent-workbench/kiro-power/`. It is a distribution wrapper around the
+same installed runtime prefix, not another runtime implementation.
+
+The Power includes:
+
+- `POWER.md` for Kiro activation and workflow guidance
+- `mcp.json` for the Agent Workbench MCP binding
+- `skills/agent-workbench/SKILL.md` for Agent Skills import
+- `agents/agent-workbench.json` for Kiro CLI custom-agent hook configuration
+- Kiro hook adapters in `hooks/`
+
+Install or refresh the runtime package first:
+
+```bash
+scripts/install-agent-workbench-package.sh \
+  --prefix "$HOME/.local/share/agent-workbench" \
+  --skip-codex-config
+```
+
+Then add `plugins/agent-workbench/kiro-power/` as a local Power in Kiro. If Kiro
+does not automatically import the bundled skill, import
+`plugins/agent-workbench/kiro-power/skills/agent-workbench/` from the Agent
+Steering & Skills panel or copy it to `~/.kiro/skills/agent-workbench`.
+
+Kiro hooks are configured through Kiro agent configuration, not Codex
+`hooks/hooks.json`. Use `kiro-power/agents/agent-workbench.json` as the source
+for a global or workspace Kiro custom agent.
