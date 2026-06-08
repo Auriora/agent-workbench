@@ -1314,6 +1314,19 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       .prepare("SELECT COUNT(*) AS count FROM docs_documents WHERE snapshot_id = @snapshotId")
       .get({ snapshotId }) as { count: number } | undefined;
     const documentCount = row?.count ?? 0;
+    if (snapshot.freshness !== "fresh" && input.snapshot_id === undefined) {
+      const usable = this.getLatestUsableDocsSnapshotByRepo(input.repo_root);
+      if (usable !== undefined) {
+        return {
+          repo_root: usable.repo_identity,
+          snapshot_id: String(usable.id),
+          freshness: "fresh",
+          status: "usable",
+          document_count: usable.document_count
+        };
+      }
+    }
+
     if (snapshot.freshness !== "fresh") {
       return {
         repo_root: snapshot.repo_root,
@@ -1495,6 +1508,30 @@ export class SqliteGraphStoreAdapter implements GraphStore {
 
   private getLatestSnapshotByRepo(repoRoot: string): SnapshotRow | undefined {
     return this.getSnapshotByRepo(repoRoot);
+  }
+
+  private getLatestUsableDocsSnapshotByRepo(repoRoot: string): (SnapshotRow & { document_count: number }) | undefined {
+    return this.db
+      .prepare(
+        `
+        SELECT snapshots.id,
+               snapshots.repo_identity,
+               snapshots.config_identity,
+               snapshots.freshness,
+               snapshots.schema_version,
+               snapshots.created_at,
+               COUNT(docs_documents.path) AS document_count
+        FROM snapshots
+        JOIN docs_documents ON docs_documents.snapshot_id = snapshots.id
+        WHERE snapshots.repo_identity = @repoRoot
+          AND snapshots.freshness = 'fresh'
+        GROUP BY snapshots.id
+        HAVING document_count > 0
+        ORDER BY snapshots.id DESC
+        LIMIT 1
+      `
+      )
+      .get({ repoRoot }) as (SnapshotRow & { document_count: number }) | undefined;
   }
 
   private getSnapshotRowById(snapshotId: number): SnapshotRow | undefined {

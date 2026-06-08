@@ -139,6 +139,52 @@ describe("FTS docs search fixtures", () => {
       fixture.dispose();
     }
   });
+
+  it("uses the latest usable docs snapshot when a newer graph refresh is incomplete", async () => {
+    const fixture = copyFixture();
+    const store = await indexFixtureDocs(fixture.root);
+    try {
+      await store.upsertSnapshot({
+        snapshot: {
+          id: "9102",
+          repo_root: fixture.root,
+          workspace_root: fixture.root,
+          repo_identity: fixture.root,
+          config_identity: "test",
+          schema_version: SCHEMA_VERSION,
+          freshness: "refreshing",
+          owner_state: "owner",
+          created_at: "2026-06-06T00:01:00.000Z",
+          updated_at: "2026-06-06T00:01:00.000Z"
+        }
+      });
+
+      const result = await searchDocs({
+        request: {
+          repo_root: fixture.root,
+          query: "docs query read surfaces",
+          max_results: 5,
+          include_snippets: true
+        },
+        docs_index: store,
+        default_repo_root: "."
+      });
+      const search = docsSearchResultSchema.parse(result.search);
+
+      expect(search.status).toBe("done");
+      expect(search.hits[0]).toMatchObject({
+        path: "docs/reference/docs-query-read-surfaces.md"
+      });
+      expect(result.meta).toMatchObject({
+        analysis_validity: "valid",
+        freshness: "fresh",
+        verification_status: "done"
+      });
+    } finally {
+      store.close();
+      fixture.dispose();
+    }
+  });
 });
 
 function copyFixture(): {
