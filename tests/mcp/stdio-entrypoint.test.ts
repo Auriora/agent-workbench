@@ -2,6 +2,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
+import { Worker } from "node:worker_threads";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   describe,
@@ -66,6 +69,26 @@ type PresenterGoldens = {
   verificationPlan: ReturnType<typeof buildVerificationPlanEnvelope>;
   preview: ReturnType<typeof buildPreviewWorkspaceEditEnvelope>;
 };
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: () => string
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message())), timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timer !== undefined) {
+      clearTimeout(timer);
+    }
+  }
+}
 
 describe("stdio MCP entrypoint", () => {
   it("uses cwd as the default repo root", () => {
@@ -326,6 +349,65 @@ describe("stdio MCP entrypoint", () => {
       ])
     );
     expect(parsedVerificationPlan.data.static_feedback).toBeUndefined();
+  });
+
+  it("keeps the spawned stdio entrypoint alive through initialize", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-mixed-language-platform");
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: ["--import", "tsx", "src/mcp/stdio.ts", "--repo-root", repoRoot],
+      cwd: path.resolve("."),
+      stderr: "pipe"
+    });
+    let stderr = "";
+    transport.stderr?.on("data", (chunk: Buffer | string) => {
+      stderr += chunk.toString();
+    });
+    const client = new Client({
+      name: "agent-workbench-spawned-entrypoint-test",
+      version: "0.1.0"
+    });
+
+    try {
+      await withTimeout(client.connect(transport), 5_000, () => `MCP initialize timed out. stderr: ${stderr}`);
+      const resources = await client.listResources();
+
+      expect(resources.resources.map((resource) => resource.uri)).toContain("repo:///status");
+    } finally {
+      await client.close();
+    }
+  });
+
+  it("initializes a spawned stdio entrypoint while the graph database is locked", async () => {
+    const repoRoot = createCleanFixtureCopy({
+      prefix: "agent-workbench-mcp-locked-startup-",
+      sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
+    });
+    const lock = await holdExclusiveSqliteLockUntilReleased(graphStorePath(repoRoot));
+    const transport = new StdioClientTransport({
+      command: process.execPath,
+      args: ["--import", "tsx", "src/mcp/stdio.ts", "--repo-root", repoRoot],
+      cwd: path.resolve("."),
+      stderr: "pipe"
+    });
+    let stderr = "";
+    transport.stderr?.on("data", (chunk: Buffer | string) => {
+      stderr += chunk.toString();
+    });
+    const client = new Client({
+      name: "agent-workbench-locked-startup-test",
+      version: "0.1.0"
+    });
+
+    try {
+      await withTimeout(client.connect(transport), 5_000, () => `MCP initialize timed out. stderr: ${stderr}`);
+      expect(lock.released).toBe(false);
+    } finally {
+      await client.close();
+      lock.release();
+      await lock.done;
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 
   it("starts graph warmup for the local repo on MCP startup", async () => {
@@ -1318,6 +1400,67 @@ function graphStorePath(repoRoot: string): string {
   const cacheDir = path.join(repoRoot, ".cache", "agent-workbench");
   fs.mkdirSync(cacheDir, { recursive: true });
   return path.join(cacheDir, "graph.sqlite");
+}
+
+async function holdExclusiveSqliteLockUntilReleased(databasePath: string): Promise<{
+  done: Promise<void>;
+  release: () => void;
+  released: boolean;
+}> {
+  const worker = new Worker(
+    `
+      const { parentPort, workerData } = require("node:worker_threads");
+      const Database = require("better-sqlite3");
+      const db = new Database(workerData.databasePath, { timeout: 5000 });
+      db.exec("CREATE TABLE IF NOT EXISTS lock_probe(id INTEGER); BEGIN EXCLUSIVE; INSERT INTO lock_probe(id) VALUES (1);");
+      parentPort.postMessage({ state: "locked" });
+      parentPort.once("message", (message) => {
+        if (message !== "release") {
+          return;
+        }
+        db.exec("COMMIT");
+        db.close();
+        parentPort.postMessage({ state: "released" });
+      });
+    `,
+    {
+      eval: true,
+      workerData: {
+        databasePath
+      }
+    }
+  );
+  let released = false;
+  const done = new Promise<void>((resolve, reject) => {
+    worker.once("error", reject);
+    worker.once("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`SQLite lock worker exited with code ${code}`));
+    });
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    worker.on("message", (message: { state?: string }) => {
+      if (message.state === "locked") {
+        resolve();
+      }
+      if (message.state === "released") {
+        released = true;
+      }
+    });
+    worker.once("error", reject);
+  });
+
+  return {
+    done,
+    release: () => worker.postMessage("release"),
+    get released() {
+      return released;
+    }
+  };
 }
 
 function normalizeFixturePaths<T>(value: T, sourceRoot: string, targetRoot: string): T {

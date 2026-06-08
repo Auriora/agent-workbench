@@ -258,7 +258,7 @@ describe("Codex plugin artifacts", () => {
       hooks?: string;
     };
     const mcpConfig = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8")) as {
-      mcpServers: Record<string, { command: string; args: string[] }>;
+      mcpServers: Record<string, { command: string; args: string[]; startup_timeout_sec: number }>;
     };
     const hooksConfig = JSON.parse(
       fs.readFileSync(path.join(pluginRoot, "hooks/hooks.json"), "utf8")
@@ -278,6 +278,7 @@ describe("Codex plugin artifacts", () => {
     expect(manifest.hooks).toBeUndefined();
     expect(mcpConfig.mcpServers["agent-workbench"]).toMatchObject({
       command: "bash",
+      startup_timeout_sec: 30.0,
       args: expect.arrayContaining([
         "exec \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp\""
       ])
@@ -448,7 +449,7 @@ describe("Codex plugin artifacts", () => {
       mcpServers: string;
     };
     const mcpConfig = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8")) as {
-      mcpServers: Record<string, { command: string; args: string[] }>;
+      mcpServers: Record<string, { command: string; args: string[]; startup_timeout_sec: number }>;
     };
     const profile = codexIntegrationProfileSchema.parse(describeCodexIntegrationProfile());
     const mcpSurface = profile.active_surfaces.find((entry) => entry.surface === "mcp");
@@ -461,6 +462,7 @@ describe("Codex plugin artifacts", () => {
     expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain(
       "plugins/cache"
     );
+    expect(mcpConfig.mcpServers["agent-workbench"].startup_timeout_sec).toBe(30.0);
     expect(mcpSurface).toEqual(
       expect.objectContaining({
         artifact_path: "plugins/agent-workbench/.mcp.json"

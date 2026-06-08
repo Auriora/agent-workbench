@@ -130,6 +130,7 @@ type DocsSearchRow = {
 };
 
 export type GraphStoreOptions = {
+  busyTimeoutMs?: number;
   enforceForeignKeys?: boolean;
 };
 
@@ -145,7 +146,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
 
   constructor(databasePath: string, options: GraphStoreOptions = {}) {
     this.databasePath = databasePath;
-    this.db = new Database(databasePath);
+    this.db = new Database(databasePath, {
+      timeout: options.busyTimeoutMs ?? DEFAULT_SQLITE_BUSY_TIMEOUT_MS
+    });
     if (options.enforceForeignKeys !== false) {
       this.db.pragma("foreign_keys = ON");
     }
@@ -1700,6 +1703,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     return Number.isNaN(id) ? null : id;
   }
 }
+
+const DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 15_000;
 
 type DocsCursor = {
   snapshot_id: string;

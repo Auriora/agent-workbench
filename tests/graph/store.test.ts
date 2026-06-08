@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ExtractionBatch } from "../../src/domain/models/index.js";
 import type { SnapshotState } from "../../src/domain/models/runtime.js";
@@ -27,6 +28,24 @@ describe("graph store", () => {
       expect(migration).toEqual({ version: SCHEMA_VERSION });
     } finally {
       store.close();
+    }
+  });
+
+  it("waits for startup schema work when another process holds the sqlite write lock", async () => {
+    const databasePath = path.join(dir, "locked-startup.sqlite");
+    const lock = await holdExclusiveSqliteLock(databasePath, 250);
+    const startedAt = Date.now();
+
+    try {
+      const store = openGraphStore(databasePath, { busyTimeoutMs: 2_000 });
+      try {
+        expect(store.validateSchema()).toBe(true);
+        expect(Date.now() - startedAt).toBeGreaterThanOrEqual(200);
+      } finally {
+        store.close();
+      }
+    } finally {
+      await lock.done;
     }
   });
 
@@ -442,4 +461,52 @@ function extractionBatch(input: {
     test_hints: [],
     extracted_at: "2026-05-08T00:00:00.000Z"
   };
+}
+
+async function holdExclusiveSqliteLock(
+  databasePath: string,
+  holdMs: number
+): Promise<{ done: Promise<void> }> {
+  const worker = new Worker(
+    `
+      const { parentPort, workerData } = require("node:worker_threads");
+      const Database = require("better-sqlite3");
+      const db = new Database(workerData.databasePath, { timeout: 5000 });
+      db.exec("CREATE TABLE IF NOT EXISTS lock_probe(id INTEGER); BEGIN EXCLUSIVE; INSERT INTO lock_probe(id) VALUES (1);");
+      parentPort.postMessage({ state: "locked" });
+      setTimeout(() => {
+        db.exec("COMMIT");
+        db.close();
+        parentPort.postMessage({ state: "released" });
+      }, workerData.holdMs);
+    `,
+    {
+      eval: true,
+      workerData: {
+        databasePath,
+        holdMs
+      }
+    }
+  );
+  const done = new Promise<void>((resolve, reject) => {
+    worker.once("error", reject);
+    worker.once("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`SQLite lock worker exited with code ${code}`));
+    });
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    worker.on("message", (message: { state?: string }) => {
+      if (message.state === "locked") {
+        resolve();
+      }
+    });
+    worker.once("error", reject);
+  });
+
+  return { done };
 }

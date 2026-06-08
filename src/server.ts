@@ -43,7 +43,7 @@ import {
   MarkdownStructureCheckerAdapter
 } from "./infrastructure/markdown/index.js";
 import { InMemoryRuntimeOperationsAdapter } from "./infrastructure/runtime/index.js";
-import { openGraphStore, SCHEMA_VERSION } from "./infrastructure/sqlite/index.js";
+import { openGraphStore, SCHEMA_VERSION, type GraphStore } from "./infrastructure/sqlite/index.js";
 import {
   createTelemetryAdapter,
   telemetryConfigFromEnv
@@ -85,7 +85,7 @@ export function createAgentWorkbenchServer(
   const diagnosticsProviders = [new JsonSyntaxDiagnosticsProviderAdapter()];
   const markdownParser = new MarkdownParserAdapter();
   const markdownChecker = new MarkdownStructureCheckerAdapter();
-  const graphStore = openGraphStore(graphStorePath(absoluteRepoRoot));
+  const graphStore = createAsyncGraphStore(graphStorePath(absoluteRepoRoot));
   const extractors = new ExtractorRegistryAdapter();
   extractors.register(new CppDeclarationExtractorAdapter({ language: "c" }));
   extractors.register(new CppDeclarationExtractorAdapter({ language: "cpp" }));
@@ -97,27 +97,33 @@ export function createAgentWorkbenchServer(
   const telemetry = createTelemetryAdapter(telemetryConfigFromEnv());
   const server = createAgentWorkbenchMcpServer(absoluteRepoRoot, {
     telemetry,
-    getRepoStatus: ({ repo_root }) =>
-      getSnapshotRepoStatus({
+    getRepoStatus: async ({ repo_root }) => {
+      const store = await graphStore();
+      return getSnapshotRepoStatus({
         repo_root,
-        snapshots: graphStore,
-        catalog: graphStore,
+        snapshots: store,
+        catalog: store,
         warmups: runtime
-      }),
-    getRepoScope: ({ repo_root }) =>
-      getRepoScope({
-        repo_root,
-        scanner,
-        snapshots: graphStore,
-        warmups: runtime
-      }),
-    getRepoOverview: ({ repo_root }) =>
-      getRepoOverview({
+      });
+    },
+    getRepoScope: async ({ repo_root }) => {
+      const store = await graphStore();
+      return getRepoScope({
         repo_root,
         scanner,
-        snapshots: graphStore,
+        snapshots: store,
         warmups: runtime
-      }),
+      });
+    },
+    getRepoOverview: async ({ repo_root }) => {
+      const store = await graphStore();
+      return getRepoOverview({
+        repo_root,
+        scanner,
+        snapshots: store,
+        warmups: runtime
+      });
+    },
     getDocsOverview: ({ request }) =>
       getDocsOverview({
         request,
@@ -132,12 +138,14 @@ export function createAgentWorkbenchServer(
         workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
       }),
-    searchDocs: ({ request }) =>
-      searchDocs({
+    searchDocs: async ({ request }) => {
+      const store = await graphStore();
+      return searchDocs({
         request,
-        docs_index: graphStore,
+        docs_index: store,
         default_repo_root: absoluteRepoRoot
-      }),
+      });
+    },
     getDocsOutline: ({ request }) =>
       getDocsOutline({
         request,
@@ -170,16 +178,18 @@ export function createAgentWorkbenchServer(
         checker: markdownChecker,
         default_repo_root: absoluteRepoRoot
       }),
-    getTaskContext: ({ request }) =>
-      getTaskContext({
+    getTaskContext: async ({ request }) => {
+      const store = await graphStore();
+      return getTaskContext({
         request,
         scanner,
-        graph: graphStore,
-        snapshots: graphStore,
-        catalog: graphStore,
+        graph: store,
+        snapshots: store,
+        catalog: store,
         workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
-      }),
+      });
+    },
     diagnoseChangedFiles: ({ request }) =>
       diagnoseChangedFiles({
         request,
@@ -187,33 +197,39 @@ export function createAgentWorkbenchServer(
         providers: diagnosticsProviders,
         default_repo_root: absoluteRepoRoot
       }),
-    searchSymbols: ({ request }) =>
-      searchSymbols({
+    searchSymbols: async ({ request }) => {
+      const store = await graphStore();
+      return searchSymbols({
         request,
-        graph: graphStore,
-        snapshots: graphStore,
-        catalog: graphStore,
+        graph: store,
+        snapshots: store,
+        catalog: store,
         workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
-      }),
-    findReferences: ({ request }) =>
-      findReferences({
+      });
+    },
+    findReferences: async ({ request }) => {
+      const store = await graphStore();
+      return findReferences({
         request,
-        graph: graphStore,
-        snapshots: graphStore,
-        catalog: graphStore,
+        graph: store,
+        snapshots: store,
+        catalog: store,
         workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
-      }),
-    computeImpact: ({ request }) =>
-      computeImpact({
+      });
+    },
+    computeImpact: async ({ request }) => {
+      const store = await graphStore();
+      return computeImpact({
         request,
-        graph: graphStore,
-        snapshots: graphStore,
-        catalog: graphStore,
+        graph: store,
+        snapshots: store,
+        catalog: store,
         workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
-      }),
+      });
+    },
     previewWorkspaceEdit: ({ request }) =>
       previewWorkspaceEdit({
         request,
@@ -271,24 +287,27 @@ export function createAgentWorkbenchServer(
   }
 
   function startInitialGraphWarmup(): void {
-    void warmupRepositoryGraph({
-      repo_root: absoluteRepoRoot,
-      scanner,
-      workspace: workspaceForRepoRoot(absoluteRepoRoot),
-      extractors,
-      resource_extractor: resourceExtractor,
-      graph: graphStore,
-      catalog: graphStore,
-      docs_index: graphStore,
-      snapshots: graphStore,
-      warmups: runtime,
-      cache: runtime,
-      clock,
-      schema_version: SCHEMA_VERSION,
-      owner_id: "agent-workbench:mcp-startup",
-      config_identity: "default",
-      max_files: options.startupWarmupMaxFiles ?? DEFAULT_STARTUP_WARMUP_MAX_FILES
-    }).catch((error) => {
+    void (async () => {
+      const store = await graphStore();
+      await warmupRepositoryGraph({
+        repo_root: absoluteRepoRoot,
+        scanner,
+        workspace: workspaceForRepoRoot(absoluteRepoRoot),
+        extractors,
+        resource_extractor: resourceExtractor,
+        graph: store,
+        catalog: store,
+        docs_index: store,
+        snapshots: store,
+        warmups: runtime,
+        cache: runtime,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        owner_id: "agent-workbench:mcp-startup",
+        config_identity: "default",
+        max_files: options.startupWarmupMaxFiles ?? DEFAULT_STARTUP_WARMUP_MAX_FILES
+      });
+    })().catch((error) => {
       // The warmup use case records failed snapshot/warmup state before throwing.
       if (options.onGraphWarmupFailure !== undefined) {
         options.onGraphWarmupFailure(error);
@@ -299,6 +318,14 @@ export function createAgentWorkbenchServer(
       );
     });
   }
+}
+
+function createAsyncGraphStore(databasePath: string): () => Promise<GraphStore> {
+  let graphStore: Promise<GraphStore> | undefined;
+  return () => {
+    graphStore ??= Promise.resolve().then(() => openGraphStore(databasePath));
+    return graphStore;
+  };
 }
 
 function graphStorePath(repoRoot: string): string {
