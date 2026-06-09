@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { PassThrough } from "node:stream";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -32,7 +33,7 @@ describe("Kiro Power artifacts", () => {
       enabled: boolean;
       version: string;
       when: { type: string; toolTypes?: string[] };
-      then: { type: string; command: string };
+      then: { type: string; command?: string };
       shortName: string;
     };
     const postWriteHook = JSON.parse(
@@ -44,7 +45,7 @@ describe("Kiro Power artifacts", () => {
       enabled: boolean;
       version: string;
       when: { type: string; toolTypes?: string[] };
-      then: { type: string; command: string };
+      then: { type: string; prompt?: string };
       shortName: string;
     };
 
@@ -81,10 +82,10 @@ describe("Kiro Power artifacts", () => {
         type: "postToolUse",
         toolTypes: ["write"]
       },
-      then: { type: "runCommand" },
+      then: { type: "askAgent" },
       shortName: "agent-workbench-post-write-feedback"
     });
-    expect(postWriteHook.then.command).toContain("hooks/post-edit-feedback.js");
+    expect(postWriteHook.then.prompt).toContain("diagnostics_for_files");
   });
 
   it("adapts Kiro hook payloads to quiet Agent Workbench feedback", async () => {
@@ -153,6 +154,15 @@ describe("Kiro Power artifacts", () => {
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )
     ).toContain("JSON syntax error in src/bad.json");
+  });
+
+  it("does not block forever when Kiro runCommand hooks provide no stdin", async () => {
+    const common = await import(
+      pathToFileURL(path.resolve("plugins/agent-workbench/hooks/hook-common.js")).href
+    );
+    const stdin = new PassThrough();
+
+    await expect(common.readStdin(stdin, 10)).resolves.toBe("");
   });
 
   it("records Kiro Power packaging in the package manifest", () => {

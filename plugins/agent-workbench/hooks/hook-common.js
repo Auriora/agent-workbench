@@ -7,16 +7,31 @@ export function feedbackMode(env = process.env) {
   return env.AGENT_WORKBENCH_HOOK_FEEDBACK === "basic" ? "basic" : "silent";
 }
 
-export function readStdin(stdin = process.stdin) {
+export function readStdin(stdin = process.stdin, timeoutMs = 250) {
   return new Promise((resolve) => {
     let payload = "";
-    stdin.setEncoding("utf8");
-    stdin.on("data", (chunk) => {
-      payload += chunk;
-    });
-    stdin.on("end", () => {
+    const timer = setTimeout(() => {
+      cleanup();
       resolve(payload);
-    });
+    }, timeoutMs);
+    const cleanup = () => {
+      clearTimeout(timer);
+      stdin.off("data", onData);
+      stdin.off("end", onEnd);
+      stdin.off("error", onEnd);
+    };
+    const onData = (chunk) => {
+      payload += chunk;
+    };
+    const onEnd = () => {
+      cleanup();
+      resolve(payload);
+    };
+
+    stdin.setEncoding("utf8");
+    stdin.on("data", onData);
+    stdin.on("end", onEnd);
+    stdin.on("error", onEnd);
   });
 }
 

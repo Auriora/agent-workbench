@@ -51,8 +51,10 @@ ${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-wo
    - `.kiro/hooks/agent-workbench-ready-check.kiro.hook`
    - `.kiro/hooks/agent-workbench-post-write-feedback.kiro.hook`
 
-   The ready check is a manual hook because current Kiro IDE hook files use
-   `userTriggered` for on-demand commands. Startup hooks for Kiro CLI custom
+   The ready check is a manual `runCommand` hook because current Kiro IDE hook
+   files use `userTriggered` for on-demand commands. The post-write hook uses
+   `askAgent` because Kiro IDE `runCommand` hooks do not provide the changed-file
+   tool payload on stdin. Startup and payload-aware hooks for Kiro CLI custom
    agents remain in the agent configuration in the next step.
 
 5. For CLI custom-agent hook support, add the contents of

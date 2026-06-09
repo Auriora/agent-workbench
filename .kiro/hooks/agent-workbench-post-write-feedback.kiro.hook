@@ -1,7 +1,7 @@
 {
   "enabled": true,
   "name": "Agent Workbench Post Write Feedback",
-  "description": "Runs quiet Agent Workbench feedback after Kiro write tools change files.",
+  "description": "Asks Kiro to run Agent Workbench feedback after write tools change files.",
   "version": "1",
   "when": {
     "type": "postToolUse",
@@ -10,8 +10,8 @@
     ]
   },
   "then": {
-    "type": "runCommand",
-    "command": "AGENT_WORKBENCH_HOOK_FEEDBACK=basic node \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/plugins/agent-workbench/kiro-power/hooks/post-edit-feedback.js\""
+    "type": "askAgent",
+    "prompt": "A write tool just changed files. Use the Agent Workbench MCP runtime to inspect the changed files when they are available in the hook context. Prefer diagnostics_for_files for focused static feedback, then use verification_plan if broader validation guidance is needed. Keep the response brief and report only actionable findings."
   },
   "shortName": "agent-workbench-post-write-feedback"
 }
