@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: requirements
 status: active
 owner: platform
-last_reviewed: 2026-06-06
+last_reviewed: 2026-06-09
 ---
 
 # Requirements
@@ -14,7 +14,8 @@ last_reviewed: 2026-06-06
 Spec-driven work needs fast mapping from task IDs to requirements, design
 sections, files, validation gates, open decisions, and closure requirements.
 Agent Workbench should consume spec lifecycle context without taking ownership
-of generic spec templates or lifecycle governance.
+of generic spec templates, Kiro-style workflow ownership, lifecycle governance,
+task closure, reconciliation, or promotion.
 
 ## Durable Source Baseline
 
@@ -26,33 +27,46 @@ of generic spec templates or lifecycle governance.
 ## Goals
 
 - Add Agent Workbench lookup support for active and archived spec packages.
-- Route task IDs to related requirements, design, files, validation gates, and
-  closure evidence.
+- Route task IDs to authoritative spec-lifecycle-manager task context or
+  traceability tools when available.
+- Provide bounded local routing evidence only when lifecycle tools are
+  unavailable, with explicit non-authoritative labels.
+- Connect spec context to Agent Workbench repo evidence, including files,
+  symbols, impact, edit preview, diagnostics, and validation planning.
 - Preserve the ownership boundary with spec-lifecycle-manager.
 
 ## Non-Goals
 
 - Do not replace spec-lifecycle-manager.
+- Do not add Kiro-style requirements, design, tasks, reconciliation, promotion,
+  closure, or spec transition workflow ownership to Agent Workbench.
+- Do not add Agent Workbench MCP tools that duplicate spec-lifecycle-manager
+  `task_context`, `traceability_lookup`, `closure_check`, `reconcile_spec`, or
+  promotion surfaces.
 - Do not migrate archived specs.
 - Do not rewrite spec packages automatically.
 - Do not enforce generic spec templates in Agent Workbench.
 
 ## Requirements
 
-### Requirement 1: Traceability Lookup
+### Requirement 1: Lifecycle Tool Handoff
 
-**User Story:** As a coding agent, I want task-level traceability context, so
-that implementation follows requirements and closure evidence instead of task
-text alone.
+**User Story:** As a coding agent, I want Agent Workbench to hand spec-driven
+work to the lifecycle tool that owns spec semantics, so that implementation uses
+authoritative task context without duplicating lifecycle behavior.
 
 #### Acceptance Criteria
 
-1. GIVEN a spec path and task ID, WHEN lookup runs, THEN the system SHALL return
-   related task text, requirements, acceptance criteria, design sections,
-   files, validation gates, and closure requirements where present.
-2. GIVEN archived specs, WHEN lookup runs, THEN the system SHALL label them as
-   historical delivery records and avoid suggesting migration.
-3. IF a spec is malformed or missing artifacts, THEN the response SHALL return
+1. GIVEN a spec path or task ID, WHEN spec-lifecycle-manager MCP is available,
+   THEN Agent Workbench SHALL route the agent to the authoritative
+   `task_context` or `traceability_lookup` surface instead of duplicating the
+   lifecycle lookup.
+2. WHERE spec-lifecycle-manager is unavailable, THE SYSTEM SHALL return bounded
+   local routing evidence and label it as non-authoritative.
+3. GIVEN archived specs, WHEN task context runs, THEN the system SHALL label
+   them as historical delivery records and avoid suggesting migration, closure,
+   or task-status changes.
+4. IF a spec is malformed or missing artifacts, THEN the response SHALL return
    structured missing evidence rather than inventing traceability.
 
 ### Requirement 2: Task Context Integration
@@ -67,19 +81,45 @@ and files.
    route to the relevant spec artifacts where evidence exists.
 2. WHERE spec-lifecycle-manager MCP is available, THE SYSTEM SHALL prefer its
    authoritative lifecycle reads or clearly label Agent Workbench local parsing.
-3. WHEN no spec evidence is found, THEN task context SHALL report missing
+3. WHEN spec lifecycle context identifies likely implementation files, THEN
+   Agent Workbench SHALL connect that context to repo status, scope, symbols,
+   impact, edit preview, diagnostics, and validation planning where those
+   runtime surfaces have evidence.
+4. WHEN no spec evidence is found, THEN task context SHALL report missing
    evidence without blocking unrelated repo context.
+
+### Requirement 3: Integration Boundary Visibility
+
+**User Story:** As a maintainer, I want Agent Workbench to show whether the
+companion lifecycle runtime is available, so that agents can tell the
+difference between authoritative lifecycle context and local routing evidence.
+
+#### Acceptance Criteria
+
+1. GIVEN integration profile or health output, WHEN spec-lifecycle-manager
+   configuration or discovery evidence exists, THEN the system SHALL report the
+   companion lifecycle surface as configured, discovered, callable,
+   unavailable, or unknown using existing integration-health semantics.
+2. WHERE spec-lifecycle-manager is unavailable or unknown, THE SYSTEM SHALL
+   avoid presenting lifecycle next actions as proven callable.
+3. WHEN emitting Kiro Power or skill guidance, THEN Agent Workbench SHALL state
+   that spec creation, reconciliation, task selection, traceability, promotion,
+   closure checks, and spec transition hooks belong to spec-lifecycle-manager.
 
 ## Correctness Properties
 
 - Active and archived specs must be distinguished.
 - Missing artifacts must stay explicit.
 - Agent Workbench must not own spec template governance.
+- Agent Workbench must not duplicate spec-lifecycle-manager lifecycle tools,
+  prompts, templates, or closure semantics.
 - Traceability output must be bounded and repo-relative.
+- Repo evidence and lifecycle evidence must be labeled separately.
 
 ## Success Criteria
 
 - Fixture specs cover active, archived, malformed, and traceability-rich
   packages.
-- Golden task lookup responses route agents to files and checks.
+- Golden task-context responses route agents to spec-lifecycle-manager tools
+  plus files and checks.
 - Durable docs document the spec-lifecycle-manager boundary.

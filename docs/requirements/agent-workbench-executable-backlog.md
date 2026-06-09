@@ -3,7 +3,7 @@ title: Agent Workbench executable backlog
 doc_type: requirements
 status: draft
 owner: platform
-last_reviewed: 2026-06-07
+last_reviewed: 2026-06-09
 ---
 
 # Agent Workbench Executable Backlog
@@ -105,7 +105,7 @@ or runtime telemetry.
 | Shell command logs | Defer | Optional command-frequency and failure-pattern summary when a reliable local source exists | Do not scrape interactive shell history by default; require explicit opt-in and redaction design | EB004, EB009 |
 | Issue trackers and backlogs | Defer | Category summary when a project provides exported local issue/backlog data | No network default; treat external tracker content as advisory planning evidence | EB009 |
 | Human IDE feature references | Mine manually | Reference matrix for problems panel, test explorer, SCM, call hierarchy, refactor preview, and task runner patterns | Do not copy product-specific UX; translate only agent-facing workflow needs | EB001, EB004, EB005, EB010 |
-| Other agent tools and MCPs | Mine manually | Capability comparison notes for portable behavior that Agent Workbench should match or exceed | Do not import Python-specific or deprecated implementations; use fixture-backed portable lessons only | EB007, EB010 |
+| Other agent tools and MCPs | Mine manually | Capability comparison notes for portable behavior that Agent Workbench should match or exceed | Do not import Python-specific or deprecated implementations; use fixture-backed portable lessons only | EB007, EB010, EB016 |
 
 ## Sequencing
 
@@ -247,15 +247,21 @@ or runtime telemetry.
 - Runtime surface: Agent Workbench task context, with optional
   spec-lifecycle-manager MCP or skill integration.
 - Acceptance:
-  - Given a spec path or task ID, return related requirements, acceptance
-    criteria, design sections, files, validation gates, open decisions, and
-    closure requirements.
-  - Distinguish active specs from archived delivery records.
+  - Given a spec path or task ID, route agents to the authoritative
+    spec-lifecycle-manager task context or traceability lookup when that MCP or
+    skill is available.
+  - When spec-lifecycle-manager is unavailable, return bounded local routing
+    evidence and clearly label it as non-authoritative.
+  - Distinguish active specs from archived delivery records without suggesting
+    migration, closure, or task-status changes.
+  - Keep lifecycle ownership, Kiro-style templates, reconciliation, promotion,
+    closure checks, and spec transition hooks in spec-lifecycle-manager.
   - Do not move generic spec-template ownership into Agent Workbench.
 - Validation:
   - Fixture specs for active, archived, malformed, and traceability-rich
     packages.
-  - Golden task lookup responses that route agents to files and checks.
+  - Golden task-context responses that route agents to spec-lifecycle-manager
+    tools plus files and checks.
 - Promotion target: active
   [Spec 021](../specs/021-spec-task-traceability-lookup/requirements.md).
 
@@ -551,6 +557,63 @@ or runtime telemetry.
   EB003 and the Markdown quality design, with telemetry evidence routed through
   EB009.
 
+### EB016: Portable Hook Intent Guardrails
+
+- Priority: P1
+- Status: proposed spec
+- Friction signal: Kiro hook review and local hook dogfooding identified useful
+  generic guardrails around pre-write policy, post-edit validation planning,
+  task evidence, prompt scope, session handoff, and companion runtime
+  availability. Repo-specific command hooks such as SAM validation, migration
+  sequencing, and project lint commands are useful in target repositories, but
+  should not become Agent Workbench defaults.
+- Runtime surface: common hook intent model, agent-specific hook emitters,
+  packaged Codex and Kiro hooks, post-edit feedback, `verification_plan`,
+  integration health/profile output, `context_for_task`, and optional
+  spec-lifecycle-manager companion routing.
+- Acceptance:
+  - Define portable hook intents for pre-write policy checks, post-edit
+    verification planning, task evidence reminders, prompt scope
+    classification, session handoff summaries, and companion runtime
+    availability checks.
+  - Pre-write policy checks detect hidden fallbacks, silent degraded behavior,
+    obvious secret material, and broad write scope using bounded evidence; they
+    must not mutate files or execute repo commands.
+  - Post-edit verification planner hooks call or route to `verification_plan`
+    and report the smallest useful validation set without executing commands by
+    default.
+  - Task evidence reminders require file, check, acceptance, or residual-risk
+    evidence when an agent claims completion; spec acceptance, reconciliation,
+    task selection, promotion, and closure ownership remains with
+    spec-lifecycle-manager.
+  - Prompt scope classifier hooks flag broad or cross-subsystem requests and
+    route to `context_for_task`, repo overview, or user clarification without
+    blocking narrow edits.
+  - Session handoff hooks produce concise summaries for the active transcript
+    or an explicit session-log destination; they must not write steering files
+    or durable docs automatically.
+  - Companion runtime availability hooks report Agent Workbench and companion
+    MCP states as configured, discovered, callable, unavailable, or unknown,
+    and keep healthy results quiet.
+  - Generated agent-specific hook artifacts stay thin wrappers around common
+    hook intents and MCP surfaces; they must not embed repo-specific validators,
+    install or repair tooling, retry failures, or add hidden fallback behavior.
+- Validation:
+  - Contract tests for hook intent definitions and agent-specific emitter
+    output for Codex and Kiro.
+  - Fixture hook payloads for write, prompt-submit, task-stop, session-start,
+    and session-stop events where client support exists.
+  - Golden outputs for clean quiet results, actionable policy findings,
+    blocked companion runtime states, broad prompt scope, evidence-missing task
+    completion, and validation-planning-only results.
+  - Regression tests proving repo-specific commands are planned through
+    `verification_plan` or target-repo hooks rather than shipped as generic
+    Agent Workbench hooks.
+- Promotion target: create a future integration-hook-intents spec after active
+  post-edit repair and spec-task routing work stabilize; route overlapping
+  lifecycle behavior to spec-lifecycle-manager and overlapping workspace risk
+  behavior to EB008.
+
 ## Backlog To Spec Promotion Rules
 
 Promote a backlog item into an implementation spec when:
@@ -590,6 +653,7 @@ Do not promote an item when:
 | HTML and web markup quality | EB013, under EB010. |
 | Large-repo graph warmup scale and progress | EB014, under EB003 and EB009. |
 | Large durable-doc audits | EB015, under EB003 and Markdown document quality. |
+| Portable generic hook guardrails | EB016, with EB005, EB006, and EB008 boundaries. |
 
 ## Immediate Next Specs
 
