@@ -508,6 +508,49 @@ or runtime telemetry.
 - Promotion target: create a future runtime operations or graph-store scale
   spec under EB003, with telemetry evidence routed through EB009.
 
+### EB015: Markdown Document Audit Scale And Chunking
+
+- Priority: P1
+- Status: candidate spec
+- Friction signal: `aws-datalake` document-audit dogfooding found roughly 150
+  durable Markdown docs outside `docs/specs`, concentrated in `docs/data-flow`,
+  `docs/reference`, and `docs/runbooks`. A first Markdown quality call was too
+  broad for the current `check_markdown_set` limit, forcing a filesystem
+  inventory pass and focused subset calls.
+- Runtime surface: `check_markdown_set`, `check_markdown_document`,
+  `verification_plan`, docs inventory/routing, Markdown quality metadata,
+  response budgets, and telemetry.
+- Acceptance:
+  - Agents can audit large durable-doc sets through deterministic chunks
+    without switching to an unstructured filesystem-only workflow.
+  - `check_markdown_set` exposes enough continuation evidence for agents to
+    continue a large audit by scope, offset, cursor, or returned next action
+    without re-planning from scratch.
+  - Broad document audits remain bounded and return structured partial states
+    instead of invalid input, hidden truncation, or generic "too broad" advice.
+  - Set checking should scan repository Markdown inventory once per set call
+    and reuse that inventory for individual document checks instead of
+    rescanning the repository for every selected document.
+  - Results distinguish unchecked, skipped, checked-clean, checked-with-findings,
+    and budget-truncated documents so final audit coverage is measurable.
+  - Durable-doc audits can exclude active spec packages by intent while still
+    supporting explicit `docs/specs` checks when requested.
+  - Telemetry records document counts, chunk size, checked count, skipped count,
+    finding count, truncation, and elapsed time without logging document bodies.
+- Validation:
+  - Synthetic fixture with at least 150 Markdown docs across `docs/data-flow`,
+    `docs/reference`, `docs/runbooks`, and `docs/specs`.
+  - Golden responses for first chunk, continuation chunk, final chunk,
+    spec-excluded audit, explicit spec-included audit, and budget-truncated
+    audit.
+  - Regression proving a broad aws-datalake-shaped durable-doc audit can be
+    completed as bounded structured calls without direct filesystem fallback.
+  - Performance test or debug harness showing set checks do not rescan the full
+    repository once per selected document.
+- Promotion target: create a future Markdown document audit scale spec under
+  EB003 and the Markdown quality design, with telemetry evidence routed through
+  EB009.
+
 ## Backlog To Spec Promotion Rules
 
 Promote a backlog item into an implementation spec when:
@@ -546,6 +589,7 @@ Do not promote an item when:
 | TODO/FIXME annotation surfacing | EB012. |
 | HTML and web markup quality | EB013, under EB010. |
 | Large-repo graph warmup scale and progress | EB014, under EB003 and EB009. |
+| Large durable-doc audits | EB015, under EB003 and Markdown document quality. |
 
 ## Immediate Next Specs
 

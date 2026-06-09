@@ -1,0 +1,20 @@
+{
+  "name": "agent-workbench",
+  "displayName": "Agent Workbench",
+  "version": "0.1.0",
+  "description": "Use Agent Workbench MCP for repository status, scoped context, symbol navigation, edit planning, and validation planning.",
+  "author": {
+    "name": "Auriora"
+  },
+  "license": "UNLICENSED",
+  "keywords": [
+    "mcp",
+    "repo",
+    "symbols",
+    "validation",
+    "agent-workbench"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./.mcp.json"
+}

@@ -187,3 +187,36 @@ Steering & Skills panel or copy it to `~/.kiro/skills/agent-workbench`.
 Kiro hooks are configured through Kiro agent configuration, not Codex
 `hooks/hooks.json`. Use `kiro-power/agents/agent-workbench.json` as the source
 for a global or workspace Kiro custom agent.
+
+## Claude Code Plugin Packaging
+
+The Claude Code integration is packaged under
+`plugins/agent-workbench/claude-plugin/`. It is a distribution wrapper around
+the same installed runtime prefix, not another runtime implementation.
+
+The plugin includes:
+
+- `.claude-plugin/plugin.json` for Claude Code plugin metadata
+- `.mcp.json` for the Agent Workbench MCP binding
+- `skills/agent-workbench/SKILL.md` for Claude Code skill guidance
+- `hooks/hooks.json` for Claude Code hook configuration
+- Claude Code hook adapters in `hooks/`
+
+Install or refresh the runtime package first:
+
+```bash
+scripts/install-agent-workbench-package.sh \
+  --prefix "$HOME/.local/share/agent-workbench" \
+  --skip-codex-config
+```
+
+Then test the plugin locally:
+
+```bash
+claude --plugin-dir plugins/agent-workbench/claude-plugin
+```
+
+Claude Code plugin layout differs from Kiro and Codex: only
+`.claude-plugin/plugin.json` belongs inside `.claude-plugin/`; `skills/`,
+`hooks/`, and `.mcp.json` belong at the Claude plugin root. Run
+`/reload-plugins` after editing hooks, skills, or MCP config.

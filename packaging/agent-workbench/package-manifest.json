@@ -54,6 +54,7 @@
     "src",
     "docs",
     "plugins/agent-workbench",
+    "plugins/agent-workbench/claude-plugin",
     "plugins/agent-workbench/hooks",
     "plugins/agent-workbench/kiro-power",
     "plugins/agent-workbench/skills",
@@ -80,5 +81,17 @@
       "plugins/agent-workbench/kiro-power/hooks/post-edit-feedback.js"
     ],
     "install_model": "Add the local Power directory in Kiro after installing the package-backed runtime."
+  },
+  "claude_code": {
+    "plugin_root": "plugins/agent-workbench/claude-plugin",
+    "plugin_manifest": "plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json",
+    "plugin_mcp_config": "plugins/agent-workbench/claude-plugin/.mcp.json",
+    "plugin_skill": "plugins/agent-workbench/claude-plugin/skills/agent-workbench/SKILL.md",
+    "plugin_hooks": "plugins/agent-workbench/claude-plugin/hooks/hooks.json",
+    "plugin_hook_scripts": [
+      "plugins/agent-workbench/claude-plugin/hooks/session-start.js",
+      "plugins/agent-workbench/claude-plugin/hooks/post-edit-feedback.js"
+    ],
+    "install_model": "Load with claude --plugin-dir plugins/agent-workbench/claude-plugin after installing the package-backed runtime."
   }
 }

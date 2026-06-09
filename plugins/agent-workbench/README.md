@@ -9,6 +9,7 @@ It packages:
 - `hooks/` scripts and hook configuration for optional quiet lifecycle feedback
 - `.mcp.json` for the Agent Workbench MCP server binding
 - `kiro-power/` for Kiro Power, Agent Skills, MCP, and hook adapter packaging
+- `claude-plugin/` for Claude Code plugin, skill, MCP, and hook adapter packaging
 
 The plugin does not reimplement runtime code. Its MCP binding launches the
 stable installed package launcher, not runtime source copied into Codex's plugin
@@ -67,3 +68,19 @@ feedback is enabled and an actionable message exists.
 Install the package-backed runtime first, then add `kiro-power/` as a local
 Power in Kiro. The MCP binding launches
 `${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp`.
+
+## Claude Code Plugin
+
+The Claude Code integration lives in `claude-plugin/`. It packages a
+`.claude-plugin/plugin.json` manifest, `.mcp.json`, a Claude Code skill, and
+Claude-shaped hook configuration.
+
+Claude Code plugin components live at the plugin root. Only `plugin.json` is
+inside `.claude-plugin/`; `skills/`, `hooks/`, and `.mcp.json` must remain at
+the Claude plugin root. Test it locally with:
+
+```bash
+claude --plugin-dir plugins/agent-workbench/claude-plugin
+```
+
+After source or hook changes, run `/reload-plugins` in Claude Code.
