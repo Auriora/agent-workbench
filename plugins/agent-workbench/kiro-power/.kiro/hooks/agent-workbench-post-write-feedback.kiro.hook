@@ -1,0 +1,17 @@
+{
+  "enabled": true,
+  "name": "Agent Workbench Post Write Feedback",
+  "description": "Runs quiet Agent Workbench feedback after Kiro write tools change files.",
+  "version": "1",
+  "when": {
+    "type": "postToolUse",
+    "toolTypes": [
+      "write"
+    ]
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "AGENT_WORKBENCH_HOOK_FEEDBACK=basic node \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/plugins/agent-workbench/kiro-power/hooks/post-edit-feedback.js\""
+  },
+  "shortName": "agent-workbench-post-write-feedback"
+}

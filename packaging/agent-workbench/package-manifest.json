@@ -77,6 +77,8 @@
     "power_skill": "plugins/agent-workbench/kiro-power/skills/agent-workbench/SKILL.md",
     "power_agent_config": "plugins/agent-workbench/kiro-power/agents/agent-workbench.json",
     "power_hooks": [
+      "plugins/agent-workbench/kiro-power/.kiro/hooks/agent-workbench-ready-check.kiro.hook",
+      "plugins/agent-workbench/kiro-power/.kiro/hooks/agent-workbench-post-write-feedback.kiro.hook",
       "plugins/agent-workbench/kiro-power/hooks/session-start.js",
       "plugins/agent-workbench/kiro-power/hooks/post-edit-feedback.js"
     ],

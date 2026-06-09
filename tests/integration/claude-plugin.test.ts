@@ -126,6 +126,8 @@ describe("Claude Code plugin artifacts", () => {
       power_mcp_config: "plugins/agent-workbench/kiro-power/mcp.json"
     });
     expect(manifest.kiro.power_hooks).toEqual([
+      "plugins/agent-workbench/kiro-power/.kiro/hooks/agent-workbench-ready-check.kiro.hook",
+      "plugins/agent-workbench/kiro-power/.kiro/hooks/agent-workbench-post-write-feedback.kiro.hook",
       "plugins/agent-workbench/kiro-power/hooks/session-start.js",
       "plugins/agent-workbench/kiro-power/hooks/post-edit-feedback.js"
     ]);

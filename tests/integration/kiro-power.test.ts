@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 describe("Kiro Power artifacts", () => {
   const powerRoot = path.resolve("plugins/agent-workbench/kiro-power");
 
-  it("ships Power, MCP, skill, agent, and hook adapter files", () => {
+  it("ships Power, MCP, skill, agent, IDE hooks, and hook adapter files", () => {
     const power = fs.readFileSync(path.join(powerRoot, "POWER.md"), "utf8");
     const mcpConfig = JSON.parse(fs.readFileSync(path.join(powerRoot, "mcp.json"), "utf8")) as {
       mcpServers: Record<string, { command: string; args: string[]; timeout: number }>;
@@ -23,9 +23,34 @@ describe("Kiro Power artifacts", () => {
       path.join(powerRoot, "skills/agent-workbench/SKILL.md"),
       "utf8"
     );
+    const readyCheckHook = JSON.parse(
+      fs.readFileSync(
+        path.join(powerRoot, ".kiro/hooks/agent-workbench-ready-check.kiro.hook"),
+        "utf8"
+      )
+    ) as {
+      enabled: boolean;
+      version: string;
+      when: { type: string; toolTypes?: string[] };
+      then: { type: string; command: string };
+      shortName: string;
+    };
+    const postWriteHook = JSON.parse(
+      fs.readFileSync(
+        path.join(powerRoot, ".kiro/hooks/agent-workbench-post-write-feedback.kiro.hook"),
+        "utf8"
+      )
+    ) as {
+      enabled: boolean;
+      version: string;
+      when: { type: string; toolTypes?: string[] };
+      then: { type: string; command: string };
+      shortName: string;
+    };
 
     expect(power).toContain('name: "agent-workbench"');
     expect(power).toContain("Do not run runtime code from this Power directory.");
+    expect(power).toContain("IDE hooks must be workspace files under `.kiro/hooks/`");
     expect(mcpConfig.mcpServers["agent-workbench"]).toMatchObject({
       command: "bash",
       timeout: 120000,
@@ -41,6 +66,25 @@ describe("Kiro Power artifacts", () => {
     expect(Object.keys(agentConfig.hooks).sort()).toEqual(["agentSpawn", "postToolUse"]);
     expect(skill).toContain("The MCP server is the only executable runtime surface.");
     expect(skill).toContain("Kiro Integration");
+    expect(readyCheckHook).toMatchObject({
+      enabled: true,
+      version: "1",
+      when: { type: "userTriggered" },
+      then: { type: "runCommand" },
+      shortName: "agent-workbench-ready-check"
+    });
+    expect(readyCheckHook.then.command).toContain("hooks/session-start.js");
+    expect(postWriteHook).toMatchObject({
+      enabled: true,
+      version: "1",
+      when: {
+        type: "postToolUse",
+        toolTypes: ["write"]
+      },
+      then: { type: "runCommand" },
+      shortName: "agent-workbench-post-write-feedback"
+    });
+    expect(postWriteHook.then.command).toContain("hooks/post-edit-feedback.js");
   });
 
   it("adapts Kiro hook payloads to quiet Agent Workbench feedback", async () => {
@@ -131,6 +175,8 @@ describe("Kiro Power artifacts", () => {
       power_skill: "plugins/agent-workbench/kiro-power/skills/agent-workbench/SKILL.md"
     });
     expect(manifest.kiro.power_hooks).toEqual([
+      "plugins/agent-workbench/kiro-power/.kiro/hooks/agent-workbench-ready-check.kiro.hook",
+      "plugins/agent-workbench/kiro-power/.kiro/hooks/agent-workbench-post-write-feedback.kiro.hook",
       "plugins/agent-workbench/kiro-power/hooks/session-start.js",
       "plugins/agent-workbench/kiro-power/hooks/post-edit-feedback.js"
     ]);

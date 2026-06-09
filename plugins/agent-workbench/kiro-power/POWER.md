@@ -10,7 +10,8 @@ author: "Auriora"
 
 Agent Workbench is the executable MCP runtime for repository-aware coding-agent
 work. This Power packages Kiro guidance, MCP configuration, a portable skill,
-and quiet hook adapters around the installed Agent Workbench runtime.
+workspace hook templates, and quiet hook adapters around the installed Agent
+Workbench runtime.
 
 Do not run runtime code from this Power directory. The MCP server must launch
 the stable package prefix:
@@ -43,7 +44,18 @@ ${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-wo
    cp -a skills/agent-workbench "$HOME/.kiro/skills/agent-workbench"
    ```
 
-4. For CLI custom-agent hook support, add the contents of
+4. Create IDE hooks from the bundled templates if Kiro did not create them
+   automatically. IDE hooks must be workspace files under `.kiro/hooks/`. Add
+   the bundled definitions to these workspace paths:
+
+   - `.kiro/hooks/agent-workbench-ready-check.kiro.hook`
+   - `.kiro/hooks/agent-workbench-post-write-feedback.kiro.hook`
+
+   The ready check is a manual hook because current Kiro IDE hook files use
+   `userTriggered` for on-demand commands. Startup hooks for Kiro CLI custom
+   agents remain in the agent configuration in the next step.
+
+5. For CLI custom-agent hook support, add the contents of
    `agents/agent-workbench.json` to `~/.kiro/agents/agent-workbench.json` or to
    the workspace `.kiro/agents/agent-workbench.json`.
 
