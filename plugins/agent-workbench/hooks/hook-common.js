@@ -19,6 +19,7 @@ export function readStdin(stdin = process.stdin, timeoutMs = 250) {
       stdin.off("data", onData);
       stdin.off("end", onEnd);
       stdin.off("error", onEnd);
+      stdin.pause();
     };
     const onData = (chunk) => {
       payload += chunk;

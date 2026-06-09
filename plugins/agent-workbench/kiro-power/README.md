@@ -35,8 +35,8 @@ cp plugins/agent-workbench/kiro-power/.kiro/hooks/*.kiro.hook .kiro/hooks/
 ```
 
 The IDE post-write hook is an `askAgent` hook. Kiro IDE `runCommand` hooks do
-not provide the changed-file tool payload on stdin, so command hooks are kept
-manual or CLI-only.
+not provide the changed-file tool payload on stdin, so automatic post-write
+command hooks are not shipped.
 
 For Kiro CLI custom-agent hooks, copy `agents/agent-workbench.json` to
 `~/.kiro/agents/agent-workbench.json` or `.kiro/agents/agent-workbench.json`.

@@ -11,16 +11,6 @@
       {
         "command": "AGENT_WORKBENCH_HOOK_FEEDBACK=basic node \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/plugins/agent-workbench/kiro-power/hooks/session-start.js\""
       }
-    ],
-    "postToolUse": [
-      {
-        "matcher": "fs_write",
-        "command": "AGENT_WORKBENCH_HOOK_FEEDBACK=basic node \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/plugins/agent-workbench/kiro-power/hooks/post-edit-feedback.js\""
-      },
-      {
-        "matcher": "write",
-        "command": "AGENT_WORKBENCH_HOOK_FEEDBACK=basic node \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/plugins/agent-workbench/kiro-power/hooks/post-edit-feedback.js\""
-      }
     ]
   }
 }

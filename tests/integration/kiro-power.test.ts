@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawn } from "node:child_process";
 import { PassThrough } from "node:stream";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -64,7 +65,7 @@ describe("Kiro Power artifacts", () => {
       "skill://.kiro/skills/**/SKILL.md",
       "skill://~/.kiro/skills/**/SKILL.md"
     ]);
-    expect(Object.keys(agentConfig.hooks).sort()).toEqual(["agentSpawn", "postToolUse"]);
+    expect(Object.keys(agentConfig.hooks).sort()).toEqual(["agentSpawn"]);
     expect(skill).toContain("The MCP server is the only executable runtime surface.");
     expect(skill).toContain("Kiro Integration");
     expect(readyCheckHook).toMatchObject({
@@ -163,6 +164,32 @@ describe("Kiro Power artifacts", () => {
     const stdin = new PassThrough();
 
     await expect(common.readStdin(stdin, 10)).resolves.toBe("");
+  });
+
+  it("exits when command-style Kiro hooks leave stdin open", async () => {
+    const hookPath = path.join(powerRoot, "hooks/post-edit-feedback.js");
+    const child = spawn(process.execPath, [hookPath], {
+      env: {
+        ...process.env,
+        AGENT_WORKBENCH_HOOK_FEEDBACK: "basic"
+      },
+      stdio: ["pipe", "pipe", "pipe"]
+    });
+
+    const result = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>(
+      (resolve, reject) => {
+        const timer = setTimeout(() => {
+          child.kill("SIGKILL");
+          reject(new Error("hook did not exit with open stdin"));
+        }, 1_000);
+        child.on("exit", (code, signal) => {
+          clearTimeout(timer);
+          resolve({ code, signal });
+        });
+      }
+    );
+
+    expect(result).toEqual({ code: 0, signal: null });
   });
 
   it("records Kiro Power packaging in the package manifest", () => {
