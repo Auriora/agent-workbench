@@ -262,7 +262,11 @@ extraction behind current contracts rather than broad rewrites.
 
 #### BL-DEBT-001: Cognitive Overload - Validation Planning Is A Multi-Ecosystem Planning Module
 
-Status: `new`
+Status: `accepted`
+
+Triage rationale: Accepted. The module currently owns multiple independent
+validation concerns, and the remediation task is already scoped to extraction
+behind the existing planning path instead of adding alternate planners.
 
 Pain x Spread: `2 x 3 = 6` scheduled debt.
 
@@ -300,7 +304,11 @@ Verification: Pending.
 
 #### BL-DEBT-002: Change Propagation - Resource Extraction Mixes Unrelated Resource Domains
 
-Status: `new`
+Status: `accepted`
+
+Triage rationale: Accepted. The adapter mixes independent resource domains
+behind one implementation class. `T011` keeps the existing `ExtractorPort`
+contract stable while splitting the internal domain ownership.
 
 Pain x Spread: `2 x 2 = 4` scheduled debt.
 
@@ -331,7 +339,11 @@ Verification: Pending.
 
 #### BL-DEBT-003: Change Propagation - Runtime Contracts Are A Multi-Context Schema Monolith
 
-Status: `new`
+Status: `accepted`
+
+Triage rationale: Accepted. Centralized contract vocabulary remains the right
+public API shape, but the implementation file should be split by stable runtime
+context while preserving the `src/contracts/index.ts` compatibility barrel.
 
 Pain x Spread: `2 x 2 = 4` scheduled debt.
 

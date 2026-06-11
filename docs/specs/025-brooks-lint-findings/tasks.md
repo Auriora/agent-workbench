@@ -153,14 +153,16 @@ T016 -> T018
 
 ## Phase 5: Debt Triage And Remediation
 
-- [ ] T009 Triage and accept, defer, or dismiss current tech debt findings.
+- [x] T009 Triage and accept, defer, or dismiss current tech debt findings.
   - Depends on: T008
   - Files: `docs/specs/025-brooks-lint-findings/findings.md`,
     `docs/specs/025-brooks-lint-findings/tasks.md`
   - Acceptance: `BL-DEBT-001`, `BL-DEBT-002`, and `BL-DEBT-003` each have a
     status beyond `new`, with a rationale and linked remediation tasks if
     accepted.
-  - Evidence: Pending.
+  - Evidence: 2026-06-11 accepted `BL-DEBT-001`, `BL-DEBT-002`, and
+    `BL-DEBT-003` with rationale. Existing remediation tasks remain `T010`,
+    `T011`, and `T012`.
 
 - [ ] T010 Split validation planning by concern.
   - Depends on: T009
