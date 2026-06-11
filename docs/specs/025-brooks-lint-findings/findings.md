@@ -262,7 +262,7 @@ extraction behind current contracts rather than broad rewrites.
 
 #### BL-DEBT-001: Cognitive Overload - Validation Planning Is A Multi-Ecosystem Planning Module
 
-Status: `accepted`
+Status: `in_progress`
 
 Triage rationale: Accepted. The module currently owns multiple independent
 validation concerns, and the remediation task is already scoped to extraction
@@ -298,7 +298,13 @@ behavior.
 
 Tasks: `T009`, `T010`
 
-Verification: Pending.
+Verification: 2026-06-11 `T010` split validation planning into focused
+application modules for shared validation utilities, static feedback,
+environment/policy discovery, package scripts, and ecosystem target selection.
+The public `planVerification` path and response contracts stayed unchanged.
+`pnpm exec vitest run tests/mcp/verification-plan-tool.test.ts`,
+`pnpm typecheck`, and `pnpm test` passed. Keep status `in_progress` until
+debt remediation is promoted or closed with the remaining debt tasks.
 
 ### Warning
 

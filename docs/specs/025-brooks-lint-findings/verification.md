@@ -54,6 +54,10 @@ Resolving findings requires code, tests, and durable documentation validation.
 | 2026-06-11 | `pnpm test` | Passed | Aggregate full-suite validation for `T006` passed: 59 test files and 396 tests. |
 | 2026-06-11 | Durable architecture doc promotion | Completed | `T007` promoted ownership of Markdown helpers, response metadata policy, telemetry recorder abstraction, and no-exception boundary rules to durable architecture docs and the documentation map. |
 | 2026-06-11 | Tech debt findings triage | Completed | `T009` accepted `BL-DEBT-001`, `BL-DEBT-002`, and `BL-DEBT-003` with linked remediation tasks `T010`, `T011`, and `T012`. No runtime code changed in this triage slice. |
+| 2026-06-11 | `pnpm exec vitest run tests/mcp/verification-plan-tool.test.ts` | Passed | 1 test file and 29 fixture-backed validation-planning tests passed after splitting validation planning by concern. |
+| 2026-06-11 | `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts tests/presentation/session-aware-presenters.test.ts tests/mcp/stdio-entrypoint.test.ts` | Passed | 3 related contract/presentation/stdio test files and 26 tests passed after the validation-planning extraction. |
+| 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after extracting validation-planning modules. |
+| 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T010`: 59 test files and 396 tests. |
 
 ## Required Gates For Remediation
 

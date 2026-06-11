@@ -164,7 +164,7 @@ T016 -> T018
     `BL-DEBT-003` with rationale. Existing remediation tasks remain `T010`,
     `T011`, and `T012`.
 
-- [ ] T010 Split validation planning by concern.
+- [x] T010 Split validation planning by concern.
   - Depends on: T009
   - Findings: `BL-DEBT-001`
   - Files: `src/application/use-cases/plan-verification.ts`,
@@ -174,11 +174,17 @@ T016 -> T018
     current response contracts, while language, environment, package-script,
     and static-feedback planning logic moves into focused modules with
     fixture-backed tests.
-  - Evidence: Pending.
-  - [ ] T010.1 Identify stable planner boundaries without changing behavior.
-  - [ ] T010.2 Extract environment policy and package-script planning.
-  - [ ] T010.3 Extract language and ecosystem target selection.
-  - [ ] T010.4 Run targeted verification-plan tests and `pnpm typecheck`.
+  - Evidence: 2026-06-11 kept `planVerification` as the single orchestration
+    path, extracted shared validation utilities, static feedback,
+    environment/policy discovery, package-script planning, and ecosystem target
+    selection into focused application modules, and passed
+    `pnpm exec vitest run tests/mcp/verification-plan-tool.test.ts`,
+    `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts tests/presentation/session-aware-presenters.test.ts tests/mcp/stdio-entrypoint.test.ts`,
+    `pnpm typecheck`, and `pnpm test`.
+  - [x] T010.1 Identify stable planner boundaries without changing behavior.
+  - [x] T010.2 Extract environment policy and package-script planning.
+  - [x] T010.3 Extract language and ecosystem target selection.
+  - [x] T010.4 Run targeted verification-plan tests and `pnpm typecheck`.
 
 - [ ] T011 Split resource-backed extraction by resource domain.
   - Depends on: T009
