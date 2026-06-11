@@ -3,7 +3,7 @@ title: Agent Workbench executable backlog
 doc_type: requirements
 status: draft
 owner: platform
-last_reviewed: 2026-06-09
+last_reviewed: 2026-06-11
 ---
 
 # Agent Workbench Executable Backlog
@@ -614,6 +614,47 @@ or runtime telemetry.
   lifecycle behavior to spec-lifecycle-manager and overlapping workspace risk
   behavior to EB008.
 
+### EB017: Repo-Configured Auto-Formatting Hooks
+
+- Priority: P1
+- Status: candidate spec
+- Friction signal: documentation and spec edits often leave Markdown tables and
+  wrapped text difficult to read in plain text. Formatter help belongs in Agent
+  Workbench because it touches file edit hooks, workspace safety, formatter
+  planning, repo configuration, and Markdown quality surfaces.
+- Runtime surface: repo-owned Agent Workbench configuration, generated
+  agent-specific hook wrappers, common hook intent model, post-edit feedback,
+  Markdown formatter planning, preview/apply workspace safety, and
+  `verification_plan`.
+- Acceptance:
+  - Auto-formatting is disabled by default and cannot mutate files unless a
+    repo-owned configuration explicitly enables the formatter and hook event.
+  - Formatter configuration lives in the target repository, not the plugin
+    cache, so project preferences survive plugin cache cleans and package
+    reinstalls.
+  - The configuration shape is extensible enough for later repo-level Agent
+    Workbench options without turning hook wrappers into the source of truth.
+  - Markdown is the first scheduled formatter, with table alignment and other
+    plain-text readability improvements prioritized over broad style churn.
+  - Hook-triggered formatting is scoped to changed or explicitly selected files
+    and uses the existing preview/apply safety path, stale-preview checks, and
+    repo-relative path reporting.
+  - Formatter failures, skipped states, missing tools, or policy conflicts are
+    reported as structured feedback; they must not hide validation failures or
+    silently fall back to another formatter.
+- Validation:
+  - Contract tests for disabled default behavior, repo-config opt-in,
+    config-precedence handling, stale preview rejection, and changed-file scope.
+  - Golden hook outputs for clean no-op formatting, Markdown table preview,
+    configured apply, missing formatter capability, and skipped unsafe writes.
+  - Fixture repositories with and without Agent Workbench config files proving
+    cache cleans or plugin reinstall paths do not erase repo preferences.
+  - Markdown formatter fixtures covering aligned tables, wide tables, wrapped
+    prose, frontmatter preservation, fenced-code preservation, and no-op
+    rendered-meaning preservation.
+- Promotion target: create a future auto-formatting hook spec after EB016 hook
+  intent boundaries and Markdown preview/apply formatter contracts are stable.
+
 ## Backlog To Spec Promotion Rules
 
 Promote a backlog item into an implementation spec when:
@@ -654,6 +695,7 @@ Do not promote an item when:
 | Large-repo graph warmup scale and progress | EB014, under EB003 and EB009. |
 | Large durable-doc audits | EB015, under EB003 and Markdown document quality. |
 | Portable generic hook guardrails | EB016, with EB005, EB006, and EB008 boundaries. |
+| Repo-configured auto-format hooks | EB017, with EB016, EB005, EB008, and Markdown document quality boundaries. |
 
 ## Immediate Next Specs
 
