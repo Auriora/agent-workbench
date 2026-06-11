@@ -171,6 +171,15 @@ Concurrency rules:
 - Watcher bursts are debounced before enqueueing incremental work.
 - Worker timeouts produce degraded evidence and structured attention items.
 
+Repo-local debug sweeps are intentionally separate from runtime warm-up
+ownership. A sweep may create isolated per-repo runtimes and generated report
+artifacts under this repository's `.tmp` tree, but it does not become the owner
+of an original external repository. If sweep execution is parallelized later,
+parallelism should be bounded across independent repo runtimes. Per-repo graph
+writes, workspace-write preview/apply pairs, and progress/final report
+publication remain serialized so result ordering, cancellation, and RCA
+evidence stay deterministic.
+
 ## Ports
 
 MVP operation ports:

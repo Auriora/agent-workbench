@@ -132,8 +132,11 @@ T013 -> T014
     budgets were then raised for large committed-tree sandbox repositories;
     the focused orientation/docs/debug-harness test set, `pnpm typecheck`, and
     the eight-repo sweep passed with 161 full, 13 partial, 0 degraded, 2
-    blocked, and 0 invalid results. Status no-coverage semantics remain
-    pending.
+    blocked, and 0 invalid results. The fresh T010 eight-repo committed-tree
+    sandbox sweep then passed with 176 full, 0 partial, 0 degraded, 0 blocked,
+    and 0 invalid results, proving current dogfood status/readiness metadata is
+    not causing non-full rows. Status no-coverage fixture semantics remain
+    pending and are tracked by T011.
   - [ ] T004.1 Write failing tests for no adapter coverage status.
   - [x] T004.2 Write failing tests for cold and refreshing docs FTS output.
     - Evidence: Updated docs search blocked-index expectations in
@@ -356,7 +359,7 @@ T013 -> T014
   - [ ] T011.2 Implement status metadata and presenter corrections.
   - [ ] T011.3 Run focused runtime/status MCP tests and update T004 evidence.
 
-- [ ] T012 Investigate bounded parallel and background processing.
+- [x] T012 Investigate bounded parallel and background processing.
   - Depends on: T009
   - Files: `src/debug/mcp-tool-sweep.ts`,
     `src/application/use-cases/index-repository-graph.ts`,
@@ -368,33 +371,72 @@ T013 -> T014
     and apply pairs, report finalization). Any implementation uses bounded
     concurrency with deterministic report ordering and clear cancellation or
     failure propagation.
-  - Evidence: Pending.
-  - [ ] T012.1 Measure current serial sweep timing and identify the slow phases.
-  - [ ] T012.2 Decide whether to parallelize across repos, within repo
+  - Evidence: Measured the T010 progress report. The serial full eight-repo
+    sweep took 163.6s of repo elapsed time: 38.5s warmup, 42.5s resource
+    calls, and 77.7s tool calls. FreeCAD accounted for 70.7s and CrealityPrint
+    for 37.0s; the slowest surfaces were direct docs reads, markdown set
+    checks, overview/context scans, and verification planning on the largest
+    sandboxes. Decision: do not add parallel execution in this correctness
+    spec. Repo-level warmups and read-only calls can be made concurrent later
+    with isolated per-repo runtimes, bounded worker count, deterministic
+    repo-order report assembly, and serialized progress/final report writes.
+    Keep per-repo SQLite writes, workspace-write preview/apply pairs, and final
+    report publication serialized.
+  - [x] T012.1 Measure current serial sweep timing and identify the slow phases.
+    - Evidence: Parsed `.tmp/agent-workbench-tool-sweep-t010-full/mcp-tool-sweep-progress.json`.
+  - [x] T012.2 Decide whether to parallelize across repos, within repo
     read-only surfaces, docs indexing, or none for this spec.
-  - [ ] T012.3 If accepted, implement bounded concurrency with stable output
+    - Evidence: Deferred implementation for this spec. Safe future boundary is
+      bounded repo-level concurrency; within-repo SQLite writes and
+      workspace-write tool pairs stay serialized.
+  - [x] T012.3 If accepted, implement bounded concurrency with stable output
     ordering and tests; otherwise record why serial execution remains the
     safer path.
-  - [ ] T012.4 Record the background/async design decision in `verification.md`
+    - Evidence: Serial execution remains the safer closure path because the
+      sweep is now correctness-clean and concurrent progress/report writes
+      would add new ordering and cancellation risks without a current RCA
+      blocker.
+  - [x] T012.4 Record the background/async design decision in `verification.md`
     or a durable design note.
 
 ## Phase 4: Verification And Promotion
 
-- [ ] T013 Run full validation and cross-repo sweep.
+- [x] T013 Run full validation and cross-repo sweep.
   - Depends on: T004, T005, T006, T007, T008, T010, T011, T012
   - Files: `docs/specs/023-mcp-tool-sweep-quality/verification.md`
   - Acceptance: `pnpm typecheck`, focused tests, `pnpm test`, and the
     eight-repo read-only tool sweep complete with no unexplained invalid
     results; workspace-write behavior is proven by fixtures or sandbox copies.
-  - Evidence: Pending.
-  - [ ] T013.1 Run `pnpm typecheck`.
-  - [ ] T013.2 Run focused tests for changed areas.
-  - [ ] T013.3 Run `pnpm test`.
-  - [ ] T013.4 Run eight-repo `pnpm debug:mcp-tool-sweep` without target repo
+  - Evidence: `pnpm typecheck`, focused tests, `pnpm test`, `git diff --check`,
+    and the final eight-repo committed-sandbox sweep passed on 2026-06-11.
+    Full suite result: 59 files and 388 tests passed. Final sweep report
+    `.tmp/agent-workbench-tool-sweep-t013-full/mcp-tool-sweep-2026-06-11T13-12-49-086Z.json`
+    covered 176 rows with 176 full, 0 partial, 0 degraded, 0 blocked, and 0
+    invalid results. Workspace-write rows ran only against sandbox copies and
+    were full/ok. Full-suite validation also exposed a Node 24/tsx stdio launch
+    issue; fixed by adding `src/mcp/stdio-entrypoint.mjs`, switching
+    `package.json` `mcp` to that bootstrap, and keeping the stdio server
+    resident after connect.
+  - [x] T013.1 Run `pnpm typecheck`.
+    - Evidence: Passed on 2026-06-11.
+  - [x] T013.2 Run focused tests for changed areas.
+    - Evidence: `pnpm test tests/mcp/debug-harness.test.ts
+      tests/docs/query-docs.test.ts tests/mcp/docs-surfaces.test.ts
+      tests/graph/query-tools.test.ts tests/mcp/query-tools.test.ts
+      tests/validation/verification-plan.test.ts` passed with 70 tests, and
+      `pnpm test tests/mcp/stdio-entrypoint.test.ts` passed with 12 tests after
+      the stdio bootstrap fix.
+  - [x] T013.3 Run `pnpm test`.
+    - Evidence: Full Vitest suite passed with 59 files and 388 tests.
+  - [x] T013.4 Run eight-repo `pnpm debug:mcp-tool-sweep` without target repo
     build/test commands or workspace-write calls against original repos.
-  - [ ] T013.5 Record evidence and residual risks in `verification.md`.
+    - Evidence: Ran against committed-tree sandbox copies under
+      `.tmp/tool-sweep-sandboxes-committed-t010/`, not original external
+      repositories. Final summary: 176 full, 0 partial, 0 degraded, 0 blocked,
+      and 0 invalid.
+  - [x] T013.5 Record evidence and residual risks in `verification.md`.
 
-- [ ] T014 Promote durable docs and prepare closure.
+- [x] T014 Promote durable docs and prepare closure.
   - Depends on: T013
   - Files: `docs/design/mcp-surface-design.md`,
     `docs/design/observability-debugging-design.md`,
@@ -404,9 +446,18 @@ T013 -> T014
   - Acceptance: Durable docs describe the sweep harness, quality labels,
     no-build/no-test/no-write original target-repo boundary, sandbox-copy path,
     and updated metadata semantics.
-  - Evidence: Pending.
-  - [ ] T014.1 Update durable docs.
-  - [ ] T014.2 Update documentation map if required.
-  - [ ] T014.3 Run `git diff --check`.
+  - Evidence: Promoted tool sweep behavior, progress-report RCA semantics,
+    quality labels, original external repository read-only boundary,
+    sandbox-copy write-test path, and bounded-concurrency decision into durable
+    docs. `git diff --check` passed.
+  - [x] T014.1 Update durable docs.
+    - Evidence: Updated `docs/design/observability-debugging-design.md`,
+      `docs/design/runtime-operations-design.md`, and
+      `docs/reference/runtime-contracts.md`.
+  - [x] T014.2 Update documentation map if required.
+    - Evidence: Updated `docs/reference/documentation-map.md` to keep the
+      sweep harness under the observability/debugging owner and link quality
+      vocabulary to runtime contracts.
+  - [x] T014.3 Run `git diff --check`.
   - [ ] T014.4 Run spec lifecycle validation or manual spec artifact check.
   - [ ] T014.5 Record closure readiness in `verification.md`.

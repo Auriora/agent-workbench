@@ -142,8 +142,9 @@ describe("stdio MCP entrypoint", () => {
   });
 
   it("is exposed through the package mcp script", () => {
-    expect(packageJson.scripts.mcp).toBe("node --import tsx src/mcp/stdio.ts");
+    expect(packageJson.scripts.mcp).toBe("node src/mcp/stdio-entrypoint.mjs");
     expect(fs.existsSync(path.resolve("src/mcp/stdio.ts"))).toBe(true);
+    expect(fs.existsSync(path.resolve("src/mcp/stdio-entrypoint.mjs"))).toBe(true);
     expect(fs.existsSync(path.resolve("src/mcp/stdio-launch.ts"))).toBe(true);
   });
 
@@ -355,7 +356,7 @@ describe("stdio MCP entrypoint", () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-mixed-language-platform");
     const transport = new StdioClientTransport({
       command: process.execPath,
-      args: ["--import", "tsx", "src/mcp/stdio.ts", "--repo-root", repoRoot],
+      args: ["src/mcp/stdio-entrypoint.mjs", "--repo-root", repoRoot],
       cwd: path.resolve("."),
       stderr: "pipe"
     });
@@ -386,7 +387,7 @@ describe("stdio MCP entrypoint", () => {
     const lock = await holdExclusiveSqliteLockUntilReleased(graphStorePath(repoRoot));
     const transport = new StdioClientTransport({
       command: process.execPath,
-      args: ["--import", "tsx", "src/mcp/stdio.ts", "--repo-root", repoRoot],
+      args: ["src/mcp/stdio-entrypoint.mjs", "--repo-root", repoRoot],
       cwd: path.resolve("."),
       stderr: "pipe"
     });

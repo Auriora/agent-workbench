@@ -100,6 +100,26 @@ Adapter domain describes what kind of surface an adapter covers.
 - `blocked`: validation could not proceed.
 - `not_applicable`: validation does not apply to this result.
 
+## Debug Sweep Result Quality
+
+Repo-local debug sweep reports use a separate quality label from
+agent-facing verification status. These labels summarize whether a debug
+harness call produced enough evidence to trust that specific surface result:
+
+- `full`: complete, usable envelope for the bounded call.
+- `partial`: useful but incomplete evidence without a continuation cursor or
+  equivalent recovery path.
+- `degraded`: completed with non-blocking missing capability, skipped
+  prerequisite, or warning evidence.
+- `blocked`: required evidence was unavailable and the response names the
+  blocker or next action.
+- `invalid`: the call failed, returned invalid analysis, or produced a contract
+  error.
+
+`partial` and `degraded` must not be treated as routine success in dogfood
+reports. They require root-cause review and either a runtime fix, a clearer
+blocked/unsupported contract, or a documented follow-up.
+
 ## Response Metadata
 
 Every non-trivial MCP response should include:

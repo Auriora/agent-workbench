@@ -12,7 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "dev": "tsx src/index.ts",
-    "mcp": "node --import tsx src/mcp/stdio.ts",
+    "mcp": "node src/mcp/stdio-entrypoint.mjs",
     "debug:mcp-status": "tsx src/debug/mcp-status.ts",
     "debug:mcp-use-case": "tsx src/debug/mcp-use-case.ts",
     "debug:mcp-profile": "tsx src/debug/mcp-use-case.ts --profile",
