@@ -13,40 +13,13 @@ import { repoScopeResource } from "../../src/interface-adapters/mcp/registries/r
 import { createAgentWorkbenchServer } from "../../src/server.js";
 import type { SnapshotState } from "../../src/domain/models/runtime.js";
 import type { SnapshotPort } from "../../src/ports/index.js";
-
-type RegisteredResource = {
-  name: string;
-  uri: string;
-  handler: (request: unknown) => Promise<{
-    contents: Array<{
-      uri: string;
-      mimeType: string;
-      text: string;
-    }>;
-  }>;
-};
-
-type ResourceReadServer = {
-  _registeredResources: Record<
-    string,
-    {
-      readCallback: (request: unknown) => Promise<{
-        contents: Array<{
-          text: string;
-        }>;
-      }>;
-    }
-  >;
-};
+import {
+  getRegisteredResource,
+  registerMcpResource
+} from "../helpers/mcp-harness.js";
 
 describe("repo scope MCP resource", () => {
   it("uses the injected scope provider for repo:///scope", async () => {
-    let registered: RegisteredResource | undefined;
-    const server = {
-      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
-        registered = { name, uri, handler };
-      }
-    };
     const result: GetRepoScopeResult = {
       scope: {
         repo_root: "/fixture",
@@ -80,7 +53,7 @@ describe("repo scope MCP resource", () => {
       }
     };
 
-    repoScopeResource.register(server as never, {
+    const registered = registerMcpResource(repoScopeResource, {
       repoRoot: "/repo",
       getRepoScope: ({ repo_root }) => ({
         ...result,
@@ -96,8 +69,8 @@ describe("repo scope MCP resource", () => {
       uri: "repo:///scope"
     });
 
-    const response = await registered?.handler({ repo_root: "/requested" });
-    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+    const response = await registered.handler({ repo_root: "/requested" });
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: GetRepoScopeResult["scope"];
     };
 
@@ -106,15 +79,9 @@ describe("repo scope MCP resource", () => {
   });
 
   it("returns a structured invalid-input envelope before provider execution", async () => {
-    let registered: RegisteredResource | undefined;
     let providerCalled = false;
-    const server = {
-      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
-        registered = { name, uri, handler };
-      }
-    };
 
-    repoScopeResource.register(server as never, {
+    const registered = registerMcpResource(repoScopeResource, {
       repoRoot: "/repo",
       getRepoScope: () => {
         providerCalled = true;
@@ -122,8 +89,8 @@ describe("repo scope MCP resource", () => {
       }
     });
 
-    const response = await registered?.handler({ repo_root: 42 });
-    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+    const response = await registered.handler({ repo_root: 42 });
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       meta: { analysis_validity: string; verification_status: string };
       errors: Array<{ code: string; retryable: boolean }>;
     };
@@ -144,12 +111,6 @@ describe("repo scope MCP resource", () => {
 
 describe("repo overview MCP resource", () => {
   it("uses the injected overview provider for repo:///overview", async () => {
-    let registered: RegisteredResource | undefined;
-    const server = {
-      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
-        registered = { name, uri, handler };
-      }
-    };
     const result: GetRepoOverviewResult = {
       overview: {
         repo_root: "/fixture",
@@ -184,7 +145,7 @@ describe("repo overview MCP resource", () => {
       }
     };
 
-    repoOverviewResource.register(server as never, {
+    const registered = registerMcpResource(repoOverviewResource, {
       repoRoot: "/repo",
       getRepoOverview: ({ repo_root }) => ({
         ...result,
@@ -200,8 +161,8 @@ describe("repo overview MCP resource", () => {
       uri: "repo:///overview"
     });
 
-    const response = await registered?.handler({ repo_root: "/requested" });
-    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+    const response = await registered.handler({ repo_root: "/requested" });
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: GetRepoOverviewResult["overview"];
     };
 
@@ -452,10 +413,10 @@ describe("repo scope and overview composed server resources", () => {
     const server = createAgentWorkbenchServer(
       "tests/fixtures/fixture-mixed-language-platform",
       { startGraphWarmup: false }
-    ) as unknown as ResourceReadServer;
+    );
 
-    const scopeResponse = await server._registeredResources["repo:///scope"].readCallback({});
-    const overviewResponse = await server._registeredResources["repo:///overview"].readCallback({});
+    const scopeResponse = await getRegisteredResource(server, "repo:///scope").readCallback({});
+    const overviewResponse = await getRegisteredResource(server, "repo:///overview").readCallback({});
     const scope = JSON.parse(scopeResponse.contents[0]?.text ?? "{}") as {
       data: GetRepoScopeResult["scope"];
     };

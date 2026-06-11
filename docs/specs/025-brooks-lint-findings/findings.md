@@ -549,7 +549,7 @@ application-to-presentation imports.
 
 #### BL-DEBT-001: Cognitive Overload - Validation Planning Is A Multi-Ecosystem Planning Module
 
-Status: `new`
+Status: `resolved`
 
 Symptom: `src/application/use-cases/plan-verification.ts` is 1,776 lines and
 contains validation planning for several unrelated ecosystems and environment
@@ -610,7 +610,15 @@ contract boundary and reserve direct registry access for focused registry tests.
 
 Tasks: `T014`
 
-Verification: Pending.
+Verification: 2026-06-11 `T014` added typed MCP test harness helpers in
+`tests/helpers/mcp-harness.ts` for tool registration, resource registration,
+composed-server tool/resource lookup, and response parsing. Representative MCP
+and integration behavior tests now use the helper instead of repeated
+`as unknown as` composed-server casts or local `registered.handler(...)`
+registration shims. Direct registration plumbing remains only in
+`tests/mcp/telemetry-instrumentation.test.ts`, where the test intentionally
+exercises instrumentation wrapping behavior. Passed targeted MCP/integration
+tests and `pnpm typecheck`.
 
 ## Recommendation
 

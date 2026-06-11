@@ -13,17 +13,11 @@ import type { FileCatalogScanPort } from "../../src/ports/index.js";
 import { verificationPlanTool } from "../../src/interface-adapters/mcp/registries/tools/verification-plan.js";
 import { verificationPlanSchema } from "../../src/contracts/index.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
-
-type RegisteredTool = {
-  name: string;
-  description: string;
-  handler: (args: unknown) => Promise<{
-    content: Array<{
-      type: string;
-      text: string;
-    }>;
-  }>;
-};
+import {
+  getRegisteredTool,
+  registerMcpTool,
+  registeredToolNames
+} from "../helpers/mcp-harness.js";
 
 describe("verification_plan use case", () => {
   it("plans TypeScript validation without executing commands and keeps clean static feedback silent", async () => {
@@ -1091,17 +1085,6 @@ describe("verification_plan use case", () => {
 
 describe("verification_plan MCP tool", () => {
   it("uses the injected verification provider", async () => {
-    let registered: RegisteredTool | undefined;
-    const server = {
-      tool(
-        name: string,
-        description: string,
-        _shape: unknown,
-        handler: RegisteredTool["handler"]
-      ) {
-        registered = { name, description, handler };
-      }
-    };
     const fixtureResult: PlanVerificationResult = {
       plan: {
         repo_root: "/fixture",
@@ -1128,7 +1111,7 @@ describe("verification_plan MCP tool", () => {
     };
 
     let parsedRepoRoot: string | undefined;
-    verificationPlanTool.register(server as never, {
+    const registered = registerMcpTool(verificationPlanTool, {
       repoRoot: "/repo",
       planVerification: ({ request }) => {
         parsedRepoRoot = request.repo_root;
@@ -1141,10 +1124,10 @@ describe("verification_plan MCP tool", () => {
       description: "Plan validation commands and quiet static feedback without executing commands."
     });
 
-    const response = await registered?.handler({
+    const response = await registered.handler({
       files: ["src/app.ts"]
     });
-    const parsed = JSON.parse(response?.content[0]?.text ?? "{}") as {
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
       data: { summary: string };
     };
 
@@ -1153,20 +1136,9 @@ describe("verification_plan MCP tool", () => {
   });
 
   it("returns a structured invalid-input envelope before provider execution", async () => {
-    let registered: RegisteredTool | undefined;
     let providerCalled = false;
-    const server = {
-      tool(
-        name: string,
-        description: string,
-        _shape: unknown,
-        handler: RegisteredTool["handler"]
-      ) {
-        registered = { name, description, handler };
-      }
-    };
 
-    verificationPlanTool.register(server as never, {
+    const registered = registerMcpTool(verificationPlanTool, {
       repoRoot: "/repo",
       planVerification: () => {
         providerCalled = true;
@@ -1174,10 +1146,10 @@ describe("verification_plan MCP tool", () => {
       }
     });
 
-    const response = await registered?.handler({
+    const response = await registered.handler({
       max_commands: 100
     });
-    const parsed = JSON.parse(response?.content[0]?.text ?? "{}") as {
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
       meta: { analysis_validity: string; verification_status: string };
       errors: Array<{ code: string; retryable: boolean }>;
     };
@@ -1196,29 +1168,17 @@ describe("verification_plan MCP tool", () => {
   });
 
   it("returns a structured blocked envelope when provider filesystem discovery fails", async () => {
-    let registered: RegisteredTool | undefined;
-    const server = {
-      tool(
-        name: string,
-        description: string,
-        _shape: unknown,
-        handler: RegisteredTool["handler"]
-      ) {
-        registered = { name, description, handler };
-      }
-    };
-
-    verificationPlanTool.register(server as never, {
+    const registered = registerMcpTool(verificationPlanTool, {
       repoRoot: "/repo",
       planVerification: () => {
         throw new Error("ENOENT: no such file or directory, scandir '/repo/docs/missing'");
       }
     });
 
-    const response = await registered?.handler({
+    const response = await registered.handler({
       changed_files: ["docs/missing/note.md"]
     });
-    const parsed = JSON.parse(response?.content[0]?.text ?? "{}") as {
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
       meta: { analysis_validity: string; verification_status: string };
       errors: Array<{ code: string; message: string; retryable: boolean }>;
     };
@@ -1237,19 +1197,7 @@ describe("verification_plan MCP tool", () => {
   });
 
   it("strips validation, test-discovery, and worker fields from the MCP verification envelope", async () => {
-    let registered: RegisteredTool | undefined;
-    const server = {
-      tool(
-        name: string,
-        description: string,
-        _shape: unknown,
-        handler: RegisteredTool["handler"]
-      ) {
-        registered = { name, description, handler };
-      }
-    };
-
-    verificationPlanTool.register(server as never, {
+    const registered = registerMcpTool(verificationPlanTool, {
       repoRoot: "/repo",
       planVerification: () =>
         ({
@@ -1336,10 +1284,10 @@ describe("verification_plan MCP tool", () => {
         }) as unknown as PlanVerificationResult
     });
 
-    const response = await registered?.handler({
+    const response = await registered.handler({
       files: ["src/app.ts"]
     });
-    const parsed = JSON.parse(response?.content[0]?.text ?? "{}") as {
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
       data: unknown;
       contract_version: string;
     };
@@ -1357,11 +1305,9 @@ describe("verification_plan MCP tool", () => {
   it("is registered by the composed server", () => {
     const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
       startGraphWarmup: false
-    }) as unknown as {
-      _registeredTools: Record<string, unknown>;
-    };
+    });
 
-    expect(Object.keys(server._registeredTools).sort()).toEqual([
+    expect(registeredToolNames(server)).toEqual([
       "apply_workspace_edit",
       "check_markdown_document",
       "check_markdown_set",
@@ -1376,7 +1322,7 @@ describe("verification_plan MCP tool", () => {
       "symbol_search",
       "verification_plan"
     ]);
-    expect(Object.keys(server._registeredTools)).not.toContain("static_feedback");
+    expect(registeredToolNames(server)).not.toContain("static_feedback");
   });
 
   it("binds composed-server validation workspaces to the request repo_root", async () => {
@@ -1389,18 +1335,9 @@ describe("verification_plan MCP tool", () => {
       );
       const server = createAgentWorkbenchServer(defaultRoot, {
         startGraphWarmup: false
-      }) as unknown as {
-        _registeredTools: Record<
-          string,
-          {
-            handler: (args: unknown) => Promise<{
-              content: Array<{ text: string }>;
-            }>;
-          }
-        >;
-      };
+      });
 
-      const response = await server._registeredTools.verification_plan.handler({
+      const response = await getRegisteredTool(server, "verification_plan").handler({
         repo_root: targetRoot,
         files: ["package.json"],
         changed_files: ["package.json"],

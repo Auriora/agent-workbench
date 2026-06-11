@@ -5,22 +5,14 @@ import type {
 import type { ComputeImpactResult } from "../../src/application/use-cases/compute-impact.js";
 import type { FindReferencesUseCaseResult } from "../../src/application/use-cases/find-references.js";
 import type { SearchSymbolsResult } from "../../src/application/use-cases/search-symbols.js";
-import type { McpRegistryContext, McpToolDeclaration } from "../../src/interface-adapters/mcp/registries/index.js";
 import { findReferencesTool } from "../../src/interface-adapters/mcp/registries/tools/find-references.js";
 import { impactTool } from "../../src/interface-adapters/mcp/registries/tools/impact.js";
 import { symbolSearchTool } from "../../src/interface-adapters/mcp/registries/tools/symbol-search.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
-
-type RegisteredTool = {
-  name: string;
-  description: string;
-  handler: (args: unknown) => Promise<{
-    content: Array<{
-      type: string;
-      text: string;
-    }>;
-  }>;
-};
+import {
+  registerMcpTool as registerTool,
+  registeredToolNames
+} from "../helpers/mcp-harness.js";
 
 describe("graph query MCP tools", () => {
   it("uses the injected symbol_search provider", async () => {
@@ -303,11 +295,9 @@ describe("graph query MCP tools", () => {
   it("is registered by the composed server", () => {
     const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
       startGraphWarmup: false
-    }) as unknown as {
-      _registeredTools: Record<string, unknown>;
-    };
+    });
 
-    expect(Object.keys(server._registeredTools).sort()).toEqual([
+    expect(registeredToolNames(server)).toEqual([
       "apply_workspace_edit",
       "check_markdown_document",
       "check_markdown_set",
@@ -324,28 +314,6 @@ describe("graph query MCP tools", () => {
     ]);
   });
 });
-
-function registerTool(
-  tool: McpToolDeclaration,
-  context: Partial<McpRegistryContext>
-): RegisteredTool {
-  let registered: RegisteredTool | undefined;
-  const server = {
-    tool(
-      name: string,
-      description: string,
-      _shape: unknown,
-      handler: RegisteredTool["handler"]
-    ) {
-      registered = { name, description, handler };
-    }
-  };
-  tool.register(server as never, { repoRoot: "/repo", ...context });
-  if (!registered) {
-    throw new Error("tool did not register");
-  }
-  return registered;
-}
 
 function meta() {
   return {

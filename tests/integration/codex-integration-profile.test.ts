@@ -16,18 +16,11 @@ import {
   mcpTools
 } from "../../src/interface-adapters/mcp/registries/index.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
-
-type RegisteredResource = {
-  name: string;
-  uri: string;
-  handler: () => Promise<{
-    contents: Array<{
-      uri: string;
-      mimeType: string;
-      text: string;
-    }>;
-  }>;
-};
+import {
+  parseMcpResourceText,
+  registeredResourceUris,
+  registerMcpResource
+} from "../helpers/mcp-harness.js";
 
 describe("Codex integration profile", () => {
   it("describes active MCP, plugin, skill, and hook surfaces without copied runtime behavior", () => {
@@ -209,14 +202,7 @@ describe("Codex integration profile", () => {
   });
 
   it("registers integration:///profiles/codex as a schema-owned MCP resource", async () => {
-    let registered: RegisteredResource | undefined;
-    const server = {
-      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
-        registered = { name, uri, handler };
-      }
-    };
-
-    codexIntegrationProfileResource.register(server as never, {
+    const registered = registerMcpResource(codexIntegrationProfileResource, {
       repoRoot: "/repo"
     });
 
@@ -225,20 +211,18 @@ describe("Codex integration profile", () => {
       uri: "integration:///profiles/codex"
     });
 
-    const response = await registered?.handler();
-    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+    const response = await registered.readCallback({});
+    const parsed = parseMcpResourceText<{
       data: { plugin: { update_model: { copied_runtime_allowed: boolean } } };
-    };
+    }>(response);
 
     expect(parsed.data.plugin.update_model.copied_runtime_allowed).toBe(false);
   });
 
   it("is exposed by the composed server alongside repo resources", () => {
-    const server = createAgentWorkbenchServer(".", { startGraphWarmup: false }) as unknown as {
-      _registeredResources: Record<string, unknown>;
-    };
+    const server = createAgentWorkbenchServer(".", { startGraphWarmup: false });
 
-    expect(Object.keys(server._registeredResources).sort()).toEqual([
+    expect(registeredResourceUris(server)).toEqual([
       "integration:///health/agent-workbench",
       "integration:///profiles/codex",
       "repo:///docs/map",

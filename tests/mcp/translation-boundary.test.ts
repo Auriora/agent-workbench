@@ -4,33 +4,11 @@ import type { PlanVerificationResult } from "../../src/application/use-cases/pla
 import { taskContextSchema, verificationPlanSchema } from "../../src/contracts/index.js";
 import { contextForTaskTool } from "../../src/interface-adapters/mcp/registries/tools/context-for-task.js";
 import { verificationPlanTool } from "../../src/interface-adapters/mcp/registries/tools/verification-plan.js";
-
-type RegisteredTool = {
-  name: string;
-  description: string;
-  handler: (args: unknown) => Promise<{
-    content: Array<{
-      type: string;
-      text: string;
-    }>;
-  }>;
-};
+import { registerMcpTool } from "../helpers/mcp-harness.js";
 
 describe("MCP translation boundaries", () => {
   it("filters backend parser and diagnostic payloads from context_for_task responses", async () => {
-    let registered: RegisteredTool | undefined;
-    const server = {
-      tool(
-        name: string,
-        description: string,
-        _shape: unknown,
-        handler: RegisteredTool["handler"]
-      ) {
-        registered = { name, description, handler };
-      }
-    };
-
-    contextForTaskTool.register(server as never, {
+    const registered = registerMcpTool(contextForTaskTool, {
       repoRoot: "/repo",
       getTaskContext: () =>
         ({
@@ -86,10 +64,10 @@ describe("MCP translation boundaries", () => {
         }) as unknown as GetTaskContextResult
     });
 
-    const response = await registered?.handler({
+    const response = await registered.handler({
       task: "Parse-only context for translation test"
     });
-    const responseText = response?.content[0]?.text ?? "{}";
+    const responseText = response.content[0]?.text ?? "{}";
     const parsed = JSON.parse(responseText) as { data: unknown; contract_version: string };
 
     expect(parsed.contract_version).toBe("0.1");
@@ -102,19 +80,7 @@ describe("MCP translation boundaries", () => {
   });
 
   it("filters validation discovery and worker payloads from verification_plan responses", async () => {
-    let registered: RegisteredTool | undefined;
-    const server = {
-      tool(
-        name: string,
-        description: string,
-        _shape: unknown,
-        handler: RegisteredTool["handler"]
-      ) {
-        registered = { name, description, handler };
-      }
-    };
-
-    verificationPlanTool.register(server as never, {
+    const registered = registerMcpTool(verificationPlanTool, {
       repoRoot: "/repo",
       planVerification: () =>
         ({
@@ -196,10 +162,10 @@ describe("MCP translation boundaries", () => {
         }) as unknown as PlanVerificationResult
     });
 
-    const response = await registered?.handler({
+    const response = await registered.handler({
       files: ["src/app.py"]
     });
-    const responseText = response?.content[0]?.text ?? "{}";
+    const responseText = response.content[0]?.text ?? "{}";
     const parsed = JSON.parse(responseText) as {
       data: unknown;
       contract_version: string;

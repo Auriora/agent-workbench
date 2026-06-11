@@ -15,17 +15,10 @@ import { contextForTaskTool } from "../../src/interface-adapters/mcp/registries/
 import { taskContextSchema } from "../../src/contracts/index.js";
 import type { ClockPort, FileCatalogScanPort } from "../../src/ports/index.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
-
-type RegisteredTool = {
-  name: string;
-  description: string;
-  handler: (args: unknown) => Promise<{
-    content: Array<{
-      type: string;
-      text: string;
-    }>;
-  }>;
-};
+import {
+  registerMcpTool,
+  registeredToolNames
+} from "../helpers/mcp-harness.js";
 
 describe("context_for_task use case", () => {
   const clock: ClockPort = {
@@ -795,17 +788,6 @@ describe("context_for_task use case", () => {
 
 describe("context_for_task MCP tool", () => {
   it("uses the injected task-context provider", async () => {
-    let registered: RegisteredTool | undefined;
-    const server = {
-      tool(
-        name: string,
-        description: string,
-        _shape: unknown,
-        handler: RegisteredTool["handler"]
-      ) {
-        registered = { name, description, handler };
-      }
-    };
     const fixtureResult: GetTaskContextResult = {
       context: {
         task: "Implement context",
@@ -842,7 +824,7 @@ describe("context_for_task MCP tool", () => {
     };
 
     let parsedRepoRoot: string | undefined;
-    contextForTaskTool.register(server as never, {
+    const registered = registerMcpTool(contextForTaskTool, {
       repoRoot: "/repo",
       getTaskContext: ({ request }) => {
         parsedRepoRoot = request.repo_root;
@@ -861,10 +843,10 @@ describe("context_for_task MCP tool", () => {
       description: "Gather compact task context from local repository evidence before editing."
     });
 
-    const response = await registered?.handler({
+    const response = await registered.handler({
       task: "Implement context"
     });
-    const parsed = JSON.parse(response?.content[0]?.text ?? "{}") as {
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
       data: { task: string; summary: string };
     };
 
@@ -876,20 +858,9 @@ describe("context_for_task MCP tool", () => {
   });
 
   it("returns a structured invalid-input envelope before provider execution", async () => {
-    let registered: RegisteredTool | undefined;
     let providerCalled = false;
-    const server = {
-      tool(
-        name: string,
-        description: string,
-        _shape: unknown,
-        handler: RegisteredTool["handler"]
-      ) {
-        registered = { name, description, handler };
-      }
-    };
 
-    contextForTaskTool.register(server as never, {
+    const registered = registerMcpTool(contextForTaskTool, {
       repoRoot: "/repo",
       getTaskContext: () => {
         providerCalled = true;
@@ -897,11 +868,11 @@ describe("context_for_task MCP tool", () => {
       }
     });
 
-    const response = await registered?.handler({
+    const response = await registered.handler({
       task: "",
       max_files: 500
     });
-    const parsed = JSON.parse(response?.content[0]?.text ?? "{}") as {
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
       meta: { analysis_validity: string; verification_status: string };
       errors: Array<{ code: string; retryable: boolean }>;
     };
@@ -920,19 +891,7 @@ describe("context_for_task MCP tool", () => {
   });
 
   it("does not emit backend-only parser/diagnostic fields in the MCP context envelope", async () => {
-    let registered: RegisteredTool | undefined;
-    const server = {
-      tool(
-        name: string,
-        description: string,
-        _shape: unknown,
-        handler: RegisteredTool["handler"]
-      ) {
-        registered = { name, description, handler };
-      }
-    };
-
-    contextForTaskTool.register(server as never, {
+    const registered = registerMcpTool(contextForTaskTool, {
       repoRoot: "/repo",
       getTaskContext: () =>
         ({
@@ -1033,10 +992,10 @@ describe("context_for_task MCP tool", () => {
         }) as unknown as GetTaskContextResult
     });
 
-    const response = await registered?.handler({
+    const response = await registered.handler({
       task: "Inspect parser-backed task"
     });
-    const parsed = JSON.parse(response?.content[0]?.text ?? "{}") as {
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
       data: unknown;
       meta: { analysis_validity: string };
       contract_version: string;
@@ -1061,10 +1020,8 @@ describe("context_for_task MCP tool", () => {
   it("is registered by the composed server", () => {
     const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
       startGraphWarmup: false
-    }) as unknown as {
-      _registeredTools: Record<string, unknown>;
-    };
+    });
 
-    expect(Object.keys(server._registeredTools)).toContain("context_for_task");
+    expect(registeredToolNames(server)).toContain("context_for_task");
   });
 });

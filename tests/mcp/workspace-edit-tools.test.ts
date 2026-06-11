@@ -19,17 +19,10 @@ import { applyWorkspaceEditTool } from "../../src/interface-adapters/mcp/registr
 import { previewWorkspaceEditTool } from "../../src/interface-adapters/mcp/registries/tools/preview-workspace-edit.js";
 import type { ClockPort } from "../../src/ports/index.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
-
-type RegisteredTool = {
-  name: string;
-  description: string;
-  handler: (args: unknown) => Promise<{
-    content: Array<{
-      type: string;
-      text: string;
-    }>;
-  }>;
-};
+import {
+  registerMcpTool,
+  registeredToolNames
+} from "../helpers/mcp-harness.js";
 
 describe("workspace edit MCP tools", () => {
   it("uses the injected preview provider", async () => {
@@ -344,11 +337,9 @@ describe("workspace edit MCP tools", () => {
   it("is registered by the composed server", () => {
     const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
       startGraphWarmup: false
-    }) as unknown as {
-      _registeredTools: Record<string, unknown>;
-    };
+    });
 
-    expect(Object.keys(server._registeredTools).sort()).toEqual([
+    expect(registeredToolNames(server)).toEqual([
       "apply_workspace_edit",
       "check_markdown_document",
       "check_markdown_set",
@@ -366,19 +357,7 @@ describe("workspace edit MCP tools", () => {
   });
 });
 
-function register(tool: { register: (server: never, context: never) => void }, context: Record<string, unknown>): RegisteredTool {
-  let registered: RegisteredTool | undefined;
-  const server = {
-    tool(name: string, description: string, _shape: unknown, handler: RegisteredTool["handler"]) {
-      registered = { name, description, handler };
-    }
-  };
-  tool.register(server as never, { repoRoot: "/repo", ...context } as never);
-  if (!registered) {
-    throw new Error("tool did not register");
-  }
-  return registered;
-}
+const register = registerMcpTool;
 
 function meta(verificationStatus: "planned" | "done") {
   return {

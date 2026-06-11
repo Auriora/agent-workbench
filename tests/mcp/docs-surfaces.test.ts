@@ -27,34 +27,10 @@ import { docsOverviewResource } from "../../src/interface-adapters/mcp/registrie
 import { docsOutlineTool } from "../../src/interface-adapters/mcp/registries/tools/docs-outline.js";
 import { docsReadSectionTool } from "../../src/interface-adapters/mcp/registries/tools/docs-read-section.js";
 import { docsSearchTool } from "../../src/interface-adapters/mcp/registries/tools/docs-search.js";
-import type {
-  McpRegistryContext,
-  McpResourceDeclaration,
-  McpToolDeclaration
-} from "../../src/interface-adapters/mcp/registries/index.js";
-
-type RegisteredResource = {
-  name: string;
-  uri: string;
-  handler: (request: unknown) => Promise<{
-    contents: Array<{
-      uri: string;
-      mimeType: string;
-      text: string;
-    }>;
-  }>;
-};
-
-type RegisteredTool = {
-  name: string;
-  description: string;
-  handler: (args: unknown) => Promise<{
-    content: Array<{
-      type: string;
-      text: string;
-    }>;
-  }>;
-};
+import {
+  registerMcpResource,
+  registerMcpTool
+} from "../helpers/mcp-harness.js";
 
 describe("docs MCP resources", () => {
   it("uses the injected docs overview provider with parsed defaults", async () => {
@@ -385,52 +361,8 @@ describe("docs MCP tools", () => {
   });
 });
 
-function registerResource(
-  resource: McpResourceDeclaration,
-  context: Partial<McpRegistryContext>
-): RegisteredResource {
-  let registered: RegisteredResource | undefined;
-  const server = {
-    resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
-      registered = { name, uri, handler };
-    }
-  };
-  resource.register(server as never, {
-    repoRoot: "/repo",
-    ...context
-  });
-
-  if (registered === undefined) {
-    throw new Error(`${resource.name} did not register`);
-  }
-  return registered;
-}
-
-function registerTool(
-  tool: McpToolDeclaration,
-  context: Partial<McpRegistryContext>
-): RegisteredTool {
-  let registered: RegisteredTool | undefined;
-  const server = {
-    tool(
-      name: string,
-      description: string,
-      _shape: unknown,
-      handler: RegisteredTool["handler"]
-    ) {
-      registered = { name, description, handler };
-    }
-  };
-  tool.register(server as never, {
-    repoRoot: "/repo",
-    ...context
-  });
-
-  if (registered === undefined) {
-    throw new Error(`${tool.name} did not register`);
-  }
-  return registered;
-}
+const registerResource: typeof registerMcpResource = registerMcpResource;
+const registerTool: typeof registerMcpTool = registerMcpTool;
 
 function overviewResult(repoRoot: string): DocsOverviewUseCaseResult {
   return {

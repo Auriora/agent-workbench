@@ -10,30 +10,16 @@ import type {
 import type { GetIntegrationHealthResult } from "../../src/application/use-cases/get-integration-health.js";
 import { integrationHealthResource } from "../../src/interface-adapters/mcp/registries/resources/integration-health.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
-
-type RegisteredResource = {
-  name: string;
-  uri: string;
-  handler: (request: unknown) => Promise<{
-    contents: Array<{
-      uri: string;
-      mimeType: string;
-      text: string;
-    }>;
-  }>;
-};
+import {
+  getRegisteredResource,
+  registerMcpResource
+} from "../helpers/mcp-harness.js";
 
 describe("integration health MCP resource", () => {
   it("uses the injected health provider with parsed session evidence", async () => {
     let parsedRequest: IntegrationHealthRequest | undefined;
-    let registered: RegisteredResource | undefined;
-    const server = {
-      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
-        registered = { name, uri, handler };
-      }
-    };
 
-    integrationHealthResource.register(server as never, {
+    const registered = registerMcpResource(integrationHealthResource, {
       repoRoot: "/repo",
       getIntegrationHealth: ({ request }) => {
         parsedRequest = request;
@@ -46,14 +32,14 @@ describe("integration health MCP resource", () => {
       uri: "integration:///health/agent-workbench"
     });
 
-    const response = await registered?.handler({
+    const response = await registered.handler({
       repo_root: "/fixture",
       client: "codex",
       discovery_state: "provided",
       discovered_tools: ["context_for_task"],
       discovered_resources: ["repo:///status"]
     });
-    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: IntegrationHealth;
     };
 
@@ -75,14 +61,8 @@ describe("integration health MCP resource", () => {
 
   it("returns structured invalid input before provider execution", async () => {
     let providerCalled = false;
-    let registered: RegisteredResource | undefined;
-    const server = {
-      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
-        registered = { name, uri, handler };
-      }
-    };
 
-    integrationHealthResource.register(server as never, {
+    const registered = registerMcpResource(integrationHealthResource, {
       repoRoot: "/repo",
       getIntegrationHealth: () => {
         providerCalled = true;
@@ -90,8 +70,8 @@ describe("integration health MCP resource", () => {
       }
     });
 
-    const response = await registered?.handler({ discovered_tools: "context_for_task" });
-    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+    const response = await registered.handler({ discovered_tools: "context_for_task" });
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: { surfaces: unknown[] };
       meta: { analysis_validity: string; verification_status: string };
       errors: Array<{ code: string; retryable: boolean }>;
@@ -112,19 +92,12 @@ describe("integration health MCP resource", () => {
   });
 
   it("returns structured provider-not-configured state", async () => {
-    let registered: RegisteredResource | undefined;
-    const server = {
-      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
-        registered = { name, uri, handler };
-      }
-    };
-
-    integrationHealthResource.register(server as never, {
+    const registered = registerMcpResource(integrationHealthResource, {
       repoRoot: "/repo"
     });
 
-    const response = await registered?.handler({});
-    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+    const response = await registered.handler({});
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: { profile: string; surfaces: unknown[] };
       errors: Array<{ code: string; message: string; retryable: boolean }>;
     };
@@ -147,22 +120,12 @@ describe("integration health MCP resource", () => {
     try {
       const server = createAgentWorkbenchServer(repoRoot, {
         startGraphWarmup: false
-      }) as unknown as {
-        _registeredResources: Record<
-          string,
-          {
-            readCallback: (request: unknown) => Promise<{
-              contents: Array<{
-                text: string;
-              }>;
-            }>;
-          }
-        >;
-      };
+      });
 
-      const response = await server._registeredResources[
+      const response = await getRegisteredResource(
+        server,
         "integration:///health/agent-workbench"
-      ].readCallback({});
+      ).readCallback({});
       const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
         data: IntegrationHealth;
       };

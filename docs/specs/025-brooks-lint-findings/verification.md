@@ -65,6 +65,9 @@ Resolving findings requires code, tests, and durable documentation validation.
 | 2026-06-11 | `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts` | Passed | 1 contract test file and 13 tests passed after splitting runtime contracts by context and adding public export compatibility checks through `src/contracts/index.ts`. |
 | 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after splitting runtime contract modules. |
 | 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T012`: 59 test files and 397 tests. |
+| 2026-06-11 | `pnpm exec vitest run tests/mcp/query-tools.test.ts tests/mcp/context-for-task-tool.test.ts tests/mcp/verification-plan-tool.test.ts tests/mcp/workspace-edit-tools.test.ts tests/mcp/malformed-input.test.ts tests/mcp/diagnostics-for-files-tool.test.ts tests/mcp/docs-surfaces.test.ts tests/mcp/repo-status-resource.test.ts tests/mcp/repo-scope-overview-resource.test.ts tests/mcp/integration-health-resource.test.ts tests/mcp/translation-boundary.test.ts tests/integration/codex-integration-profile.test.ts` | Passed | 12 MCP/integration test files and 132 tests passed after adding typed MCP test harness helpers and updating representative behavior tests. |
+| 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after MCP test harness helper extraction. |
+| 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T014`: 59 test files and 397 tests. |
 
 ## Required Gates For Remediation
 

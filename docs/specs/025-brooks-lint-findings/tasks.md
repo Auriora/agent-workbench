@@ -239,19 +239,28 @@ T016 -> T018
   - Evidence: Captured `$brooks-health` Health Dashboard in `findings.md` on
     2026-06-06.
 
-- [ ] T014 Triage and reduce MCP test harness brittleness.
+- [x] T014 Triage and reduce MCP test harness brittleness.
   - Depends on: T013
   - Findings: `BL-HEALTH-001`
   - Files: `tests/mcp/`, `tests/integration/`, possible `tests/helpers/`
   - Acceptance: Repeated composed-server casts, direct registry handler access,
     and invalid-input dispatch setup are either moved behind typed test harness
     helpers or kept in focused registry tests with rationale.
-  - Evidence: Pending.
-  - [ ] T014.1 Inventory repeated MCP test harness access patterns.
-  - [ ] T014.2 Add typed helpers for composed-server resources and tool
+  - Evidence: 2026-06-11 added `tests/helpers/mcp-harness.ts` with typed
+    helpers for direct tool/resource registration, composed-server tool/resource
+    lookup, and MCP response parsing. Updated representative MCP and
+    integration behavior tests across graph query, context, verification,
+    workspace edit, malformed input, docs, repo status/scope/overview,
+    diagnostics, integration health, translation boundary, and Codex
+    integration profile coverage. Kept direct registration plumbing in
+    `tests/mcp/telemetry-instrumentation.test.ts` because that file tests the
+    instrumentation wrapper itself. Passed targeted MCP/integration tests and
+    `pnpm typecheck`.
+  - [x] T014.1 Inventory repeated MCP test harness access patterns.
+  - [x] T014.2 Add typed helpers for composed-server resources and tool
     dispatch where behavior tests need them.
-  - [ ] T014.3 Update representative MCP tests without changing assertions.
-  - [ ] T014.4 Run targeted MCP tests and `pnpm typecheck`.
+  - [x] T014.3 Update representative MCP tests without changing assertions.
+  - [x] T014.4 Run targeted MCP tests and `pnpm typecheck`.
 
 ## Phase 7: Test Quality Follow-Up
 

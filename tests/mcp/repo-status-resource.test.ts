@@ -5,27 +5,13 @@ import { describe, expect, it } from "vitest";
 import { repoStatusResource } from "../../src/interface-adapters/mcp/registries/resources/repo-status.js";
 import type { GetRepoStatusResult } from "../../src/application/use-cases/get-repo-status.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
-
-type RegisteredResource = {
-  name: string;
-  uri: string;
-  handler: (request: unknown) => Promise<{
-    contents: Array<{
-      uri: string;
-      mimeType: string;
-      text: string;
-    }>;
-  }>;
-};
+import {
+  getRegisteredResource,
+  registerMcpResource
+} from "../helpers/mcp-harness.js";
 
 describe("repo status MCP resource", () => {
   it("uses the injected status provider for repo:///status", async () => {
-    let registered: RegisteredResource | undefined;
-    const server = {
-      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
-        registered = { name, uri, handler };
-      }
-    };
     const result: GetRepoStatusResult = {
       status: {
         repo_root: "/fixture",
@@ -62,7 +48,7 @@ describe("repo status MCP resource", () => {
       }
     };
 
-    repoStatusResource.register(server as never, {
+    const registered = registerMcpResource(repoStatusResource, {
       repoRoot: "/repo",
       getRepoStatus: ({ repo_root }) => ({
         ...result,
@@ -78,8 +64,8 @@ describe("repo status MCP resource", () => {
       uri: "repo:///status"
     });
 
-    const response = await registered?.handler({ repo_root: "/requested" });
-    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+    const response = await registered.handler({ repo_root: "/requested" });
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: GetRepoStatusResult["status"];
     };
 
@@ -88,15 +74,9 @@ describe("repo status MCP resource", () => {
   });
 
   it("returns a structured invalid-input envelope before provider execution", async () => {
-    let registered: RegisteredResource | undefined;
     let providerCalled = false;
-    const server = {
-      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
-        registered = { name, uri, handler };
-      }
-    };
 
-    repoStatusResource.register(server as never, {
+    const registered = registerMcpResource(repoStatusResource, {
       repoRoot: "/repo",
       getRepoStatus: () => {
         providerCalled = true;
@@ -104,8 +84,8 @@ describe("repo status MCP resource", () => {
       }
     });
 
-    const response = await registered?.handler({ repo_root: 42 });
-    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+    const response = await registered.handler({ repo_root: 42 });
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       meta: { analysis_validity: string; verification_status: string };
       errors: Array<{ code: string; retryable: boolean }>;
     };
@@ -124,19 +104,12 @@ describe("repo status MCP resource", () => {
   });
 
   it("returns structured provider-not-configured state without synthesizing status", async () => {
-    let registered: RegisteredResource | undefined;
-    const server = {
-      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
-        registered = { name, uri, handler };
-      }
-    };
-
-    repoStatusResource.register(server as never, {
+    const registered = registerMcpResource(repoStatusResource, {
       repoRoot: "/repo"
     });
 
-    const response = await registered?.handler({});
-    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+    const response = await registered.handler({});
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: { freshness: string; adapter_coverage: unknown[] };
       meta: { analysis_validity: string; verification_status: string };
       errors: Array<{ code: string; message: string; retryable: boolean }>;
@@ -163,20 +136,9 @@ describe("repo status MCP resource", () => {
       fs.writeFileSync(path.join(repoRoot, "package.json"), "{\"name\":\"cold-fixture\"}\n");
       const server = createAgentWorkbenchServer(repoRoot, {
         startGraphWarmup: false
-      }) as unknown as {
-        _registeredResources: Record<
-          string,
-          {
-            readCallback: (request: unknown) => Promise<{
-              contents: Array<{
-                text: string;
-              }>;
-            }>;
-          }
-        >;
-      };
+      });
 
-      const response = await server._registeredResources["repo:///status"].readCallback({});
+      const response = await getRegisteredResource(server, "repo:///status").readCallback({});
       const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
         data: GetRepoStatusResult["status"];
         meta: GetRepoStatusResult["meta"];
@@ -191,14 +153,7 @@ describe("repo status MCP resource", () => {
   });
 
   it("preserves no-coverage status caveats in the MCP resource envelope", async () => {
-    let registered: RegisteredResource | undefined;
-    const server = {
-      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
-        registered = { name, uri, handler };
-      }
-    };
-
-    repoStatusResource.register(server as never, {
+    const registered = registerMcpResource(repoStatusResource, {
       repoRoot: "/repo",
       getRepoStatus: ({ repo_root }) => ({
         status: {
@@ -234,8 +189,8 @@ describe("repo status MCP resource", () => {
       })
     });
 
-    const response = await registered?.handler({});
-    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+    const response = await registered.handler({});
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       meta: GetRepoStatusResult["meta"];
       errors: unknown[];
     };

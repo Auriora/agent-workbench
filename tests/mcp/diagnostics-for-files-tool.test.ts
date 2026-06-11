@@ -2,17 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { DiagnoseChangedFilesResult } from "../../src/application/use-cases/diagnose-changed-files.js";
 import type { DiagnosticsForFilesRequest } from "../../src/contracts/index.js";
 import { diagnosticsForFilesTool } from "../../src/interface-adapters/mcp/registries/tools/diagnostics-for-files.js";
-
-type RegisteredTool = {
-  name: string;
-  description: string;
-  handler: (args: unknown) => Promise<{
-    content: Array<{
-      type: string;
-      text: string;
-    }>;
-  }>;
-};
+import {
+  type RegisteredMcpTool,
+  registerMcpTool
+} from "../helpers/mcp-harness.js";
 
 describe("diagnostics_for_files MCP tool", () => {
   it("uses the injected diagnostics provider and defaults the repo root", async () => {
@@ -128,28 +121,8 @@ describe("diagnostics_for_files MCP tool", () => {
   });
 });
 
-function registerDiagnosticsTool(context: Record<string, unknown>): RegisteredTool {
-  let registered: RegisteredTool | undefined;
-  const server = {
-    tool(
-      name: string,
-      description: string,
-      _shape: unknown,
-      handler: RegisteredTool["handler"]
-    ) {
-      registered = { name, description, handler };
-    }
-  };
-
-  diagnosticsForFilesTool.register(server as never, {
-    repoRoot: "/repo",
-    ...context
-  });
-
-  if (registered === undefined) {
-    throw new Error("diagnostics_for_files did not register");
-  }
-  return registered;
+function registerDiagnosticsTool(context: Record<string, unknown>): RegisteredMcpTool {
+  return registerMcpTool(diagnosticsForFilesTool, context);
 }
 
 function meta(): DiagnoseChangedFilesResult["meta"] {
