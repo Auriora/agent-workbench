@@ -546,6 +546,13 @@ export interface TelemetryPort {
   flush(): Promise<void>;
 }
 
+export interface TelemetryRecorderPort {
+  record(name: string, properties?: Record<string, unknown>): void;
+  recordError(error: unknown, properties?: Record<string, unknown>): void;
+  flush(): Promise<void> | void;
+  shutdown(): Promise<void> | void;
+}
+
 export interface IntegrationProfileRegistryPort {
   getProfile(input: { runtime_version?: string }): Promise<IntegrationProfile | null>;
   putProfile(input: { profile: IntegrationProfile }): Promise<void>;

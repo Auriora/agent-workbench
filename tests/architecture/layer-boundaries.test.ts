@@ -126,6 +126,7 @@ const architectureSlices: LayerSpec[] = [
     directory: "src/interface-adapters/mcp",
     forbidden: [
       rules.betterSqlite3,
+      rules.concreteInfrastructure,
       rules.sqliteInfrastructure,
       rules.treeSitterInfrastructure,
       rules.filesystemInfrastructure

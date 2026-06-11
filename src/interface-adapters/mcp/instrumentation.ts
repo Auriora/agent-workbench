@@ -1,5 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { TelemetryAdapter } from "../../infrastructure/telemetry/index.js";
+import type { TelemetryRecorderPort } from "../../ports/index.js";
 
 type ToolHandler = (args: unknown) => Promise<unknown> | unknown;
 type ResourceHandler = (request: unknown) => Promise<unknown> | unknown;
@@ -15,7 +15,7 @@ type ServerRegistrationTarget = Record<PropertyKey, unknown> & {
 
 export function instrumentMcpServer(input: {
   server: McpServer;
-  telemetry?: TelemetryAdapter;
+  telemetry?: TelemetryRecorderPort;
 }): McpServer {
   if (input.telemetry === undefined) {
     return input.server;
@@ -62,7 +62,7 @@ export function instrumentMcpServer(input: {
 }
 
 function instrumentHandler(input: {
-  telemetry: TelemetryAdapter;
+  telemetry: TelemetryRecorderPort;
   eventName: string;
   surfaceKind: "tool" | "resource";
   surfaceName: string;

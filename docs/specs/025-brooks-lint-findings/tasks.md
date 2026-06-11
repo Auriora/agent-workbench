@@ -92,7 +92,7 @@ T016 -> T018
   - [x] T004.4 Add or update boundary assertions for
     application-to-presentation imports.
 
-- [ ] T005 Remove or document MCP adapter telemetry infrastructure coupling.
+- [x] T005 Remove or document MCP adapter telemetry infrastructure coupling.
   - Depends on: T002, T003
   - Findings: `BL-ARCH-003`
   - Files: `src/interface-adapters/mcp/`, `src/infrastructure/telemetry/`,
@@ -100,10 +100,16 @@ T016 -> T018
   - Acceptance: MCP adapters depend on a telemetry port abstraction, or the
     concrete telemetry dependency is documented as an intentional exception
     with a matching boundary test.
-  - Evidence: Pending.
-  - [ ] T005.1 Decide whether telemetry belongs behind `src/ports`.
-  - [ ] T005.2 Move or document the type ownership.
-  - [ ] T005.3 Update boundary tests for the selected rule.
+  - Evidence: 2026-06-11 selected a port abstraction, added
+    `TelemetryRecorderPort` to `src/ports/index.ts`, kept concrete telemetry in
+    `src/infrastructure/telemetry/index.ts`, updated MCP server and
+    instrumentation imports to the port, broadened the MCP architecture rule to
+    forbid concrete infrastructure imports, and passed
+    `pnpm exec vitest run tests/architecture/layer-boundaries.test.ts tests/mcp/telemetry-instrumentation.test.ts tests/telemetry/boundary-instrumentation.test.ts tests/telemetry/config.test.ts`,
+    `pnpm typecheck`, and `pnpm test`.
+  - [x] T005.1 Decide whether telemetry belongs behind `src/ports`.
+  - [x] T005.2 Move or document the type ownership.
+  - [x] T005.3 Update boundary tests for the selected rule.
 
 ## Phase 3: Validation And Documentation
 

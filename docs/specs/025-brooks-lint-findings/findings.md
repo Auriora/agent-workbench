@@ -182,7 +182,7 @@ validation and durable architecture docs are promoted.
 
 #### BL-ARCH-003: Dependency Disorder - MCP Adapters Depend On Concrete Telemetry Type
 
-Status: `accepted`
+Status: `in_progress`
 
 Triage rationale: Accepted for explicit boundary decision. The current MCP
 adapter dependency is type-only, but it still points at a concrete
@@ -210,7 +210,13 @@ test that encodes it explicitly.
 
 Tasks: `T002`, `T005`
 
-Verification: Pending.
+Verification: 2026-06-11 `T005` added `TelemetryRecorderPort` in `src/ports`,
+made the infrastructure telemetry adapter implement that port, changed MCP
+server and instrumentation imports to the port abstraction, broadened the MCP
+adapter boundary test to forbid concrete infrastructure imports, and passed
+focused telemetry/architecture tests, `pnpm typecheck`, and `pnpm test`. Keep
+status `in_progress` until aggregate validation and durable architecture docs
+are promoted.
 
 ---
 

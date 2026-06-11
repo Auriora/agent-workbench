@@ -46,6 +46,9 @@ Resolving findings requires code, tests, and durable documentation validation.
 | 2026-06-11 | `pnpm exec vitest run tests/architecture/layer-boundaries.test.ts tests/contracts/response-metadata.test.ts` | Passed | 2 test files and 14 tests passed after moving response metadata policy inward and adding the application-to-presentation boundary rule. |
 | 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after the response metadata move and presenter import updates. |
 | 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T004`: 59 test files and 396 tests. |
+| 2026-06-11 | `pnpm exec vitest run tests/architecture/layer-boundaries.test.ts tests/mcp/telemetry-instrumentation.test.ts tests/telemetry/boundary-instrumentation.test.ts tests/telemetry/config.test.ts` | Passed | 4 test files and 20 tests passed after moving MCP telemetry dependency to `TelemetryRecorderPort`. |
+| 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after the telemetry port ownership change. |
+| 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T005`: 59 test files and 396 tests. |
 
 ## Required Gates For Remediation
 
