@@ -2,6 +2,11 @@
   "name": "agent-workbench",
   "version": "0.1.0",
   "registry": "ghcr.io",
+  "distribution": {
+    "npm_contract": "packaging/agent-workbench/npm-package.json",
+    "npm_package": "@auriora/agent-workbench",
+    "npm_publish_status": "pack-ready-not-published"
+  },
   "image": "ghcr.io/bcherrington/agent-workbench",
   "containerfile": "packaging/agent-workbench/Containerfile",
   "installer": "scripts/install-agent-workbench-package.sh",

@@ -1,8 +1,8 @@
-# Agent Workbench GHCR Package
+# Agent Workbench Package
 
-This package definition builds an OCI image for GHCR that contains the Agent
-Workbench MCP runtime, documentation, Codex plugin wrapper, skill, and hook
-scripts.
+This package definition supports the npm installer shim and the GHCR image for
+the Agent Workbench MCP runtime, documentation, Codex plugin wrapper, skill,
+and hook scripts.
 
 Checkout-only debug harnesses under `src/debug/`, `debug:*` package scripts,
 and active implementation specs under `docs/specs/` are removed from installed
@@ -34,6 +34,13 @@ the package contents to a stable local prefix, writes a launcher, installs the
 Codex plugin wrapper files, appends fallback Codex MCP configuration to
 `config.toml`, and merges hook configuration into `hooks.json` when the plugin
 system does not install hooks itself.
+
+The npm package contract is `npm-package.json`. It exposes the
+`@auriora/agent-workbench` package and runs the same host installer through:
+
+```bash
+npx @auriora/agent-workbench install
+```
 
 Build locally:
 

@@ -1,10 +1,43 @@
 {
-  "name": "agent-workbench",
+  "name": "@auriora/agent-workbench",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "packageManager": "pnpm@10.18.1",
   "description": "Local-first Agent IDE runtime scaffold.",
+  "license": "MIT",
+  "author": "Auriora",
+  "homepage": "https://github.com/Auriora/agent-workbench/tree/main/plugins/agent-workbench",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Auriora/agent-workbench.git"
+  },
+  "keywords": [
+    "codex",
+    "plugin",
+    "mcp",
+    "agent",
+    "workbench"
+  ],
+  "bin": {
+    "agent-workbench": "packaging/agent-workbench/npm-install.js",
+    "agent-workbench-plugin": "packaging/agent-workbench/npm-install.js"
+  },
+  "files": [
+    "AGENTS.md",
+    "docs/design/coding-agent-integration-design.md",
+    "docs/design/runtime-operations-design.md",
+    "docs/reference/runtime-contracts.md",
+    "docs/runbooks/codex-agent-workbench-plugin.md",
+    "package.json",
+    "packaging/agent-workbench/package-manifest.json",
+    "packaging/agent-workbench/npm-package.json",
+    "packaging/agent-workbench/npm-install.js",
+    "plugins/agent-workbench",
+    "pnpm-lock.yaml",
+    "scripts/install-agent-workbench-package.sh",
+    "src",
+    "tsconfig.json"
+  ],
   "engines": {
     "node": ">=22"
   },
@@ -18,6 +51,7 @@
     "debug:mcp-profile": "tsx src/debug/mcp-use-case.ts --profile",
     "debug:sample-smoke": "tsx src/debug/sample-smoke.ts",
     "debug:mcp-tool-sweep": "tsx src/debug/mcp-tool-sweep.ts",
+    "pack:dry-run": "npm_config_cache=/tmp/agent-workbench-npm-cache npm pack --dry-run --json",
     "rebuild:native": "CXXFLAGS=-std=c++20 pnpm rebuild tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-typescript tree-sitter-go"
   },
   "dependencies": {

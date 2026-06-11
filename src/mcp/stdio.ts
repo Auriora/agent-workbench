@@ -1,5 +1,5 @@
 import { connectAgentWorkbenchStdio } from "./stdio-launch.js";
 
-process.stdin.resume();
 await connectAgentWorkbenchStdio();
+process.stdin.resume();
 setInterval(() => {}, 2 ** 31 - 1);

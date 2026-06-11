@@ -25,11 +25,11 @@ Agent Workbench has one executable Codex runtime path per packaged install:
   `scripts/install-agent-workbench-package.sh`.
 - The plugin must not launch runtime code from Codex's plugin cache path.
 
-The GHCR package is the distribution wrapper for complete installs. It contains
-runtime source, docs, package metadata, the Codex plugin, skills, hooks, MCP
-configuration, and an installer that registers the plugin through the personal
-marketplace. This is not a second runtime implementation; the plugin MCP config
-launches the same MCP entrypoint installed under a stable prefix.
+The npm and GHCR packages are distribution wrappers for complete installs. They
+contain runtime source, docs, package metadata, the Codex plugin, skills, hooks,
+MCP configuration, and an installer that registers the plugin through the
+personal marketplace. This is not a second runtime implementation; the plugin
+MCP config launches the same MCP entrypoint installed under a stable prefix.
 
 Companion MCP servers, such as a spec lifecycle server for a separate docs
 repository, should also be configured as host-level Codex MCP entries. Keep
@@ -67,12 +67,40 @@ codex plugin add agent-workbench@auriora-local
 After reinstall, start a new Codex session to pick up changed skills, hooks,
 MCP tools, and plugin metadata.
 
+## NPM Package Installation
+
+The npm distribution package is `@auriora/agent-workbench`. Its package
+contract lives at `packaging/agent-workbench/npm-package.json`, and the CLI
+shim is `packaging/agent-workbench/npm-install.js`.
+
+Install or refresh the package-backed Codex plugin with:
+
+```bash
+npx @auriora/agent-workbench install
+```
+
+Pass installer options after `--` when needed:
+
+```bash
+npx @auriora/agent-workbench install -- \
+  --prefix "$HOME/.local/share/agent-workbench" \
+  --codex-home "$HOME/.codex"
+```
+
+The npm package status is `pack-ready-not-published` until an authorized npm
+publish is performed. Validate the package payload with:
+
+```bash
+pnpm pack:dry-run
+```
+
 ## GHCR Package Installation
 
 The package definition lives at `packaging/agent-workbench/`:
 
 - `Containerfile` builds the GHCR image.
-- `package-manifest.json` lists installed components.
+- `package-manifest.json` lists installed components and distribution
+  contracts.
 - `.github/workflows/release-ghcr.yml` publishes tagged releases to GHCR.
 - `scripts/install-agent-workbench-package.sh` installs the package into a
   stable host prefix.

@@ -213,7 +213,7 @@ export function isAgentWorkbenchRepo(repoRoot: string): boolean {
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8")) as {
     name?: string;
   };
-  return packageJson.name === "agent-workbench";
+  return packageJson.name === "agent-workbench" || packageJson.name === "@auriora/agent-workbench";
 }
 
 function isDebugMcpUseCase(value: string | undefined): value is DebugMcpUseCase {
