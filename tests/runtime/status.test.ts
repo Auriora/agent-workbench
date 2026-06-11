@@ -309,6 +309,12 @@ describe("runtime status", () => {
 
     const cases = [
       {
+        name: "no adapter coverage",
+        snapshot: undefined,
+        files: [],
+        expectedKind: "no_adapter_coverage" as const
+      },
+      {
         name: "missing parser grammar",
         snapshot: snapshot({
           freshness: "fresh",
@@ -363,6 +369,7 @@ describe("runtime status", () => {
 
     for (const testCase of cases) {
       const result =
+        testCase.snapshot === undefined ||
         testCase.expectedKind === "missing_optional_enrichment_evidence" ||
         testCase.expectedKind === "unsupported_language_or_platform"
           ? getCatalogRepoStatus({
@@ -371,7 +378,7 @@ describe("runtime status", () => {
               skipped_roots: [],
               files: testCase.files,
               snapshot: testCase.snapshot,
-              freshness: testCase.snapshot.freshness
+              freshness: testCase.snapshot?.freshness
             })
           : await getSnapshotRepoStatus({
               repo_root: "/repo",
@@ -476,6 +483,80 @@ describe("runtime status", () => {
         domain: "language",
         name: "typescript",
         capability_level: "partial_semantic"
+      })
+    ]);
+  });
+
+  it("reports no adapter coverage as explicit status evidence instead of an unexplained partial", async () => {
+    const result = await getScannedRepoStatus({
+      repo_root: "/repo",
+      scanner: {
+        async scan(input) {
+          return {
+            repo_root: input.repo_root,
+            indexed_roots: input.indexed_roots,
+            skipped_roots: input.skipped_roots,
+            truncated: false,
+            files: []
+          };
+        }
+      }
+    });
+
+    expect(result.status.runtime_state).toBe("partial");
+    expect(result.status.adapter_coverage).toEqual([]);
+    expect(result.meta).toMatchObject({
+      analysis_validity: "partial",
+      capability_level: "unsupported",
+      verification_status: "needed"
+    });
+    expect(result.meta.caveats).toEqual([
+      expect.objectContaining({
+        kind: "no_adapter_coverage",
+        message: expect.stringContaining("No scanner-visible adapter coverage")
+      })
+    ]);
+  });
+
+  it("distinguishes unsupported language coverage from cold runtime state", async () => {
+    const result = await getScannedRepoStatus({
+      repo_root: "/repo",
+      scanner: {
+        async scan(input) {
+          return {
+            repo_root: input.repo_root,
+            indexed_roots: input.indexed_roots,
+            skipped_roots: input.skipped_roots,
+            truncated: false,
+            files: [
+              buildFileCatalogEntry({
+                file_identity: {
+                  path: "src/App.java",
+                  language: "java",
+                  content_hash: "sha256:java",
+                  size_bytes: 10,
+                  mtime_ms: 1
+                }
+              })
+            ]
+          };
+        }
+      }
+    });
+
+    expect(result.status.freshness).toBe("unknown");
+    expect(result.meta.analysis_validity).toBe("valid");
+    expect(result.meta.capability_level).toBe("unsupported");
+    expect(result.status.adapter_coverage).toEqual([
+      expect.objectContaining({
+        domain: "language",
+        name: "java",
+        capability_level: "unsupported"
+      })
+    ]);
+    expect(result.meta.caveats).toEqual([
+      expect.objectContaining({
+        kind: "unsupported_language_or_platform"
       })
     ]);
   });

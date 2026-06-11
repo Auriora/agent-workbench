@@ -398,6 +398,76 @@ describe("docs query application contracts", () => {
     }
   });
 
+  it("blocks missing Markdown outlines with a missing-path warning", async () => {
+    const fixture = copyFixture();
+    try {
+      const result = await getDocsOutline({
+        request: {
+          repo_root: fixture.root,
+          path: "docs/missing.md"
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot: fixture.root }),
+        default_repo_root: "."
+      });
+      const outline = docsOutlineResultSchema.parse(result.outline);
+
+      expect(outline).toMatchObject({
+        status: "blocked",
+        path: "docs/missing.md",
+        headings: [],
+        warnings: [
+          expect.objectContaining({
+            path: "docs/missing.md",
+            reason: "missing",
+            message: expect.stringContaining("was not found")
+          })
+        ]
+      });
+      expect(result.meta).toMatchObject({
+        analysis_validity: "valid",
+        verification_status: "needed"
+      });
+    } finally {
+      fixture.dispose();
+    }
+  });
+
+  it("returns existing no-heading Markdown as an explicit empty outline", async () => {
+    const root = path.resolve("tests/fixtures/fixture-mcp-tool-sweep");
+    const result = await getDocsOutline({
+      request: {
+        repo_root: root,
+        path: "docs/no-heading.md"
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot: root }),
+      default_repo_root: "."
+    });
+    const outline = docsOutlineResultSchema.parse(result.outline);
+
+    expect(outline).toMatchObject({
+      status: "done",
+      path: "docs/no-heading.md",
+      title: "no heading",
+      headings: [],
+      warnings: []
+    });
+    expect(outline.next_actions).toEqual([
+      {
+        tool: "docs_outline",
+        args: {
+          repo_root: root,
+          path: "docs/no-heading.md"
+        }
+      }
+    ]);
+    expect(result.meta).toMatchObject({
+      analysis_validity: "valid",
+      verification_status: "done"
+    });
+  });
+
   it("directly reads requested outline and section paths beyond the broad docs-map budget", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-docs-large-"));
     try {

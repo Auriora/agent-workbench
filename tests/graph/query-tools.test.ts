@@ -801,6 +801,72 @@ describe("graph query use cases", () => {
     }
   });
 
+  it("distinguishes cold graph from warm no-symbol graph query output", async () => {
+    const coldStore = openGraphStore(path.join(dir, "cold.sqlite"));
+    try {
+      const cold = await searchSymbols({
+        request: {
+          query: "Runner",
+          repo_root: path.resolve("tests/fixtures/fixture-basic-python"),
+          exact: true,
+          languages: ["python"],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: coldStore,
+        snapshots: coldStore,
+        catalog: coldStore,
+        default_repo_root: path.resolve("tests/fixtures/fixture-basic-python")
+      });
+
+      expect(cold.symbols.symbols).toEqual([]);
+      expect(cold.meta).toMatchObject({
+        analysis_validity: "valid",
+        verification_status: "blocked",
+        capability_level: "unsupported"
+      });
+      expect(cold.symbols.next_actions).toEqual([]);
+    } finally {
+      coldStore.close();
+    }
+
+    const fixture = await indexedFixture("tests/fixtures/fixture-basic-python", "215");
+    try {
+      const missing = await searchSymbols({
+        request: {
+          query: "MissingSymbol",
+          repo_root: fixture.repoRoot,
+          exact: true,
+          languages: ["python"],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      });
+
+      expect(missing.symbols.symbols).toEqual([]);
+      expect(missing.meta).toMatchObject({
+        analysis_validity: "valid",
+        verification_status: "needed"
+      });
+      expect(missing.symbols.next_actions).toEqual([
+        expect.objectContaining({
+          tool: "context_for_task",
+          args: expect.objectContaining({
+            task: expect.stringContaining("Exact symbol 'MissingSymbol' was not found"),
+            symbols: ["MissingSymbol"]
+          })
+        })
+      ]);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
   it("finds resolved references and routes to impact", async () => {
     const fixture = await indexedFixture("tests/fixtures/fixture-basic-python", "202");
     try {
@@ -1094,7 +1160,7 @@ describe("graph query use cases", () => {
       });
 
       expect(result.meta).toMatchObject({
-        analysis_validity: "invalid",
+        analysis_validity: "valid",
         freshness: "cold",
         verification_status: "blocked"
       });

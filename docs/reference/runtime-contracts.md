@@ -148,6 +148,19 @@ Every non-trivial MCP response should include:
 }
 ```
 
+Runtime status responses may include `meta.caveats` when the status envelope is
+usable but attention is required before treating coverage as complete. Current
+caveat kinds are:
+
+- `no_adapter_coverage`: scanner-visible files did not produce any adapter
+  evidence. This is explicit unsupported coverage, not a cold-runtime failure.
+- `unsupported_language_or_platform`: scanner-visible files were found for a
+  language or platform that has no useful adapter coverage.
+- parser and watcher caveats such as `missing_tree_sitter_parser`,
+  `missing_parser_grammar`, `parser_timeout`, `parser_crash`,
+  `missing_optional_enrichment_evidence`, `missing_test_runner`, and
+  `stale_watcher_snapshot`.
+
 ## Error Shape
 
 Errors must be structured and actionable.

@@ -128,7 +128,7 @@ export async function planVerification(input: {
       message: reason,
       why_this_matters: "Repo-local validation guidance takes precedence over generic language command planning."
     })),
-    ...(commands.length === 0
+    ...(commands.length === 0 && commandPlan.blockerReasons.length === 0
       ? [
           {
             severity: "warning" as const,
@@ -145,38 +145,45 @@ export async function planVerification(input: {
     files,
     freshness: "unknown"
   });
+  const nextActions = capNextActions([
+    ...selectedEntries
+      .filter((entry) => entry.file_identity.language === "python")
+      .map((entry) => ({
+        tool: "symbol_search",
+        args: {
+          query: symbolQueryFromPath(entry.path),
+          repo_root: scanned.repo_root
+        }
+      })),
+    ...(commands.length === 0 && commandPlan.blockerReasons.length === 0
+      ? [
+          {
+            tool: "context_for_task",
+            args: {
+              task: input.request.task ?? "Gather more repository context for validation planning.",
+              repo_root: scanned.repo_root,
+              files: selectedPaths
+            }
+          }
+        ]
+      : [])
+  ]);
   const plan: VerificationPlan = {
     task: input.request.task,
     repo_root: scanned.repo_root,
     status: blocked ? "blocked" : "planned",
-    summary: buildSummary(commands, staticFeedback, blocked),
+    summary: buildSummary({
+      commands,
+      staticFeedback,
+      blocked,
+      risks,
+      nextActions
+    }),
     planned_commands: commands,
     ...(staticFeedback?.status === "actionable" ? { static_feedback: staticFeedback } : {}),
     skipped_paths: mapSkippedPaths(scanned.skipped_paths ?? []),
     risks,
-    next_actions: capNextActions([
-      ...selectedEntries
-        .filter((entry) => entry.file_identity.language === "python")
-        .map((entry) => ({
-          tool: "symbol_search",
-          args: {
-            query: symbolQueryFromPath(entry.path),
-            repo_root: scanned.repo_root
-          }
-        })),
-      ...(commands.length === 0
-        ? [
-            {
-              tool: "context_for_task",
-              args: {
-                task: input.request.task ?? "Gather more repository context for validation planning.",
-                repo_root: scanned.repo_root,
-                files: selectedPaths
-              }
-            }
-          ]
-        : [])
-    ])
+    next_actions: nextActions
   };
 
   return {
@@ -728,17 +735,25 @@ function selectEntries(
   return files.filter((file) => selected.has(file.path));
 }
 
-function buildSummary(
-  commands: readonly PlannedValidationCommand[],
-  staticFeedback: StaticFeedback | undefined,
-  blocked: boolean
-): string {
+function buildSummary(input: {
+  commands: readonly PlannedValidationCommand[];
+  staticFeedback: StaticFeedback | undefined;
+  blocked: boolean;
+  risks: ReadonlyArray<VerificationPlan["risks"][number]>;
+  nextActions: ReadonlyArray<VerificationPlan["next_actions"][number]>;
+}): string {
   const feedbackSummary =
-    staticFeedback === undefined || staticFeedback.status === "silent"
+    input.staticFeedback === undefined || input.staticFeedback.status === "silent"
       ? "static feedback is silent"
-      : `${staticFeedback.findings.length} static feedback finding(s) need attention`;
-  const statusSummary = blocked ? "Validation planning is blocked" : "Validation planning is ready";
-  return `${statusSummary}; planned ${commands.length} validation command(s); ${feedbackSummary}. Commands were not executed.`;
+      : `${input.staticFeedback.findings.length} static feedback finding(s) need attention`;
+  const statusSummary = input.blocked ? "Validation planning is blocked" : "Validation planning is ready";
+  const blocker = input.risks.find((risk) => risk.severity === "blocker");
+  const nextAction = input.nextActions[0];
+  const blockedDetails =
+    input.blocked && blocker !== undefined
+      ? ` Blocker: ${blocker.message} Next action: ${nextAction === undefined ? blocker.why_this_matters : `Call ${nextAction.tool}.`}`
+      : "";
+  return `${statusSummary}; planned ${input.commands.length} validation command(s); ${feedbackSummary}. Commands were not executed.${blockedDetails}`;
 }
 
 function hasAny(values: Set<string>, expected: readonly string[]): boolean {

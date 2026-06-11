@@ -15,7 +15,6 @@ import type {
 } from "../../ports/index.js";
 import {
   buildResponseMeta,
-  invalidResponseMeta,
   strongestCapabilityLevel,
   uniqueSorted
 } from "../../presentation/metadata.js";
@@ -84,9 +83,19 @@ export function blockedMeta(input: {
   traversal_depth?: number;
   source_byte_limit?: number;
 }): ResponseMetadata {
-  return invalidResponseMeta({
-    repoRoot: input.repo_root,
+  return buildResponseMeta({
+    analysis_validity: "valid",
     freshness: "cold",
+    scope: {
+      repo_root: input.repo_root,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      languages: []
+    },
+    capability_level: "unsupported",
+    evidence_kinds: [],
+    verification_status: "blocked",
+    truncated: false,
     budget: {
       row_limit: input.row_limit,
       traversal_depth: input.traversal_depth,

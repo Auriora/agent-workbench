@@ -109,7 +109,7 @@ T013 -> T014
 
 ## Phase 2: Runtime Semantics
 
-- [ ] T004 Correct status and readiness metadata semantics.
+- [x] T004 Correct status and readiness metadata semantics.
   - Depends on: T003
   - Files: `src/application/use-cases/get-repo-status.ts`,
     `src/presentation/status-presenter.ts`,
@@ -135,23 +135,36 @@ T013 -> T014
     blocked, and 0 invalid results. The fresh T010 eight-repo committed-tree
     sandbox sweep then passed with 176 full, 0 partial, 0 degraded, 0 blocked,
     and 0 invalid results, proving current dogfood status/readiness metadata is
-    not causing non-full rows. Status no-coverage fixture semantics remain
-    pending and are tracked by T011.
-  - [ ] T004.1 Write failing tests for no adapter coverage status.
+    not causing non-full rows. Status no-coverage fixture semantics were then
+    completed with explicit `no_adapter_coverage` and
+    `unsupported_language_or_platform` caveats; cold graph metadata was
+    corrected to valid blocked evidence. Focused status/docs/graph tests,
+    `pnpm typecheck`, `pnpm test`, and the final committed-sandbox sweep
+    `.tmp/agent-workbench-tool-sweep-t015-full/mcp-tool-sweep-2026-06-11T14-00-18-411Z.json`
+    passed with 176 full, 0 partial, 0 degraded, 0 blocked, and 0 invalid
+    results.
+  - [x] T004.1 Write failing tests for no adapter coverage status.
+    - Evidence: Added no-adapter and unsupported-language status coverage in
+      `tests/runtime/status.test.ts` and MCP resource caveat coverage in
+      `tests/mcp/repo-status-resource.test.ts`.
   - [x] T004.2 Write failing tests for cold and refreshing docs FTS output.
     - Evidence: Updated docs search blocked-index expectations in
       `tests/docs/query-docs.test.ts` to require `analysis_validity: valid`
       with `verification_status: blocked`.
-  - [ ] T004.3 Implement metadata and presenter corrections.
+  - [x] T004.3 Implement metadata and presenter corrections.
     - Evidence: Docs search metadata correction and sweep `needed` classifier
       correction complete. Catalog scan budgets now cover the current dogfood
       repos without routine degraded orientation metadata. Status no-coverage
-      correction remains pending before this subtask can close.
-  - [ ] T004.4 Run focused status/docs tests.
-    - Evidence: Docs-focused, orientation-focused, integration context, and
-      debug-harness tests passed; status-focused tests remain pending.
+      and unsupported-language corrections are complete without reintroducing
+      routine optional-enrichment warning noise.
+  - [x] T004.4 Run focused status/docs tests.
+    - Evidence: `pnpm test tests/runtime/status.test.ts
+      tests/runtime/orientation-golden.test.ts
+      tests/mcp/repo-status-resource.test.ts`, `pnpm test
+      tests/docs/query-docs.test.ts tests/mcp/docs-surfaces.test.ts`, and
+      graph-focused query/harness tests passed on 2026-06-11.
 
-- [ ] T005 Correct documentation tool edge cases.
+- [x] T005 Correct documentation tool edge cases.
   - Depends on: T003
   - Files: `src/application/use-cases/query-docs.ts`,
     `src/presentation/docs-presenter.ts`,
@@ -175,25 +188,31 @@ T013 -> T014
     `docs-overview` and `docs-map` list caps. Docs overview/map now expose
     cursor-backed pagination; the sweep classifier treats truncated responses
     with continuation cursors as complete pages, not partial results. Missing
-    and no-heading docs subtasks remain pending.
-  - [ ] T005.1 Write failing tests for missing Markdown path behavior.
-  - [ ] T005.2 Write failing tests for existing no-heading Markdown behavior.
+    and no-heading docs behavior is now fixture-proven.
+  - [x] T005.1 Write failing tests for missing Markdown path behavior.
+    - Evidence: Added a missing Markdown outline regression in
+      `tests/docs/query-docs.test.ts`.
+  - [x] T005.2 Write failing tests for existing no-heading Markdown behavior.
+    - Evidence: Added a no-heading Markdown outline regression in
+      `tests/docs/query-docs.test.ts`; the chosen behavior is `done` with an
+      empty heading list and no missing-path warning.
   - [x] T005.3 Write failing tests for headed Markdown outline and section
     read.
     - Evidence: Added a regression proving requested outline and section reads
       remain full when the requested Markdown file sorts beyond the broad
       docs-map budget.
-  - [ ] T005.4 Implement docs/query and presenter corrections.
+  - [x] T005.4 Implement docs/query and presenter corrections.
     - Evidence: Direct requested-file outline/read-section implementation is
       complete. Cursor-backed docs overview/map pagination is complete;
-      missing and no-heading behavior remains pending.
-  - [ ] T005.5 Run focused docs tests.
+      missing and no-heading behavior is now fixture-proven.
+  - [x] T005.5 Run focused docs tests.
     - Evidence: `pnpm test tests/docs/query-docs.test.ts
       tests/mcp/docs-surfaces.test.ts tests/mcp/debug-harness.test.ts` passed,
-      including pagination parsing/classification coverage; final docs
-      edge-case test set remains pending.
+      including pagination parsing/classification coverage. The final docs
+      edge-case test set `pnpm test tests/docs/query-docs.test.ts
+      tests/mcp/docs-surfaces.test.ts` passed on 2026-06-11.
 
-- [ ] T006 Improve graph-backed sweep inputs and degraded explanations.
+- [x] T006 Improve graph-backed sweep inputs and degraded explanations.
   - Depends on: T003
   - Files: `src/debug/mcp-tool-sweep.ts`,
     `src/application/use-cases/get-task-context.ts`,
@@ -216,29 +235,38 @@ T013 -> T014
     catalog language sampling as response truncation, and `find_references`
     now uses max-plus-one result evidence plus cursors before marking output
     partial. Graph warmup now scans enough files for docs FTS while bounding
-    symbol extraction separately.
+    symbol extraction separately. Indexed-symbol selection and cold/no-symbol
+    distinctions are now covered by focused fixture tests, and cold graph
+    metadata returns valid blocked evidence instead of invalid input metadata.
   - [x] T006.1 Write failing harness test proving sweep facts are selected
     from scanner-visible files, not raw recursive filesystem listings.
     - Evidence: Added regression coverage that hidden/generated Markdown is
       ignored for sweep input selection while visible docs are selected.
-  - [ ] T006.2 Write failing harness test for indexed-symbol selection.
-  - [ ] T006.3 Write failing tests for no-symbol versus cold-graph output.
-  - [ ] T006.4 Implement scanner-visible file selection, indexed-symbol
+  - [x] T006.2 Write failing harness test for indexed-symbol selection.
+    - Evidence: Added debug-harness coverage proving `symbol_search`,
+      `find_references`, and `impact` use a warmed indexed symbol node id from
+      the fixture graph.
+  - [x] T006.3 Write failing tests for no-symbol versus cold-graph output.
+    - Evidence: Added graph query coverage distinguishing cold graph blocked
+      metadata from warm exact no-symbol results that route to
+      `context_for_task`.
+  - [x] T006.4 Implement scanner-visible file selection, indexed-symbol
     selection, and metadata improvements.
     - Evidence: Scanner-visible file selection is complete. Exact-budget
       reference metadata, cursor-backed `find_references` pagination, and
-      split scan/extraction warmup are complete; indexed-symbol selection and
-      deeper graph coverage remain pending.
-  - [ ] T006.5 Run focused graph/tool tests.
+      split scan/extraction warmup are complete. Cold graph metadata now uses
+      valid blocked evidence instead of invalid input metadata.
+  - [x] T006.5 Run focused graph/tool tests.
     - Evidence: `pnpm test tests/graph/query-tools.test.ts
       tests/mcp/query-tools.test.ts tests/graph/extraction-pipeline.test.ts
       tests/mcp/debug-harness.test.ts` and `pnpm typecheck` passed in focused
       runs. Direct FreeCAD and LibreChat docs-index checks showed usable docs
-      FTS instead of blocked search. Full multi-repo warmup sweep attempts
-      still need harness/PTY reliability follow-up before they can be used as
-      closure evidence.
+      FTS instead of blocked search. The final graph-focused set `pnpm test
+      tests/mcp/debug-harness.test.ts tests/graph/query-tools.test.ts
+      tests/mcp/query-tools.test.ts tests/mcp/context-for-task-tool.test.ts`
+      passed on 2026-06-11, and the final committed-sandbox sweep is clean.
 
-- [ ] T007 Improve verification-plan blocked reasons.
+- [x] T007 Improve verification-plan blocked reasons.
   - Depends on: T003
   - Files: `src/application/use-cases/plan-verification.ts`,
     `src/presentation/verification-plan-presenter.ts`,
@@ -247,13 +275,22 @@ T013 -> T014
     action; planned commands remain non-executed and policy-aware. Harness
     changed-file inputs do not target scanner-excluded hidden/generated files
     unless the test is explicitly proving that blocked behavior.
-  - Evidence: Pending.
-  - [ ] T007.1 Write failing tests for blocked LibreChat-like and
+  - Evidence: Verification plan blocked summaries now include the first
+    blocker and a concrete next action, without executing commands or
+    suggesting generic host commands when repo policy blocks them. `pnpm test
+    tests/mcp/verification-plan-tool.test.ts` passed on 2026-06-11.
+  - [x] T007.1 Write failing tests for blocked LibreChat-like and
     OneMount-like validation evidence.
-  - [ ] T007.2 Implement blocked reason and next-action presentation.
-  - [ ] T007.3 Run focused verification-plan tests.
+    - Evidence: Added blocked missing-file and Docker-only policy summary
+      assertions in `tests/mcp/verification-plan-tool.test.ts`.
+  - [x] T007.2 Implement blocked reason and next-action presentation.
+    - Evidence: Updated `planVerification` summaries to include the first
+      blocker and either the first planned next-action tool or the blocking
+      risk's own next-action guidance.
+  - [x] T007.3 Run focused verification-plan tests.
+    - Evidence: `pnpm test tests/mcp/verification-plan-tool.test.ts` passed.
 
-- [ ] T008 Compact routine skipped-path warnings.
+- [x] T008 Compact routine skipped-path warnings.
   - Depends on: T003
   - Files: `src/presentation/metadata.ts`, `src/presentation/docs-presenter.ts`,
     `src/presentation/task-context-presenter.ts`, `tests/presentation/`,
@@ -262,10 +299,21 @@ T013 -> T014
     summarized by reason with examples; requested-path exclusions remain
     explicit and actionable. Routine skipped paths do not by themselves turn a
     complete response into degraded quality.
-  - Evidence: Pending.
-  - [ ] T008.1 Write failing tests for noisy skipped-path summaries.
-  - [ ] T008.2 Implement compact warning aggregation.
-  - [ ] T008.3 Run focused presentation/docs tests.
+  - Evidence: Existing compact skipped-path aggregation is fixture-proven in
+    docs and task-context tests, and the sweep classifier keeps routine
+    `verification_status: needed` attention items separate from degraded
+    result quality. `pnpm test tests/docs/query-docs.test.ts
+    tests/docs/docs-presenter.test.ts tests/mcp/context-for-task-tool.test.ts
+    tests/mcp/debug-harness.test.ts` passed on 2026-06-11.
+  - [x] T008.1 Write failing tests for noisy skipped-path summaries.
+    - Evidence: `tests/docs/query-docs.test.ts` covers large
+      generated/vendor skipped-path compaction; context tests cover skipped
+      path grouping by reason.
+  - [x] T008.2 Implement compact warning aggregation.
+    - Evidence: Docs results aggregate generated/vendor skip noise and task
+      context reports skipped paths by reason with a sample path.
+  - [x] T008.3 Run focused presentation/docs tests.
+    - Evidence: Focused docs presenter/context/debug-harness test set passed.
 
 ## Phase 3: Sweep Reliability And Runtime Follow-Ups
 
@@ -344,7 +392,7 @@ T013 -> T014
     - Evidence: The fresh report has zero non-full rows, so no new runtime RCA
       or follow-up implementation task is needed from T010.
 
-- [ ] T011 Complete status no-coverage semantics.
+- [x] T011 Complete status no-coverage semantics.
   - Depends on: T004
   - Files: `src/application/use-cases/get-repo-status.ts`,
     `src/presentation/status-presenter.ts`, `tests/runtime/`,
@@ -353,11 +401,23 @@ T013 -> T014
     unsupported or degraded evidence with actionable metadata, not invalid or
     unexplained partial output. The response distinguishes unsupported
     language/tool coverage from cold or failed runtime state.
-  - Evidence: Pending.
-  - [ ] T011.1 Add failing tests for no adapter coverage and unsupported
+  - Evidence: Status no-coverage and unsupported-language semantics are now
+    explicit through `meta.caveats` and remain distinct from cold
+    snapshot-null runtime state. `pnpm test tests/runtime/status.test.ts
+    tests/runtime/orientation-golden.test.ts
+    tests/mcp/repo-status-resource.test.ts` passed on 2026-06-11.
+  - [x] T011.1 Add failing tests for no adapter coverage and unsupported
     language status.
-  - [ ] T011.2 Implement status metadata and presenter corrections.
-  - [ ] T011.3 Run focused runtime/status MCP tests and update T004 evidence.
+    - Evidence: Added runtime status tests for empty scanned coverage and
+      unsupported Java coverage plus MCP resource envelope caveat preservation.
+  - [x] T011.2 Implement status metadata and presenter corrections.
+    - Evidence: Added `no_adapter_coverage` runtime caveat kind and changed
+      runtime metadata derivation so scanned/catalog no-coverage and
+      unsupported-language states are explicit without changing cold snapshot
+      behavior.
+  - [x] T011.3 Run focused runtime/status MCP tests and update T004 evidence.
+    - Evidence: Focused runtime/status MCP tests passed and T004 evidence was
+      updated.
 
 - [x] T012 Investigate bounded parallel and background processing.
   - Depends on: T009
@@ -409,8 +469,10 @@ T013 -> T014
     results; workspace-write behavior is proven by fixtures or sandbox copies.
   - Evidence: `pnpm typecheck`, focused tests, `pnpm test`, `git diff --check`,
     and the final eight-repo committed-sandbox sweep passed on 2026-06-11.
-    Full suite result: 59 files and 388 tests passed. Final sweep report
-    `.tmp/agent-workbench-tool-sweep-t013-full/mcp-tool-sweep-2026-06-11T13-12-49-086Z.json`
+    Full suite result: 59 files and 388 tests passed. After completing the
+    remaining fixture-level semantic coverage, `pnpm typecheck` passed,
+    `pnpm test` passed with 59 files and 395 tests, and final sweep report
+    `.tmp/agent-workbench-tool-sweep-t015-full/mcp-tool-sweep-2026-06-11T14-00-18-411Z.json`
     covered 176 rows with 176 full, 0 partial, 0 degraded, 0 blocked, and 0
     invalid results. Workspace-write rows ran only against sandbox copies and
     were full/ok. Full-suite validation also exposed a Node 24/tsx stdio launch
@@ -418,7 +480,7 @@ T013 -> T014
     `package.json` `mcp` to that bootstrap, and keeping the stdio server
     resident after connect.
   - [x] T013.1 Run `pnpm typecheck`.
-    - Evidence: Passed on 2026-06-11.
+    - Evidence: Passed on 2026-06-11 after the final semantic coverage slice.
   - [x] T013.2 Run focused tests for changed areas.
     - Evidence: `pnpm test tests/mcp/debug-harness.test.ts
       tests/docs/query-docs.test.ts tests/mcp/docs-surfaces.test.ts
@@ -427,13 +489,16 @@ T013 -> T014
       `pnpm test tests/mcp/stdio-entrypoint.test.ts` passed with 12 tests after
       the stdio bootstrap fix.
   - [x] T013.3 Run `pnpm test`.
-    - Evidence: Full Vitest suite passed with 59 files and 388 tests.
+    - Evidence: Full Vitest suite passed with 59 files and 395 tests. An
+      intermediate full run timed out on two spawned stdio tests under suite
+      load; the stdio file passed by itself immediately after, and the full
+      suite passed on rerun.
   - [x] T013.4 Run eight-repo `pnpm debug:mcp-tool-sweep` without target repo
     build/test commands or workspace-write calls against original repos.
     - Evidence: Ran against committed-tree sandbox copies under
       `.tmp/tool-sweep-sandboxes-committed-t010/`, not original external
-      repositories. Final summary: 176 full, 0 partial, 0 degraded, 0 blocked,
-      and 0 invalid.
+      repositories. Final T015 summary: 176 full, 0 partial, 0 degraded, 0
+      blocked, and 0 invalid.
   - [x] T013.5 Record evidence and residual risks in `verification.md`.
 
 - [x] T014 Promote durable docs and prepare closure.
@@ -459,5 +524,10 @@ T013 -> T014
       sweep harness under the observability/debugging owner and link quality
       vocabulary to runtime contracts.
   - [x] T014.3 Run `git diff --check`.
-  - [ ] T014.4 Run spec lifecycle validation or manual spec artifact check.
-  - [ ] T014.5 Record closure readiness in `verification.md`.
+  - [x] T014.4 Run spec lifecycle validation or manual spec artifact check.
+    - Evidence: `spec_runtime.py lint
+      docs/specs/023-mcp-tool-sweep-quality` passed with 0 diagnostics, and
+      `spec_runtime.py closure-check docs/specs/023-mcp-tool-sweep-quality`
+      returned `ready: true` with no blockers on 2026-06-11.
+  - [x] T014.5 Record closure readiness in `verification.md`.
+    - Evidence: Closure readiness recorded in `verification.md`.

@@ -110,6 +110,8 @@ describe("verification_plan use case", () => {
     });
 
     expect(result.plan.status).toBe("blocked");
+    expect(result.plan.summary).toContain("Blocker: Some requested validation files were not found in the scanned repository.");
+    expect(result.plan.summary).toContain("Next action: Call symbol_search.");
     expect(result.plan.planned_commands).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -580,6 +582,8 @@ describe("verification_plan use case", () => {
       });
 
       expect(result.plan.status).toBe("blocked");
+      expect(result.plan.summary).toContain("Blocker: Repository guidance requires Docker-based validation");
+      expect(result.plan.summary).toContain("Next action: Repo-local validation guidance takes precedence");
       expect(result.plan.static_feedback).toBeUndefined();
       expect(result.plan.planned_commands.map((command) => command.display)).not.toEqual(
         expect.arrayContaining(["make test", "go test ./..."])

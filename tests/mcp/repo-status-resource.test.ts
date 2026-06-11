@@ -184,8 +184,67 @@ describe("repo status MCP resource", () => {
 
       expect(parsed.data.adapter_coverage).toEqual([]);
       expect(parsed.meta.scope.languages).toEqual([]);
+      expect(parsed.meta.caveats).toBeUndefined();
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
+  });
+
+  it("preserves no-coverage status caveats in the MCP resource envelope", async () => {
+    let registered: RegisteredResource | undefined;
+    const server = {
+      resource(name: string, uri: string, handler: RegisteredResource["handler"]) {
+        registered = { name, uri, handler };
+      }
+    };
+
+    repoStatusResource.register(server as never, {
+      repoRoot: "/repo",
+      getRepoStatus: ({ repo_root }) => ({
+        status: {
+          repo_root,
+          runtime_state: "partial",
+          freshness: "unknown",
+          indexed_roots: ["."],
+          skipped_roots: [],
+          adapter_coverage: []
+        },
+        meta: {
+          analysis_validity: "partial",
+          freshness: "unknown",
+          scope: {
+            repo_root,
+            indexed_roots: ["."],
+            skipped_roots: [],
+            languages: []
+          },
+          capability_level: "unsupported",
+          evidence_kinds: [],
+          verification_status: "needed",
+          truncated: false,
+          caveats: [
+            {
+              kind: "no_adapter_coverage",
+              severity: "warning",
+              message: "No scanner-visible adapter coverage was observed.",
+              evidence_kinds: []
+            }
+          ]
+        }
+      })
+    });
+
+    const response = await registered?.handler({});
+    const parsed = JSON.parse(response?.contents[0]?.text ?? "{}") as {
+      meta: GetRepoStatusResult["meta"];
+      errors: unknown[];
+    };
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.meta.caveats).toEqual([
+      expect.objectContaining({
+        kind: "no_adapter_coverage"
+      })
+    ]);
   });
 });

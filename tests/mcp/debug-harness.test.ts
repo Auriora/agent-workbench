@@ -350,6 +350,53 @@ describe("repo-local MCP debug harness", () => {
     }
   });
 
+  it("uses indexed symbols for graph-backed sweep calls when graph evidence is warm", async () => {
+    const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep-indexed-symbol", String(Date.now()));
+    const targetRepo = path.resolve("tests/fixtures/fixture-mcp-tool-sweep");
+    try {
+      const report = await runMcpToolSweep({
+        repos: [targetRepo],
+        output_dir: outputDir,
+        call_timeout_ms: 30_000,
+        include_raw: true,
+        start_graph_warmup: true
+      });
+      const symbolSearch = report.results.find(
+        (result) => result.kind === "tool" && result.name === "symbol_search"
+      );
+      const findReferences = report.results.find(
+        (result) => result.kind === "tool" && result.name === "find_references"
+      );
+      const impact = report.results.find(
+        (result) => result.kind === "tool" && result.name === "impact"
+      );
+      const rawSymbolSearch = symbolSearch?.raw_envelope as {
+        data?: { query?: string; symbols?: Array<{ node_id?: string; name?: string }> };
+      } | undefined;
+      const rawReferences = findReferences?.raw_envelope as {
+        data?: { target?: { node_id?: string; name?: string } };
+      } | undefined;
+      const rawImpact = impact?.raw_envelope as {
+        data?: { start_node_ids?: string[] };
+      } | undefined;
+
+      expect(rawSymbolSearch?.data?.query).toMatch(/^(helper|greet)$/u);
+      expect(rawSymbolSearch?.data?.symbols?.[0]).toEqual(
+        expect.objectContaining({
+          node_id: expect.any(String),
+          name: rawSymbolSearch?.data?.query
+        })
+      );
+      expect(rawReferences?.data?.target?.node_id).toBe(rawSymbolSearch?.data?.symbols?.[0]?.node_id);
+      expect(rawImpact?.data?.start_node_ids).toContain(rawSymbolSearch?.data?.symbols?.[0]?.node_id);
+      expect(symbolSearch).toMatchObject({ status: "ok", quality: "full" });
+      expect(findReferences).toMatchObject({ status: "ok", quality: "full" });
+      expect(impact).toMatchObject({ status: "ok", quality: "full" });
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    }
+  });
+
   it("does not classify successful findings as degraded sweep quality", async () => {
     const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep-findings-quality", String(Date.now()));
     const targetRepo = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-findings-quality-"));

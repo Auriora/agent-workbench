@@ -88,6 +88,9 @@ would see from committed source.
 | 2026-06-11 | Bounded parallel/background processing decision | Parsed `.tmp/agent-workbench-tool-sweep-t010-full/mcp-tool-sweep-progress.json` for phase timing. The serial full sweep recorded 163.6s of repo elapsed time: 38.5s warmup, 42.5s resource calls, and 77.7s tool calls. FreeCAD dominated at 70.7s and CrealityPrint followed at 37.0s. Slow surfaces were direct docs reads, markdown set checks, overview/context scans, and verification planning on the largest sandboxes. Decision: keep this spec serial because the current sweep is correctness-clean and concurrency would add report/progress ordering and cancellation risk during closure. Future safe implementation path is bounded repo-level concurrency with isolated per-repo runtimes, deterministic repo-order final report assembly, serialized progress/final report writes, and explicit cancellation propagation. Within-repo SQLite writes, workspace-write preview/apply pairs, and final report publication must stay serialized. |
 | 2026-06-11 | Full validation and final sweep | `pnpm typecheck` passed. Focused tests passed: `pnpm test tests/mcp/debug-harness.test.ts tests/docs/query-docs.test.ts tests/mcp/docs-surfaces.test.ts tests/graph/query-tools.test.ts tests/mcp/query-tools.test.ts tests/validation/verification-plan.test.ts` with 70 tests, and `pnpm test tests/mcp/stdio-entrypoint.test.ts` with 12 tests after the stdio launch fix. `pnpm test` passed with 59 files and 388 tests. `git diff --check` passed. Final committed-sandbox sweep `.tmp/agent-workbench-tool-sweep-t013-full/mcp-tool-sweep-2026-06-11T13-12-49-086Z.json` covered 176 rows with 176 full, 0 partial, 0 degraded, 0 blocked, and 0 invalid results; progress state was `complete`. Workspace-write rows ran only against sandbox copies. |
 | 2026-06-11 | Durable documentation promotion | Promoted repo-local sweep harness behavior, progress-report RCA semantics, quality labels, original external repository read-only boundary, sandbox-copy write-test path, and bounded concurrency decision into `docs/design/observability-debugging-design.md`, `docs/design/runtime-operations-design.md`, `docs/reference/runtime-contracts.md`, and `docs/reference/documentation-map.md`. |
+| 2026-06-11 | Final fixture-level semantic coverage | Completed the remaining open T004-T008 and T011 fixture coverage. Added status no-coverage and unsupported-language caveats, docs missing/no-heading regressions, indexed-symbol sweep regression, cold-graph versus warm no-symbol regression, and verification-plan blocked-summary regressions. `pnpm typecheck` passed. Focused tests passed: `pnpm test tests/runtime/status.test.ts tests/runtime/orientation-golden.test.ts tests/mcp/repo-status-resource.test.ts`, `pnpm test tests/docs/query-docs.test.ts tests/mcp/docs-surfaces.test.ts`, `pnpm test tests/mcp/debug-harness.test.ts tests/graph/query-tools.test.ts tests/mcp/query-tools.test.ts tests/mcp/context-for-task-tool.test.ts`, `pnpm test tests/mcp/verification-plan-tool.test.ts`, and `pnpm test tests/docs/query-docs.test.ts tests/docs/docs-presenter.test.ts tests/mcp/context-for-task-tool.test.ts tests/mcp/debug-harness.test.ts`. |
+| 2026-06-11 | Final full-suite and sweep validation after open spec work | `pnpm test` passed with 59 files and 395 tests. An intermediate full-suite run timed out on two spawned stdio tests under load; `pnpm test tests/mcp/stdio-entrypoint.test.ts` passed immediately after, and the full suite passed on rerun. Final committed-sandbox sweep `.tmp/agent-workbench-tool-sweep-t015-full/mcp-tool-sweep-2026-06-11T14-00-18-411Z.json` covered 176 rows with 176 full, 0 partial, 0 degraded, 0 blocked, and 0 invalid results. Workspace-write rows ran only against sandbox copies. |
+| 2026-06-11 | Closure readiness check | Spec lint passed with 0 diagnostics. `spec_runtime.py closure-check docs/specs/023-mcp-tool-sweep-quality` returned `ready: true` with no blockers. All tasks are checked with evidence, durable docs include the sweep boundary and `no_adapter_coverage` status caveat, generated `.tmp` artifacts remain untracked, and the final full suite and committed-sandbox sweep are clean. |
 
 ## Non-Full Result RCA
 
@@ -98,10 +101,10 @@ cause and removed where the runtime can gather better evidence.
 | Latest / prior | Labels | Root cause | Assessment | Fix direction |
 | --- | --- | --- | --- | --- |
 | 0 / 49 | partial | Prior result-budget truncation after raising normal runtime catalog scan budgets. Earlier reports had docs list/section partials in TimeLocker, aws-datalake, and OneMount plus one CrealityPrint reference truncation. | Resolved in the fresh eight-repo committed-sandbox sweep: docs overview/map now have cursor-backed pagination and cursor-backed truncation is classified as a complete page; `find_references` now distinguishes real omitted result rows from catalog metadata sampling. | No current follow-up from dogfood. Keep pagination and max-plus-one reference regressions in the focused tests. |
-| 0 / 20 | degraded | Graph coverage or query miss in `symbol_search`, `find_references`, and `impact`. Some sweeps selected symbols that were not indexed, and C++/C# coverage remains resource-backed or shallow. | Improved by scanner-visible input selection and current sweep inputs, but coverage remains a risk for future language fixtures. | Improve indexed-symbol selection from the warmed graph and add language coverage fixtures before accepting degraded graph output. |
-| 0 / 15 | degraded | Status/scope/overview metadata reported `verification_status: needed` because skipped paths, partial-semantic evidence, or unsupported areas existed. | Classifier and metadata issue addressed for current sweep quality. Broad attention items should not degrade otherwise actionable orientation responses. | Keep attention items separate from result quality; still add explicit no-coverage status tests before closing T004. |
-| 0 / 8 | degraded | Docs map/overview/outline/read-section included skipped-path warnings unrelated to the requested document result. | Current sweep no longer reports these as degraded, but remaining docs partials show the broad docs-list dependency still needs targeted lookup. | Compact routine skip warnings and keep requested-path failures explicit. |
-| 0 / 5 | degraded | `context_for_task` had no graph query ports wired in the sweep path, so ranked-symbol evidence was skipped. | Current sweep quality improved after request-budget changes, but graph-backed context remains a coverage area. | Wire graph query ports into context calls or record a precise unsupported capability instead of generic degraded output. |
+| 0 / 20 | degraded | Graph coverage or query miss in `symbol_search`, `find_references`, and `impact`. Some sweeps selected symbols that were not indexed, and C++/C# coverage remains resource-backed or shallow. | Resolved for current sweep quality and fixture semantics: the harness now proves indexed-symbol use, and graph tests distinguish cold graph from warm no-symbol output. | No current follow-up from this spec. Future language-depth work should use separate fixtures/specs. |
+| 0 / 15 | degraded | Status/scope/overview metadata reported `verification_status: needed` because skipped paths, partial-semantic evidence, or unsupported areas existed. | Classifier and metadata issue addressed for current sweep quality. No-coverage and unsupported-language status semantics are fixture-proven with explicit caveats. | Keep attention items separate from result quality. |
+| 0 / 8 | degraded | Docs map/overview/outline/read-section included skipped-path warnings unrelated to the requested document result. | Current sweep no longer reports these as degraded; docs and context skipped-path compaction are fixture-proven. | Keep requested-path failures explicit and routine skip noise compact. |
+| 0 / 5 | degraded | `context_for_task` had no graph query ports wired in the sweep path, so ranked-symbol evidence was skipped. | Current sweep quality improved after request-budget changes, and graph-backed context behavior is covered by focused tests. | No current follow-up from this spec. |
 | 0 / 4 | blocked | `verification_plan` was blocked because the harness selected hidden/generated files as changed files, then the scanner correctly excluded them. | Harness bug fixed by building facts from scanner-visible files. | Keep sweep facts scanner-visible; add regression fixtures when new file-selection paths are introduced. |
 | 0 / 3 | degraded | `diagnostics_for_files` had no applicable diagnostics provider or selected a file outside current provider coverage. | Current sweep selects provider-covered JSON files. | Select provider-covered files for sweep positives and add explicit no-provider coverage tests. |
 | 0 / 3 | invalid | `check_markdown_document` selected markdown-like paths that the scanner could not validate, such as hidden/generated paths or `AGENTS.md`/root docs missed by the scanner budget. | Harness bug plus scanner coverage gap fixed for current sweep by scanner-visible markdown selection and the higher catalog budget. | Keep markdown sweep inputs scanner-visible; treat `AGENTS.md`/repo instruction docs consistently if they are valid documentation targets. |
@@ -111,16 +114,21 @@ cause and removed where the runtime can gather better evidence.
 
 ## Known Initial Findings
 
-- `docs_search` now returns blocked, non-invalid output while docs FTS evidence
-  is cold or missing. Further work remains to decide whether docs FTS warmup
-  should index markdown independently of symbol warmup budgets.
-- `repo:///status` can return invalid without explicit errors when adapter
-  coverage is zero.
-- `docs_outline` and `check_markdown_document` need clearer missing versus
-  no-heading behavior.
-- Graph-backed tools need better sweep inputs and clearer degraded reasons.
-- `verification_plan` blocked output needs reason and next-action clarity.
-- Routine skipped-path warnings are too noisy for large repos.
+The initial findings are resolved for this spec's scope:
+
+- `docs_search` returns structured blocked metadata when FTS evidence is cold
+  or missing, and the final committed-sandbox sweep no longer has blocked docs
+  search rows.
+- `repo:///status` no-coverage and unsupported-language cases expose explicit
+  caveats instead of unexplained invalid or partial output.
+- `docs_outline` distinguishes missing Markdown from existing no-heading
+  Markdown; no-heading documents return `done` with an empty heading list.
+- Graph-backed sweep calls use indexed symbols when available, and graph query
+  tools distinguish cold graph blocked evidence from warm no-symbol results.
+- `verification_plan` blocked summaries include the first blocker and a next
+  action without executing commands.
+- Routine skipped-path warnings are compacted in docs/context surfaces and do
+  not downgrade the clean sweep result quality.
 
 ## Residual Risks
 
@@ -145,8 +153,7 @@ cause and removed where the runtime can gather better evidence.
 - Workspace-write behavior on real external repository shapes requires a
   sandbox copy. Running write-capable tools against original external
   repositories is out of bounds for this spec.
-- The current dogfood sweep is clean, but T004-T008 and T011 still track
-  fixture-level semantic coverage gaps that are not proven solely by the
-  current eight repository set: no-coverage status fixtures, missing/no-heading
-  docs behavior, indexed-symbol/no-symbol graph distinctions, explicit blocked
-  verification-plan reasons, and compact skipped-path warning presentation.
+- Spawned stdio entrypoint tests are timing-sensitive under full-suite load.
+  The final full suite passed on rerun, and the stdio test file passed directly
+  after the intermediate timeout, so this is recorded as load/timing risk
+  rather than a current regression.

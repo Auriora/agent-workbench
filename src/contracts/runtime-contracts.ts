@@ -101,6 +101,7 @@ export const nextActionSchema = z.object({
 export type NextAction = z.infer<typeof nextActionSchema>;
 
 export const runtimeStatusCaveatKindSchema = z.enum([
+  "no_adapter_coverage",
   "missing_tree_sitter_parser",
   "missing_parser_grammar",
   "parser_timeout",

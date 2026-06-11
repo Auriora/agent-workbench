@@ -165,6 +165,16 @@ export function deriveRuntimeStatusCaveats(input: {
   const caveats: RuntimeStatusCaveat[] = [];
   const reason = (input.snapshot?.reason ?? input.warmup?.reason ?? "").toLowerCase();
 
+  if (input.coverage.length === 0) {
+    caveats.push({
+      kind: "no_adapter_coverage",
+      severity: runtimeCaveatSeverities.language,
+      message:
+        "No scanner-visible adapter coverage was observed; status is limited to repository availability and cannot prove language, docs, config, or validation readiness.",
+      evidence_kinds: []
+    });
+  }
+
   if (reason.includes("grammar")) {
     caveats.push({
       kind: "missing_parser_grammar",
@@ -234,7 +244,7 @@ export function deriveRuntimeStatusCaveats(input: {
   const hasOptionalEnrichmentEvidence = input.coverage.some((entry) =>
     entry.evidence_kinds.includes("compiler_api") || entry.evidence_kinds.includes("lsp")
   );
-  if (hasPartialParserCoverage && !hasOptionalEnrichmentEvidence) {
+  if (input.snapshot !== undefined && hasPartialParserCoverage && !hasOptionalEnrichmentEvidence) {
     caveats.push({
       kind: "missing_optional_enrichment_evidence",
       severity: runtimeCaveatSeverities.enrichment,
@@ -282,7 +292,7 @@ export function buildRuntimeResponseMeta(input: {
   });
   const evidenceKinds = uniqueSorted<EvidenceKind>(input.coverage.flatMap((item) => item.evidence_kinds));
   const caveats =
-    input.snapshot === null || input.snapshot === undefined
+    input.snapshot === null
       ? []
       : deriveRuntimeStatusCaveats({
           coverage: input.coverage,
