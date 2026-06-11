@@ -78,6 +78,7 @@ would see from committed source.
 | 2026-06-11 | Eight-repo committed-tree sandbox dogfood sweep | Created `.tmp/tool-sweep-sandboxes-committed/{timelocker,aws-datalake,freecad,librechat,onemount,one-register,xrppoc,crealityprint}` from each target repository with `git archive HEAD`, excluding uncommitted and ignored/generated content. Ran `pnpm debug:mcp-tool-sweep -- --repo ... --output-dir .tmp/agent-workbench-tool-sweep-committed-sandboxes --start-graph-warmup`; report `.tmp/agent-workbench-tool-sweep-committed-sandboxes/mcp-tool-sweep-2026-06-11T05-51-39-772Z.json` covered 8 repos with 58 full, 51 partial, 57 degraded, 5 blocked, and 5 invalid results. `preview_workspace_edit` and `apply_workspace_edit` were full/ok on all eight sandbox copies. Invalids were FreeCAD `docs_search` and `check_markdown_document`, LibreChat `docs_search` and `check_markdown_document`, and CrealityPrint `check_markdown_document`; none were write-tool failures. |
 | 2026-06-11 | Raw envelope RCA rerun for non-full results | Reran the same eight committed-tree sandboxes with `--include-raw`; report `.tmp/agent-workbench-tool-sweep-committed-sandboxes-raw/mcp-tool-sweep-2026-06-11T06-01-40-393Z.json` reproduced the same 58 full, 51 partial, 57 degraded, 5 blocked, and 5 invalid counts. RCA below records each non-full category as a root cause to fix or explicitly justify. |
 | 2026-06-11 | Scanner-visible sweep input selection | Updated the harness to select Markdown, JSON, text, and validation-plan inputs from scanner-visible files instead of raw recursive filesystem listings; markdown quality calls now skip when no scanner-visible Markdown prerequisite exists. `pnpm test tests/mcp/debug-harness.test.ts` and `pnpm typecheck` passed. Eight-repo sandbox report `.tmp/agent-workbench-tool-sweep-committed-sandboxes-after-input-selection-final/mcp-tool-sweep-2026-06-11T06-16-13-585Z.json` improved the baseline to 64 full, 46 partial, 64 degraded, 0 blocked, and 2 invalid. The only remaining invalids are FreeCAD and LibreChat `docs_search` cold/missing FTS semantics. |
+| 2026-06-11 | Docs search blocked FTS metadata correction | Changed `docs_search` blocked FTS metadata from invalid analysis to valid blocked evidence. `pnpm test tests/docs/query-docs.test.ts tests/mcp/docs-surfaces.test.ts tests/mcp/debug-harness.test.ts` and `pnpm typecheck` passed. Eight-repo sandbox report `.tmp/agent-workbench-tool-sweep-committed-sandboxes-after-docs-search-meta/mcp-tool-sweep-2026-06-11T06-33-34-341Z.json` returned 64 full, 46 partial, 64 degraded, 2 blocked, and 0 invalid results. The 2 blocked rows are expected `docs_search` missing/cold FTS evidence for FreeCAD and LibreChat. |
 
 ## Non-Full Result RCA
 
@@ -101,8 +102,9 @@ cause and removed where the runtime can gather better evidence.
 
 ## Known Initial Findings
 
-- `docs_search` can return blocked invalid output while docs FTS evidence is
-  cold or refreshing.
+- `docs_search` now returns blocked, non-invalid output while docs FTS evidence
+  is cold or missing. Further work remains to decide whether docs FTS warmup
+  should index markdown independently of symbol warmup budgets.
 - `repo:///status` can return invalid without explicit errors when adapter
   coverage is zero.
 - `docs_outline` and `check_markdown_document` need clearer missing versus

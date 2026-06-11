@@ -365,7 +365,7 @@ function docsSearchMeta(input: {
   blocked: boolean;
 }): ResponseMetadata {
   return {
-    analysis_validity: input.blocked ? "invalid" : "valid",
+    analysis_validity: "valid",
     freshness: input.freshness,
     scope: {
       repo_root: input.repoRoot,

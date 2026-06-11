@@ -264,7 +264,7 @@ describe("docs query application contracts", () => {
       truncated: false
     });
     expect(result.meta).toMatchObject({
-      analysis_validity: "invalid",
+      analysis_validity: "valid",
       capability_level: "unsupported",
       evidence_kinds: [],
       verification_status: "blocked"

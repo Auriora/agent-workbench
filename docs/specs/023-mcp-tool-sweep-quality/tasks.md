@@ -116,11 +116,23 @@ T004,T005,T006,T007,T008 -> T009 -> T010
     unsupported evidence; cold/refreshing docs FTS is structured blocked and
     actionable, not unexplained invalid. Routine attention items do not
     downgrade otherwise complete orientation responses.
-  - Evidence: Pending.
+  - Evidence: Docs FTS blocked metadata corrected on 2026-06-11 in
+    `src/application/use-cases/query-docs.ts`; `pnpm test
+    tests/docs/query-docs.test.ts tests/mcp/docs-surfaces.test.ts
+    tests/mcp/debug-harness.test.ts`, `pnpm typecheck`, and the eight-repo
+    committed-tree sandbox sweep passed with 0 invalid results. Status
+    no-coverage semantics and routine attention-item downgrade semantics remain
+    pending.
   - [ ] T004.1 Write failing tests for no adapter coverage status.
-  - [ ] T004.2 Write failing tests for cold and refreshing docs FTS output.
+  - [x] T004.2 Write failing tests for cold and refreshing docs FTS output.
+    - Evidence: Updated docs search blocked-index expectations in
+      `tests/docs/query-docs.test.ts` to require `analysis_validity: valid`
+      with `verification_status: blocked`.
   - [ ] T004.3 Implement metadata and presenter corrections.
+    - Evidence: Docs search metadata correction complete; status and routine
+      attention-item corrections remain pending before this subtask can close.
   - [ ] T004.4 Run focused status/docs tests.
+    - Evidence: Docs-focused tests passed; status-focused tests remain pending.
 
 - [ ] T005 Correct documentation tool edge cases.
   - Depends on: T003
