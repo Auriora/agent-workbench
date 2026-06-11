@@ -307,7 +307,7 @@ T013 -> T014
   - [x] T009.4 Record process/report RCA and any remaining harness risk in
     `verification.md`.
 
-- [ ] T010 Run a fresh full eight-repo committed-sandbox sweep.
+- [x] T010 Run a fresh full eight-repo committed-sandbox sweep.
   - Depends on: T009
   - Files: `.tmp/agent-workbench-tool-sweep-*`,
     `docs/specs/023-mcp-tool-sweep-quality/verification.md`
@@ -315,14 +315,31 @@ T013 -> T014
     the pagination, reference truncation, and docs FTS warmup fixes; all
     non-full rows are listed with current RCA. Workspace-write rows run only
     against sandbox copies.
-  - Evidence: Pending.
-  - [ ] T010.1 Refresh or verify the committed-tree sandbox copies.
-  - [ ] T010.2 Run `pnpm debug:mcp-tool-sweep -- --repo ... --start-graph-warmup`
+  - Evidence: Created fresh committed-tree sandboxes under
+    `.tmp/tool-sweep-sandboxes-committed-t010/` with `git archive HEAD` for
+    all eight target repositories. Ran the full warmup sweep into
+    `.tmp/agent-workbench-tool-sweep-t010-full/` on 2026-06-11; final report
+    `.tmp/agent-workbench-tool-sweep-t010-full/mcp-tool-sweep-2026-06-11T10-03-36-626Z.json`
+    covered 176 rows with 176 full, 0 partial, 0 degraded, 0 blocked, and 0
+    invalid results. Progress report state was `complete`. Workspace-write
+    rows were full/ok for all eight sandbox copies only.
+  - [x] T010.1 Refresh or verify the committed-tree sandbox copies.
+    - Evidence: Created new sandbox copies from each original repo's committed
+      `HEAD` using `git archive HEAD`, excluding `.git`, ignored/generated
+      files, dependency folders, caches, and uncommitted local changes by
+      construction.
+  - [x] T010.2 Run `pnpm debug:mcp-tool-sweep -- --repo ... --start-graph-warmup`
     against all eight sandbox repos.
-  - [ ] T010.3 Extract and record the final full/partial/degraded/blocked/invalid
+    - Evidence: Full eight-repo warmup sweep completed with a final report and
+      complete progress report under `.tmp/agent-workbench-tool-sweep-t010-full/`.
+  - [x] T010.3 Extract and record the final full/partial/degraded/blocked/invalid
     counts.
-  - [ ] T010.4 Reconcile any remaining non-full rows into this task list or a
+    - Evidence: Extracted final summary: 176 full, 0 partial, 0 degraded, 0
+      blocked, and 0 invalid. Each repo contributed 22 full rows.
+  - [x] T010.4 Reconcile any remaining non-full rows into this task list or a
     follow-up spec.
+    - Evidence: The fresh report has zero non-full rows, so no new runtime RCA
+      or follow-up implementation task is needed from T010.
 
 - [ ] T011 Complete status no-coverage semantics.
   - Depends on: T004
