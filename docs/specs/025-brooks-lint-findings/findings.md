@@ -87,7 +87,13 @@ graph TD
 
 #### BL-ARCH-001: Dependency Disorder - Application Imports Concrete Markdown Infrastructure
 
-Status: `new`
+Status: `accepted`
+
+Triage rationale: Accepted. The finding matches the repository's documented
+layer direction and the running evidence shows the current architecture test
+can pass while missing the multiline imports. Remediation stays sequenced
+behind `T003` so the executable boundary test is strengthened before any code
+movement.
 
 Symptom: `src/application/use-cases/index-repository-graph.ts` and
 `src/application/use-cases/query-docs.ts` import Markdown helper functions from
@@ -117,7 +123,13 @@ Verification: Pending.
 
 #### BL-ARCH-002: Dependency Disorder - Application And Presentation Form A Layer Cycle
 
-Status: `new`
+Status: `accepted`
+
+Triage rationale: Accepted. Application imports from `src/presentation` create
+an inward dependency on response metadata vocabulary and contradict the
+documented presentation-to-application direction. Remediation stays sequenced
+behind `T004` after `T003` makes the boundary test capable of enforcing the
+rule.
 
 Symptom: Multiple application use cases import `capNextActions`,
 `invalidResponseMeta`, or `uniqueSorted` from
@@ -161,7 +173,13 @@ Verification: Pending.
 
 #### BL-ARCH-003: Dependency Disorder - MCP Adapters Depend On Concrete Telemetry Type
 
-Status: `new`
+Status: `accepted`
+
+Triage rationale: Accepted for explicit boundary decision. The current MCP
+adapter dependency is type-only, but it still points at a concrete
+infrastructure module where a port abstraction or documented exception should
+own the contract. `T005` will decide whether to move telemetry behind
+`src/ports` or encode a durable exception with a matching boundary test.
 
 Symptom: `src/interface-adapters/mcp/server.ts` and
 `src/interface-adapters/mcp/instrumentation.ts` import the `TelemetryAdapter`
@@ -431,7 +449,10 @@ graph TD
 
 #### BL-ARCH-001: Dependency Disorder - Application Imports Concrete Markdown Infrastructure
 
-Status: `new`
+Status: `accepted`
+
+Triage rationale: Accepted in the primary architecture ledger above; retained
+here as the health-dashboard cross-reference to `T003`.
 
 Symptom: The application layer imports Markdown helpers from
 `src/infrastructure/markdown/docs.ts`, and the current architecture boundary
@@ -451,7 +472,10 @@ port before moving the code.
 
 #### BL-ARCH-002: Dependency Disorder - Application And Presentation Form A Layer Cycle
 
-Status: `new`
+Status: `accepted`
+
+Triage rationale: Accepted in the primary architecture ledger above; retained
+here as the health-dashboard cross-reference to `T004`.
 
 Symptom: Application use cases import next-action and metadata helpers from
 `src/presentation/metadata.ts`, while presenters import application result

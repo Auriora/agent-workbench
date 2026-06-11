@@ -38,14 +38,16 @@ T016 -> T018
     fields.
   - Evidence: Captured in `findings.md` on 2026-06-06.
 
-- [ ] T002 Triage and accept, defer, or dismiss current architecture findings.
+- [x] T002 Triage and accept, defer, or dismiss current architecture findings.
   - Depends on: T001
   - Files: `docs/specs/025-brooks-lint-findings/findings.md`,
     `docs/specs/025-brooks-lint-findings/tasks.md`
   - Acceptance: `BL-ARCH-001`, `BL-ARCH-002`, and `BL-ARCH-003` each have a
     status beyond `new`, with a rationale and linked remediation tasks if
     accepted.
-  - Evidence: Pending.
+  - Evidence: 2026-06-11 triage accepted `BL-ARCH-001`, `BL-ARCH-002`, and
+    `BL-ARCH-003` in `findings.md`, with remediation linked to `T003`, `T004`,
+    and `T005`.
 
 ## Phase 2: Architecture Remediation
 

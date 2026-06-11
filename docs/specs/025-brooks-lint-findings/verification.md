@@ -38,6 +38,7 @@ Resolving findings requires code, tests, and durable documentation validation.
 | 2026-06-06 | Static Brooks-Lint tech debt scan | Completed | Captured `BL-DEBT-001`, `BL-DEBT-002`, and `BL-DEBT-003` in `findings.md`. |
 | 2026-06-06 | Static Brooks-Lint health dashboard scan | Completed | Captured composite score `82/100`, dimension scores, test suite map, and `BL-HEALTH-001` in `findings.md`. |
 | 2026-06-06 | `pnpm test` | Passed | 57 test files and 360 tests passed in 12.93 seconds. Evidence captured for `$brooks-test`. |
+| 2026-06-11 | Architecture findings triage | Completed | `BL-ARCH-001`, `BL-ARCH-002`, and `BL-ARCH-003` accepted with rationale and linked remediation tasks `T003`, `T004`, and `T005`. No runtime code changed in this triage slice. |
 
 ## Required Gates For Remediation
 
