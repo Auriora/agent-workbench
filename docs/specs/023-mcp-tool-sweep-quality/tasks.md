@@ -17,7 +17,10 @@ T003 -> T004 -> T005
 T003 -> T006
 T003 -> T007
 T003 -> T008
-T004,T005,T006,T007,T008 -> T009 -> T010
+T004,T005,T006,T007,T008 -> T009 -> T010 -> T013
+T004 -> T011 -> T013
+T009 -> T012 -> T013
+T013 -> T014
 ```
 
 ## Phase 1: Harness And Baseline
@@ -261,24 +264,99 @@ T004,T005,T006,T007,T008 -> T009 -> T010
   - [ ] T008.2 Implement compact warning aggregation.
   - [ ] T008.3 Run focused presentation/docs tests.
 
-## Phase 3: Verification And Promotion
+## Phase 3: Sweep Reliability And Runtime Follow-Ups
 
-- [ ] T009 Run full validation and cross-repo sweep.
-  - Depends on: T004, T005, T006, T007, T008
+- [ ] T009 Investigate stale sweep execution and report reliability.
+  - Depends on: T002, T006
+  - Files: `src/debug/mcp-tool-sweep.ts`, `tests/mcp/debug-harness.test.ts`,
+    `docs/specs/023-mcp-tool-sweep-quality/verification.md`
+  - Acceptance: Multi-repo warmup sweep failures are classified as one of:
+    clean process exit without report, thrown error before report write,
+    timeout/cancellation, process kill, or terminal/PTY observation issue.
+    The harness writes enough per-repo progress or partial report evidence that
+    a failed or interrupted run can still be RCA'd without guessing.
+  - Evidence: Pending.
+  - [ ] T009.1 Reproduce the stale PTY/missing-report behavior with a bounded
+    committed-tree sandbox sweep.
+  - [ ] T009.2 Add deterministic report flushing or per-repo progress records
+    before and after warmup and surface calls.
+  - [ ] T009.3 Add a harness regression for report persistence when one repo
+    warmup or surface call fails.
+  - [ ] T009.4 Record process/report RCA and any remaining harness risk in
+    `verification.md`.
+
+- [ ] T010 Run a fresh full eight-repo committed-sandbox sweep.
+  - Depends on: T009
+  - Files: `.tmp/agent-workbench-tool-sweep-*`,
+    `docs/specs/023-mcp-tool-sweep-quality/verification.md`
+  - Acceptance: A fresh eight-repo committed-tree sandbox report exists after
+    the pagination, reference truncation, and docs FTS warmup fixes; all
+    non-full rows are listed with current RCA. Workspace-write rows run only
+    against sandbox copies.
+  - Evidence: Pending.
+  - [ ] T010.1 Refresh or verify the committed-tree sandbox copies.
+  - [ ] T010.2 Run `pnpm debug:mcp-tool-sweep -- --repo ... --start-graph-warmup`
+    against all eight sandbox repos.
+  - [ ] T010.3 Extract and record the final full/partial/degraded/blocked/invalid
+    counts.
+  - [ ] T010.4 Reconcile any remaining non-full rows into this task list or a
+    follow-up spec.
+
+- [ ] T011 Complete status no-coverage semantics.
+  - Depends on: T004
+  - Files: `src/application/use-cases/get-repo-status.ts`,
+    `src/presentation/status-presenter.ts`, `tests/runtime/`,
+    `tests/mcp/repo-status-resource.test.ts`
+  - Acceptance: Repository status with no adapter coverage returns explicit
+    unsupported or degraded evidence with actionable metadata, not invalid or
+    unexplained partial output. The response distinguishes unsupported
+    language/tool coverage from cold or failed runtime state.
+  - Evidence: Pending.
+  - [ ] T011.1 Add failing tests for no adapter coverage and unsupported
+    language status.
+  - [ ] T011.2 Implement status metadata and presenter corrections.
+  - [ ] T011.3 Run focused runtime/status MCP tests and update T004 evidence.
+
+- [ ] T012 Investigate bounded parallel and background processing.
+  - Depends on: T009
+  - Files: `src/debug/mcp-tool-sweep.ts`,
+    `src/application/use-cases/index-repository-graph.ts`,
+    `docs/specs/023-mcp-tool-sweep-quality/verification.md`,
+    future design notes if needed.
+  - Acceptance: The spec records which work is safe to run concurrently
+    (repo warmups, read-only surface calls, docs indexing) and which work must
+    remain serialized (shared SQLite writes per repo, workspace-write preview
+    and apply pairs, report finalization). Any implementation uses bounded
+    concurrency with deterministic report ordering and clear cancellation or
+    failure propagation.
+  - Evidence: Pending.
+  - [ ] T012.1 Measure current serial sweep timing and identify the slow phases.
+  - [ ] T012.2 Decide whether to parallelize across repos, within repo
+    read-only surfaces, docs indexing, or none for this spec.
+  - [ ] T012.3 If accepted, implement bounded concurrency with stable output
+    ordering and tests; otherwise record why serial execution remains the
+    safer path.
+  - [ ] T012.4 Record the background/async design decision in `verification.md`
+    or a durable design note.
+
+## Phase 4: Verification And Promotion
+
+- [ ] T013 Run full validation and cross-repo sweep.
+  - Depends on: T004, T005, T006, T007, T008, T010, T011, T012
   - Files: `docs/specs/023-mcp-tool-sweep-quality/verification.md`
   - Acceptance: `pnpm typecheck`, focused tests, `pnpm test`, and the
     eight-repo read-only tool sweep complete with no unexplained invalid
     results; workspace-write behavior is proven by fixtures or sandbox copies.
   - Evidence: Pending.
-  - [ ] T009.1 Run `pnpm typecheck`.
-  - [ ] T009.2 Run focused tests for changed areas.
-  - [ ] T009.3 Run `pnpm test`.
-  - [ ] T009.4 Run eight-repo `pnpm debug:mcp-tool-sweep` without target repo
+  - [ ] T013.1 Run `pnpm typecheck`.
+  - [ ] T013.2 Run focused tests for changed areas.
+  - [ ] T013.3 Run `pnpm test`.
+  - [ ] T013.4 Run eight-repo `pnpm debug:mcp-tool-sweep` without target repo
     build/test commands or workspace-write calls against original repos.
-  - [ ] T009.5 Record evidence and residual risks in `verification.md`.
+  - [ ] T013.5 Record evidence and residual risks in `verification.md`.
 
-- [ ] T010 Promote durable docs and prepare closure.
-  - Depends on: T009
+- [ ] T014 Promote durable docs and prepare closure.
+  - Depends on: T013
   - Files: `docs/design/mcp-surface-design.md`,
     `docs/design/observability-debugging-design.md`,
     `docs/reference/runtime-contracts.md`,
@@ -288,8 +366,8 @@ T004,T005,T006,T007,T008 -> T009 -> T010
     no-build/no-test/no-write original target-repo boundary, sandbox-copy path,
     and updated metadata semantics.
   - Evidence: Pending.
-  - [ ] T010.1 Update durable docs.
-  - [ ] T010.2 Update documentation map if required.
-  - [ ] T010.3 Run `git diff --check`.
-  - [ ] T010.4 Run spec lifecycle validation or manual spec artifact check.
-  - [ ] T010.5 Record closure readiness in `verification.md`.
+  - [ ] T014.1 Update durable docs.
+  - [ ] T014.2 Update documentation map if required.
+  - [ ] T014.3 Run `git diff --check`.
+  - [ ] T014.4 Run spec lifecycle validation or manual spec artifact check.
+  - [ ] T014.5 Record closure readiness in `verification.md`.
