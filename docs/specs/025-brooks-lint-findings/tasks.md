@@ -273,14 +273,17 @@ T016 -> T018
   - Evidence: Captured `$brooks-test` Test Quality Review in `findings.md` on
     2026-06-06.
 
-- [ ] T016 Triage and accept, defer, or dismiss current test quality findings.
+- [x] T016 Triage and accept, defer, or dismiss current test quality findings.
   - Depends on: T015
   - Files: `docs/specs/025-brooks-lint-findings/findings.md`,
     `docs/specs/025-brooks-lint-findings/tasks.md`
   - Acceptance: `BL-TEST-001`, `BL-TEST-002`, and `BL-TEST-003` each have a
     status beyond `new`, with a rationale and linked remediation tasks if
     accepted.
-  - Evidence: Pending.
+  - Evidence: 2026-06-11 triage marked `BL-TEST-001` resolved through `T014`,
+    accepted `BL-TEST-002` for focused unit/contract follow-up in `T017`, and
+    accepted `BL-TEST-003` for broad fixture annotation/splitting guidance in
+    `T018`. No runtime code changed in this triage slice.
 
 - [ ] T017 Add focused unit coverage while extracting validation and resource logic.
   - Depends on: T016, T010, T011

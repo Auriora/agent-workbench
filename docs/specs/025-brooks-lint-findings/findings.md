@@ -699,9 +699,14 @@ under `tests/fixtures/` are not counted as executable test files.
 
 #### BL-TEST-001: Test Brittleness - MCP Behavior Tests Reach Through Internal Registration Shapes
 
-Status: `new`
+Status: `resolved`
 
 Related finding: `BL-HEALTH-001`
+
+Triage rationale: Accepted and resolved through `T014`. The finding matched
+the repeated local registration shims and composed-server casts in MCP behavior
+tests. The fix keeps behavior assertions at the MCP boundary while moving
+test-only registry and composed-server access behind typed helpers.
 
 Symptom: Several MCP behavior tests construct ad hoc server objects, capture
 `registered.handler(...)`, or cast composed servers to internal
@@ -727,11 +732,21 @@ metadata tests.
 
 Tasks: `T014`, `T016`
 
-Verification: Pending.
+Verification: 2026-06-11 `T014` added `tests/helpers/mcp-harness.ts` and
+updated representative MCP/integration behavior tests for tool registration,
+resource registration, composed-server lookup, invalid-input dispatch, and
+response parsing. Targeted MCP/integration tests, `pnpm typecheck`, and
+`pnpm test` passed.
 
 #### BL-TEST-002: Architecture Mismatch - Integration Tests Dominate Fast Feedback
 
-Status: `new`
+Status: `accepted`
+
+Triage rationale: Accepted for follow-up through `T017`. The suite is still
+fast, so this is not a release blocker, but the integration-heavy distribution
+is real maintainability debt. The remediation should add focused unit or
+contract tests around already-extracted validation planner and resource
+extractor rules without deleting high-value integration fixtures.
 
 Symptom: The executed suite is fast at 12.93 seconds, but the suite map is
 heavily integration-oriented: approximately 47 of 57 executable test files and
@@ -759,13 +774,19 @@ extractor rules into focused unit tests where possible.
 
 Tasks: `T010`, `T011`, `T016`, `T017`
 
-Verification: Pending.
+Verification: Triage completed 2026-06-11. Implementation remains pending in
+`T017`.
 
 ### Suggestion
 
 #### BL-TEST-003: Test Obscurity - Some Fixture Tests Compress Too Many Behaviors Into One Scenario
 
-Status: `new`
+Status: `accepted`
+
+Triage rationale: Accepted for follow-up through `T018`. The broad fixture
+tests are intentionally valuable smoke coverage and should not be mechanically
+split. The remediation is to add named helpers, smaller companion tests, or
+scenario comments when a broad fixture expands or fails.
 
 Symptom: Several high-value fixture tests intentionally cover many behaviors in
 one `it(...)` block, for example
@@ -794,7 +815,8 @@ behavioral reason.
 
 Tasks: `T016`, `T018`
 
-Verification: Pending.
+Verification: Triage completed 2026-06-11. Implementation remains pending in
+`T018`.
 
 ---
 
