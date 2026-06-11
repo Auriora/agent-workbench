@@ -3,7 +3,7 @@ title: Agent IDE system architecture
 doc_type: architecture
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-06-11
 ---
 
 # Agent IDE System Architecture
@@ -83,6 +83,12 @@ MCP, SQLite, tree-sitter, filesystem watching, and process execution are outer
 adapters. Application and domain code depend on ports and policies, not concrete
 infrastructure. MCP handlers must call one use case and one presenter; they must
 not query SQLite, parse source, or hand-build response envelopes.
+
+Shared response policy follows the same dependency direction. Application-owned
+helpers handle Markdown document selection, response metadata policy, public
+next-action filtering, and runtime trust classification. Presenters depend
+inward on those helpers to build envelopes, while concrete telemetry remains in
+infrastructure behind `TelemetryRecorderPort`.
 
 Coding-agent integration emitters are also outer adapters. They may target
 Codex, Claude Code, Kiro, Augment, Gemini, Junie, or future agents, but they

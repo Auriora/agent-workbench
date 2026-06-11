@@ -3,7 +3,7 @@ title: Layered runtime architecture
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-05-08
+last_reviewed: 2026-06-11
 ---
 
 # Layered Runtime Architecture
@@ -123,6 +123,27 @@ other external tools.
   Agent-specific plugins, hooks, commands, rules, steering files, guidelines,
   and extension manifests must not become core runtime abstractions.
 
+## Current Boundary Ownership
+
+The runtime keeps shared response policy in the innermost layer that needs it:
+
+- Markdown document parsing helpers used by docs query/index use cases live in
+  `src/application/use-cases/markdown-docs.ts`. They are pure application
+  helpers, not filesystem or Markdown infrastructure adapters.
+- Response metadata policy, public next-action filtering, runtime trust
+  classification, and invalid-response metadata live in
+  `src/application/use-cases/response-metadata.ts`. Presenters may use those
+  helpers while still owning envelope construction, warnings/errors, and final
+  response shaping.
+- MCP instrumentation depends on `TelemetryRecorderPort` from `src/ports`.
+  Concrete telemetry adapters, OpenTelemetry configuration, and fallback
+  in-memory/no-op implementations live in `src/infrastructure/telemetry/`.
+
+Architecture tests enforce these decisions: application code must not import
+`src/presentation` or `src/infrastructure`, presentation must not import
+`src/infrastructure`, and MCP adapters must not import concrete infrastructure.
+There are no current intentional exceptions for these rules.
+
 ## Core Ports
 
 MVP ports:
@@ -156,6 +177,7 @@ MVP ports:
 - `RuntimeContextFactoryPort`
 - `StateStorePort`
 - `TelemetryPort`
+- `TelemetryRecorderPort`
 - `IntegrationProfileRegistryPort`
 - `IntegrationArtifactEmitterPort`
 

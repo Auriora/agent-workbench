@@ -49,6 +49,10 @@ Resolving findings requires code, tests, and durable documentation validation.
 | 2026-06-11 | `pnpm exec vitest run tests/architecture/layer-boundaries.test.ts tests/mcp/telemetry-instrumentation.test.ts tests/telemetry/boundary-instrumentation.test.ts tests/telemetry/config.test.ts` | Passed | 4 test files and 20 tests passed after moving MCP telemetry dependency to `TelemetryRecorderPort`. |
 | 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after the telemetry port ownership change. |
 | 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T005`: 59 test files and 396 tests. |
+| 2026-06-11 | `pnpm exec vitest run tests/architecture/layer-boundaries.test.ts` | Passed | Aggregate architecture validation for `T006`: 1 test file and 6 tests passed after `T003`, `T004`, and `T005`. |
+| 2026-06-11 | `pnpm typecheck` | Passed | Aggregate TypeScript validation for `T006` passed after accepted architecture remediations. |
+| 2026-06-11 | `pnpm test` | Passed | Aggregate full-suite validation for `T006` passed: 59 test files and 396 tests. |
+| 2026-06-11 | Durable architecture doc promotion | Completed | `T007` promoted ownership of Markdown helpers, response metadata policy, telemetry recorder abstraction, and no-exception boundary rules to durable architecture docs and the documentation map. |
 
 ## Required Gates For Remediation
 

@@ -87,7 +87,7 @@ graph TD
 
 #### BL-ARCH-001: Dependency Disorder - Application Imports Concrete Markdown Infrastructure
 
-Status: `in_progress`
+Status: `resolved`
 
 Triage rationale: Accepted. The finding matches the repository's documented
 layer direction and the running evidence shows the current architecture test
@@ -122,12 +122,14 @@ Tasks: `T002`, `T003`
 Verification: 2026-06-11 `T003` moved pure Markdown document helpers to
 `src/application/use-cases/markdown-docs.ts`, replaced regex import extraction
 with TypeScript AST extraction, and passed targeted architecture/docs tests and
-`pnpm typecheck`. Keep status `in_progress` until validation aggregation and
-durable architecture docs are promoted.
+`pnpm typecheck`. `T006` aggregate validation passed, and `T007` promoted
+ownership to `docs/design/layered-runtime-architecture.md` with map pointers in
+`docs/architecture/system-architecture.md` and
+`docs/reference/documentation-map.md`.
 
 #### BL-ARCH-002: Dependency Disorder - Application And Presentation Form A Layer Cycle
 
-Status: `in_progress`
+Status: `resolved`
 
 Triage rationale: Accepted. Application imports from `src/presentation` create
 an inward dependency on response metadata vocabulary and contradict the
@@ -175,14 +177,16 @@ Verification: 2026-06-11 `T004` moved response metadata and next-action policy
 to `src/application/use-cases/response-metadata.ts`, updated presenters to
 depend inward on that module, added an application boundary rule forbidding
 `src/presentation` imports, and passed targeted architecture/metadata checks,
-`pnpm typecheck`, and `pnpm test`. Keep status `in_progress` until aggregate
-validation and durable architecture docs are promoted.
+`pnpm typecheck`, and `pnpm test`. `T006` aggregate validation passed, and
+`T007` promoted ownership to `docs/design/layered-runtime-architecture.md`
+with map pointers in `docs/architecture/system-architecture.md` and
+`docs/reference/documentation-map.md`.
 
 ### Warning
 
 #### BL-ARCH-003: Dependency Disorder - MCP Adapters Depend On Concrete Telemetry Type
 
-Status: `in_progress`
+Status: `resolved`
 
 Triage rationale: Accepted for explicit boundary decision. The current MCP
 adapter dependency is type-only, but it still points at a concrete
@@ -214,9 +218,11 @@ Verification: 2026-06-11 `T005` added `TelemetryRecorderPort` in `src/ports`,
 made the infrastructure telemetry adapter implement that port, changed MCP
 server and instrumentation imports to the port abstraction, broadened the MCP
 adapter boundary test to forbid concrete infrastructure imports, and passed
-focused telemetry/architecture tests, `pnpm typecheck`, and `pnpm test`. Keep
-status `in_progress` until aggregate validation and durable architecture docs
-are promoted.
+focused telemetry/architecture tests, `pnpm typecheck`, and `pnpm test`. `T006`
+aggregate validation passed, and `T007` promoted ownership to
+`docs/design/layered-runtime-architecture.md` with map pointers in
+`docs/architecture/system-architecture.md` and
+`docs/reference/documentation-map.md`.
 
 ---
 
@@ -464,7 +470,7 @@ graph TD
 
 #### BL-ARCH-001: Dependency Disorder - Application Imports Concrete Markdown Infrastructure
 
-Status: `in_progress`
+Status: `resolved`
 
 Triage rationale: Accepted in the primary architecture ledger above; retained
 here as the health-dashboard cross-reference to `T003`.
@@ -487,7 +493,7 @@ port before moving the code.
 
 #### BL-ARCH-002: Dependency Disorder - Application And Presentation Form A Layer Cycle
 
-Status: `in_progress`
+Status: `resolved`
 
 Triage rationale: Accepted in the primary architecture ledger above; retained
 here as the health-dashboard cross-reference to `T004`.

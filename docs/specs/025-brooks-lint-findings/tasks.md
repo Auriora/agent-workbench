@@ -113,14 +113,17 @@ T016 -> T018
 
 ## Phase 3: Validation And Documentation
 
-- [ ] T006 Run validation for accepted remediations.
+- [x] T006 Run validation for accepted remediations.
   - Depends on: T003, T004, T005
   - Files: `tests/architecture/layer-boundaries.test.ts`, `src/`
   - Acceptance: `pnpm typecheck`, targeted architecture tests, and relevant
     Vitest suites pass after remediation.
-  - Evidence: Pending.
+  - Evidence: 2026-06-11 aggregate validation passed after `T003`, `T004`,
+    and `T005`: `pnpm exec vitest run tests/architecture/layer-boundaries.test.ts`
+    passed 1 test file and 6 tests, `pnpm typecheck` passed, and `pnpm test`
+    passed 59 test files and 396 tests.
 
-- [ ] T007 Promote resolved architecture decisions into durable docs.
+- [x] T007 Promote resolved architecture decisions into durable docs.
   - Depends on: T006
   - Files: `docs/design/layered-runtime-architecture.md`,
     `docs/architecture/system-architecture.md`,
@@ -128,7 +131,12 @@ T016 -> T018
   - Acceptance: Durable docs describe the final boundary ownership for
     metadata helpers, Markdown document helpers, telemetry abstraction, and any
     intentional exceptions.
-  - Evidence: Pending.
+  - Evidence: 2026-06-11 promoted current boundary ownership to
+    `docs/design/layered-runtime-architecture.md`, summarized the dependency
+    direction in `docs/architecture/system-architecture.md`, and updated
+    `docs/reference/documentation-map.md` to keep layered runtime architecture
+    as the canonical owner. No intentional exceptions remain for the remediated
+    architecture rules.
 
 ## Phase 4: Later Brooks-Lint Runs
 
