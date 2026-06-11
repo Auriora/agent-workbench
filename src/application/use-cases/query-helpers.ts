@@ -45,10 +45,11 @@ export async function resolveSnapshot(input: {
 
   const files = await input.catalog.listFiles({
     snapshot_id: snapshot.id,
-    max_rows: input.row_limit
+    max_rows: input.row_limit + 1
   });
-  const languages = uniqueSorted(files.map((file) => file.file_identity.language));
-  const fileRefs = files.map((file) => ({
+  const pageFiles = files.slice(0, input.row_limit);
+  const languages = uniqueSorted(pageFiles.map((file) => file.file_identity.language));
+  const fileRefs = pageFiles.map((file) => ({
     capability_level: file.adapter_evidence?.capability_level ?? capabilityForLanguage(file.file_identity.language),
     evidence_kinds: file.adapter_evidence?.evidence_kinds ?? evidenceForLanguage(file.file_identity.language)
   }));
@@ -67,7 +68,7 @@ export async function resolveSnapshot(input: {
       capability_level: strongestCapabilityLevel(fileRefs.map((file) => file.capability_level)),
       files: fileRefs,
       verification_status: "needed",
-      truncated: files.length >= input.row_limit,
+      truncated: false,
       budget: {
         row_limit: input.row_limit,
         traversal_depth: input.traversal_depth,

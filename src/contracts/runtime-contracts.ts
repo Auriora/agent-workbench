@@ -353,7 +353,8 @@ export const docsOverviewRequestSchema = z
   .object({
     repo_root: z.string().optional(),
     max_docs: z.number().int().positive().max(50).default(10),
-    max_headings_per_doc: z.number().int().positive().max(20).default(5)
+    max_headings_per_doc: z.number().int().positive().max(20).default(5),
+    cursor: z.string().optional()
   })
   .strict();
 export type DocsOverviewRequest = z.infer<typeof docsOverviewRequestSchema>;
@@ -362,7 +363,8 @@ export const docsMapRequestSchema = z
   .object({
     repo_root: z.string().optional(),
     max_docs: z.number().int().positive().max(200).default(50),
-    max_headings_per_doc: z.number().int().positive().max(50).default(20)
+    max_headings_per_doc: z.number().int().positive().max(50).default(20),
+    cursor: z.string().optional()
   })
   .strict();
 export type DocsMapRequest = z.infer<typeof docsMapRequestSchema>;
@@ -459,6 +461,8 @@ export const docsOverviewSchema = z
     important_docs: z.array(docsDocumentSchema),
     warnings: z.array(docsWarningSchema),
     truncated: z.boolean(),
+    cursor: z.string().optional(),
+    result_count: z.number().int().nonnegative().optional(),
     next_actions: z.array(nextActionSchema)
   })
   .strict();
@@ -471,6 +475,8 @@ export const docsMapSchema = z
     docs: z.array(docsDocumentSchema),
     warnings: z.array(docsWarningSchema),
     truncated: z.boolean(),
+    cursor: z.string().optional(),
+    result_count: z.number().int().nonnegative().optional(),
     next_actions: z.array(nextActionSchema)
   })
   .strict();
@@ -577,7 +583,8 @@ export const findReferencesRequestSchema = z
     repo_root: z.string().optional(),
     snapshot_id: z.string().optional(),
     max_depth: z.number().int().positive().max(5).default(1),
-    max_results: z.number().int().positive().max(100).default(50)
+    max_results: z.number().int().positive().max(100).default(50),
+    cursor: z.string().optional()
   })
   .strict()
   .refine((value) => value.node_id !== undefined || value.symbol !== undefined, {
@@ -608,6 +615,8 @@ export const findReferencesResultSchema = z
     snapshot_id: z.string(),
     target: symbolReferenceSchema.optional(),
     references: z.array(referenceHitSchema),
+    cursor: z.string().optional(),
+    result_count: z.number().int().nonnegative().optional(),
     next_actions: z.array(nextActionSchema)
   })
   .strict();

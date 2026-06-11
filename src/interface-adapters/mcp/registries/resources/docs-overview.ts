@@ -26,7 +26,8 @@ export const docsOverviewResource: McpResourceDeclaration = {
     parameters: [
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
       { name: "max_docs", description: "Maximum important docs to return.", required: false },
-      { name: "max_headings_per_doc", description: "Maximum headings to return per document.", required: false }
+      { name: "max_headings_per_doc", description: "Maximum headings to return per document.", required: false },
+      { name: "cursor", description: "Opaque cursor returned by a previous truncated docs overview page.", required: false }
     ],
     returns: "ResponseEnvelope<DocsOverview>"
   },
@@ -71,7 +72,8 @@ function getDocsResourceArgumentInput(request: unknown): unknown {
   return {
     repo_root: input.repo_root,
     max_docs: input.max_docs,
-    max_headings_per_doc: input.max_headings_per_doc
+    max_headings_per_doc: input.max_headings_per_doc,
+    cursor: input.cursor
   };
 }
 

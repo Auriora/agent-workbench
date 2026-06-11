@@ -100,7 +100,8 @@ describe("docs MCP resources", () => {
     const response = await registered.handler({
       repo_root: "/fixture",
       max_docs: 2,
-      max_headings_per_doc: 1
+      max_headings_per_doc: 1,
+      cursor: "next-page"
     });
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: DocsMapUseCaseResult["map"];
@@ -109,7 +110,8 @@ describe("docs MCP resources", () => {
     expect(parsedRequest).toMatchObject({
       repo_root: "/fixture",
       max_docs: 2,
-      max_headings_per_doc: 1
+      max_headings_per_doc: 1,
+      cursor: "next-page"
     });
     expect(parsed.data.docs.map((doc) => doc.path)).toEqual(["README.md", "docs/guide.md"]);
     expect(parsed.data.truncated).toBe(false);

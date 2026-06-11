@@ -64,6 +64,7 @@ export async function indexRepositoryGraph(input: {
   snapshot_id?: string;
   config_identity?: string;
   max_files?: number;
+  max_extraction_files?: number;
 }): Promise<IndexRepositoryGraphResult> {
   const snapshotId = input.snapshot_id ?? String(input.clock.nowUnixMs());
   const now = input.clock.nowIso8601();
@@ -98,7 +99,11 @@ export async function indexRepositoryGraph(input: {
   let unsupportedFiles = 0;
   let resourceBackedFiles = 0;
 
-  for (const [index, file] of scanned.files.entries()) {
+  const extractionFiles = input.max_extraction_files === undefined
+    ? scanned.files
+    : scanned.files.slice(0, input.max_extraction_files);
+
+  for (const [index, file] of extractionFiles.entries()) {
     await yieldToEventLoop(index);
     const extractor = resolveExtractor({
       file,
@@ -387,6 +392,7 @@ export async function warmupRepositoryGraph(input: {
   snapshot_id?: string;
   config_identity?: string;
   max_files?: number;
+  max_extraction_files?: number;
   cache?: CachePort;
 }): Promise<WarmupRepositoryGraphResult> {
   const snapshotId = input.snapshot_id ?? String(input.clock.nowUnixMs());
@@ -414,7 +420,8 @@ export async function warmupRepositoryGraph(input: {
       schema_version: input.schema_version,
       snapshot_id: snapshotId,
       config_identity: input.config_identity,
-      max_files: input.max_files
+      max_files: input.max_files,
+      max_extraction_files: input.max_extraction_files
     });
     const files = await input.catalog.listFiles({
       snapshot_id: result.snapshot_id,

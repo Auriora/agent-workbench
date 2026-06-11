@@ -33,6 +33,7 @@ import { getCatalogRepoStatus } from "./get-repo-status.js";
 
 const DOC_ROW_LIMIT = 15000;
 const DIRECT_READ_CAVEAT = "Docs search is routing evidence; use docs_read_section for precise claims.";
+const DOCS_CURSOR_KIND = "docs";
 
 export type DocsOverviewUseCaseResult = {
   overview: DocsOverview;
@@ -69,10 +70,15 @@ export async function getDocsOverview(input: {
     request: input.request,
     scanner: input.scanner,
     workspace: input.workspace,
-    default_repo_root: input.default_repo_root
+    default_repo_root: input.default_repo_root,
+    order: "importance"
   });
-  const docs = rankImportantDocs(index.documents)
-    .slice(0, input.request.max_docs)
+  const page = paginate(index.documents, {
+    cursor: input.request.cursor,
+    limit: input.request.max_docs,
+    kind: DOCS_CURSOR_KIND
+  });
+  const docs = page.items
     .map((doc) => publicDocument(limitDocumentHeadings(doc, input.request.max_headings_per_doc)));
 
   return {
@@ -82,10 +88,12 @@ export async function getDocsOverview(input: {
       summary: `Docs overview found ${docs.length} important doc(s) from ${index.documents.length} indexed Markdown doc(s).`,
       important_docs: docs,
       warnings: index.warnings,
-      truncated: index.truncated || index.documents.length > input.request.max_docs,
+      truncated: index.truncated || page.hasMore,
+      cursor: page.nextCursor,
+      result_count: index.totalDocuments,
       next_actions: docs.length > 0 ? docsNextActions(index.repoRoot, docs[0]?.path) : []
     },
-    meta: docsMeta(index)
+    meta: docsMeta({ ...index, truncated: index.truncated || page.hasMore })
   };
 }
 
@@ -99,10 +107,15 @@ export async function getDocsMap(input: {
     request: input.request,
     scanner: input.scanner,
     workspace: input.workspace,
-    default_repo_root: input.default_repo_root
+    default_repo_root: input.default_repo_root,
+    order: "path"
   });
-  const docs = index.documents
-    .slice(0, input.request.max_docs)
+  const page = paginate(index.documents, {
+    cursor: input.request.cursor,
+    limit: input.request.max_docs,
+    kind: DOCS_CURSOR_KIND
+  });
+  const docs = page.items
     .map((doc) => publicDocument(limitDocumentHeadings(doc, input.request.max_headings_per_doc)));
 
   return {
@@ -111,10 +124,12 @@ export async function getDocsMap(input: {
       status: index.warnings.length > 0 ? "needed" : docs.length > 0 ? "done" : "not_applicable",
       docs,
       warnings: index.warnings,
-      truncated: index.truncated || index.documents.length > input.request.max_docs,
+      truncated: index.truncated || page.hasMore,
+      cursor: page.nextCursor,
+      result_count: index.totalDocuments,
       next_actions: docs.length > 0 ? docsNextActions(index.repoRoot, docs[0]?.path) : []
     },
-    meta: docsMeta(index)
+    meta: docsMeta({ ...index, truncated: index.truncated || page.hasMore })
   };
 }
 
@@ -173,7 +188,8 @@ export async function getDocsOutline(input: {
     request: { repo_root: input.request.repo_root, max_docs: 200, max_headings_per_doc: 100 },
     scanner: input.scanner,
     workspace: input.workspace,
-    default_repo_root: input.default_repo_root
+    default_repo_root: input.default_repo_root,
+    order: "path"
   });
   const normalizedPath = normalizeRepoPath(input.request.path);
   const requested = await loadRequestedDoc({
@@ -211,7 +227,8 @@ export async function readDocsSection(input: {
     request: { repo_root: input.request.repo_root, max_docs: 200, max_headings_per_doc: 100 },
     scanner: input.scanner,
     workspace: input.workspace,
-    default_repo_root: input.default_repo_root
+    default_repo_root: input.default_repo_root,
+    order: "path"
   });
   const normalizedPath = normalizeRepoPath(input.request.path);
   const requested = await loadRequestedDoc({
@@ -264,13 +281,15 @@ type LoadedDocsIndex = {
   skippedPaths: readonly FileCatalogSkippedPath[];
   truncated: boolean;
   scannedFiles: readonly FileCatalogEntry[];
+  totalDocuments: number;
 };
 
 async function loadDocsIndex(input: {
-  request: { repo_root?: string; max_docs: number; max_headings_per_doc: number };
+  request: { repo_root?: string; max_docs: number; max_headings_per_doc: number; cursor?: string };
   scanner: FileCatalogScanPort;
   workspace: WorkspaceFilePort;
   default_repo_root: string;
+  order: "importance" | "path";
 }): Promise<LoadedDocsIndex> {
   const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
   const scanned = await input.scanner.scan({
@@ -282,9 +301,17 @@ async function loadDocsIndex(input: {
   const markdownFiles = scanned.files
     .filter((file) => file.file_identity.language === "markdown")
     .sort((left, right) => left.path.localeCompare(right.path));
+  const orderedMarkdownFiles = input.order === "importance"
+    ? [...markdownFiles].sort((left, right) => docRank(right.path) - docRank(left.path) || left.path.localeCompare(right.path))
+    : markdownFiles;
   const warnings = mapSkippedPaths(scanned.skipped_paths ?? []);
   const documents: Array<DocsDocument & { content: string }> = [];
-  for (const file of markdownFiles.slice(0, Math.max(input.request.max_docs, 200))) {
+  const cursorOffset = decodeCursor(input.request.cursor, DOCS_CURSOR_KIND);
+  const readLimit = Math.min(
+    orderedMarkdownFiles.length,
+    Math.max(input.request.max_docs, 200) + cursorOffset + 1
+  );
+  for (const file of orderedMarkdownFiles.slice(0, readLimit)) {
     try {
       const content = await input.workspace.readText({ path: file.path });
       const headings = parseMarkdownHeadings(content);
@@ -308,11 +335,12 @@ async function loadDocsIndex(input: {
   }
   return {
     repoRoot: scanned.repo_root,
-    documents: documents.sort((left, right) => left.path.localeCompare(right.path)),
+    documents: documents,
     warnings,
     skippedPaths: scanned.skipped_paths ?? [],
-    truncated: scanned.truncated || markdownFiles.length > Math.max(input.request.max_docs, 200),
-    scannedFiles: scanned.files
+    truncated: scanned.truncated || orderedMarkdownFiles.length > readLimit,
+    scannedFiles: scanned.files,
+    totalDocuments: markdownFiles.length
   };
 }
 
@@ -528,10 +556,6 @@ function unsafePathWarning(pathValue: string): DocsWarning | undefined {
   return undefined;
 }
 
-function rankImportantDocs(documents: readonly (DocsDocument & { content: string })[]) {
-  return [...documents].sort((left, right) => docRank(right.path) - docRank(left.path) || left.path.localeCompare(right.path));
-}
-
 function docRank(filePath: string): number {
   const lower = filePath.toLowerCase();
   let score = 0;
@@ -541,6 +565,47 @@ function docRank(filePath: string): number {
   if (lower.includes("architecture") || lower.includes("design")) score += 65;
   if (lower.startsWith("docs/reference/")) score += 30;
   return score;
+}
+
+function paginate<T>(items: readonly T[], input: {
+  cursor?: string;
+  limit: number;
+  kind: string;
+}): {
+  items: readonly T[];
+  hasMore: boolean;
+  nextCursor?: string;
+} {
+  const offset = decodeCursor(input.cursor, input.kind);
+  const page = items.slice(offset, offset + input.limit);
+  const hasMore = items.length > offset + input.limit;
+  return {
+    items: page,
+    hasMore,
+    nextCursor: hasMore ? encodeCursor({ kind: input.kind, offset: offset + page.length }) : undefined
+  };
+}
+
+function encodeCursor(input: { kind: string; offset: number }): string {
+  return Buffer.from(JSON.stringify(input), "utf8").toString("base64url");
+}
+
+function decodeCursor(cursor: string | undefined, kind: string): number {
+  if (cursor === undefined) {
+    return 0;
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
+      kind?: unknown;
+      offset?: unknown;
+    };
+    if (parsed.kind !== kind || typeof parsed.offset !== "number" || !Number.isInteger(parsed.offset) || parsed.offset < 0) {
+      return 0;
+    }
+    return parsed.offset;
+  } catch {
+    return 0;
+  }
 }
 
 function limitDocumentHeadings<T extends DocsDocument & { content?: string }>(

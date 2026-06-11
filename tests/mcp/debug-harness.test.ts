@@ -330,6 +330,44 @@ describe("repo-local MCP debug harness", () => {
       fs.rmSync(targetRepo, { recursive: true, force: true });
     }
   });
+
+  it("does not classify cursor-backed paginated results as partial sweep quality", async () => {
+    const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep-pagination-quality", String(Date.now()));
+    const targetRepo = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-pagination-quality-"));
+    try {
+      fs.mkdirSync(path.join(targetRepo, "docs"), { recursive: true });
+      for (let index = 0; index < 220; index += 1) {
+        fs.writeFileSync(
+          path.join(targetRepo, "docs", `page-${String(index).padStart(3, "0")}.md`),
+          `# Page ${index}\n\nBody.\n`
+        );
+      }
+
+      const report = await runMcpToolSweep({
+        repos: [targetRepo],
+        output_dir: outputDir,
+        call_timeout_ms: 30_000,
+        include_raw: true,
+        start_graph_warmup: false
+      });
+      const docsMap = report.results.find(
+        (result) => result.kind === "resource" && result.name === "docs-map"
+      );
+      const rawDocsMap = docsMap?.raw_envelope as {
+        data?: { truncated?: boolean; cursor?: string };
+      } | undefined;
+
+      expect(rawDocsMap?.data?.truncated).toBe(true);
+      expect(rawDocsMap?.data?.cursor).toEqual(expect.any(String));
+      expect(docsMap).toMatchObject({
+        status: "ok",
+        quality: "full"
+      });
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+      fs.rmSync(targetRepo, { recursive: true, force: true });
+    }
+  });
 });
 
 function snapshotDirectory(directory: string): string[] {

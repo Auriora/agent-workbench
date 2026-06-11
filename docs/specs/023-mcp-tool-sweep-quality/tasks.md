@@ -166,8 +166,10 @@ T004,T005,T006,T007,T008 -> T009 -> T010
     58 full, 8 partial, 0 degraded, 0 blocked, and 0 invalid to 60 full, 6
     partial, 0 degraded, 0 blocked, and 0 invalid after raising the harness
     docs-read byte budget; remaining subset partials are only broad
-    `docs-overview` and `docs-map` list caps. Missing and no-heading docs
-    subtasks remain pending.
+    `docs-overview` and `docs-map` list caps. Docs overview/map now expose
+    cursor-backed pagination; the sweep classifier treats truncated responses
+    with continuation cursors as complete pages, not partial results. Missing
+    and no-heading docs subtasks remain pending.
   - [ ] T005.1 Write failing tests for missing Markdown path behavior.
   - [ ] T005.2 Write failing tests for existing no-heading Markdown behavior.
   - [x] T005.3 Write failing tests for headed Markdown outline and section
@@ -177,11 +179,13 @@ T004,T005,T006,T007,T008 -> T009 -> T010
       docs-map budget.
   - [ ] T005.4 Implement docs/query and presenter corrections.
     - Evidence: Direct requested-file outline/read-section implementation is
-      complete; missing and no-heading behavior remains pending.
+      complete. Cursor-backed docs overview/map pagination is complete;
+      missing and no-heading behavior remains pending.
   - [ ] T005.5 Run focused docs tests.
     - Evidence: `pnpm test tests/docs/query-docs.test.ts
-      tests/mcp/docs-surfaces.test.ts tests/mcp/debug-harness.test.ts` passed;
-      final docs edge-case test set remains pending.
+      tests/mcp/docs-surfaces.test.ts tests/mcp/debug-harness.test.ts` passed,
+      including pagination parsing/classification coverage; final docs
+      edge-case test set remains pending.
 
 - [ ] T006 Improve graph-backed sweep inputs and degraded explanations.
   - Depends on: T003
@@ -201,8 +205,12 @@ T004,T005,T006,T007,T008 -> T009 -> T010
     2026-06-11. Eight-repo committed-tree sandbox sweep after the change wrote
     `.tmp/agent-workbench-tool-sweep-committed-sandboxes-after-input-selection-final/mcp-tool-sweep-2026-06-11T06-16-13-585Z.json`
     with 64 full, 46 partial, 64 degraded, 0 blocked, and 2 invalid results.
-    Remaining invalids are `docs_search` cold/missing FTS semantics for FreeCAD
-    and LibreChat.
+    Remaining invalids were `docs_search` cold/missing FTS semantics for
+    FreeCAD and LibreChat. Graph query metadata no longer treats bounded
+    catalog language sampling as response truncation, and `find_references`
+    now uses max-plus-one result evidence plus cursors before marking output
+    partial. Graph warmup now scans enough files for docs FTS while bounding
+    symbol extraction separately.
   - [x] T006.1 Write failing harness test proving sweep facts are selected
     from scanner-visible files, not raw recursive filesystem listings.
     - Evidence: Added regression coverage that hidden/generated Markdown is
@@ -211,7 +219,18 @@ T004,T005,T006,T007,T008 -> T009 -> T010
   - [ ] T006.3 Write failing tests for no-symbol versus cold-graph output.
   - [ ] T006.4 Implement scanner-visible file selection, indexed-symbol
     selection, and metadata improvements.
+    - Evidence: Scanner-visible file selection is complete. Exact-budget
+      reference metadata, cursor-backed `find_references` pagination, and
+      split scan/extraction warmup are complete; indexed-symbol selection and
+      deeper graph coverage remain pending.
   - [ ] T006.5 Run focused graph/tool tests.
+    - Evidence: `pnpm test tests/graph/query-tools.test.ts
+      tests/mcp/query-tools.test.ts tests/graph/extraction-pipeline.test.ts
+      tests/mcp/debug-harness.test.ts` and `pnpm typecheck` passed in focused
+      runs. Direct FreeCAD and LibreChat docs-index checks showed usable docs
+      FTS instead of blocked search. Full multi-repo warmup sweep attempts
+      still need harness/PTY reliability follow-up before they can be used as
+      closure evidence.
 
 - [ ] T007 Improve verification-plan blocked reasons.
   - Depends on: T003

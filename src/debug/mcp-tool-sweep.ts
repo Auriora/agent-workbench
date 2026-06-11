@@ -241,7 +241,8 @@ async function warmGraph(input: { repoRoot: string; runtime: RepoRuntime }): Pro
     snapshots: input.runtime.graph,
     clock: input.runtime.clock,
     schema_version: SCHEMA_VERSION,
-    max_files: 500
+    max_files: 15000,
+    max_extraction_files: 500
   });
 }
 
@@ -741,13 +742,21 @@ function classifyEnvelope(envelope: ResponseEnvelope<unknown>): ToolSweepQuality
   if (envelope.meta.verification_status === "blocked") {
     return "blocked";
   }
-  if (envelope.meta.truncated || envelope.meta.analysis_validity === "partial") {
+  if ((envelope.meta.truncated && !hasContinuationCursor(envelope.data)) || envelope.meta.analysis_validity === "partial") {
     return "partial";
   }
   if (envelope.warnings.length > 0) {
     return "degraded";
   }
   return "full";
+}
+
+function hasContinuationCursor(data: unknown): boolean {
+  if (typeof data !== "object" || data === null) {
+    return false;
+  }
+  const cursor = (data as { cursor?: unknown }).cursor;
+  return typeof cursor === "string" && cursor.length > 0;
 }
 
 function discoveryResult(input: { repoRoot: string; name: string; count: number }): ToolSweepSurfaceResult {

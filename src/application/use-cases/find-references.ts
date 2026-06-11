@@ -19,6 +19,8 @@ export type FindReferencesUseCaseResult = {
   meta: ResponseMetadata;
 };
 
+const REFERENCES_CURSOR_KIND = "references";
+
 export async function findReferences(input: {
   request: FindReferencesRequest;
   graph: GraphQueryPort;
@@ -42,6 +44,7 @@ export async function findReferences(input: {
         repo_root: repoRoot,
         snapshot_id: input.request.snapshot_id ?? "",
         references: [],
+        result_count: 0,
         next_actions: capNextActions([])
       },
       meta: blockedMeta({
@@ -66,26 +69,29 @@ export async function findReferences(input: {
         repo_root: resolved.repo_root,
         snapshot_id: resolved.snapshot_id,
         references: [],
+        result_count: 0,
         next_actions: [{ tool: "symbol_search", args: { query: input.request.symbol ?? input.request.node_id ?? "" } }]
       },
       meta: resolved.meta
     };
   }
 
+  const pageOffset = decodeCursor(input.request.cursor, REFERENCES_CURSOR_KIND);
+  const fetchLimit = pageOffset + input.request.max_results + 1;
   const outgoing = await input.graph.getReferences({
     snapshot_id: resolved.snapshot_id,
     node_id: target.id,
     max_depth: input.request.max_depth,
-    max_rows: input.request.max_results
+    max_rows: fetchLimit
   });
   const incoming = await input.graph.getIncomingEdges({
     snapshot_id: resolved.snapshot_id,
     node_id: target.id,
-    max_rows: input.request.max_results
+    max_rows: fetchLimit
   });
   const unresolved = (await input.graph.getUnresolvedReferences({
     snapshot_id: resolved.snapshot_id,
-    max_rows: input.request.max_results
+    max_rows: fetchLimit
   })).filter(
     (item) =>
       item.source_node_id === target.id ||
@@ -145,10 +151,12 @@ export async function findReferences(input: {
           snapshot_id: resolved.snapshot_id,
           catalog: input.catalog,
           workspace: input.workspace,
-          max_results: input.request.max_results
+          max_results: fetchLimit
         })
       : [];
-  const references = dedupeReferences([...parserReferences, ...lexicalReferences]).slice(0, input.request.max_results);
+  const allReferences = dedupeReferences([...parserReferences, ...lexicalReferences]);
+  const references = allReferences.slice(pageOffset, pageOffset + input.request.max_results);
+  const hasMore = allReferences.length > pageOffset + input.request.max_results;
 
   return {
     references: {
@@ -160,6 +168,8 @@ export async function findReferences(input: {
         source_byte_limit: 0
       }),
       references,
+      cursor: hasMore ? encodeCursor({ kind: REFERENCES_CURSOR_KIND, offset: pageOffset + references.length }) : undefined,
+      result_count: allReferences.length,
       next_actions: capNextActions([
         {
           tool: "impact",
@@ -172,7 +182,7 @@ export async function findReferences(input: {
     },
     meta: {
       ...resolved.meta,
-      truncated: references.length >= input.request.max_results
+      truncated: hasMore
     }
   };
 }
@@ -263,4 +273,26 @@ function dedupeReferences(references: readonly ReferenceHit[]): ReferenceHit[] {
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+
+function encodeCursor(input: { kind: string; offset: number }): string {
+  return Buffer.from(JSON.stringify(input), "utf8").toString("base64url");
+}
+
+function decodeCursor(cursor: string | undefined, kind: string): number {
+  if (cursor === undefined) {
+    return 0;
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
+      kind?: unknown;
+      offset?: unknown;
+    };
+    if (parsed.kind !== kind || typeof parsed.offset !== "number" || !Number.isInteger(parsed.offset) || parsed.offset < 0) {
+      return 0;
+    }
+    return parsed.offset;
+  } catch {
+    return 0;
+  }
 }

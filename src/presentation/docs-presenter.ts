@@ -199,6 +199,8 @@ function sanitizeDocsOverview(
     important_docs: input.important_docs.map(sanitizeDocument),
     warnings: sortWarnings(input.warnings).map(sanitizeWarning),
     truncated: input.truncated,
+    cursor: input.cursor,
+    result_count: input.result_count,
     next_actions: presentNextActions(input.next_actions, context).map((action) => nextActionSchema.parse(action))
   });
 }
@@ -213,6 +215,8 @@ function sanitizeDocsMap(
     docs: [...input.docs].sort(compareDocuments).map(sanitizeDocument),
     warnings: sortWarnings(input.warnings).map(sanitizeWarning),
     truncated: input.truncated,
+    cursor: input.cursor,
+    result_count: input.result_count,
     next_actions: presentNextActions(input.next_actions, context).map((action) => nextActionSchema.parse(action))
   });
 }

@@ -966,6 +966,70 @@ describe("graph query use cases", () => {
     }
   });
 
+  it("does not mark below-limit lexical reference results as truncated", async () => {
+    const repoRoot = path.join(dir, "empty-reference-repo");
+    fs.mkdirSync(repoRoot, { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "lonely.py"), "def lonely() -> str:\n    return 'alone'\n");
+    const fixture = await indexedFixture(repoRoot, "213");
+    try {
+      const lonely = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "213",
+        qualified_name: "lonely"
+      });
+      const result = await findReferences({
+        request: {
+          node_id: lonely[0]?.id,
+          max_depth: 1,
+          max_results: 10
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: repoRoot
+      });
+
+      expect(result.references.references).toEqual([
+        expect.objectContaining({
+          reference_name: "lonely",
+          reference_kind: "lexical"
+        })
+      ]);
+      expect(result.references.cursor).toBeUndefined();
+      expect(result.references.result_count).toBe(1);
+      expect(result.meta.truncated).toBe(false);
+      expect(result.meta.analysis_validity).toBe("valid");
+    } finally {
+      fixture.store.close();
+    }
+  });
+
+  it("does not mark exact-budget snapshot metadata as truncated", async () => {
+    const repoRoot = path.join(dir, "exact-budget-repo");
+    fs.mkdirSync(repoRoot, { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "only.py"), "def only() -> str:\n    return 'only'\n");
+    const fixture = await indexedFixture(repoRoot, "214");
+    try {
+      const result = await findReferences({
+        request: {
+          symbol: "missing",
+          max_depth: 1,
+          max_results: 1
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: repoRoot
+      });
+
+      expect(result.meta.budget?.row_limit).toBe(1);
+      expect(result.meta.truncated).toBe(false);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
   it("computes bounded impact without broad source scans", async () => {
     const fixture = await indexedFixture("tests/fixtures/fixture-basic-python", "204");
     try {

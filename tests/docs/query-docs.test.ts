@@ -102,6 +102,57 @@ describe("docs query application contracts", () => {
     }
   });
 
+  it("paginates docs maps with opaque cursors", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-docs-pages-"));
+    try {
+      fs.mkdirSync(path.join(root, "docs"), { recursive: true });
+      for (let index = 0; index < 5; index += 1) {
+        fs.writeFileSync(
+          path.join(root, "docs", `page-${String(index).padStart(2, "0")}.md`),
+          `# Page ${index}\n\nPage content.\n`
+        );
+      }
+
+      const first = await getDocsMap({
+        request: {
+          repo_root: root,
+          max_docs: 2,
+          max_headings_per_doc: 2
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot: root }),
+        default_repo_root: "."
+      });
+      const second = await getDocsMap({
+        request: {
+          repo_root: root,
+          max_docs: 2,
+          max_headings_per_doc: 2,
+          cursor: first.map.cursor
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot: root }),
+        default_repo_root: "."
+      });
+
+      expect(first.map.docs.map((doc) => doc.path)).toEqual([
+        "docs/page-00.md",
+        "docs/page-01.md"
+      ]);
+      expect(first.map.truncated).toBe(true);
+      expect(first.map.cursor).toEqual(expect.any(String));
+      expect(first.map.result_count).toBe(5);
+      expect(second.map.docs.map((doc) => doc.path)).toEqual([
+        "docs/page-02.md",
+        "docs/page-03.md"
+      ]);
+      expect(second.map.truncated).toBe(true);
+      expect(second.map.cursor).toEqual(expect.any(String));
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("searches path, title, heading, and content with direct-read caveats and truncation", async () => {
     const fixture = copyFixture();
     const store = await indexFixtureDocs(fixture.root);

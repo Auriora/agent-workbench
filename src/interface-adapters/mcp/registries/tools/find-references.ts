@@ -21,7 +21,8 @@ const findReferencesRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
   snapshot_id: z.string().optional().describe("Optional snapshot id. Defaults to the latest snapshot for the repository."),
   max_depth: z.number().int().positive().max(5).default(1).describe("Maximum reference depth to inspect."),
-  max_results: z.number().int().positive().max(100).default(50).describe("Maximum reference rows to return.")
+  max_results: z.number().int().positive().max(100).default(50).describe("Maximum reference rows to return."),
+  cursor: z.string().optional().describe("Opaque cursor returned by a previous truncated find_references page.")
 };
 
 export const findReferencesTool: McpToolDeclaration = {
@@ -38,7 +39,8 @@ export const findReferencesTool: McpToolDeclaration = {
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
       { name: "snapshot_id", description: "Optional snapshot id. Defaults to latest snapshot for the repository.", required: false },
       { name: "max_depth", description: "Maximum reference depth to inspect.", required: false },
-      { name: "max_results", description: "Maximum reference rows to return.", required: false }
+      { name: "max_results", description: "Maximum reference rows to return.", required: false },
+      { name: "cursor", description: "Opaque cursor returned by a previous truncated find_references page.", required: false }
     ],
     returns: "ResponseEnvelope<FindReferencesResult>"
   },

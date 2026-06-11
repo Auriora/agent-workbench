@@ -194,6 +194,54 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
+  it("indexes docs beyond the bounded symbol extraction window", async () => {
+    const repoRoot = path.join(dir, "docs-beyond-extraction");
+    fs.mkdirSync(path.join(repoRoot, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "a.py"), "def first() -> str:\n    return 'first'\n");
+    fs.writeFileSync(path.join(repoRoot, "docs", "late.md"), "# Late Doc\n\nneedle-for-docs-search\n");
+    const store = openGraphStore(path.join(dir, "docs-beyond-extraction.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new PythonTreeSitterExtractorAdapter());
+
+    try {
+      await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        docs_index: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "102",
+        max_files: 10,
+        max_extraction_files: 1
+      });
+
+      const docsState = await store.getState({ repo_root: repoRoot });
+      const docsSearch = await store.search({
+        repo_root: repoRoot,
+        query: "needle-for-docs-search",
+        max_results: 5,
+        include_snippets: false
+      });
+
+      expect(docsState).toMatchObject({
+        status: "usable",
+        document_count: 1
+      });
+      expect(docsSearch.status).toBe("done");
+      if (docsSearch.status === "done") {
+        expect(docsSearch.hits.map((hit) => hit.path)).toEqual(["docs/late.md"]);
+      }
+    } finally {
+      store.close();
+    }
+  });
+
   it("yields to the event loop while indexing large repositories", async () => {
     const repoRoot = path.join(dir, "yield-repo");
     const store = openGraphStore(path.join(dir, "yield.sqlite"));
