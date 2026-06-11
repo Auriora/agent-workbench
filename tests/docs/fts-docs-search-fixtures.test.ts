@@ -38,45 +38,11 @@ describe("FTS docs search fixtures", () => {
       states: Array<{ state: string; expected_status: string; reason: string }>;
     };
 
-    expect(markdownFiles).toEqual(
-      expect.arrayContaining([
-        "README.md",
-        "docs/reference/docs-query-read-surfaces.md",
-        "docs/evaluations/agent-workbench-python-agent-ide.md",
-        "docs/guides/ai-agent/template.md",
-        "docs/guides/ai-agent/general.md",
-        "docs/reference/heading-match.md",
-        "dist/generated-doc.md",
-        "vendor/vendor-doc.md"
-      ])
-    );
-    expect(textByPath.get("docs/reference/docs-query-read-surfaces.md")?.toLowerCase()).toContain(
-      "docs query read surfaces"
-    );
-    expect(extractHeadings(textByPath.get("docs/reference/heading-match.md") ?? "")).toContain(
-      "Requirement 2 Docs Search"
-    );
-    expect(textByPath.get("docs/evaluations/agent-workbench-python-agent-ide.md")).toContain(
-      "RepositoryResolver"
-    );
-    expect(textByPath.get("docs/guides/ai-agent/template.md")).toContain(
-      "common terms such as agent, guide, workbench"
-    );
-    expect(markdownFiles.filter((file) => file.startsWith("docs/pagination/page-"))).toHaveLength(6);
-    expect(scanned.files.map((file) => file.path)).not.toContain("dist/generated-doc.md");
-    expect(scanned.files.map((file) => file.path)).not.toContain("vendor/vendor-doc.md");
-    expect(scanned.skipped_paths).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ path: "dist", reason: "generated_or_vendor" }),
-        expect.objectContaining({ path: "vendor", reason: "generated_or_vendor" })
-      ])
-    );
-    expect(indexStates.states.map((state) => state.state).sort()).toEqual([
-      "cold",
-      "invalid",
-      "stale",
-      "unavailable"
-    ]);
+    expectFtsFixtureInventory(markdownFiles);
+    expectRankingDocuments(textByPath);
+    expectPaginationFixture(markdownFiles);
+    expectFtsScannerSkipsGeneratedDocs(scanned);
+    expectDegradedIndexStateCases(indexStates);
   });
 
   it("uses FTS docs search ranking, downranking, and cursor behavior", async () => {
@@ -268,4 +234,60 @@ function extractHeadings(text: string): string[] {
     .map((line) => /^(#{1,6})\s+(.+)$/u.exec(line))
     .filter((match): match is RegExpExecArray => match !== null)
     .map((match) => match[2] ?? "");
+}
+
+function expectFtsFixtureInventory(markdownFiles: string[]): void {
+  expect(markdownFiles).toEqual(
+    expect.arrayContaining([
+      "README.md",
+      "docs/reference/docs-query-read-surfaces.md",
+      "docs/evaluations/agent-workbench-python-agent-ide.md",
+      "docs/guides/ai-agent/template.md",
+      "docs/guides/ai-agent/general.md",
+      "docs/reference/heading-match.md",
+      "dist/generated-doc.md",
+      "vendor/vendor-doc.md"
+    ])
+  );
+}
+
+function expectRankingDocuments(textByPath: Map<string, string>): void {
+  expect(textByPath.get("docs/reference/docs-query-read-surfaces.md")?.toLowerCase()).toContain(
+    "docs query read surfaces"
+  );
+  expect(extractHeadings(textByPath.get("docs/reference/heading-match.md") ?? "")).toContain(
+    "Requirement 2 Docs Search"
+  );
+  expect(textByPath.get("docs/evaluations/agent-workbench-python-agent-ide.md")).toContain(
+    "RepositoryResolver"
+  );
+  expect(textByPath.get("docs/guides/ai-agent/template.md")).toContain(
+    "common terms such as agent, guide, workbench"
+  );
+}
+
+function expectPaginationFixture(markdownFiles: string[]): void {
+  expect(markdownFiles.filter((file) => file.startsWith("docs/pagination/page-"))).toHaveLength(6);
+}
+
+function expectFtsScannerSkipsGeneratedDocs(scanned: Awaited<ReturnType<FileCatalogScannerAdapter["scan"]>>): void {
+  expect(scanned.files.map((file) => file.path)).not.toContain("dist/generated-doc.md");
+  expect(scanned.files.map((file) => file.path)).not.toContain("vendor/vendor-doc.md");
+  expect(scanned.skipped_paths).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ path: "dist", reason: "generated_or_vendor" }),
+      expect.objectContaining({ path: "vendor", reason: "generated_or_vendor" })
+    ])
+  );
+}
+
+function expectDegradedIndexStateCases(indexStates: {
+  states: Array<{ state: string; expected_status: string; reason: string }>;
+}): void {
+  expect(indexStates.states.map((state) => state.state).sort()).toEqual([
+    "cold",
+    "invalid",
+    "stale",
+    "unavailable"
+  ]);
 }

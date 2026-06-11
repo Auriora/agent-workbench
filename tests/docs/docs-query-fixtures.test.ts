@@ -31,66 +31,90 @@ describe("docs query fixtures", () => {
         max_files: 2000
       });
 
-      expect(markdownFiles).toEqual(
-        expect.arrayContaining([
-          "README.md",
-          "docs/guide.md",
-          "docs/operations/runbook.md",
-          "docs/reference/api.md",
-          "docs/unreadable.md",
-          "dist/generated-doc.md",
-          "vendor/vendor-doc.md"
-        ])
-      );
-      expect(() => fs.readFileSync(unreadablePath, "utf8")).toThrow();
-      expect(extractHeadings(markdownTextByPath.get("docs/guide.md") ?? "")).toEqual([
-        { depth: 1, text: "Guide" },
-        { depth: 2, text: "Install" },
-        { depth: 2, text: "Configure" },
-        { depth: 3, text: "Details" },
-        { depth: 2, text: "Duplicate" },
-        { depth: 2, text: "Duplicate" }
-      ]);
-      expect(duplicateHeadingTexts(markdownTextByPath)).toEqual(
-        expect.arrayContaining(["Duplicate"])
-      );
-      expect(extractLinks(markdownTextByPath)).toEqual(
-        expect.arrayContaining([
-          { from: "README.md", target: "docs/guide.md", exists: true },
-          { from: "README.md", target: "docs/operations/runbook.md", exists: true },
-          { from: "README.md", target: "docs/missing.md", exists: false },
-          { from: "docs/guide.md", target: "docs/operations/runbook.md", exists: true }
-        ])
-      );
-      expect(markdownFiles.filter((file) => file.startsWith("docs/reference/large-set-"))).toHaveLength(10);
-      expect(scanned.files.map((file) => file.path)).toEqual(
-        expect.arrayContaining([
-          "README.md",
-          "docs/guide.md",
-          "docs/operations/runbook.md",
-          "docs/reference/api.md"
-        ])
-      );
-      expect(scanned.files.map((file) => file.path)).not.toContain("dist/generated-doc.md");
-      expect(scanned.files.map((file) => file.path)).not.toContain("vendor/vendor-doc.md");
-      expect(scanned.skipped_paths).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            path: "dist",
-            reason: "generated_or_vendor"
-          }),
-          expect.objectContaining({
-            path: "vendor",
-            reason: "generated_or_vendor"
-          })
-        ])
-      );
+      expectDocsFixtureInventory(markdownFiles);
+      expectUnreadableDocIsNotRead(unreadablePath);
+      expectHeadingScenario(markdownTextByPath);
+      expectLinkScenario(markdownTextByPath);
+      expectRowCapVolume(markdownFiles);
+      expectScannerSkipsGeneratedDocs(scanned);
     } finally {
       fs.chmodSync(unreadablePath, 0o600);
       fs.rmSync(tempRoot, { recursive: true, force: true });
     }
   });
 });
+
+function expectDocsFixtureInventory(markdownFiles: string[]): void {
+  expect(markdownFiles).toEqual(
+    expect.arrayContaining([
+      "README.md",
+      "docs/guide.md",
+      "docs/operations/runbook.md",
+      "docs/reference/api.md",
+      "docs/unreadable.md",
+      "dist/generated-doc.md",
+      "vendor/vendor-doc.md"
+    ])
+  );
+}
+
+function expectUnreadableDocIsNotRead(unreadablePath: string): void {
+  expect(() => fs.readFileSync(unreadablePath, "utf8")).toThrow();
+}
+
+function expectHeadingScenario(markdownTextByPath: Map<string, string>): void {
+  expect(extractHeadings(markdownTextByPath.get("docs/guide.md") ?? "")).toEqual([
+    { depth: 1, text: "Guide" },
+    { depth: 2, text: "Install" },
+    { depth: 2, text: "Configure" },
+    { depth: 3, text: "Details" },
+    { depth: 2, text: "Duplicate" },
+    { depth: 2, text: "Duplicate" }
+  ]);
+  expect(duplicateHeadingTexts(markdownTextByPath)).toEqual(
+    expect.arrayContaining(["Duplicate"])
+  );
+}
+
+function expectLinkScenario(markdownTextByPath: Map<string, string>): void {
+  expect(extractLinks(markdownTextByPath)).toEqual(
+    expect.arrayContaining([
+      { from: "README.md", target: "docs/guide.md", exists: true },
+      { from: "README.md", target: "docs/operations/runbook.md", exists: true },
+      { from: "README.md", target: "docs/missing.md", exists: false },
+      { from: "docs/guide.md", target: "docs/operations/runbook.md", exists: true }
+    ])
+  );
+}
+
+function expectRowCapVolume(markdownFiles: string[]): void {
+  expect(markdownFiles.filter((file) => file.startsWith("docs/reference/large-set-"))).toHaveLength(10);
+}
+
+function expectScannerSkipsGeneratedDocs(scanned: Awaited<ReturnType<FileCatalogScannerAdapter["scan"]>>): void {
+  expect(scanned.files.map((file) => file.path)).toEqual(
+    expect.arrayContaining([
+      "README.md",
+      "docs/guide.md",
+      "docs/operations/runbook.md",
+      "docs/reference/api.md"
+    ])
+  );
+  expect(scanned.files.map((file) => file.path)).not.toContain("dist/generated-doc.md");
+  expect(scanned.files.map((file) => file.path)).not.toContain("vendor/vendor-doc.md");
+  expect(scanned.skipped_paths).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        path: "dist",
+        reason: "generated_or_vendor"
+      }),
+      expect.objectContaining({
+        path: "vendor",
+        reason: "generated_or_vendor"
+      })
+    ])
+  );
+}
 
 function listMarkdownFiles(directory: string): string[] {
   return fs.readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {

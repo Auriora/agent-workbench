@@ -3,7 +3,7 @@ title: MVP proof matrix
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-06-03
+last_reviewed: 2026-06-11
 ---
 
 # MVP Proof Matrix
@@ -124,6 +124,31 @@ measurements.
 Tests must capture enough trace evidence to prove hot-path tools use targeted
 indexed reads. Acceptable evidence includes SQL trace assertions, query-plan
 assertions, row-count caps, traversal-depth caps, and source-byte caps.
+
+## Test Maintainability Gates
+
+Architecture, MCP, extraction, validation, and broad fixture tests should stay
+diagnostic enough that a failure points to one behavior cluster without losing
+the smoke-test value of representative repositories.
+
+- Boundary tests must parse static import/export module specifiers through the
+  TypeScript compiler API instead of line-oriented string matching. They should
+  cover multiline imports and enforce the current layered-runtime dependency
+  direction.
+- MCP behavior tests should use typed harness helpers for composed-server
+  resources, tool lookup, direct dispatch, and response parsing. Direct registry
+  plumbing belongs only in tests whose subject is the registry or
+  instrumentation wrapper itself.
+- Extracted validation-planner and resource-extractor rules should have focused
+  unit or contract tests for package-script selection, ecosystem target
+  selection, validation-policy discovery, static feedback, CMake targets, .NET
+  project metadata, and CloudFormation/SAM resource evidence. Broad integration
+  fixtures remain useful, but they should not be the only coverage for extracted
+  rules.
+- Broad fixture smoke tests should use named assertion helpers, smaller
+  companion tests, or scenario comments when they grow or fail. Avoid mechanical
+  splitting when one fixture intentionally proves cross-cutting behavior, but
+  avoid assertion roulette inside large `it(...)` blocks.
 
 ## Acceptance Gate
 

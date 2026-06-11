@@ -17,40 +17,10 @@ describe("Go reference and validation-policy fixtures", () => {
     });
     const paths = scanned.files.map((file) => file.path).sort();
 
-    expect(paths).toEqual(
-      expect.arrayContaining([
-        ".github/workflows/go.yml",
-        "Makefile",
-        "cmd/service/main.go",
-        "go.mod",
-        "internal/cache/ambiguous.go",
-        "internal/graph/ambiguous.go",
-        "internal/graph/response_cache.go",
-        "internal/graph/response_cache_test.go",
-        "internal/generated/client.go"
-      ])
-    );
-    expect(scanned.skipped_paths).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          path: ".gocache",
-          reason: "generated_or_vendor"
-        })
-      ])
-    );
-
+    expectGoFixtureInventory(paths);
+    expectGoCacheSkipped(scanned);
     const goFiles = scanned.files.filter((file) => file.file_identity.language === "go");
-    expect(goFiles.map((file) => file.path)).toEqual(
-      expect.arrayContaining([
-        "cmd/service/main.go",
-        "internal/cache/ambiguous.go",
-        "internal/graph/ambiguous.go",
-        "internal/graph/response_cache.go",
-        "internal/graph/response_cache_test.go"
-      ])
-    );
-    expect(goFiles.every((file) => file.adapter_evidence?.capability_level === "partial_semantic")).toBe(true);
-    expect(goFiles.every((file) => file.adapter_evidence?.evidence_kinds.includes("parser"))).toBe(true);
+    expectGoParserEvidence(goFiles);
   });
 
   it("blocks generic host Go validation for Docker-only policy fixture", async () => {
@@ -81,3 +51,46 @@ describe("Go reference and validation-policy fixtures", () => {
     );
   });
 });
+
+type ScannedGoFixture = Awaited<ReturnType<FileCatalogScannerAdapter["scan"]>>;
+
+function expectGoFixtureInventory(paths: string[]): void {
+  expect(paths).toEqual(
+    expect.arrayContaining([
+      ".github/workflows/go.yml",
+      "Makefile",
+      "cmd/service/main.go",
+      "go.mod",
+      "internal/cache/ambiguous.go",
+      "internal/graph/ambiguous.go",
+      "internal/graph/response_cache.go",
+      "internal/graph/response_cache_test.go",
+      "internal/generated/client.go"
+    ])
+  );
+}
+
+function expectGoCacheSkipped(scanned: ScannedGoFixture): void {
+  expect(scanned.skipped_paths).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        path: ".gocache",
+        reason: "generated_or_vendor"
+      })
+    ])
+  );
+}
+
+function expectGoParserEvidence(goFiles: ScannedGoFixture["files"]): void {
+  expect(goFiles.map((file) => file.path)).toEqual(
+    expect.arrayContaining([
+      "cmd/service/main.go",
+      "internal/cache/ambiguous.go",
+      "internal/graph/ambiguous.go",
+      "internal/graph/response_cache.go",
+      "internal/graph/response_cache_test.go"
+    ])
+  );
+  expect(goFiles.every((file) => file.adapter_evidence?.capability_level === "partial_semantic")).toBe(true);
+  expect(goFiles.every((file) => file.adapter_evidence?.evidence_kinds.includes("parser"))).toBe(true);
+}

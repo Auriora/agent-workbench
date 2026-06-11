@@ -19,44 +19,11 @@ describe("JavaScript/TypeScript project-shape routing", () => {
     });
     const shape = detectJsTsProjectShape(scanned.files);
 
-    expect(scanned.skipped_paths).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          path: "apps/web/node_modules",
-          reason: "generated_or_vendor"
-        })
-      ])
-    );
-    expect(shape.package_manifests).toEqual([
-      "apps/web/package.json",
-      "package.json",
-      "packages/shared/package.json",
-      "services/api/package.json"
-    ]);
-    expect(shape.workspace_files).toEqual(["pnpm-lock.yaml", "pnpm-workspace.yaml"]);
-    expect(shape.tsconfig_files).toEqual([
-      "apps/web/tsconfig.json",
-      "packages/shared/tsconfig.json",
-      "services/api/tsconfig.json",
-      "tsconfig.base.json"
-    ]);
-    expect(shape.source_files).toEqual(
-      expect.arrayContaining([
-        "apps/web/src/Login.tsx",
-        "apps/web/src/components/LoginForm.tsx",
-        "packages/shared/src/auth.ts",
-        "services/api/src/auth-controller.ts",
-        "services/api/src/routes/auth-route.ts"
-      ])
-    );
-    expect(shape.generated_files).toEqual(["apps/web/src/generated/client.ts"]);
-    expect(shape.test_files).toEqual(
-      expect.arrayContaining([
-        "apps/web/src/components/LoginForm.test.tsx",
-        "e2e/login.spec.ts",
-        "services/api/src/auth-controller.test.ts"
-      ])
-    );
+    expectGeneratedDependenciesSkipped(scanned);
+    expectWorkspacePackageShape(shape);
+    expectTypeScriptConfigShape(shape);
+    expectSourceAndTestShape(shape);
+    expectGeneratedSourceShape(shape);
   });
 
   it("reports JS/TS-heavy scope as resource-backed rather than unsupported", async () => {
@@ -145,3 +112,59 @@ describe("JavaScript/TypeScript project-shape routing", () => {
     );
   });
 });
+
+type JsTsScan = Awaited<ReturnType<FileCatalogScannerAdapter["scan"]>>;
+type JsTsShape = ReturnType<typeof detectJsTsProjectShape>;
+
+function expectGeneratedDependenciesSkipped(scanned: JsTsScan): void {
+  expect(scanned.skipped_paths).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        path: "apps/web/node_modules",
+        reason: "generated_or_vendor"
+      })
+    ])
+  );
+}
+
+function expectWorkspacePackageShape(shape: JsTsShape): void {
+  expect(shape.package_manifests).toEqual([
+    "apps/web/package.json",
+    "package.json",
+    "packages/shared/package.json",
+    "services/api/package.json"
+  ]);
+  expect(shape.workspace_files).toEqual(["pnpm-lock.yaml", "pnpm-workspace.yaml"]);
+}
+
+function expectTypeScriptConfigShape(shape: JsTsShape): void {
+  expect(shape.tsconfig_files).toEqual([
+    "apps/web/tsconfig.json",
+    "packages/shared/tsconfig.json",
+    "services/api/tsconfig.json",
+    "tsconfig.base.json"
+  ]);
+}
+
+function expectSourceAndTestShape(shape: JsTsShape): void {
+  expect(shape.source_files).toEqual(
+    expect.arrayContaining([
+      "apps/web/src/Login.tsx",
+      "apps/web/src/components/LoginForm.tsx",
+      "packages/shared/src/auth.ts",
+      "services/api/src/auth-controller.ts",
+      "services/api/src/routes/auth-route.ts"
+    ])
+  );
+  expect(shape.test_files).toEqual(
+    expect.arrayContaining([
+      "apps/web/src/components/LoginForm.test.tsx",
+      "e2e/login.spec.ts",
+      "services/api/src/auth-controller.test.ts"
+    ])
+  );
+}
+
+function expectGeneratedSourceShape(shape: JsTsShape): void {
+  expect(shape.generated_files).toEqual(["apps/web/src/generated/client.ts"]);
+}

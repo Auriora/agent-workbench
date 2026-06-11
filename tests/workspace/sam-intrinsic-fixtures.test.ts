@@ -16,25 +16,41 @@ describe("SAM intrinsic fixture", () => {
       ".agent-workbench/validation-policy.json"
     ];
 
-    for (const file of files) {
-      expect(fs.existsSync(path.join(root, file)), file).toBe(true);
-    }
+    expectSamFixtureInventory(root, files);
 
     const ordersTemplate = fs.readFileSync(path.join(root, "infra/orders/template.yaml"), "utf8");
     const sharedTemplate = fs.readFileSync(path.join(root, "infra/shared/template.json"), "utf8");
     const validationPolicy = fs.readFileSync(path.join(root, ".agent-workbench/validation-policy.json"), "utf8");
 
-    expect(ordersTemplate).toContain("!Ref OrdersTable");
-    expect(ordersTemplate).toContain("!GetAtt OrdersQueue.Arn");
-    expect(ordersTemplate).toContain("Fn::Join:");
-    expect(ordersTemplate).toContain("Fn::If:");
-    expect(ordersTemplate).toContain("Fn::ImportValue: SharedOrdersTopicArn");
-    expect(ordersTemplate).toContain("DependsOn: OrdersTable");
-    expect(ordersTemplate).toContain("Type: DynamoDB");
-    expect(ordersTemplate).toContain("{{resolve:secretsmanager:orders/token:SecretString:value}}");
-    expect(sharedTemplate).toContain("\"Fn::GetAtt\": [\"SharedOrdersTopic\", \"TopicArn\"]");
-    expect(sharedTemplate).toContain("\"DependsOn\": \"SharedOrdersTopic\"");
-    expect(validationPolicy).toContain("sam-validate-orders");
-    expect(validationPolicy).toContain("cfn-lint-shared");
+    expectYamlIntrinsicScenario(ordersTemplate);
+    expectJsonIntrinsicScenario(sharedTemplate);
+    expectValidationPolicyScenario(validationPolicy);
   });
 });
+
+function expectSamFixtureInventory(root: string, files: string[]): void {
+  for (const file of files) {
+    expect(fs.existsSync(path.join(root, file)), file).toBe(true);
+  }
+}
+
+function expectYamlIntrinsicScenario(ordersTemplate: string): void {
+  expect(ordersTemplate).toContain("!Ref OrdersTable");
+  expect(ordersTemplate).toContain("!GetAtt OrdersQueue.Arn");
+  expect(ordersTemplate).toContain("Fn::Join:");
+  expect(ordersTemplate).toContain("Fn::If:");
+  expect(ordersTemplate).toContain("Fn::ImportValue: SharedOrdersTopicArn");
+  expect(ordersTemplate).toContain("DependsOn: OrdersTable");
+  expect(ordersTemplate).toContain("Type: DynamoDB");
+  expect(ordersTemplate).toContain("{{resolve:secretsmanager:orders/token:SecretString:value}}");
+}
+
+function expectJsonIntrinsicScenario(sharedTemplate: string): void {
+  expect(sharedTemplate).toContain("\"Fn::GetAtt\": [\"SharedOrdersTopic\", \"TopicArn\"]");
+  expect(sharedTemplate).toContain("\"DependsOn\": \"SharedOrdersTopic\"");
+}
+
+function expectValidationPolicyScenario(validationPolicy: string): void {
+  expect(validationPolicy).toContain("sam-validate-orders");
+  expect(validationPolicy).toContain("cfn-lint-shared");
+}

@@ -740,7 +740,7 @@ response parsing. Targeted MCP/integration tests, `pnpm typecheck`, and
 
 #### BL-TEST-002: Architecture Mismatch - Integration Tests Dominate Fast Feedback
 
-Status: `accepted`
+Status: `resolved`
 
 Triage rationale: Accepted for follow-up through `T017`. The suite is still
 fast, so this is not a release blocker, but the integration-heavy distribution
@@ -774,14 +774,19 @@ extractor rules into focused unit tests where possible.
 
 Tasks: `T010`, `T011`, `T016`, `T017`
 
-Verification: Triage completed 2026-06-11. Implementation remains pending in
-`T017`.
+Verification: 2026-06-11 `T017` added focused rule-level tests in
+`tests/application/validation-planner-rules.test.ts` for package-script
+selection, CMake command targeting, repo-local validation policy discovery, and
+static feedback. It also added `tests/graph/resource-extractor-rules.test.ts`
+for CMake, .NET project metadata, and CloudFormation handler/event/intrinsic
+extraction. Existing integration fixtures were preserved. Targeted unit and
+related integration tests plus `pnpm typecheck` passed.
 
 ### Suggestion
 
 #### BL-TEST-003: Test Obscurity - Some Fixture Tests Compress Too Many Behaviors Into One Scenario
 
-Status: `accepted`
+Status: `resolved`
 
 Triage rationale: Accepted for follow-up through `T018`. The broad fixture
 tests are intentionally valuable smoke coverage and should not be mechanically
@@ -815,8 +820,10 @@ behavioral reason.
 
 Tasks: `T016`, `T018`
 
-Verification: Triage completed 2026-06-11. Implementation remains pending in
-`T018`.
+Verification: 2026-06-11 `T018` kept the broad smoke-test fixture scenarios in
+place and added named assertion helpers for docs query, FTS docs search,
+CMake/C++ routing, Go reference fixtures, SAM intrinsic fixtures, and JS/TS
+project-shape fixtures. Passed targeted fixture tests and `pnpm typecheck`.
 
 ---
 

@@ -69,6 +69,15 @@ Resolving findings requires code, tests, and durable documentation validation.
 | 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after MCP test harness helper extraction. |
 | 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T014`: 59 test files and 397 tests. |
 | 2026-06-11 | Test quality findings triage | Completed | `T016` marked `BL-TEST-001` resolved through `T014`, accepted `BL-TEST-002` for `T017`, and accepted `BL-TEST-003` for `T018`. No runtime code changed in this triage slice. |
+| 2026-06-11 | `pnpm exec vitest run tests/application/validation-planner-rules.test.ts tests/graph/resource-extractor-rules.test.ts` | Passed | 2 focused unit/contract test files and 7 tests passed for extracted validation planner and resource extractor rules. |
+| 2026-06-11 | `pnpm exec vitest run tests/application/validation-planner-rules.test.ts tests/graph/resource-extractor-rules.test.ts tests/mcp/verification-plan-tool.test.ts tests/graph/extraction-pipeline.test.ts tests/graph/cmake-cpp-routing-fixture.test.ts tests/workspace/sam-intrinsic-fixtures.test.ts tests/workspace/file-catalog-scanner.test.ts tests/mcp/repo-scope-overview-resource.test.ts` | Passed | 8 focused and related integration test files and 76 tests passed after `T017`. |
+| 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after adding focused validation planner and resource extractor tests. |
+| 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T017`: 61 test files and 404 tests. |
+| 2026-06-11 | `pnpm exec vitest run tests/docs/docs-query-fixtures.test.ts tests/docs/fts-docs-search-fixtures.test.ts tests/graph/cmake-cpp-routing-fixture.test.ts tests/workspace/go-reference-fixtures.test.ts tests/workspace/sam-intrinsic-fixtures.test.ts tests/workspace/js-ts-project-shape.test.ts` | Passed | 6 broad fixture test files and 12 tests passed after adding named assertion helpers for `T018`. |
+| 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after broad fixture helper extraction. |
+| 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T018`: 61 test files and 404 tests. |
+| 2026-06-11 | `python3 /home/bcherrington/.codex/plugins/cache/auriora-local/spec-lifecycle-manager/0.1.0+codex.20260606221001/skills/spec-lifecycle-manager/scripts/spec_runtime.py lint docs/specs/025-brooks-lint-findings` | Passed | Spec lint reported 0 errors, 0 warnings, and 0 info diagnostics after `T018`. |
+| 2026-06-11 | `git diff --check` | Passed | No whitespace or patch formatting errors after `T018`. |
 
 ## Required Gates For Remediation
 

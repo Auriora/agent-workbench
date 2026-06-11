@@ -285,20 +285,35 @@ T016 -> T018
     accepted `BL-TEST-003` for broad fixture annotation/splitting guidance in
     `T018`. No runtime code changed in this triage slice.
 
-- [ ] T017 Add focused unit coverage while extracting validation and resource logic.
+- [x] T017 Add focused unit coverage while extracting validation and resource logic.
   - Depends on: T016, T010, T011
   - Findings: `BL-TEST-002`
   - Files: `tests/`, `src/application/`, `src/infrastructure/extraction/`
   - Acceptance: Validation planner and resource extractor refactors add
     smaller unit or contract tests for extracted rules while preserving
     existing integration fixture coverage.
-  - Evidence: Pending.
+  - Evidence: 2026-06-11 added
+    `tests/application/validation-planner-rules.test.ts` for extracted
+    validation planner rule coverage and
+    `tests/graph/resource-extractor-rules.test.ts` for extracted resource
+    domain rule coverage. Existing integration fixtures remain in place. Passed
+    `pnpm exec vitest run tests/application/validation-planner-rules.test.ts tests/graph/resource-extractor-rules.test.ts`,
+    related validation/extraction integration suites, and `pnpm typecheck`.
 
-- [ ] T018 Split or annotate broad fixture scenarios when they expand or fail.
+- [x] T018 Split or annotate broad fixture scenarios when they expand or fail.
   - Depends on: T016
   - Findings: `BL-TEST-003`
   - Files: `tests/docs/`, `tests/graph/`, `tests/workspace/`
   - Acceptance: Broad fixture tests keep their smoke-test value, but expanded
     or failing behavior clusters gain named helpers, smaller companion tests,
     or clearer scenario comments.
-  - Evidence: Pending.
+  - Evidence: 2026-06-11 preserved the broad fixture smoke tests and added
+    named assertion helpers for docs query, FTS docs search, CMake/C++ routing,
+    Go reference fixtures, SAM intrinsic fixtures, and JS/TS project-shape
+    behavior clusters. Passed `pnpm exec vitest run
+    tests/docs/docs-query-fixtures.test.ts
+    tests/docs/fts-docs-search-fixtures.test.ts
+    tests/graph/cmake-cpp-routing-fixture.test.ts
+    tests/workspace/go-reference-fixtures.test.ts
+    tests/workspace/sam-intrinsic-fixtures.test.ts
+    tests/workspace/js-ts-project-shape.test.ts` and `pnpm typecheck`.
