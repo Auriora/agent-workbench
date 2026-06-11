@@ -51,18 +51,24 @@ T016 -> T018
 
 ## Phase 2: Architecture Remediation
 
-- [ ] T003 Strengthen architecture boundary import extraction.
+- [x] T003 Strengthen architecture boundary import extraction.
   - Depends on: T002
   - Findings: `BL-ARCH-001`
   - Files: `tests/architecture/layer-boundaries.test.ts`
   - Acceptance: Boundary tests detect single-line and multiline static
     imports/exports using one explicit parser path, and fail on
     application-to-infrastructure imports.
-  - Evidence: Pending.
-  - [ ] T003.1 Add fixture coverage for multiline static imports.
-  - [ ] T003.2 Verify current application-to-infrastructure imports are
+  - Evidence: 2026-06-11 replaced line-oriented import regexes with TypeScript
+    AST module-specifier extraction, added multiline static import/export
+    coverage, moved pure Markdown document helpers inward to
+    `src/application/use-cases/markdown-docs.ts`, and passed
+    `pnpm exec vitest run tests/architecture/layer-boundaries.test.ts`,
+    `pnpm exec vitest run tests/docs/query-docs.test.ts tests/docs/fts-docs-search-fixtures.test.ts tests/mcp/docs-surfaces.test.ts tests/graph/query-tools.test.ts`,
+    `pnpm typecheck`, and `pnpm test`.
+  - [x] T003.1 Add fixture coverage for multiline static imports.
+  - [x] T003.2 Verify current application-to-infrastructure imports are
     detected before remediation.
-  - [ ] T003.3 Keep the rule implementation scoped to architecture boundary
+  - [x] T003.3 Keep the rule implementation scoped to architecture boundary
     checks.
 
 - [ ] T004 Remove application-to-presentation dependency cycle.

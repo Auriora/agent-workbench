@@ -39,6 +39,10 @@ Resolving findings requires code, tests, and durable documentation validation.
 | 2026-06-06 | Static Brooks-Lint health dashboard scan | Completed | Captured composite score `82/100`, dimension scores, test suite map, and `BL-HEALTH-001` in `findings.md`. |
 | 2026-06-06 | `pnpm test` | Passed | 57 test files and 360 tests passed in 12.93 seconds. Evidence captured for `$brooks-test`. |
 | 2026-06-11 | Architecture findings triage | Completed | `BL-ARCH-001`, `BL-ARCH-002`, and `BL-ARCH-003` accepted with rationale and linked remediation tasks `T003`, `T004`, and `T005`. No runtime code changed in this triage slice. |
+| 2026-06-11 | `pnpm exec vitest run tests/architecture/layer-boundaries.test.ts` | Passed | 1 test file and 6 tests passed. The architecture boundary extractor now uses the TypeScript AST and covers multiline static imports/exports. |
+| 2026-06-11 | `pnpm exec vitest run tests/docs/query-docs.test.ts tests/docs/fts-docs-search-fixtures.test.ts tests/mcp/docs-surfaces.test.ts tests/graph/query-tools.test.ts` | Passed | 4 test files and 53 tests passed after moving pure Markdown document helpers from infrastructure to application-owned code. |
+| 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after the helper move and architecture test update. |
+| 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed in the unrestricted runtime: 59 test files and 396 tests. |
 
 ## Required Gates For Remediation
 

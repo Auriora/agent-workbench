@@ -24,7 +24,7 @@ import {
   markdownTitleFromPath,
   parseMarkdownHeadings,
   selectedMarkdownText
-} from "../../src/infrastructure/markdown/docs.js";
+} from "../../src/application/use-cases/markdown-docs.js";
 import { openGraphStore, SCHEMA_VERSION, type GraphStore } from "../../src/infrastructure/sqlite/index.js";
 import type { DocsIndexPort, DocsIndexSearchResult } from "../../src/ports/index.js";
 

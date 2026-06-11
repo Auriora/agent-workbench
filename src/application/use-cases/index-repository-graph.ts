@@ -25,7 +25,7 @@ import {
   markdownTitleFromPath,
   parseMarkdownHeadings,
   selectedMarkdownText
-} from "../../infrastructure/markdown/docs.js";
+} from "./markdown-docs.js";
 
 const MAX_TEXT_EXTRACTION_BYTES = 2_000_000;
 const MAX_DOCS_INDEX_BYTES = 120_000;

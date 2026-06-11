@@ -27,7 +27,7 @@ import {
   extractMarkdownDocLinks,
   markdownTitleFromPath,
   parseMarkdownHeadings
-} from "../../infrastructure/markdown/docs.js";
+} from "./markdown-docs.js";
 import { capNextActions } from "../../presentation/metadata.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 

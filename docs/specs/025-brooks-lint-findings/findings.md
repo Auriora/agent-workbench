@@ -87,7 +87,7 @@ graph TD
 
 #### BL-ARCH-001: Dependency Disorder - Application Imports Concrete Markdown Infrastructure
 
-Status: `accepted`
+Status: `in_progress`
 
 Triage rationale: Accepted. The finding matches the repository's documented
 layer direction and the running evidence shows the current architecture test
@@ -119,7 +119,11 @@ and application-to-infrastructure imports fail.
 
 Tasks: `T002`, `T003`
 
-Verification: Pending.
+Verification: 2026-06-11 `T003` moved pure Markdown document helpers to
+`src/application/use-cases/markdown-docs.ts`, replaced regex import extraction
+with TypeScript AST extraction, and passed targeted architecture/docs tests and
+`pnpm typecheck`. Keep status `in_progress` until validation aggregation and
+durable architecture docs are promoted.
 
 #### BL-ARCH-002: Dependency Disorder - Application And Presentation Form A Layer Cycle
 
@@ -449,7 +453,7 @@ graph TD
 
 #### BL-ARCH-001: Dependency Disorder - Application Imports Concrete Markdown Infrastructure
 
-Status: `accepted`
+Status: `in_progress`
 
 Triage rationale: Accepted in the primary architecture ledger above; retained
 here as the health-dashboard cross-reference to `T003`.

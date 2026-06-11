@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 type ForbiddenRule = {
@@ -150,36 +151,42 @@ function listTypeScriptFiles(directory: string): string[] {
 }
 
 function extractModuleSpecifiers(fileContents: string): string[] {
-  const lines: string[] = fileContents.split(/\r?\n/);
-  const importLines = lines.filter((line: string) => line.trim().length > 0);
   const specifiers: string[] = [];
-  const importFrom = /^\s*(?:import|export)\s+[^"']*?\s+from\s+["']([^"']+)["']/;
-  const importBare = /^\s*import\s+["']([^"']+)["']/;
-  const importDynamic = /^\s*import\(\s*["']([^"']+)["']\s*\)/;
+  const source = ts.createSourceFile("layer-boundary-input.ts", fileContents, ts.ScriptTarget.Latest, true);
 
-  for (const line of importLines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("//")) {
-      continue;
+  function visit(node: ts.Node): void {
+    if (
+      ts.isImportDeclaration(node) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier.text);
+      return;
     }
 
-    const [, fromMatch] = trimmed.match(importFrom) as RegExpMatchArray | null ?? [];
-    if (fromMatch) {
-      specifiers.push(fromMatch);
-      continue;
+    if (
+      ts.isExportDeclaration(node) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteralLike(node.moduleSpecifier)
+    ) {
+      specifiers.push(node.moduleSpecifier.text);
+      return;
     }
 
-    const [, bareMatch] = trimmed.match(importBare) as RegExpMatchArray | null ?? [];
-    if (bareMatch) {
-      specifiers.push(bareMatch);
-      continue;
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length === 1 &&
+      ts.isStringLiteralLike(node.arguments[0])
+    ) {
+      specifiers.push(node.arguments[0].text);
+      return;
     }
 
-    const [, dynamicMatch] = trimmed.match(importDynamic) as RegExpMatchArray | null ?? [];
-    if (dynamicMatch) {
-      specifiers.push(dynamicMatch);
-    }
+    ts.forEachChild(node, visit);
   }
+
+  visit(source);
 
   return specifiers;
 }
@@ -209,6 +216,33 @@ function gatherViolations(layer: LayerSpec): Violation[] {
 }
 
 describe("architecture boundaries", () => {
+  it("extracts module specifiers from imports and exports", () => {
+    expect(extractModuleSpecifiers(`
+      import fs from "node:fs";
+      import {
+        parseMarkdownHeadings,
+        selectedMarkdownText
+      } from "../../src/application/use-cases/markdown-docs.js";
+      import type {
+        FileCatalogEntry
+      } from "../../src/domain/models/index.js";
+      export {
+        createTelemetryAdapter
+      } from "../../src/infrastructure/telemetry/index.js";
+      export type {
+        GraphStore
+      } from "../../src/infrastructure/sqlite/index.js";
+      const lazy = import("../../src/infrastructure/tree-sitter/index.js");
+    `)).toEqual([
+      "node:fs",
+      "../../src/application/use-cases/markdown-docs.js",
+      "../../src/domain/models/index.js",
+      "../../src/infrastructure/telemetry/index.js",
+      "../../src/infrastructure/sqlite/index.js",
+      "../../src/infrastructure/tree-sitter/index.js"
+    ]);
+  });
+
   for (const layer of architectureSlices) {
     it(`${layer.layerName} must not import forbidden modules`, () => {
       const violations = gatherViolations(layer);
