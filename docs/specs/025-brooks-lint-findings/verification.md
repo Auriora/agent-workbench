@@ -78,6 +78,7 @@ Resolving findings requires code, tests, and durable documentation validation.
 | 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T018`: 61 test files and 404 tests. |
 | 2026-06-11 | `python3 /home/bcherrington/.codex/plugins/cache/auriora-local/spec-lifecycle-manager/0.1.0+codex.20260606221001/skills/spec-lifecycle-manager/scripts/spec_runtime.py lint docs/specs/025-brooks-lint-findings` | Passed | Spec lint reported 0 errors, 0 warnings, and 0 info diagnostics after `T018`. |
 | 2026-06-11 | `git diff --check` | Passed | No whitespace or patch formatting errors after `T018`. |
+| 2026-06-11 | Traceability and durable promotion review | Completed | Added `traceability.md` mapping T001-T018 to findings, durable destinations, and verification before closure. Promoted lasting test-maintainability gates to `docs/reference/mvp-proof-matrix.md`. |
 
 ## Required Gates For Remediation
 
