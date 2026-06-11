@@ -266,7 +266,7 @@ T013 -> T014
 
 ## Phase 3: Sweep Reliability And Runtime Follow-Ups
 
-- [ ] T009 Investigate stale sweep execution and report reliability.
+- [x] T009 Investigate stale sweep execution and report reliability.
   - Depends on: T002, T006
   - Files: `src/debug/mcp-tool-sweep.ts`, `tests/mcp/debug-harness.test.ts`,
     `docs/specs/023-mcp-tool-sweep-quality/verification.md`
@@ -275,14 +275,36 @@ T013 -> T014
     timeout/cancellation, process kill, or terminal/PTY observation issue.
     The harness writes enough per-repo progress or partial report evidence that
     a failed or interrupted run can still be RCA'd without guessing.
-  - Evidence: Pending.
-  - [ ] T009.1 Reproduce the stale PTY/missing-report behavior with a bounded
+  - Evidence: Added fixed `mcp-tool-sweep-progress.json` progress reporting
+    with atomic flushes around sweep, repo, warmup, discovery, resource, and
+    tool phases. The progress report carries cumulative results, quality
+    summary, state, events, and failure messages. `pnpm test
+    tests/mcp/debug-harness.test.ts`, `pnpm typecheck`, fixture sweep
+    `.tmp/agent-workbench-tool-sweep-t009-progress/`, and committed-sandbox
+    subset sweep `.tmp/agent-workbench-tool-sweep-t009-committed-subset/`
+    passed on 2026-06-11. The bounded committed-sandbox subset did not
+    reproduce the stale PTY issue; it classified as clean process exit with a
+    final report. Future interrupted/stale runs can now be classified from the
+    fixed progress file.
+  - [x] T009.1 Reproduce the stale PTY/missing-report behavior with a bounded
     committed-tree sandbox sweep.
-  - [ ] T009.2 Add deterministic report flushing or per-repo progress records
+    - Evidence: Reran TimeLocker and LibreChat committed-tree sandboxes with
+      graph warmup on 2026-06-11. The run completed cleanly with a final
+      report and progress report, so the stale PTY/missing-report behavior was
+      not reproduced after reload.
+  - [x] T009.2 Add deterministic report flushing or per-repo progress records
     before and after warmup and surface calls.
-  - [ ] T009.3 Add a harness regression for report persistence when one repo
+    - Evidence: `runMcpToolSweep` now writes
+      `mcp-tool-sweep-progress.json` under the output directory before the
+      final timestamped report exists, and flushes it before and after warmup,
+      discovery, resource calls, and tool calls.
+  - [x] T009.3 Add a harness regression for report persistence when one repo
     warmup or surface call fails.
-  - [ ] T009.4 Record process/report RCA and any remaining harness risk in
+    - Evidence: Added a debug-harness regression that creates an unreadable
+      sandbox file, forces `preview_workspace_edit` to fail, and verifies the
+      progress report still records the failed tool event and cumulative
+      invalid summary.
+  - [x] T009.4 Record process/report RCA and any remaining harness risk in
     `verification.md`.
 
 - [ ] T010 Run a fresh full eight-repo committed-sandbox sweep.

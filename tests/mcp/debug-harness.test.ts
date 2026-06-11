@@ -16,6 +16,7 @@ import {
 import {
   resolveToolSweepConfig,
   runMcpToolSweep,
+  toolSweepProgressPath,
   writeToolSweepReport
 } from "../../src/debug/mcp-tool-sweep.js";
 import {
@@ -255,6 +256,58 @@ describe("repo-local MCP debug harness", () => {
     } finally {
       fs.rmSync(outputDir, { recursive: true, force: true });
       fs.rmSync(externalRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("persists sweep progress when a surface call fails", async () => {
+    const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep-progress-failure", String(Date.now()));
+    const targetRepo = path.join(outputDir, "sandbox-repo");
+    const unreadablePath = path.join(targetRepo, "README.md");
+    try {
+      fs.mkdirSync(targetRepo, { recursive: true });
+      fs.writeFileSync(unreadablePath, "# Unreadable\n\nBody.\n");
+      fs.chmodSync(unreadablePath, 0o000);
+
+      const report = await runMcpToolSweep({
+        repos: [targetRepo],
+        output_dir: outputDir,
+        call_timeout_ms: 30_000,
+        include_raw: false,
+        start_graph_warmup: false
+      });
+      const progress = JSON.parse(fs.readFileSync(toolSweepProgressPath(outputDir), "utf8")) as {
+        state: string;
+        results: Array<{ kind: string; name: string; status: string; quality: string }>;
+        summary: { invalid: number };
+        events: Array<{ phase: string; status: string; name?: string; message?: string }>;
+      };
+
+      const failedWorkspaceEdit = report.results.find(
+        (result) => result.kind === "tool" && result.name === "preview_workspace_edit"
+      );
+
+      expect(failedWorkspaceEdit).toMatchObject({
+        status: "failed",
+        quality: "invalid"
+      });
+      expect(progress.state).toBe("complete");
+      expect(progress.results).toHaveLength(report.results.length);
+      expect(progress.summary.invalid).toBeGreaterThan(0);
+      expect(progress.events).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            phase: "tool",
+            status: "failed",
+            name: "preview_workspace_edit",
+            message: expect.stringContaining("EACCES")
+          })
+        ])
+      );
+    } finally {
+      if (fs.existsSync(unreadablePath)) {
+        fs.chmodSync(unreadablePath, 0o600);
+      }
+      fs.rmSync(outputDir, { recursive: true, force: true });
     }
   });
 

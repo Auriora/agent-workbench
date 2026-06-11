@@ -99,6 +99,23 @@ export type ToolSweepReport = {
   summary: Record<ToolSweepQuality, number>;
 };
 
+export type ToolSweepProgressEvent = {
+  timestamp: string;
+  repo_root?: string;
+  phase: "sweep" | "repo" | "warmup" | "discovery" | "resource" | "tool";
+  status: "started" | "completed" | "failed" | "skipped";
+  name?: string;
+  elapsed_ms?: number;
+  message?: string;
+};
+
+export type ToolSweepProgressReport = ToolSweepReport & {
+  state: "running" | "complete" | "failed";
+  updated_at: string;
+  events: ToolSweepProgressEvent[];
+  last_error?: string;
+};
+
 type RepoFacts = {
   markdown_path?: string;
   no_heading_markdown_path?: string;
@@ -144,49 +161,168 @@ export function resolveToolSweepConfig(input: {
 export async function runMcpToolSweep(config: ToolSweepConfig): Promise<ToolSweepReport> {
   const results: ToolSweepSurfaceResult[] = [];
   fs.mkdirSync(config.output_dir, { recursive: true });
+  const progressPath = toolSweepProgressPath(config.output_dir);
+  const progress: ToolSweepProgressReport = {
+    generated_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    state: "running",
+    config,
+    repo_count: config.repos.length,
+    results,
+    summary: summarizeQuality(results),
+    events: []
+  };
+
+  recordProgressEvent({
+    progress,
+    outputPath: progressPath,
+    event: { phase: "sweep", status: "started" }
+  });
 
   for (const repoRoot of config.repos) {
     const runtime = createRepoRuntime({ repoRoot, outputDir: config.output_dir });
+    const repoStarted = Date.now();
     try {
+      recordProgressEvent({
+        progress,
+        outputPath: progressPath,
+        event: { repo_root: repoRoot, phase: "repo", status: "started" }
+      });
       if (config.start_graph_warmup) {
-        await warmGraph({ repoRoot, runtime });
+        const warmupStarted = Date.now();
+        recordProgressEvent({
+          progress,
+          outputPath: progressPath,
+          event: { repo_root: repoRoot, phase: "warmup", status: "started" }
+        });
+        try {
+          await warmGraph({ repoRoot, runtime });
+        } catch (error) {
+          recordProgressEvent({
+            progress,
+            outputPath: progressPath,
+            event: {
+              repo_root: repoRoot,
+              phase: "warmup",
+              status: "failed",
+              elapsed_ms: Date.now() - warmupStarted,
+              message: error instanceof Error ? error.message : String(error)
+            }
+          });
+          throw error;
+        }
+        recordProgressEvent({
+          progress,
+          outputPath: progressPath,
+          event: {
+            repo_root: repoRoot,
+            phase: "warmup",
+            status: "completed",
+            elapsed_ms: Date.now() - warmupStarted
+          }
+        });
       }
       const facts = await discoverRepoFacts({ repoRoot, runtime });
-      results.push(discoveryResult({ repoRoot, name: "resources/list", count: mcpResources.length }));
-      results.push(discoveryResult({ repoRoot, name: "tools/list", count: mcpTools.length }));
+      const resourceDiscovery = discoveryResult({ repoRoot, name: "resources/list", count: mcpResources.length });
+      const toolDiscovery = discoveryResult({ repoRoot, name: "tools/list", count: mcpTools.length });
+      results.push(resourceDiscovery);
+      recordSurfaceProgress({
+        progress,
+        outputPath: progressPath,
+        result: resourceDiscovery,
+        phase: "discovery"
+      });
+      results.push(toolDiscovery);
+      recordSurfaceProgress({
+        progress,
+        outputPath: progressPath,
+        result: toolDiscovery,
+        phase: "discovery"
+      });
 
       for (const resource of mcpResources) {
-        results.push(await timedEnvelope({
+        recordProgressEvent({
+          progress,
+          outputPath: progressPath,
+          event: { repo_root: repoRoot, phase: "resource", status: "started", name: resource.name }
+        });
+        const result = await timedEnvelope({
           repoRoot,
           kind: "resource",
           name: resource.name,
           timeoutMs: config.call_timeout_ms,
           includeRaw: config.include_raw,
           run: () => callResource({ repoRoot, resourceName: resource.name, runtime })
-        }));
+        });
+        results.push(result);
+        recordSurfaceProgress({ progress, outputPath: progressPath, result, phase: "resource" });
       }
       for (const tool of mcpTools) {
-        results.push(await timedEnvelope({
+        recordProgressEvent({
+          progress,
+          outputPath: progressPath,
+          event: { repo_root: repoRoot, phase: "tool", status: "started", name: tool.name }
+        });
+        const result = await timedEnvelope({
           repoRoot,
           kind: "tool",
           name: tool.name,
           timeoutMs: config.call_timeout_ms,
           includeRaw: config.include_raw,
           run: () => callTool({ repoRoot, toolName: tool.name, facts, runtime })
-        }));
+        });
+        results.push(result);
+        recordSurfaceProgress({ progress, outputPath: progressPath, result, phase: "tool" });
       }
+      recordProgressEvent({
+        progress,
+        outputPath: progressPath,
+        event: {
+          repo_root: repoRoot,
+          phase: "repo",
+          status: "completed",
+          elapsed_ms: Date.now() - repoStarted
+        }
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      progress.state = "failed";
+      progress.last_error = message;
+      recordProgressEvent({
+        progress,
+        outputPath: progressPath,
+        event: {
+          repo_root: repoRoot,
+          phase: "repo",
+          status: "failed",
+          elapsed_ms: Date.now() - repoStarted,
+          message
+        }
+      });
+      throw error;
     } finally {
       runtime.graph.close();
     }
   }
 
+  progress.state = "complete";
+  recordProgressEvent({
+    progress,
+    outputPath: progressPath,
+    event: { phase: "sweep", status: "completed" }
+  });
+
   return {
-    generated_at: new Date().toISOString(),
+    generated_at: progress.generated_at,
     config,
     repo_count: config.repos.length,
     results,
     summary: summarizeQuality(results)
   };
+}
+
+export function toolSweepProgressPath(outputDir: string): string {
+  return path.join(outputDir, "mcp-tool-sweep-progress.json");
 }
 
 export function writeToolSweepReport(input: {
@@ -198,6 +334,63 @@ export function writeToolSweepReport(input: {
   const outputPath = path.join(input.outputDir, `mcp-tool-sweep-${timestamp}.json`);
   fs.writeFileSync(outputPath, `${JSON.stringify(input.report, null, 2)}\n`);
   return outputPath;
+}
+
+function recordSurfaceProgress(input: {
+  progress: ToolSweepProgressReport;
+  outputPath: string;
+  result: ToolSweepSurfaceResult;
+  phase: "discovery" | "resource" | "tool";
+}): void {
+  const message = firstResultMessage(input.result);
+  recordProgressEvent({
+    progress: input.progress,
+    outputPath: input.outputPath,
+    event: {
+      repo_root: input.result.repo_root,
+      phase: input.phase,
+      status: progressStatusFromResult(input.result),
+      name: input.result.name,
+      elapsed_ms: input.result.elapsed_ms,
+      ...(message ? { message } : {})
+    }
+  });
+}
+
+function recordProgressEvent(input: {
+  progress: ToolSweepProgressReport;
+  outputPath: string;
+  event: Omit<ToolSweepProgressEvent, "timestamp">;
+}): void {
+  const timestamp = new Date().toISOString();
+  input.progress.updated_at = timestamp;
+  input.progress.summary = summarizeQuality(input.progress.results);
+  input.progress.events.push({ timestamp, ...input.event });
+  writeToolSweepProgressReport({ report: input.progress, outputPath: input.outputPath });
+}
+
+function writeToolSweepProgressReport(input: {
+  report: ToolSweepProgressReport;
+  outputPath: string;
+}): void {
+  fs.mkdirSync(path.dirname(input.outputPath), { recursive: true });
+  const tempPath = `${input.outputPath}.${process.pid}.tmp`;
+  fs.writeFileSync(tempPath, `${JSON.stringify(input.report, null, 2)}\n`);
+  fs.renameSync(tempPath, input.outputPath);
+}
+
+function progressStatusFromResult(result: ToolSweepSurfaceResult): ToolSweepProgressEvent["status"] {
+  if (result.status === "failed") {
+    return "failed";
+  }
+  if (result.status === "skipped") {
+    return "skipped";
+  }
+  return "completed";
+}
+
+function firstResultMessage(result: ToolSweepSurfaceResult): string | undefined {
+  return result.errors[0] ?? result.warnings[0];
 }
 
 export async function main(argv = process.argv.slice(2), cwd = process.cwd()): Promise<void> {
