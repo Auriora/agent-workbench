@@ -310,7 +310,7 @@ debt remediation is promoted or closed with the remaining debt tasks.
 
 #### BL-DEBT-002: Change Propagation - Resource Extraction Mixes Unrelated Resource Domains
 
-Status: `accepted`
+Status: `in_progress`
 
 Triage rationale: Accepted. The adapter mixes independent resource domains
 behind one implementation class. `T011` keeps the existing `ExtractorPort`
@@ -341,7 +341,13 @@ CloudFormation/SAM evidence, and CMake evidence. Keep the existing
 
 Tasks: `T009`, `T011`
 
-Verification: Pending.
+Verification: 2026-06-11 `T011` kept `ResourceExtractorAdapter` as the stable
+`ExtractorPort` implementation and split domain extraction into generic
+resource coordination, `.NET` project/solution metadata,
+CloudFormation/SAM template parsing and intrinsic references, CMake targets,
+and shared resource helpers. Targeted resource-domain tests, `pnpm typecheck`,
+and `pnpm test` passed. Keep status `in_progress` until debt remediation is
+promoted or closed with the remaining debt tasks.
 
 #### BL-DEBT-003: Change Propagation - Runtime Contracts Are A Multi-Context Schema Monolith
 

@@ -186,7 +186,7 @@ T016 -> T018
   - [x] T010.3 Extract language and ecosystem target selection.
   - [x] T010.4 Run targeted verification-plan tests and `pnpm typecheck`.
 
-- [ ] T011 Split resource-backed extraction by resource domain.
+- [x] T011 Split resource-backed extraction by resource domain.
   - Depends on: T009
   - Findings: `BL-DEBT-002`
   - Files: `src/infrastructure/extraction/resource-extractor.ts`,
@@ -195,10 +195,16 @@ T016 -> T018
     extraction concerns are separated behind the existing `ExtractorPort`
     behavior, with fixture-backed tests preserving emitted nodes, edges, and
     unresolved references.
-  - Evidence: Pending.
-  - [ ] T011.1 Identify current golden behavior for each resource domain.
-  - [ ] T011.2 Extract one resource domain at a time with tests.
-  - [ ] T011.3 Verify extraction pipeline tests and `pnpm typecheck`.
+  - Evidence: 2026-06-11 kept `ResourceExtractorAdapter` as the stable
+    coordinator and split domain logic into
+    `cloudformation-resource-extractor.ts`, `cmake-resource-extractor.ts`,
+    `dotnet-resource-extractor.ts`, and `resource-shared.ts`. Passed
+    `pnpm exec vitest run tests/graph/extraction-pipeline.test.ts tests/graph/query-tools.test.ts tests/mcp/context-for-task-tool.test.ts tests/mcp/verification-plan-tool.test.ts`,
+    `pnpm exec vitest run tests/graph/cmake-cpp-routing-fixture.test.ts tests/workspace/sam-intrinsic-fixtures.test.ts tests/workspace/file-catalog-scanner.test.ts tests/mcp/repo-scope-overview-resource.test.ts`,
+    `pnpm typecheck`, and `pnpm test`.
+  - [x] T011.1 Identify current golden behavior for each resource domain.
+  - [x] T011.2 Extract one resource domain at a time with tests.
+  - [x] T011.3 Verify extraction pipeline tests and `pnpm typecheck`.
 
 - [ ] T012 Split runtime contracts into context modules behind the current barrel.
   - Depends on: T009

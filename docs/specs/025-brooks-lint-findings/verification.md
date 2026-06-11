@@ -58,6 +58,10 @@ Resolving findings requires code, tests, and durable documentation validation.
 | 2026-06-11 | `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts tests/presentation/session-aware-presenters.test.ts tests/mcp/stdio-entrypoint.test.ts` | Passed | 3 related contract/presentation/stdio test files and 26 tests passed after the validation-planning extraction. |
 | 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after extracting validation-planning modules. |
 | 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T010`: 59 test files and 396 tests. |
+| 2026-06-11 | `pnpm exec vitest run tests/graph/extraction-pipeline.test.ts tests/graph/query-tools.test.ts tests/mcp/context-for-task-tool.test.ts tests/mcp/verification-plan-tool.test.ts` | Passed | 4 resource and downstream routing test files and 87 tests passed after splitting resource-backed extraction domains. |
+| 2026-06-11 | `pnpm exec vitest run tests/graph/cmake-cpp-routing-fixture.test.ts tests/workspace/sam-intrinsic-fixtures.test.ts tests/workspace/file-catalog-scanner.test.ts tests/mcp/repo-scope-overview-resource.test.ts` | Passed | 4 CMake/SAM/.NET-adjacent fixture and overview test files and 26 tests passed after the extraction split. |
+| 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after splitting resource-backed extraction modules. |
+| 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T011`: 59 test files and 396 tests. |
 
 ## Required Gates For Remediation
 
