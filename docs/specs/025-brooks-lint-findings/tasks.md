@@ -206,7 +206,7 @@ T016 -> T018
   - [x] T011.2 Extract one resource domain at a time with tests.
   - [x] T011.3 Verify extraction pipeline tests and `pnpm typecheck`.
 
-- [ ] T012 Split runtime contracts into context modules behind the current barrel.
+- [x] T012 Split runtime contracts into context modules behind the current barrel.
   - Depends on: T009
   - Findings: `BL-DEBT-003`
   - Files: `src/contracts/runtime-contracts.ts`, `src/contracts/`,
@@ -214,11 +214,19 @@ T016 -> T018
   - Acceptance: Contract schemas are grouped by stable runtime context while
     existing public imports through `src/contracts/index.ts` remain compatible
     and contract tests prove schema behavior is unchanged.
-  - Evidence: Pending.
-  - [ ] T012.1 Define contract module boundaries and public export inventory.
-  - [ ] T012.2 Move schemas in small groups without changing names or shapes.
-  - [ ] T012.3 Add or update export compatibility tests.
-  - [ ] T012.4 Run contract tests and `pnpm typecheck`.
+  - Evidence: 2026-06-11 split runtime contracts into stable context modules
+    for core primitives, orientation/repo overview, docs/Markdown quality,
+    graph queries, validation/edit feedback, response envelopes, and
+    integration profiles. Kept `src/contracts/runtime-contracts.ts` and
+    `src/contracts/index.ts` as compatibility barrels, added public export
+    parity coverage in `tests/contracts/runtime-contracts.test.ts`, updated
+    `docs/reference/runtime-contracts.md`, and passed
+    `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts`,
+    `pnpm typecheck`, and `pnpm test`.
+  - [x] T012.1 Define contract module boundaries and public export inventory.
+  - [x] T012.2 Move schemas in small groups without changing names or shapes.
+  - [x] T012.3 Add or update export compatibility tests.
+  - [x] T012.4 Run contract tests and `pnpm typecheck`.
 
 ## Phase 6: Health Dashboard Follow-Up
 

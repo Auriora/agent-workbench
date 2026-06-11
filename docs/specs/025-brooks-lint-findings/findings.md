@@ -351,7 +351,7 @@ promoted or closed with the remaining debt tasks.
 
 #### BL-DEBT-003: Change Propagation - Runtime Contracts Are A Multi-Context Schema Monolith
 
-Status: `accepted`
+Status: `in_progress`
 
 Triage rationale: Accepted. Centralized contract vocabulary remains the right
 public API shape, but the implementation file should be split by stable runtime
@@ -384,7 +384,16 @@ stable during the split.
 
 Tasks: `T009`, `T012`
 
-Verification: Pending.
+Verification: 2026-06-11 `T012` split runtime contracts into context modules
+for core primitives, orientation/repo overview, docs and Markdown quality,
+graph queries, validation/edit feedback, response envelopes, and integration
+profiles while keeping `src/contracts/runtime-contracts.ts` and
+`src/contracts/index.ts` as compatibility barrels. Added export compatibility
+coverage in `tests/contracts/runtime-contracts.test.ts`, updated
+`docs/reference/runtime-contracts.md`, and passed
+`pnpm exec vitest run tests/contracts/runtime-contracts.test.ts`,
+`pnpm typecheck`, and `pnpm test`. Keep status `in_progress` until debt
+remediation is promoted or closed with the remaining debt tasks.
 
 ---
 

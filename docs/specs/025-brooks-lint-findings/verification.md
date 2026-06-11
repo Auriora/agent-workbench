@@ -62,6 +62,9 @@ Resolving findings requires code, tests, and durable documentation validation.
 | 2026-06-11 | `pnpm exec vitest run tests/graph/cmake-cpp-routing-fixture.test.ts tests/workspace/sam-intrinsic-fixtures.test.ts tests/workspace/file-catalog-scanner.test.ts tests/mcp/repo-scope-overview-resource.test.ts` | Passed | 4 CMake/SAM/.NET-adjacent fixture and overview test files and 26 tests passed after the extraction split. |
 | 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after splitting resource-backed extraction modules. |
 | 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T011`: 59 test files and 396 tests. |
+| 2026-06-11 | `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts` | Passed | 1 contract test file and 13 tests passed after splitting runtime contracts by context and adding public export compatibility checks through `src/contracts/index.ts`. |
+| 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after splitting runtime contract modules. |
+| 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T012`: 59 test files and 397 tests. |
 
 ## Required Gates For Remediation
 

@@ -14,6 +14,32 @@ Define the shared vocabulary and response shapes used by the Agent IDE runtime.
 This is the canonical source for enums and envelope fields used by MCP tools,
 resources, adapters, graph edges, attention items, and edit contracts.
 
+## Source Layout
+
+Runtime contract schemas are grouped by stable runtime context under
+`src/contracts/`:
+
+- `runtime-core-contracts.ts`: contract version, shared enums, file/document
+  references, runtime caveats, errors, skipped paths, and generic action/risk
+  primitives.
+- `runtime-orientation-contracts.ts`: task context, repository scope, and
+  repository overview contracts.
+- `runtime-docs-contracts.ts`: documentation overview, map, search, outline,
+  section reads, Markdown quality, and Markdown formatting contracts.
+- `runtime-graph-contracts.ts`: symbol search, reference lookup, and impact
+  contracts.
+- `runtime-validation-edit-contracts.ts`: verification planning, diagnostics,
+  post-edit feedback, and bounded workspace edit contracts.
+- `runtime-response-contracts.ts`: response metadata, attention items,
+  response envelopes, and envelope construction.
+- `runtime-integration-contracts.ts`: MCP surface health and coding-agent
+  integration profile contracts.
+
+`src/contracts/runtime-contracts.ts` and `src/contracts/index.ts` remain
+compatibility barrels for public imports. New contract definitions should live
+in the context module that owns the runtime behavior, then be exported through
+the existing barrels.
+
 ## Contract Versioning
 
 Every MCP response must include a contract version.

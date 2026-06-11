@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import * as contractBarrel from "../../src/contracts/index.js";
 import {
   applicationContracts,
   domainContracts,
@@ -29,6 +30,7 @@ import {
   verificationPlanSchema
 } from "../../src/contracts/index.js";
 import { capabilityLevelSchema as domainCapabilityLevelSchema } from "../../src/contracts/domain-contracts.js";
+import * as runtimeContracts from "../../src/contracts/runtime-contracts.js";
 
 describe("runtime contract categories", () => {
   it("re-export canonical contracts by category", () => {
@@ -36,6 +38,40 @@ describe("runtime contract categories", () => {
     expect(domainContracts.capabilityLevelSchema).toBeDefined();
     expect(domainContracts.capabilityLevelSchema).toBe(capabilityLevelSchema);
     expect(presentationContracts.attentionItemSchema).toBeDefined();
+  });
+
+  it("keeps the runtime and top-level contract barrels compatible", () => {
+    const representativeContextExports = [
+      "capabilityLevelSchema",
+      "CONTRACT_VERSION",
+      "taskContextSchema",
+      "repoOverviewSchema",
+      "docsSearchResultSchema",
+      "symbolSearchResultSchema",
+      "findReferencesResultSchema",
+      "verificationPlanSchema",
+      "diagnosticsForFilesResultSchema",
+      "previewWorkspaceEditResultSchema",
+      "responseMetadataSchema",
+      "responseEnvelopeSchema",
+      "integrationHealthSchema",
+      "codexIntegrationProfileSchema",
+      "checkMarkdownDocumentResultSchema",
+      "markdownFormatPlanSchema",
+      "makeEnvelope"
+    ] as const;
+
+    expect(Object.keys(runtimeContracts).sort()).toEqual(
+      expect.arrayContaining([...representativeContextExports])
+    );
+
+    for (const exportName of Object.keys(runtimeContracts) as Array<
+      keyof typeof runtimeContracts
+    >) {
+      expect(contractBarrel[exportName as keyof typeof contractBarrel]).toBe(
+        runtimeContracts[exportName]
+      );
+    }
   });
 
   it("keeps capability levels canonical in the domain contracts", () => {
