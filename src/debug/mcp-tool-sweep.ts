@@ -744,7 +744,7 @@ function classifyEnvelope(envelope: ResponseEnvelope<unknown>): ToolSweepQuality
   if (envelope.meta.truncated || envelope.meta.analysis_validity === "partial") {
     return "partial";
   }
-  if (envelope.warnings.length > 0 || envelope.meta.verification_status === "needed") {
+  if (envelope.warnings.length > 0) {
     return "degraded";
   }
   return "full";

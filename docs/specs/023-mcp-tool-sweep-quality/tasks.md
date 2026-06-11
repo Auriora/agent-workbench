@@ -120,8 +120,12 @@ T004,T005,T006,T007,T008 -> T009 -> T010
     `src/application/use-cases/query-docs.ts`; `pnpm test
     tests/docs/query-docs.test.ts tests/mcp/docs-surfaces.test.ts
     tests/mcp/debug-harness.test.ts`, `pnpm typecheck`, and the eight-repo
-    committed-tree sandbox sweep passed with 0 invalid results. Status
-    no-coverage semantics and routine attention-item downgrade semantics remain
+    committed-tree sandbox sweep passed with 0 invalid results. Sweep quality
+    classification now treats `verification_status: needed` as an action state
+    instead of degraded transport quality; `pnpm test
+    tests/mcp/debug-harness.test.ts`, `pnpm typecheck`, and the eight-repo
+    committed-tree sandbox sweep passed with 126 full, 46 partial, 2 degraded,
+    2 blocked, and 0 invalid results. Status no-coverage semantics remain
     pending.
   - [ ] T004.1 Write failing tests for no adapter coverage status.
   - [x] T004.2 Write failing tests for cold and refreshing docs FTS output.
@@ -129,10 +133,12 @@ T004,T005,T006,T007,T008 -> T009 -> T010
       `tests/docs/query-docs.test.ts` to require `analysis_validity: valid`
       with `verification_status: blocked`.
   - [ ] T004.3 Implement metadata and presenter corrections.
-    - Evidence: Docs search metadata correction complete; status and routine
-      attention-item corrections remain pending before this subtask can close.
+    - Evidence: Docs search metadata correction and sweep `needed` classifier
+      correction complete; status no-coverage correction remains pending before
+      this subtask can close.
   - [ ] T004.4 Run focused status/docs tests.
-    - Evidence: Docs-focused tests passed; status-focused tests remain pending.
+    - Evidence: Docs-focused and debug-harness tests passed; status-focused
+      tests remain pending.
 
 - [ ] T005 Correct documentation tool edge cases.
   - Depends on: T003
@@ -145,7 +151,9 @@ T004,T005,T006,T007,T008 -> T009 -> T010
     produce distinguishable envelopes with stable heading ids where applicable.
     A successful markdown-quality check with findings is reported as a full
     checker result with findings, not degraded transport quality.
-  - Evidence: Pending.
+  - Evidence: Successful markdown-quality findings are now classified as full
+    sweep quality, covered by `tests/mcp/debug-harness.test.ts`; broader docs
+    edge-case subtasks remain pending.
   - [ ] T005.1 Write failing tests for missing Markdown path behavior.
   - [ ] T005.2 Write failing tests for existing no-heading Markdown behavior.
   - [ ] T005.3 Write failing tests for headed Markdown outline and section

@@ -296,6 +296,40 @@ describe("repo-local MCP debug harness", () => {
       fs.rmSync(targetRepo, { recursive: true, force: true });
     }
   });
+
+  it("does not classify successful findings as degraded sweep quality", async () => {
+    const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep-findings-quality", String(Date.now()));
+    const targetRepo = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-findings-quality-"));
+    try {
+      fs.writeFileSync(path.join(targetRepo, "README.md"), "# Missing Frontmatter\n\nBody.\n");
+
+      const report = await runMcpToolSweep({
+        repos: [targetRepo],
+        output_dir: outputDir,
+        call_timeout_ms: 30_000,
+        include_raw: true,
+        start_graph_warmup: false
+      });
+      const markdownDocument = report.results.find(
+        (result) => result.kind === "tool" && result.name === "check_markdown_document"
+      );
+      const rawMarkdown = markdownDocument?.raw_envelope as {
+        data?: { status?: string; findings?: unknown[] };
+        meta?: { verification_status?: string };
+      } | undefined;
+
+      expect(rawMarkdown?.data?.status).toBe("done");
+      expect(rawMarkdown?.data?.findings?.length).toBeGreaterThan(0);
+      expect(rawMarkdown?.meta?.verification_status).toBe("needed");
+      expect(markdownDocument).toMatchObject({
+        status: "ok",
+        quality: "full"
+      });
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+      fs.rmSync(targetRepo, { recursive: true, force: true });
+    }
+  });
 });
 
 function snapshotDirectory(directory: string): string[] {
