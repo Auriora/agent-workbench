@@ -49,7 +49,7 @@ export async function diagnoseChangedFiles(input: {
     repo_root: repoRoot,
     indexed_roots: ["."],
     skipped_roots: [],
-    max_files: 2000
+    max_files: 15000
   });
   const filesByPath = new Map(scanned.files.map((file) => [file.path, file]));
   const selectedFiles = safeRequestedFiles
@@ -84,7 +84,7 @@ export async function diagnoseChangedFiles(input: {
     files: scanned.files,
     freshness: "unknown",
     truncated: scanned.truncated,
-    row_limit: 2000
+    row_limit: 15000
   });
   const diagnostics: DiagnosticsForFilesResult = {
     repo_root: scanned.repo_root,
@@ -111,7 +111,7 @@ export async function diagnoseChangedFiles(input: {
       verification_status: diagnostics.status,
       truncated: scanned.truncated || requestedFiles.length > input.request.max_files,
       budget: {
-        row_limit: 2000
+        row_limit: 15000
       }
     }
   };

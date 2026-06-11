@@ -261,7 +261,7 @@ async function callResource(input: {
   }
   if (input.resourceName === "docs-overview") {
     return buildDocsOverviewEnvelope(await getDocsOverview({
-      request: { repo_root: input.repoRoot, max_docs: 5, max_headings_per_doc: 5 },
+      request: { repo_root: input.repoRoot, max_docs: 200, max_headings_per_doc: 100 },
       scanner: input.runtime.scanner,
       workspace: input.runtime.workspace,
       default_repo_root: input.repoRoot
@@ -269,7 +269,7 @@ async function callResource(input: {
   }
   if (input.resourceName === "docs-map") {
     return buildDocsMapEnvelope(await getDocsMap({
-      request: { repo_root: input.repoRoot, max_docs: 10, max_headings_per_doc: 5 },
+      request: { repo_root: input.repoRoot, max_docs: 200, max_headings_per_doc: 100 },
       scanner: input.runtime.scanner,
       workspace: input.runtime.workspace,
       default_repo_root: input.repoRoot
@@ -310,8 +310,8 @@ async function callTool(input: {
         repo_root: input.repoRoot,
         files: file ? [file] : [],
         symbols: input.facts.symbol_query ? [input.facts.symbol_query] : [],
-        max_files: 5,
-        max_docs: 5
+        max_files: 20,
+        max_docs: 20
       },
       scanner: input.runtime.scanner,
       workspace: input.runtime.workspace,
@@ -320,7 +320,7 @@ async function callTool(input: {
   }
   if (input.toolName === "diagnostics_for_files") {
     return buildDiagnosticsForFilesEnvelope(await diagnoseChangedFiles({
-      request: { repo_root: input.repoRoot, files: input.facts.json_path ? [input.facts.json_path] : [], max_files: 5 },
+      request: { repo_root: input.repoRoot, files: input.facts.json_path ? [input.facts.json_path] : [], max_files: 20 },
       scanner: input.runtime.scanner,
       providers: [new JsonSyntaxDiagnosticsProviderAdapter()],
       default_repo_root: input.repoRoot
@@ -580,7 +580,7 @@ async function discoverRepoFacts(input: { repoRoot: string; runtime: RepoRuntime
     repo_root: input.repoRoot,
     indexed_roots: ["."],
     skipped_roots: [],
-    max_files: 2000
+    max_files: 15000
   });
   const files = [...scanned.files].sort((left, right) => left.path.localeCompare(right.path));
   const markdownFiles = files.filter((file) => file.file_identity.language === "markdown");

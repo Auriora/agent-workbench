@@ -31,7 +31,7 @@ import {
 import { capNextActions } from "../../presentation/metadata.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 
-const DOC_ROW_LIMIT = 2000;
+const DOC_ROW_LIMIT = 15000;
 const DIRECT_READ_CAVEAT = "Docs search is routing evidence; use docs_read_section for precise claims.";
 
 export type DocsOverviewUseCaseResult = {

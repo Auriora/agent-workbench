@@ -158,7 +158,7 @@ export async function getScannedRepoStatus(input: {
     repo_root: input.repo_root,
     indexed_roots: input.indexed_roots ?? ["."],
     skipped_roots: input.skipped_roots ?? [],
-    max_files: input.max_files ?? 2000
+    max_files: input.max_files ?? 15000
   });
   const result = getCatalogRepoStatus({
     repo_root: scanned.repo_root,
@@ -174,7 +174,7 @@ export async function getScannedRepoStatus(input: {
       ...result.meta,
       truncated: scanned.truncated,
       budget: {
-        row_limit: input.max_files ?? 2000
+        row_limit: input.max_files ?? 15000
       }
     }
   };

@@ -54,7 +54,7 @@ export async function getTaskContext(input: {
     repo_root: repoRoot,
     indexed_roots: ["."],
     skipped_roots: [],
-    max_files: 2000
+    max_files: 15000
   });
   const byPath = new Map(scanned.files.map((file) => [file.path, file]));
   const jsTsShape = detectJsTsProjectShape(scanned.files);
@@ -201,7 +201,7 @@ export async function getTaskContext(input: {
       verification_status: "needed",
       truncated: scanned.truncated,
       budget: {
-        row_limit: 2000
+        row_limit: 15000
       }
     }
   };

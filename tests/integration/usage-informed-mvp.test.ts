@@ -76,7 +76,7 @@ describe("usage-informed MVP validation", () => {
     });
     const serialized = JSON.stringify(result.context);
 
-    expect(recordingScanner.calls).toEqual([{ max_files: 2000 }]);
+    expect(recordingScanner.calls).toEqual([{ max_files: 15000 }]);
     expect(result.context.related_files.length).toBeLessThanOrEqual(3);
     expect(result.context.governing_docs.length).toBeLessThanOrEqual(3);
     expect(result.context.skipped_work).toEqual(

@@ -20,7 +20,7 @@ import type {
 } from "../../ports/index.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 
-const MARKDOWN_QUALITY_ROW_LIMIT = 2000;
+const MARKDOWN_QUALITY_ROW_LIMIT = 15000;
 
 export type CheckMarkdownDocumentUseCaseResult = {
   check: CheckMarkdownDocumentResult;

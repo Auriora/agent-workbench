@@ -31,7 +31,7 @@ export async function planVerification(input: {
     repo_root: repoRoot,
     indexed_roots: ["."],
     skipped_roots: [],
-    max_files: 2000
+    max_files: 15000
   });
   const selectedPaths = uniqueSorted([
     ...input.request.files.map(normalizeRepoPath),
@@ -186,7 +186,7 @@ export async function planVerification(input: {
       verification_status: plan.status,
       truncated: scanned.truncated,
       budget: {
-        row_limit: 2000
+        row_limit: 15000
       }
     }
   };

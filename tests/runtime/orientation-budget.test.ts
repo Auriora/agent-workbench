@@ -49,10 +49,10 @@ describe("repo orientation budgets", () => {
       })
     );
 
-    expect(scopeScanner.calls[0]?.max_files).toBe(2000);
-    expect(overviewScanner.calls[0]?.max_files).toBe(2000);
-    expect(scopeEnvelope.meta.budget).toEqual({ row_limit: 2000 });
-    expect(overviewEnvelope.meta.budget).toEqual({ row_limit: 2000 });
+    expect(scopeScanner.calls[0]?.max_files).toBe(15000);
+    expect(overviewScanner.calls[0]?.max_files).toBe(15000);
+    expect(scopeEnvelope.meta.budget).toEqual({ row_limit: 15000 });
+    expect(overviewEnvelope.meta.budget).toEqual({ row_limit: 15000 });
     const statusKeys = collectObjectKeys(buildStatusEnvelope({
       status: {
         repo_root: "/repo",

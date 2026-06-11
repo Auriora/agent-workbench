@@ -221,7 +221,7 @@ describe("repo orientation golden responses", () => {
       verification_status: "needed",
       truncated: false,
       budget: {
-        row_limit: 2000
+        row_limit: 15000
       }
     };
 

@@ -36,7 +36,7 @@ export async function getRepoOverview(input: {
       repo_root: input.repo_root,
       indexed_roots: ["."],
       skipped_roots: [],
-      max_files: 2000
+      max_files: 15000
     }),
     input.snapshots?.getSnapshot({ repo_root: input.repo_root }) ?? Promise.resolve(undefined),
     input.warmups?.getState({ repo_root: input.repo_root }) ?? Promise.resolve(undefined)
@@ -73,7 +73,7 @@ export async function getRepoOverview(input: {
       ...status.meta,
       truncated: scanned.truncated,
       budget: {
-        row_limit: 2000
+        row_limit: 15000
       }
     }
   };

@@ -125,7 +125,11 @@ T004,T005,T006,T007,T008 -> T009 -> T010
     instead of degraded transport quality; `pnpm test
     tests/mcp/debug-harness.test.ts`, `pnpm typecheck`, and the eight-repo
     committed-tree sandbox sweep passed with 126 full, 46 partial, 2 degraded,
-    2 blocked, and 0 invalid results. Status no-coverage semantics remain
+    2 blocked, and 0 invalid results. Catalog scan and docs/context request
+    budgets were then raised for large committed-tree sandbox repositories;
+    the focused orientation/docs/debug-harness test set, `pnpm typecheck`, and
+    the eight-repo sweep passed with 161 full, 13 partial, 0 degraded, 2
+    blocked, and 0 invalid results. Status no-coverage semantics remain
     pending.
   - [ ] T004.1 Write failing tests for no adapter coverage status.
   - [x] T004.2 Write failing tests for cold and refreshing docs FTS output.
@@ -134,11 +138,12 @@ T004,T005,T006,T007,T008 -> T009 -> T010
       with `verification_status: blocked`.
   - [ ] T004.3 Implement metadata and presenter corrections.
     - Evidence: Docs search metadata correction and sweep `needed` classifier
-      correction complete; status no-coverage correction remains pending before
-      this subtask can close.
+      correction complete. Catalog scan budgets now cover the current dogfood
+      repos without routine degraded orientation metadata. Status no-coverage
+      correction remains pending before this subtask can close.
   - [ ] T004.4 Run focused status/docs tests.
-    - Evidence: Docs-focused and debug-harness tests passed; status-focused
-      tests remain pending.
+    - Evidence: Docs-focused, orientation-focused, integration context, and
+      debug-harness tests passed; status-focused tests remain pending.
 
 - [ ] T005 Correct documentation tool edge cases.
   - Depends on: T003
