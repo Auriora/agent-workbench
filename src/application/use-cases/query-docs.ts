@@ -176,23 +176,28 @@ export async function getDocsOutline(input: {
     default_repo_root: input.default_repo_root
   });
   const normalizedPath = normalizeRepoPath(input.request.path);
-  const warning = unsafePathWarning(normalizedPath) ?? missingOrSkippedWarning(normalizedPath, index);
-  const doc = warning === undefined ? index.documents.find((candidate) => candidate.path === normalizedPath) : undefined;
-  const warnings = [...index.warnings, ...(warning === undefined ? [] : [warning])];
+  const requested = await loadRequestedDoc({
+    index,
+    workspace: input.workspace,
+    path: normalizedPath,
+    maxHeadings: 100
+  });
+  const doc = requested.doc;
+  const warnings = requested.warning === undefined ? [] : [requested.warning];
 
   return {
     outline: {
       repo_root: index.repoRoot,
       path: normalizedPath,
-      status: warning === undefined && doc !== undefined ? "done" : "blocked",
+      status: requested.warning === undefined && doc !== undefined ? "done" : "blocked",
       title: doc?.title ?? markdownTitleFromPath(normalizedPath),
       headings: doc?.headings ?? [],
       warnings,
-      next_actions: warning === undefined && doc !== undefined
+      next_actions: requested.warning === undefined && doc !== undefined
         ? docsNextActions(index.repoRoot, normalizedPath, doc.headings[0]?.id)
         : []
     },
-    meta: docsMeta({ ...index, warnings })
+    meta: docsMeta({ ...index, warnings, truncated: false })
   };
 }
 
@@ -209,8 +214,13 @@ export async function readDocsSection(input: {
     default_repo_root: input.default_repo_root
   });
   const normalizedPath = normalizeRepoPath(input.request.path);
-  const warning = unsafePathWarning(normalizedPath) ?? missingOrSkippedWarning(normalizedPath, index);
-  const doc = warning === undefined ? index.documents.find((candidate) => candidate.path === normalizedPath) : undefined;
+  const requested = await loadRequestedDoc({
+    index,
+    workspace: input.workspace,
+    path: normalizedPath,
+    maxHeadings: 100
+  });
+  const doc = requested.doc;
   const heading = doc?.headings.find((candidate) => candidate.id === input.request.heading_id);
   const section = doc !== undefined && heading !== undefined
     ? buildSourceSection({
@@ -222,9 +232,8 @@ export async function readDocsSection(input: {
       })
     : undefined;
   const warnings = [
-    ...index.warnings,
-    ...(warning === undefined ? [] : [warning]),
-    ...(warning === undefined && doc !== undefined && heading === undefined
+    ...(requested.warning === undefined ? [] : [requested.warning]),
+    ...(requested.warning === undefined && doc !== undefined && heading === undefined
       ? [{
           path: normalizedPath,
           reason: "missing" as const,
@@ -244,7 +253,7 @@ export async function readDocsSection(input: {
       warnings,
       next_actions: []
     },
-    meta: docsMeta({ ...index, warnings })
+    meta: docsMeta({ ...index, warnings, truncated: section?.truncated ?? false })
   };
 }
 
@@ -432,24 +441,73 @@ function mapSkippedPaths(skippedPaths: readonly FileCatalogSkippedPath[]): DocsW
     }));
 }
 
-function missingOrSkippedWarning(pathValue: string, index: LoadedDocsIndex): DocsWarning | undefined {
+async function loadRequestedDoc(input: {
+  index: LoadedDocsIndex;
+  workspace: WorkspaceFilePort;
+  path: string;
+  maxHeadings: number;
+}): Promise<{
+  doc?: DocsDocument & { content: string };
+  warning?: DocsWarning;
+}> {
+  const warning = unsafePathWarning(input.path) ?? skippedPathWarning(input.path, input.index);
+  if (warning !== undefined) {
+    return { warning };
+  }
+  const existing = input.index.documents.find((doc) => doc.path === input.path);
+  if (existing !== undefined) {
+    return { doc: existing };
+  }
+  const entry = input.index.scannedFiles.find((file) =>
+    file.path === input.path && file.file_identity.language === "markdown"
+  );
+  if (entry === undefined) {
+    return {
+      warning: {
+        path: input.path,
+        reason: "missing",
+        message: `Documentation file ${input.path} was not found.`
+      }
+    };
+  }
+  const markdownFiles = input.index.scannedFiles.filter((file) => file.file_identity.language === "markdown");
+  try {
+    const content = await input.workspace.readText({ path: entry.path });
+    const headings = parseMarkdownHeadings(content);
+    return {
+      doc: {
+        path: entry.path,
+        title: headings[0]?.text ?? markdownTitleFromPath(entry.path),
+        headings: headings.slice(0, input.maxHeadings),
+        links: extractMarkdownDocLinks({ fromPath: entry.path, content, docs: markdownFiles }),
+        capability_level: "resource_backed",
+        evidence_kinds: ["docs"],
+        direct_read_caveat: DIRECT_READ_CAVEAT,
+        content
+      }
+    };
+  } catch {
+    return {
+      warning: {
+        path: entry.path,
+        reason: "permission_denied",
+        message: `Documentation file ${entry.path} could not be read.`
+      }
+    };
+  }
+}
+
+function skippedPathWarning(pathValue: string, index: LoadedDocsIndex): DocsWarning | undefined {
   const skipped = index.skippedPaths.find((warning) =>
     warning.path === pathValue || pathValue.startsWith(`${warning.path}/`)
   );
-  if (skipped !== undefined) {
-    return {
-      path: skipped.path,
-      reason: skipped.reason,
-      message: skipped.detail
-    };
-  }
-  if (index.documents.some((doc) => doc.path === pathValue)) {
+  if (skipped === undefined) {
     return undefined;
   }
   return {
-    path: pathValue,
-    reason: "missing",
-    message: `Documentation file ${pathValue} was not found.`
+    path: skipped.path,
+    reason: skipped.reason,
+    message: skipped.detail
   };
 }
 

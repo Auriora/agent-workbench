@@ -157,14 +157,31 @@ T004,T005,T006,T007,T008 -> T009 -> T010
     A successful markdown-quality check with findings is reported as a full
     checker result with findings, not degraded transport quality.
   - Evidence: Successful markdown-quality findings are now classified as full
-    sweep quality, covered by `tests/mcp/debug-harness.test.ts`; broader docs
-    edge-case subtasks remain pending.
+    sweep quality, covered by `tests/mcp/debug-harness.test.ts`. Requested
+    docs outline and section reads now use direct requested-file evidence
+    instead of inheriting broad docs-map truncation; `pnpm test
+    tests/docs/query-docs.test.ts tests/mcp/docs-surfaces.test.ts
+    tests/mcp/debug-harness.test.ts` and `pnpm typecheck` passed. A focused
+    TimeLocker/aws-datalake/OneMount committed-tree subset sweep improved from
+    58 full, 8 partial, 0 degraded, 0 blocked, and 0 invalid to 60 full, 6
+    partial, 0 degraded, 0 blocked, and 0 invalid after raising the harness
+    docs-read byte budget; remaining subset partials are only broad
+    `docs-overview` and `docs-map` list caps. Missing and no-heading docs
+    subtasks remain pending.
   - [ ] T005.1 Write failing tests for missing Markdown path behavior.
   - [ ] T005.2 Write failing tests for existing no-heading Markdown behavior.
-  - [ ] T005.3 Write failing tests for headed Markdown outline and section
+  - [x] T005.3 Write failing tests for headed Markdown outline and section
     read.
+    - Evidence: Added a regression proving requested outline and section reads
+      remain full when the requested Markdown file sorts beyond the broad
+      docs-map budget.
   - [ ] T005.4 Implement docs/query and presenter corrections.
+    - Evidence: Direct requested-file outline/read-section implementation is
+      complete; missing and no-heading behavior remains pending.
   - [ ] T005.5 Run focused docs tests.
+    - Evidence: `pnpm test tests/docs/query-docs.test.ts
+      tests/mcp/docs-surfaces.test.ts tests/mcp/debug-harness.test.ts` passed;
+      final docs edge-case test set remains pending.
 
 - [ ] T006 Improve graph-backed sweep inputs and degraded explanations.
   - Depends on: T003

@@ -354,7 +354,7 @@ async function callTool(input: {
         repo_root: input.repoRoot,
         path: pathForRead,
         heading_id: outline.outline.headings[0]?.id ?? "missing-heading",
-        max_bytes: 1000
+        max_bytes: 30000
       },
       scanner: input.runtime.scanner,
       workspace: input.runtime.workspace,

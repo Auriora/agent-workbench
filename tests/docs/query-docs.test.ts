@@ -347,6 +347,55 @@ describe("docs query application contracts", () => {
     }
   });
 
+  it("directly reads requested outline and section paths beyond the broad docs-map budget", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-docs-large-"));
+    try {
+      fs.mkdirSync(path.join(root, "docs"), { recursive: true });
+      for (let index = 0; index < 220; index += 1) {
+        fs.writeFileSync(
+          path.join(root, "docs", `a-${String(index).padStart(3, "0")}.md`),
+          `# Filler ${index}\n\nFiller content.\n`
+        );
+      }
+      fs.writeFileSync(
+        path.join(root, "docs", "zz-target.md"),
+        "# Target\n\nIntro.\n\n## Direct Section\n\nRequested content.\n"
+      );
+
+      const outlineResult = await getDocsOutline({
+        request: {
+          repo_root: root,
+          path: "docs/zz-target.md"
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot: root }),
+        default_repo_root: "."
+      });
+      const readResult = await readDocsSection({
+        request: {
+          repo_root: root,
+          path: "docs/zz-target.md",
+          heading_id: "direct-section",
+          max_bytes: 200
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot: root }),
+        default_repo_root: "."
+      });
+
+      expect(outlineResult.outline.status).toBe("done");
+      expect(outlineResult.outline.headings.map((heading) => heading.id)).toContain("direct-section");
+      expect(outlineResult.meta.truncated).toBe(false);
+      expect(outlineResult.meta.analysis_validity).toBe("valid");
+      expect(readResult.read.status).toBe("done");
+      expect(readResult.read.section?.text).toContain("Requested content.");
+      expect(readResult.meta.truncated).toBe(false);
+      expect(readResult.meta.analysis_validity).toBe("valid");
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("blocks unsafe, missing, and generated read targets with structured warnings", async () => {
     const fixture = copyFixture();
     try {
