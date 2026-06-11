@@ -60,7 +60,10 @@ pnpm dev -- tests/fixtures/fixture-mixed-language-platform
 Debug harnesses may call runtime use cases against arbitrary target repos, but
 they must live in this repository and refuse to run unless the current working
 directory is the `agent-workbench` project. They are not MCP resources/tools and
-must not be emitted to downstream projects.
+must not be emitted to downstream projects. Installed and containerized Agent
+Workbench packages strip `src/debug/`, `debug:*` package scripts, and active
+implementation specs under `docs/specs/`, so cross-repo debug options are
+available only from the owning repository checkout.
 
 Current harnesses:
 
@@ -77,6 +80,7 @@ Future harnesses should follow the same pattern:
 
 - accept a target repo explicitly
 - use normal use cases and presenters
+- remain checkout-only and be stripped from installed/containerized packages
 - optionally emit OTEL traces when telemetry is enabled
 - never expose debug-only behavior through the public MCP registry
 

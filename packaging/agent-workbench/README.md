@@ -4,6 +4,12 @@ This package definition builds an OCI image for GHCR that contains the Agent
 Workbench MCP runtime, documentation, Codex plugin wrapper, skill, and hook
 scripts.
 
+Checkout-only debug harnesses under `src/debug/`, `debug:*` package scripts,
+and active implementation specs under `docs/specs/` are removed from installed
+and containerized packages. Cross-repo dogfood and tool-sweep commands are
+available only from the owning repository checkout, not from deployed Agent
+Workbench instances.
+
 The image entrypoint launches the MCP stdio server:
 
 ```bash

@@ -1,0 +1,7 @@
+{
+  "name": "fixture-mcp-tool-sweep",
+  "private": true,
+  "scripts": {
+    "test": "python -m pytest"
+  }
+}

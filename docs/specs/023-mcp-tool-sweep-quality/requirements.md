@@ -35,8 +35,11 @@ target repository build or test commands. The sweep covered 176 surface calls:
 - 22 calls were classified failed or invalid.
 - Quality classification was 52 full, 39 partial, 60 degraded, 3 blocked, and
   22 invalid.
-- `apply_workspace_edit` succeeded on all eight repositories in a targeted
-  rerun when called with a real preview token and identical replacement text.
+- `apply_workspace_edit` previously succeeded on all eight repositories in a
+  targeted rerun when called with a real preview token and identical
+  replacement text. That remains historical evidence only; future external
+  target sweeps must not perform workspace-write calls against original target
+  repositories.
 - `docs_search` frequently returned blocked invalid envelopes while docs FTS
   evidence depended on a cold or refreshing graph snapshot.
 - Graph-backed tools frequently returned degraded output because fixed query
@@ -65,6 +68,10 @@ are local evidence, not durable source of truth.
 
 - Do not compile, build, test, or execute target repositories as part of the
   MCP tool sweep.
+- Do not perform workspace-write tool calls against original external target
+  repositories. Workspace-write tool coverage must use repo-owned fixtures or
+  explicit sandbox copies under `.tmp` or an Agent Workbench-named `/tmp`
+  sandbox directory.
 - Do not add parser, semantic, validation, or command-execution fallbacks to
   hide unavailable evidence.
 - Do not make public MCP tools depend on debug-only harness behavior.
@@ -85,16 +92,21 @@ invalid output without executing target repo commands.
 1. GIVEN a list of target repository roots, WHEN the harness runs, THEN the
    system SHALL call every registered MCP resource and tool with bounded,
    read-only or safe arguments.
-2. WHERE a tool is workspace-write capable, THE SYSTEM SHALL test a positive
+2. WHERE a tool is workspace-write capable and the target root is a repo-owned
+   fixture or explicit sandbox copy, THE SYSTEM SHALL test a positive
    preview-and-apply flow using identical replacement text and a negative
    invalid-token flow without changing file content.
-3. WHEN a target repository lacks a safe input for a tool, THEN the harness
+3. WHERE a tool is workspace-write capable and the target root is an original
+   external repository, THE SYSTEM SHALL skip that tool with degraded harness
+   coverage and explain that the repository must be copied into a sandbox
+   before workspace-write testing.
+4. WHEN a target repository lacks a safe input for a tool, THEN the harness
    SHALL record the skipped prerequisite as degraded harness coverage instead
    of silently omitting the tool.
-4. WHEN a call returns an MCP envelope, THEN the harness SHALL preserve raw
+5. WHEN a call returns an MCP envelope, THEN the harness SHALL preserve raw
    envelope output in a local report and summarize validity, verification
    status, truncation, errors, warnings, and data shape.
-5. WHEN a call times out, THEN the harness SHALL record the timeout as a tool
+6. WHEN a call times out, THEN the harness SHALL record the timeout as a tool
    finding with the surface name, repo root, elapsed time, and no target-repo
    command execution.
 
@@ -204,7 +216,10 @@ validated against the same expectations.
 
 - Every registered MCP surface is either called or explicitly skipped with a
   recorded prerequisite reason.
-- Workspace-write positive tests must leave target file content unchanged.
+- Workspace-write positive tests must leave target file content unchanged and
+  must run only against repo-owned fixtures or explicit sandbox copies.
+- Original external target repositories must never receive workspace-write tool
+  calls from the sweep harness.
 - Negative apply-token tests must not mutate files and must return structured
   blocked or invalid output.
 - Cold or refreshing evidence must not be hidden behind broad direct-scan
@@ -225,5 +240,6 @@ validated against the same expectations.
 - Fixture tests cover positive and negative workspace-edit tool sweep cases.
 - Fixture tests cover cold docs FTS, no-heading docs, headed docs, unsupported
   coverage, and graph-backed no-symbol cases.
-- The cross-repo sweep can be rerun on the eight dogfood repos and produces no
-  unexplained invalid results.
+- The cross-repo sweep can be rerun on the eight dogfood repos as read-only
+  input data and produces no unexplained invalid results; workspace-write
+  coverage for those repos uses fixture evidence or sandbox copies only.

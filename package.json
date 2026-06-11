@@ -17,6 +17,7 @@
     "debug:mcp-use-case": "tsx src/debug/mcp-use-case.ts",
     "debug:mcp-profile": "tsx src/debug/mcp-use-case.ts --profile",
     "debug:sample-smoke": "tsx src/debug/sample-smoke.ts",
+    "debug:mcp-tool-sweep": "tsx src/debug/mcp-tool-sweep.ts",
     "rebuild:native": "CXXFLAGS=-std=c++20 pnpm rebuild tree-sitter tree-sitter-python tree-sitter-javascript tree-sitter-typescript tree-sitter-go"
   },
   "dependencies": {

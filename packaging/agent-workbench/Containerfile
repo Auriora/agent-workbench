@@ -32,7 +32,9 @@ COPY plugins ./plugins
 COPY packaging ./packaging
 COPY scripts ./scripts
 
-RUN pnpm install --frozen-lockfile \
+RUN rm -rf src/debug docs/specs \
+  && node -e 'const fs = require("node:fs"); const p = "package.json"; const j = JSON.parse(fs.readFileSync(p, "utf8")); for (const k of Object.keys(j.scripts ?? {})) { if (k.startsWith("debug:")) delete j.scripts[k]; } fs.writeFileSync(p, `${JSON.stringify(j, null, 2)}\n`);' \
+  && pnpm install --frozen-lockfile \
   && pnpm rebuild:native
 
 ENTRYPOINT ["node", "--import", "tsx", "/opt/agent-workbench/src/mcp/stdio.ts"]

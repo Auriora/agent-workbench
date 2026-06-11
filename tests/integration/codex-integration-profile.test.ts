@@ -10,6 +10,11 @@ import {
 import { describeCodexIntegrationProfile } from "../../src/application/use-cases/describe-codex-integration-profile.js";
 import { buildCodexIntegrationProfileEnvelope } from "../../src/presentation/integration-profile-presenter.js";
 import { codexIntegrationProfileResource } from "../../src/interface-adapters/mcp/registries/resources/codex-integration-profile.js";
+import {
+  mcpPrompts,
+  mcpResources,
+  mcpTools
+} from "../../src/interface-adapters/mcp/registries/index.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
 
 type RegisteredResource = {
@@ -500,6 +505,7 @@ describe("Codex plugin artifacts", () => {
         native_build_script_dependencies: string[];
       };
       components: string[];
+      excluded_components: string[];
       codex: {
         plugin_mcp_config: string;
         plugin_hooks: string;
@@ -553,11 +559,17 @@ describe("Codex plugin artifacts", () => {
         "AGENTS.md"
       ])
     );
+    expect(manifest.excluded_components).toEqual(
+      expect.arrayContaining(["docs/specs", "src/debug", "package.json scripts matching debug:*"])
+    );
     expect(manifest.codex.plugin_mcp_config).toBe("plugins/agent-workbench/.mcp.json");
     expect(manifest.codex.plugin_hooks).toBe("plugins/agent-workbench/hooks/hooks.json");
     expect(manifest.codex.plugin_install_model).toBe("scripts/install-agent-workbench-package.sh");
     expect(containerfile).toContain("FROM node:24-bookworm-slim");
     expect(containerfile).toContain("COPY src ./src");
+    expect(containerfile).toContain("rm -rf src/debug");
+    expect(containerfile).toContain("docs/specs");
+    expect(containerfile).toContain('k.startsWith("debug:")');
     expect(containerfile).toContain("COPY docs ./docs");
     expect(containerfile).toContain("COPY plugins ./plugins");
     expect(containerfile).toContain("pnpm install --frozen-lockfile");
@@ -567,6 +579,10 @@ describe("Codex plugin artifacts", () => {
     expect(installer).toContain("Node.js 22 or newer is required");
     expect(installer).toContain("pnpm 10.18.1 is required");
     expect(installer).toContain("ensure_native_build_prerequisites");
+    expect(installer).toContain("sanitize_deployed_runtime");
+    expect(installer).toContain('rm -rf "$INSTALL_ROOT/src/debug"');
+    expect(installer).toContain('rm -rf "$INSTALL_ROOT/docs/specs"');
+    expect(installer).toContain('name.startsWith("debug:")');
     expect(installer).toContain("install_codex_plugin");
     expect(installer).toContain("codex plugin add");
     expect(installer).toContain("remove_legacy_agent_workbench_mcp_block");
@@ -582,6 +598,25 @@ describe("Codex plugin artifacts", () => {
     expect(installer).not.toContain("[[hooks.PostToolUse]]");
     expect(workflow).toContain("registry: ghcr.io");
     expect(workflow).toContain("packaging/agent-workbench/Containerfile");
+  });
+
+  it("keeps cross-repo debug harnesses checkout-only", () => {
+    const containerfile = fs.readFileSync(path.resolve("packaging/agent-workbench/Containerfile"), "utf8");
+    const installer = fs.readFileSync(path.resolve("scripts/install-agent-workbench-package.sh"), "utf8");
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+    const publicSurfaceNames = [...mcpResources, ...mcpTools, ...mcpPrompts].map((surface) => surface.name);
+
+    expect(packageJson.scripts["debug:mcp-tool-sweep"]).toBe("tsx src/debug/mcp-tool-sweep.ts");
+    expect(publicSurfaceNames).not.toContain("debug:mcp-tool-sweep");
+    expect(publicSurfaceNames).not.toContain("mcp_tool_sweep");
+    expect(containerfile).toContain("rm -rf src/debug");
+    expect(containerfile).toContain("docs/specs");
+    expect(containerfile).toContain('k.startsWith("debug:")');
+    expect(installer).toContain('rm -rf "$INSTALL_ROOT/src/debug"');
+    expect(installer).toContain('rm -rf "$INSTALL_ROOT/docs/specs"');
+    expect(installer).toContain('name.startsWith("debug:")');
   });
 
   it("keeps plugin wrappers out of concrete runtime implementation paths", () => {

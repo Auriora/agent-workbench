@@ -254,6 +254,30 @@ copy_component() {
   run cp -a "$SOURCE_ROOT/$relative_path" "$INSTALL_ROOT/$relative_path"
 }
 
+sanitize_deployed_runtime() {
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "dry-run: remove checkout-only debug harnesses from $INSTALL_ROOT/src/debug"
+    echo "dry-run: remove active implementation specs from $INSTALL_ROOT/docs/specs"
+    echo "dry-run: remove debug:* package scripts from $INSTALL_ROOT/package.json"
+    return
+  fi
+
+  rm -rf "$INSTALL_ROOT/src/debug"
+  rm -rf "$INSTALL_ROOT/docs/specs"
+  PACKAGE_JSON="$INSTALL_ROOT/package.json" node <<'NODE'
+const fs = require("node:fs");
+
+const packageJsonPath = process.env.PACKAGE_JSON;
+const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8"));
+for (const name of Object.keys(packageJson.scripts ?? {})) {
+  if (name.startsWith("debug:")) {
+    delete packageJson.scripts[name];
+  }
+}
+fs.writeFileSync(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
+NODE
+}
+
 ensure_runtime_prerequisites
 run mkdir -p "$INSTALL_ROOT"
 for component in src docs plugins packaging scripts package.json pnpm-lock.yaml tsconfig.json AGENTS.md; do
@@ -261,6 +285,7 @@ for component in src docs plugins packaging scripts package.json pnpm-lock.yaml 
     copy_component "$component"
   fi
 done
+sanitize_deployed_runtime
 
 if [ -d "$SOURCE_ROOT/node_modules" ]; then
   copy_component node_modules

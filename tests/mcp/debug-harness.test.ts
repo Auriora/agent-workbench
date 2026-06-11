@@ -14,6 +14,11 @@ import {
   writeSampleSmokeReport
 } from "../../src/debug/sample-smoke.js";
 import {
+  resolveToolSweepConfig,
+  runMcpToolSweep,
+  writeToolSweepReport
+} from "../../src/debug/mcp-tool-sweep.js";
+import {
   mcpPrompts,
   mcpResources,
   mcpTools
@@ -25,12 +30,14 @@ describe("repo-local MCP debug harness", () => {
     expect(packageJson.scripts["debug:mcp-use-case"]).toBe("tsx src/debug/mcp-use-case.ts");
     expect(packageJson.scripts["debug:mcp-profile"]).toBe("tsx src/debug/mcp-use-case.ts --profile");
     expect(packageJson.scripts["debug:sample-smoke"]).toBe("tsx src/debug/sample-smoke.ts");
+    expect(packageJson.scripts["debug:mcp-tool-sweep"]).toBe("tsx src/debug/mcp-tool-sweep.ts");
 
     const publicSurfaceNames = [...mcpResources, ...mcpTools, ...mcpPrompts].map((surface) => surface.name);
     expect(publicSurfaceNames).not.toContain("debug:mcp-status");
     expect(publicSurfaceNames).not.toContain("debug:mcp-use-case");
     expect(publicSurfaceNames).not.toContain("debug:mcp-profile");
     expect(publicSurfaceNames).not.toContain("debug:sample-smoke");
+    expect(publicSurfaceNames).not.toContain("debug:mcp-tool-sweep");
     expect(publicSurfaceNames).not.toContain("mcp_use_case");
   });
 
@@ -156,6 +163,139 @@ describe("repo-local MCP debug harness", () => {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("plans and runs the MCP tool sweep across every registered resource and tool", async () => {
+    const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep", String(Date.now()));
+    const targetRepo = path.resolve("tests/fixtures/fixture-mcp-tool-sweep");
+    const before = fileContentSnapshot(targetRepo);
+    try {
+      const config = resolveToolSweepConfig({
+        argv: ["--repo", targetRepo, "--output-dir", outputDir, "--start-graph-warmup"],
+        cwd: process.cwd()
+      });
+      expect(config).toMatchObject({
+        repos: [targetRepo],
+        output_dir: outputDir,
+        start_graph_warmup: true
+      });
+
+      const report = await runMcpToolSweep(config);
+      const outputPath = writeToolSweepReport({ report, outputDir });
+      const parsed = JSON.parse(fs.readFileSync(outputPath, "utf8")) as typeof report;
+      const resultsBySurface = new Map(parsed.results.map((result) => [`${result.kind}:${result.name}`, result]));
+
+      expect(parsed.repo_count).toBe(1);
+      expect(resultsBySurface.get("discovery:resources/list")).toMatchObject({ quality: "full" });
+      expect(resultsBySurface.get("discovery:tools/list")).toMatchObject({ quality: "full" });
+      for (const resource of mcpResources) {
+        expect(resultsBySurface.get(`resource:${resource.name}`), resource.name).toBeDefined();
+      }
+      for (const tool of mcpTools) {
+        expect(resultsBySurface.get(`tool:${tool.name}`), tool.name).toBeDefined();
+      }
+      expect(resultsBySurface.get("tool:preview_workspace_edit")).toMatchObject({
+        status: "ok"
+      });
+      expect(resultsBySurface.get("tool:apply_workspace_edit")).toMatchObject({
+        status: "ok"
+      });
+      expect(fileContentSnapshot(targetRepo)).toEqual(before);
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    }
+  });
+
+  it("records skipped prerequisites as findings instead of omitting surfaces", async () => {
+    const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep-degraded", String(Date.now()));
+    const targetRepo = path.resolve("tests/fixtures/fixture-degraded-tools");
+    try {
+      const report = await runMcpToolSweep({
+        repos: [targetRepo],
+        output_dir: outputDir,
+        call_timeout_ms: 30_000,
+        include_raw: false,
+        start_graph_warmup: false
+      });
+      const symbolSearch = report.results.find((result) => result.kind === "tool" && result.name === "symbol_search");
+      const docsSearch = report.results.find((result) => result.kind === "tool" && result.name === "docs_search");
+
+      expect(symbolSearch).toBeDefined();
+      expect(docsSearch).toBeDefined();
+      expect(report.results.filter((result) => result.status === "failed")).toEqual([]);
+      expect(report.results).toHaveLength(mcpResources.length + mcpTools.length + 2);
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    }
+  });
+
+  it("skips workspace-write sweep calls for original external repositories", async () => {
+    const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep-external", String(Date.now()));
+    const externalRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-external-original-"));
+    try {
+      fs.writeFileSync(path.join(externalRoot, "README.md"), "# External Original\n");
+      const report = await runMcpToolSweep({
+        repos: [externalRoot],
+        output_dir: outputDir,
+        call_timeout_ms: 30_000,
+        include_raw: false,
+        start_graph_warmup: false
+      });
+      const preview = report.results.find((result) => result.kind === "tool" && result.name === "preview_workspace_edit");
+      const apply = report.results.find((result) => result.kind === "tool" && result.name === "apply_workspace_edit");
+
+      expect(preview).toMatchObject({
+        status: "skipped",
+        quality: "degraded"
+      });
+      expect(apply).toMatchObject({
+        status: "skipped",
+        quality: "degraded"
+      });
+      expect(JSON.stringify([preview, apply])).toContain("Agent Workbench-named /tmp sandbox");
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+      fs.rmSync(externalRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("selects sweep inputs from scanner-visible files instead of hidden or generated paths", async () => {
+    const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep-visible-inputs", String(Date.now()));
+    const targetRepo = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-visible-inputs-"));
+    try {
+      fs.mkdirSync(path.join(targetRepo, ".codex", "skills", "hidden"), { recursive: true });
+      fs.mkdirSync(path.join(targetRepo, "docs"), { recursive: true });
+      fs.writeFileSync(path.join(targetRepo, ".codex", "skills", "hidden", "SKILL.md"), "# Hidden Skill\n");
+      fs.writeFileSync(path.join(targetRepo, "docs", "guide.md"), "# Visible Guide\n\nBody.\n");
+      fs.writeFileSync(path.join(targetRepo, "package.json"), "{\"name\":\"visible-inputs\"}\n");
+
+      const report = await runMcpToolSweep({
+        repos: [targetRepo],
+        output_dir: outputDir,
+        call_timeout_ms: 30_000,
+        include_raw: true,
+        start_graph_warmup: false
+      });
+
+      const markdownDocument = report.results.find(
+        (result) => result.kind === "tool" && result.name === "check_markdown_document"
+      );
+      const verificationPlan = report.results.find(
+        (result) => result.kind === "tool" && result.name === "verification_plan"
+      );
+      const rawMarkdown = markdownDocument?.raw_envelope as { data?: { path?: string } } | undefined;
+      const rawVerification = verificationPlan?.raw_envelope as {
+        data?: { planned_commands?: Array<{ args?: string[] }> };
+      } | undefined;
+
+      expect(rawMarkdown?.data?.path).toBe("docs/guide.md");
+      expect(JSON.stringify(markdownDocument)).not.toContain(".codex");
+      expect(JSON.stringify(verificationPlan)).not.toContain("not found in the scanned repository");
+      expect(rawVerification?.data?.planned_commands?.flatMap((command) => command.args ?? [])).toContain("docs/guide.md");
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+      fs.rmSync(targetRepo, { recursive: true, force: true });
+    }
+  });
 });
 
 function snapshotDirectory(directory: string): string[] {
@@ -163,4 +303,17 @@ function snapshotDirectory(directory: string): string[] {
     .readdirSync(directory, { recursive: true, withFileTypes: true })
     .map((entry) => path.relative(directory, path.join(entry.parentPath, entry.name)))
     .sort();
+}
+
+function fileContentSnapshot(directory: string): Record<string, string> {
+  return Object.fromEntries(
+    fs
+      .readdirSync(directory, { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .map((entry) => {
+        const relative = path.relative(directory, path.join(entry.parentPath, entry.name));
+        return [relative, fs.readFileSync(path.join(directory, relative), "utf8")];
+      })
+      .sort(([left], [right]) => left.localeCompare(right))
+  );
 }

@@ -52,7 +52,8 @@ target repo list
 Repo fact discovery uses bounded local file and index evidence:
 
 - existing repo-relative Markdown files for docs tools;
-- existing text files for edit preview/apply no-op content;
+- existing text files for edit preview/apply no-op content only when the repo
+  root is a repo-owned fixture or explicit sandbox copy;
 - package or manifest files for diagnostics and context;
 - indexed graph symbols when a warm snapshot is available;
 - explicit skip records when prerequisites are unavailable.
@@ -141,9 +142,12 @@ Tool calls:
   degraded no-symbol case.
 - `find_references` and `impact` using a node id from symbol search when
   available.
-- `preview_workspace_edit` with identical file content.
+- `preview_workspace_edit` with identical file content only for repo-owned
+  fixtures or sandbox copies.
 - `apply_workspace_edit` once with a valid preview token and once with an
-  invalid token.
+  invalid token only for repo-owned fixtures or sandbox copies. Original
+  external target repositories must record these tools as skipped degraded
+  coverage with a sandbox-copy instruction.
 - `verification_plan` with selected existing files and no command execution.
 
 ### Metadata Corrections
@@ -176,6 +180,11 @@ Add or extend fixtures under `tests/fixtures/`:
 
 Do not add target-repo-specific fixtures for FreeCAD, LibreChat, or client
 repositories. Cross-repo dogfood remains an external validation mode.
+Original external target repositories are read-only inputs for dogfood. If
+workspace-write behavior needs to be exercised against a real external
+repository shape, copy that repository into a sandbox under `.tmp` or an
+Agent Workbench-named `/tmp` sandbox directory and run the sweep against the
+copy.
 
 ## Operational Considerations
 
@@ -185,7 +194,8 @@ repositories. Cross-repo dogfood remains an external validation mode.
   not part of the default `pnpm test` suite.
 - Focused fixture tests should be part of `pnpm test`.
 - The harness should make timeouts visible with surface name and repo root.
-- No target-repo build, test, install, Docker, or network commands are allowed.
+- No target-repo build, test, install, Docker, network commands, or
+  workspace-write calls against original external repositories are allowed.
 
 ## Open Questions
 

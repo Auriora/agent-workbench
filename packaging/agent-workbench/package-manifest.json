@@ -63,6 +63,11 @@
     "tsconfig.json",
     "AGENTS.md"
   ],
+  "excluded_components": [
+    "docs/specs",
+    "src/debug",
+    "package.json scripts matching debug:*"
+  ],
   "codex": {
     "mcp_server_id": "agent-workbench",
     "plugin_manifest": "plugins/agent-workbench/.codex-plugin/plugin.json",

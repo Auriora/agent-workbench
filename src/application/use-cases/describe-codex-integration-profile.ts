@@ -63,6 +63,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         ],
         constraints: [
           "Debug commands are not registered as public MCP surfaces.",
+          "Debug commands and active implementation specs are checkout-only and are stripped from installed and containerized Agent Workbench packages.",
           "Debug commands are not available to target repositories as plugin runtime behavior."
         ]
       }
@@ -308,6 +309,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       "Source edits require package reinstall, plugin reinstall, and Codex restart to reload MCP source behavior.",
       "Dependency changes require a package containing rebuilt dependencies, plugin reinstall, and Codex restart.",
       "The GHCR package must include runtime source, docs, plugin manifest, plugin MCP config, skills, hooks, installer, and release metadata.",
+      "Checkout-only debug harnesses, active implementation specs, and debug:* package scripts must be stripped from installed and containerized packages.",
       "No primary-plus-fallback routes are allowed unless the spec and fixture-backed tests require them.",
       "Timeouts and failures must not produce partial-success evidence.",
       "Root causes must be fixed or reported as structured degraded/blocked state with missing evidence."

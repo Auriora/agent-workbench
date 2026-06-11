@@ -21,7 +21,7 @@ last_reviewed: 2026-06-06
 
 | Change | Type | Durable Target | Notes |
 | --- | --- | --- | --- |
-| Add `debug:mcp-tool-sweep` harness | add | Observability and debugging design | Debug-only command, not public MCP surface. |
+| Add `debug:mcp-tool-sweep` harness | add | Observability and debugging design | Debug-only command, not public MCP surface; owning-checkout only and stripped from installed/containerized packages. |
 | Define sweep quality labels | add | Observability and debugging design, runtime contracts if contract-facing | Harness labels are local unless MCP metadata semantics change. |
 | Clarify cold docs FTS output | clarify/bug fix | MCP surface design, runtime contracts | Current design says blocked cold output is intentional; implementation must make it actionable. |
 | Clarify unsupported/no-coverage status | bug fix | MCP surface design, runtime contracts | Avoid unexplained invalid metadata. |
@@ -35,7 +35,8 @@ last_reviewed: 2026-06-06
 Before closing this spec:
 
 - Update durable docs for any changed MCP metadata semantics.
-- Document the tool sweep command and no-build/no-test boundary.
+- Document the tool sweep command, checkout-only packaging boundary, and
+  no-build/no-test/no-write original target-repo boundary.
 - Add or update documentation map entries for new durable docs.
 - Record final validation evidence in `verification.md`.
 
