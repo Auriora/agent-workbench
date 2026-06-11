@@ -127,7 +127,7 @@ durable architecture docs are promoted.
 
 #### BL-ARCH-002: Dependency Disorder - Application And Presentation Form A Layer Cycle
 
-Status: `accepted`
+Status: `in_progress`
 
 Triage rationale: Accepted. Application imports from `src/presentation` create
 an inward dependency on response metadata vocabulary and contradict the
@@ -171,7 +171,12 @@ forbids application imports of `src/presentation`.
 
 Tasks: `T002`, `T004`
 
-Verification: Pending.
+Verification: 2026-06-11 `T004` moved response metadata and next-action policy
+to `src/application/use-cases/response-metadata.ts`, updated presenters to
+depend inward on that module, added an application boundary rule forbidding
+`src/presentation` imports, and passed targeted architecture/metadata checks,
+`pnpm typecheck`, and `pnpm test`. Keep status `in_progress` until aggregate
+validation and durable architecture docs are promoted.
 
 ### Warning
 
@@ -476,7 +481,7 @@ port before moving the code.
 
 #### BL-ARCH-002: Dependency Disorder - Application And Presentation Form A Layer Cycle
 
-Status: `accepted`
+Status: `in_progress`
 
 Triage rationale: Accepted in the primary architecture ledger above; retained
 here as the health-dashboard cross-reference to `T004`.

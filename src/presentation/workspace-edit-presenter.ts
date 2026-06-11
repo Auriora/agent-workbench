@@ -10,7 +10,7 @@ import {
   invalidResponseMeta,
   presentNextActions,
   type PresentationSessionContext
-} from "./metadata.js";
+} from "../application/use-cases/response-metadata.js";
 
 export function buildPreviewWorkspaceEditEnvelope(
   result: PreviewWorkspaceEditUseCaseResult,

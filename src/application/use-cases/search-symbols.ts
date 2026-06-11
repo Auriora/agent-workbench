@@ -11,7 +11,7 @@ import type {
 } from "../../ports/index.js";
 import type { GraphNode } from "../../domain/models/index.js";
 import { blockedMeta, resolveSnapshot, toSymbolReference } from "./query-helpers.js";
-import { capNextActions, uniqueSorted } from "../../presentation/metadata.js";
+import { capNextActions, uniqueSorted } from "./response-metadata.js";
 
 export type SearchSymbolsResult = {
   symbols: SymbolSearchResult;

@@ -5,7 +5,7 @@ import {
   type ResponseEnvelope
 } from "../contracts/index.js";
 import type { GetIntegrationHealthResult } from "../application/use-cases/get-integration-health.js";
-import { invalidResponseMeta } from "./metadata.js";
+import { invalidResponseMeta } from "../application/use-cases/response-metadata.js";
 
 export function buildIntegrationHealthEnvelope(
   result: GetIntegrationHealthResult

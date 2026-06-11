@@ -7,9 +7,9 @@ import {
   classifyRuntimeTrust,
   deriveRuntimeStatusCaveats,
   sessionAwareNextActions
-} from "../../src/presentation/metadata.js";
+} from "../../src/application/use-cases/response-metadata.js";
 
-describe("presentation metadata helpers", () => {
+describe("response metadata helpers", () => {
   it("classifies fresh snapshot evidence without conflicting trust labels", () => {
     const result = buildRuntimeResponseMeta({
       repoRoot: "/repo",

@@ -5,7 +5,7 @@ import type {
   PostEditFeedbackResult,
   ResponseMetadata
 } from "../../contracts/index.js";
-import { capNextActions, invalidResponseMeta } from "../../presentation/metadata.js";
+import { capNextActions, invalidResponseMeta } from "./response-metadata.js";
 
 export type BuildPostEditFeedbackResult = {
   feedback: PostEditFeedbackResult;

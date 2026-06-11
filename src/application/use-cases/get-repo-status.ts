@@ -9,7 +9,7 @@ import { summarizeAdapterEvidence } from "../../domain/policies/index.js";
 import {
   buildRuntimeResponseMeta,
   uniqueSorted
-} from "../../presentation/metadata.js";
+} from "./response-metadata.js";
 import type {
   FileCatalogPort,
   FileCatalogScanPort,

@@ -51,6 +51,10 @@ const rules = {
     name: "src/infrastructure",
     check: (specifier: string) => /^\.+\//.test(specifier) && /\/infrastructure\//.test(specifier)
   },
+  presentation: {
+    name: "src/presentation",
+    check: (specifier: string) => /^\.+\//.test(specifier) && /\/presentation\//.test(specifier)
+  },
   sqliteInfrastructure: {
     name: "src/infrastructure/sqlite",
     check: (specifier: string) => specifier.includes("infrastructure/sqlite")
@@ -101,7 +105,8 @@ const architectureSlices: LayerSpec[] = [
       rules.treeSitter,
       rules.nodeFs,
       rules.nodeChildProcess,
-      rules.concreteInfrastructure
+      rules.concreteInfrastructure,
+      rules.presentation
     ]
   },
   {

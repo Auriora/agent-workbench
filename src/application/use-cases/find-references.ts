@@ -12,7 +12,7 @@ import type {
   WorkspaceFilePort
 } from "../../ports/index.js";
 import { blockedMeta, resolveSnapshot, toSymbolReference } from "./query-helpers.js";
-import { capNextActions } from "../../presentation/metadata.js";
+import { capNextActions } from "./response-metadata.js";
 
 export type FindReferencesUseCaseResult = {
   references: FindReferencesResult;

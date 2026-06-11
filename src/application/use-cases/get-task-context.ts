@@ -15,7 +15,7 @@ import type { FileCatalogEntry, GraphNode } from "../../domain/models/index.js";
 import { isExplicitHiddenCatalogPathAllowed } from "../../domain/policies/index.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 import { buildStatBackedFileCatalogEntry } from "./file-catalog-entry.js";
-import { capNextActions } from "../../presentation/metadata.js";
+import { capNextActions } from "./response-metadata.js";
 import type {
   FileCatalogPort,
   FileCatalogScanPort,

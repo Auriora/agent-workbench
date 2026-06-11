@@ -71,7 +71,7 @@ T016 -> T018
   - [x] T003.3 Keep the rule implementation scoped to architecture boundary
     checks.
 
-- [ ] T004 Remove application-to-presentation dependency cycle.
+- [x] T004 Remove application-to-presentation dependency cycle.
   - Depends on: T002, T003
   - Findings: `BL-ARCH-002`
   - Files: `src/application/use-cases/`, `src/presentation/`,
@@ -79,11 +79,17 @@ T016 -> T018
   - Acceptance: Application use cases no longer import `src/presentation`;
     presenters continue to build response envelopes and metadata; boundary
     tests prevent the cycle from returning.
-  - Evidence: Pending.
-  - [ ] T004.1 Decide ownership for next-action and metadata primitives.
-  - [ ] T004.2 Move shared helpers to the selected inward layer.
-  - [ ] T004.3 Update imports without changing response contracts.
-  - [ ] T004.4 Add or update boundary assertions for
+  - Evidence: 2026-06-11 selected application-owned response metadata policy,
+    moved `src/presentation/metadata.ts` to
+    `src/application/use-cases/response-metadata.ts`, updated application and
+    presentation imports without changing response contracts, added an
+    application boundary rule forbidding `src/presentation` imports, and passed
+    `pnpm exec vitest run tests/architecture/layer-boundaries.test.ts tests/contracts/response-metadata.test.ts`,
+    `pnpm typecheck`, and `pnpm test`.
+  - [x] T004.1 Decide ownership for next-action and metadata primitives.
+  - [x] T004.2 Move shared helpers to the selected inward layer.
+  - [x] T004.3 Update imports without changing response contracts.
+  - [x] T004.4 Add or update boundary assertions for
     application-to-presentation imports.
 
 - [ ] T005 Remove or document MCP adapter telemetry infrastructure coupling.

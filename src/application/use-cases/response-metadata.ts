@@ -12,8 +12,8 @@ import type {
   RuntimeStatusCaveat,
   ScopeMetadata,
   VerificationStatus
-} from "../contracts/index.js";
-import type { SnapshotState, WarmupExecution } from "../domain/models/runtime.js";
+} from "../../contracts/index.js";
+import type { SnapshotState, WarmupExecution } from "../../domain/models/runtime.js";
 
 export type RuntimeTrustState =
   | "cold"

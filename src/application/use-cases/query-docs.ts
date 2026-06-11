@@ -28,7 +28,7 @@ import {
   markdownTitleFromPath,
   parseMarkdownHeadings
 } from "./markdown-docs.js";
-import { capNextActions } from "../../presentation/metadata.js";
+import { capNextActions } from "./response-metadata.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 
 const DOC_ROW_LIMIT = 15000;

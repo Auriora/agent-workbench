@@ -1,6 +1,6 @@
 import { makeEnvelope, type RepoOverview, type ResponseEnvelope } from "../contracts/index.js";
 import type { GetRepoOverviewResult } from "../application/use-cases/get-repo-overview.js";
-import { invalidResponseMeta } from "./metadata.js";
+import { invalidResponseMeta } from "../application/use-cases/response-metadata.js";
 
 export function buildRepoOverviewEnvelope(
   result: GetRepoOverviewResult

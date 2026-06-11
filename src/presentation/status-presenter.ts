@@ -3,7 +3,7 @@ import {
   type RuntimeStatus,
   type RuntimeStatusResult
 } from "../application/use-cases/get-repo-status.js";
-import { invalidResponseMeta } from "./metadata.js";
+import { invalidResponseMeta } from "../application/use-cases/response-metadata.js";
 
 export type StatusPresentationPayload = {
   status: RuntimeStatus;

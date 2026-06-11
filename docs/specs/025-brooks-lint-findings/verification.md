@@ -43,6 +43,9 @@ Resolving findings requires code, tests, and durable documentation validation.
 | 2026-06-11 | `pnpm exec vitest run tests/docs/query-docs.test.ts tests/docs/fts-docs-search-fixtures.test.ts tests/mcp/docs-surfaces.test.ts tests/graph/query-tools.test.ts` | Passed | 4 test files and 53 tests passed after moving pure Markdown document helpers from infrastructure to application-owned code. |
 | 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after the helper move and architecture test update. |
 | 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed in the unrestricted runtime: 59 test files and 396 tests. |
+| 2026-06-11 | `pnpm exec vitest run tests/architecture/layer-boundaries.test.ts tests/contracts/response-metadata.test.ts` | Passed | 2 test files and 14 tests passed after moving response metadata policy inward and adding the application-to-presentation boundary rule. |
+| 2026-06-11 | `pnpm typecheck` | Passed | TypeScript compile check passed after the response metadata move and presenter import updates. |
+| 2026-06-11 | `pnpm test` | Passed | Full Vitest suite passed after `T004`: 59 test files and 396 tests. |
 
 ## Required Gates For Remediation
 

@@ -11,7 +11,7 @@ import type { FileCatalogEntry } from "../../domain/models/index.js";
 import { isExplicitHiddenCatalogPathAllowed } from "../../domain/policies/index.js";
 import { planCommand } from "../../domain/policies/command-safety.js";
 import type { FileCatalogScanPort, FileCatalogSkippedPath, WorkspaceFilePort } from "../../ports/index.js";
-import { capNextActions } from "../../presentation/metadata.js";
+import { capNextActions } from "./response-metadata.js";
 import { buildStatBackedFileCatalogEntry } from "./file-catalog-entry.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 

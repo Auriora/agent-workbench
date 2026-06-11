@@ -17,7 +17,7 @@ import {
   buildResponseMeta,
   strongestCapabilityLevel,
   uniqueSorted
-} from "../../presentation/metadata.js";
+} from "./response-metadata.js";
 
 export type ResolvedSnapshot = {
   snapshot_id: string;
