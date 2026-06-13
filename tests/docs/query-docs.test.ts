@@ -468,6 +468,31 @@ describe("docs query application contracts", () => {
     });
   });
 
+  it("reads a requested outline directly without scanning the repository", async () => {
+    const fixture = copyFixture();
+    try {
+      const result = await getDocsOutline({
+        request: {
+          repo_root: fixture.root,
+          path: "docs/guide.md"
+        },
+        scanner: {
+          async scan() {
+            throw new Error("scanner should not be used for docs_outline");
+          }
+        },
+        workspace: new WorkspaceFileAdapter({ repoRoot: fixture.root }),
+        default_repo_root: "."
+      });
+
+      expect(result.outline.status).toBe("done");
+      expect(result.outline.headings.map((heading) => heading.id)).toContain("configure");
+      expect(result.meta.budget).toMatchObject({ row_limit: 1 });
+    } finally {
+      fixture.dispose();
+    }
+  });
+
   it("directly reads requested outline and section paths beyond the broad docs-map budget", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-docs-large-"));
     try {

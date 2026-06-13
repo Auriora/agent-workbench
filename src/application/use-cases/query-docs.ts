@@ -17,6 +17,10 @@ import type {
   SourceSection
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
+import {
+  catalogSkipReason,
+  type CatalogSkipReason
+} from "../../domain/policies/index.js";
 import type {
   DocsIndexPort,
   FileCatalogScanPort,
@@ -184,16 +188,9 @@ export async function getDocsOutline(input: {
   workspace: WorkspaceFilePort;
   default_repo_root: string;
 }): Promise<DocsOutlineUseCaseResult> {
-  const index = await loadDocsIndex({
-    request: { repo_root: input.request.repo_root, max_docs: 200, max_headings_per_doc: 100 },
-    scanner: input.scanner,
-    workspace: input.workspace,
-    default_repo_root: input.default_repo_root,
-    order: "path"
-  });
+  const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
   const normalizedPath = normalizeRepoPath(input.request.path);
-  const requested = await loadRequestedDoc({
-    index,
+  const requested = await loadDirectMarkdownDoc({
     workspace: input.workspace,
     path: normalizedPath,
     maxHeadings: 100
@@ -203,17 +200,22 @@ export async function getDocsOutline(input: {
 
   return {
     outline: {
-      repo_root: index.repoRoot,
+      repo_root: repoRoot,
       path: normalizedPath,
       status: requested.warning === undefined && doc !== undefined ? "done" : "blocked",
       title: doc?.title ?? markdownTitleFromPath(normalizedPath),
       headings: doc?.headings ?? [],
       warnings,
       next_actions: requested.warning === undefined && doc !== undefined
-        ? docsNextActions(index.repoRoot, normalizedPath, doc.headings[0]?.id)
+        ? docsNextActions(repoRoot, normalizedPath, doc.headings[0]?.id)
         : []
     },
-    meta: docsMeta({ ...index, warnings, truncated: false })
+    meta: directDocsMeta({
+      repoRoot,
+      warnings,
+      status: requested.warning === undefined && doc !== undefined ? "done" : "needed",
+      truncated: false
+    })
   };
 }
 
@@ -223,16 +225,9 @@ export async function readDocsSection(input: {
   workspace: WorkspaceFilePort;
   default_repo_root: string;
 }): Promise<DocsReadSectionUseCaseResult> {
-  const index = await loadDocsIndex({
-    request: { repo_root: input.request.repo_root, max_docs: 200, max_headings_per_doc: 100 },
-    scanner: input.scanner,
-    workspace: input.workspace,
-    default_repo_root: input.default_repo_root,
-    order: "path"
-  });
+  const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
   const normalizedPath = normalizeRepoPath(input.request.path);
-  const requested = await loadRequestedDoc({
-    index,
+  const requested = await loadDirectMarkdownDoc({
     workspace: input.workspace,
     path: normalizedPath,
     maxHeadings: 100
@@ -261,7 +256,7 @@ export async function readDocsSection(input: {
 
   return {
     read: {
-      repo_root: index.repoRoot,
+      repo_root: repoRoot,
       path: normalizedPath,
       heading_id: input.request.heading_id,
       status: section === undefined ? "blocked" : "done",
@@ -270,7 +265,12 @@ export async function readDocsSection(input: {
       warnings,
       next_actions: []
     },
-    meta: docsMeta({ ...index, warnings, truncated: section?.truncated ?? false })
+    meta: directDocsMeta({
+      repoRoot,
+      warnings,
+      status: section === undefined ? "needed" : "done",
+      truncated: section?.truncated ?? false
+    })
   };
 }
 
@@ -525,6 +525,87 @@ async function loadRequestedDoc(input: {
   }
 }
 
+async function loadDirectMarkdownDoc(input: {
+  workspace: WorkspaceFilePort;
+  path: string;
+  maxHeadings: number;
+}): Promise<{
+  doc?: DocsDocument & { content: string };
+  warning?: DocsWarning;
+}> {
+  const warning = unsafePathWarning(input.path) ?? directSkipWarning(input.path);
+  if (warning !== undefined) {
+    return { warning };
+  }
+
+  const stat = await input.workspace.stat({ path: input.path });
+  if (!stat.exists || !stat.is_file || !input.path.toLowerCase().endsWith(".md")) {
+    return {
+      warning: {
+        path: input.path,
+        reason: "missing",
+        message: `Documentation file ${input.path} was not found.`
+      }
+    };
+  }
+
+  try {
+    const content = await input.workspace.readText({ path: input.path });
+    const headings = parseMarkdownHeadings(content);
+    return {
+      doc: {
+        path: input.path,
+        title: headings[0]?.text ?? markdownTitleFromPath(input.path),
+        headings: headings.slice(0, input.maxHeadings),
+        links: [],
+        capability_level: "resource_backed",
+        evidence_kinds: ["docs"],
+        direct_read_caveat: DIRECT_READ_CAVEAT,
+        content
+      }
+    };
+  } catch {
+    return {
+      warning: {
+        path: input.path,
+        reason: "permission_denied",
+        message: `Documentation file ${input.path} could not be read.`
+      }
+    };
+  }
+}
+
+function directSkipWarning(pathValue: string): DocsWarning | undefined {
+  const reason = catalogSkipReason({
+    relativePath: pathValue,
+    isDirectory: false,
+    skippedRoots: []
+  });
+  if (reason === null) {
+    return undefined;
+  }
+  return {
+    path: directSkipPath(pathValue, reason),
+    reason,
+    message: catalogWarningDetail(reason)
+  };
+}
+
+function directSkipPath(pathValue: string, reason: CatalogSkipReason): string {
+  if (reason !== "generated_or_vendor") {
+    return pathValue;
+  }
+  const segments = pathValue.split("/");
+  const matched = segments.find((segment) =>
+    catalogSkipReason({
+      relativePath: segment,
+      isDirectory: true,
+      skippedRoots: []
+    }) === "generated_or_vendor"
+  );
+  return matched ?? pathValue;
+}
+
 function skippedPathWarning(pathValue: string, index: LoadedDocsIndex): DocsWarning | undefined {
   const skipped = index.skippedPaths.find((warning) =>
     warning.path === pathValue || pathValue.startsWith(`${warning.path}/`)
@@ -537,6 +618,46 @@ function skippedPathWarning(pathValue: string, index: LoadedDocsIndex): DocsWarn
     reason: skipped.reason,
     message: skipped.detail
   };
+}
+
+function directDocsMeta(input: {
+  repoRoot: string;
+  warnings: readonly DocsWarning[];
+  status: ResponseMetadata["verification_status"];
+  truncated: boolean;
+}): ResponseMetadata {
+  return {
+    analysis_validity: "valid",
+    freshness: "unknown",
+    scope: {
+      repo_root: input.repoRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      languages: ["markdown"]
+    },
+    capability_level: "resource_backed",
+    evidence_kinds: ["docs"],
+    verification_status: input.warnings.length > 0 ? "needed" : input.status,
+    truncated: input.truncated,
+    budget: {
+      row_limit: 1
+    }
+  };
+}
+
+function catalogWarningDetail(reason: CatalogSkipReason): string {
+  switch (reason) {
+    case "secret":
+      return "Secret-bearing local environment file was excluded from catalog evidence.";
+    case "generated_or_vendor":
+      return "Generated, dependency, cache, build, or vendor path was excluded from catalog evidence.";
+    case "configured_skip":
+      return "Path matched caller-provided skipped roots.";
+    case "hidden_path":
+      return "Hidden local path is not allowlisted as repository-shape evidence.";
+    case "gitignore":
+      return "Path matched repository ignore rules.";
+  }
 }
 
 function unsafePathWarning(pathValue: string): DocsWarning | undefined {
