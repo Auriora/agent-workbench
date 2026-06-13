@@ -68,7 +68,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/024-plugin-discoverability-and-drift-hardening
 - **Title:** Plugin discoverability and drift hardening
 - **Final spec commit:** 90b70bc
-- **Closure cleanup commit:** 68b50d0
+- **Closure cleanup commit:** ad9b27f
 - **Closure action:** removed
 - **Durable docs updated:**
   - `.agents/plugins/marketplace.json`
