@@ -57,6 +57,26 @@ Every MCP response must include a contract version.
 Breaking schema changes require a new contract version. Non-breaking additions
 may add optional fields but must not change enum meanings.
 
+## Task Context Lifecycle Evidence
+
+`context_for_task` separates repository evidence from lifecycle evidence.
+Repository evidence remains in requested files, related files, governing docs,
+ranked symbols, validation hints, risks, and top-level `next_actions`.
+Lifecycle evidence lives in `lifecycle_evidence` entries with a source, kind,
+status, summary, files, validation hints, and nested next actions.
+
+Allowed lifecycle evidence kinds are preflight, task detail, validation plan,
+evidence quality, task-state audit, closure risk, task context, traceability,
+and local spec routing. Local spec routing is always non-authoritative routing
+evidence. It may point agents to spec artifacts and companion lifecycle tools,
+but it must not claim lifecycle acceptance, task completion, promotion,
+reconciliation, release, or closure.
+
+Caller-supplied lifecycle context may be passed into `context_for_task` so
+Workbench can join lifecycle files and planned validation to repository routing.
+Top-level executable `next_actions` remain Agent Workbench MCP actions; nested
+lifecycle next actions are companion-routing hints.
+
 ## Capability Levels
 
 Use these values only:

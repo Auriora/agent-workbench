@@ -20,6 +20,9 @@ const contextForTaskRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
   files: z.array(z.string()).default([]).describe("Known repo-relative files relevant to the task."),
   symbols: z.array(z.string()).default([]).describe("Known symbols or identifiers relevant to the task."),
+  lifecycle_context: taskContextRequestSchema.shape.lifecycle_context.describe(
+    "Optional caller-supplied spec-lifecycle-manager context to consume before broad repository search."
+  ),
   max_files: z.number().int().positive().max(50).default(10).describe("Maximum related file candidates to return."),
   max_docs: z.number().int().positive().max(20).default(5).describe("Maximum governing documentation files to return.")
 };
@@ -37,6 +40,7 @@ export const contextForTaskTool: McpToolDeclaration = {
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
       { name: "files", description: "Known repo-relative files relevant to the task.", required: false },
       { name: "symbols", description: "Known symbols or identifiers relevant to the task.", required: false },
+      { name: "lifecycle_context", description: "Optional caller-supplied spec-lifecycle-manager context.", required: false },
       { name: "max_files", description: "Maximum related file candidates to return.", required: false },
       { name: "max_docs", description: "Maximum governing documentation files to return.", required: false }
     ],

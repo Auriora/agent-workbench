@@ -193,6 +193,14 @@ label this as lifecycle evidence, join it to repository files and validation
 planning where useful, and avoid turning it into task-status updates,
 reconciliation, promotion, or closure decisions.
 
+Agent Workbench does not broker spec-lifecycle-manager calls in the MVP surface.
+When a prompt mentions a spec path, `Spec NNN`, or `TNNN`, `context_for_task`
+may read bounded local spec artifacts as non-authoritative routing evidence and
+may include a companion lifecycle next action inside `lifecycle_evidence`.
+Top-level executable `next_actions` remain Agent Workbench MCP actions only.
+Caller-supplied lifecycle outputs are consumed before broad repository search
+and stay labeled as lifecycle evidence.
+
 `verification_plan` plans checks but does not execute them. It must distinguish
 planned checks from proven runnable checks and route low-confidence test
 discovery to explicit follow-up instead of implying nearest-test proof.

@@ -20,11 +20,11 @@ semantics, while Agent Workbench owns repo-evidence routing.
 
 | Task ID | Requirements | Acceptance Criteria | Design Sections | Change Impact | Verification | Durable Targets | Open Decisions |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| T001 | Requirement 1, Requirement 3 | R1 AC1-AC6, R3 AC1-AC3 | Overview, High-Level Design, Low-Level Design, Operational Considerations | None | Boundary review, spec lifecycle lint | `docs/design/mcp-surface-design.md`, `docs/design/coding-agent-integration-design.md` | Companion callability discovery mechanism |
-| T002 | Requirement 1, Requirement 2, Requirement 3 | R1 AC2-AC5, R2 AC1-AC5, R3 AC1-R3 AC2 | High-Level Design, Low-Level Design | None | Fixture coverage for active, archived, malformed, traceability-rich, available, unavailable, unknown, and caller-supplied lifecycle context states | Fixture docs under `tests/fixtures/` | Exact fixture shape |
-| T003 | Requirement 1, Requirement 2 | R1 AC1-R1 AC6, R2 AC1-R2 AC5 | Low-Level Design | None | Focused docs/task-context tests | `src/application/`, `src/infrastructure/markdown/`, `src/contracts/` | Local reader extraction scope |
-| T004 | Requirement 1, Requirement 2, Requirement 3 | R1 AC1-R1 AC6, R2 AC1-R2 AC5, R3 AC1-R3 AC3 | High-Level Design, Low-Level Design, Operational Considerations | None | MCP and presenter golden responses | `src/application/use-cases/get-task-context.ts`, `src/interface-adapters/mcp/`, `src/presentation/` | Whether Workbench brokers lifecycle calls or only routes |
-| T005 | Requirement 3 | R3 AC1-R3 AC3 | Operational Considerations | None | `pnpm typecheck`, focused tests, `pnpm test`, `git diff --check`, spec lifecycle scan | `docs/design/mcp-surface-design.md`, `docs/design/coding-agent-integration-design.md`, packaged skill and Power guidance, documentation map | Closure readiness |
+| T001 | Requirement 1, Requirement 3 | R1 AC1-AC6, R3 AC1-AC3 | Overview, High-Level Design, Low-Level Design, Operational Considerations | None | Boundary review, spec lifecycle lint | `docs/design/mcp-surface-design.md`, `docs/design/coding-agent-integration-design.md` | Resolved: route-and-consume; no Workbench lifecycle MCP brokering |
+| T002 | Requirement 1, Requirement 2, Requirement 3 | R1 AC2-AC5, R2 AC1-AC5, R3 AC1-R3 AC2 | High-Level Design, Low-Level Design | None | Fixture coverage for active, archived, malformed, traceability-rich, unavailable, unknown, and caller-supplied lifecycle context states | Temporary fixture repos in `tests/mcp/context-for-task-tool.test.ts` | Resolved: synthetic temp fixture packages cover artifact states |
+| T003 | Requirement 1, Requirement 2 | R1 AC1-R1 AC6, R2 AC1-R2 AC5 | Low-Level Design | None | Focused docs/task-context tests | `src/application/use-cases/get-task-context.ts`, `src/contracts/runtime-orientation-contracts.ts` | Resolved: extract artifact presence, checklist task blocks, status, and backticked repo files only |
+| T004 | Requirement 1, Requirement 2, Requirement 3 | R1 AC1-R1 AC6, R2 AC1-R2 AC5, R3 AC1-R3 AC3 | High-Level Design, Low-Level Design, Operational Considerations | None | MCP and presenter golden responses | `src/application/use-cases/get-task-context.ts`, `src/interface-adapters/mcp/registries/tools/context-for-task.ts`, `src/presentation/task-context-presenter.ts` | Resolved: Workbench routes and consumes lifecycle evidence; it does not broker lifecycle calls |
+| T005 | Requirement 3 | R3 AC1-R3 AC3 | Operational Considerations | None | `pnpm typecheck`, focused tests, `pnpm test`, `git diff --check`, spec lifecycle scan | `docs/design/mcp-surface-design.md`, `docs/design/coding-agent-integration-design.md`, `docs/reference/runtime-contracts.md`, packaged skill and Power guidance, documentation map | Pending final closure command evidence |
 
 ## Requirement To Delivery Matrix
 
@@ -47,8 +47,8 @@ semantics, while Agent Workbench owns repo-evidence routing.
 
 | Decision ID | Blocks | Affected Requirements | Affected Tasks | Resolution Needed |
 | --- | --- | --- | --- | --- |
-| D001 | Implementation details for companion callability | Requirement 1, Requirement 3 | T001, T004 | Decide whether Agent Workbench brokers lifecycle MCP calls or only reports companion next actions. |
-| D002 | Fixture shape for caller-supplied lifecycle context | Requirement 1, Requirement 2 | T002, T003, T004 | Define the test payload shape for preflight, task detail, validation plan, evidence quality, task-state audit, and closure-risk context. |
+| D001 | Implementation details for companion callability | Requirement 1, Requirement 3 | T001, T004 | Resolved: Agent Workbench does not broker lifecycle calls; companion actions are nested lifecycle routing hints. |
+| D002 | Fixture shape for caller-supplied lifecycle context | Requirement 1, Requirement 2 | T002, T003, T004 | Resolved: `lifecycle_context` carries source, state, spec path, task ID, and typed lifecycle outputs with files, planned validation hints, and nested next actions. |
 
 ## Maintenance Notes
 

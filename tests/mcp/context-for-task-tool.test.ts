@@ -700,6 +700,197 @@ describe("context_for_task use case", () => {
     expect(JSON.stringify(result.context)).not.toContain("agent-ide");
   });
 
+  it("adds non-authoritative local routing evidence for active spec task prompts", async () => {
+    const repoRoot = createSpecFixtureRepo({
+      status: "active",
+      includeRequirements: true,
+      includeTasks: true,
+      includeTraceability: true
+    });
+    try {
+      const result = await getTaskContext({
+        request: {
+          task: "Complete Spec 021 T003",
+          repo_root: repoRoot,
+          files: [],
+          symbols: [],
+          max_files: 12,
+          max_docs: 5
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: repoRoot
+      });
+
+      expect(result.context.lifecycle_evidence).toEqual([
+        expect.objectContaining({
+          source: "agent-workbench-local-reader",
+          kind: "local_spec_routing",
+          status: "non_authoritative",
+          summary: expect.stringContaining("active spec package")
+        })
+      ]);
+      expect(result.context.requested_files.map((file) => file.path)).toEqual(
+        expect.arrayContaining([
+          "docs/specs/021-example/requirements.md",
+          "docs/specs/021-example/tasks.md",
+          "src/application/use-cases/get-task-context.ts"
+        ])
+      );
+      expect(result.context.lifecycle_evidence?.[0]?.next_actions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            tool: "spec-lifecycle-manager.task_context",
+            args: expect.objectContaining({
+              spec_path: "docs/specs/021-example",
+              task_id: "T003"
+            })
+          })
+        ])
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("labels archived specs as historical delivery records without lifecycle status changes", async () => {
+    const repoRoot = createSpecFixtureRepo({
+      status: "archived",
+      includeRequirements: true,
+      includeTasks: true,
+      includeTraceability: false
+    });
+    try {
+      const result = await getTaskContext({
+        request: {
+          task: "Review docs/specs/021-example T003",
+          repo_root: repoRoot,
+          files: [],
+          symbols: [],
+          max_files: 8,
+          max_docs: 5
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: repoRoot
+      });
+
+      expect(result.context.lifecycle_evidence?.[0]).toEqual(
+        expect.objectContaining({
+          status: "non_authoritative",
+          summary: expect.stringContaining("historical delivery record")
+        })
+      );
+      expect(result.context.lifecycle_evidence?.[0]?.summary).toContain("Use spec-lifecycle-manager");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("reports malformed spec packages as missing evidence instead of inventing traceability", async () => {
+    const repoRoot = createSpecFixtureRepo({
+      status: "active",
+      includeRequirements: false,
+      includeTasks: true,
+      includeTraceability: false
+    });
+    try {
+      const result = await getTaskContext({
+        request: {
+          task: "Complete docs/specs/021-example T003",
+          repo_root: repoRoot,
+          files: [],
+          symbols: [],
+          max_files: 8,
+          max_docs: 5
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: repoRoot
+      });
+
+      expect(result.context.lifecycle_evidence?.[0]).toEqual(
+        expect.objectContaining({
+          summary: expect.stringContaining("malformed spec package")
+        })
+      );
+      expect(result.context.lifecycle_evidence?.[0]?.summary).toContain("missing artifacts: 2");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("consumes caller-supplied lifecycle context before broad repo search", async () => {
+    const result = await getTaskContext({
+      request: {
+        task: "Complete Spec 021 T004",
+        repo_root: "tests/fixtures/fixture-mixed-language-platform",
+        files: [],
+        symbols: [],
+        lifecycle_context: {
+          source: "spec-lifecycle-manager",
+          state: "callable",
+          spec_path: "docs/specs/021-example",
+          task_id: "T004",
+          outputs: [
+            {
+              kind: "task_context",
+              status: "provided",
+              summary: "Authoritative task context points at get-task-context.",
+              files: ["src/application/use-cases/get-task-context.ts"],
+              validation_hints: [
+                {
+                  command: "pnpm test -- tests/mcp/context-for-task-tool.test.ts",
+                  reason: "Lifecycle validation plan for T004.",
+                  status: "planned"
+                }
+              ],
+              next_actions: [
+                {
+                  tool: "verification_plan",
+                  args: { files: ["src/application/use-cases/get-task-context.ts"] }
+                }
+              ]
+            }
+          ]
+        },
+        max_files: 8,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+
+    expect(result.context.lifecycle_evidence).toEqual([
+      expect.objectContaining({
+        source: "spec-lifecycle-manager",
+        kind: "task_context",
+        status: "provided",
+        validation_hints: [
+          expect.objectContaining({
+            status: "planned"
+          })
+        ]
+      }),
+      expect.objectContaining({
+        source: "agent-workbench-local-reader",
+        status: "unknown"
+      })
+    ]);
+    expect(result.context.next_actions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          tool: "verification_plan"
+        })
+      ])
+    );
+    expect(result.context.next_actions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tool: "spec-lifecycle-manager.task_context" })
+      ])
+    );
+  });
+
   it("boosts local build files and nearby tests for explicit CMake C++ files", async () => {
     const result = await getTaskContext({
       request: {
@@ -785,6 +976,49 @@ describe("context_for_task use case", () => {
     );
   });
 });
+
+function createSpecFixtureRepo(input: {
+  status: "active" | "archived";
+  includeRequirements: boolean;
+  includeTasks: boolean;
+  includeTraceability: boolean;
+}): string {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-spec-routing-"));
+  const specPath = path.join(repoRoot, "docs", "specs", "021-example");
+  fs.mkdirSync(specPath, { recursive: true });
+  fs.mkdirSync(path.join(repoRoot, "src", "application", "use-cases"), { recursive: true });
+  fs.writeFileSync(
+    path.join(repoRoot, "src", "application", "use-cases", "get-task-context.ts"),
+    "export const routed = true;\n"
+  );
+  if (input.includeRequirements) {
+    fs.writeFileSync(
+      path.join(specPath, "requirements.md"),
+      `---\ntitle: Fixture requirements\ndoc_type: spec\nartifact_type: requirements\nstatus: ${input.status}\nowner: platform\nlast_reviewed: 2026-06-13\n---\n\n# Requirements\n\nSpec fixture.\n`
+    );
+  }
+  fs.writeFileSync(
+    path.join(specPath, "design.md"),
+    "---\ntitle: Fixture design\ndoc_type: spec\nartifact_type: design\nstatus: active\nowner: platform\nlast_reviewed: 2026-06-13\n---\n\n# Design\n\nRoutes to `src/application/use-cases/get-task-context.ts`.\n"
+  );
+  if (input.includeTasks) {
+    fs.writeFileSync(
+      path.join(specPath, "tasks.md"),
+      "---\ntitle: Fixture tasks\ndoc_type: spec\nartifact_type: tasks\nstatus: active\nowner: platform\nlast_reviewed: 2026-06-13\n---\n\n# Tasks\n\n- [ ] T003 Implement fixture routing.\n  - Files: `src/application/use-cases/get-task-context.ts`\n  - Evidence: Pending.\n"
+    );
+  }
+  if (input.includeTraceability) {
+    fs.writeFileSync(
+      path.join(specPath, "traceability.md"),
+      "---\ntitle: Fixture traceability\ndoc_type: spec\nartifact_type: traceability\nstatus: active\nowner: platform\nlast_reviewed: 2026-06-13\n---\n\n# Traceability\n\n| Task ID | Files |\n| --- | --- |\n| T003 | `src/application/use-cases/get-task-context.ts` |\n"
+    );
+  }
+  fs.writeFileSync(
+    path.join(specPath, "verification.md"),
+    "---\ntitle: Fixture verification\ndoc_type: spec\nartifact_type: verification\nstatus: active\nowner: platform\nlast_reviewed: 2026-06-13\n---\n\n# Verification\n\n- `pnpm test`\n"
+  );
+  return repoRoot;
+}
 
 describe("context_for_task MCP tool", () => {
   it("uses the injected task-context provider", async () => {

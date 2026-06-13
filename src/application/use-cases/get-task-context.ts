@@ -34,7 +34,9 @@ import {
 } from "./js-ts-project-shape.js";
 
 export type GetTaskContextResult = {
-  context: TaskContext;
+  context: Omit<TaskContext, "lifecycle_evidence"> & {
+    lifecycle_evidence?: TaskContext["lifecycle_evidence"];
+  };
   meta: ResponseMetadata;
 };
 
@@ -58,12 +60,19 @@ export async function getTaskContext(input: {
   });
   const byPath = new Map(scanned.files.map((file) => [file.path, file]));
   const jsTsShape = detectJsTsProjectShape(scanned.files);
+  const specRouting = await buildSpecRouting({
+    request: input.request,
+    byPath,
+    workspace: input.workspace,
+    maxFiles,
+    maxDocs
+  });
   const directRequestedEntries = await resolveExplicitEntries({
-    filePaths: input.request.files,
+    filePaths: uniqueStrings([...input.request.files, ...specRouting.files]),
     byPath,
     workspace: input.workspace
   });
-  const requestedFiles = input.request.files.map((filePath) =>
+  const requestedFiles = uniqueStrings([...input.request.files, ...specRouting.files]).map((filePath) =>
     toFileReference(filePath, directRequestedEntries.get(normalizeRepoPath(filePath)))
   );
   const catalogFiles = [...directRequestedEntries.values()].sort((left, right) => left.path.localeCompare(right.path));
@@ -152,6 +161,7 @@ export async function getTaskContext(input: {
       related_files: relatedFiles,
       ranked_symbols: rankedSymbolResult.ranked_symbols,
       governing_docs: governingDocs,
+      lifecycle_evidence: specRouting.lifecycle_evidence,
       validation_hints: validationHints,
       skipped_work: skippedWork,
       completeness,
@@ -188,6 +198,7 @@ export async function getTaskContext(input: {
             repo_root: scanned.repo_root
           }
         })),
+        ...specRouting.next_actions,
         {
           tool: "verification_plan",
           args: {
@@ -219,6 +230,225 @@ function buildSummary(input: {
     `${input.docCount} governing doc(s)`,
     `and ${input.validationCount} validation hint(s).`
   ].join(", ");
+}
+
+type SpecReference = {
+  spec_path?: string;
+  spec_id?: string;
+  task_id?: string;
+};
+
+async function buildSpecRouting(input: {
+  request: TaskContextRequest;
+  byPath: Map<string, FileCatalogEntry>;
+  workspace?: WorkspaceFilePort;
+  maxFiles: number;
+  maxDocs: number;
+}): Promise<{
+  files: string[];
+  lifecycle_evidence: TaskContext["lifecycle_evidence"];
+  next_actions: NextAction[];
+}> {
+  const explicitLifecycleContext = input.request.lifecycle_context;
+  const lifecycleEvidence: TaskContext["lifecycle_evidence"] = [];
+  const files: string[] = [];
+  const nextActions: NextAction[] = [];
+
+  if (explicitLifecycleContext !== undefined) {
+    for (const output of explicitLifecycleContext.outputs) {
+      lifecycleEvidence.push({
+        source: explicitLifecycleContext.source,
+        kind: output.kind,
+        status: output.status,
+        summary: output.summary,
+        files: output.files,
+        validation_hints: output.validation_hints,
+        next_actions: output.next_actions
+      });
+      files.push(...output.files);
+      nextActions.push(...output.next_actions);
+    }
+  }
+
+  const reference = detectSpecReference(input.request);
+  if (reference === undefined && explicitLifecycleContext === undefined) {
+    return {
+      files: [],
+      lifecycle_evidence: [],
+      next_actions: []
+    };
+  }
+
+  const specPath =
+    explicitLifecycleContext?.spec_path ??
+    reference?.spec_path ??
+    (reference?.spec_id === undefined ? undefined : resolveSpecPath(reference.spec_id, input.byPath));
+  const taskId = explicitLifecycleContext?.task_id ?? reference?.task_id;
+
+  if (specPath !== undefined) {
+    const local = await readLocalSpecRouting({
+      specPath,
+      taskId,
+      workspace: input.workspace,
+      maxFiles: input.maxFiles,
+      maxDocs: input.maxDocs
+    });
+    lifecycleEvidence.push(local.evidence);
+    files.push(...local.files);
+  }
+
+  const lifecycleToolsCallable = explicitLifecycleContext?.state === "callable";
+  if (!lifecycleToolsCallable && specPath !== undefined) {
+    nextActions.push({
+      tool: "spec-lifecycle-manager.task_context",
+      args: {
+        spec_path: specPath,
+        ...(taskId === undefined ? {} : { task_id: taskId })
+      }
+    });
+  }
+
+  return {
+    files: uniqueStrings(files).slice(0, input.maxFiles),
+    lifecycle_evidence: lifecycleEvidence,
+    next_actions: nextActions
+  };
+}
+
+function detectSpecReference(request: TaskContextRequest): SpecReference | undefined {
+  const combined = [request.task, ...request.files].join(" ");
+  const specPathMatch = /docs\/specs\/([0-9]{3}[-a-z0-9_]*)/iu.exec(combined);
+  const specIdMatch = /\bSpec\s+([0-9]{3})\b/iu.exec(combined);
+  const taskIdMatch = /\bT([0-9]{3})\b/iu.exec(combined);
+  if (specPathMatch === null && specIdMatch === null && taskIdMatch === null) {
+    return undefined;
+  }
+  return {
+    spec_path: specPathMatch === null ? undefined : `docs/specs/${specPathMatch[1]}`,
+    spec_id: specIdMatch === null ? undefined : specIdMatch[1],
+    task_id: taskIdMatch === null ? undefined : `T${taskIdMatch[1]}`
+  };
+}
+
+function resolveSpecPath(specId: string, byPath: Map<string, FileCatalogEntry>): string | undefined {
+  const prefix = `docs/specs/${specId}-`;
+  const candidates = [...byPath.keys()]
+    .filter((filePath) => filePath.startsWith(prefix))
+    .map((filePath) => filePath.split("/").slice(0, 3).join("/"))
+    .sort();
+  return candidates[0];
+}
+
+async function readLocalSpecRouting(input: {
+  specPath: string;
+  taskId?: string;
+  workspace?: WorkspaceFilePort;
+  maxFiles: number;
+  maxDocs: number;
+}): Promise<{
+  files: string[];
+  evidence: TaskContext["lifecycle_evidence"][number];
+}> {
+  const artifactPaths = ["requirements.md", "design.md", "tasks.md", "traceability.md", "verification.md"].map(
+    (artifact) => `${input.specPath}/${artifact}`
+  );
+  const existing = [];
+  const missing = [];
+  const mentionedFiles: string[] = [];
+  let statusLine = "unknown";
+  let taskSnippet = "";
+
+  if (input.workspace === undefined) {
+    return {
+      files: artifactPaths.slice(0, input.maxDocs),
+      evidence: {
+        source: "agent-workbench-local-reader",
+        kind: "local_spec_routing",
+        status: "unknown",
+        summary: "Spec reference detected, but local direct reads are unavailable in this context.",
+        files: artifactPaths.slice(0, input.maxDocs),
+        validation_hints: [],
+        next_actions: []
+      }
+    };
+  }
+
+  for (const artifactPath of artifactPaths) {
+    const stat = await input.workspace.stat({ path: artifactPath });
+    if (!stat.exists || !stat.is_file) {
+      missing.push(artifactPath);
+      continue;
+    }
+    existing.push(artifactPath);
+    const text = await input.workspace.readText({ path: artifactPath });
+    if (artifactPath.endsWith("/requirements.md")) {
+      statusLine = frontmatterValue(text, "status") ?? statusLine;
+    }
+    if (input.taskId !== undefined && taskSnippet.length === 0) {
+      taskSnippet = extractTaskBlock(text, input.taskId);
+      mentionedFiles.push(...extractBacktickedFilePaths(taskSnippet));
+    }
+    mentionedFiles.push(...extractBacktickedFilePaths(text).filter((filePath) => filePath.startsWith("src/") || filePath.startsWith("docs/") || filePath.startsWith("tests/")));
+  }
+
+  const historical = statusLine === "archived" || statusLine === "closed" || input.specPath.includes("/archive/");
+  const malformed = missing.includes(`${input.specPath}/requirements.md`) || missing.includes(`${input.specPath}/tasks.md`);
+  const label = historical
+    ? "historical delivery record"
+    : malformed
+      ? "malformed spec package"
+      : "active spec package";
+  const taskSummary = input.taskId === undefined
+    ? ""
+    : taskSnippet.length > 0
+      ? ` Task ${input.taskId} was found in local checklist evidence.`
+      : ` Task ${input.taskId} was not found in local checklist evidence.`;
+
+  return {
+    files: uniqueStrings([...existing, ...mentionedFiles]).slice(0, input.maxFiles),
+    evidence: {
+      source: "agent-workbench-local-reader",
+      kind: "local_spec_routing",
+      status: "non_authoritative",
+      summary: `${label}: ${input.specPath}. Existing artifacts: ${existing.length}; missing artifacts: ${missing.length}.${taskSummary} Use spec-lifecycle-manager for authoritative lifecycle decisions.`,
+      files: uniqueStrings([...existing, ...mentionedFiles]).slice(0, input.maxFiles),
+      validation_hints: [
+        {
+          command: `spec-lifecycle-manager task_context ${input.specPath}${input.taskId === undefined ? "" : ` --task ${input.taskId}`}`,
+          reason: "Authoritative lifecycle context is owned by spec-lifecycle-manager; local spec routing is non-authoritative.",
+          status: "needed"
+        }
+      ],
+      next_actions: [
+        {
+          tool: "spec-lifecycle-manager.task_context",
+          args: {
+            spec_path: input.specPath,
+            ...(input.taskId === undefined ? {} : { task_id: input.taskId })
+          }
+        }
+      ]
+    }
+  };
+}
+
+function frontmatterValue(text: string, key: string): string | undefined {
+  const match = new RegExp(`^${key}:\\s*([^\\n]+)$`, "imu").exec(text);
+  return match?.[1]?.trim();
+}
+
+function extractTaskBlock(text: string, taskId: string): string {
+  const lines = text.split(/\r?\n/u);
+  const start = lines.findIndex((line) => line.includes(taskId));
+  if (start < 0) return "";
+  const end = lines.findIndex((line, index) => index > start && /^- \[[^\]]+\] T[0-9]{3}\b/u.test(line));
+  return lines.slice(start, end < 0 ? Math.min(lines.length, start + 12) : end).join("\n");
+}
+
+function extractBacktickedFilePaths(text: string): string[] {
+  return [...text.matchAll(/`((?:src|tests|docs|plugins)\/[^`]+)`/gu)]
+    .map((match) => match[1])
+    .filter((filePath): filePath is string => filePath !== undefined);
 }
 
 function selectRelatedFiles(input: {
@@ -1075,6 +1305,10 @@ function tokenSet(values: readonly string[]): Set<string> {
 
 function normalizeRepoPath(value: string): string {
   return value.replaceAll("\\", "/").replace(/^\.\/+/, "");
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return Array.from(new Set(values.map(normalizeRepoPath).filter((value) => value.length > 0)));
 }
 
 async function resolveExplicitEntries(input: {

@@ -38,6 +38,13 @@ Components:
   symbols, impact, edit preview, diagnostics, and validation planning.
 - Skill and Kiro Power guidance that states the ownership boundary.
 
+Decision: Agent Workbench does not broker lifecycle MCP calls in this slice.
+Coding agents call spec-lifecycle-manager directly when that runtime is
+available, then pass authoritative outputs into `context_for_task` as
+`lifecycle_context`. Agent Workbench consumes those outputs and local routing
+evidence, but top-level executable `next_actions` remain Agent Workbench MCP
+actions only.
+
 ## Low-Level Design
 
 The detector should recognize explicit lifecycle references without broadly
@@ -65,7 +72,9 @@ Workbench-owned task transitions or closure decisions.
 Integration health/profile output should treat spec-lifecycle-manager as a
 companion runtime, not as an Agent Workbench backend. If caller-discovered
 evidence is absent, the lifecycle surface remains unknown and must not appear as
-proven callable.
+proven callable. Companion lifecycle next actions may appear inside
+`lifecycle_evidence`, where they are routing hints rather than Workbench-owned
+callable MCP actions.
 
 ## Operational Considerations
 
@@ -83,6 +92,9 @@ proven callable.
 
 ## Open Questions
 
-- Exact mechanism for discovering companion MCP callability in each client.
-- Whether Agent Workbench should ever broker a lifecycle MCP call, or only
-  report the appropriate companion tool next action.
+- Client-specific companion callability discovery remains integration-health
+  evidence supplied by the active agent session. Workbench does not inspect
+  client internals.
+- Lifecycle MCP brokering is deferred. The accepted MVP behavior is
+  route-and-consume: report companion lifecycle next actions as nested lifecycle
+  evidence, and consume caller-supplied lifecycle outputs.

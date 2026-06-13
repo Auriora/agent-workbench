@@ -20,6 +20,19 @@ local scripts.
 4. Use preview/apply surfaces for workspace writes when available.
 5. Use `verification_plan` for validation planning and quiet post-edit static feedback.
 
+## Spec Lifecycle Boundary
+
+When work is driven by `docs/specs/[###-slug]/`, `Spec NNN`, or a `TNNN` task,
+use spec-lifecycle-manager for authoritative lifecycle preflight, task context,
+traceability, evidence quality, task-state audit, promotion planning, closure
+risk, and closure checks. Agent Workbench can consume those outputs through
+`context_for_task.lifecycle_context` and join them to repository files,
+diagnostics, symbols, impact, edit preview, and validation planning.
+
+If spec-lifecycle-manager is unavailable, Agent Workbench local spec routing is
+non-authoritative. Treat it as bounded routing evidence only; do not use it to
+change task status, reconcile specs, promote docs, or close specs.
+
 ## Codex Integration
 
 Read `integration:///profiles/codex` when you need to know which Codex surfaces

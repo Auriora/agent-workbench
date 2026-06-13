@@ -269,10 +269,12 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         workflow: [
           "Read repo status, scope, and overview before trusting runtime results.",
           "Gather task context before broad file reads.",
+          "Pass authoritative spec-lifecycle-manager outputs into context_for_task.lifecycle_context when spec-driven work is active.",
           "Use targeted symbol, reference, impact, edit, and verification surfaces for implementation work."
         ],
         constraints: [
           "Do not bypass MCP schemas.",
+          "Do not use Agent Workbench local spec routing for lifecycle authority, task-status changes, promotion, or closure.",
           "Do not add fallback routes or alternate analyzers without spec-backed tests."
         ]
       }
@@ -305,6 +307,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
     guardrails: [
       "MCP is the only executable runtime surface.",
       "Configured MCP bindings must not be treated as guaranteed client-discovered tools unless the active session exposes them.",
+      "spec-lifecycle-manager owns lifecycle authority; Agent Workbench only consumes lifecycle evidence and joins it to repository evidence.",
       "Plugin, skill, and hook artifacts are wrappers around MCP, not parallel implementations.",
       "Source edits require package reinstall, plugin reinstall, and Codex restart to reload MCP source behavior.",
       "Dependency changes require a package containing rebuilt dependencies, plugin reinstall, and Codex restart.",

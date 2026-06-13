@@ -79,6 +79,10 @@ or validation planning is unclear.
 - MCP is the only executable runtime surface.
 - Skills and Power guidance explain how to use the runtime; they do not
   duplicate runtime logic.
+- spec-lifecycle-manager owns spec creation, reconciliation, task selection,
+  traceability authority, promotion planning, closure checks, and spec
+  transition hooks. Agent Workbench only consumes lifecycle evidence and joins
+  it to repository routing.
 - Hooks are quiet adapters. They must not install, repair, retry, or add hidden
   fallback behavior.
 - Do not return partial results as success for crashes, timeouts, or missing

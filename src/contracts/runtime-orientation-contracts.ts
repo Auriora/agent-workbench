@@ -29,11 +29,66 @@ export const taskContextRequestSchema = z
     repo_root: z.string().optional(),
     files: z.array(z.string()).default([]),
     symbols: z.array(z.string()).default([]),
+    lifecycle_context: z
+      .object({
+        source: z.string().default("caller"),
+        state: z.enum(["provided", "callable", "unavailable", "unknown"]).default("provided"),
+        spec_path: z.string().optional(),
+        task_id: z.string().optional(),
+        outputs: z
+          .array(
+            z
+              .object({
+                kind: z.enum([
+                  "preflight",
+                  "task_detail",
+                  "validation_plan",
+                  "evidence_quality",
+                  "task_state_audit",
+                  "closure_risk",
+                  "task_context",
+                  "traceability"
+                ]),
+                status: z.enum(["provided", "callable", "unavailable", "unknown", "blocked"]).default("provided"),
+                summary: z.string(),
+                files: z.array(z.string()).default([]),
+                validation_hints: z.array(validationHintSchema).default([]),
+                next_actions: z.array(nextActionSchema).default([])
+              })
+              .strict()
+          )
+          .default([])
+      })
+      .strict()
+      .optional(),
     max_files: z.number().int().positive().max(50).default(10),
     max_docs: z.number().int().positive().max(20).default(5)
   })
   .strict();
 export type TaskContextRequest = z.infer<typeof taskContextRequestSchema>;
+
+export const lifecycleEvidenceSchema = z
+  .object({
+    source: z.string(),
+    kind: z.enum([
+      "preflight",
+      "task_detail",
+      "validation_plan",
+      "evidence_quality",
+      "task_state_audit",
+      "closure_risk",
+      "task_context",
+      "traceability",
+      "local_spec_routing"
+    ]),
+    status: z.enum(["provided", "callable", "unavailable", "unknown", "blocked", "non_authoritative"]),
+    summary: z.string(),
+    files: z.array(z.string()).default([]),
+    validation_hints: z.array(validationHintSchema).default([]),
+    next_actions: z.array(nextActionSchema).default([])
+  })
+  .strict();
+export type LifecycleEvidence = z.infer<typeof lifecycleEvidenceSchema>;
 
 export const taskContextSchema = z
   .object({
@@ -44,6 +99,7 @@ export const taskContextSchema = z
     related_files: z.array(fileReferenceSchema),
     ranked_symbols: z.array(rankedSymbolCandidateSchema),
     governing_docs: z.array(documentReferenceSchema),
+    lifecycle_evidence: z.array(lifecycleEvidenceSchema).default([]),
     validation_hints: z.array(validationHintSchema),
     skipped_work: z.array(skippedWorkSchema),
     completeness: contextCompletenessSchema,

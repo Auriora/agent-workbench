@@ -9,6 +9,7 @@ import {
   symbolReferenceSchema,
   validationHintSchema,
   documentReferenceSchema,
+  lifecycleEvidenceSchema,
   responseMetadataSchema,
   taskContextSchema,
   nextActionSchema,
@@ -48,6 +49,7 @@ export function buildInvalidTaskContextInputEnvelope(input: {
       related_files: [],
       ranked_symbols: [],
       governing_docs: [],
+      lifecycle_evidence: [],
       validation_hints: [],
       skipped_work: [],
       completeness: {
@@ -81,11 +83,24 @@ function sanitizeTaskContext(
     related_files: context.related_files.map(sanitizeFileReference),
     ranked_symbols: context.ranked_symbols.map(sanitizeRankedSymbol),
     governing_docs: context.governing_docs.map(sanitizeDocumentReference),
+    lifecycle_evidence: (context.lifecycle_evidence ?? []).map(sanitizeLifecycleEvidence),
     validation_hints: context.validation_hints.map(sanitizeValidationHint),
     skipped_work: context.skipped_work.map(sanitizeSkippedWork),
     completeness: sanitizeCompleteness(context.completeness),
     risks: context.risks.map(sanitizeRisk),
     next_actions: presentNextActions(context.next_actions, sessionContext).map(sanitizeNextAction)
+  });
+}
+
+function sanitizeLifecycleEvidence(input: NonNullable<GetTaskContextResult["context"]["lifecycle_evidence"]>[number]) {
+  return lifecycleEvidenceSchema.parse({
+    source: input.source,
+    kind: input.kind,
+    status: input.status,
+    summary: input.summary,
+    files: input.files,
+    validation_hints: input.validation_hints.map(sanitizeValidationHint),
+    next_actions: input.next_actions.map(sanitizeNextAction)
   });
 }
 

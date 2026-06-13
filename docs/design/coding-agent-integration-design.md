@@ -67,6 +67,16 @@ consumes those outputs as upstream context and joins them to repo evidence; it
 does not own lifecycle task status, reconciliation, promotion, closure checks,
 templates, or Kiro-style workflow semantics.
 
+The MVP integration stance is route-and-consume, not broker. Coding agents
+should call spec-lifecycle-manager directly for authoritative lifecycle
+preflight, task context, traceability lookup, evidence quality, task-state
+audit, closure-risk review, promotion planning, and closure checks. They may
+then pass those outputs into Agent Workbench `context_for_task` as
+`lifecycle_context` so Workbench can join lifecycle files and validation-plan
+evidence to repository routing, diagnostics, symbols, impact, edit preview, and
+validation planning. If the companion runtime is unavailable, Agent Workbench
+local spec routing is explicitly non-authoritative.
+
 ### Repository Instructions
 
 Repository instruction files are common but not fully standardized. The runtime
