@@ -215,7 +215,7 @@ or runtime telemetry.
 ### EB005: Multi-File Post-Edit Repair Loop
 
 - Priority: P1
-- Status: active Spec 020
+- Status: closed Spec 020
 - Friction signal: hook logs show `too_many_files` and
   `too_many_files_for_inline_hook`; Agent IDE diagnostics and post-edit
   feedback were high-value signals.
@@ -234,8 +234,8 @@ or runtime telemetry.
     cases.
   - Provider tests for bounded diagnostics and structured skipped results.
   - Telemetry for deferred diagnostic reasons.
-- Promotion target: active
-  [Spec 020](../specs/020-multi-file-post-edit-repair/requirements.md).
+- Promotion target: closed
+  [Spec 020](../history/spec-closure-log.md).
 
 ### EB006: Spec And Task Traceability Lookup
 
@@ -1161,6 +1161,5 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-1. Spec 020: multi-file post-edit repair loop.
-2. Spec 021: spec/task traceability integration.
-3. Spec 022: MCP-server repository support.
+1. Spec 021: spec/task traceability integration.
+2. Spec 022: MCP-server repository support.
