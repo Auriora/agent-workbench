@@ -248,6 +248,61 @@ describe("repo overview MCP resource", () => {
     }
   });
 
+  it("surfaces MCP server entrypoints, transports, tool registries, and docs in overview", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-overview-mcp-server-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "src", "mcp"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "docs"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, ".devcontainer"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, "package.json"),
+        JSON.stringify({ scripts: { "mcp:stdio": "tsx src/mcp/server.ts" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(repoRoot, "src", "mcp", "server.ts"), "export function start() {}\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "mcp", "tools.ts"), "export const tools = [];\n");
+      fs.writeFileSync(path.join(repoRoot, "docs", "mcp-stdio-transport.md"), "# MCP stdio transport\n");
+      fs.writeFileSync(path.join(repoRoot, ".devcontainer", "Dockerfile"), "FROM node:24\n");
+
+      const result = await getRepoOverview({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter()
+      });
+
+      expect(result.overview.platforms).toEqual(
+        expect.arrayContaining(["mcp_server", "mcp_stdio", "mcp_devcontainer"])
+      );
+      expect(result.overview.key_files).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: "src/mcp/server.ts",
+            reason: expect.stringContaining("MCP server entrypoint")
+          }),
+          expect.objectContaining({
+            path: "src/mcp/tools.ts",
+            reason: expect.stringContaining("MCP tool registry")
+          })
+        ])
+      );
+      expect(result.overview.key_docs).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: "docs/mcp-stdio-transport.md"
+          })
+        ])
+      );
+      expect(result.overview.validation_hints).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            command: "verification_plan",
+            reason: expect.stringContaining("MCP server high-confidence evidence")
+          })
+        ])
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("prioritizes durable docs and skill guidance over fixture docs in docs-heavy repositories", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-overview-docs-heavy-"));
     try {

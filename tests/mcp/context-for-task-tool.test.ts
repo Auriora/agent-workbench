@@ -891,6 +891,60 @@ describe("context_for_task use case", () => {
     );
   });
 
+  it("routes MCP server prompts to entrypoints, tool registries, protocol docs, and transport evidence", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-context-mcp-server-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "src", "mcp"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "docs"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "generated"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, "package.json"),
+        JSON.stringify({ scripts: { "mcp:http": "tsx src/mcp/http-server.ts" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(repoRoot, "src", "mcp", "http-server.ts"), "export function serve() {}\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "mcp", "tools.ts"), "export const tools = [];\n");
+      fs.writeFileSync(path.join(repoRoot, "docs", "mcp-sse-transport.md"), "# MCP SSE transport\n");
+      fs.writeFileSync(path.join(repoRoot, "generated", "mcp-server.ts"), "generated noise\n");
+
+      const result = await getTaskContext({
+        request: {
+          task: "Update MCP server HTTP/SSE tools/list smoke support",
+          repo_root: repoRoot,
+          files: [],
+          symbols: [],
+          max_files: 6,
+          max_docs: 5
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: repoRoot
+      });
+
+      expect(result.context.related_files.map((file) => file.path)).toEqual(
+        expect.arrayContaining([
+          "src/mcp/http-server.ts",
+          "src/mcp/tools.ts",
+          "docs/mcp-sse-transport.md"
+        ])
+      );
+      expect(result.context.related_files).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: "src/mcp/http-server.ts",
+            reason: "MCP server entrypoint evidence."
+          }),
+          expect.objectContaining({
+            path: "src/mcp/tools.ts",
+            reason: "MCP tool registry evidence."
+          })
+        ])
+      );
+      expect(result.context.related_files.map((file) => file.path)).not.toContain("generated/mcp-server.ts");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("boosts local build files and nearby tests for explicit CMake C++ files", async () => {
     const result = await getTaskContext({
       request: {

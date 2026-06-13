@@ -58,6 +58,16 @@ next-action rules: known unavailable actions are not emitted as executable
 `next_actions`, while unknown caller discovery preserves conservative guidance
 with explicit assumptions inside the integration-health result.
 
+For MCP-server repositories, coding agents should treat Agent Workbench
+MCP-server labels as routing evidence. Overview and task-context output can
+identify likely server entrypoints, tool registries, protocol docs, transports,
+and container/devcontainer evidence, but agents must still read source or docs
+directly before making protocol claims. Validation planning may suggest
+initialize/tools-list/call-tool smoke checks or configured MCP scripts, but it
+does not execute the server, open network sessions, or prove the checks passed.
+Repository validation policy, including host-command blocking, remains
+authoritative.
+
 Companion runtimes such as spec-lifecycle-manager are collaborators, not Agent
 Workbench backends. When a companion lifecycle runtime is discovered and
 callable, Agent Workbench guidance may route agents to its preflight, task

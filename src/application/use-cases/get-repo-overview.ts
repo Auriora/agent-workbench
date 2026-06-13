@@ -19,6 +19,12 @@ import {
   isJsTsProjectConfigPath,
   isJsTsTestPath
 } from "./js-ts-project-shape.js";
+import {
+  detectMcpServerShape,
+  isMcpServerEvidencePath,
+  mcpEvidenceReason,
+  mcpTransportLabels
+} from "./mcp-server-shape.js";
 
 export type GetRepoOverviewResult = {
   overview: RepoOverview;
@@ -227,6 +233,18 @@ function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHin
       status: "needed"
     });
   }
+  const mcpShape = detectMcpServerShape(paths);
+  if (mcpShape.detected) {
+    hints.push({
+      command: "verification_plan",
+      reason: [
+        `MCP server ${mcpShape.confidence}-confidence evidence is present`,
+        mcpShape.transports.length > 0 ? `transports: ${mcpTransportLabels(mcpShape.transports).join(", ")}` : "transport evidence is incomplete",
+        "plan initialize/tools-list/call-tool smoke checks without execution"
+      ].join("; "),
+      status: "needed"
+    });
+  }
   if (hasDockerComposeEvidence(paths)) {
     hints.push({
       command: "manual_review compose-validation-environment",
@@ -292,6 +310,13 @@ function detectPlatforms(files: readonly FileCatalogEntry[]): string[] {
   if (hasCMakeEvidence(paths)) platforms.add("cmake");
   if (hasDockerEvidence(paths)) platforms.add("docker");
   if (hasDevcontainerEvidence(paths)) platforms.add("devcontainer");
+  const mcpShape = detectMcpServerShape(paths);
+  if (mcpShape.detected) {
+    platforms.add("mcp_server");
+    for (const transport of mcpShape.transports) {
+      platforms.add(`mcp_${transport}`);
+    }
+  }
   if ([...paths].some((file) => file.startsWith(".github/workflows/"))) platforms.add("github_actions");
   return [...platforms].sort();
 }
@@ -323,6 +348,7 @@ function isKeyFile(filePath: string): boolean {
     filePath.startsWith("apps/") ||
     filePath.startsWith("packages/") ||
     filePath.startsWith("services/") ||
+    isMcpServerEvidencePath(filePath) ||
     filePath.startsWith("src/") ||
     filePath.startsWith("tests/")
   );
@@ -360,6 +386,11 @@ function keyFileEvidence(file: FileCatalogEntry): { score: number; reason: strin
   }
   if (isJsTsProjectConfigPath(lower) && lower !== "package.json") {
     reasons.push("JavaScript/TypeScript project configuration");
+  }
+  const mcpReason = mcpEvidenceReason(file.path);
+  if (mcpReason !== undefined) {
+    score = Math.max(score, 118);
+    reasons.push(mcpReason.replace(/\s+evidence\.$/u, ""));
   }
   if (isEntrypointPath(lower)) {
     score = Math.max(score, 115);
@@ -484,6 +515,7 @@ function baseKeyFileRank(file: FileCatalogEntry): number {
   if (lower.includes("/generated/") || lower.includes("/fixtures/")) score -= 60;
   if (lower.startsWith("tests/fixtures/") || lower.includes("/fixture")) score -= 140;
   if (lower.includes("template-generated")) score -= 90;
+  if (isMcpServerEvidencePath(lower)) score += 60;
   return score;
 }
 

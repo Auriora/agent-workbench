@@ -1,0 +1,10 @@
+{
+  "name": "fixture-mcp-server-stdio",
+  "scripts": {
+    "mcp:smoke": "node scripts/mcp-smoke.mjs",
+    "mcp:stdio": "tsx src/mcp/stdio-server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

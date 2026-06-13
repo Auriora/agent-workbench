@@ -1,0 +1,9 @@
+{
+  "name": "fixture-mcp-server-http-sse",
+  "scripts": {
+    "mcp:http": "tsx src/mcp/sse-server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

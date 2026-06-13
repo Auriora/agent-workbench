@@ -48,6 +48,12 @@ import {
   selectPackageScripts,
   type PackageScriptEvidence
 } from "./validation-package-scripts.js";
+import {
+  detectMcpServerShape,
+  isMcpServerEvidencePath,
+  mcpTransportLabels,
+  type McpServerShape
+} from "./mcp-server-shape.js";
 import { buildStaticFeedback } from "./validation-static-feedback.js";
 import { normalizeRepoPath, uniqueSorted } from "./validation-utils.js";
 
@@ -89,6 +95,7 @@ export async function planVerification(input: {
     files,
     selectedEntries,
     discovery,
+    task: input.request.task,
     maxCommands: input.request.max_commands
   });
   const commands = commandPlan.commands;
@@ -279,7 +286,10 @@ async function mergeDirectValidationEntries(input: {
     "CMakeLists.txt",
     "template.yaml",
     "template.yml",
-    "template.json"
+    "template.json",
+    "mcp.json",
+    "mcp-server.json",
+    ".well-known/mcp/server-card.json"
   ])) {
     if (byPath.has(filePath)) {
       continue;
@@ -341,6 +351,7 @@ async function discoverValidationEvidence(input: {
       workflowPaths: [...paths].filter(isGithubWorkflowPath).sort(),
       workspace: input.workspace
     }),
+    mcpShape: detectMcpServerShape(paths),
     pythonNearestTests: await discoverPythonNearestTests({
       files: input.files,
       selectedEntries: input.selectedEntries,
@@ -366,6 +377,7 @@ type ValidationDiscovery = {
   samTemplates: string[];
   samInfraTests: string[];
   goCiCommands: PlannedValidationCommand[];
+  mcpShape: McpServerShape;
   pythonNearestTests: PlannedValidationCommand[];
 };
 
@@ -379,6 +391,7 @@ function planValidationCommands(input: {
   files: readonly FileCatalogEntry[];
   selectedEntries: readonly FileCatalogEntry[];
   discovery: ValidationDiscovery;
+  task?: string;
   maxCommands: number;
 }): CommandPlanningResult {
   const selectedLanguages = new Set(input.selectedEntries.map((file) => file.file_identity.language));
@@ -401,6 +414,17 @@ function planValidationCommands(input: {
   const samShapeSelected =
     hasSamTemplate &&
     (includeAll || input.selectedEntries.some((file) => isSamRelatedPath(file.path)) || hasAny(selectedLanguages, ["yaml", "json", "python"]));
+  const mcpShapeSelected =
+    input.discovery.mcpShape.detected &&
+    (includeAll ||
+      input.selectedEntries.some((file) => isMcpServerEvidencePath(file.path)) ||
+      input.selectedEntries.some((file) => file.path === "package.json") ||
+      taskMentionsMcp(input.task));
+  const selectedPackageScripts = selectPackageScripts({
+    packages: input.discovery.packageScripts,
+    selectedEntries: input.selectedEntries,
+    includeAll
+  });
 
   commands.push(...input.discovery.validationProtocol.policyCommands);
   if (!hostCommandsBlocked(input.discovery.validationProtocol)) {
@@ -559,11 +583,18 @@ function planValidationCommands(input: {
     }
   }
 
-  const selectedPackageScripts = selectPackageScripts({
-    packages: input.discovery.packageScripts,
-    selectedEntries: input.selectedEntries,
-    includeAll
-  });
+  if (mcpShapeSelected) {
+    if (hostCommandsBlocked(input.discovery.validationProtocol)) {
+      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+        blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "MCP server"));
+      }
+    } else {
+      commands.push(...mcpServerValidationCommands({
+        packages: selectedPackageScripts,
+        shape: input.discovery.mcpShape
+      }));
+    }
+  }
 
   if (
     selectedPackageScripts.length > 0 &&
@@ -571,6 +602,7 @@ function planValidationCommands(input: {
     !cmakeShapeSelected &&
     !dotnetShapeSelected &&
     !samShapeSelected &&
+    !mcpShapeSelected &&
     (includeAll || hasAny(selectedLanguages, ["typescript", "javascript", "json"]))
   ) {
     if (hostCommandsBlocked(input.discovery.validationProtocol)) {
@@ -673,6 +705,62 @@ function planValidationCommands(input: {
   };
 }
 
+function mcpServerValidationCommands(input: {
+  packages: readonly PackageScriptEvidence[];
+  shape: McpServerShape;
+}): PlannedValidationCommand[] {
+  const scriptCommands = configuredPackageCommands(input.packages, [
+    {
+      script: "mcp:smoke",
+      reason: "Configured MCP smoke script indicates initialize/tools-list/call-tool validation is available."
+    },
+    {
+      script: "mcp:inspect",
+      reason: "Configured MCP inspector script indicates protocol smoke validation is available."
+    },
+    {
+      script: "inspect:mcp",
+      reason: "Configured MCP inspector script indicates protocol smoke validation is available."
+    },
+    {
+      script: "mcp:stdio",
+      reason: "Configured MCP stdio server script can support initialize and tools/list smoke validation."
+    },
+    {
+      script: "mcp:http",
+      reason: "Configured MCP HTTP server script can support HTTP/SSE or streamable HTTP smoke validation."
+    }
+  ]);
+  if (scriptCommands.length > 0) {
+    return [
+      ...scriptCommands,
+      manualMcpSmokeCommand(input.shape, "Configured MCP script evidence is present; run protocol smoke checks explicitly and treat this plan as not executed.")
+    ];
+  }
+  return [
+    manualMcpSmokeCommand(
+      input.shape,
+      "MCP server project-shape evidence exists but no safe repo script was discovered; perform manual initialize, tools/list, and targeted call-tool smoke checks."
+    )
+  ];
+}
+
+function manualMcpSmokeCommand(shape: McpServerShape, reason: string): PlannedValidationCommand {
+  return {
+    command: "manual_review",
+    args: ["mcp-initialize-tools-list-call-tool"],
+    display: "planned MCP initialize/tools-list/call-tool smoke review",
+    reason: [
+      reason,
+      shape.transports.length > 0 ? `Transport evidence: ${mcpTransportLabels(shape.transports).join(", ")}.` : "Transport evidence is incomplete.",
+      shape.entrypoints.length > 0 ? `Entrypoint evidence: ${shape.entrypoints.slice(0, 2).join(", ")}.` : "Entrypoint evidence is incomplete.",
+      shape.tool_registries.length > 0 ? `Tool registry evidence: ${shape.tool_registries.slice(0, 2).join(", ")}.` : "Tool registry evidence is incomplete."
+    ].join(" "),
+    status: "planned",
+    execution: "not_executed"
+  };
+}
+
 function selectEntries(
   files: readonly FileCatalogEntry[],
   selectedPaths: readonly string[]
@@ -716,4 +804,8 @@ function symbolQueryFromPath(filePath: string): string {
 
 function isUnsafeValidationTarget(filePath: string): boolean {
   return /[;&|`$<>]/u.test(filePath);
+}
+
+function taskMentionsMcp(task: string | undefined): boolean {
+  return task !== undefined && /\bmcp\b|tools\/list|call[-_ ]?tool|initialize|stdio|sse|streamable http/iu.test(task);
 }

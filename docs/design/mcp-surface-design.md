@@ -3,7 +3,7 @@ title: MCP surface design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-06
+last_reviewed: 2026-06-13
 ---
 
 # MCP Surface Design
@@ -135,6 +135,14 @@ configuration. These reasons describe path and repository-shape routing
 evidence only; capability metadata remains the trust boundary for whether a
 file has semantic support.
 
+MCP-server repository support is also project-shape routing. `repo:///overview`
+may label `mcp_server` plus transport platforms such as `mcp_stdio`,
+`mcp_http_sse`, `mcp_streamable_http`, `mcp_docker`, or `mcp_devcontainer` when
+MCP-specific entrypoint, tool-registry, protocol-doc, or config evidence exists.
+Docker and devcontainer files are transport/environment evidence only after
+MCP-specific evidence is present. Generated, vendor, fixture, cache, and temp
+paths must not create MCP-server detection by themselves.
+
 `repo:///docs/overview` and `repo:///docs/map` expose bounded Markdown
 documentation routing evidence. They return repo-relative paths, titles,
 heading outlines, links where available, skipped/unreadable path warnings,
@@ -184,6 +192,12 @@ full topology, diagnostics execution, broad docs reports, or high-cardinality
 cache validation as hidden work. It should return complete-enough markers,
 skipped-work metadata, and exact next actions.
 
+When a task mentions MCP server work, `context_for_task` should rank
+MCP-server entrypoints, tool registries, protocol docs, and transport evidence
+above generated or vendor noise. The returned reasons are evidence labels for
+where an agent should read next; they are not proof that the server implements a
+specific protocol behavior.
+
 When a task is explicitly spec-driven, `context_for_task` may consume
 spec-lifecycle-manager companion evidence before broad repo search. Companion
 inputs include lifecycle preflight, task detail, validation plan, evidence
@@ -204,6 +218,14 @@ and stay labeled as lifecycle evidence.
 `verification_plan` plans checks but does not execute them. It must distinguish
 planned checks from proven runnable checks and route low-confidence test
 discovery to explicit follow-up instead of implying nearest-test proof.
+
+For MCP-server repositories, `verification_plan` may plan configured scripts
+such as `mcp:smoke`, `mcp:inspect`, `inspect:mcp`, `mcp:stdio`, and `mcp:http`,
+and may add a manual planned smoke review for initialize, tools/list, and a
+targeted call-tool check. It must record the transport, entrypoint, and
+tool-registry evidence used to form the plan. Host-blocked validation policy
+continues to take precedence, returning a blocked state instead of generic host
+commands when repository guidance requires containerized validation.
 
 `diagnostics_for_files` runs compact provider-backed diagnostics for explicit
 repo-relative files. It is read-only, bounded by file count and provider

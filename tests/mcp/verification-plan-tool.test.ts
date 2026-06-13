@@ -212,6 +212,145 @@ describe("verification_plan use case", () => {
     }
   });
 
+  it("plans MCP server smoke checks from package scripts and transport evidence without executing them", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-mcp-stdio-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "src", "mcp"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "docs"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, "package.json"),
+        JSON.stringify(
+          {
+            scripts: {
+              "mcp:smoke": "node scripts/mcp-smoke.mjs",
+              "mcp:stdio": "tsx src/mcp/stdio-server.ts"
+            }
+          },
+          null,
+          2
+        )
+      );
+      fs.writeFileSync(path.join(repoRoot, "src", "mcp", "stdio-server.ts"), "export function start() {}\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "mcp", "tools.ts"), "export const tools = [];\n");
+      fs.writeFileSync(path.join(repoRoot, "docs", "mcp-stdio-transport.md"), "# MCP stdio transport\n");
+
+      const result = await planVerification({
+        request: {
+          task: "Plan MCP initialize tools/list call-tool smoke checks",
+          repo_root: repoRoot,
+          files: ["src/mcp/stdio-server.ts"],
+          changed_files: [],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            display: "pnpm run mcp:smoke",
+            execution: "not_executed"
+          }),
+          expect.objectContaining({
+            display: "pnpm run mcp:stdio",
+            execution: "not_executed"
+          }),
+          expect.objectContaining({
+            display: "planned MCP initialize/tools-list/call-tool smoke review",
+            reason: expect.stringContaining("Transport evidence: stdio")
+          })
+        ])
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("plans manual MCP smoke guidance for HTTP/SSE, streamable HTTP, and ambiguous evidence", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-mcp-http-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "src", "mcp"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "docs"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "src", "mcp", "sse-server.ts"), "export function serveSse() {}\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "mcp", "streamable-http-server.ts"), "export function serveHttp() {}\n");
+      fs.writeFileSync(path.join(repoRoot, "docs", "mcp-inspector.md"), "# MCP inspector\n");
+
+      const result = await planVerification({
+        request: {
+          task: "Plan MCP streamable HTTP and SSE initialize tools/list validation",
+          repo_root: repoRoot,
+          files: [],
+          changed_files: [],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            display: "planned MCP initialize/tools-list/call-tool smoke review",
+            reason: expect.stringContaining("HTTP/SSE")
+          })
+        ])
+      );
+      expect(
+        result.plan.planned_commands.find((command) => command.display === "planned MCP initialize/tools-list/call-tool smoke review")?.reason
+      ).toContain("streamable HTTP");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks generic MCP host smoke checks when repo policy requires Docker validation", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-mcp-docker-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "src", "mcp"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, ".agent-workbench"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "Dockerfile"), "FROM node:24\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "mcp", "server.ts"), "export function start() {}\n");
+      fs.writeFileSync(
+        path.join(repoRoot, ".agent-workbench", "validation-policy.json"),
+        JSON.stringify({ validation: { environment: "docker", host_commands: "blocked" } }, null, 2)
+      );
+
+      const result = await planVerification({
+        request: {
+          task: "Plan MCP Docker validation",
+          repo_root: repoRoot,
+          files: ["src/mcp/server.ts"],
+          changed_files: [],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("blocked");
+      expect(result.plan.planned_commands).toEqual([]);
+      expect(result.plan.risks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            severity: "blocker",
+            message: expect.stringContaining("Repository guidance requires Docker-based validation")
+          })
+        ])
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("plans package-local JavaScript and TypeScript scripts for selected monorepo files", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-js-monorepo-"));
     try {

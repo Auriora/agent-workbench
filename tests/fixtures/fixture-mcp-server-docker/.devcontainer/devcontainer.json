@@ -1,0 +1,4 @@
+{
+  "name": "fixture-mcp-server-docker",
+  "dockerFile": "../Dockerfile"
+}

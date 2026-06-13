@@ -1,0 +1,9 @@
+{
+  "name": "fixture-mcp-server-streamable-http",
+  "scripts": {
+    "mcp:http": "tsx src/mcp/streamable-http-server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "fixture-mcp-server-docker",
+  "scripts": {
+    "mcp:stdio": "tsx src/mcp/server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

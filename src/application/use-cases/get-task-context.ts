@@ -32,6 +32,12 @@ import {
   isJsTsTestPath,
   jsTsPackageRootForPath
 } from "./js-ts-project-shape.js";
+import {
+  detectMcpServerShape,
+  isMcpServerEvidencePath,
+  mcpEvidenceReason,
+  mcpTransportLabels
+} from "./mcp-server-shape.js";
 
 export type GetTaskContextResult = {
   context: Omit<TaskContext, "lifecycle_evidence"> & {
@@ -882,7 +888,8 @@ function scoreFile(file: FileCatalogEntry, terms: Set<string>): number {
     jsTsStructureBoost(file.path, terms) +
     webAppStructureBoost(file.path, terms) +
     dotnetStructureBoost(file.path, terms) +
-    samStructureBoost(file.path, terms);
+    samStructureBoost(file.path, terms) +
+    mcpServerStructureBoost(file.path, terms);
   for (const term of terms) {
     if (pathTerms.has(term)) {
       score += 3;
@@ -1026,6 +1033,10 @@ function reasonForRelatedFile(
   if (samReason !== undefined) {
     return samReason;
   }
+  const mcpReason = mcpServerStructureReason(file.path, terms);
+  if (mcpReason !== undefined) {
+    return mcpReason;
+  }
   return hasExactPathTerm
     ? "Matched task terms in the repo-relative path."
     : "Weak path-term match; use as routing evidence only.";
@@ -1155,6 +1166,36 @@ function hasAnyTerm(terms: Set<string>, expected: readonly string[]): boolean {
   return expected.some((term) => terms.has(term));
 }
 
+function mcpServerStructureBoost(filePath: string, terms: Set<string>): number {
+  const reason = mcpServerStructureReason(filePath, terms);
+  if (reason === undefined) {
+    return 0;
+  }
+  const lower = filePath.toLowerCase();
+  if (mcpEvidenceReason(lower)?.includes("entrypoint")) return 18;
+  if (mcpEvidenceReason(lower)?.includes("tool registry")) return 16;
+  if (mcpEvidenceReason(lower)?.includes("documentation")) return 10;
+  return 8;
+}
+
+function mcpServerStructureReason(filePath: string, terms: Set<string>): string | undefined {
+  if (!hasAnyTerm(terms, ["mcp", "server", "stdio", "sse", "http", "streamable", "transport", "tools", "initialize", "inspector"])) {
+    return undefined;
+  }
+  const reason = mcpEvidenceReason(filePath);
+  if (reason !== undefined) {
+    return reason;
+  }
+  if (isMcpServerEvidencePath(filePath)) {
+    const shape = detectMcpServerShape([filePath]);
+    if (shape.transports.length > 0) {
+      return `MCP server transport evidence (${mcpTransportLabels(shape.transports).join(", ")}).`;
+    }
+    return "MCP server routing evidence.";
+  }
+  return undefined;
+}
+
 function dotnetStructureBoost(filePath: string, terms: Set<string>): number {
   const reason = dotnetStructureReason(filePath, terms);
   if (reason === undefined) {
@@ -1250,8 +1291,8 @@ function isSamInfraTestPath(filePath: string): boolean {
 function noisyArtifactPenalty(filePath: string): number {
   const lower = filePath.toLowerCase();
   if (/(^|\/)(vendor|third_party|thirdparty|3rdparty|external|extern)\//u.test(lower)) return 12;
-  if (lower.includes("/fixtures/") || lower.includes("/fixture/")) return 7;
-  if (lower.includes("/installer/") || lower.includes("/generated/")) return 6;
+  if (lower.startsWith("tests/fixtures/") || lower.includes("/fixtures/") || lower.includes("/fixture/")) return 12;
+  if (lower.startsWith("generated/") || lower.includes("/installer/") || lower.includes("/generated/")) return 12;
   if (lower.endsWith(".md") || lower.endsWith(".txt")) return 3;
   return 0;
 }
