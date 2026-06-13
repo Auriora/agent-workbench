@@ -716,6 +716,8 @@ describe("Codex plugin artifacts", () => {
     const containerfilePath = path.resolve("packaging/agent-workbench/Containerfile");
     const installerPath = path.resolve("scripts/install-agent-workbench-package.sh");
     const workflowPath = path.resolve(".github/workflows/release-ghcr.yml");
+    const ciWorkflowPath = path.resolve(".github/workflows/ci.yml");
+    const pluginValidatorPath = path.resolve("scripts/validate-agent-workbench-plugin.mjs");
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
       registry: string;
       image: string;
@@ -740,6 +742,7 @@ describe("Codex plugin artifacts", () => {
       };
     };
     const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as {
+      scripts: Record<string, string>;
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
       pnpm: {
@@ -749,6 +752,8 @@ describe("Codex plugin artifacts", () => {
     const containerfile = fs.readFileSync(containerfilePath, "utf8");
     const installer = fs.readFileSync(installerPath, "utf8");
     const workflow = fs.readFileSync(workflowPath, "utf8");
+    const ciWorkflow = fs.readFileSync(ciWorkflowPath, "utf8");
+    const pluginValidator = fs.readFileSync(pluginValidatorPath, "utf8");
 
     expect(manifest).toMatchObject({
       registry: "ghcr.io",
@@ -825,6 +830,22 @@ describe("Codex plugin artifacts", () => {
     expect(installer).not.toContain("[[hooks.PostToolUse]]");
     expect(workflow).toContain("registry: ghcr.io");
     expect(workflow).toContain("packaging/agent-workbench/Containerfile");
+    expect(packageJson.scripts["validate:plugin"]).toBe(
+      "node scripts/validate-agent-workbench-plugin.mjs"
+    );
+    expect(pluginValidator).toContain("Agent Workbench plugin/package validation passed.");
+    expect(pluginValidator).toContain("plugins/agent-workbench/.codex-plugin/plugin.json");
+    expect(pluginValidator).toContain(".well-known/mcp/server-card.json");
+    expect(pluginValidator).toContain(".agents/plugins/marketplace.json");
+    expect(pluginValidator).toContain("manifest.dependency_install.runtime_dependencies");
+    expect(ciWorkflow).toContain("pnpm install --frozen-lockfile");
+    expect(ciWorkflow).toContain("pnpm typecheck");
+    expect(ciWorkflow).toContain("pnpm test");
+    expect(ciWorkflow).toContain("pnpm run validate:plugin");
+    expect(ciWorkflow).toContain(
+      "scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config"
+    );
+    expect(ciWorkflow).toContain("pnpm pack:dry-run");
   });
 
   it("keeps cross-repo debug harnesses checkout-only", () => {

@@ -236,11 +236,22 @@ skill wording, `.mcp.json`, marketplace metadata, server-card metadata, and
 package/install profile. Do not rely on user-local plugin validator scripts for
 CI unless a repository-owned equivalent exists.
 
+CI runs the repository-owned plugin/package validator:
+
+```bash
+pnpm run validate:plugin
+```
+
+That validator checks the Codex plugin manifest, `.mcp.json`, hooks, skill,
+repo marketplace metadata, MCP server card, package manifest dependency lists,
+and package component paths without reading user-local Codex configuration.
+
 For package changes, also run:
 
 ```bash
 scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config
 pnpm exec vitest run tests/integration/codex-integration-profile.test.ts
+pnpm pack:dry-run
 ```
 
 For broader runtime-impacting changes, also run:

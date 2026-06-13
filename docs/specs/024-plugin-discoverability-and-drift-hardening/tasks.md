@@ -118,30 +118,50 @@ T002,T003,T004,T005 -> T006 -> T007
 
 ## Phase 3: CI And Closure
 
-- [ ] T006 Add CI/plugin/package validation.
+- [x] T006 Add CI/plugin/package validation.
   - Depends on: T002, T003, T004, T005
   - Files: `.github/workflows/ci.yml`, `scripts/`, `tests/integration/`,
     `package.json`
   - Acceptance: CI runs typecheck, tests, plugin validation, installer
     dry-run, and package manifest consistency checks without relying on local
     user Codex config.
-  - Evidence: Pending.
-  - [ ] T006.1 Add CI workflow or extend existing workflow.
-  - [ ] T006.2 Add repo-owned plugin validation script if local
+  - Evidence: Added `.github/workflows/ci.yml`,
+    `scripts/validate-agent-workbench-plugin.mjs`, `validate:plugin`, and CI
+    assertions in `tests/integration/codex-integration-profile.test.ts`;
+    `pnpm run validate:plugin`, installer dry-run, `pnpm pack:dry-run`,
+    focused integration tests, typecheck, and full tests passed on 2026-06-13.
+  - [x] T006.1 Add CI workflow or extend existing workflow; Evidence:
+    `.github/workflows/ci.yml` runs install, typecheck, test, plugin
+    validation, installer dry-run, and package dry-run.
+  - [x] T006.2 Add repo-owned plugin validation script if local
     plugin-creator scripts are unavailable in CI.
-  - [ ] T006.3 Add package manifest consistency validation.
-  - [ ] T006.4 Run CI-equivalent commands locally.
+    Evidence: `scripts/validate-agent-workbench-plugin.mjs`.
+  - [x] T006.3 Add package manifest consistency validation; Evidence:
+    validator and integration test compare package manifest dependencies and
+    component paths with `package.json`.
+  - [x] T006.4 Run CI-equivalent commands locally; Evidence:
+    `pnpm typecheck`, `pnpm test`, `pnpm run validate:plugin`,
+    `scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config`,
+    and `pnpm pack:dry-run` passed.
 
-- [ ] T007 Validate, promote durable docs, and prepare closure.
+- [x] T007 Validate, promote durable docs, and prepare closure.
   - Depends on: T006
   - Files: `docs/specs/024-plugin-discoverability-and-drift-hardening/`,
     durable docs changed by this spec
   - Acceptance: Full validation passes, durable docs reflect final behavior,
     and residual risks or follow-up specs are recorded.
-  - Evidence: Pending.
-  - [ ] T007.1 Run `pnpm typecheck`.
-  - [ ] T007.2 Run focused plugin/discoverability tests.
-  - [ ] T007.3 Run `pnpm test`.
-  - [ ] T007.4 Run `git diff --check`.
-  - [ ] T007.5 Run spec lifecycle validation.
-  - [ ] T007.6 Record closure readiness in `verification.md`.
+  - Evidence: Durable docs updated in the plugin README, runbook, and
+    documentation map. `verification.md` records validation and closure
+    readiness; final spec package removal follows the final pre-removal commit.
+  - [x] T007.1 Run `pnpm typecheck`; Evidence: passed on 2026-06-13.
+  - [x] T007.2 Run focused plugin/discoverability tests; Evidence:
+    `pnpm exec vitest run tests/integration/codex-integration-profile.test.ts`
+    passed with 17 tests.
+  - [x] T007.3 Run `pnpm test`; Evidence: full suite passed outside the
+    managed sandbox with 62 files and 432 tests.
+  - [x] T007.4 Run `git diff --check`; Evidence: passed.
+  - [x] T007.5 Run spec lifecycle validation; Evidence: spec lifecycle lint
+    passed with zero diagnostics.
+  - [x] T007.6 Record closure readiness in `verification.md`; Evidence:
+    closure readiness, durable destinations, residual risks, and follow-up
+    scope recorded.

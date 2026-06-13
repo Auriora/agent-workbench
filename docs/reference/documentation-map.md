@@ -37,7 +37,7 @@ copying tables, schemas, or enum definitions.
 | SQLite graph schema and freshness model | [Graph store design](../design/graph-store-design.md) | Owns storage invariants, FTS, rebuilds, and query budgets. |
 | Cache, warm-up, and concurrency | [Runtime operations design](../design/runtime-operations-design.md) | Owns cache tiers, invalidation, warm-up, work queues, worker pools, async/snapshot rules, and runtime signals exposed to observability. |
 | Observability, Jaeger export, debug harnesses, and profiling | [Observability and debugging design](../design/observability-debugging-design.md) | Owns disabled-by-default OpenTelemetry configuration, OTLP HTTP export, repo-local debug harnesses including the MCP tool sweep, profiler guidance, low-impact monitoring candidates, and usage-record boundaries. Sweep result quality vocabulary is summarized in [Runtime contracts](runtime-contracts.md). |
-| Codex plugin setup | [Codex plugin runbook](../runbooks/codex-agent-workbench-plugin.md) | Owns install and recovery. |
+| Codex plugin | [Runbook](../runbooks/codex-agent-workbench-plugin.md) | Setup. |
 | Adapter capability model and promotion gates | [Language adapter design](../design/language-adapter-design.md) | Owns adapter lifecycle and semantic promotion rules. |
 | Language priority table | [Language capability matrix](language-capability-matrix.md) | Reference view only; uses enums from runtime contracts. |
 | MCP resources and tools | [MCP surface design](../design/mcp-surface-design.md) | Owns MVP/non-MVP tool split and schema examples through runtime contracts. |
@@ -87,6 +87,9 @@ resource guidance for `repo:///status`, `repo:///scope`, and `repo:///overview`.
 The server-card metadata at `.well-known/mcp/server-card.json` owns local
 machine-readable discoverability for public MCP resources and tools, including
 `codex-integration-profile` and `integration-health`.
+
+The CI workflow at `.github/workflows/ci.yml` owns automated typecheck, test,
+plugin/package validation, installer dry-run, and npm package dry-run gates.
 
 ## Source-Of-Truth Rules
 

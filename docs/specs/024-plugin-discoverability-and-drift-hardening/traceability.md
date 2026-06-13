@@ -18,8 +18,8 @@ last_reviewed: 2026-06-13
 | T003 | Requirement 2 | MCP Server Card | Complete |
 | T004 | Requirement 3 | Drift Tests | Complete |
 | T005 | Requirement 4 | Documentation Updates | Complete |
-| T006 | Requirement 5 | CI Workflow | Pending |
-| T007 | Success criteria | Operations | Pending |
+| T006 | Requirement 5 | CI Workflow | Complete |
+| T007 | Success criteria | Operations | Complete |
 
 T004 verification:
 Profile, prompt, skill, docs, and `.mcp.json` drift tests are implemented in
@@ -29,6 +29,15 @@ integration tests and plugin/runbook guidance.
 T005 verification:
 Operator documentation updates are implemented in the plugin README, Codex
 plugin runbook, and documentation map.
+
+T006 verification:
+CI and package validation are implemented in `.github/workflows/ci.yml`,
+`scripts/validate-agent-workbench-plugin.mjs`, `package.json`, and the focused
+integration tests. The CI-equivalent commands passed locally.
+
+T007 verification:
+Durable docs are promoted, validation is recorded, and the package is ready for
+final pre-removal commit followed by active spec removal.
 
 ## Requirement To Delivery Matrix
 
@@ -51,7 +60,8 @@ missing launcher recovery, and documentation map updates. Verified by the
 focused documented-surface drift test and Markdown checks.
 
 Requirement 5:
-Deferred to Phase 3 CI/package validation.
+Delivered by Phase 3 CI/package validation, repo-owned plugin/package
+validation, installer dry-run, package dry-run, and integration-test coverage.
 
 Requirement 6:
 Delivered by the Phase 1 decision to defer history reconnaissance to a
@@ -80,10 +90,17 @@ Documentation ownership:
 Implemented in `docs/reference/documentation-map.md` and verified by Markdown
 checks.
 
+CI and package validation:
+Implemented in `.github/workflows/ci.yml`,
+`scripts/validate-agent-workbench-plugin.mjs`, and `package.json`; verified by
+local CI-equivalent commands and focused integration tests.
+
 ## Open Decision Impact
 
 Phase 1 resolved marketplace metadata, server-card maintenance, server-card
 resource inclusion, and history reconnaissance scope. Phase 2 resolved the
 skill, prompt, profile, docs, and `.mcp.json` drift-test approach plus
-first-run/operator documentation coverage. CI and package-manifest drift
-decisions remain in Phase 3.
+first-run/operator documentation coverage. Phase 3 resolved CI validation,
+repo-owned plugin/package validation, installer dry-run coverage, and package
+manifest consistency checks. Closure cleanup remains as the final active
+package removal step after the final pre-removal commit.

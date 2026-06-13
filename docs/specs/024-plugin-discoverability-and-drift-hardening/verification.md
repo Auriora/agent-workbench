@@ -111,15 +111,79 @@ The targeted stdio entrypoint suite passed outside the sandbox: 1 file, 12
 tests. The full `pnpm test` suite then passed outside the sandbox: 62 files,
 432 tests.
 
+2026-06-13:
+Phase 3 added `.github/workflows/ci.yml`, the repo-owned
+`scripts/validate-agent-workbench-plugin.mjs` validator, `validate:plugin`,
+and focused integration-test assertions for the CI/package validation contract.
+
+2026-06-13:
+`pnpm run validate:plugin` passed. The validator checked the Codex plugin
+manifest, `.mcp.json`, hooks, skill, repo marketplace metadata, MCP server
+card, package manifest dependency lists, and package component paths without
+reading user-local Codex config.
+
+2026-06-13:
+`scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config`
+passed.
+
+2026-06-13:
+`pnpm pack:dry-run` passed and produced a dry-run npm package file list.
+
+2026-06-13:
+`pnpm typecheck` passed.
+
+2026-06-13:
+`pnpm exec vitest run tests/integration/codex-integration-profile.test.ts`
+passed: 1 file, 17 tests.
+
+2026-06-13:
+Full `pnpm test` passed outside the managed sandbox: 62 files, 432 tests.
+
+2026-06-13:
+`git diff --check` passed.
+
+2026-06-13:
+Spec lifecycle lint passed with zero diagnostics.
+
+2026-06-13:
+Agent Workbench Markdown checks passed with zero findings for changed durable
+and spec docs.
+
+## Durable Promotion Map
+
+- Plugin discoverability, first-run, update, uninstall, hook trust, missing
+  launcher recovery, validation, and CI behavior are promoted to
+  `plugins/agent-workbench/README.md` and
+  `docs/runbooks/codex-agent-workbench-plugin.md`.
+- Documentation ownership for the runbook, server card, and CI workflow is
+  promoted to `docs/reference/documentation-map.md`.
+- Machine-readable marketplace and MCP server-card metadata are durable in
+  `.agents/plugins/marketplace.json` and `.well-known/mcp/server-card.json`.
+- CI/package validation behavior is durable in `.github/workflows/ci.yml`,
+  `scripts/validate-agent-workbench-plugin.mjs`, `package.json`, and focused
+  integration tests.
+
+## Closure Readiness
+
+Spec 024 is ready for final pre-removal commit and active package removal.
+Closure action should be `removed` after the final spec commit is recorded in
+`docs/history/spec-closure-log.md` and `docs/history/spec-archive-index.md`.
+
+Follow-up work:
+
+- Package manifest consistency remains covered by the repo-owned validator and
+  integration tests; no separate follow-up spec is required.
+- Dependency audit or SBOM generation was intentionally not added. It remains a
+  future bounded CI enhancement if repository/package dependency audit policy
+  is defined.
+
 ## Residual Risks
 
-- Codex plugin validation tooling may not be available in GitHub Actions unless
-  a repo-owned validation script is added.
 - MCP server-card conventions may vary across directories; a too-specific
   schema could create maintenance churn.
 - Marketplace metadata could conflict with local package installer behavior if
   the source path is misunderstood.
 - String-based skill drift tests can become brittle; generated metadata checks
   may be more durable.
-- History reconnaissance may require command execution policy decisions that
-  exceed this spec's intended plugin/discoverability scope.
+- History reconnaissance remains intentionally deferred to a future debug
+  command or skill workflow outside this spec.
