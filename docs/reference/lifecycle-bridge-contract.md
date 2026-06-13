@@ -164,4 +164,4 @@ Until this surface exists, agents should combine lifecycle task packets with
 - [MCP surface design](../design/mcp-surface-design.md)
 - [Coding agent integration design](../design/coding-agent-integration-design.md)
 - [Workspace safety contract](workspace-safety-contract.md)
-- [Spec task traceability lookup requirements](../specs/021-spec-task-traceability-lookup/requirements.md)
+- [Spec closure log](../history/spec-closure-log.md)

@@ -240,7 +240,7 @@ or runtime telemetry.
 ### EB006: Spec And Task Traceability Lookup
 
 - Priority: P1
-- Status: active Spec 021
+- Status: closed Spec 021
 - Friction signal: spec-driven work needs fast mapping from task IDs to
   requirements, design sections, files, validation gates, open decisions, and
   closure requirements.
@@ -266,8 +266,8 @@ or runtime telemetry.
     packages.
   - Golden task-context responses that route agents to spec-lifecycle-manager
     tools plus files and checks.
-- Promotion target: active
-  [Spec 021](../specs/021-spec-task-traceability-lookup/requirements.md).
+- Promotion target: closed
+  [Spec 021](../history/spec-closure-log.md).
 
 ### EB007: MCP Server Repository Support
 
@@ -1161,5 +1161,5 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-1. Spec 021: spec/task traceability integration.
-2. Spec 022: MCP-server repository support.
+1. Spec 022: MCP-server repository support.
+2. Spec 024: plugin discoverability and drift hardening.
