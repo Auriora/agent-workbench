@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: design
 status: active
 owner: platform
-last_reviewed: 2026-06-06
+last_reviewed: 2026-06-13
 ---
 
 # Technical Design
@@ -48,18 +48,18 @@ Generated or maintained metadata must be validated against it.
 
 ### Marketplace Metadata
 
-Add `.agents/plugins/marketplace.json` if the repository should be directly
-installable as a marketplace source. The entry should identify
-`agent-workbench`, point at `./plugins/agent-workbench`, and include policy and
-category fields.
+Commit `.agents/plugins/marketplace.json` as repo-level marketplace metadata.
+The entry identifies `agent-workbench`, points at `./plugins/agent-workbench`,
+uses `AVAILABLE` installation and `ON_INSTALL` authentication policy, and keeps
+the plugin category aligned with the Codex plugin manifest.
 
-If repository-level marketplace metadata conflicts with the current local
-package installer model, document the decision in the runbook and keep the
-installer-owned personal marketplace path.
+This does not replace the package installer's personal marketplace behavior.
+The checked-in marketplace is repository metadata; the installer still writes
+or updates `~/.agents/plugins/marketplace.json` for packaged installs.
 
 ### MCP Server Card
 
-Add `.well-known/mcp/server-card.json` or an equivalent metadata file with:
+Add `.well-known/mcp/server-card.json` with:
 
 - server name and description;
 - local-first/privacy expectations;
@@ -68,9 +68,10 @@ Add `.well-known/mcp/server-card.json` or an equivalent metadata file with:
 - setup requirements;
 - link to package/plugin docs.
 
-Prefer generating the card from a small TypeScript helper if manual
-maintenance would introduce drift. If generated output is committed, add a test
-that regenerates in memory and compares to the committed file.
+Maintain the card manually in Phase 1 and validate it directly against
+`mcpResources` and `mcpTools`. The drift test compares names, URIs,
+descriptions, capability classes, mutation classes, and budget policies so
+registry changes fail when the committed card is stale.
 
 ### Drift Tests
 
@@ -144,11 +145,12 @@ design explicitly accepts local git command execution. Initial preferred path:
 
 ## Open Questions
 
-- Should `.agents/plugins/marketplace.json` be committed now, or should the
-  package installer remain the only supported marketplace writer?
-- Should server-card metadata include resources as well as tools if downstream
-  directories expect only tool entries?
-- Should drift checks be string-based, generated metadata based, or both?
+- Marketplace metadata is committed in Phase 1, while installer-owned personal
+  marketplace writes remain supported for packaged installs.
+- Server-card metadata includes resources and tools because both are public MCP
+  registry surfaces.
+- Server-card drift checks are metadata based in Phase 1; string-based skill,
+  prompt, and docs drift checks are deferred to Phase 2.
 - Should package manifest consistency be a custom test or a standalone script?
-- Should history reconnaissance become a follow-up spec or a task within this
-  package?
+- History reconnaissance is deferred to a follow-up debug command or skill
+  workflow, not a Phase 1 MCP surface.

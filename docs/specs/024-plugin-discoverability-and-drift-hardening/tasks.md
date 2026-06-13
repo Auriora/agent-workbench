@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: tasks
 status: active
 owner: platform
-last_reviewed: 2026-06-06
+last_reviewed: 2026-06-13
 ---
 
 # Tasks
@@ -20,18 +20,23 @@ T002,T003,T004,T005 -> T006 -> T007
 
 ## Phase 1: Decisions And Metadata
 
-- [ ] T001 Reconcile external plugin references and final metadata decisions.
+- [x] T001 Reconcile external plugin references and final metadata decisions.
   - Files: `docs/specs/024-plugin-discoverability-and-drift-hardening/research.md`,
     `docs/runbooks/codex-agent-workbench-plugin.md`
   - Acceptance: Alcove and Codebase Recon patterns are reviewed deeply enough
     to decide repo marketplace, server-card, CI, and history-recon scope.
-  - Evidence: Pending.
-  - [ ] T001.1 Re-review Alcove plugin manifests, hooks, server card, CI, and
-    installer script.
-  - [ ] T001.2 Re-review Codebase Recon marketplace, skill, and design spec.
-  - [ ] T001.3 Record decisions and explicitly deferred ideas.
+  - Evidence: Reviewed Alcove plugin manifest, hooks, server card, CI, and
+    installer patterns plus Codebase Recon marketplace, skill, and design
+    patterns on 2026-06-13; recorded decisions and deferrals in `research.md`
+    and `design.md`.
+  - [x] T001.1 Reviewed Alcove plugin manifests, hooks, server card, CI, and
+    installer script; evidence recorded in `research.md`.
+  - [x] T001.2 Reviewed Codebase Recon marketplace, skill, and design spec;
+    evidence recorded in `research.md`.
+  - [x] T001.3 Recorded decisions and explicitly deferred ideas in
+    `research.md` and `design.md`.
 
-- [ ] T002 Add or document repo-level marketplace metadata.
+- [x] T002 Add or document repo-level marketplace metadata.
   - Depends on: T001
   - Files: `.agents/plugins/marketplace.json`,
     `docs/runbooks/codex-agent-workbench-plugin.md`,
@@ -39,23 +44,29 @@ T002,T003,T004,T005 -> T006 -> T007
   - Acceptance: `agent-workbench` marketplace source is either committed and
     tested, or the installer-owned personal marketplace model is documented
     with a visible decision.
-  - Evidence: Pending.
-  - [ ] T002.1 Add marketplace metadata or decision text.
-  - [ ] T002.2 Add tests for marketplace path, policy, and category when
-    metadata is committed.
-  - [ ] T002.3 Validate install instructions against `codex plugin list`.
+  - Evidence: Added `.agents/plugins/marketplace.json`, documented repository
+    versus installer-owned personal marketplace behavior in the runbook, and
+    added marketplace metadata assertions in
+    `tests/integration/codex-integration-profile.test.ts`.
+  - [x] T002.1 Added marketplace metadata in
+    `.agents/plugins/marketplace.json`.
+  - [x] T002.2 Added tests for marketplace path, policy, and category.
+  - [x] T002.3 Documented `codex plugin list` verification in the runbook.
 
-- [ ] T003 Add MCP discoverability metadata.
+- [x] T003 Add MCP discoverability metadata.
   - Depends on: T001
   - Files: `.well-known/mcp/server-card.json`, `src/debug/` or `scripts/`,
     `tests/integration/`
   - Acceptance: MCP discoverability metadata lists current public surfaces and
     fails validation if registry entries drift.
-  - Evidence: Pending.
-  - [ ] T003.1 Decide manual versus generated server-card maintenance.
-  - [ ] T003.2 Add server-card metadata or generator.
-  - [ ] T003.3 Add registry-to-server-card drift tests.
-  - [ ] T003.4 Document locality and setup assumptions.
+  - Evidence: Added `.well-known/mcp/server-card.json`, chose manual
+    maintenance with registry drift tests, documented locality/setup assumptions
+    in the runbook, and added registry-to-server-card assertions in
+    `tests/integration/codex-integration-profile.test.ts`.
+  - [x] T003.1 Chose manual server-card maintenance with registry drift tests.
+  - [x] T003.2 Added `.well-known/mcp/server-card.json`.
+  - [x] T003.3 Added registry-to-server-card drift tests.
+  - [x] T003.4 Documented locality and setup assumptions in the runbook.
 
 ## Phase 2: Drift And Documentation
 

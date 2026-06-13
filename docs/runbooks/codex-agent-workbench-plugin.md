@@ -3,7 +3,7 @@ title: Codex Agent Workbench plugin and MCP setup
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-06-06
+last_reviewed: 2026-06-13
 ---
 
 # Codex Agent Workbench Plugin And MCP Setup
@@ -57,6 +57,18 @@ The plugin manifest includes `skills` and `mcpServers`. Codex auto-discovers
 `hooks/hooks.json` when the plugin is enabled. The `.mcp.json` file launches the
 installed package launcher and must not point at a plugin-cache source path.
 
+The repository also includes `.agents/plugins/marketplace.json` for inspectable
+repo-level marketplace metadata. It points `agent-workbench` at the checked-in
+`./plugins/agent-workbench` source and uses the same `Developer Tools` category
+as the plugin manifest. This metadata is useful when testing the checkout as a
+marketplace source.
+
+Packaged installs still use the installer-owned personal marketplace flow. The
+installer writes or updates `~/.agents/plugins/marketplace.json` and then runs
+`codex plugin add agent-workbench@<personal-marketplace>`. Do not edit the
+checked-in marketplace file to point at an installed package prefix; package
+installs are intentionally represented by the personal marketplace entry.
+
 When changing plugin packaging, update the plugin cachebuster and reinstall:
 
 ```bash
@@ -66,6 +78,28 @@ codex plugin add agent-workbench@auriora-local
 
 After reinstall, start a new Codex session to pick up changed skills, hooks,
 MCP tools, and plugin metadata.
+
+Verify the installed plugin and marketplace source with:
+
+```bash
+codex plugin list
+```
+
+The expected installed entry is
+`agent-workbench@<personal-marketplace>` with status `installed, enabled`.
+
+## MCP Discoverability Metadata
+
+The repository publishes `.well-known/mcp/server-card.json` as local,
+machine-readable MCP discoverability metadata. It describes the Agent Workbench
+stdio transport, local-first privacy posture, setup paths, public MCP
+resources, and public MCP tools.
+
+The server card is a checked-in metadata file, not another runtime registry.
+Integration tests compare its resources and tools against the MCP registry, so
+changes to `mcpResources` or `mcpTools` must update the card in the same
+change. The card must not claim remote hosting, network requirements, or
+surfaces that Agent Workbench does not register.
 
 ## NPM Package Installation
 

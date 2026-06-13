@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: research
 status: active
 owner: platform
-last_reviewed: 2026-06-06
+last_reviewed: 2026-06-13
 ---
 
 # Research
@@ -134,13 +134,31 @@ but hooks should not perform network installs or hide setup failures.
 
 ## Research Questions
 
-- Should Agent Workbench commit `.agents/plugins/marketplace.json`, or keep
-  marketplace creation installer-owned?
-- Should the MCP server card be generated from registry metadata or maintained
-  manually with drift tests?
+## Phase 1 Decisions
+
+- Commit repo-level marketplace metadata. Codebase Recon's repository
+  marketplace pattern is small, inspectable, and fits Agent Workbench's
+  checked-in plugin source. The package installer still owns the personal
+  marketplace in `~/.agents/plugins/marketplace.json` for packaged installs.
+- Add a committed MCP server card at `.well-known/mcp/server-card.json`.
+  Alcove's server-card pattern is useful for machine-readable discoverability,
+  but Agent Workbench includes resources as well as tools because resources are
+  first-class public MCP surfaces.
+- Maintain the server card manually for now, backed by registry-to-card drift
+  tests. A generator can be added later if the metadata grows or the card shape
+  stabilizes enough to justify another build artifact.
+- Keep hooks quiet and non-repairing. Alcove's SessionStart installer is a
+  useful operator convenience pattern, but it conflicts with Agent Workbench's
+  explicit package install, root-cause setup, and quiet-hook constraints.
+- Defer Codebase Recon style history reconnaissance out of Phase 1 and out of
+  default MCP surfaces. The preferred future route is a follow-up debug command
+  or skill workflow with explicit local git command execution.
+- CI SBOM generation remains deferred. Phase 3 should first validate typecheck,
+  tests, plugin metadata, installer dry-run, and package manifest consistency.
+
+## Deferred Questions
+
 - Should plugin default prompts be tested against active MCP resources and
-  tools?
-- Should history reconnaissance be an MCP tool, a debug command, or a
-  separate skill-only workflow?
-- Should CI publish an SBOM or only validate package manifest dependency
-  consistency for now?
+  tools? Deferred to Phase 2 drift tests.
+- Should package manifest consistency be a standalone script or an integration
+  test? Deferred to Phase 3 CI work.

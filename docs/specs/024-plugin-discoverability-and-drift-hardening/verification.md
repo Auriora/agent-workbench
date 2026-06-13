@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: verification
 status: active
 owner: platform
-last_reviewed: 2026-06-06
+last_reviewed: 2026-06-13
 ---
 
 # Verification
@@ -35,10 +35,47 @@ last_reviewed: 2026-06-06
 
 ## Evidence Log
 
-| Date | Activity | Result |
-| --- | --- | --- |
-| 2026-06-06 | Reviewed Alcove and Codebase Recon plugin patterns | Candidate improvements identified for marketplace metadata, server-card metadata, drift tests, README/runbook guidance, CI, and history recon decision. |
-| 2026-06-06 | Spec created | Pending implementation. |
+2026-06-06:
+Reviewed Alcove and Codebase Recon plugin patterns. Candidate improvements were
+identified for marketplace metadata, server-card metadata, drift tests,
+README/runbook guidance, CI, and the history-recon decision.
+
+2026-06-06:
+Spec created. Implementation was pending.
+
+2026-06-13:
+Phase 1 metadata implementation added repo marketplace metadata, an MCP server
+card, registry drift tests, and documented external-reference decisions.
+
+2026-06-13:
+`pnpm exec vitest run tests/integration/codex-integration-profile.test.ts`
+passed: 1 file, 13 tests.
+
+2026-06-13:
+`pnpm typecheck` passed.
+
+2026-06-13:
+`git diff --check` passed.
+
+2026-06-13:
+Spec lifecycle lint passed with zero diagnostics.
+
+2026-06-13:
+Agent Workbench Markdown set check passed for the changed runbook and Spec 024
+documents with zero findings.
+
+2026-06-13:
+`scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config`
+passed.
+
+2026-06-13:
+`codex plugin list` passed; `agent-workbench@auriora-local` is installed and
+enabled.
+
+2026-06-13:
+The local plugin-creator skill no longer ships `validate_plugin.py`, so the
+old runbook validator command was not run. Phase 1 metadata is covered by
+repo-owned integration tests.
 
 ## Residual Risks
 

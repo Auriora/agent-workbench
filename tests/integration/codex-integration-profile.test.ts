@@ -277,6 +277,109 @@ describe("Codex plugin artifacts", () => {
     expect(skill).toContain("Do not add primary-plus-fallback routes");
   });
 
+  it("ships repo-level marketplace metadata for the checked-in Codex plugin", () => {
+    const marketplace = JSON.parse(
+      fs.readFileSync(path.resolve(".agents/plugins/marketplace.json"), "utf8")
+    ) as {
+      name: string;
+      interface: { displayName: string };
+      plugins: Array<{
+        name: string;
+        source: { source: string; path: string };
+        policy: { installation: string; authentication: string };
+        category: string;
+      }>;
+    };
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(pluginRoot, ".codex-plugin/plugin.json"), "utf8")
+    ) as { name: string; interface: { category: string } };
+
+    expect(marketplace.name).toBe("auriora-local");
+    expect(marketplace.interface.displayName).toBe("Auriora Local");
+    expect(marketplace.plugins).toHaveLength(1);
+    expect(marketplace.plugins[0]).toEqual({
+      name: manifest.name,
+      source: {
+        source: "local",
+        path: "./plugins/agent-workbench"
+      },
+      policy: {
+        installation: "AVAILABLE",
+        authentication: "ON_INSTALL"
+      },
+      category: manifest.interface.category
+    });
+    expect(fs.existsSync(path.resolve(marketplace.plugins[0].source.path))).toBe(true);
+  });
+
+  it("keeps MCP server-card metadata synchronized with registered resources and tools", () => {
+    const serverCard = JSON.parse(
+      fs.readFileSync(path.resolve(".well-known/mcp/server-card.json"), "utf8")
+    ) as {
+      id: string;
+      version: string;
+      transport: { type: string; local: boolean; command: string };
+      privacy: { local_first: boolean; network_required: boolean; data_leaves_machine: boolean };
+      setup: { codex_plugin: string; mcp_config: string; runbook: string };
+      resources: Array<{
+        name: string;
+        uri: string;
+        description: string;
+        capability_class: string;
+        mutation_class: string;
+        budget_policy: string;
+      }>;
+      tools: Array<{
+        name: string;
+        description: string;
+        capability_class: string;
+        mutation_class: string;
+        budget_policy: string;
+      }>;
+    };
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as {
+      version: string;
+    };
+
+    expect(serverCard.id).toBe("agent-workbench");
+    expect(serverCard.version).toBe(packageJson.version);
+    expect(serverCard.transport).toMatchObject({
+      type: "stdio",
+      local: true,
+      command: "agent-workbench-mcp"
+    });
+    expect(serverCard.privacy).toMatchObject({
+      local_first: true,
+      network_required: false,
+      data_leaves_machine: false
+    });
+    expect(serverCard.setup).toMatchObject({
+      codex_plugin: "plugins/agent-workbench",
+      mcp_config: "plugins/agent-workbench/.mcp.json",
+      runbook: "docs/runbooks/codex-agent-workbench-plugin.md"
+    });
+
+    expect(serverCard.resources).toEqual(
+      mcpResources.map((resource) => ({
+        name: resource.name,
+        uri: resource.uri,
+        description: resource.metadata.description,
+        capability_class: resource.metadata.capability_class,
+        mutation_class: resource.metadata.mutation_class,
+        budget_policy: resource.metadata.budget_policy
+      }))
+    );
+    expect(serverCard.tools).toEqual(
+      mcpTools.map((tool) => ({
+        name: tool.name,
+        description: tool.metadata.description,
+        capability_class: tool.metadata.capability_class,
+        mutation_class: tool.metadata.mutation_class,
+        budget_policy: tool.metadata.budget_policy
+      }))
+    );
+  });
+
   it("keeps hooks silent by default and emits only basic MCP guidance when configured", async () => {
     const postEdit = await import(
       pathToFileURL(path.join(pluginRoot, "hooks/post-edit-feedback.js")).href
