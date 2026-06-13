@@ -184,6 +184,15 @@ full topology, diagnostics execution, broad docs reports, or high-cardinality
 cache validation as hidden work. It should return complete-enough markers,
 skipped-work metadata, and exact next actions.
 
+When a task is explicitly spec-driven, `context_for_task` may consume
+spec-lifecycle-manager companion evidence before broad repo search. Companion
+inputs include lifecycle preflight, task detail, validation plan, evidence
+quality, task-state audit, and closure-risk summaries when they are supplied by
+the caller or proven callable through integration health. Agent Workbench must
+label this as lifecycle evidence, join it to repository files and validation
+planning where useful, and avoid turning it into task-status updates,
+reconciliation, promotion, or closure decisions.
+
 `verification_plan` plans checks but does not execute them. It must distinguish
 planned checks from proven runnable checks and route low-confidence test
 discovery to explicit follow-up instead of implying nearest-test proof.
@@ -228,6 +237,12 @@ the FTS search hot path because outline and section reads are precise direct
 evidence rather than search ranking evidence. Documentation crosslink graphs,
 broad docs reports, and generated architecture answers remain post-MVP.
 
+Future documentation routing should add stale-doc classification for active,
+current, archived, superseded, closure breadcrumb, removed-spec reference, and
+unknown states. Until fixture-backed classification exists, docs results remain
+routing evidence with direct-read caveats and must not invent lifecycle
+freshness.
+
 `check_markdown_document` and `check_markdown_set` are read-only documentation
 quality tools. They parse direct Markdown content through the Markdown quality
 subsystem, apply catalog and workspace safety policy, return compact findings
@@ -244,6 +259,7 @@ source evidence.
 - `repo:///graph/communities`
 - `repo:///validation-surface`
 - `repo:///agent-integration-profile`
+- `repo:///capability-inventory`
 - `repo:///attention/current`
 - `repo:///usage/gaps`
 - `symbol_context`
@@ -254,6 +270,8 @@ source evidence.
 - `apply_markdown_format`
 - `post_edit_feedback`
 - `run_nearest_tests`
+- `workflow_friction_report`
+- `handoff_packet`
 
 Documentation crosslink graphs, broad docs reports, generated architecture
 answers, and `docs_crosslinks` remain post-MVP. Promote them only when dogfood

@@ -29,6 +29,9 @@ task closure, reconciliation, or promotion.
 - Add Agent Workbench lookup support for active and archived spec packages.
 - Route task IDs to authoritative spec-lifecycle-manager task context or
   traceability tools when available.
+- Consume spec-lifecycle-manager preflight, task detail, validation plan,
+  evidence quality, task-state audit, and closure-risk outputs as upstream
+  context when those companion surfaces are discovered and callable.
 - Provide bounded local routing evidence only when lifecycle tools are
   unavailable, with explicit non-authoritative labels.
 - Connect spec context to Agent Workbench repo evidence, including files,
@@ -61,13 +64,21 @@ authoritative task context without duplicating lifecycle behavior.
    THEN Agent Workbench SHALL route the agent to the authoritative
    `task_context` or `traceability_lookup` surface instead of duplicating the
    lifecycle lookup.
-2. WHERE spec-lifecycle-manager is unavailable, THE SYSTEM SHALL return bounded
+2. GIVEN companion outputs for lifecycle preflight, task detail, validation
+   plan, evidence quality, task-state audit, or closure risk, WHEN those outputs
+   are supplied or callable, THEN Agent Workbench SHALL use them as upstream
+   task context before broad repo search.
+3. WHERE spec-lifecycle-manager is unavailable, THE SYSTEM SHALL return bounded
    local routing evidence and label it as non-authoritative.
-3. GIVEN archived specs, WHEN task context runs, THEN the system SHALL label
+4. GIVEN archived specs, WHEN task context runs, THEN the system SHALL label
    them as historical delivery records and avoid suggesting migration, closure,
    or task-status changes.
-4. IF a spec is malformed or missing artifacts, THEN the response SHALL return
+5. IF a spec is malformed or missing artifacts, THEN the response SHALL return
    structured missing evidence rather than inventing traceability.
+6. WHEN lifecycle context includes task-state, evidence-quality, or closure-risk
+   findings, THEN Agent Workbench SHALL label them as lifecycle evidence and
+   avoid converting them into task-status changes, closure decisions, or
+   promotion actions.
 
 ### Requirement 2: Task Context Integration
 
@@ -85,7 +96,10 @@ and files.
    Agent Workbench SHALL connect that context to repo status, scope, symbols,
    impact, edit preview, diagnostics, and validation planning where those
    runtime surfaces have evidence.
-4. WHEN no spec evidence is found, THEN task context SHALL report missing
+4. WHEN lifecycle validation-plan evidence exists, THEN Agent Workbench SHALL
+   join it to repository validation policy and verification planning without
+   claiming that validation has been executed.
+5. WHEN no spec evidence is found, THEN task context SHALL report missing
    evidence without blocking unrelated repo context.
 
 ### Requirement 3: Integration Boundary Visibility

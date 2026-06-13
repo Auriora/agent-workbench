@@ -58,6 +58,15 @@ next-action rules: known unavailable actions are not emitted as executable
 `next_actions`, while unknown caller discovery preserves conservative guidance
 with explicit assumptions inside the integration-health result.
 
+Companion runtimes such as spec-lifecycle-manager are collaborators, not Agent
+Workbench backends. When a companion lifecycle runtime is discovered and
+callable, Agent Workbench guidance may route agents to its preflight, task
+detail, validation plan, evidence quality, task-state audit, closure-risk, task
+context, or traceability outputs before broad repo search. Agent Workbench
+consumes those outputs as upstream context and joins them to repo evidence; it
+does not own lifecycle task status, reconciliation, promotion, closure checks,
+templates, or Kiro-style workflow semantics.
+
 ### Repository Instructions
 
 Repository instruction files are common but not fully standardized. The runtime
@@ -148,6 +157,12 @@ Example hook intents:
 - `on_session_start_context_hint`
 - `on_turn_stop_validation_summary`
 - `on_prompt_submit_secret_check`
+
+Future hook and session-stop support may expose a read-only handoff packet with
+selected task, loaded context, changed files, validation status, stale-doc
+risk, open decisions, companion runtime state, and next action. The packet is a
+summary surface only; it must not write durable docs, change lifecycle task
+state, repair installs, or execute validation commands by default.
 
 ### Slash Commands
 

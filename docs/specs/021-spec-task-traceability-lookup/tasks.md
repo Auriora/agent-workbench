@@ -21,7 +21,9 @@ T001 -> T002 -> T003 -> T004 -> T005
     `docs/design/coding-agent-integration-design.md`
   - Acceptance: Design states that spec-lifecycle-manager owns lifecycle
     workflows and Agent Workbench owns spec-aware routing plus repo-evidence
-    support.
+    support, including consumption of lifecycle preflight, task detail,
+    validation-plan, evidence-quality, task-state-audit, and closure-risk
+    context without making Agent Workbench lifecycle-authoritative.
   - Evidence: Pending.
 
 - [ ] T002 Add spec fixture packages.
@@ -29,7 +31,7 @@ T001 -> T002 -> T003 -> T004 -> T005
   - Files: `tests/fixtures/`, `tests/docs/`
   - Acceptance: Fixtures cover active, archived, malformed, and
     traceability-rich specs, plus companion lifecycle available, unavailable,
-    and unknown states.
+    unknown, and caller-supplied lifecycle context states.
   - Evidence: Pending.
 
 - [ ] T003 Implement spec-reference detection and bounded local routing.
@@ -47,8 +49,9 @@ T001 -> T002 -> T003 -> T004 -> T005
     `src/interface-adapters/mcp/`, `src/presentation/`, `tests/mcp/`
   - Acceptance: Spec/task prompts route to lifecycle tools, relevant repo
     files, symbols, impact, diagnostics, edit preview, and validation planning
-    where evidence exists; lifecycle next actions are not presented as callable
-    without discovery evidence.
+    where evidence exists; caller-supplied lifecycle outputs are consumed
+    before broad repo search; lifecycle next actions are not presented as
+    callable without discovery evidence.
   - Evidence: Pending.
 
 - [ ] T005 Promote docs, validate, and close.

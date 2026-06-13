@@ -250,6 +250,10 @@ or runtime telemetry.
   - Given a spec path or task ID, route agents to the authoritative
     spec-lifecycle-manager task context or traceability lookup when that MCP or
     skill is available.
+  - Consume lifecycle preflight, task detail, validation plan, evidence
+    quality, task-state audit, and closure-risk outputs as upstream context
+    before broad Agent Workbench repo search when the companion runtime is
+    discovered and callable.
   - When spec-lifecycle-manager is unavailable, return bounded local routing
     evidence and clearly label it as non-authoritative.
   - Distinguish active specs from archived delivery records without suggesting
@@ -655,6 +659,137 @@ or runtime telemetry.
 - Promotion target: create a future auto-formatting hook spec after EB016 hook
   intent boundaries and Markdown preview/apply formatter contracts are stable.
 
+### EB018: Stale Documentation Filtering
+
+- Priority: P1
+- Status: proposed spec
+- Friction signal: agents can over-trust archived specs, superseded design
+  notes, removed-spec references, stale open decisions, and closure breadcrumbs
+  when docs search or first-read context surfaces them without lifecycle state.
+- Runtime surface: docs inventory, docs search, docs overview/map,
+  `context_for_task`, spec-aware routing, and presentation ranking metadata.
+- Acceptance:
+  - Classify documentation as active/current, archived, superseded,
+    historical, closure breadcrumb, removed-spec reference, or unknown where
+    repo evidence supports that label.
+  - Rank active/current durable docs ahead of archived or superseded material
+    for implementation prompts unless the user explicitly asks for history.
+  - Preserve historical docs as discoverable evidence while labeling them so
+    agents do not treat them as current requirements.
+  - Keep generic lifecycle truth, spec closure decisions, and status migration
+    ownership in spec-lifecycle-manager; Agent Workbench owns only routing and
+    trust labels.
+  - Return missing or unknown classification evidence explicitly instead of
+    inventing freshness.
+- Validation:
+  - Fixture repositories with active specs, archived specs, closure logs,
+    superseded design docs, removed-spec references, and durable current docs.
+  - Golden docs/search/context responses proving stale docs are labeled and
+    downranked without disappearing.
+  - Regression tests proving exact historical prompts can still surface
+    archived material with historical caveats.
+- Promotion target: create a future docs-context trust spec under EB003,
+  EB006, and the documentation routing design.
+
+### EB019: Repo Capability Inventory
+
+- Priority: P1
+- Status: proposed spec
+- Friction signal: agents repeatedly rediscover local skills, MCP tools,
+  prompts, hooks, `AGENTS.md` scope, validation commands, install/cache state,
+  and source-vs-installed drift through shell reads or user corrections.
+- Runtime surface: integration health/profile output, repo status/scope,
+  validation planning, docs overview, plugin/skill packaging metadata, and a
+  future read-only capability inventory packet.
+- Acceptance:
+  - Report repo-local and packaged skills, MCP resources/tools/prompts, hooks,
+    agent instructions, validation commands, repo-local policy, and companion
+    runtimes as discovered/configured/callable/unavailable/unknown where
+    evidence exists.
+  - Show `AGENTS.md` scope and precedence without rewriting instructions.
+  - Distinguish source copy, packaged copy, installed copy, and cache copy for
+    Agent Workbench-owned integration artifacts when paths are locally
+    discoverable.
+  - Keep the inventory read-only and bounded; it must not install, repair,
+    refresh caches, execute commands, or probe external networks.
+  - Label caller-provided discovery evidence separately from local filesystem
+    evidence and configured profile evidence.
+- Validation:
+  - Fixtures for repo-local skills, packaged plugin skills, hidden or missing
+    hooks, prompt lists, nested `AGENTS.md`, validation-policy files, and
+    stale installed/cache copies.
+  - Golden inventory responses for clean, drifted, partially installed, and
+    unknown caller-discovery states.
+  - Tests proving unavailable capabilities are reported as caveats rather than
+    executable next actions.
+- Promotion target: create a future capability-inventory spec building on
+  EB001, EB002, EB004, EB016, and package discoverability work.
+
+### EB020: Workflow-Friction Report
+
+- Priority: P2
+- Status: proposed spec
+- Friction signal: repeated tool loops, user corrections, interrupted turns,
+  shell fallback despite MCP tools, and rediscovered validation commands are
+  product signals that should feed backlog work instead of staying in chat.
+- Runtime surface: local debug mining, hook logs, MCP server logs, telemetry,
+  validation planning, and future usage summaries.
+- Acceptance:
+  - Summarize repeated loops by category, including wrong surface, broad shell
+    search after MCP guidance, missing validation policy, retry/fallback
+    patterns, interruption/resume gaps, and repeated user corrections.
+  - Keep reports aggregate-first with bounded excerpts and redaction; do not
+    publish full transcripts or command logs.
+  - Link each repeated friction category to an existing backlog item, proposed
+    spec, or explicit no-action decision.
+  - Treat shell-history or external tracker mining as opt-in evidence, not a
+    default local scan.
+  - Keep the report read-only and diagnostic; it must not mutate backlog docs
+    automatically.
+- Validation:
+  - Synthetic history, hook, telemetry, and MCP-log fixtures covering repeated
+    loops, single-event noise, redaction, and no-signal cases.
+  - Golden reports proving categories, counts, representative bounded evidence,
+    and backlog routing are stable.
+  - Regression tests proving reports avoid full transcript emission and do not
+    claim validation commands were executed.
+- Promotion target: create a future workflow-friction-report spec under EB009.
+
+### EB021: Read-Only Handoff Packet
+
+- Priority: P1
+- Status: proposed spec
+- Friction signal: subagent and interrupted-session handoffs lose the selected
+  task, loaded context, file ownership, changed files, validation status,
+  stale-doc risk, open decisions, and next action, causing repeated setup and
+  weak blocker transfer.
+- Runtime surface: context routing, diagnostics/post-edit feedback,
+  verification planning, workspace safety, integration health, spec-aware
+  routing, and optional hook/session-stop wrappers.
+- Acceptance:
+  - Produce a read-only handoff packet containing selected task, context
+    loaded, known changed files, validation run/not applicable/blocked,
+    stale-doc risk, open decisions, companion-runtime state, limitations, and
+    the next concrete action.
+  - Separate agent-made changes from pre-existing dirty worktree changes where
+    evidence exists; unknown ownership must stay explicit.
+  - Include spec lifecycle context only as consumed evidence or next-action
+    routing; do not update task state, close specs, or write durable lifecycle
+    docs.
+  - Keep hook-generated handoffs quiet unless explicitly requested or required
+    by the client event; no durable files are written by default.
+  - Preserve bounded repo-relative paths and redact sensitive values.
+- Validation:
+  - Fixtures for clean handoff, dirty worktree, subagent file ownership,
+    blocked validation, stale docs, unavailable companion runtime, and
+    interrupted-session resume.
+  - Golden handoff packets proving validation status, stale-doc caveats, open
+    decisions, and next actions are compact and deterministic.
+  - Regression tests proving the packet is read-only and never marks lifecycle
+    tasks complete.
+- Promotion target: create a future handoff-packet spec under EB005, EB006,
+  EB008, EB016, and EB018.
+
 ## Backlog To Spec Promotion Rules
 
 Promote a backlog item into an implementation spec when:
@@ -696,6 +831,10 @@ Do not promote an item when:
 | Large durable-doc audits | EB015, under EB003 and Markdown document quality. |
 | Portable generic hook guardrails | EB016, with EB005, EB006, and EB008 boundaries. |
 | Repo-configured auto-format hooks | EB017, with EB016, EB005, EB008, and Markdown document quality boundaries. |
+| Stale-doc filtering | EB018, with EB006 and docs routing boundaries. |
+| Repo capability inventory | EB019, with EB001, EB002, EB004, EB016, and packaging boundaries. |
+| Workflow-friction report | EB020, under EB009. |
+| Read-only handoff packet | EB021, with EB005, EB006, EB008, EB016, and EB018 boundaries. |
 
 ## Immediate Next Specs
 
