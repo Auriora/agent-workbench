@@ -81,6 +81,22 @@ resource-backed discovery fixtures.
 | Integration profile contract | `fixture-agent-integration-profile` | target agents, MCP bindings, artifacts, unsupported surfaces, provenance | executable behavior remains MCP-first and vendor emitters stay outside core runtime |
 | Markdown quality contract | `fixture-markdown-quality` | finding shape, formatter plan shape, source ranges, preview/apply safety metadata | executable tools remain post-MVP unless explicitly promoted |
 
+## Capability Proof Status
+
+This table is a compact product-facing summary. The detailed fixture gates
+above remain the proof source of truth.
+
+| Capability | Current level | Fixture proof | Known limitation | Promotion blocker |
+| --- | --- | --- | --- | --- |
+| Python symbols | `partial_semantic` | passing MVP fixtures | broad impact requires direct verification | reference ambiguity and semantic promotion gates |
+| Markdown/docs routing | `resource_backed` | passing docs fixtures | search is routing evidence only | exact claims require `docs_read_section` direct-read evidence |
+| TypeScript/JavaScript declarations | `partial_semantic` | passing package/workspace fixtures | references and impact remain conservative | fixture-backed semantic promotion |
+| Go declarations and references | `partial_semantic` | passing Go fixture slices | impact remains low confidence outside supported parser-backed edges | deeper semantic reference graph |
+| C/C++ declarations | `resource_backed` to `partial_semantic` | passing CMake/C++ fixture slices | compile-aware semantics require external metadata | clangd/libclang readiness and compile DB policy |
+| SAM/CloudFormation routing | `resource_backed` to `partial_semantic` | passing SAM fixture slices | stack semantics and deployment behavior are not proven | deeper infrastructure semantic model |
+| Validation planning | `planning` | passing validation fixtures | commands may be planned but not executed | allowlist command-runner policy |
+| Workspace edit | `workspace_write` | passing workspace-safety fixtures | requires preview token and drift checks | rollback remains post-MVP |
+
 ## Initial Budgets
 
 Budgets are draft targets for fixture tests and should be revised with real

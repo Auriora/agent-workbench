@@ -214,6 +214,10 @@ does not depend on emitters.
   surface.
 - Skills and instruction files explain how to use the runtime; they do not own
   runtime behavior.
+- Lifecycle integrations may consume Workbench evidence and provide task
+  context, but they do not alter Workbench authority boundaries. Workbench owns
+  repo evidence; lifecycle systems own intent, acceptance, promotion, and
+  closure.
 - Agent-specific hooks, commands, plugins, extensions, rules, or guideline files
   are generated from common integration specs.
 - Vendor-specific emitters must not call SQLite, tree-sitter, filesystem

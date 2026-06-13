@@ -126,6 +126,23 @@ Adapter domain describes what kind of surface an adapter covers.
 - `blocked`: validation could not proceed.
 - `not_applicable`: validation does not apply to this result.
 
+## Evidence Semantics
+
+Routing evidence helps an agent decide where to look. It is not proof by
+itself. Parser-backed evidence supports stronger claims about declarations,
+syntax, imports, and local structure when the relevant adapter has fixture
+coverage. Semantic evidence supports stronger claims only for the language and
+operation that have fixture-proven behavior.
+
+Direct source reads remain necessary when confidence is partial, degraded,
+stale, heuristic, or based on text fallback. Planned validation is not completed
+validation. Executed tests/checks or equivalent evidence are required before a
+response or final report claims proof.
+
+Do not introduce synonyms for the core capability levels. Use
+`evidence_kinds`, provenance, confidence, caveats, and verification status to
+express narrower distinctions.
+
 ## Debug Sweep Result Quality
 
 Repo-local debug sweep reports use a separate quality label from

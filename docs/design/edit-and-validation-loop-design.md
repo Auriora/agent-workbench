@@ -164,6 +164,23 @@ Fallback to `rg`, `find`, broad file reads, or ad hoc validation is useful
 product evidence. MVP may note these as local warnings; persisted usage-gap
 analytics are post-MVP.
 
+Fallback tracking should be aggregate-first, opt-in where it uses user/session
+history, and redacted. Useful fields are:
+
+- fallback kind: `rg`, `find`, `broad_read`, `ad_hoc_command`,
+  `manual_validation`, or `direct_source_read`
+- reason: `missing_tool`, `low_confidence`, `stale_index`, `poor_ranking`,
+  `unavailable_mcp`, `unsupported_language`, `user_preference`, or
+  `environment_blocked`
+- repo type
+- task type
+- affected language or framework
+- resulting improvement candidate
+
+The point is product improvement, not surveillance. Repeated fallback should
+route to backlog items, fixture gaps, ranking fixes, capability promotion, or
+clear no-action decisions.
+
 ## Capability Priority
 
 1. Indexing, FTS, file tree, generated/vendor awareness.

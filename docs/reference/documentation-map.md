@@ -30,6 +30,7 @@ copying tables, schemas, or enum definitions.
 | Layered implementation architecture | [Layered runtime architecture](../design/layered-runtime-architecture.md) | Owns dependency direction, source layout, ports, presenters, policies, boundary-test rules, and current ownership decisions for Markdown helpers, response metadata policy, and telemetry recorder abstractions. |
 | Accepted target requirements | [Runtime requirements](../requirements/runtime-requirements.md) | Requirements are target-state until implementation evidence exists. |
 | Runtime response envelope, enums, and MCP contract rules | [Runtime contracts](runtime-contracts.md) | Single source for capability, trust, freshness, evidence, attention, edit-token, and error-shape vocabulary. |
+| Lifecycle bridge contract | [Lifecycle bridge contract](lifecycle-bridge-contract.md) | Owns the generic boundary between Agent Workbench repo evidence and lifecycle systems such as `ai-spec-lifecycle`, issue trackers, or ad hoc task packets. |
 | SQLite graph schema and freshness model | [Graph store design](../design/graph-store-design.md) | Owns storage invariants, FTS, rebuilds, and query budgets. |
 | Cache, warm-up, and concurrency | [Runtime operations design](../design/runtime-operations-design.md) | Owns cache tiers, invalidation, warm-up, work queues, worker pools, async/snapshot rules, and runtime signals exposed to observability. |
 | Observability, Jaeger export, debug harnesses, and profiling | [Observability and debugging design](../design/observability-debugging-design.md) | Owns disabled-by-default OpenTelemetry configuration, OTLP HTTP export, repo-local debug harnesses including the MCP tool sweep, profiler guidance, low-impact monitoring candidates, and usage-record boundaries. Sweep result quality vocabulary is summarized in [Runtime contracts](runtime-contracts.md). |
@@ -95,6 +96,7 @@ copying tables, schemas, or enum definitions.
 ## Related Docs
 
 - [Runtime contracts](runtime-contracts.md)
+- [Lifecycle bridge contract](lifecycle-bridge-contract.md)
 - [Workspace safety contract](workspace-safety-contract.md)
 - [MVP proof matrix](mvp-proof-matrix.md)
 - [Native dependency setup](../runbooks/native-dependency-setup.md)
