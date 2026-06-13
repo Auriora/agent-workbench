@@ -92,6 +92,7 @@ implicit guarantee.
 
 Current evidence starts in:
 
+- [Dogfood evidence ledger](docs/reference/dogfood-evidence-ledger.md)
 - [MVP proof matrix](docs/reference/mvp-proof-matrix.md)
 - [Spec closure log](docs/history/spec-closure-log.md)
 - [Cross-repo smoke feedback](docs/reference/agent-workbench-cross-repo-smoke-2026-06-06.md)
@@ -154,3 +155,6 @@ versions. Do not add parser fallbacks to mask install/build issues.
 
 Start with [Documentation map](docs/reference/documentation-map.md) for the
 canonical owner of each design, contract, proof, integration, and safety topic.
+
+Agent-visible behavior changes are tracked in
+[Agent-readable changelog](docs/reference/agent-readable-changelog.md).
