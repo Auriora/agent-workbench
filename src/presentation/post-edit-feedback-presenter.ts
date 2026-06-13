@@ -30,9 +30,11 @@ function sanitizePostEditFeedback(input: PostEditFeedbackResult): PostEditFeedba
   return postEditFeedbackResultSchema.parse({
     repo_root: input.repo_root,
     status: input.status,
+    outcome: input.outcome,
     summary: input.summary,
     checked_files: input.checked_files,
     findings: input.findings.map((finding) => postEditFeedbackFindingSchema.parse(finding)),
+    deferred_checks: input.deferred_checks,
     visible_message: input.visible_message,
     next_actions: input.next_actions
   });

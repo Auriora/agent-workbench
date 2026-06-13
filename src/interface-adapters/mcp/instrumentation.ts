@@ -96,6 +96,7 @@ function instrumentHandler(input: {
         runtime_state: envelope.runtime_state,
         cache_state: envelope.cache_state,
         quiet_feedback_suppression_count: countQuietFeedbackSuppressions(envelope.warnings),
+        ...buildDeferredCheckTelemetryProperties(envelope.post_edit_feedback ?? {}),
         repo_root: envelope.repo_root,
         status: envelope.status,
         truncated: envelope.meta?.truncated,
@@ -134,6 +135,7 @@ function extractResponseEnvelope(response: unknown): {
   cache_state?: unknown;
   repo_root?: unknown;
   status?: unknown;
+  post_edit_feedback?: unknown;
   errors: unknown[];
   warnings: unknown[];
 } {
@@ -174,11 +176,31 @@ function extractResponseEnvelope(response: unknown): {
       cache_state: cacheState,
       runtime_state: runtimeState,
       repo_root: repoRoot ?? extractNestedDataValue(data, "repo_root"),
-      status: status ?? extractNestedDataValue(data, "status")
+      status: status ?? extractNestedDataValue(data, "status"),
+      post_edit_feedback: extractPostEditFeedback(data)
     };
   } catch (_error) {
     return { errors: [], warnings: [] };
   }
+}
+
+function extractPostEditFeedback(data: unknown): unknown {
+  if (typeof data !== "object" || data === null) {
+    return undefined;
+  }
+  if ("deferred_checks" in data || "outcome" in data) {
+    return data;
+  }
+  for (const value of Object.values(data)) {
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      ("deferred_checks" in value || "outcome" in value)
+    ) {
+      return value;
+    }
+  }
+  return undefined;
 }
 
 function extractNestedDataValue(data: unknown, key: "repo_root" | "status"): unknown {
@@ -221,6 +243,47 @@ function countQuietFeedbackSuppressions(warnings: unknown[]): number {
         (warning as { code?: unknown }).code === "quiet_feedback")
     );
   }).length;
+}
+
+function buildDeferredCheckTelemetryProperties(input: unknown): Record<string, unknown> {
+  if (typeof input !== "object" || input === null) {
+    return {};
+  }
+  const deferredChecks = Array.isArray((input as { deferred_checks?: unknown }).deferred_checks)
+    ? (input as { deferred_checks: unknown[] }).deferred_checks.filter(isDeferredCheckTelemetryRecord)
+    : [];
+  const reasonCounts = new Map<string, number>();
+  const outcomeCounts = new Map<string, number>();
+  for (const check of deferredChecks) {
+    reasonCounts.set(check.reason, (reasonCounts.get(check.reason) ?? 0) + check.count);
+    outcomeCounts.set(check.outcome, (outcomeCounts.get(check.outcome) ?? 0) + check.count);
+  }
+
+  return {
+    post_edit_outcome: typeof (input as { outcome?: unknown }).outcome === "string"
+      ? (input as { outcome: string }).outcome
+      : undefined,
+    post_edit_deferred_check_count: deferredChecks.reduce((total, check) => total + check.count, 0),
+    post_edit_deferred_reason_count: deferredChecks.length,
+    post_edit_deferred_reasons: [...reasonCounts.keys()].sort(),
+    post_edit_deferred_reason_counts: Object.fromEntries([...reasonCounts.entries()].sort()),
+    post_edit_deferred_outcome_counts: Object.fromEntries([...outcomeCounts.entries()].sort())
+  };
+}
+
+function isDeferredCheckTelemetryRecord(value: unknown): value is {
+  reason: string;
+  outcome: string;
+  count: number;
+} {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { reason?: unknown }).reason === "string" &&
+    typeof (value as { outcome?: unknown }).outcome === "string" &&
+    typeof (value as { count?: unknown }).count === "number" &&
+    Number.isFinite((value as { count: number }).count)
+  );
 }
 
 function extractResponseText(response: unknown): string | undefined {

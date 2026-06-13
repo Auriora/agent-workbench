@@ -133,16 +133,23 @@ export function buildPostEditContext(payload, env = process.env) {
 }
 
 export function buildPostEditFeedback(payload) {
+  const cwd = typeof payload.cwd === "string" ? payload.cwd : process.cwd();
+  const changedFiles = extractChangedFiles(payload)
+    .map((file) => normalizeRepoRelativePath(file, cwd))
+    .filter((file) => file.status === "inside")
+    .map((file) => file.relativePath);
+  const checkedFiles = Array.from(new Set(changedFiles)).sort();
+  const deferredChecks = buildHookDeferredChecks({
+    cwd,
+    checkedFiles,
+    toolSucceeded: toolSucceeded(payload)
+  });
   const findings = buildPostEditFindings(payload).map((message) => ({
     severity: message.startsWith("Workspace escape") ? "blocker" : "warning",
     message,
     category: message.includes("Generated/local artifact") ? "edit_risk" : "diagnostic",
     blocking: message.startsWith("Workspace escape")
   }));
-  const changedFiles = extractChangedFiles(payload)
-    .map((file) => normalizeRepoRelativePath(file, typeof payload.cwd === "string" ? payload.cwd : process.cwd()))
-    .filter((file) => file.status === "inside")
-    .map((file) => file.relativePath);
 
   return {
     status: findings.some((finding) => finding.blocking)
@@ -150,11 +157,108 @@ export function buildPostEditFeedback(payload) {
       : findings.length > 0
         ? "needed"
         : "done",
-    checked_files: Array.from(new Set(changedFiles)).sort(),
+    outcome: classifyHookOutcome({ checkedFiles, findings, deferredChecks }),
+    checked_files: checkedFiles,
     findings,
+    deferred_checks: deferredChecks,
     visible_message: findings.length === 0 ? undefined : findings.slice(0, 3).map((finding) => finding.message).join(" "),
-    next_actions: []
+    next_actions: findings.length === 0 && deferredChecks.length === 0
+      ? []
+      : [
+          {
+            tool: "diagnostics_for_files",
+            args: {
+              repo_root: cwd,
+              files: checkedFiles
+            }
+          },
+          {
+            tool: "verification_plan",
+            args: {
+              repo_root: cwd,
+              changed_files: checkedFiles
+            }
+          }
+        ]
   };
+}
+
+function buildHookDeferredChecks(input) {
+  const deferredChecks = [];
+  if (!input.toolSucceeded) {
+    deferredChecks.push({
+      reason: "diagnostics_error",
+      outcome: "errored",
+      count: 1,
+      message: "Post-edit feedback skipped diagnostics because the triggering tool did not report success.",
+      follow_up_tool: "verification_plan"
+    });
+  }
+
+  if (input.checkedFiles.length > MAX_INLINE_CHECK_FILES) {
+    deferredChecks.push({
+      reason: "too_many_files",
+      outcome: "queued",
+      count: input.checkedFiles.length - MAX_INLINE_CHECK_FILES,
+      paths: input.checkedFiles.slice(MAX_INLINE_CHECK_FILES),
+      message: "Changed file count exceeds the inline post-edit diagnostics budget.",
+      follow_up_tool: "diagnostics_for_files"
+    });
+  }
+
+  const limited = input.checkedFiles.slice(0, MAX_INLINE_CHECK_FILES);
+  const skippedPaths = limited.filter((relativePath) => shouldReportSkippedInlineCheck(input.cwd, relativePath));
+  if (skippedPaths.length > 0) {
+    deferredChecks.push({
+      reason: "diagnostics_skipped",
+      outcome: "skipped",
+      count: skippedPaths.length,
+      paths: skippedPaths,
+      message: "One or more changed files were not checked inline by the hook.",
+      follow_up_tool: "diagnostics_for_files"
+    });
+  }
+
+  return deferredChecks;
+}
+
+function shouldReportSkippedInlineCheck(cwd, relativePath) {
+  const suffix = path.extname(relativePath).toLowerCase();
+  if (!TEXT_CHECK_SUFFIXES.has(suffix)) {
+    return true;
+  }
+  const absolutePath = path.resolve(cwd, relativePath);
+  try {
+    if (!absolutePath.startsWith(path.resolve(cwd) + path.sep)) {
+      return true;
+    }
+    const stat = fs.statSync(absolutePath);
+    return !stat.isFile() || stat.size > MAX_FILE_BYTES;
+  } catch {
+    return true;
+  }
+}
+
+function classifyHookOutcome(input) {
+  if (input.findings.length > 0) {
+    return "actionable";
+  }
+  if (input.deferredChecks.some((check) => check.outcome === "queued")) {
+    return "queued";
+  }
+  if (input.deferredChecks.some((check) => check.outcome === "errored")) {
+    return "errored";
+  }
+  if (input.deferredChecks.some((check) => check.outcome === "unavailable")) {
+    return "unavailable";
+  }
+  if (input.deferredChecks.some((check) => check.outcome === "skipped")) {
+    return "skipped";
+  }
+  if (input.checkedFiles.length > 0) {
+    return "checked";
+  }
+  return "silent";
 }
 
 function objectValue(value) {

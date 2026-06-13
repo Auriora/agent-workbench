@@ -3,7 +3,7 @@ title: Documentation map
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-06-11
+last_reviewed: 2026-06-13
 ---
 
 # Documentation Map
@@ -69,7 +69,7 @@ copying tables, schemas, or enum definitions.
 | History mining for agent IDE signals delivery record | [Spec closure log](../history/spec-closure-log.md) | Closed Spec 018 delivery evidence. Current mining taxonomy, evidence-source decisions, executable backlog routing, and deferred automation boundaries live in [Agent Workbench executable backlog](../requirements/agent-workbench-executable-backlog.md). |
 | Integration health and session routing delivery record | [Spec closure log](../history/spec-closure-log.md) | Closed Spec 019 delivery evidence. Current integration health, session-aware next-action, and contextual routing behavior lives in [MCP surface design](../design/mcp-surface-design.md), [Coding agent integration design](../design/coding-agent-integration-design.md), and runtime contracts. |
 | Brooks-Lint findings tracker delivery record | [Spec closure log](../history/spec-closure-log.md) | Closed Spec 025 delivery evidence. Current architecture boundary rules live in [Layered runtime architecture](../design/layered-runtime-architecture.md), runtime contract module ownership lives in [Runtime contracts](runtime-contracts.md), and test-maintainability gates live in [MVP proof matrix](mvp-proof-matrix.md). |
-| Multi-file post-edit repair work | [Multi-file post-edit repair requirements](../specs/020-multi-file-post-edit-repair/requirements.md) | Active Spec 020. Promotes EB005 into quiet multi-file diagnostics, skipped/deferred evidence, and post-edit repair-loop work. |
+| Multi-file post-edit repair behavior | [Edit and validation loop design](../design/edit-and-validation-loop-design.md) | Current quiet multi-file diagnostics, skipped/deferred evidence, post-edit repair-loop outcomes, hook behavior, and telemetry behavior also live in [Coding agent integration design](../design/coding-agent-integration-design.md) and [Runtime contracts](runtime-contracts.md). Spec 020 remains the active delivery record until final closure removal. |
 | Spec task traceability lookup work | [Spec task traceability lookup requirements](../specs/021-spec-task-traceability-lookup/requirements.md) | Active Spec 021. Promotes EB006 into bounded spec/task lookup and task-context integration work while preserving the spec-lifecycle-manager ownership boundary. |
 | MCP server repository support work | [MCP server repository support requirements](../specs/022-mcp-server-repository-support/requirements.md) | Active Spec 022. Promotes EB007 into MCP-server repo-shape detection, context routing, and safe validation-planning work. |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) | Owns fixture, budget, degraded-mode, and acceptance evidence. |

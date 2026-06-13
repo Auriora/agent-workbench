@@ -154,13 +154,45 @@ export const postEditFeedbackRiskSchema = z
   .strict();
 export type PostEditFeedbackRisk = z.infer<typeof postEditFeedbackRiskSchema>;
 
+export const postEditFeedbackOutcomeSchema = z.enum([
+  "checked",
+  "actionable",
+  "queued",
+  "skipped",
+  "unavailable",
+  "errored",
+  "silent"
+]);
+export type PostEditFeedbackOutcome = z.infer<typeof postEditFeedbackOutcomeSchema>;
+
+export const postEditDeferredCheckSchema = z
+  .object({
+    reason: z.enum([
+      "too_many_files",
+      "provider_failed",
+      "provider_unavailable",
+      "provider_not_applicable",
+      "diagnostics_skipped",
+      "diagnostics_error"
+    ]),
+    outcome: z.enum(["queued", "skipped", "unavailable", "errored"]),
+    count: z.number().int().positive(),
+    paths: z.array(z.string()).optional(),
+    message: z.string().optional(),
+    follow_up_tool: z.enum(["diagnostics_for_files", "verification_plan"]).optional()
+  })
+  .strict();
+export type PostEditDeferredCheck = z.infer<typeof postEditDeferredCheckSchema>;
+
 export const postEditFeedbackRequestSchema = z
   .object({
     repo_root: z.string().optional(),
     changed_files: z.array(z.string()).default([]),
+    max_inline_files: z.number().int().positive().max(50).default(20),
     diagnostics: diagnosticsForFilesResultSchema.optional(),
     edit_risks: z.array(postEditFeedbackRiskSchema).default([]),
-    validation_status: verificationStatusSchema.optional()
+    validation_status: verificationStatusSchema.optional(),
+    deferred_checks: z.array(postEditDeferredCheckSchema).default([])
   })
   .strict();
 export type PostEditFeedbackRequest = z.infer<typeof postEditFeedbackRequestSchema>;
@@ -169,9 +201,11 @@ export const postEditFeedbackResultSchema = z
   .object({
     repo_root: z.string(),
     status: verificationStatusSchema,
+    outcome: postEditFeedbackOutcomeSchema,
     summary: z.string(),
     checked_files: z.array(z.string()),
     findings: z.array(postEditFeedbackFindingSchema),
+    deferred_checks: z.array(postEditDeferredCheckSchema),
     visible_message: z.string().optional(),
     next_actions: z.array(nextActionSchema)
   })

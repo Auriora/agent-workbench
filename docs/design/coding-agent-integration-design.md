@@ -3,7 +3,7 @@ title: Coding agent integration design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-06
+last_reviewed: 2026-06-13
 ---
 
 # Coding Agent Integration Design
@@ -149,6 +149,11 @@ edit-risk signals, validation status, and next actions, but it is not a public
 MCP tool in the current surface. Public diagnostics and validation remain
 available through `diagnostics_for_files` and `verification_plan`; hooks should
 only surface the concise visible message when actionable findings exist.
+When inline diagnostics cannot fully run, adapters should preserve structured
+deferred checks with reasons such as over-budget file count, unsupported file,
+provider failure, unavailable analyzer, or skipped large file. These reasons
+belong in hook logs and telemetry attributes, not user-facing hook prose, unless
+there are actionable findings to repair.
 
 Example hook intents:
 

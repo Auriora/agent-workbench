@@ -3,7 +3,7 @@ title: Edit and validation loop design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-13
 ---
 
 # Edit And Validation Loop Design
@@ -142,6 +142,21 @@ validation status, quiet visible messages, and next actions toward
 `diagnostics_for_files` and `verification_plan`. Codex hooks call this policy
 through their adapter and emit only concise actionable findings in basic mode;
 clean edits, failed tool calls, and optional analyzer failures stay silent.
+
+The post-edit result keeps the verification `status` separate from the
+repair-loop `outcome`. Outcomes distinguish `checked`, `actionable`, `queued`,
+`skipped`, `unavailable`, `errored`, and `silent` states so hooks can stay quiet
+while the runtime still preserves why inline evidence was incomplete. Deferred
+checks record a reason, outcome, count, optional repo-relative paths, and the
+follow-up surface, normally `diagnostics_for_files` or `verification_plan`.
+
+Inline hook checks are budgeted by file count and file size. Over-budget
+multi-file edits are represented as queued deferred checks rather than success
+messages. Unsupported files, optional provider failures, missing analyzers, and
+large or unreadable files are represented as skipped, unavailable, or errored
+deferred checks. Those states are observable through hook logs or telemetry
+attributes, but they do not create agent-visible hook output unless actionable
+findings exist.
 
 Candidate checks include parser syntax checks, formatter/lint planning,
 type-check routing, documentation structure checks, config validation, and

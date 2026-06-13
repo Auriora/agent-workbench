@@ -40,6 +40,11 @@ export type TelemetryBoundaryInput<T> = {
   run: () => Promise<T> | T;
 };
 
+type DeferredCheckTelemetryInput = {
+  outcome?: unknown;
+  deferred_checks?: unknown;
+};
+
 type StartupFailureReason = "startup_failure" | "shutdown_failure";
 
 type OperationalEventInput = {
@@ -97,6 +102,44 @@ export class NoopTelemetryAdapter {
 
 export function createNoopTelemetryAdapter(): NoopTelemetryAdapter {
   return new NoopTelemetryAdapter();
+}
+
+export function buildDeferredCheckTelemetryProperties(
+  input: DeferredCheckTelemetryInput
+): Record<string, unknown> {
+  const deferredChecks = Array.isArray(input.deferred_checks)
+    ? input.deferred_checks.filter(isDeferredCheckTelemetryRecord)
+    : [];
+  const reasonCounts = new Map<string, number>();
+  const outcomeCounts = new Map<string, number>();
+  for (const check of deferredChecks) {
+    reasonCounts.set(check.reason, (reasonCounts.get(check.reason) ?? 0) + check.count);
+    outcomeCounts.set(check.outcome, (outcomeCounts.get(check.outcome) ?? 0) + check.count);
+  }
+
+  return {
+    post_edit_outcome: typeof input.outcome === "string" ? input.outcome : undefined,
+    post_edit_deferred_check_count: deferredChecks.reduce((total, check) => total + check.count, 0),
+    post_edit_deferred_reason_count: deferredChecks.length,
+    post_edit_deferred_reasons: [...reasonCounts.keys()].sort(),
+    post_edit_deferred_reason_counts: Object.fromEntries([...reasonCounts.entries()].sort()),
+    post_edit_deferred_outcome_counts: Object.fromEntries([...outcomeCounts.entries()].sort())
+  };
+}
+
+function isDeferredCheckTelemetryRecord(value: unknown): value is {
+  reason: string;
+  outcome: string;
+  count: number;
+} {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { reason?: unknown }).reason === "string" &&
+    typeof (value as { outcome?: unknown }).outcome === "string" &&
+    typeof (value as { count?: unknown }).count === "number" &&
+    Number.isFinite((value as { count: number }).count)
+  );
 }
 
 export class InMemoryTelemetryAdapter implements TelemetryAdapter {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildDeferredCheckTelemetryProperties,
   InMemoryTelemetryAdapter,
   runTelemetryBoundary,
   type TelemetryBoundaryKind
@@ -121,5 +122,38 @@ describe("runtime telemetry boundary instrumentation", () => {
         })
       })
     ]);
+  });
+
+  it("summarizes post-edit deferred checks for telemetry attributes", () => {
+    expect(
+      buildDeferredCheckTelemetryProperties({
+        outcome: "queued",
+        deferred_checks: [
+          {
+            reason: "too_many_files",
+            outcome: "queued",
+            count: 2
+          },
+          {
+            reason: "provider_not_applicable",
+            outcome: "skipped",
+            count: 1
+          }
+        ]
+      })
+    ).toEqual({
+      post_edit_outcome: "queued",
+      post_edit_deferred_check_count: 3,
+      post_edit_deferred_reason_count: 2,
+      post_edit_deferred_reasons: ["provider_not_applicable", "too_many_files"],
+      post_edit_deferred_reason_counts: {
+        provider_not_applicable: 1,
+        too_many_files: 2
+      },
+      post_edit_deferred_outcome_counts: {
+        queued: 2,
+        skipped: 1
+      }
+    });
   });
 });

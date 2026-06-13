@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-06-05
+last_reviewed: 2026-06-13
 ---
 
 # Runtime Contracts
@@ -383,6 +383,60 @@ artifacts around those bindings.
 ```
 
 ## Markdown Quality Shapes
+
+## Post-Edit Feedback Shape
+
+Post-edit feedback is an internal application and hook-facing result, not a
+public MCP tool. It uses the normal response envelope when presented through
+runtime surfaces. `status` remains the verification-status vocabulary;
+`outcome` describes the repair-loop classification for hook and telemetry
+behavior.
+
+Allowed post-edit outcomes are:
+
+- `checked`: changed files were checked and no actionable findings were found
+- `actionable`: findings exist and may be surfaced in basic hook mode
+- `queued`: inline budgets were exceeded and explicit follow-up is needed
+- `skipped`: checks did not apply or were skipped without implying failure
+- `unavailable`: a required analyzer/provider was unavailable
+- `errored`: a provider or triggering tool failed before checks completed
+- `silent`: there was no changed-file evidence to report
+
+Deferred checks preserve why inline evidence is incomplete without forcing hook
+text:
+
+```json
+{
+  "repo_root": "/repo",
+  "status": "done",
+  "outcome": "queued",
+  "checked_files": ["src/a.ts", "src/b.ts", "src/c.ts"],
+  "findings": [],
+  "deferred_checks": [
+    {
+      "reason": "too_many_files",
+      "outcome": "queued",
+      "count": 1,
+      "paths": ["src/c.ts"],
+      "message": "Changed file count exceeds the inline post-edit diagnostics budget.",
+      "follow_up_tool": "diagnostics_for_files"
+    }
+  ],
+  "next_actions": [
+    {
+      "tool": "diagnostics_for_files",
+      "args": {
+        "repo_root": "/repo",
+        "files": ["src/a.ts", "src/b.ts", "src/c.ts"]
+      }
+    }
+  ]
+}
+```
+
+Hook-facing presenters must suppress `visible_message` unless `findings` are
+actionable. Telemetry may record deferred-check counts and reasons, but planned
+or deferred checks must not be reported as executed validation.
 
 Markdown quality findings are executable read-only checker outputs from
 `check_markdown_document` and `check_markdown_set`. The contract shape also

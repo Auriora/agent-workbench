@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: design
 status: active
 owner: platform
-last_reviewed: 2026-06-06
+last_reviewed: 2026-06-13
 ---
 
 # Technical Design
@@ -31,13 +31,19 @@ Components:
 `buildPostEditFeedback` should return an internal structured result with:
 
 - checked files;
+- repair-loop outcome: checked, actionable, queued, skipped, unavailable,
+  errored, or silent;
 - actionable findings;
-- skipped/deferred reason counts;
+- skipped/deferred reason counts and optional affected paths;
 - recommended explicit MCP follow-up;
 - hook-facing message, omitted when clean or unsupported.
 
 The hook script should preserve successful exit behavior for unsupported,
 errored, or clean payloads.
+
+For this slice, queued diagnostics are represented as structured deferred
+checks with follow-up to `diagnostics_for_files` or `verification_plan`; they
+are not persisted into a background runtime queue.
 
 ## Operational Considerations
 
@@ -45,8 +51,18 @@ errored, or clean payloads.
 - Do not block edits.
 - Do not include absolute paths in hook-facing output.
 
+## Resolved Decisions
+
+- Deferred multi-file diagnostics are represented as structured queued,
+  skipped, unavailable, or errored evidence in this slice. A persisted runtime
+  pickup queue is deferred until a separate design proves the storage and
+  lifecycle behavior.
+- Telemetry records aggregate post-edit outcome, deferred-check counts,
+  deferred reasons, and deferred outcome counts. Hook logs may include
+  repo-relative paths for local operator debugging; telemetry aggregation avoids
+  depending on full file contents or raw analyzer output.
+
 ## Open Questions
 
-- Should deferred multi-file diagnostics be queued for later runtime pickup or
-  only represented as skipped evidence in this slice?
-- Which telemetry attributes are safe enough for hook skip reasons?
+- No open questions block this slice. A persisted background diagnostics queue
+  remains deferred and would need a separate spec before implementation.

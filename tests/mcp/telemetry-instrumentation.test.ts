@@ -209,6 +209,82 @@ describe("MCP telemetry instrumentation", () => {
     ]);
   });
 
+  it("records post-edit deferred reasons from response envelopes", async () => {
+    const telemetry = new InMemoryTelemetryAdapter();
+    const { registeredTools, server } = createInstrumentedEndpoints(telemetry);
+
+    server.tool(
+      "post_edit_feedback_fixture",
+      "",
+      {},
+      async () => ({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                data: {
+                  repo_root: "/repo",
+                  status: "done",
+                  outcome: "queued",
+                  checked_files: ["src/a.ts", "src/b.ts", "src/c.ts"],
+                  findings: [],
+                  deferred_checks: [
+                    {
+                      reason: "too_many_files",
+                      outcome: "queued",
+                      count: 1,
+                      paths: ["src/c.ts"],
+                      follow_up_tool: "diagnostics_for_files"
+                    },
+                    {
+                      reason: "provider_not_applicable",
+                      outcome: "skipped",
+                      count: 2,
+                      paths: ["src/a.ts", "src/b.ts"]
+                    }
+                  ],
+                  visible_message: undefined,
+                  next_actions: []
+                },
+                meta: {
+                  analysis_validity: "valid",
+                  verification_status: "done",
+                  truncated: false
+                }
+              },
+              null,
+              2
+            )
+          }
+        ]
+      })
+    );
+
+    await registeredTools.post_edit_feedback_fixture.handler({});
+
+    expect(telemetry.records).toEqual([
+      expect.objectContaining({
+        name: "mcp.tool.dispatch",
+        properties: expect.objectContaining({
+          surface_name: "post_edit_feedback_fixture",
+          post_edit_outcome: "queued",
+          post_edit_deferred_check_count: 3,
+          post_edit_deferred_reason_count: 2,
+          post_edit_deferred_reasons: ["provider_not_applicable", "too_many_files"],
+          post_edit_deferred_reason_counts: {
+            provider_not_applicable: 2,
+            too_many_files: 1
+          },
+          post_edit_deferred_outcome_counts: {
+            queued: 1,
+            skipped: 2
+          }
+        })
+      })
+    ]);
+  });
+
   it("records row-limit and source-byte caps for symbol-search dispatch", async () => {
     const telemetry = new InMemoryTelemetryAdapter();
     const { registeredTools, server } = createInstrumentedEndpoints(telemetry);
