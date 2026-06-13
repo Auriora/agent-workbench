@@ -77,6 +77,40 @@ The local plugin-creator skill no longer ships `validate_plugin.py`, so the
 old runbook validator command was not run. Phase 1 metadata is covered by
 repo-owned integration tests.
 
+2026-06-13:
+Phase 2 drift implementation added checks for integration-profile MCP binding
+sync, plugin default prompt mappings, skill stale-name and obsolete-install
+wording, durable documented MCP names, and `.mcp.json` launcher ownership.
+`pnpm exec vitest run tests/integration/codex-integration-profile.test.ts`
+passed: 1 file, 17 tests.
+
+2026-06-13:
+Phase 2 operator documentation updated the plugin README quick start, runbook
+first-run verification, troubleshooting, hook trust, missing launcher recovery,
+and the documentation map entries for plugin quick start and MCP server-card
+metadata.
+
+2026-06-13:
+`pnpm typecheck` passed.
+
+2026-06-13:
+Spec lifecycle lint passed with zero diagnostics.
+
+2026-06-13:
+Agent Workbench Markdown checks passed with zero findings for the changed
+runbook, Spec 024 task, traceability, and verification docs. The plugin README
+Markdown check passed with zero findings after adding repository-standard
+frontmatter.
+
+2026-06-13:
+`git diff --check` passed.
+
+2026-06-13:
+`pnpm test` timed out in the sandbox for two spawned stdio entrypoint tests.
+The targeted stdio entrypoint suite passed outside the sandbox: 1 file, 12
+tests. The full `pnpm test` suite then passed outside the sandbox: 62 files,
+432 tests.
+
 ## Residual Risks
 
 - Codex plugin validation tooling may not be available in GitHub Actions unless

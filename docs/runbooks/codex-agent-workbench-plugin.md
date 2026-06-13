@@ -88,6 +88,27 @@ codex plugin list
 The expected installed entry is
 `agent-workbench@<personal-marketplace>` with status `installed, enabled`.
 
+## First-Run Verification
+
+After installation, start a new Codex session from the target repository. Use
+the Agent Workbench MCP resources first:
+
+- `repo:///status` for runtime freshness, scope, and adapter coverage.
+- `repo:///scope` for indexed roots, skipped roots, language counts, and
+  generated/vendor scope.
+- `repo:///overview` for repository shape, key files, key docs, validation
+  hints, and first-call guidance.
+
+For task work, call `context_for_task` before broad file reads and
+`verification_plan` before running validation commands. Read
+`integration:///profiles/codex` when checking the Codex plugin, skill, hook,
+and MCP binding model. Read `integration:///health/agent-workbench` when
+checking configured, registered, discovered, and callable MCP states.
+
+The plugin should not create a host-level Agent Workbench MCP block in
+`~/.codex/config.toml`. The supported Codex path is plugin-bundled `.mcp.json`
+launching the installed package prefix.
+
 ## MCP Discoverability Metadata
 
 The repository publishes `.well-known/mcp/server-card.json` as local,
@@ -100,6 +121,12 @@ Integration tests compare its resources and tools against the MCP registry, so
 changes to `mcpResources` or `mcpTools` must update the card in the same
 change. The card must not claim remote hosting, network requirements, or
 surfaces that Agent Workbench does not register.
+
+The server card is the durable metadata owner for public resource/tool names.
+The core Codex-facing resources are `repo:///status`, `repo:///scope`,
+`repo:///overview`, `integration:///profiles/codex`, and
+`integration:///health/agent-workbench`; the matching public resource names
+include `codex-integration-profile` and `integration-health`.
 
 ## NPM Package Installation
 
@@ -201,9 +228,13 @@ Tagged GitHub releases publish through the GHCR workflow.
 Use these checks before considering plugin/runtime setup changes complete:
 
 ```bash
-python3 /home/bcherrington/.codex/skills/.system/plugin-creator/scripts/validate_plugin.py plugins/agent-workbench
 pnpm exec vitest run tests/integration/codex-integration-profile.test.ts tests/integration/common-integration-profile.test.ts
 ```
+
+The focused integration tests validate the plugin manifest, default prompts,
+skill wording, `.mcp.json`, marketplace metadata, server-card metadata, and
+package/install profile. Do not rely on user-local plugin validator scripts for
+CI unless a repository-owned equivalent exists.
 
 For package changes, also run:
 
@@ -218,6 +249,40 @@ For broader runtime-impacting changes, also run:
 pnpm typecheck
 pnpm test
 ```
+
+## Troubleshooting
+
+If `codex plugin list` does not show `agent-workbench@<personal-marketplace>`
+as installed and enabled, rerun the package installer, then reinstall the
+plugin from the personal marketplace:
+
+```bash
+scripts/install-agent-workbench-package.sh
+codex plugin add agent-workbench@auriora-local
+```
+
+If the MCP server fails because `bin/agent-workbench-mcp` is missing under the
+package prefix, reinstall the package with the expected prefix:
+
+```bash
+scripts/install-agent-workbench-package.sh \
+  --prefix "${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}"
+```
+
+Hooks must not repair missing launchers, install packages, update plugins, or
+write Codex configuration. They stay silent by default and emit only compact
+local guidance when `AGENT_WORKBENCH_HOOK_FEEDBACK=basic` is set. If Codex asks
+for hook trust review after install or update, review the plugin-bundled
+`hooks/hooks.json` and hook scripts under `plugins/agent-workbench/hooks/`.
+
+To uninstall the Codex plugin, remove the plugin entry from Codex:
+
+```bash
+codex plugin remove agent-workbench@auriora-local
+```
+
+Remove the installed package prefix only when no active local setup depends on
+it.
 
 ## Kiro Power Packaging
 

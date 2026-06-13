@@ -1,3 +1,11 @@
+---
+title: Agent Workbench Codex plugin
+doc_type: runbook
+status: draft
+owner: platform
+last_reviewed: 2026-06-13
+---
+
 # Agent Workbench Codex Plugin
 
 This plugin packages the Codex-facing Agent Workbench integration. It can be
@@ -20,6 +28,57 @@ register the local plugin marketplace entry, cachebust the plugin, and run
 After source or dependency changes, install a package containing the updated
 runtime, reinstall the plugin, then restart Codex.
 
+## Quick Start
+
+From this repository or an unpacked package source, install the package-backed
+Codex plugin:
+
+```bash
+scripts/install-agent-workbench-package.sh
+```
+
+For an npm package install, run:
+
+```bash
+npx @auriora/agent-workbench install
+```
+
+Verify the plugin is installed and enabled:
+
+```bash
+codex plugin list
+```
+
+In a new Codex session, use Agent Workbench through MCP. The first useful
+resources are `repo:///status`, `repo:///scope`, and `repo:///overview`.
+For task work, use `context_for_task` before broad reads and
+`verification_plan` before running validation. Use
+`integration:///profiles/codex` for the Codex integration profile and
+`integration:///health/agent-workbench` for integration health.
+
+To update after source, dependency, skill, hook, or MCP config changes:
+
+```bash
+scripts/install-agent-workbench-package.sh
+codex plugin add agent-workbench@auriora-local
+```
+
+Then restart Codex so the plugin cache, skill, hooks, and MCP server config are
+rediscovered.
+
+To uninstall the Codex plugin from the current Codex installation:
+
+```bash
+codex plugin remove agent-workbench@auriora-local
+```
+
+Remove the installed package prefix separately only when no other local setup
+uses it.
+
+Review plugin hook trust in Codex after install or update. Hooks are quiet and
+non-repairing; if the MCP launcher is missing, reinstall the package rather
+than relying on SessionStart or PostToolUse hooks to repair setup.
+
 For normal Codex workspace sessions, do not set
 `AGENT_WORKBENCH_DEFAULT_REPO_ROOT`; the MCP server should default to Codex's
 active working directory. Use that environment variable or `--repo-root` only
@@ -31,6 +90,11 @@ The local plugin source lives at `~/plugins/agent-workbench` after package
 installation. The personal marketplace entry points at that source, and Codex
 loads an installed copy from its plugin cache. The plugin MCP binding must keep
 launching the package prefix through `bin/agent-workbench-mcp`.
+
+The repository also includes `.agents/plugins/marketplace.json` for checkout
+marketplace inspection and `.well-known/mcp/server-card.json` for local MCP
+discoverability metadata. The server card lists public resources and tools,
+including `codex-integration-profile` and `integration-health`.
 
 ## GHCR Package Model
 

@@ -37,7 +37,7 @@ copying tables, schemas, or enum definitions.
 | SQLite graph schema and freshness model | [Graph store design](../design/graph-store-design.md) | Owns storage invariants, FTS, rebuilds, and query budgets. |
 | Cache, warm-up, and concurrency | [Runtime operations design](../design/runtime-operations-design.md) | Owns cache tiers, invalidation, warm-up, work queues, worker pools, async/snapshot rules, and runtime signals exposed to observability. |
 | Observability, Jaeger export, debug harnesses, and profiling | [Observability and debugging design](../design/observability-debugging-design.md) | Owns disabled-by-default OpenTelemetry configuration, OTLP HTTP export, repo-local debug harnesses including the MCP tool sweep, profiler guidance, low-impact monitoring candidates, and usage-record boundaries. Sweep result quality vocabulary is summarized in [Runtime contracts](runtime-contracts.md). |
-| Codex Agent Workbench plugin and MCP setup | [Codex Agent Workbench plugin and MCP setup](../runbooks/codex-agent-workbench-plugin.md) | Owns the plugin-bundled Codex MCP, skill, hook, and package installation/update model. |
+| Codex plugin setup | [Codex plugin runbook](../runbooks/codex-agent-workbench-plugin.md) | Owns install and recovery. |
 | Adapter capability model and promotion gates | [Language adapter design](../design/language-adapter-design.md) | Owns adapter lifecycle and semantic promotion rules. |
 | Language priority table | [Language capability matrix](language-capability-matrix.md) | Reference view only; uses enums from runtime contracts. |
 | MCP resources and tools | [MCP surface design](../design/mcp-surface-design.md) | Owns MVP/non-MVP tool split and schema examples through runtime contracts. |
@@ -74,6 +74,19 @@ copying tables, schemas, or enum definitions.
 | MCP server repository support delivery record | [Spec closure log](../history/spec-closure-log.md) | Closed Spec 022 delivery evidence. Current MCP-server repo-shape detection, context routing, and safe validation-planning behavior lives in [MCP surface design](../design/mcp-surface-design.md) and [Coding agent integration design](../design/coding-agent-integration-design.md). |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) | Owns fixture, budget, degraded-mode, and acceptance evidence. |
 | Architectural decisions | [ADRs](../adr/) | ADR status must match frontmatter and body text. |
+
+## Plugin Discoverability Notes
+
+The plugin runbook owns operator guidance for `context_for_task`,
+`verification_plan`, `integration:///profiles/codex`, and
+`integration:///health/agent-workbench`.
+
+The plugin README owns quick start, verification, update, uninstall, and first
+resource guidance for `repo:///status`, `repo:///scope`, and `repo:///overview`.
+
+The server-card metadata at `.well-known/mcp/server-card.json` owns local
+machine-readable discoverability for public MCP resources and tools, including
+`codex-integration-profile` and `integration-health`.
 
 ## Source-Of-Truth Rules
 

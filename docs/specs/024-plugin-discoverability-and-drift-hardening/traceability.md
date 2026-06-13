@@ -11,39 +11,24 @@ last_reviewed: 2026-06-13
 
 ## Task To Context Matrix
 
-T001:
-Requirements 1, 2, and 6. Design sections: Marketplace Metadata, MCP Server
-Card, and History Reconnaissance. Verification: research decision review plus
-focused metadata tests. Durable targets: runbook and spec research/design.
-Status: complete for Phase 1.
+| Task ID | Requirements | Design | Status |
+| --- | --- | --- | --- |
+| T001 | Requirements 1, 2, 6 | Metadata decisions | Complete |
+| T002 | Requirement 1 | Marketplace Metadata | Complete |
+| T003 | Requirement 2 | MCP Server Card | Complete |
+| T004 | Requirement 3 | Drift Tests | Complete |
+| T005 | Requirement 4 | Documentation Updates | Complete |
+| T006 | Requirement 5 | CI Workflow | Pending |
+| T007 | Success criteria | Operations | Pending |
 
-T002:
-Requirement 1. Design section: Marketplace Metadata. Verification:
-marketplace metadata assertions in `tests/integration/codex-integration-profile.test.ts`.
-Durable targets: `.agents/plugins/marketplace.json` and the Codex plugin
-runbook. Status: complete for Phase 1.
+T004 verification:
+Profile, prompt, skill, docs, and `.mcp.json` drift tests are implemented in
+`tests/integration/codex-integration-profile.test.ts`. Durable targets are the
+integration tests and plugin/runbook guidance.
 
-T003:
-Requirement 2. Design section: MCP Server Card. Verification:
-registry-to-server-card assertions in `tests/integration/codex-integration-profile.test.ts`.
-Durable targets: `.well-known/mcp/server-card.json` and the Codex plugin
-runbook. Status: complete for Phase 1.
-
-T004:
-Requirement 3. Design section: Drift Tests. Verification and durable targets
-remain pending for Phase 2.
-
-T005:
-Requirement 4. Design section: Documentation Updates. Verification and durable
-targets remain pending for Phase 2.
-
-T006:
-Requirement 5. Design section: CI Workflow. Verification and durable targets
-remain pending for Phase 3.
-
-T007:
-Success criteria. Verification: typecheck, focused tests, full tests,
-lifecycle checks, and closure readiness. Status: pending.
+T005 verification:
+Operator documentation updates are implemented in the plugin README, Codex
+plugin runbook, and documentation map.
 
 ## Requirement To Delivery Matrix
 
@@ -56,14 +41,17 @@ Delivered by `.well-known/mcp/server-card.json` and the runbook MCP
 discoverability section. Verified by the registry-to-server-card drift test.
 
 Requirement 3:
-Deferred to Phase 2.
+Delivered by Phase 2 drift checks for profile bindings, default prompts, skill
+wording, documented MCP names, and `.mcp.json` launcher ownership. Verified by
+the focused Codex integration profile test.
 
 Requirement 4:
-Partially clarified in Phase 1 runbook updates. Full quick-start work remains
-deferred to T005.
+Delivered by Phase 2 plugin README, runbook troubleshooting, hook trust,
+missing launcher recovery, and documentation map updates. Verified by the
+focused documented-surface drift test and Markdown checks.
 
 Requirement 5:
-Deferred to Phase 3.
+Deferred to Phase 3 CI/package validation.
 
 Requirement 6:
 Delivered by the Phase 1 decision to defer history reconnaissance to a
@@ -72,22 +60,30 @@ follow-up debug command or skill workflow.
 ## Design To Implementation Matrix
 
 Repo marketplace metadata:
-Implemented in `.agents/plugins/marketplace.json` and covered by the
+Implemented in `.agents/plugins/marketplace.json` and verified by the
 marketplace metadata test.
 
 MCP server card:
-Implemented in `.well-known/mcp/server-card.json` and covered by the
+Implemented in `.well-known/mcp/server-card.json` and verified by the
 registry-to-server-card drift test.
 
-External reference reconciliation:
-Recorded in `research.md` and `design.md` decisions.
+Drift tests:
+Implemented in `tests/integration/codex-integration-profile.test.ts` and
+verified by the focused Vitest run.
 
 Operator locality and setup guidance:
-Recorded in `docs/runbooks/codex-agent-workbench-plugin.md`.
+Implemented in `plugins/agent-workbench/README.md` and
+`docs/runbooks/codex-agent-workbench-plugin.md`; verified by Markdown checks
+and docs drift assertions.
+
+Documentation ownership:
+Implemented in `docs/reference/documentation-map.md` and verified by Markdown
+checks.
 
 ## Open Decision Impact
 
-Phase 1 resolves marketplace metadata, server-card maintenance, server-card
-resource inclusion, and history reconnaissance scope for this slice. Skill,
-prompt, docs, CI, and package-manifest drift decisions remain in their planned
-later tasks.
+Phase 1 resolved marketplace metadata, server-card maintenance, server-card
+resource inclusion, and history reconnaissance scope. Phase 2 resolved the
+skill, prompt, profile, docs, and `.mcp.json` drift-test approach plus
+first-run/operator documentation coverage. CI and package-manifest drift
+decisions remain in Phase 3.

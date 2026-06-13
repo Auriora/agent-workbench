@@ -380,6 +380,138 @@ describe("Codex plugin artifacts", () => {
     );
   });
 
+  it("keeps the Codex integration profile bound to registered MCP resources and tools", () => {
+    const profile = codexIntegrationProfileSchema.parse(describeCodexIntegrationProfile());
+    const expectedBindings = [
+      ...mcpResources.map((resource) => ({
+        name: resource.name,
+        uri: resource.uri,
+        kind: "resource",
+        capability_class: resource.metadata.capability_class
+      })),
+      ...mcpTools.map((tool) => ({
+        name: tool.name,
+        uri: undefined,
+        kind: "tool",
+        capability_class: tool.metadata.capability_class
+      }))
+    ].sort(compareBindings);
+    const actualBindings = profile.mcp_bindings
+      .map((binding) => ({
+        name: binding.name,
+        uri: binding.uri,
+        kind: binding.kind,
+        capability_class: binding.capability_class
+      }))
+      .sort(compareBindings);
+
+    expect(actualBindings).toEqual(expectedBindings);
+  });
+
+  it("maps plugin default prompts to registered MCP surfaces or documented workflows", () => {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(pluginRoot, ".codex-plugin/plugin.json"), "utf8")
+    ) as {
+      interface: { defaultPrompt: string[] };
+    };
+    const registeredNames = new Set([
+      ...mcpResources.map((resource) => resource.name),
+      ...mcpTools.map((tool) => tool.name),
+      ...mcpPrompts.map((prompt) => prompt.name)
+    ]);
+    const registeredUris = new Set(mcpResources.map((resource) => resource.uri));
+    const defaultPromptBindings: Record<
+      string,
+      { resources?: string[]; tools?: string[]; workflows?: string[] }
+    > = {
+      "Check Agent Workbench status for this repo.": {
+        resources: ["repo:///status", "repo:///scope", "repo:///overview"]
+      },
+      "Plan context and validation with Agent Workbench.": {
+        tools: ["context_for_task", "verification_plan"]
+      },
+      "Show the Codex integration profile.": {
+        resources: ["integration:///profiles/codex"]
+      }
+    };
+
+    expect(manifest.interface.defaultPrompt).toEqual(Object.keys(defaultPromptBindings));
+
+    for (const [prompt, bindings] of Object.entries(defaultPromptBindings)) {
+      expect(manifest.interface.defaultPrompt).toContain(prompt);
+
+      for (const resourceUri of bindings.resources ?? []) {
+        expect(registeredUris, `${prompt} -> ${resourceUri}`).toContain(resourceUri);
+      }
+
+      for (const toolName of bindings.tools ?? []) {
+        expect(registeredNames, `${prompt} -> ${toolName}`).toContain(toolName);
+      }
+    }
+  });
+
+  it("keeps skill guidance aligned with supported MCP workflows and install boundaries", () => {
+    const skill = fs.readFileSync(
+      path.join(pluginRoot, "skills/agent-workbench/SKILL.md"),
+      "utf8"
+    );
+
+    expect(skill).toContain("repo:///status");
+    expect(skill).toContain("repo:///scope");
+    expect(skill).toContain("repo:///overview");
+    expect(skill).toContain("context_for_task");
+    expect(skill).toContain("verification_plan");
+    expect(skill).toContain("integration:///profiles/codex");
+    expect(skill).toContain("spec-lifecycle-manager");
+    expect(skill).toContain("Do not add primary-plus-fallback routes");
+    expect(skill).not.toMatch(/\borient_repo\b/);
+    expect(skill).not.toMatch(/\brepo_preflight\b/);
+    expect(skill).not.toMatch(/\bmcp_tool_sweep\b/);
+    expect(skill).not.toContain("debug:mcp-tool-sweep");
+    expect(skill).not.toMatch(/SessionStart[^.\n]*(?:install|update|repair)/i);
+    expect(skill).not.toMatch(/(?:auto|automatically)[ -]?(?:install|update|repair)/i);
+    expect(skill).not.toContain("~/.codex/hooks.json");
+    expect(skill).not.toContain("plugins/cache");
+  });
+
+  it("keeps durable docs from naming stale core MCP surfaces", () => {
+    const runbook = fs.readFileSync(
+      path.resolve("docs/runbooks/codex-agent-workbench-plugin.md"),
+      "utf8"
+    );
+    const pluginReadme = fs.readFileSync(path.join(pluginRoot, "README.md"), "utf8");
+    const documentationMap = fs.readFileSync(
+      path.resolve("docs/reference/documentation-map.md"),
+      "utf8"
+    );
+    const durableDocs = `${runbook}\n${pluginReadme}\n${documentationMap}`;
+
+    for (const name of [
+      "context_for_task",
+      "verification_plan",
+      "codex-integration-profile",
+      "integration-health"
+    ]) {
+      expect(durableDocs, name).toContain(name);
+    }
+
+    for (const uri of [
+      "repo:///status",
+      "repo:///scope",
+      "repo:///overview",
+      "integration:///profiles/codex",
+      "integration:///health/agent-workbench"
+    ]) {
+      expect(durableDocs, uri).toContain(uri);
+    }
+
+    expect(durableDocs).toContain(".well-known/mcp/server-card.json");
+    expect(durableDocs).not.toMatch(/\borient_repo\b/);
+    expect(durableDocs).not.toMatch(/\brepo_preflight\b/);
+    expect(durableDocs).not.toMatch(/\bmcp_tool_sweep\b/);
+    expect(durableDocs).not.toContain("[mcp_servers.agent-workbench]");
+  });
+
   it("keeps hooks silent by default and emits only basic MCP guidance when configured", async () => {
     const postEdit = await import(
       pathToFileURL(path.join(pluginRoot, "hooks/post-edit-feedback.js")).href
@@ -555,6 +687,14 @@ describe("Codex plugin artifacts", () => {
       "plugins/cache"
     );
     expect(mcpConfig.mcpServers["agent-workbench"].startup_timeout_sec).toBe(30.0);
+    expect(mcpConfig.mcpServers["agent-workbench"].command).toBe("bash");
+    expect(mcpConfig.mcpServers["agent-workbench"].args).toEqual([
+      "-lc",
+      'exec "${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp"'
+    ]);
+    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain("src/mcp");
+    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain("tsx");
+    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain("node_modules");
     expect(mcpSurface).toEqual(
       expect.objectContaining({
         artifact_path: "plugins/agent-workbench/.mcp.json"
@@ -723,4 +863,13 @@ function listFiles(directory: string): string[] {
     const entryPath = path.join(directory, entry.name);
     return entry.isDirectory() ? listFiles(entryPath) : [entryPath];
   });
+}
+
+function compareBindings(
+  left: { kind: string; name: string; uri?: string },
+  right: { kind: string; name: string; uri?: string }
+): number {
+  return `${left.kind}:${left.name}:${left.uri ?? ""}`.localeCompare(
+    `${right.kind}:${right.name}:${right.uri ?? ""}`
+  );
 }
