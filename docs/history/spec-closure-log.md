@@ -52,7 +52,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/022-mcp-server-repository-support
 - **Title:** MCP server repository support
 - **Final spec commit:** 62db46c
-- **Closure cleanup commit:** pending
+- **Closure cleanup commit:** 6ed5758
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/mcp-surface-design.md`
