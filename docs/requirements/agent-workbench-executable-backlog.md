@@ -272,7 +272,7 @@ or runtime telemetry.
 ### EB007: MCP Server Repository Support
 
 - Priority: P1
-- Status: active Spec 022
+- Status: closed Spec 022
 - Friction signal: MCP server repos require transport, session, tool-list,
   HTTP/SSE, stdio, Docker, and log debugging context.
 - Runtime surface: repo-shape detection, context packets, docs routing,
@@ -286,8 +286,8 @@ or runtime telemetry.
 - Validation:
   - Fixture MCP server repos for stdio, HTTP/SSE, and streamable HTTP shapes.
   - Golden context and validation-plan responses.
-- Promotion target: active
-  [Spec 022](../specs/022-mcp-server-repository-support/requirements.md).
+- Promotion target: closed
+  [Spec 022](../history/spec-closure-log.md).
 
 ### EB008: Workspace Hygiene And Wrong-Repo Guard
 
@@ -1161,5 +1161,5 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-1. Spec 022: MCP-server repository support.
-2. Spec 024: plugin discoverability and drift hardening.
+1. Spec 024: plugin discoverability and drift hardening.
+2. Spec 026: agent skills standard compliance.

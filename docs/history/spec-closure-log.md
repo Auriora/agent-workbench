@@ -43,8 +43,24 @@ name their own final pre-removal tree commits.
 | Spec 019: Integration health and session routing | Removed from `docs/specs/` on 2026-06-06 after final pre-removal tree commit `787ec81` completed integration health, session-aware next-action filtering, and conservative contextual routing. | MCP surface design, coding agent integration design, executable backlog, runtime contracts, integration profiles, and presenter tests. |
 | Spec 020: Multi-file post-edit repair | Removed from `docs/specs/` on 2026-06-13 after final pre-removal tree commit `a4b66ae` completed structured post-edit outcomes, deferred-check evidence, quiet hook behavior, hook-log and telemetry observability, and durable promotion. | Edit and validation loop design, coding agent integration design, runtime contracts, documentation map, executable backlog, feedback tests, hook fixture tests, Kiro integration tests, MCP telemetry tests, telemetry helper tests, and final full Vitest validation. |
 | Spec 021: Spec task traceability lookup | Removed from `docs/specs/` on 2026-06-13 after final pre-removal tree commit `d31e5c8` completed `context_for_task.lifecycle_context`, `lifecycle_evidence`, bounded local spec routing, non-authoritative active/archived/malformed spec evidence, caller-supplied lifecycle context consumption, nested companion routing hints, and durable promotion. | Runtime contracts, MCP surface design, coding agent integration design, documentation map, executable backlog, lifecycle bridge contract, packaged Agent Workbench skill and Kiro Power guidance, context task tests, contract tests, integration-profile tests, Kiro integration tests, and final full Vitest validation. |
+| Spec 022: MCP server repository support | Removed from `docs/specs/` on 2026-06-13 after final pre-removal tree commit `62db46c` completed MCP-server repo-shape detection, overview/context routing, safe initialize/tools-list/call-tool validation planning, fixture coverage for stdio, HTTP/SSE, streamable HTTP, Docker/devcontainer, and ambiguous evidence, plus durable promotion. | MCP surface design, coding agent integration design, documentation map, executable backlog, MCP server fixture repos, overview/context/verification-plan tests, typecheck, lifecycle lint, closure check, and final serial full Vitest validation. |
 | Spec 023: MCP tool sweep quality | Removed from `docs/specs/` on 2026-06-11 after final pre-removal tree commit `7922693` completed sweep quality semantics, sandbox-only write validation, progress-report RCA, pagination, docs FTS warmup, and final eight-repo committed-sandbox validation. | Observability and debugging design, runtime operations design, runtime contracts, documentation map, debug harness tests, docs/query tests, graph/query tests, verification-plan tests, and final committed-sandbox sweep evidence. |
 | Spec 025: Brooks-Lint findings tracker | Removed from `docs/specs/` on 2026-06-11 after final pre-removal tree commit `539f174` completed architecture boundary remediation, tech-debt extraction splits, runtime contract modularization, MCP test harness hardening, focused validation/resource rule tests, broad fixture helper annotation, and durable test-maintainability gates. | Layered runtime architecture, system architecture, runtime contracts, MVP proof matrix, documentation map, architecture tests, MCP/integration tests, focused validation/resource tests, broad fixture tests, and final closure traceability. |
+
+### 2026-06-13 - 022-mcp-server-repository-support
+
+- **Spec:** docs/specs/022-mcp-server-repository-support
+- **Title:** MCP server repository support
+- **Final spec commit:** 62db46c
+- **Closure cleanup commit:** pending
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/mcp-surface-design.md`
+  - `docs/design/coding-agent-integration-design.md`
+  - `docs/reference/documentation-map.md`
+  - `docs/requirements/agent-workbench-executable-backlog.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
 
 ## Closure Notes
 
