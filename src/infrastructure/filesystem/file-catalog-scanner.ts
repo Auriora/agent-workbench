@@ -42,7 +42,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     const entries: FileCatalogEntry[] = [];
     const skippedPaths: FileCatalogSkippedPath[] = [];
     const skippedRoots = new Set(input.skipped_roots);
-    const gitignoreRules = readRootGitignoreRules(repoRoot);
+    const gitignoreRules = readRootIgnoreRules(repoRoot);
     let truncated = false;
 
     for (const indexedRoot of indexedRoots) {
@@ -259,7 +259,7 @@ function catalogSkipDetail(reason: FileCatalogSkippedPath["reason"]): string {
     case "hidden_path":
       return "Hidden local path is not allowlisted as repository-shape evidence.";
     case "gitignore":
-      return "Path matched root .gitignore skip rules.";
+      return "Path matched root ignore-file skip rules.";
     case "nested_git_repository":
       return "Nested git checkout was skipped during catalog scan.";
     case "permission_denied":
@@ -301,13 +301,15 @@ function compareCatalogEntries(left: fs.Dirent, right: fs.Dirent): number {
   return catalogTraversalPriority(left) - catalogTraversalPriority(right) || left.name.localeCompare(right.name);
 }
 
-function readRootGitignoreRules(repoRoot: string): GitignoreRule[] {
-  const gitignorePath = path.join(repoRoot, ".gitignore");
-  if (!fs.existsSync(gitignorePath)) {
-    return [];
-  }
+function readRootIgnoreRules(repoRoot: string): GitignoreRule[] {
+  return [".gitignore", ".aiignore"].flatMap((ignoreFileName) => readRootIgnoreFileRules(repoRoot, ignoreFileName));
+}
+
+function readRootIgnoreFileRules(repoRoot: string, ignoreFileName: string): GitignoreRule[] {
+  const ignoreFilePath = path.join(repoRoot, ignoreFileName);
+  if (!fs.existsSync(ignoreFilePath)) return [];
   try {
-    return parseGitignoreRules(fs.readFileSync(gitignorePath, "utf8"));
+    return parseGitignoreRules(fs.readFileSync(ignoreFilePath, "utf8"));
   } catch (_error) {
     return [];
   }

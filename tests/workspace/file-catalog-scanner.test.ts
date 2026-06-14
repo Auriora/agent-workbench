@@ -278,6 +278,40 @@ describe("file catalog scanner", () => {
     );
   });
 
+  it("uses root aiignore as an additional skip signal", async () => {
+    fs.writeFileSync(path.join(repoRoot, ".aiignore"), "scratch/\n*.prompt.log\n!keep.prompt.log\n");
+    fs.mkdirSync(path.join(repoRoot, "scratch"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "scratch", "notes.md"), "# Scratch\n");
+    fs.writeFileSync(path.join(repoRoot, "run.prompt.log"), "prompt trace\n");
+    fs.writeFileSync(path.join(repoRoot, "keep.prompt.log"), "kept trace\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    const result = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      max_files: 100
+    });
+    const paths = result.files.map((file) => file.path);
+
+    expect(paths).toContain(".aiignore");
+    expect(paths).toContain("keep.prompt.log");
+    expect(paths).not.toContain("scratch/notes.md");
+    expect(paths).not.toContain("run.prompt.log");
+    expect(result.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "scratch",
+          reason: "gitignore"
+        }),
+        expect.objectContaining({
+          path: "run.prompt.log",
+          reason: "gitignore"
+        })
+      ])
+    );
+  });
+
   it("preserves representative source coverage before docs noise when row-capped", async () => {
     fs.mkdirSync(path.join(repoRoot, "aaa-docs"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "cmd", "service"), { recursive: true });

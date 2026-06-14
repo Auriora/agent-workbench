@@ -49,6 +49,7 @@ export const ALLOWED_HIDDEN_DIRECTORIES = [
 ] as const;
 
 export const ALLOWED_HIDDEN_FILES = [
+  ".aiignore",
   ".dockerignore",
   ".editorconfig",
   ".env.example",
