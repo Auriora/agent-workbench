@@ -40,3 +40,36 @@ export function buildInvalidRepoScopeInputEnvelope(input: {
     ]
   });
 }
+
+export function buildRepoScopeProviderFailureEnvelope(input: {
+  repoRoot: string;
+  message: string;
+}): ResponseEnvelope<RepoScope> {
+  return makeEnvelope({
+    data: {
+      repo_root: input.repoRoot,
+      indexed_roots: [],
+      skipped_roots: [],
+      languages: [],
+      file_counts: {},
+      capability_counts: {
+        semantic: 0,
+        partial_semantic: 0,
+        resource_backed: 0,
+        unsupported: 0
+      },
+      generated_or_vendor_roots: []
+    },
+    meta: invalidResponseMeta({
+      repoRoot: input.repoRoot,
+      analysis_validity: "invalid_due_to_environment"
+    }),
+    errors: [
+      {
+        code: "provider_unavailable",
+        message: input.message,
+        retryable: true
+      }
+    ]
+  });
+}

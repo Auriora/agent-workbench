@@ -1119,6 +1119,48 @@ Do not promote an item when:
 - it is parity-only work for a public tool catalog with no agent friction
   signal.
 
+### EB036: Per-Repo Runtime Daemon And Session Sharing
+
+- Priority: P0
+- Status: proposed spec from dogfood evidence
+- Friction signal: multiple Codex sessions in the same large repository can
+  start separate Agent Workbench MCP processes that share one repo cache
+  database and contend during startup graph warmup, surfacing
+  `database is locked` from repo resources and graph-backed tools.
+- Runtime surface: MCP stdio launcher, per-repo daemon process, Unix socket
+  transport, graph warmup scheduler, SQLite store ownership, integration
+  health, doctor command, and package install/cleanup behavior.
+- Acceptance:
+  - Start one runtime daemon per repo when the first MCP instance for that repo
+    starts.
+  - Route later MCP instances for the same repo to the existing daemon instead
+    of opening their own graph store or starting another warmup writer.
+  - Keep the daemon alive while at least one MCP client is connected.
+  - Stop the daemon after the last client disconnects, with a short idle grace
+    period so rapid session restarts do not thrash warmup state.
+  - Serialize graph writes and allow graph reads to use the latest usable
+    snapshot while a refresh is running.
+  - Report `refreshing`, `blocked`, or `invalid_due_to_environment` envelopes
+    when the daemon, socket, or graph store is unavailable; never return raw
+    `database is locked` as non-JSON tool output.
+  - Keep socket paths repo-scoped and safe for multiple repositories open in
+    parallel.
+  - Provide a doctor/debug surface that shows daemon PID, socket path, repo
+    root, connected client count, warmup state, graph freshness, and last
+    failure.
+- Validation:
+  - Fixture tests that start two MCP stdio clients for the same repo and prove
+    only one daemon and one warmup writer are active.
+  - Tests that the daemon exits only after the last client disconnects plus the
+    configured idle grace period.
+  - Tests that a second repo gets a separate daemon and graph store.
+  - Tests for daemon crash/restart, stale socket cleanup, malformed socket
+    requests, and blocked graph-store startup.
+  - Dogfood post-warmup sweep against `aws-datalake` with multiple concurrent
+    clients and no `database is locked` resource or tool failures.
+- Promotion target: create a focused runtime-daemon spec before implementing
+  broad graph-backed tool hardening.
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |
@@ -1158,6 +1200,7 @@ Do not promote an item when:
 | Generated-file detection | EB033, under workspace hygiene and safety. |
 | Security-sensitive change detection | EB034, after threat-model reconciliation. |
 | Agent-readable changelog | EB035. |
+| Per-repo runtime daemon and shared sessions | EB036, under EB003 first-read reliability and EB014 large-repo graph warmup scale. |
 
 ## Immediate Next Specs
 

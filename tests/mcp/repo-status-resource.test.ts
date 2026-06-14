@@ -130,6 +130,39 @@ describe("repo status MCP resource", () => {
     ]);
   });
 
+  it("returns a structured environment failure envelope when the provider cannot read sqlite evidence", async () => {
+    const registered = registerMcpResource(repoStatusResource, {
+      repoRoot: "/repo",
+      getRepoStatus: () => {
+        throw new Error("database is locked");
+      }
+    });
+
+    const response = await registered.handler({ repo_root: "/requested" });
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
+      data: { repo_root: string; runtime_state: string; reason?: string };
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; message: string; retryable: boolean }>;
+    };
+
+    expect(parsed.data).toMatchObject({
+      repo_root: "/requested",
+      runtime_state: "invalid_due_to_environment"
+    });
+    expect(parsed.data.reason).toContain("database is locked");
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid_due_to_environment",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "provider_unavailable",
+        message: expect.stringContaining("database is locked"),
+        retryable: true
+      })
+    ]);
+  });
+
   it("keeps default status bounded without scanned coverage when no snapshot exists", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-status-cold-"));
     try {

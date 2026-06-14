@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   buildInvalidRepoOverviewInputEnvelope,
+  buildRepoOverviewProviderFailureEnvelope,
   buildRepoOverviewEnvelope
 } from "../../../../presentation/repo-overview-presenter.js";
 import type { McpResourceDeclaration } from "../index.js";
@@ -66,10 +67,19 @@ export const repoOverviewResource: McpResourceDeclaration = {
         };
       }
 
-      const result = await context.getRepoOverview({
-        repo_root: args.repo_root ?? context.repoRoot
-      });
-      const envelope = buildRepoOverviewEnvelope(result);
+      const repoRoot = args.repo_root ?? context.repoRoot;
+      let envelope;
+      try {
+        const result = await context.getRepoOverview({
+          repo_root: repoRoot
+        });
+        envelope = buildRepoOverviewEnvelope(result);
+      } catch (error) {
+        envelope = buildRepoOverviewProviderFailureEnvelope({
+          repoRoot,
+          message: providerFailureMessage("repo:///overview", error)
+        });
+      }
 
       return {
         contents: [
@@ -96,4 +106,9 @@ function getRepoResourceArgumentInput(request: unknown): unknown {
   }
 
   return undefined;
+}
+
+function providerFailureMessage(resourceUri: string, error: unknown): string {
+  const reason = error instanceof Error ? error.message : String(error);
+  return `${resourceUri} provider could not read required runtime evidence: ${reason}`;
 }

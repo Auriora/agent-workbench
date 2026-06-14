@@ -1,6 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   buildInvalidRepoScopeInputEnvelope,
+  buildRepoScopeProviderFailureEnvelope,
   buildRepoScopeEnvelope
 } from "../../../../presentation/repo-scope-presenter.js";
 import type { McpResourceDeclaration } from "../index.js";
@@ -66,8 +67,17 @@ export const repoScopeResource: McpResourceDeclaration = {
         };
       }
 
-      const result = await context.getRepoScope({ repo_root: args.repo_root ?? context.repoRoot });
-      const envelope = buildRepoScopeEnvelope(result);
+      const repoRoot = args.repo_root ?? context.repoRoot;
+      let envelope;
+      try {
+        const result = await context.getRepoScope({ repo_root: repoRoot });
+        envelope = buildRepoScopeEnvelope(result);
+      } catch (error) {
+        envelope = buildRepoScopeProviderFailureEnvelope({
+          repoRoot,
+          message: providerFailureMessage("repo:///scope", error)
+        });
+      }
 
       return {
         contents: [
@@ -94,4 +104,9 @@ function getRepoResourceArgumentInput(request: unknown): unknown {
   }
 
   return undefined;
+}
+
+function providerFailureMessage(resourceUri: string, error: unknown): string {
+  const reason = error instanceof Error ? error.message : String(error);
+  return `${resourceUri} provider could not read required runtime evidence: ${reason}`;
 }

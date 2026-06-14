@@ -477,12 +477,13 @@ function dedupeUnavailableNextActions(
 
 export function invalidResponseMeta(input: {
   repoRoot: string;
+  analysis_validity?: ResponseMetadata["analysis_validity"];
   freshness?: ResponseMetadata["freshness"];
   verification_status?: VerificationStatus;
   budget?: ResponseMetadata["budget"];
 }): ResponseMetadata {
   return {
-    analysis_validity: "invalid",
+    analysis_validity: input.analysis_validity ?? "invalid",
     freshness: input.freshness ?? "unknown",
     scope: emptyScope(input.repoRoot),
     capability_level: "unsupported",

@@ -107,6 +107,38 @@ describe("repo scope MCP resource", () => {
       })
     ]);
   });
+
+  it("returns a structured environment failure envelope when the scope provider cannot read sqlite evidence", async () => {
+    const registered = registerMcpResource(repoScopeResource, {
+      repoRoot: "/repo",
+      getRepoScope: () => {
+        throw new Error("database is locked");
+      }
+    });
+
+    const response = await registered.handler({ repo_root: "/requested" });
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
+      data: { repo_root: string; languages: string[] };
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; message: string; retryable: boolean }>;
+    };
+
+    expect(parsed.data).toMatchObject({
+      repo_root: "/requested",
+      languages: []
+    });
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid_due_to_environment",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "provider_unavailable",
+        message: expect.stringContaining("database is locked"),
+        retryable: true
+      })
+    ]);
+  });
 });
 
 describe("repo overview MCP resource", () => {
@@ -168,6 +200,37 @@ describe("repo overview MCP resource", () => {
 
     expect(parsed.data.repo_root).toBe("/requested");
     expect(parsed.data.recommended_first_calls).toEqual(result.overview.recommended_first_calls);
+  });
+
+  it("returns a structured environment failure envelope when the overview provider cannot read sqlite evidence", async () => {
+    const registered = registerMcpResource(repoOverviewResource, {
+      repoRoot: "/repo",
+      getRepoOverview: () => {
+        throw new Error("database is locked");
+      }
+    });
+
+    const response = await registered.handler({ repo_root: "/requested" });
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
+      data: { repo_root: string; summary: string; recommended_first_calls: unknown[] };
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; message: string; retryable: boolean }>;
+    };
+
+    expect(parsed.data.repo_root).toBe("/requested");
+    expect(parsed.data.summary).toContain("required runtime evidence could not be read");
+    expect(parsed.data.recommended_first_calls).toEqual([]);
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid_due_to_environment",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "provider_unavailable",
+        message: expect.stringContaining("database is locked"),
+        retryable: true
+      })
+    ]);
   });
 
   it("prioritizes durable root and guide docs over templates and update notes", async () => {

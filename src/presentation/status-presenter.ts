@@ -52,3 +52,31 @@ export function buildInvalidStatusInputEnvelope(input: {
     ]
   });
 }
+
+export function buildStatusProviderFailureEnvelope(input: {
+  repoRoot: string;
+  message: string;
+}): ResponseEnvelope<RuntimeStatus> {
+  return makeEnvelope({
+    data: {
+      repo_root: input.repoRoot,
+      runtime_state: "invalid_due_to_environment",
+      freshness: "unknown",
+      indexed_roots: [],
+      skipped_roots: [],
+      adapter_coverage: [],
+      reason: input.message
+    },
+    meta: invalidResponseMeta({
+      repoRoot: input.repoRoot,
+      analysis_validity: "invalid_due_to_environment"
+    }),
+    errors: [
+      {
+        code: "provider_unavailable",
+        message: input.message,
+        retryable: true
+      }
+    ]
+  });
+}

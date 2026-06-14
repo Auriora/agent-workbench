@@ -36,3 +36,32 @@ export function buildInvalidRepoOverviewInputEnvelope(input: {
     ]
   });
 }
+
+export function buildRepoOverviewProviderFailureEnvelope(input: {
+  repoRoot: string;
+  message: string;
+}): ResponseEnvelope<RepoOverview> {
+  return makeEnvelope({
+    data: {
+      repo_root: input.repoRoot,
+      summary: "Repository overview is unavailable because required runtime evidence could not be read.",
+      languages: [],
+      platforms: [],
+      key_files: [],
+      key_docs: [],
+      validation_hints: [],
+      recommended_first_calls: []
+    },
+    meta: invalidResponseMeta({
+      repoRoot: input.repoRoot,
+      analysis_validity: "invalid_due_to_environment"
+    }),
+    errors: [
+      {
+        code: "provider_unavailable",
+        message: input.message,
+        retryable: true
+      }
+    ]
+  });
+}
