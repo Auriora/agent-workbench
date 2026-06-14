@@ -23,6 +23,7 @@ import type {
   DocsIndexSearchResult,
   DocsIndexState,
   FileCatalogPort,
+  GraphMaintenancePort,
   GraphQueryPort,
   GraphWritePort,
   SnapshotPort
@@ -134,7 +135,13 @@ export type GraphStoreOptions = {
   enforceForeignKeys?: boolean;
 };
 
-export interface GraphStore extends GraphWritePort, GraphQueryPort, SnapshotPort, FileCatalogPort, DocsIndexPort {
+export interface GraphStore
+  extends GraphWritePort,
+    GraphQueryPort,
+    GraphMaintenancePort,
+    SnapshotPort,
+    FileCatalogPort,
+    DocsIndexPort {
   db: Database.Database;
   close(): void;
   validateSchema(): boolean;
@@ -941,7 +948,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       return;
     }
 
-    this.db.prepare("DELETE FROM snapshots WHERE id = @id").run({ id: snapshotId });
+    this.clearSnapshotRecords({ snapshotId });
   }
 
   public async clearUnresolvedReferences(input: {
@@ -1184,10 +1191,80 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       return;
     }
 
+    const fileRow = this.getFileRow(snapshotId, input.path);
+    if (fileRow) {
+      this.clearFileRecords({ snapshotId, filePath: input.path, fileId: fileRow.id });
+    }
+
     this.db.prepare("DELETE FROM files WHERE snapshot_id = @snapshotId AND path = @path").run({
       snapshotId,
       path: input.path
     });
+  }
+
+  public async pruneRepositorySnapshots(input: {
+    repo_root: string;
+    retain_latest_snapshots: number;
+    retain_latest_fresh_snapshots: number;
+    vacuum: boolean;
+  }): Promise<{
+    repo_root: string;
+    deleted_snapshots: number;
+    retained_snapshot_ids: readonly string[];
+    optimized: boolean;
+    vacuumed: boolean;
+  }> {
+    const retainLatestSnapshots = Math.max(1, input.retain_latest_snapshots);
+    const retainLatestFreshSnapshots = Math.max(0, input.retain_latest_fresh_snapshots);
+    const snapshots = this.db
+      .prepare(
+        `
+        SELECT id, repo_identity, config_identity, freshness, schema_version, created_at
+        FROM snapshots
+        WHERE repo_identity = @repoRoot
+        ORDER BY id DESC
+      `
+      )
+      .all({ repoRoot: input.repo_root }) as SnapshotRow[];
+
+    const retained = new Set<number>();
+    for (const snapshot of snapshots.slice(0, retainLatestSnapshots)) {
+      retained.add(snapshot.id);
+    }
+    for (const snapshot of snapshots.filter((candidate) => candidate.freshness === "fresh").slice(0, retainLatestFreshSnapshots)) {
+      retained.add(snapshot.id);
+    }
+
+    const deleteIds = snapshots.map((snapshot) => snapshot.id).filter((snapshotId) => !retained.has(snapshotId));
+    if (deleteIds.length > 0) {
+      const tx = this.db.transaction(() => {
+        this.deleteSnapshotData(deleteIds);
+        this.rebuildNodeFts();
+      });
+      tx();
+    }
+
+    const optimized = deleteIds.length > 0;
+    if (optimized) {
+      this.optimizeStorage();
+    }
+
+    let vacuumed = false;
+    if (input.vacuum && deleteIds.length > 0) {
+      this.db.exec("VACUUM");
+      vacuumed = true;
+    }
+
+    return {
+      repo_root: input.repo_root,
+      deleted_snapshots: deleteIds.length,
+      retained_snapshot_ids: snapshots
+        .map((snapshot) => snapshot.id)
+        .filter((snapshotId) => retained.has(snapshotId))
+        .map((snapshotId) => String(snapshotId)),
+      optimized,
+      vacuumed
+    };
   }
 
   public async replaceSnapshotDocs(input: {
@@ -1589,6 +1666,55 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     });
   }
 
+  private clearSnapshotRecords(input: { snapshotId: number }): void {
+    this.deleteSnapshotData([input.snapshotId]);
+    this.rebuildNodeFts();
+  }
+
+  private deleteSnapshotData(snapshotIds: readonly number[]): void {
+    if (snapshotIds.length === 0) {
+      return;
+    }
+    const placeholders = sqlPlaceholders(snapshotIds.length);
+    this.db
+      .prepare(`DELETE FROM docs_fts WHERE rowid IN (SELECT id FROM docs_documents WHERE snapshot_id IN (${placeholders}))`)
+      .run(...snapshotIds);
+    this.db
+      .prepare(`DELETE FROM docs_headings WHERE document_id IN (SELECT id FROM docs_documents WHERE snapshot_id IN (${placeholders}))`)
+      .run(...snapshotIds);
+    this.db.prepare(`DELETE FROM docs_documents WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
+    this.db
+      .prepare(`DELETE FROM edges WHERE file_id IN (SELECT id FROM files WHERE snapshot_id IN (${placeholders}))`)
+      .run(...snapshotIds);
+    this.db
+      .prepare(`DELETE FROM unresolved_refs WHERE file_id IN (SELECT id FROM files WHERE snapshot_id IN (${placeholders}))`)
+      .run(...snapshotIds);
+    this.db
+      .prepare(`DELETE FROM nodes WHERE file_id IN (SELECT id FROM files WHERE snapshot_id IN (${placeholders}))`)
+      .run(...snapshotIds);
+    this.db.prepare(`DELETE FROM files WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
+    this.db.prepare(`DELETE FROM snapshots WHERE id IN (${placeholders})`).run(...snapshotIds);
+  }
+
+  private rebuildNodeFts(): void {
+    this.db.prepare("DELETE FROM node_fts").run();
+    this.db
+      .prepare(
+        `
+        INSERT INTO node_fts (node_id, name, qualified_name, signature, docstring)
+        SELECT id, name, qualified_name, signature, docstring
+        FROM nodes
+      `
+      )
+      .run();
+  }
+
+  private optimizeStorage(): void {
+    this.db.prepare("INSERT INTO node_fts(node_fts) VALUES ('optimize')").run();
+    this.db.prepare("INSERT INTO docs_fts(docs_fts) VALUES ('optimize')").run();
+    this.db.pragma("optimize");
+  }
+
   private mapGraphNodeRow(row: NodeWithFileRow): GraphNodeReadModel {
     return {
       id: row.id,
@@ -1821,6 +1947,10 @@ function decodeDocsCursor(value: string | undefined): DocsCursor | undefined {
   return undefined;
 }
 
+function sqlPlaceholders(count: number): string {
+  return Array.from({ length: count }, () => "?").join(", ");
+}
+
 function slugifyDocsHeading(value: string): string {
   const slug = value
     .trim()
@@ -1949,11 +2079,16 @@ function migrate(db: Database.Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_files_path ON files(path);
+    CREATE INDEX IF NOT EXISTS idx_snapshots_repo_id ON snapshots(repo_identity, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_snapshots_repo_freshness_id ON snapshots(repo_identity, freshness, id DESC);
     CREATE INDEX IF NOT EXISTS idx_nodes_lower_name ON nodes(lower_name);
     CREATE INDEX IF NOT EXISTS idx_nodes_qualified_name ON nodes(qualified_name);
     CREATE INDEX IF NOT EXISTS idx_nodes_file_range ON nodes(file_id, start_line, start_column);
+    CREATE INDEX IF NOT EXISTS idx_nodes_file_id ON nodes(file_id);
     CREATE INDEX IF NOT EXISTS idx_edges_source ON edges(source_node_id);
     CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_node_id);
+    CREATE INDEX IF NOT EXISTS idx_edges_file_id ON edges(file_id);
+    CREATE INDEX IF NOT EXISTS idx_unresolved_refs_file_id ON unresolved_refs(file_id);
     CREATE INDEX IF NOT EXISTS idx_files_snapshot_path ON files(snapshot_id, path);
     CREATE INDEX IF NOT EXISTS idx_docs_documents_snapshot_path ON docs_documents(snapshot_id, path);
     CREATE INDEX IF NOT EXISTS idx_docs_headings_document ON docs_headings(document_id, line);

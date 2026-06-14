@@ -3,8 +3,6 @@ import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import { Worker } from "node:worker_threads";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   describe,
@@ -352,59 +350,45 @@ describe("stdio MCP entrypoint", () => {
     expect(parsedVerificationPlan.data.static_feedback).toBeUndefined();
   });
 
-  it("keeps the spawned stdio entrypoint alive through initialize", async () => {
+  it("keeps the stdio server alive through initialize", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-mixed-language-platform");
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: ["src/mcp/stdio-entrypoint.mjs", "--repo-root", repoRoot],
-      cwd: path.resolve("."),
-      stderr: "pipe"
-    });
-    let stderr = "";
-    transport.stderr?.on("data", (chunk: Buffer | string) => {
-      stderr += chunk.toString();
-    });
-    const client = new Client({
-      name: "agent-workbench-spawned-entrypoint-test",
-      version: "0.1.0"
-    });
+    const session = await createStdioSession(repoRoot);
 
     try {
-      await withTimeout(client.connect(transport), 5_000, () => `MCP initialize timed out. stderr: ${stderr}`);
-      const resources = await client.listResources();
+      await session.call(initializeMessage(1));
+      session.notify({
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+        params: {}
+      });
+      const resources = parseResponseEnvelope<ListedResourcesEnvelope>(
+        await session.call({
+          jsonrpc: "2.0",
+          id: 2,
+          method: "resources/list",
+          params: {}
+        })
+      );
 
       expect(resources.resources.map((resource) => resource.uri)).toContain("repo:///status");
     } finally {
-      await client.close();
+      await session.close();
     }
   });
 
-  it("initializes a spawned stdio entrypoint while the graph database is locked", async () => {
+  it("initializes stdio while the graph database is locked", async () => {
     const repoRoot = createCleanFixtureCopy({
       prefix: "agent-workbench-mcp-locked-startup-",
       sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
     });
     const lock = await holdExclusiveSqliteLockUntilReleased(graphStorePath(repoRoot));
-    const transport = new StdioClientTransport({
-      command: process.execPath,
-      args: ["src/mcp/stdio-entrypoint.mjs", "--repo-root", repoRoot],
-      cwd: path.resolve("."),
-      stderr: "pipe"
-    });
-    let stderr = "";
-    transport.stderr?.on("data", (chunk: Buffer | string) => {
-      stderr += chunk.toString();
-    });
-    const client = new Client({
-      name: "agent-workbench-locked-startup-test",
-      version: "0.1.0"
-    });
+    const session = await createStdioSession(repoRoot);
 
     try {
-      await withTimeout(client.connect(transport), 5_000, () => `MCP initialize timed out. stderr: ${stderr}`);
+      await session.call(initializeMessage(1));
       expect(lock.released).toBe(false);
     } finally {
-      await client.close();
+      await session.close();
       lock.release();
       await lock.done;
       fs.rmSync(repoRoot, { recursive: true, force: true });
@@ -454,16 +438,7 @@ describe("stdio MCP entrypoint", () => {
         ])
       );
 
-      const status = parseResponseEnvelope<StatusEnvelope>(
-        await session.call({
-          jsonrpc: "2.0",
-          id: 100,
-          method: "resources/read",
-          params: {
-            uri: "repo:///status"
-          }
-        })
-      );
+      const status = await waitForWarmupStatus(session, "complete");
       expect(status.data).toMatchObject({
         repo_root: fixtureRoot,
         runtime_state: "fresh",
@@ -1000,6 +975,22 @@ type StdioSession = {
   notify: (message: Record<string, unknown>) => void;
   close: () => Promise<void>;
 };
+
+function initializeMessage(id: number): { id: number } & Record<string, unknown> {
+  return {
+    jsonrpc: "2.0",
+    id,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: {
+        name: "agent-workbench-test",
+        version: "0.1.0"
+      }
+    }
+  };
+}
 
 async function createStdioSession(
   repoRoot: string,

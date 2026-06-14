@@ -345,6 +345,7 @@ describe("graph store", () => {
 
       await store.clearFile({ snapshot_id: snapshot.id, file_path: "src/old.py" });
       expect(await store.findNodesByName({ snapshot_id: snapshot.id, query: "MovedSymbol", exact: true })).toEqual([]);
+      expect(countRows(store.db, "node_fts")).toBe(0);
 
       await store.replaceSnapshotExtraction({
         batch: extractionBatch({
@@ -362,6 +363,142 @@ describe("graph store", () => {
           file_path: "src/new.py"
         })
       ]);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("cleans FTS rows when file catalog entries are removed", async () => {
+    const store = openGraphStore(path.join(dir, "remove-entry-cleanup.sqlite"));
+    const snapshot = snapshotState("461");
+
+    try {
+      await store.upsertSnapshot({ snapshot });
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: snapshot.id,
+          source_path: "src/delete_me.py",
+          node_id: "delete-me-node",
+          name: "DeleteMe"
+        }),
+        replace: true
+      });
+      expect(countRows(store.db, "node_fts")).toBe(1);
+
+      await store.removeEntry({ snapshot_id: snapshot.id, path: "src/delete_me.py" });
+
+      expect(await store.getFile({ snapshot_id: snapshot.id, path: "src/delete_me.py" })).toBeNull();
+      expect(await store.findNodesByName({ snapshot_id: snapshot.id, query: "DeleteMe", exact: true })).toEqual([]);
+      expect(countRows(store.db, "node_fts")).toBe(0);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("cleans FTS rows when snapshots are cleared", async () => {
+    const store = openGraphStore(path.join(dir, "snapshot-cleanup.sqlite"));
+    const snapshot = snapshotState("462");
+
+    try {
+      await store.upsertSnapshot({ snapshot });
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: snapshot.id,
+          source_path: "src/service.py",
+          node_id: "snapshot-node",
+          name: "SnapshotSymbol"
+        }),
+        replace: true
+      });
+      await store.replaceSnapshotDocs({
+        snapshot_id: snapshot.id,
+        repo_root: snapshot.repo_root,
+        documents: [
+          {
+            path: "docs/design.md",
+            title: "Design",
+            headings: [{ id: "design", text: "Design", depth: 1, line: 1 }],
+            selected_text: "Design details",
+            content_hash: "docs-hash",
+            byte_count: 14,
+            indexed_at: "2026-05-08T00:00:00.000Z",
+            truncated: false
+          }
+        ]
+      });
+      expect(countRows(store.db, "node_fts")).toBe(1);
+      expect(countRows(store.db, "docs_fts")).toBe(1);
+
+      await store.clearSnapshot({ snapshot_id: snapshot.id });
+
+      expect(await store.getSnapshot({ repo_root: snapshot.repo_root, snapshot_id: snapshot.id })).toBeNull();
+      expect(countRows(store.db, "node_fts")).toBe(0);
+      expect(countRows(store.db, "docs_fts")).toBe(0);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("prunes old repository snapshots and optimizes storage", async () => {
+    const store = openGraphStore(path.join(dir, "snapshot-prune.sqlite"));
+
+    try {
+      for (let index = 1; index <= 6; index += 1) {
+        const snapshot = {
+          ...snapshotState(String(4600 + index)),
+          freshness: index === 5 ? "refreshing" as const : "fresh" as const,
+          created_at: `2026-05-08T00:00:0${index}.000Z`,
+          updated_at: `2026-05-08T00:00:0${index}.000Z`
+        };
+        await store.upsertSnapshot({ snapshot });
+        await store.replaceSnapshotExtraction({
+          batch: extractionBatch({
+            snapshot_id: snapshot.id,
+            source_path: `src/file_${index}.py`,
+            node_id: `node-${index}`,
+            name: `Symbol${index}`
+          }),
+          replace: true
+        });
+        await store.replaceSnapshotDocs({
+          snapshot_id: snapshot.id,
+          repo_root: snapshot.repo_root,
+          documents: [
+            {
+              path: `docs/doc_${index}.md`,
+              title: `Doc ${index}`,
+              headings: [{ id: `doc-${index}`, text: `Doc ${index}`, depth: 1, line: 1 }],
+              selected_text: `Doc ${index}`,
+              content_hash: `doc-hash-${index}`,
+              byte_count: 10,
+              indexed_at: "2026-05-08T00:00:00.000Z",
+              truncated: false
+            }
+          ]
+        });
+      }
+
+      const result = await store.pruneRepositorySnapshots({
+        repo_root: "/tmp/repo",
+        retain_latest_snapshots: 2,
+        retain_latest_fresh_snapshots: 2,
+        vacuum: true
+      });
+
+      expect(result).toEqual({
+        repo_root: "/tmp/repo",
+        deleted_snapshots: 3,
+        retained_snapshot_ids: ["4606", "4605", "4604"],
+        optimized: true,
+        vacuumed: true
+      });
+      expect((await store.listSnapshots({ repo_root: "/tmp/repo" })).map((snapshot) => snapshot.id)).toEqual([
+        "4604",
+        "4605",
+        "4606"
+      ]);
+      expect(countRows(store.db, "node_fts")).toBe(3);
+      expect(countRows(store.db, "docs_fts")).toBe(3);
     } finally {
       store.close();
     }
@@ -461,6 +598,10 @@ function extractionBatch(input: {
     test_hints: [],
     extracted_at: "2026-05-08T00:00:00.000Z"
   };
+}
+
+function countRows(db: import("better-sqlite3").Database, table: string): number {
+  return (db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count;
 }
 
 async function holdExclusiveSqliteLock(

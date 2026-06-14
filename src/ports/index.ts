@@ -103,6 +103,23 @@ export interface GraphWritePort {
   clearUnresolvedReferences(input: { snapshot_id: string; source_node_id: string }): Promise<void>;
 }
 
+export type GraphPruneResult = {
+  repo_root: string;
+  deleted_snapshots: number;
+  retained_snapshot_ids: readonly string[];
+  optimized: boolean;
+  vacuumed: boolean;
+};
+
+export interface GraphMaintenancePort {
+  pruneRepositorySnapshots(input: {
+    repo_root: string;
+    retain_latest_snapshots: number;
+    retain_latest_fresh_snapshots: number;
+    vacuum: boolean;
+  }): Promise<GraphPruneResult>;
+}
+
 export interface SnapshotPort {
   getSnapshot(input: { repo_root: string; snapshot_id?: string }): Promise<SnapshotState | null>;
   listSnapshots(input: { repo_root: string }): Promise<readonly SnapshotState[]>;
