@@ -287,6 +287,46 @@ describe("graph store", () => {
     }
   });
 
+  it("uses B-tree exact lookup and FTS fuzzy lookup plans for symbols", () => {
+    const store = openGraphStore(path.join(dir, "symbol-query-plan.sqlite"));
+
+    try {
+      const exactPlan = store.db
+        .prepare(
+          `
+          EXPLAIN QUERY PLAN
+          SELECT nodes.*, files.path as path
+          FROM nodes
+          INNER JOIN files ON files.id = nodes.file_id
+          WHERE files.snapshot_id = @snapshotId AND nodes.lower_name = @query
+          ORDER BY nodes.name ASC
+          LIMIT @maxRows
+        `
+        )
+        .all({ snapshotId: 1, query: "runner", maxRows: 20 }) as Array<{ detail: string }>;
+      const fuzzyPlan = store.db
+        .prepare(
+          `
+          EXPLAIN QUERY PLAN
+          SELECT DISTINCT nodes.*, files.path as path
+          FROM node_fts
+          INNER JOIN nodes ON nodes.id = node_fts.node_id
+          INNER JOIN files ON files.id = nodes.file_id
+          WHERE files.snapshot_id = @snapshotId
+            AND node_fts MATCH @ftsQuery
+          ORDER BY bm25(node_fts, -8.0, -7.0, -3.0, -2.0) DESC, nodes.name ASC
+          LIMIT @maxRows
+        `
+        )
+        .all({ snapshotId: 1, ftsQuery: "run*", maxRows: 20 }) as Array<{ detail: string }>;
+
+      expect(exactPlan.map((row) => row.detail).join("\n")).toContain("idx_nodes_lower_name");
+      expect(fuzzyPlan.map((row) => row.detail).join("\n")).toContain("node_fts");
+    } finally {
+      store.close();
+    }
+  });
+
   it("replaces stale file graph evidence and refreshes search rows", async () => {
     const store = openGraphStore(path.join(dir, "replace.sqlite"));
     const snapshot = snapshotState("45");

@@ -275,25 +275,27 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     if (query.length === 0) {
       return [];
     }
+    const ftsQuery = buildNodeFtsQuery(query);
+    if (ftsQuery.length === 0) {
+      return [];
+    }
 
     const rows = this.db
       .prepare(
         `
         SELECT DISTINCT nodes.*, files.path as path
-        FROM nodes
+        FROM node_fts
+        INNER JOIN nodes ON nodes.id = node_fts.node_id
         INNER JOIN files ON files.id = nodes.file_id
         WHERE files.snapshot_id = @snapshotId
-          AND (lower(nodes.name) LIKE @queryLike
-            OR lower(coalesce(nodes.qualified_name, '')) LIKE @queryLike
-            OR lower(coalesce(nodes.signature, '')) LIKE @queryLike
-            OR lower(coalesce(nodes.docstring, '')) LIKE @queryLike)
-        ORDER BY nodes.name ASC
+          AND node_fts MATCH @ftsQuery
+        ORDER BY bm25(node_fts, -8.0, -7.0, -3.0, -2.0) DESC, nodes.name ASC
         LIMIT @maxRows
       `
       )
       .all({
         snapshotId,
-        queryLike: `%${query}%`,
+        ftsQuery,
         maxRows
       }) as NodeWithFileRow[];
 
@@ -1842,6 +1844,21 @@ function buildDocsFtsQuery(query: string): string {
   return tokenizeDocsQuery(query)
     .map((term) => `"${term.replaceAll('"', '""')}"`)
     .join(" OR ");
+}
+
+function buildNodeFtsQuery(query: string): string {
+  return tokenizeNodeQuery(query)
+    .map((term) => `${term}*`)
+    .join(" AND ");
+}
+
+function tokenizeNodeQuery(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/[^a-z0-9_]+/u)
+    .map((term) => term.trim())
+    .filter((term) => term.length > 0)
+    .slice(0, 12);
 }
 
 function tokenizeDocsQuery(query: string): string[] {
