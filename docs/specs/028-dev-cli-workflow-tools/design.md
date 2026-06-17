@@ -49,9 +49,9 @@ awb
     preflight
 ```
 
-The command name `awb` is recommended because it is short and clearly maps to
-Agent Workbench. `agent-workbench-dev` can be added as a secondary script alias
-if desired, but documentation should use one primary command consistently.
+**Decision:** the primary command is `awb`. No secondary alias is installed;
+`proj` is removed entirely rather than deprecated, since it was scaffold-only
+and nothing external depends on it. Documentation uses `awb` exclusively.
 
 ### Architecture
 
@@ -96,10 +96,10 @@ SQLite metadata directly because the goal is inspection, not mutation.
 
 Update `tools/devcli/pyproject.toml`:
 
-- package name: `agent-workbench-devcli` or `auriora-agent-workbench-devcli`
+- package name: `agent-workbench-devcli`
 - description: Agent Workbench developer CLI
 - script entry point: `awb = "auriora_dev.cli:app"`
-- optional script alias: `agent-workbench-dev = "auriora_dev.cli:app"`
+- no secondary script alias
 
 Update help text and READMEs to remove template language.
 
@@ -387,8 +387,6 @@ GitHub credentials.
 
 ## Open Questions
 
-- Should the primary command be `awb` only, or should `agent-workbench-dev` be
-  installed as an alias?
 - Should `awb package check` run focused integration tests by default, or gate
   them behind `--with-integration`?
 - Should the plugin cachebuster helper remain an external Codex skill path or

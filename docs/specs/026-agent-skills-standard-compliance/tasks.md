@@ -22,15 +22,18 @@ T005,T006 -> T007
 
 ## Phase 1: Decision And Scope
 
-- [ ] T001 Record the compliance target decision.
+- [x] T001 Record the compliance target decision.
   - Files: `docs/specs/026-agent-skills-standard-compliance/design.md`,
     `docs/runbooks/codex-agent-workbench-plugin.md`
   - Acceptance: The repo states whether it targets strict Agent Skills
     portability, Codex-local compatibility, or a hybrid model.
-  - Evidence: Pending.
-  - [ ] T001.1 Decide the target for checked-in Agent Workbench skills.
-  - [ ] T001.2 Decide how Brooks-Lint portability should be handled.
-  - [ ] T001.3 Record third-party cached skills as non-owned observations.
+  - Evidence: Hybrid target recorded in design.md (Compliance Levels and
+    Brooks-Lint Portability Decision sections): owned checked-in skills are
+    strict, Brooks-Lint stays Codex-local with a documented exception,
+    third-party cached skills are observation-only.
+  - [x] T001.1 Decide the target for checked-in Agent Workbench skills.
+  - [x] T001.2 Decide how Brooks-Lint portability should be handled.
+  - [x] T001.3 Record third-party cached skills as non-owned observations.
 
 - [ ] T002 Define owned skill validation rules.
   - Depends on: T001

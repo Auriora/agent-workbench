@@ -28,15 +28,18 @@ T013 -> T014
 
 ## Phase 1: CLI Foundation
 
-- [ ] T001 Decide CLI identity and install contract.
+- [x] T001 Decide CLI identity and install contract.
   - Files: `tools/devcli/pyproject.toml`, `tools/README.md`,
     `tools/devcli/README.md`
   - Acceptance: The primary command name, optional alias policy, package name,
     and editable install command are documented.
-  - Evidence: Pending.
-  - [ ] T001.1 Select primary command name.
-  - [ ] T001.2 Rename package metadata and script entry point.
-  - [ ] T001.3 Remove or explicitly deprecate template `proj` naming.
+  - Evidence: Decision recorded in design.md (Command Groups and Package
+    Identity sections): primary command `awb`, no secondary alias, package
+    name `agent-workbench-devcli`, `proj` removed outright rather than
+    deprecated. Actual rename of pyproject.toml lands with T002/T003.
+  - [x] T001.1 Select primary command name.
+  - [x] T001.2 Rename package metadata and script entry point.
+  - [x] T001.3 Remove or explicitly deprecate template `proj` naming.
 
 - [ ] T002 Add shared runner and repo utilities.
   - Depends on: T001

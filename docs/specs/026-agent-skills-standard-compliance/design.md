@@ -40,7 +40,7 @@ Observed but not owned:
 
 ### Compliance Levels
 
-The design should choose one level during implementation:
+This spec adopts one of the following levels:
 
 - `strict`: all owned skills follow the Agent Skills specification and
   recommended portability guidance, including skill-root-relative references.
@@ -49,9 +49,15 @@ The design should choose one level during implementation:
 - `hybrid`: checked-in Agent Workbench skills are strict, while Brooks-Lint
   remains a documented Codex-local skill set until repackaged.
 
-The recommended starting point is `hybrid`: keep Agent Workbench's checked-in
-plugin skill strict, document Brooks-Lint as local/non-owned unless it is moved
-into this repository, and add validation that only gates owned paths.
+**Decision:** Agent Workbench targets `hybrid`. Checked-in skills under
+`plugins/agent-workbench/skills/**/SKILL.md` (and any future checked-in skill
+path) are held to the `strict` Agent Skills specification. Brooks-Lint and any
+other skill set that is not checked into this repository stay Codex-local and
+are exempt from strict portability until explicitly promoted into this
+repository. Its `../_shared/...` cross-root references are a documented,
+accepted non-portability exception: they are convenient for a single local
+Codex installation and are not currently distributed, so restructuring them
+now has no payoff. Validation added in T002/T003 only gates owned paths.
 
 ## Low-Level Design
 
@@ -89,17 +95,18 @@ Likely targets:
 ### Brooks-Lint Portability Decision
 
 Brooks-Lint currently lives outside this repository under the user's Codex
-skills directory. It should not be changed as part of Agent Workbench plugin
-validation unless the user explicitly promotes it into this repository or a
-plugin. The spec should record one of these outcomes:
+skills directory. It is not changed as part of Agent Workbench plugin
+validation.
 
-- leave as local Codex skill set with documented non-portable shared references
-- package as a plugin with shared references inside the plugin bundle
-- duplicate or vendor shared references under each skill root
-
-The likely best fit is plugin packaging with shared references inside the
-plugin bundle, because it avoids duplication while keeping references
-portable within the distributed artifact.
+**Decision:** leave Brooks-Lint as a local, non-owned Codex skill set with its
+existing `../_shared/...` references documented as a non-portable exception
+(see Compliance Levels above). If Brooks-Lint is later promoted into this
+repository or a plugin, the pre-recorded follow-up is to package it as a
+plugin with shared references kept inside the plugin bundle, rather than
+duplicating or vendoring shared content under each skill root — that avoids
+duplication while keeping references portable within the distributed
+artifact. No restructuring happens until that promotion decision is made
+explicitly in a follow-up task or spec.
 
 ## Operational Considerations
 
@@ -113,5 +120,3 @@ portable within the distributed artifact.
 
 - Should Agent Workbench maintain a generic skill validator script, or should
   the check be embedded as a Vitest integration test?
-- Should Brooks-Lint be packaged as an Agent Workbench-adjacent plugin or kept
-  as a separate user-level skill collection?
