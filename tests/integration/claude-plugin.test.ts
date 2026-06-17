@@ -14,7 +14,6 @@ describe("Claude Code plugin artifacts", () => {
       name: string;
       displayName: string;
       skills: string;
-      hooks: string;
       mcpServers: string;
     };
     const mcpConfig = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8")) as {
@@ -34,7 +33,6 @@ describe("Claude Code plugin artifacts", () => {
       name: "agent-workbench",
       displayName: "Agent Workbench",
       skills: "./skills/",
-      hooks: "./hooks/hooks.json",
       mcpServers: "./.mcp.json"
     });
     expect(mcpConfig.mcpServers["agent-workbench"]).toMatchObject({

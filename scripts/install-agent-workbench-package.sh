@@ -63,6 +63,7 @@ required_paths=(
   "src"
   "docs"
   "plugins/agent-workbench/.codex-plugin/plugin.json"
+  "plugins/agent-workbench/.claude-plugin/marketplace.json"
   "plugins/agent-workbench/.mcp.json"
   "plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json"
   "plugins/agent-workbench/claude-plugin/.mcp.json"

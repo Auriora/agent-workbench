@@ -1,0 +1,16 @@
+{
+  "name": "agent-workbench-local",
+  "description": "Local marketplace for the Agent Workbench Claude Code plugin.",
+  "owner": {
+    "name": "Auriora",
+    "url": "https://github.com/bcherrington"
+  },
+  "plugins": [
+    {
+      "name": "agent-workbench",
+      "description": "Use Agent Workbench MCP for repository status, scoped context, symbol navigation, edit planning, and validation planning.",
+      "source": "./claude-plugin",
+      "category": "Developer Tools"
+    }
+  ]
+}
