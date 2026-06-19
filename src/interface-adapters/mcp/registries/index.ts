@@ -53,6 +53,7 @@ import { repoScopeResource } from "./resources/repo-scope.js";
 import { repoStatusResource } from "./resources/repo-status.js";
 import { contextForTaskTool } from "./tools/context-for-task.js";
 import { diagnosticsForFilesTool } from "./tools/diagnostics-for-files.js";
+import { docsScopeTool } from "./tools/docs-scope.js";
 import { docsOutlineTool } from "./tools/docs-outline.js";
 import { docsReadSectionTool } from "./tools/docs-read-section.js";
 import { docsSearchTool } from "./tools/docs-search.js";
@@ -62,9 +63,11 @@ import { impactTool } from "./tools/impact.js";
 import { previewWorkspaceEditTool } from "./tools/preview-workspace-edit.js";
 import { symbolSearchTool } from "./tools/symbol-search.js";
 import { verificationPlanTool } from "./tools/verification-plan.js";
+import type { DocsSessionScopeState } from "./docs-session-scope.js";
 
 export type McpRegistryContext = {
   repoRoot: string;
+  docsSessionScope?: DocsSessionScopeState;
   getRepoStatus?: (input: { repo_root: string }) => Promise<GetRepoStatusResult> | GetRepoStatusResult;
   getRepoScope?: (input: { repo_root: string }) => Promise<GetRepoScopeResult> | GetRepoScopeResult;
   getRepoOverview?: (input: { repo_root: string }) => Promise<GetRepoOverviewResult> | GetRepoOverviewResult;
@@ -139,6 +142,7 @@ export const mcpResources: McpResourceDeclaration[] = [
 export const mcpTools: McpToolDeclaration[] = [
   contextForTaskTool,
   diagnosticsForFilesTool,
+  docsScopeTool,
   docsSearchTool,
   docsOutlineTool,
   docsReadSectionTool,
@@ -158,15 +162,19 @@ export function registerAllMcpSurfaces(
   server: McpServer,
   context: McpRegistryContext
 ): void {
+  const registryContext: McpRegistryContext = {
+    ...context,
+    docsSessionScope: context.docsSessionScope ?? {}
+  };
   for (const resource of mcpResources) {
-    resource.register(server, context);
+    resource.register(server, registryContext);
   }
 
   for (const tool of mcpTools) {
-    tool.register(server, context);
+    tool.register(server, registryContext);
   }
 
   for (const prompt of mcpPrompts) {
-    prompt.register(server, context);
+    prompt.register(server, registryContext);
   }
 }

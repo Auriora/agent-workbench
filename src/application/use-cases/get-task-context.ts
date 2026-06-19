@@ -12,7 +12,10 @@ import type {
   ValidationHint
 } from "../../contracts/index.js";
 import type { FileCatalogEntry, GraphNode } from "../../domain/models/index.js";
-import { isExplicitHiddenCatalogPathAllowed } from "../../domain/policies/index.js";
+import {
+  classifyMarkdownDoc,
+  isExplicitHiddenCatalogPathAllowed
+} from "../../domain/policies/index.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 import { buildStatBackedFileCatalogEntry } from "./file-catalog-entry.js";
 import { capNextActions } from "./response-metadata.js";
@@ -495,12 +498,17 @@ function selectGoverningDocs(input: {
     .filter((item) => item.score > 0)
     .sort((left, right) => right.score - left.score || left.file.path.localeCompare(right.file.path))
     .slice(0, input.limit)
-    .map((item) => ({
-      path: item.file.path,
-      title: titleFromPath(item.file.path),
-      reason: "Matched task terms or repository documentation priority.",
-      evidence_kinds: ["docs"]
-    }));
+    .map((item) => {
+      const title = titleFromPath(item.file.path);
+      const authority = classifyMarkdownDoc({ path: item.file.path, title });
+      return {
+        path: item.file.path,
+        title,
+        reason: `Matched task terms or repository documentation priority. ${authority.authority_caveat}`,
+        evidence_kinds: ["docs"],
+        ...publicAuthority(authority)
+      };
+    });
 }
 
 async function selectRankedSymbols(input: {
@@ -1316,13 +1324,15 @@ function stemFromPath(filePath: string): string {
 
 function docPriority(filePath: string): number {
   const lower = filePath.toLowerCase();
+  const authority = classifyMarkdownDoc({ path: filePath, title: titleFromPath(filePath) });
+  let score = authority.priority;
   if (lower === "readme.md" || lower.endsWith("/readme.md")) {
-    return 2;
+    score += 2;
   }
   if (lower.includes("docs/") || lower.startsWith("docs/")) {
-    return 1;
+    score += 1;
   }
-  return 0;
+  return score;
 }
 
 function titleFromPath(filePath: string): string {
@@ -1346,6 +1356,14 @@ function tokenSet(values: readonly string[]): Set<string> {
 
 function normalizeRepoPath(value: string): string {
   return value.replaceAll("\\", "/").replace(/^\.\/+/, "");
+}
+
+function publicAuthority(input: ReturnType<typeof classifyMarkdownDoc>) {
+  return {
+    doc_status: input.doc_status,
+    authority: input.authority,
+    authority_caveat: input.authority_caveat
+  };
 }
 
 function uniqueStrings(values: readonly string[]): string[] {

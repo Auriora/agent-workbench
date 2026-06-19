@@ -52,7 +52,7 @@
       "description": "Compact docs overview with important docs, headings, warnings, truncation, and direct-read caveats.",
       "capability_class": "read_only",
       "mutation_class": "none",
-      "budget_policy": "Bounded by max_docs and max_headings_per_doc; scans Markdown docs without source mutation."
+      "budget_policy": "Bounded by optional scope_path, max_docs, and max_headings_per_doc; scans Markdown docs without source mutation."
     },
     {
       "name": "docs-map",
@@ -60,7 +60,7 @@
       "description": "Bounded repository documentation map with paths, headings, warnings, truncation, and direct-read caveats.",
       "capability_class": "read_only",
       "mutation_class": "none",
-      "budget_policy": "Bounded by max_docs and max_headings_per_doc; scans Markdown docs without source mutation."
+      "budget_policy": "Bounded by optional scope_path, max_docs, and max_headings_per_doc; scans Markdown docs without source mutation."
     },
     {
       "name": "codex-integration-profile",
@@ -95,11 +95,18 @@
       "budget_policy": "Bounded by max_files and provider budgets; never mutates files or executes validation commands."
     },
     {
+      "name": "docs_scope",
+      "description": "Set, clear, or show the default docs scope_path for this MCP server session.",
+      "capability_class": "read_only",
+      "mutation_class": "none",
+      "budget_policy": "Bounded in-memory MCP session state only; no repository scan and no source mutation."
+    },
+    {
       "name": "docs_search",
       "description": "Search repository docs by path, title, heading, and bounded text snippets.",
       "capability_class": "read_only",
       "mutation_class": "none",
-      "budget_policy": "Bounded by max_results and snippet limits; scans Markdown docs without source mutation."
+      "budget_policy": "Bounded by optional scope_path, max_results, and snippet limits; scans Markdown docs without source mutation."
     },
     {
       "name": "docs_outline",

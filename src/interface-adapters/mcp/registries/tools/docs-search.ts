@@ -12,14 +12,17 @@ import {
   formatMcpArgumentError,
   parseMcpArguments
 } from "../../arguments/index.js";
+import { requestWithSessionDocsScope } from "../docs-session-scope.js";
 import type { McpToolDeclaration } from "../index.js";
 import { withDefaultRepoRoot } from "../repo-root-default.js";
 
 const docsSearchRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
+  scope_path: z.string().min(1).optional().describe("Optional repo-relative docs scope prefix, such as docs/specs/032-per-repo-runtime-daemon-cache."),
   query: z.string().min(1).describe("Documentation search query."),
   max_results: z.number().int().positive().max(50).default(10).describe("Maximum ranked docs hits to return."),
-  include_snippets: z.boolean().default(true).describe("Whether to include bounded snippets when safe.")
+  include_snippets: z.boolean().default(true).describe("Whether to include bounded snippets when safe."),
+  cursor: z.string().optional().describe("Opaque cursor returned by a previous truncated docs search page.")
 };
 
 export const docsSearchTool: McpToolDeclaration = {
@@ -28,13 +31,15 @@ export const docsSearchTool: McpToolDeclaration = {
   metadata: {
     capability_class: "read_only",
     mutation_class: "none",
-    budget_policy: "Bounded by max_results and snippet limits; scans Markdown docs without source mutation.",
+    budget_policy: "Bounded by optional scope_path, max_results, and snippet limits; scans Markdown docs without source mutation.",
     description: "Search repository docs by path, title, heading, and bounded text snippets.",
     parameters: [
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
+      { name: "scope_path", description: "Optional repo-relative docs scope prefix, for example one docs/specs package.", required: false },
       { name: "query", description: "Documentation search query.", required: true },
       { name: "max_results", description: "Maximum ranked docs hits to return.", required: false },
-      { name: "include_snippets", description: "Whether to include bounded snippets when safe.", required: false }
+      { name: "include_snippets", description: "Whether to include bounded snippets when safe.", required: false },
+      { name: "cursor", description: "Opaque cursor returned by a previous truncated docs search page.", required: false }
     ],
     returns: "ResponseEnvelope<DocsSearchResult>"
   },
@@ -65,8 +70,12 @@ export const docsSearchTool: McpToolDeclaration = {
           return textToolResponse(envelope);
         }
 
+        const scopedRequest = requestWithSessionDocsScope(
+          withDefaultRepoRoot(request, context.repoRoot),
+          context.docsSessionScope
+        );
         const result = await context.searchDocs({
-          request: withDefaultRepoRoot(request, context.repoRoot)
+          request: scopedRequest
         });
         return textToolResponse(buildDocsSearchEnvelope(result));
       }

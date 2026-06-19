@@ -13,6 +13,7 @@ import type {
   SnapshotPort,
   WarmupCoordinatorPort
 } from "../../ports/index.js";
+import { classifyMarkdownDoc } from "../../domain/policies/index.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 import {
   detectJsTsProjectShape,
@@ -117,12 +118,17 @@ function selectKeyDocs(files: readonly FileCatalogEntry[]): DocumentReference[] 
     .filter((file) => isOverviewDocCandidate(file.path))
     .sort((left, right) => docRank(right.path) - docRank(left.path) || left.path.localeCompare(right.path))
     .slice(0, 10)
-    .map((file) => ({
-      path: file.path,
-      title: titleFromPath(file.path),
-      reason: reasonForDoc(file.path),
-      evidence_kinds: ["docs"]
-    }));
+    .map((file) => {
+      const title = titleFromPath(file.path);
+      const authority = classifyMarkdownDoc({ path: file.path, title });
+      return {
+        path: file.path,
+        title,
+        reason: `${reasonForDoc(file.path)} ${authority.authority_caveat}`,
+        evidence_kinds: ["docs"],
+        ...publicAuthority(authority)
+      };
+    });
 }
 
 function isOverviewDocCandidate(filePath: string): boolean {
@@ -138,6 +144,7 @@ function isOverviewDocCandidate(filePath: string): boolean {
 
 function docRank(filePath: string): number {
   const lower = filePath.toLowerCase();
+  const authority = classifyMarkdownDoc({ path: filePath, title: titleFromPath(filePath) });
   let score = 0;
   if (lower === "agents.md") score += 220;
   if (lower === "readme.md") score += 210;
@@ -152,6 +159,7 @@ function docRank(filePath: string): number {
   if (lower.includes("/archive/") || lower.startsWith("docs/archive/")) score -= 70;
   if (lower.includes("/updates/") || lower.startsWith("docs/updates/")) score -= 60;
   if (lower.includes("project-management") || lower.includes("/plans/")) score -= 40;
+  score += authority.priority * 10;
   return score;
 }
 
@@ -587,6 +595,14 @@ function titleFromPath(filePath: string): string {
     .filter(Boolean)
     .map((part) => `${part[0]?.toUpperCase() ?? ""}${part.slice(1)}`)
     .join(" ");
+}
+
+function publicAuthority(input: ReturnType<typeof classifyMarkdownDoc>) {
+  return {
+    doc_status: input.doc_status,
+    authority: input.authority,
+    authority_caveat: input.authority_caveat
+  };
 }
 
 function uniqueSorted(values: readonly string[]): string[] {

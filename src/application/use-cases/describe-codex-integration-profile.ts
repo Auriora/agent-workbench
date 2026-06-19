@@ -160,6 +160,12 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         description: "Configured compact provider-backed diagnostics for repo-relative files without command execution."
       },
       {
+        name: "docs_scope",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Configured session default docs scope_path for bounded documentation queries."
+      },
+      {
         name: "docs_search",
         kind: "tool",
         capability_class: "read_only",

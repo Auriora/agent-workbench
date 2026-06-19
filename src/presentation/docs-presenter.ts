@@ -283,7 +283,10 @@ function sanitizeDocument(input: DocsDocument): DocsDocument {
     links: [...input.links].sort(compareLinks).map(sanitizeLink),
     capability_level: input.capability_level,
     evidence_kinds: [...input.evidence_kinds].sort(),
-    direct_read_caveat: input.direct_read_caveat
+    direct_read_caveat: input.direct_read_caveat,
+    doc_status: input.doc_status,
+    authority: input.authority,
+    authority_caveat: input.authority_caveat
   });
 }
 
@@ -314,7 +317,10 @@ function sanitizeSearchHit(input: DocsSearchHit): DocsSearchHit {
     snippet: input.snippet === undefined ? undefined : redactPresentationText(input.snippet, { context: "source" }),
     score: input.score,
     evidence_kinds: [...input.evidence_kinds].sort(),
-    direct_read_caveat: input.direct_read_caveat
+    direct_read_caveat: input.direct_read_caveat,
+    doc_status: input.doc_status,
+    authority: input.authority,
+    authority_caveat: input.authority_caveat
   });
 }
 

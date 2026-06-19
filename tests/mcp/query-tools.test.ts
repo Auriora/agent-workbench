@@ -305,6 +305,7 @@ describe("graph query MCP tools", () => {
       "diagnostics_for_files",
       "docs_outline",
       "docs_read_section",
+      "docs_scope",
       "docs_search",
       "find_references",
       "impact",

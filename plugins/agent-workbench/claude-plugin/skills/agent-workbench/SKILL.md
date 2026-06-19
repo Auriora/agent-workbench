@@ -19,6 +19,25 @@ local scripts.
 4. Use preview/apply surfaces for workspace writes when available.
 5. Use `verification_plan` for validation planning and quiet post-edit static feedback.
 
+## Spec Documentation Scope
+
+When work is driven by `docs/specs/[###-slug]/`, `Spec NNN`, or a `TNNN` task
+and Agent Workbench docs tools are used for implementation evidence, keep
+canonical spec evidence bounded to the active package. Prefer setting the MCP
+session default with `docs_scope`:
+
+```json
+{ "action": "set", "scope_path": "docs/specs/[###-slug]" }
+```
+
+Then `docs_search`, `repo:///docs/overview`, and `repo:///docs/map` use that
+scope by default until `docs_scope` changes or clears it. A per-call
+`scope_path` overrides the session default. Clear the default with:
+
+```json
+{ "action": "clear" }
+```
+
 ## Claude Code Integration
 
 This skill is packaged in the Agent Workbench Claude Code plugin. The plugin

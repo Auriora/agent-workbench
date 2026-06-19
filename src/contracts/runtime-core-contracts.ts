@@ -142,12 +142,30 @@ export const fileReferenceSchema = z
   .strict();
 export type FileReference = z.infer<typeof fileReferenceSchema>;
 
+export const documentStatusSchema = z.enum([
+  "current",
+  "draft",
+  "historical",
+  "legacy",
+  "archived",
+  "template",
+  "sample",
+  "unknown"
+]);
+export type DocumentStatus = z.infer<typeof documentStatusSchema>;
+
+export const documentAuthoritySchema = z.enum(["canonical", "supporting", "non_authoritative"]);
+export type DocumentAuthority = z.infer<typeof documentAuthoritySchema>;
+
 export const documentReferenceSchema = z
   .object({
     path: z.string(),
     title: z.string(),
     reason: z.string(),
-    evidence_kinds: z.array(evidenceKindSchema)
+    evidence_kinds: z.array(evidenceKindSchema),
+    doc_status: documentStatusSchema.optional(),
+    authority: documentAuthoritySchema.optional(),
+    authority_caveat: z.string().optional()
   })
   .strict();
 export type DocumentReference = z.infer<typeof documentReferenceSchema>;

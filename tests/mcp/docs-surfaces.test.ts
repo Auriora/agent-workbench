@@ -26,7 +26,9 @@ import { docsMapResource } from "../../src/interface-adapters/mcp/registries/res
 import { docsOverviewResource } from "../../src/interface-adapters/mcp/registries/resources/docs-overview.js";
 import { docsOutlineTool } from "../../src/interface-adapters/mcp/registries/tools/docs-outline.js";
 import { docsReadSectionTool } from "../../src/interface-adapters/mcp/registries/tools/docs-read-section.js";
+import { docsScopeTool } from "../../src/interface-adapters/mcp/registries/tools/docs-scope.js";
 import { docsSearchTool } from "../../src/interface-adapters/mcp/registries/tools/docs-search.js";
+import type { DocsSessionScopeState } from "../../src/interface-adapters/mcp/registries/docs-session-scope.js";
 import {
   registerMcpResource,
   registerMcpTool
@@ -47,13 +49,14 @@ describe("docs MCP resources", () => {
       uri: "repo:///docs/overview"
     });
 
-    const response = await registered.handler({ repo_root: "/fixture" });
+    const response = await registered.handler({ repo_root: "/fixture", scope_path: "docs/specs/032-example" });
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: DocsOverviewUseCaseResult["overview"];
     };
 
     expect(parsedRequest).toMatchObject({
       repo_root: "/fixture",
+      scope_path: "docs/specs/032-example",
       max_docs: 10,
       max_headings_per_doc: 5
     });
@@ -75,6 +78,7 @@ describe("docs MCP resources", () => {
 
     const response = await registered.handler({
       repo_root: "/fixture",
+      scope_path: "docs/specs/032-example",
       max_docs: 2,
       max_headings_per_doc: 1,
       cursor: "next-page"
@@ -87,7 +91,8 @@ describe("docs MCP resources", () => {
       repo_root: "/fixture",
       max_docs: 2,
       max_headings_per_doc: 1,
-      cursor: "next-page"
+      cursor: "next-page",
+      scope_path: "docs/specs/032-example"
     });
     expect(parsed.data.docs.map((doc) => doc.path)).toEqual(["README.md", "docs/guide.md"]);
     expect(parsed.data.truncated).toBe(false);
@@ -134,21 +139,82 @@ describe("docs MCP tools", () => {
       }
     });
 
-    const response = await registered.handler({ query: "guide" });
+    const response = await registered.handler({
+      query: "guide",
+      scope_path: "docs/specs/032-example",
+      cursor: "next-page"
+    });
     const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
       data: DocsSearchUseCaseResult["search"];
     };
 
     expect(parsedRequest).toMatchObject({
       repo_root: "/repo",
+      scope_path: "docs/specs/032-example",
       query: "guide",
       max_results: 10,
-      include_snippets: true
+      include_snippets: true,
+      cursor: "next-page"
     });
     expect(parsed.data.hits[0]).toMatchObject({
       path: "docs/guide.md",
       direct_read_caveat: expect.stringContaining("docs_read_section")
     });
+  });
+
+  it("sets a session docs scope and applies it to docs surfaces until cleared", async () => {
+    const docsSessionScope: DocsSessionScopeState = {};
+    let searchRequest: DocsSearchRequest | undefined;
+    let mapRequest: DocsMapRequest | undefined;
+    const scope = registerTool(docsScopeTool, { docsSessionScope });
+    const search = registerTool(docsSearchTool, {
+      docsSessionScope,
+      searchDocs: ({ request }) => {
+        searchRequest = request;
+        return searchResult(request.repo_root ?? "/missing", request.query);
+      }
+    });
+    const map = registerResource(docsMapResource, {
+      docsSessionScope,
+      getDocsMap: ({ request }) => {
+        mapRequest = request;
+        return mapResult(request.repo_root ?? "/missing");
+      }
+    });
+
+    const setResponse = await scope.handler({
+      action: "set",
+      scope_path: "docs/specs/032-example/"
+    });
+    expect(JSON.parse(setResponse.content[0]?.text ?? "{}")).toMatchObject({
+      data: {
+        status: "set",
+        scope_path: "docs/specs/032-example"
+      }
+    });
+
+    await search.handler({ query: "guide" });
+    await map.handler({ max_docs: 5 });
+    expect(searchRequest).toMatchObject({
+      scope_path: "docs/specs/032-example"
+    });
+    expect(mapRequest).toMatchObject({
+      scope_path: "docs/specs/032-example"
+    });
+
+    await search.handler({ query: "guide", scope_path: "docs/specs/033-explicit" });
+    expect(searchRequest).toMatchObject({
+      scope_path: "docs/specs/033-explicit"
+    });
+
+    const clearResponse = await scope.handler({ action: "clear" });
+    expect(JSON.parse(clearResponse.content[0]?.text ?? "{}")).toMatchObject({
+      data: {
+        status: "cleared"
+      }
+    });
+    await search.handler({ query: "guide" });
+    expect(searchRequest?.scope_path).toBeUndefined();
   });
 
   it("uses the injected docs_outline and docs_read_section providers", async () => {

@@ -378,6 +378,7 @@ export type DocsIndexState = {
 
 export type DocsIndexSearchRequest = {
   repo_root: string;
+  scope_path?: string;
   query: string;
   max_results: number;
   include_snippets: boolean;

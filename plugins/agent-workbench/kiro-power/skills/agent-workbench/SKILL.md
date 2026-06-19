@@ -29,6 +29,22 @@ risk, and closure checks. Agent Workbench can consume those outputs through
 `context_for_task.lifecycle_context` and join them to repository files,
 diagnostics, symbols, impact, edit preview, and validation planning.
 
+When using Agent Workbench docs tools for spec implementation evidence, keep
+canonical spec evidence bounded to the active package. Prefer setting the MCP
+session default with `docs_scope`:
+
+```json
+{ "action": "set", "scope_path": "docs/specs/[###-slug]" }
+```
+
+Then `docs_search`, `repo:///docs/overview`, and `repo:///docs/map` use that
+scope by default until `docs_scope` changes or clears it. A per-call
+`scope_path` overrides the session default. Clear the default with:
+
+```json
+{ "action": "clear" }
+```
+
 If spec-lifecycle-manager is unavailable, Agent Workbench local spec routing is
 non-authoritative. Treat it as bounded routing evidence only; do not use it to
 change task status, reconcile specs, promote docs, or close specs.

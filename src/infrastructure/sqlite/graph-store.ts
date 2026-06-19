@@ -16,6 +16,7 @@ import type {
   DocsSearchHit,
   Freshness
 } from "../../contracts/index.js";
+import { classifyMarkdownDoc } from "../../domain/policies/index.js";
 import type {
   DocsIndexDocumentWrite,
   DocsIndexPort,
@@ -1470,6 +1471,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     }
 
     const cursor = decodeDocsCursor(input.cursor);
+    const scopePath = normalizeDocsScopePath(input.scope_path);
     if (cursor !== undefined && cursor.snapshot_id !== state.snapshot_id) {
       return {
         status: "blocked",
@@ -1478,6 +1480,19 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         freshness: state.freshness,
         reason: "stale",
         message: "Docs search cursor belongs to a different snapshot.",
+        hits: [],
+        truncated: false,
+        result_count: 0
+      };
+    }
+    if (cursor !== undefined && cursor.scope_path !== scopePath) {
+      return {
+        status: "blocked",
+        repo_root: state.repo_root,
+        snapshot_id: state.snapshot_id,
+        freshness: state.freshness,
+        reason: "stale",
+        message: "Docs search cursor belongs to a different scope_path.",
         hits: [],
         truncated: false,
         result_count: 0
@@ -1512,6 +1527,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         INNER JOIN docs_documents ON docs_documents.id = docs_fts.rowid
         WHERE docs_documents.snapshot_id = @snapshotId
           AND docs_fts MATCH @ftsQuery
+          AND (@scopePath IS NULL OR docs_documents.path = @scopePath OR docs_documents.path LIKE @scopePrefix)
         ORDER BY rank_score DESC, docs_documents.path ASC
         LIMIT @limit
         OFFSET @offset
@@ -1520,6 +1536,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       .all({
         snapshotId,
         ftsQuery,
+        scopePath: scopePath ?? null,
+        scopePrefix: scopePath === undefined ? null : `${scopePath}/%`,
         limit: candidateLimit,
         offset
       }) as DocsSearchRow[];
@@ -1541,6 +1559,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         ? encodeDocsCursor({
             snapshot_id: state.snapshot_id,
             query: input.query,
+            scope_path: scopePath,
             offset: offset + input.max_results
           })
         : undefined,
@@ -1798,9 +1817,15 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     const terms = tokenizeDocsQuery(input.query);
     const heading = bestHeadingMatch(input.row.headings_text, terms, input.query);
     const normalizedQuery = input.query.toLowerCase();
-    const score =
+    const authority = classifyMarkdownDoc({
+      path: input.row.path,
+      title: input.row.title,
+      content: input.row.selected_text
+    });
+    const score = Math.max(0,
       Math.max(0, Number(input.row.rank_score)) +
       docsPathCategoryBoost(input.row.path) +
+      authority.priority +
       docsFieldBoost({
         path: input.row.path,
         title: input.row.title,
@@ -1808,7 +1833,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         selectedText: input.row.selected_text,
         query: normalizedQuery,
         terms
-      });
+      })
+    );
     return {
       path: input.row.path,
       title: input.row.title,
@@ -1819,7 +1845,10 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         : undefined,
       score,
       evidence_kinds: ["docs", "fts"],
-      direct_read_caveat: "Docs search is routing evidence; use docs_read_section for precise claims."
+      direct_read_caveat: "Docs search is routing evidence; use docs_read_section for precise claims.",
+      doc_status: authority.doc_status,
+      authority: authority.authority,
+      authority_caveat: authority.authority_caveat
     };
   }
 
@@ -1837,6 +1866,7 @@ const DEFAULT_SQLITE_BUSY_TIMEOUT_MS = 15_000;
 type DocsCursor = {
   snapshot_id: string;
   query: string;
+  scope_path?: string;
   offset: number;
 };
 
@@ -1948,6 +1978,7 @@ function decodeDocsCursor(value: string | undefined): DocsCursor | undefined {
     if (
       typeof parsed.snapshot_id === "string" &&
       typeof parsed.query === "string" &&
+      (parsed.scope_path === undefined || typeof parsed.scope_path === "string") &&
       typeof parsed.offset === "number" &&
       Number.isInteger(parsed.offset) &&
       parsed.offset >= 0
@@ -1955,6 +1986,7 @@ function decodeDocsCursor(value: string | undefined): DocsCursor | undefined {
       return {
         snapshot_id: parsed.snapshot_id,
         query: parsed.query,
+        scope_path: parsed.scope_path,
         offset: parsed.offset
       };
     }
@@ -1962,6 +1994,21 @@ function decodeDocsCursor(value: string | undefined): DocsCursor | undefined {
     return undefined;
   }
   return undefined;
+}
+
+function normalizeDocsScopePath(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const normalized = value.replaceAll("\\", "/").replace(/^\.\/+/, "").replace(/\/+$/u, "");
+  if (
+    normalized.length === 0 ||
+    normalized === "." ||
+    normalized.startsWith("/") ||
+    normalized.startsWith("../") ||
+    normalized.includes("/../")
+  ) {
+    return undefined;
+  }
+  return normalized;
 }
 
 function sqlPlaceholders(count: number): string {

@@ -252,6 +252,44 @@ describe("docs query application contracts", () => {
     }
   });
 
+  it("limits docs map and FTS search results to scope_path", async () => {
+    const fixture = copyFixture();
+    const store = await indexFixtureDocs(fixture.root);
+    try {
+      const mapResult = await getDocsMap({
+        request: {
+          repo_root: fixture.root,
+          scope_path: "docs/operations",
+          max_docs: 20,
+          max_headings_per_doc: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot: fixture.root }),
+        default_repo_root: "."
+      });
+      const map = docsMapSchema.parse(mapResult.map);
+      const searchResult = await searchDocs({
+        request: {
+          repo_root: fixture.root,
+          scope_path: "docs/operations",
+          query: "docs",
+          max_results: 10,
+          include_snippets: false
+        },
+        docs_index: store,
+        default_repo_root: "."
+      });
+      const search = docsSearchResultSchema.parse(searchResult.search);
+
+      expect(map.docs.map((doc) => doc.path)).toEqual(["docs/operations/runbook.md"]);
+      expect(search.hits.length).toBeGreaterThan(0);
+      expect(search.hits.every((hit) => hit.path.startsWith("docs/operations/"))).toBe(true);
+    } finally {
+      store.close();
+      fixture.dispose();
+    }
+  });
+
   it("blocks docs search when the FTS index is cold instead of scanning files", async () => {
     const fixture = copyFixture();
     const store = openGraphStore(path.join(fixture.root, "cold.sqlite"));

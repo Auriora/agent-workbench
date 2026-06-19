@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import packageJson from "../../package.json" with { type: "json" };
-import type { ResponseEnvelope } from "../contracts/index.js";
+import { makeEnvelope, type ResponseEnvelope } from "../contracts/index.js";
 import type { FileCatalogEntry, GraphNode } from "../domain/models/index.js";
 import { checkMarkdownDocument, checkMarkdownSet } from "../application/use-cases/check-markdown-quality.js";
 import { computeImpact } from "../application/use-cases/compute-impact.js";
@@ -519,6 +519,28 @@ async function callTool(input: {
       providers: [new JsonSyntaxDiagnosticsProviderAdapter()],
       default_repo_root: input.repoRoot
     }));
+  }
+  if (input.toolName === "docs_scope") {
+    return makeEnvelope({
+      data: {
+        status: "unchanged",
+        message: "No session docs scope_path is set."
+      },
+      meta: {
+        analysis_validity: "valid",
+        freshness: "unknown",
+        scope: {
+          repo_root: input.repoRoot,
+          indexed_roots: ["."],
+          skipped_roots: [],
+          languages: ["markdown"]
+        },
+        capability_level: "resource_backed",
+        evidence_kinds: ["config"],
+        verification_status: "done",
+        truncated: false
+      }
+    });
   }
   if (input.toolName === "docs_search") {
     return buildDocsSearchEnvelope(await searchDocs({

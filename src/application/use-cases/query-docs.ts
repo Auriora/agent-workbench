@@ -32,6 +32,7 @@ import {
   markdownTitleFromPath,
   parseMarkdownHeadings
 } from "./markdown-docs.js";
+import { classifyMarkdownDoc } from "../../domain/policies/index.js";
 import { capNextActions } from "./response-metadata.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 
@@ -145,6 +146,7 @@ export async function searchDocs(input: {
   const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
   const result = await input.docs_index.search({
     repo_root: repoRoot,
+    scope_path: input.request.scope_path,
     query: input.request.query,
     max_results: input.request.max_results,
     include_snippets: input.request.include_snippets,
@@ -285,7 +287,7 @@ type LoadedDocsIndex = {
 };
 
 async function loadDocsIndex(input: {
-  request: { repo_root?: string; max_docs: number; max_headings_per_doc: number; cursor?: string };
+  request: { repo_root?: string; scope_path?: string; max_docs: number; max_headings_per_doc: number; cursor?: string };
   scanner: FileCatalogScanPort;
   workspace: WorkspaceFilePort;
   default_repo_root: string;
@@ -300,6 +302,7 @@ async function loadDocsIndex(input: {
   });
   const markdownFiles = scanned.files
     .filter((file) => file.file_identity.language === "markdown")
+    .filter((file) => isInDocsScope(file.path, input.request.scope_path))
     .sort((left, right) => left.path.localeCompare(right.path));
   const orderedMarkdownFiles = input.order === "importance"
     ? [...markdownFiles].sort((left, right) => docRank(right.path) - docRank(left.path) || left.path.localeCompare(right.path))
@@ -315,14 +318,17 @@ async function loadDocsIndex(input: {
     try {
       const content = await input.workspace.readText({ path: file.path });
       const headings = parseMarkdownHeadings(content);
+      const title = headings[0]?.text ?? markdownTitleFromPath(file.path);
+      const authority = classifyMarkdownDoc({ path: file.path, title, content });
       documents.push({
         path: file.path,
-        title: headings[0]?.text ?? markdownTitleFromPath(file.path),
+        title,
         headings: headings.slice(0, Math.max(input.request.max_headings_per_doc, 100)),
         links: extractMarkdownDocLinks({ fromPath: file.path, content, docs: markdownFiles }),
         capability_level: "resource_backed",
         evidence_kinds: ["docs"],
         direct_read_caveat: DIRECT_READ_CAVEAT,
+        ...publicAuthority(authority),
         content
       });
     } catch {
@@ -502,15 +508,18 @@ async function loadRequestedDoc(input: {
   try {
     const content = await input.workspace.readText({ path: entry.path });
     const headings = parseMarkdownHeadings(content);
+    const title = headings[0]?.text ?? markdownTitleFromPath(entry.path);
+    const authority = classifyMarkdownDoc({ path: entry.path, title, content });
     return {
       doc: {
         path: entry.path,
-        title: headings[0]?.text ?? markdownTitleFromPath(entry.path),
+        title,
         headings: headings.slice(0, input.maxHeadings),
         links: extractMarkdownDocLinks({ fromPath: entry.path, content, docs: markdownFiles }),
         capability_level: "resource_backed",
         evidence_kinds: ["docs"],
         direct_read_caveat: DIRECT_READ_CAVEAT,
+        ...publicAuthority(authority),
         content
       }
     };
@@ -552,15 +561,18 @@ async function loadDirectMarkdownDoc(input: {
   try {
     const content = await input.workspace.readText({ path: input.path });
     const headings = parseMarkdownHeadings(content);
+    const title = headings[0]?.text ?? markdownTitleFromPath(input.path);
+    const authority = classifyMarkdownDoc({ path: input.path, title, content });
     return {
       doc: {
         path: input.path,
-        title: headings[0]?.text ?? markdownTitleFromPath(input.path),
+        title,
         headings: headings.slice(0, input.maxHeadings),
         links: [],
         capability_level: "resource_backed",
         evidence_kinds: ["docs"],
         direct_read_caveat: DIRECT_READ_CAVEAT,
+        ...publicAuthority(authority),
         content
       }
     };
@@ -747,10 +759,42 @@ function publicDocument(doc: DocsDocument & { content?: string }): DocsDocument 
     links: doc.links,
     capability_level: doc.capability_level,
     evidence_kinds: doc.evidence_kinds,
-    direct_read_caveat: doc.direct_read_caveat
+    direct_read_caveat: doc.direct_read_caveat,
+    doc_status: doc.doc_status,
+    authority: doc.authority,
+    authority_caveat: doc.authority_caveat
+  };
+}
+
+function publicAuthority(input: ReturnType<typeof classifyMarkdownDoc>) {
+  return {
+    doc_status: input.doc_status,
+    authority: input.authority,
+    authority_caveat: input.authority_caveat
   };
 }
 
 function normalizeRepoPath(value: string): string {
   return value.replaceAll("\\", "/").replace(/^\.\/+/, "");
+}
+
+function isInDocsScope(filePath: string, scopePath: string | undefined): boolean {
+  const normalizedScope = normalizeDocsScopePath(scopePath);
+  if (normalizedScope === undefined) return true;
+  return filePath === normalizedScope || filePath.startsWith(`${normalizedScope}/`);
+}
+
+function normalizeDocsScopePath(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  const normalized = normalizeRepoPath(value).replace(/\/+$/u, "");
+  if (
+    normalized.length === 0 ||
+    normalized === "." ||
+    normalized.startsWith("/") ||
+    normalized.startsWith("../") ||
+    normalized.includes("/../")
+  ) {
+    return undefined;
+  }
+  return normalized;
 }

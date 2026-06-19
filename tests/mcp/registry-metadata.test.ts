@@ -26,6 +26,7 @@ describe("MCP registry metadata", () => {
       "tool:diagnostics_for_files",
       "tool:docs_outline",
       "tool:docs_read_section",
+      "tool:docs_scope",
       "tool:docs_search",
       "tool:find_references",
       "tool:impact",

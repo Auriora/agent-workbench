@@ -87,14 +87,20 @@ describe("repo orientation golden responses", () => {
           {
             path: "README.md",
             title: "README",
-            reason: "Repository entry document.",
-            evidence_kinds: ["docs"]
+            reason: "Repository entry document. Document is classified as current canonical or governing repository guidance.",
+            evidence_kinds: ["docs"],
+            doc_status: "current",
+            authority: "canonical",
+            authority_caveat: "Document is classified as current canonical or governing repository guidance."
           },
           {
             path: "docs/architecture.md",
             title: "Architecture",
-            reason: "Durable architecture or design document.",
-            evidence_kinds: ["docs"]
+            reason: "Durable architecture or design document. Document is classified as current canonical or governing repository guidance.",
+            evidence_kinds: ["docs"],
+            doc_status: "current",
+            authority: "canonical",
+            authority_caveat: "Document is classified as current canonical or governing repository guidance."
           }
         ],
         validation_hints: [

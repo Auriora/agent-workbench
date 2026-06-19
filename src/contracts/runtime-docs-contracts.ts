@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   attentionSeveritySchema,
   capabilityLevelSchema,
+  documentAuthoritySchema,
+  documentStatusSchema,
   evidenceKindSchema,
   nextActionSchema,
   skippedPathReasonSchema,
@@ -58,7 +60,10 @@ export const docsDocumentSchema = z
     links: z.array(docsLinkSchema),
     capability_level: capabilityLevelSchema,
     evidence_kinds: z.array(evidenceKindSchema),
-    direct_read_caveat: z.string()
+    direct_read_caveat: z.string(),
+    doc_status: documentStatusSchema.optional(),
+    authority: documentAuthoritySchema.optional(),
+    authority_caveat: z.string().optional()
   })
   .strict();
 export type DocsDocument = z.infer<typeof docsDocumentSchema>;
@@ -72,7 +77,10 @@ export const docsSearchHitSchema = z
     snippet: z.string().optional(),
     score: z.number().nonnegative(),
     evidence_kinds: z.array(evidenceKindSchema),
-    direct_read_caveat: z.string()
+    direct_read_caveat: z.string(),
+    doc_status: documentStatusSchema.optional(),
+    authority: documentAuthoritySchema.optional(),
+    authority_caveat: z.string().optional()
   })
   .strict();
 export type DocsSearchHit = z.infer<typeof docsSearchHitSchema>;
@@ -80,6 +88,7 @@ export type DocsSearchHit = z.infer<typeof docsSearchHitSchema>;
 export const docsOverviewRequestSchema = z
   .object({
     repo_root: z.string().optional(),
+    scope_path: z.string().min(1).optional(),
     max_docs: z.number().int().positive().max(50).default(10),
     max_headings_per_doc: z.number().int().positive().max(20).default(5),
     cursor: z.string().optional()
@@ -90,6 +99,7 @@ export type DocsOverviewRequest = z.infer<typeof docsOverviewRequestSchema>;
 export const docsMapRequestSchema = z
   .object({
     repo_root: z.string().optional(),
+    scope_path: z.string().min(1).optional(),
     max_docs: z.number().int().positive().max(200).default(50),
     max_headings_per_doc: z.number().int().positive().max(50).default(20),
     cursor: z.string().optional()
@@ -100,6 +110,7 @@ export type DocsMapRequest = z.infer<typeof docsMapRequestSchema>;
 export const docsSearchRequestSchema = z
   .object({
     repo_root: z.string().optional(),
+    scope_path: z.string().min(1).optional(),
     query: z.string().min(1),
     max_results: z.number().int().positive().max(50).default(10),
     include_snippets: z.boolean().default(true),

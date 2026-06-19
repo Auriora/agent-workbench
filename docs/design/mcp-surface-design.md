@@ -249,6 +249,16 @@ bounded snippets, optional heading evidence, `result_count`, truncation
 metadata, an opaque continuation cursor when more results exist, and a
 direct-read caveat. Search results are routing evidence only; agents must use
 `docs_read_section` before making precise documentation claims.
+Callers may pass `scope_path` to constrain results to one repo-relative
+documentation subtree. For spec implementation work, pass the active spec
+package path, such as `docs/specs/032-per-repo-runtime-daemon-cache`, so
+`docs_search` only returns hits from that package when resolving canonical
+spec evidence.
+`docs_scope` can set the same docs `scope_path` as an in-memory default for
+the current MCP server session. The default applies to `docs_search`,
+`repo:///docs/overview`, and `repo:///docs/map` when a request omits
+`scope_path`; an explicit per-call `scope_path` takes precedence, and
+`docs_scope` can clear the session default.
 
 If the docs FTS index is cold, stale, invalid, or unavailable, `docs_search`
 returns a compact structured blocked response naming the missing evidence. It
@@ -262,10 +272,12 @@ workspace escapes and generated/vendor paths through structured blocked
 responses rather than best-effort reads.
 
 `repo:///docs/overview`, `repo:///docs/map`, `docs_outline`, and
-`docs_read_section` remain direct scanner/read surfaces. They are separate from
-the FTS search hot path because outline and section reads are precise direct
-evidence rather than search ranking evidence. Documentation crosslink graphs,
-broad docs reports, and generated architecture answers remain post-MVP.
+`docs_read_section` remain direct scanner/read surfaces. The docs overview and
+map resources accept the same `scope_path` prefix for bounded documentation
+subtree inventories. They are separate from the FTS search hot path because
+outline and section reads are precise direct evidence rather than search
+ranking evidence. Documentation crosslink graphs, broad docs reports, and
+generated architecture answers remain post-MVP.
 
 Future documentation routing should add stale-doc classification for active,
 current, archived, superseded, closure breadcrumb, removed-spec reference, and

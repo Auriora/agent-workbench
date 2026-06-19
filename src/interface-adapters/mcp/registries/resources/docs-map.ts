@@ -11,6 +11,7 @@ import {
   formatMcpArgumentError,
   parseMcpArguments
 } from "../../arguments/index.js";
+import { requestWithSessionDocsScope } from "../docs-session-scope.js";
 import type { McpResourceDeclaration } from "../index.js";
 import { withDefaultRepoRoot } from "../repo-root-default.js";
 
@@ -21,10 +22,11 @@ export const docsMapResource: McpResourceDeclaration = {
   metadata: {
     capability_class: "read_only",
     mutation_class: "none",
-    budget_policy: "Bounded by max_docs and max_headings_per_doc; scans Markdown docs without source mutation.",
+    budget_policy: "Bounded by optional scope_path, max_docs, and max_headings_per_doc; scans Markdown docs without source mutation.",
     description: "Bounded repository documentation map with paths, headings, warnings, truncation, and direct-read caveats.",
     parameters: [
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
+      { name: "scope_path", description: "Optional repo-relative docs scope prefix, for example one docs/specs package.", required: false },
       { name: "max_docs", description: "Maximum docs to return.", required: false },
       { name: "max_headings_per_doc", description: "Maximum headings to return per document.", required: false },
       { name: "cursor", description: "Opaque cursor returned by a previous truncated docs map page.", required: false }
@@ -55,8 +57,12 @@ export const docsMapResource: McpResourceDeclaration = {
         return docsResourceResponse("repo:///docs/map", envelope);
       }
 
+      const scopedRequest = requestWithSessionDocsScope(
+        withDefaultRepoRoot(parsedRequest, context.repoRoot),
+        context.docsSessionScope
+      );
       const result = await context.getDocsMap({
-        request: withDefaultRepoRoot(parsedRequest, context.repoRoot)
+        request: scopedRequest
       });
       return docsResourceResponse("repo:///docs/map", buildDocsMapEnvelope(result));
     });
@@ -71,6 +77,7 @@ function getDocsResourceArgumentInput(request: unknown): unknown {
   const input = request as Record<string, unknown>;
   return {
     repo_root: input.repo_root,
+    scope_path: input.scope_path,
     max_docs: input.max_docs,
     max_headings_per_doc: input.max_headings_per_doc,
     cursor: input.cursor

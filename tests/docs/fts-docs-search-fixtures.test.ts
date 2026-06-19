@@ -106,6 +106,67 @@ describe("FTS docs search fixtures", () => {
     }
   });
 
+  it("marks and downranks archived or legacy docs behind current docs", async () => {
+    const fixture = copyFixture();
+    fs.mkdirSync(path.join(fixture.root, "docs", "runbooks"), { recursive: true });
+    fs.mkdirSync(path.join(fixture.root, "docs", "history"), { recursive: true });
+    fs.writeFileSync(
+      path.join(fixture.root, "docs", "runbooks", "canonical-source-priority.md"),
+      [
+        "---",
+        "title: Canonical source priority",
+        "status: current",
+        "---",
+        "# Canonical Source Priority",
+        "",
+        "The canonical source priority rule is current operational guidance."
+      ].join("\n")
+    );
+    fs.writeFileSync(
+      path.join(fixture.root, "docs", "history", "canonical-source-priority-legacy.md"),
+      [
+        "---",
+        "title: Canonical source priority legacy record",
+        "status: archived",
+        "---",
+        "# Canonical Source Priority Legacy Record",
+        "",
+        "The canonical source priority rule appears here as historical delivery evidence only."
+      ].join("\n")
+    );
+    const store = await indexFixtureDocs(fixture.root);
+    try {
+      const result = await searchDocs({
+        request: {
+          repo_root: fixture.root,
+          query: "canonical source priority",
+          max_results: 5,
+          include_snippets: true
+        },
+        docs_index: store,
+        default_repo_root: "."
+      });
+      const search = docsSearchResultSchema.parse(result.search);
+      const currentIndex = search.hits.findIndex((hit) => hit.path === "docs/runbooks/canonical-source-priority.md");
+      const archivedIndex = search.hits.findIndex((hit) => hit.path === "docs/history/canonical-source-priority-legacy.md");
+
+      expect(currentIndex).toBe(0);
+      expect(archivedIndex).toBeGreaterThan(currentIndex);
+      expect(search.hits[currentIndex]).toMatchObject({
+        doc_status: "current",
+        authority: "canonical"
+      });
+      expect(search.hits[archivedIndex]).toMatchObject({
+        doc_status: "archived",
+        authority: "non_authoritative",
+        authority_caveat: expect.stringContaining("legacy or archived")
+      });
+    } finally {
+      store.close();
+      fixture.dispose();
+    }
+  });
+
   it("uses the latest usable docs snapshot when a newer graph refresh is incomplete", async () => {
     const fixture = copyFixture();
     const store = await indexFixtureDocs(fixture.root);

@@ -120,7 +120,10 @@ function sanitizeDocumentReference(input: GetTaskContextResult["context"]["gover
     path: input.path,
     title: input.title,
     reason: input.reason,
-    evidence_kinds: input.evidence_kinds
+    evidence_kinds: input.evidence_kinds,
+    doc_status: input.doc_status,
+    authority: input.authority,
+    authority_caveat: input.authority_caveat
   });
 }
 
