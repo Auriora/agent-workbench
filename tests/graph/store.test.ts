@@ -131,6 +131,66 @@ describe("graph store", () => {
     }
   });
 
+  it("uses the latest fresh snapshot when newer failed warmup snapshots exist", async () => {
+    const store = openGraphStore(path.join(dir, "index.sqlite"));
+    const fresh = snapshotState("100");
+    const cold = {
+      ...snapshotState("101"),
+      freshness: "cold" as const,
+      reason: "database is locked"
+    };
+    const refreshing = {
+      ...snapshotState("102"),
+      freshness: "refreshing" as const
+    };
+
+    try {
+      await store.upsertSnapshot({ snapshot: fresh });
+      await store.upsertSnapshot({ snapshot: cold });
+      await store.upsertSnapshot({ snapshot: refreshing });
+
+      await expect(store.getSnapshot({ repo_root: fresh.repo_root })).resolves.toMatchObject({
+        id: fresh.id,
+        freshness: "fresh"
+      });
+      await expect(
+        store.getSnapshot({
+          repo_root: fresh.repo_root,
+          snapshot_id: cold.id
+        })
+      ).resolves.toMatchObject({
+        id: cold.id,
+        freshness: "cold"
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("falls back to the latest non-fresh snapshot when no fresh snapshot exists", async () => {
+    const store = openGraphStore(path.join(dir, "index.sqlite"));
+    const cold = {
+      ...snapshotState("201"),
+      freshness: "cold" as const
+    };
+    const refreshing = {
+      ...snapshotState("202"),
+      freshness: "refreshing" as const
+    };
+
+    try {
+      await store.upsertSnapshot({ snapshot: cold });
+      await store.upsertSnapshot({ snapshot: refreshing });
+
+      await expect(store.getSnapshot({ repo_root: cold.repo_root })).resolves.toMatchObject({
+        id: refreshing.id,
+        freshness: "refreshing"
+      });
+    } finally {
+      store.close();
+    }
+  });
+
   it("supports file catalog upsert/list/get/remove", async () => {
     const store = openGraphStore(path.join(dir, "index.sqlite"));
     const snapshot: SnapshotState = {

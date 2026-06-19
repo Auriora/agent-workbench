@@ -1608,7 +1608,18 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   }
 
   private getLatestSnapshotByRepo(repoRoot: string): SnapshotRow | undefined {
-    return this.getSnapshotByRepo(repoRoot);
+    return (this.db
+      .prepare(
+        `
+        SELECT id, repo_identity, config_identity, freshness, schema_version, created_at
+        FROM snapshots
+        WHERE repo_identity = @repoRoot
+          AND freshness = 'fresh'
+        ORDER BY id DESC
+        LIMIT 1
+      `
+      )
+      .get({ repoRoot }) as SnapshotRow | undefined) ?? this.getSnapshotByRepo(repoRoot);
   }
 
   private getLatestUsableDocsSnapshotByRepo(repoRoot: string): (SnapshotRow & { document_count: number }) | undefined {
