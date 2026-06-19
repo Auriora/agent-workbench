@@ -43,6 +43,7 @@ customer data, full transcripts, or unredacted command output.
 | 2026-06-05 | FreeCAD evaluation | C++/CMake/Python stubs | Codex | Large mixed-language repo dogfood | status, scope, overview, context, symbol routing, validation planning | Drove first-party C++/CMake ranking and validation-planning improvements | Direct source reads for semantic C++ claims | Third-party/generated noise and weak CMake ranking surfaced early | Compile-aware semantics remained unsupported | Specs 009 and C/C++ capability backlog |
 | 2026-06-06 | Cross-repo smoke pass | Mixed repositories | Codex | First-read reliability smoke | status, scope, overview, integration profile, context | Confirmed first-call trust, scope visibility, and project-shape gaps | Manual inspection when validation plans timed out or were too broad | Several ranking and validation-planning gaps promoted into durable backlog | Some smoke evidence stayed partial/degraded | EB003, EB004, EB009, EB014 |
 | 2026-06-13 | Product positioning docs slice | Markdown/docs/package metadata | Codex | Documentation hardening | repo status/scope/overview, docs direct reads, package dry-run, focused tests | Added README, lifecycle bridge contract, proof/status guidance, and packaging metadata | Direct file reads for precise docs edits | Lifecycle dependency confusion reduced in durable docs | No runtime trust-calibration field yet | EB023, EB025, EB029 |
+| 2026-06-19 | Rails/spec lifecycle phase | Ruby/Rails/spec docs | Codex | Session-scoped plugin adoption feedback | None meaningfully used | Workbench was available but lost to shell, spec-lifecycle MCP, subagents, and Docker validation because the first useful Workbench action was not obvious | Shell `git status`, direct file reads, Docker validation, and spec-lifecycle tools | No Workbench-backed defects avoided in this phase | Discoverability gap between advertised `repo:///...` resources and visible tool-oriented affordances | EB044 |
 
 ## Maintenance Notes
 
@@ -53,6 +54,10 @@ customer data, full transcripts, or unredacted command output.
   entries, active specs, closure logs, or no-action decisions.
 - Record fallback honestly. Fallback is product evidence, not a failure by
   itself.
+- Keep raw per-agent feedback documents scoped to the chat session and stored
+  with that session. Promote only distilled product signals, dated ledger
+  entries, backlog items, specs, or durable design decisions into this
+  repository.
 
 ## Related Docs
 

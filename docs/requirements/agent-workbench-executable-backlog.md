@@ -803,6 +803,9 @@ or runtime telemetry.
   - Maintain a durable dogfood ledger with date, project, language/framework,
     agent used, task type, Workbench surfaces used, outcome, fallback points,
     defects avoided, defects missed, and follow-up improvement.
+  - Keep raw per-agent feedback notes scoped to the originating chat session
+    and stored with that session, not as standalone repository reference docs.
+    Promote only distilled product signals into durable docs.
   - Treat entries as product evidence, not universal proof.
   - Link follow-up improvements to backlog items, specs, or no-action
     decisions.
@@ -1161,6 +1164,99 @@ Do not promote an item when:
 - Promotion target: create a focused runtime-daemon spec before implementing
   broad graph-backed tool hardening.
 
+### EB044: Changed-Files Workbench Entry Point
+
+- Priority: P1
+- Status: proposed spec
+- Friction signal: 2026-06-19 session-scoped plugin feedback from a
+  Rails/spec-lifecycle phase reported that Agent Workbench was available but
+  not naturally used. The agent defaulted to shell, spec-lifecycle MCP,
+  subagents, and Docker validation because the visible Workbench surface did
+  not provide an obvious first action after worktree changes, and the
+  advertised `repo:///status`, `repo:///scope`, and `repo:///overview`
+  resources did not map cleanly to the callable tool surface the agent saw.
+- Runtime surface: integration health, agent-specific plugin guidance,
+  `diagnostics_for_files`, `verification_plan`, repo resources,
+  `context_for_task`, post-edit feedback, and optional lifecycle companion
+  routing.
+- Acceptance:
+  - Provide one explicit "changed files" entry point for agents after edits or
+    before handoff, either as a new tool or as a documented first-class
+    workflow over existing resources and tools.
+  - Combine bounded git/worktree state, repo freshness/scope evidence,
+    changed-file diagnostics, recommended validation commands, and skipped or
+    unavailable evidence into one structured packet.
+  - Preserve source authority: use Workbench for repo evidence and validation
+    planning, keep spec status/preflight authority in spec-lifecycle-manager,
+    and label any lifecycle output as consumed companion evidence.
+  - Make resource-style affordances such as `repo:///status`,
+    `repo:///scope`, and `repo:///overview` discoverable from the same
+    integration guidance that lists callable tools.
+  - Ensure generated Codex, Claude, Kiro, and other agent guidance names the
+    exact callable surface for changed-file diagnostics instead of assuming
+    agents can infer it from resource names.
+  - Return structured skipped, unavailable, or blocked states instead of
+    partial success when git state, diagnostics, repo freshness, or validation
+    planning evidence is missing.
+- Validation:
+  - Golden responses for clean worktrees, dirty worktrees, staged files,
+    docs-only changes, code changes with diagnostics, unavailable diagnostics,
+    stale repo snapshots, and spec-driven tasks with lifecycle companion
+    evidence.
+  - Integration-profile tests proving the changed-files workflow is surfaced as
+    a first action after edits and does not advertise unavailable resources as
+    callable tools.
+  - Fixture tests proving lifecycle evidence is consumed read-only and never
+    mutates spec status, closes tasks, or replaces spec-lifecycle-manager
+    preflight.
+  - Dogfood rerun on a Rails/spec-lifecycle task to check whether an agent uses
+    the Workbench entry point before falling back to shell-only status and
+    validation planning.
+- Promotion target: create a focused post-edit or agent-adoption spec after
+  active P0 MCP hardening specs, or fold into EB005 follow-up work if the
+  implementation is only a presenter/guidance extension.
+
+### EB045: Native Installer Deprecation Debt
+
+- Priority: P2
+- Status: technical debt
+- Friction signal: a fresh `npx` install from the 0.1.0 release tarball emitted
+  `npm warn deprecated prebuild-install@7.1.3: No longer maintained`. The
+  install can continue, so this is not a release blocker, but it indicates a
+  transitive native-install dependency that may become a future install or
+  security-maintenance risk.
+- Debt classification:
+  - Risk: Dependency Disorder.
+  - Intent: accidental debt.
+  - Priority score: pain 1 x spread 2 = 2, monitored debt.
+  - Symptom: package installation depends on a deprecated transitive native
+    installer helper.
+  - Source: Software Engineering at Google - dependency management and upgrade
+    blockage.
+  - Consequence: future Node/npm/native-addon changes may break installs or
+    leave release users with noisy warnings that reduce package trust.
+  - Remedy: identify the owning direct dependency, check whether an upgrade
+    removes `prebuild-install`, and validate the resulting package install on
+    Node 22 and Node 24 before changing dependency constraints.
+- Runtime surface: dependency manifest, lockfile, native dependency setup,
+  installer, package doctor, release-readiness gates, and package validation.
+- Acceptance:
+  - Identify which direct dependency brings in `prebuild-install@7.1.3`.
+  - Decide whether the right remediation is direct dependency upgrade, upstream
+    issue tracking, replacement, or documented acceptance until an upstream
+    release exists.
+  - Keep native dependency behavior explicit; do not add parser, SQLite, or
+    command-execution fallbacks to hide the warning.
+  - Make doctor or release-preflight output distinguish non-blocking deprecated
+    transitive warnings from install failures.
+- Validation:
+  - `pnpm why prebuild-install` or equivalent dependency-tree evidence.
+  - Clean package install on Node 22 and Node 24 after any dependency change.
+  - Native module load checks for `better-sqlite3` and tree-sitter packages.
+  - Release tarball install smoke using the documented Claude Code path.
+- Promotion target: fold into EB026 doctor work or EB043 release-readiness work
+  when packaging dependency hygiene is scheduled.
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |
@@ -1201,6 +1297,8 @@ Do not promote an item when:
 | Security-sensitive change detection | EB034, after threat-model reconciliation. |
 | Agent-readable changelog | EB035. |
 | Per-repo runtime daemon and shared sessions | EB036, under EB003 first-read reliability and EB014 large-repo graph warmup scale. |
+| Changed-files Workbench entry point | EB044, with EB005, EB006, EB011, and EB016 boundaries. |
+| Native installer deprecation debt | EB045, with EB026 and EB043 packaging gates. |
 
 ## Immediate Next Specs
 
