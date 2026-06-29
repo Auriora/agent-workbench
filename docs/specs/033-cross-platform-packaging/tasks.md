@@ -133,16 +133,25 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
     and emits a `node --check`-valid launcher; missing component fails loud).
     `npm run typecheck` → exit 0.
 
-- [ ] T005a Wire `npm-install.js` to call `installer.mjs` in-process.
+- [x] T005a Wire `npm-install.mjs` to call `installer.mjs` in-process.
   - Depends on: T004
-  - Files: `packaging/agent-workbench/npm-install.js`
+  - Files: `packaging/agent-workbench/npm-install.mjs` (renamed from `.js`),
+    `packaging/agent-workbench/npm-package.json` (bin + required_paths)
   - Acceptance: No `spawnSync` of a `.sh`; imports and calls `installer.mjs`
     in-process. Satisfies Requirement 1.1.
-  - Evidence: Pending.
+  - Evidence: The npm entry point no longer spawns any process — it statically
+    imports `parseArgs`/`install` from `installer.mjs` and runs them in-process.
+    Renamed `.js` → `.mjs` so it stays ESM in both the `type:module` checkout and
+    the CommonJS-default published package; `npm-package.json` `bin` and
+    `required_paths` updated (now lists `npm-install.mjs` and `installer.mjs`).
+    Verified on Linux: `node npm-install.mjs install -- --dry-run
+    --skip-codex-config` runs the installer in-process (zero writes); `help` → 0,
+    unknown command → 2, unknown installer flag → 2. `npm run typecheck` → exit 0;
+    full suite `npx vitest run` → 472 passed.
 
 - [ ] T005b Make install failures fail loud and actionable.
   - Depends on: T005a
-  - Files: `packaging/agent-workbench/npm-install.js`,
+  - Files: `packaging/agent-workbench/npm-install.mjs`,
     `packaging/agent-workbench/installer.mjs` (error surfaces)
   - Acceptance: On failure, throws/exits with a message naming the missing
     prerequisite and per-OS remediation; never leaves a partial install.

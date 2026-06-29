@@ -63,6 +63,12 @@ unavailable — a recorded manual run with the gap noted explicitly.
   spawns route through a PATH×PATHEXT full-path lookup so Windows `.cmd` shims
   are reachable without a shell. The per-OS install smoke (windows/macos) remains
   for T011a. Task T004.
+- **In-process npm entry (R1.1) — PASS (Linux).** `packaging/agent-workbench/npm-install.mjs`
+  (renamed from `.js`) statically imports and calls `installer.mjs` — no
+  `spawnSync` of any `.sh`. Linux host: `node npm-install.mjs install -- --dry-run
+  --skip-codex-config` ran the installer in-process with zero writes; `help` → 0,
+  unknown command → 2, unknown installer flag → 2. Full suite `npx vitest run` →
+  472 passed; `npm run typecheck` → exit 0. Task T005a.
 - **Hook/shim drift (P2) — PASS.** `npx vitest run
   tests/integration/claude-plugin.test.ts` → all passed, including a new
   byte-identical guard for the vendored `mcp-launch.mjs`/`install-root.mjs` and
