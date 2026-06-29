@@ -1,8 +1,10 @@
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
+import { VENDORED_HOOK_FILES } from "../../scripts/sync-claude-plugin-hooks.mjs";
 
 describe("Claude Code plugin artifacts", () => {
   const pluginRoot = path.resolve("plugins/agent-workbench/claude-plugin");
@@ -139,5 +141,65 @@ describe("Claude Code plugin artifacts", () => {
       "plugins/agent-workbench/claude-plugin/hooks/session-start.js",
       "plugins/agent-workbench/claude-plugin/hooks/post-edit-feedback.js"
     ]);
+  });
+
+  it("keeps vendored hook modules byte-identical to the shared source", () => {
+    const sourceDir = path.resolve("plugins/agent-workbench/hooks");
+    for (const [source, target] of Object.entries(VENDORED_HOOK_FILES)) {
+      const sourceContent = fs.readFileSync(path.join(sourceDir, source));
+      const vendoredContent = fs.readFileSync(path.join(pluginRoot, "hooks", target));
+      expect(
+        vendoredContent.equals(sourceContent),
+        `${target} is out of sync with hooks/${source}; run \`npm run sync:claude-hooks\``
+      ).toBe(true);
+    }
+  });
+
+  it("runs hooks from an isolated plugin copy (no parent hooks/ directory)", () => {
+    // Claude Code installs a plugin by copying only its plugin-root subtree into a
+    // per-user cache. Reproduce that layout so a re-introduced ../../ import (which
+    // resolves in the repo tree but not the cache) fails loudly here instead of
+    // silently disabling the hooks at runtime.
+    const stage = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-isolated-plugin-"));
+    const isolatedRoot = path.join(stage, "agent-workbench");
+    fs.cpSync(pluginRoot, isolatedRoot, { recursive: true });
+    expect(fs.existsSync(path.join(stage, "hooks"))).toBe(false);
+
+    const env = { ...process.env, AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" };
+    const runHook = (script: string, payload: unknown): string =>
+      execFileSync("node", [path.join(isolatedRoot, "hooks", script)], {
+        input: JSON.stringify(payload),
+        encoding: "utf8",
+        env
+      });
+
+    const sessionOut = runHook("session-start.js", {
+      hook_event_name: "SessionStart",
+      source: "startup"
+    });
+    expect(sessionOut).toContain("Agent Workbench MCP is available.");
+    expect(sessionOut).toContain("repo:///status");
+
+    const work = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-isolated-work-"));
+    fs.writeFileSync(path.join(work, "bad.json"), "{ bad,,, }\n");
+    const editOut = runHook("post-edit-feedback.js", {
+      hook_event_name: "PostToolUse",
+      tool_name: "Write",
+      tool_input: { file_path: "bad.json" },
+      cwd: work
+    });
+    expect(editOut).toContain("JSON syntax error in bad.json");
+
+    fs.writeFileSync(path.join(work, "clean.js"), "const x = 1;\n");
+    const cleanOut = runHook("post-edit-feedback.js", {
+      hook_event_name: "PostToolUse",
+      tool_name: "Write",
+      tool_input: { file_path: "clean.js" },
+      cwd: work
+    });
+    expect(cleanOut).toBe("");
+
+    fs.rmSync(stage, { recursive: true, force: true });
+    fs.rmSync(work, { recursive: true, force: true });
   });
 });

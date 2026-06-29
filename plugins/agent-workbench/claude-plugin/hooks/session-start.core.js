@@ -1,22 +1,27 @@
 #!/usr/bin/env node
 import {
-  buildSessionStartContext
-} from "./session-start.core.js";
-import {
   emitAdditionalContext,
+  feedbackMode,
   isMain,
   parsePayload,
   readStdin,
   runQuietHook
 } from "./hook-common.js";
 
-export function buildClaudeSessionStartContext(payload, env = process.env) {
-  return buildSessionStartContext(payload, env);
+export function buildSessionStartContext(payload, env = process.env) {
+  if (feedbackMode(env) !== "basic") {
+    return undefined;
+  }
+
+  return [
+    "Agent Workbench MCP is available.",
+    "Use repo:///status, repo:///scope, or repo:///overview when repository context is unclear."
+  ].join(" ");
 }
 
 async function main() {
   const payload = parsePayload(await readStdin());
-  const context = buildClaudeSessionStartContext(payload);
+  const context = buildSessionStartContext(payload);
   if (context) {
     emitAdditionalContext("SessionStart", context);
   }

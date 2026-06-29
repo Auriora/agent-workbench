@@ -1,14 +1,14 @@
 #!/usr/bin/env node
 import {
   buildPostEditContext
-} from "../../hooks/post-edit-feedback.js";
+} from "./post-edit-feedback.core.js";
 import {
   emitAdditionalContext,
   isMain,
   parsePayload,
   readStdin,
   runQuietHook
-} from "../../hooks/hook-common.js";
+} from "./hook-common.js";
 
 export function buildClaudePostEditContext(payload, env = process.env) {
   return buildPostEditContext(payload, env);
