@@ -317,20 +317,33 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
 
 - [ ] T012a Document the supported platform matrix.
   - Depends on: T011a, T011b, T011c
-  - Files: durable docs (runtime operations / install guide), spec
-    `verification.md`
+  - Files: `docs/runbooks/codex-agent-workbench-plugin.md` (Supported Platform
+    Matrix), spec `verification.md`
   - Acceptance: Supported OS/Node/toolchain matrix documented, including the core
     `tree-sitter` C++20 toolchain prerequisite (Decision 1) and the caveat that
     grammar packages ship prebuilt binaries. Satisfies Requirement 4.1, 4.3,
     5.2.
-  - Evidence: Pending.
+  - Evidence: Runbook now carries a "Supported Platform Matrix" section —
+    OS × Node 22+ × native toolchain (Linux `make`+`g++`/`clang++`, macOS Xcode
+    CLT, Windows MSVC build tools; Python 3), per-OS install prefix, the bounded
+    native-build note (only core `tree-sitter` compiles from source; grammars and
+    `better-sqlite3` ship prebuilds; no compiler needed when `node_modules` is
+    packaged), and a Verification column tied to the smoke matrix. Stale
+    `npm-install.js`/`.sh` runbook references corrected. Held open until the
+    matrix's macOS/Windows rows are backed by green runner runs (T011), per the
+    spec's executed-run validation strategy.
 
 - [ ] T012b [follow-up] Route the turnkey-core native build to the backlog.
   - Depends on: T012a
-  - Files: `docs/backlog/`
+  - Files: `docs/backlog/033-turnkey-tree-sitter-core-build.md`
   - Acceptance: Record a bounded follow-up spec for making the core
     `tree-sitter` binding turnkey — option (b1) pin core+grammars to a
     prebuild-publishing line (e.g. 0.22.4) after an ABI/parser regression pass,
     or (b2) add a `prebuildify` matrix to release CI. This is a follow-up
     routing task, not implementation. Satisfies Requirement 5.1.
-  - Evidence: Pending.
+  - Evidence: `docs/backlog/033-turnkey-tree-sitter-core-build.md` records the
+    bounded follow-up — context (only core `tree-sitter` compiles from source),
+    options (b1) prebuild-publishing pin after an ABI/parser regression pass and
+    (b2) `prebuildify` release-CI matrix, acceptance for the future spec, and
+    references to Decision 1 / Requirement 5.1. Routing note authored; remains
+    open under its T012a dependency until the matrix doc closes.

@@ -128,11 +128,44 @@ The core Codex-facing resources are `repo:///status`, `repo:///scope`,
 `integration:///health/agent-workbench`; the matching public resource names
 include `codex-integration-profile` and `integration-health`.
 
+## Supported Platform Matrix
+
+Install and launch are shell-free on all supported operating systems: the npm
+entry point and the generated `bin/agent-workbench-mcp.mjs` launcher invoke
+`node` directly, with no POSIX shell on the install or runtime path. The
+supported distribution channel is the npm package (Decision 2).
+
+| OS | Node | Native toolchain (for the build path) | Verification |
+| --- | --- | --- | --- |
+| Linux (x64/arm64) | 22+ | `make` + `g++`/`clang++` (C++20), Python 3 — e.g. `build-essential` | Smoke matrix verified |
+| macOS | 22+ | Xcode command line tools (`xcode-select --install`), Python 3 | Smoke matrix pending runner |
+| Windows 10+ | 22+ | MSVC C++ build tools ("Desktop development with C++"), Python 3 | Smoke matrix pending runner |
+
+Default install prefix per OS: `%LOCALAPPDATA%\agent-workbench` on Windows
+(falling back to `%USERPROFILE%\AppData\Local`), and
+`~/.local/share/agent-workbench` on Linux/macOS. Override with `--prefix` or
+`AGENT_WORKBENCH_INSTALL_ROOT`.
+
+**Native build prerequisite (Decision 1).** A C++20 toolchain is required only
+when the install must build native modules from source (no packaged
+`node_modules`). This is bounded: of the native dependencies, only the core
+`tree-sitter` runtime binding compiles from source; the four grammar packages
+(`tree-sitter-go`, `-javascript`, `-python`, `-typescript`) ship prebuilt
+binaries for all targets, and `better-sqlite3` ships prebuilds. When a packaged
+`node_modules` is present, no compiler is needed. A missing toolchain fails loud
+with per-OS remediation before any files are written.
+
+The cross-platform smoke matrix that backs the "Verification" column lives in
+`.github/workflows/cross-platform-packaging.yml` (install, MCP launch, and hook
+smokes per OS). The macOS/Windows legs are authored but await a runner; that gap
+is tracked in the spec's `verification.md`.
+
 ## NPM Package Installation
 
 The npm distribution package is `@auriora/agent-workbench`. Its package
 contract lives at `packaging/agent-workbench/npm-package.json`, and the CLI
-shim is `packaging/agent-workbench/npm-install.js`.
+entry point is `packaging/agent-workbench/npm-install.mjs`, which runs the
+shell-free Node installer (`packaging/agent-workbench/installer.mjs`) in-process.
 
 Install or refresh the package-backed Codex plugin with:
 
@@ -163,8 +196,10 @@ The package definition lives at `packaging/agent-workbench/`:
 - `package-manifest.json` lists installed components and distribution
   contracts.
 - `.github/workflows/release-ghcr.yml` publishes tagged releases to GHCR.
-- `scripts/install-agent-workbench-package.sh` installs the package into a
-  stable host prefix.
+- `packaging/agent-workbench/installer.mjs` is the single, shell-free source of
+  install logic; `scripts/install-agent-workbench-package.sh` is a thin POSIX
+  delegator to it (it still requires bash, so it is not part of the shell-free
+  path).
 
 The installer copies all project components required by the runtime and Codex
 integration:
