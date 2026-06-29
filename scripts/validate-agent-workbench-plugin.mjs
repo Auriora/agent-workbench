@@ -106,7 +106,7 @@ assert(serverCard.privacy?.local_first === true, "Server card must advertise loc
 assert(serverCard.privacy?.network_required === false, "Server card must not require network access.");
 
 assert(manifest.version === packageJson.version, "Package manifest version must match package.json.");
-assert(manifest.installer === "scripts/install-agent-workbench-package.sh", "Package installer path drifted.");
+assert(manifest.installer === "packaging/agent-workbench/installer.mjs", "Package installer path drifted.");
 assertArrayEquals(
   manifest.dependency_install.runtime_dependencies,
   Object.keys(packageJson.dependencies ?? {}),
