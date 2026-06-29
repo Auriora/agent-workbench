@@ -54,6 +54,15 @@ unavailable — a recorded manual run with the gap noted explicitly.
   defaults to `basic` in-script (no hook `env` field exists). `npm run typecheck`
   → exit 0; full suite `npx vitest run` → 465 passed; validator passed. Per-OS
   hook firing remains for T011c. Tasks T007/T008/T009.
+- **Shell-free installer (R1) — PARTIAL (Linux).** Linux host, `npx vitest run
+  tests/integration/installer.test.ts` → 7 passed. The Node installer
+  (`packaging/agent-workbench/installer.mjs`) validates `--source` components,
+  copies the runtime with `cp -a` fidelity, strips checkout-only artifacts,
+  honors `--dry-run` (zero writes) and `--skip-codex-config`, and generates a
+  shell-free `bin/agent-workbench-mcp.mjs` (`node --check`-valid). External-tool
+  spawns route through a PATH×PATHEXT full-path lookup so Windows `.cmd` shims
+  are reachable without a shell. The per-OS install smoke (windows/macos) remains
+  for T011a. Task T004.
 - **Hook/shim drift (P2) — PASS.** `npx vitest run
   tests/integration/claude-plugin.test.ts` → all passed, including a new
   byte-identical guard for the vendored `mcp-launch.mjs`/`install-root.mjs` and

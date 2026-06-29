@@ -110,15 +110,28 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
 
 ## Phase 2: Cross-platform installer
 
-- [ ] T004 Port the installer to Node (`installer.mjs`).
+- [x] T004 Port the installer to Node (`installer.mjs`).
   - Depends on: T001a
-  - Files: `packaging/agent-workbench/installer.mjs` (new)
+  - Files: `packaging/agent-workbench/installer.mjs` (new),
+    `packaging/agent-workbench/installer.d.mts` (new),
+    `tests/integration/installer.test.ts` (new)
   - Acceptance: Reproduces `install-agent-workbench-package.sh` steps (validate
     `--source`, resolve root, copy `required_paths`, register plugin, honor
     `--dry-run`/`--skip-codex-config`) using only `node:fs/path/os`. Generates
     `bin/agent-workbench-mcp.mjs` (Node, no bash shebang). Satisfies
     Requirement 1.1-1.2, 2.4.
-  - Evidence: Pending.
+  - Evidence: `installer.mjs` ports the `.sh` using only `node:fs/path/os/child_process`
+    and the shared `resolveInstallRoot`. External tools (pnpm, corepack, codex)
+    spawn through a `resolveOnPath` (PATH×PATHEXT) full-path lookup so Windows
+    `.cmd` shims are found without a shell. Validates `REQUIRED_PATHS`, copies
+    `COPY_COMPONENTS` with `cp -a` fidelity (`verbatimSymlinks`), strips
+    checkout-only `src/debug`/`docs/specs`/`debug:*` scripts, and writes a
+    shell-free `bin/agent-workbench-mcp.mjs` (self-locating root, `node --import
+    tsx`). `--skip-codex-config` and `--dry-run` honored; unknown flags exit 2.
+    `npx vitest run tests/integration/installer.test.ts` → 7 passed (dry-run
+    writes nothing; real install to a temp prefix copies the runtime, sanitizes,
+    and emits a `node --check`-valid launcher; missing component fails loud).
+    `npm run typecheck` → exit 0.
 
 - [ ] T005a Wire `npm-install.js` to call `installer.mjs` in-process.
   - Depends on: T004
