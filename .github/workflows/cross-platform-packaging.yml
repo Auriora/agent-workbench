@@ -38,6 +38,12 @@ jobs:
           node-version: "22"
           cache: pnpm
 
+      # NOTE: installing deps first means the install smoke exercises the
+      # node_modules-COPY path (verbatimSymlinks over the pnpm link farm), which
+      # is the Windows-fragile path flagged in the spec's verification.md. A red
+      # Windows leg may be the copy step on the junction farm — not a launch/hook
+      # defect. The canonical Windows install is the rebuild path (no packaged
+      # node_modules); see verification.md residual risks before diagnosing.
       - name: Install dependencies (provides tsx + native modules for the smokes)
         run: pnpm install --frozen-lockfile
 
