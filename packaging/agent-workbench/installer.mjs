@@ -118,6 +118,48 @@ export function resolveOnPath(command, env = process.env) {
   return null;
 }
 
+const REMEDIATION = {
+  node: {
+    darwin: "Install Node.js 22+ (`brew install node@22`) or from https://nodejs.org.",
+    win32: "Install Node.js 22+ (`winget install OpenJS.NodeJS.LTS`) or from https://nodejs.org.",
+    linux: "Install Node.js 22+ via NodeSource or from https://nodejs.org."
+  },
+  pnpm: {
+    darwin: "Enable pnpm with `corepack enable pnpm`, or install it via `npm install -g pnpm@10.18.1`.",
+    win32: "Enable pnpm with `corepack enable pnpm`, or install it via `npm install -g pnpm@10.18.1`.",
+    linux: "Enable pnpm with `corepack enable pnpm`, or install it via `npm install -g pnpm@10.18.1`."
+  },
+  python: {
+    darwin: "Install Python 3 (`brew install python`) for native node-gyp builds.",
+    win32: "Install Python 3 (`winget install Python.Python.3`) for native node-gyp builds.",
+    linux: "Install Python 3 (`sudo apt-get install python3`) for native node-gyp builds."
+  },
+  make: {
+    darwin: "Install the Xcode command line tools (`xcode-select --install`).",
+    win32: "",
+    linux: "Install build tools (`sudo apt-get install build-essential`)."
+  },
+  cxx: {
+    darwin: "Install the Xcode command line tools (`xcode-select --install`) for a C++20 compiler.",
+    win32: "",
+    linux: "Install a C++20 compiler (`sudo apt-get install build-essential g++`)."
+  },
+  msvc: {
+    darwin: "",
+    win32: "Native modules need the MSVC C++ build tools. Install 'Desktop development with C++' "
+      + "(`winget install Microsoft.VisualStudio.2022.BuildTools`) plus Python 3, then re-run.",
+    linux: ""
+  }
+};
+
+// Per-OS, actionable remediation text for a missing prerequisite. Parameterized
+// by platform so all three OS messages are assertable from any host.
+export function remediation(key, platform = process.platform) {
+  const entry = REMEDIATION[key];
+  if (!entry) return "";
+  return entry[platform] ?? entry.linux;
+}
+
 function makeLogger(dryRun) {
   const actions = [];
   return {
@@ -127,10 +169,10 @@ function makeLogger(dryRun) {
   };
 }
 
-function ensureRuntimePrerequisites() {
+function ensureRuntimePrerequisites(platform = process.platform) {
   const major = Number(process.versions.node.split(".")[0]);
   if (Number.isNaN(major) || major < 22) {
-    throw new InstallError(`Node.js 22 or newer is required; found ${process.version}.`);
+    throw new InstallError(`Node.js 22 or newer is required; found ${process.version}. ${remediation("node", platform)}`);
   }
 }
 
@@ -210,46 +252,52 @@ function spawnTool(command, args, options, ctx, { hint } = {}) {
   if (result.status !== 0) throw new InstallError(`${command} ${args.join(" ")} exited with status ${result.status}.`);
 }
 
-function ensurePnpm(ctx) {
+function ensurePnpm(ctx, platform = process.platform) {
   if (resolveOnPath("pnpm")) return;
   if (resolveOnPath("corepack")) {
     spawnTool("corepack", ["enable", "pnpm"], {}, ctx);
   }
   if (!ctx.dryRun && !resolveOnPath("pnpm")) {
-    throw new InstallError(
-      "pnpm 10.18.1 is required to install Agent Workbench dependencies. Install pnpm or enable it with corepack."
-    );
+    throw new InstallError(`pnpm 10.18.1 is required to install Agent Workbench dependencies. ${remediation("pnpm", platform)}`);
   }
 }
 
-function ensureNativeBuildPrerequisites(ctx) {
+function ensureNativeBuildPrerequisites(ctx, platform = process.platform) {
   // node-gyp needs Python on every platform.
   if (!resolveOnPath("python3") && !resolveOnPath("python")) {
-    throw new InstallError("Missing required dependency: python3. Install Python 3 for native Node module builds.");
+    throw new InstallError(`Missing required dependency: python3. ${remediation("python", platform)}`);
   }
-  if (process.platform === "win32") {
-    // Windows uses MSVC, not make/g++. The actionable MSVC message is emitted by
-    // the fail-loud handling around the rebuild (T005b) if node-gyp fails.
+  if (platform === "win32") {
+    // Windows uses MSVC, not make/g++, and cl.exe is not reliably on PATH. The
+    // actionable MSVC remediation is emitted by the fail-loud handling around the
+    // rebuild (runNativeRebuild) if node-gyp fails.
     return;
   }
   if (!resolveOnPath("make")) {
-    throw new InstallError("Missing required dependency: make. Install make for native Node module builds.");
+    throw new InstallError(`Missing required dependency: make. ${remediation("make", platform)}`);
   }
   if (!resolveOnPath("c++") && !resolveOnPath("g++")) {
-    throw new InstallError(
-      "Missing required dependency: c++ compiler. Install g++ or another C++20-capable compiler for native Node module builds."
-    );
+    throw new InstallError(`Missing required dependency: a C++20 compiler. ${remediation("cxx", platform)}`);
   }
 }
 
-function rebuildNativeModulesIfNeeded(sourceRoot, installRoot, ctx) {
+// True when no `tsx` is present, so the install must run a native rebuild.
+function nativeRebuildNeeded(sourceRoot, installRoot) {
   const tsxInSource = fs.existsSync(path.join(sourceRoot, "node_modules", "tsx"));
   const tsxInInstall = fs.existsSync(path.join(installRoot, "node_modules", "tsx"));
-  if (tsxInSource || tsxInInstall) return;
-  ensurePnpm(ctx);
-  ensureNativeBuildPrerequisites(ctx);
-  spawnTool("pnpm", ["install", "--frozen-lockfile"], { cwd: installRoot }, ctx);
-  spawnTool("pnpm", ["rebuild:native"], { cwd: installRoot }, ctx);
+  return !(tsxInSource || tsxInInstall);
+}
+
+function runNativeRebuild(installRoot, ctx) {
+  try {
+    spawnTool("pnpm", ["install", "--frozen-lockfile"], { cwd: installRoot }, ctx);
+    spawnTool("pnpm", ["rebuild:native"], { cwd: installRoot }, ctx);
+  } catch (error) {
+    if (process.platform === "win32" && error instanceof InstallError) {
+      throw new InstallError(`${error.message}\n${remediation("msvc", "win32")}`);
+    }
+    throw error;
+  }
 }
 
 function removeLegacyCodexMcpBlock(codexHome, ctx) {
@@ -340,34 +388,49 @@ export function install(rawOptions = {}) {
   const codexHome = path.resolve(rawOptions.codexHome ?? process.env.CODEX_HOME ?? path.join(os.homedir(), ".codex"));
   const writeCodexConfig = rawOptions.writeCodexConfig !== false;
 
+  // --- Validate everything before the first write so a missing prerequisite
+  //     fails loud without leaving a partial install. ---
   for (const relativePath of REQUIRED_PATHS) {
     if (!fs.existsSync(path.join(sourceRoot, relativePath))) {
       throw new InstallError(`Missing package component: ${relativePath}`);
     }
   }
-
   ensureRuntimePrerequisites();
+  const willRebuild = nativeRebuildNeeded(sourceRoot, installRoot);
+  if (willRebuild) {
+    ensurePnpm(ctx);
+    ensureNativeBuildPrerequisites(ctx);
+  }
 
-  log.plan(`mkdir ${installRoot}`);
-  if (!dryRun) fs.mkdirSync(installRoot, { recursive: true });
+  // --- Execute. Fresh installs roll back fully on failure; a refresh cannot
+  //     (per-component rm+copy may have already replaced files). ---
+  const createdInstallRoot = !dryRun && !fs.existsSync(installRoot);
+  let launcherPath;
+  try {
+    log.plan(`mkdir ${installRoot}`);
+    if (!dryRun) fs.mkdirSync(installRoot, { recursive: true });
 
-  for (const component of COPY_COMPONENTS) {
-    if (fs.existsSync(path.join(sourceRoot, component))) {
-      copyComponent(sourceRoot, installRoot, component, ctx);
+    for (const component of COPY_COMPONENTS) {
+      if (fs.existsSync(path.join(sourceRoot, component))) {
+        copyComponent(sourceRoot, installRoot, component, ctx);
+      }
     }
-  }
-  sanitizeDeployedRuntime(installRoot, ctx);
+    sanitizeDeployedRuntime(installRoot, ctx);
 
-  if (fs.existsSync(path.join(sourceRoot, "node_modules"))) {
-    copyComponent(sourceRoot, installRoot, "node_modules", ctx);
-  }
+    if (fs.existsSync(path.join(sourceRoot, "node_modules"))) {
+      copyComponent(sourceRoot, installRoot, "node_modules", ctx);
+    }
 
-  const launcherPath = generateLauncher(installRoot, ctx);
-  rebuildNativeModulesIfNeeded(sourceRoot, installRoot, ctx);
+    launcherPath = generateLauncher(installRoot, ctx);
+    if (willRebuild) runNativeRebuild(installRoot, ctx);
 
-  if (writeCodexConfig) {
-    removeLegacyCodexMcpBlock(codexHome, ctx);
-    installCodexPlugin(installRoot, ctx);
+    if (writeCodexConfig) {
+      removeLegacyCodexMcpBlock(codexHome, ctx);
+      installCodexPlugin(installRoot, ctx);
+    }
+  } catch (error) {
+    if (createdInstallRoot) fs.rmSync(installRoot, { recursive: true, force: true });
+    throw error;
   }
 
   if (!dryRun) log.info(`Agent Workbench installed at ${installRoot}`);

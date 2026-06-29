@@ -9,6 +9,7 @@ import {
   REQUIRED_PATHS,
   install,
   parseArgs,
+  remediation,
   resolveOnPath
 } from "../../packaging/agent-workbench/installer.mjs";
 
@@ -135,6 +136,37 @@ describe("Agent Workbench installer (spec 033, R1/R2.4 shell-free install)", () 
       expect(() => install({ source, prefix, writeCodexConfig: false })).toThrowError(
         /Missing package component: tsconfig\.json/
       );
+    });
+  });
+
+  describe("fail-loud remediation (spec 033, P4)", () => {
+    it("gives per-OS, actionable remediation for each prerequisite", () => {
+      expect(remediation("node", "darwin")).toContain("brew install node@22");
+      expect(remediation("node", "win32")).toContain("winget");
+      expect(remediation("node", "linux")).toContain("nodejs.org");
+      expect(remediation("python", "linux")).toContain("apt-get install python3");
+      expect(remediation("make", "linux")).toContain("build-essential");
+      expect(remediation("cxx", "darwin")).toContain("xcode-select");
+      expect(remediation("msvc", "win32")).toContain("MSVC");
+      expect(remediation("pnpm", "linux")).toContain("corepack");
+      // Unknown key resolves to empty, never throws.
+      expect(remediation("nope" as never)).toBe("");
+    });
+
+    it("validates a missing build prerequisite before any write (no partial install)", () => {
+      // Force the rebuild branch: remove the tsx marker so a native build is planned.
+      fs.rmSync(path.join(source, "node_modules"), { recursive: true, force: true });
+      const savedPath = process.env.PATH;
+      try {
+        process.env.PATH = "";
+        expect(() => install({ source, prefix, writeCodexConfig: false })).toThrowError(
+          /pnpm 10\.18\.1 is required[\s\S]*corepack/
+        );
+      } finally {
+        process.env.PATH = savedPath;
+      }
+      // The prefix was never created — the failure happened before the first write.
+      expect(fs.existsSync(prefix)).toBe(false);
     });
   });
 });

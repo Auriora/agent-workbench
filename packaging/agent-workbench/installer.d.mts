@@ -43,5 +43,11 @@ export function parseArgs(argv: string[]): ParsedArgs;
 /** Resolve a command to a full path across PATH and (on Windows) PATHEXT. */
 export function resolveOnPath(command: string, env?: NodeJS.ProcessEnv): string | null;
 
+/** Per-OS, actionable remediation text for a missing prerequisite key. */
+export function remediation(
+  key: "node" | "pnpm" | "python" | "make" | "cxx" | "msvc",
+  platform?: NodeJS.Platform
+): string;
+
 /** Run the install; throws InstallError on validation/prerequisite failure. */
 export function install(options?: InstallOptions): InstallResult;

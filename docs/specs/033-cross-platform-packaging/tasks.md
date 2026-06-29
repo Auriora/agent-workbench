@@ -149,14 +149,27 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
     unknown command → 2, unknown installer flag → 2. `npm run typecheck` → exit 0;
     full suite `npx vitest run` → 472 passed.
 
-- [ ] T005b Make install failures fail loud and actionable.
+- [x] T005b Make install failures fail loud and actionable.
   - Depends on: T005a
-  - Files: `packaging/agent-workbench/npm-install.mjs`,
-    `packaging/agent-workbench/installer.mjs` (error surfaces)
+  - Files: `packaging/agent-workbench/installer.mjs` (error surfaces, validation
+    ordering, rollback), `packaging/agent-workbench/installer.d.mts`,
+    `tests/integration/installer.test.ts`
   - Acceptance: On failure, throws/exits with a message naming the missing
     prerequisite and per-OS remediation; never leaves a partial install.
     Satisfies Requirement 1.4, P4.
-  - Evidence: Pending.
+  - Evidence: A platform-parameterized `remediation(key, platform)` helper
+    supplies per-OS, actionable text (Node, pnpm, Python, make, C++20 compiler,
+    and the Windows MSVC build tools); every prerequisite `InstallError` now
+    carries it. All prerequisite validation (required components, Node version,
+    and — when a native rebuild is planned — pnpm + Python/make/C++) runs ahead
+    of the first write, so a missing prerequisite fails before `installRoot` is
+    created. Fresh installs that error mid-copy roll back (remove the root the
+    run created); the Windows MSVC remediation is attached by catching the
+    `rebuild:native` spawn failure on `win32`. Verified on Linux:
+    `npx vitest run tests/integration/installer.test.ts` → 9 passed, including
+    per-OS remediation assertions and a P4 gate (no `tsx`, emptied `PATH` →
+    actionable pnpm/corepack error and `installRoot` never created).
+    `npm run typecheck` → exit 0; full suite → 474 passed.
 
 - [ ] T006 Retire or delegate the legacy `.sh` installer.
   - Depends on: T004

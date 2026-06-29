@@ -63,6 +63,16 @@ unavailable — a recorded manual run with the gap noted explicitly.
   spawns route through a PATH×PATHEXT full-path lookup so Windows `.cmd` shims
   are reachable without a shell. The per-OS install smoke (windows/macos) remains
   for T011a. Task T004.
+- **Fail-loud install (P4, R1.4) — PASS (Linux).** Prerequisite validation
+  (required components, Node version, and — when a native rebuild is planned —
+  pnpm + Python/make/C++) is hoisted ahead of the first write, so a missing
+  prerequisite throws before `installRoot` exists. Errors carry per-OS
+  remediation from a platform-parameterized `remediation(key, platform)` helper.
+  Linux host: `npx vitest run tests/integration/installer.test.ts` → 9 passed,
+  including all-three-OS remediation assertions and a P4 gate (no `tsx` +
+  emptied `PATH` → actionable pnpm/corepack error, `installRoot` never created).
+  Windows MSVC remediation is attached by catching the `rebuild:native` failure
+  on `win32`; its live assertion is the Windows leg of T011a. Task T005b.
 - **In-process npm entry (R1.1) — PASS (Linux).** `packaging/agent-workbench/npm-install.mjs`
   (renamed from `.js`) statically imports and calls `installer.mjs` — no
   `spawnSync` of any `.sh`. Linux host: `node npm-install.mjs install -- --dry-run
@@ -85,6 +95,13 @@ unavailable — a recorded manual run with the gap noted explicitly.
   is tracked in `docs/backlog/`.
 - Windows CI runner availability may force manual verification for some gates;
   any such gap must be recorded here, not silently skipped.
+- Install rollback is scoped to fresh installs: if the run created `installRoot`,
+  a mid-install failure removes it. A **refresh** over a pre-existing install
+  cannot roll back cleanly — `copyComponent` does `rm -rf` then copy per
+  component, so a failure partway through has already replaced some files. The
+  installer surfaces the error but the prior install may be left mid-update;
+  re-running the installer is the recovery path. Atomic refresh (stage + rename)
+  is impractical because pnpm bakes the install path into `node_modules`/`.bin`.
 - `env`-field support on hook entries is assumed; the in-script default
   (task T008) is the mitigation if a runtime ignores it.
 - Codex `${PLUGIN_ROOT}` expansion inside `.mcp.json` args (not just hook
