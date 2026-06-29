@@ -44,6 +44,11 @@ unavailable — a recorded manual run with the gap noted explicitly.
   shim spawns `node --import tsx <root>/src/mcp/stdio.ts` with `cwd: root`,
   defaults/preserves `AGENT_WORKBENCH_DEFAULT_REPO_ROOT`, passes argv through,
   and uses no shell. Full per-OS launch handshake remains for T011b. Task T002a.
+- **MCP launch config shape (R2.1) — PASS.** Both `.mcp.json` files switched to
+  exec-form `node` launch (Claude `${CLAUDE_PLUGIN_ROOT}`, Codex `${PLUGIN_ROOT}`).
+  `node scripts/validate-agent-workbench-plugin.mjs` → exit 0 (asserts no bash,
+  no `-lc`, no POSIX default expansion, no cache/runtime-internal paths);
+  `npx vitest run tests/integration/` → 54 passed. Task T003.
 - **Hook/shim drift (P2) — PASS.** `npx vitest run
   tests/integration/claude-plugin.test.ts` → all passed, including a new
   byte-identical guard for the vendored `mcp-launch.mjs`/`install-root.mjs` and
@@ -62,6 +67,15 @@ unavailable — a recorded manual run with the gap noted explicitly.
   any such gap must be recorded here, not silently skipped.
 - `env`-field support on hook entries is assumed; the in-script default
   (task T008) is the mitigation if a runtime ignores it.
+- Codex `${PLUGIN_ROOT}` expansion inside `.mcp.json` args (not just hook
+  command strings) is taken on the strength of the existing hook usage; the live
+  per-OS launch smoke (T011b) is what confirms it end to end. If it does not
+  expand, the localized fix is to have the installer write the absolute install
+  prefix into the deployed Codex `.mcp.json`.
+- `plugins/agent-workbench/kiro-power/mcp.json` still uses the `bash -lc` launch
+  form. Kiro is outside this spec's Requirement 2 baseline (Claude/Codex only);
+  converting it is a follow-up so the Kiro entry point is not left shell-bound
+  indefinitely.
 
 ## Closure Readiness
 

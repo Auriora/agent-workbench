@@ -89,13 +89,24 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
     that imports the vendored shim and asserts `./install-root.mjs` resolves
     inside the copied subtree. 22 tests pass across the three suites.
 
-- [ ] T003 Switch both `.mcp.json` files to exec-form `node` launch.
+- [x] T003 Switch both `.mcp.json` files to exec-form `node` launch.
   - Depends on: T002b
   - Files: `plugins/agent-workbench/.mcp.json`,
-    `plugins/agent-workbench/claude-plugin/.mcp.json`
-  - Acceptance: `"command":"node","args":["${CLAUDE_PLUGIN_ROOT}/mcp-launch.mjs"]`;
-    no `bash`/`-lc`. Preserves `startup_timeout_sec`. Satisfies Requirement 2.1.
-  - Evidence: Pending.
+    `plugins/agent-workbench/claude-plugin/.mcp.json`,
+    `scripts/validate-agent-workbench-plugin.mjs`,
+    `tests/integration/{claude-plugin,codex-integration-profile}.test.ts`
+  - Acceptance: `"command":"node"` with the per-runtime plugin-root token —
+    Claude uses `${CLAUDE_PLUGIN_ROOT}/mcp-launch.mjs`, Codex uses
+    `${PLUGIN_ROOT}/mcp-launch.mjs` (the runtimes use different tokens; the Codex
+    one is confirmed by the existing hooks). No `bash`/`-lc`/`${VAR:-}`. Codex
+    timeout `startup_timeout_sec` preserved. Satisfies Requirement 2.1.
+  - Evidence: Both `.mcp.json` files rewritten to exec form (Claude
+    `${CLAUDE_PLUGIN_ROOT}`, Codex `${PLUGIN_ROOT}`). Validator updated to assert
+    the shell-free shape (no bash, no `-lc`, no POSIX default expansion, no cache
+    or runtime-internal paths) and re-run green (exit 0). Claude and Codex
+    integration assertions updated; full suite `npx vitest run
+    tests/integration/` → 54 passed. Requirement 2.1 shell-free launch shape
+    verified.
 
 ## Phase 2: Cross-platform installer
 

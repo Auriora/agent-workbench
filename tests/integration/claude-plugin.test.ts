@@ -37,12 +37,16 @@ describe("Claude Code plugin artifacts", () => {
       skills: "./skills/",
       mcpServers: "./.mcp.json"
     });
+    // Spec 033: shell-free exec-form launch via the portable shim; Claude
+    // expands ${CLAUDE_PLUGIN_ROOT} before invocation on every OS.
     expect(mcpConfig.mcpServers["agent-workbench"]).toMatchObject({
-      command: "bash",
-      args: expect.arrayContaining([
-        "exec \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp\""
-      ])
+      command: "node",
+      args: ["${CLAUDE_PLUGIN_ROOT}/mcp-launch.mjs"]
     });
+    const claudeMcpArgs = mcpConfig.mcpServers["agent-workbench"].args.join(" ");
+    expect(claudeMcpArgs).not.toContain("bash");
+    expect(claudeMcpArgs).not.toContain("-lc");
+    expect(claudeMcpArgs).not.toContain("${VAR:-");
     expect(Object.keys(hooksConfig.hooks).sort()).toEqual(["PostToolUse", "SessionStart"]);
     expect(skill).toContain("description: Use Agent Workbench as the MCP-backed IDE runtime");
     expect(skill).toContain("Claude Code Integration");

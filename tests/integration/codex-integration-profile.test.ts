@@ -265,12 +265,12 @@ describe("Codex plugin artifacts", () => {
       mcpServers: "./.mcp.json"
     });
     expect(manifest.hooks).toBeUndefined();
+    // Spec 033: shell-free exec-form launch via the portable shim; Codex expands
+    // ${PLUGIN_ROOT} and the shim resolves the install prefix itself.
     expect(mcpConfig.mcpServers["agent-workbench"]).toMatchObject({
-      command: "bash",
+      command: "node",
       startup_timeout_sec: 30.0,
-      args: expect.arrayContaining([
-        "exec \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp\""
-      ])
+      args: ["${PLUGIN_ROOT}/mcp-launch.mjs"]
     });
     expect(Object.keys(hooksConfig.hooks).sort()).toEqual(["PostToolUse", "SessionStart"]);
     expect(skill).toContain("Agent Workbench is the executable runtime.");
@@ -680,21 +680,21 @@ describe("Codex plugin artifacts", () => {
     const pluginSurface = profile.active_surfaces.find((entry) => entry.surface === "plugins");
 
     expect(manifest.mcpServers).toBe("./.mcp.json");
-    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).toContain(
-      "/bin/agent-workbench-mcp"
-    );
-    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain(
-      "plugins/cache"
-    );
-    expect(mcpConfig.mcpServers["agent-workbench"].startup_timeout_sec).toBe(30.0);
-    expect(mcpConfig.mcpServers["agent-workbench"].command).toBe("bash");
+    // Spec 033: shell-free exec-form launch via the portable shim. The .mcp.json
+    // names only the shim; the shim resolves the install prefix and runtime
+    // internals (src/mcp, tsx, node_modules) at launch — none of those leak here.
+    expect(mcpConfig.mcpServers["agent-workbench"].command).toBe("node");
     expect(mcpConfig.mcpServers["agent-workbench"].args).toEqual([
-      "-lc",
-      'exec "${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp"'
+      "${PLUGIN_ROOT}/mcp-launch.mjs"
     ]);
-    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain("src/mcp");
-    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain("tsx");
-    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain("node_modules");
+    expect(mcpConfig.mcpServers["agent-workbench"].startup_timeout_sec).toBe(30.0);
+    const codexMcpArgs = mcpConfig.mcpServers["agent-workbench"].args.join(" ");
+    expect(codexMcpArgs).not.toContain("plugins/cache");
+    expect(codexMcpArgs).not.toContain("-lc");
+    expect(codexMcpArgs).not.toContain("${VAR:-");
+    expect(codexMcpArgs).not.toContain("src/mcp");
+    expect(codexMcpArgs).not.toContain("tsx");
+    expect(codexMcpArgs).not.toContain("node_modules");
     expect(mcpSurface).toEqual(
       expect.objectContaining({
         artifact_path: "plugins/agent-workbench/.mcp.json"
