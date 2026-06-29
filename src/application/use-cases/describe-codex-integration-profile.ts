@@ -250,7 +250,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile_path: "packaging/agent-workbench/Containerfile",
       manifest_path: "packaging/agent-workbench/package-manifest.json",
-      installer_path: "scripts/install-agent-workbench-package.sh",
+      installer_path: "packaging/agent-workbench/installer.mjs",
       release_workflow_path: ".github/workflows/release-ghcr.yml",
       installed_components: [
         "src",

@@ -19,8 +19,8 @@
     "workbench"
   ],
   "bin": {
-    "agent-workbench": "packaging/agent-workbench/npm-install.js",
-    "agent-workbench-plugin": "packaging/agent-workbench/npm-install.js"
+    "agent-workbench": "packaging/agent-workbench/npm-install.mjs",
+    "agent-workbench-plugin": "packaging/agent-workbench/npm-install.mjs"
   },
   "files": [
     "AGENTS.md",
@@ -36,7 +36,9 @@
     "package.json",
     "packaging/agent-workbench/package-manifest.json",
     "packaging/agent-workbench/npm-package.json",
-    "packaging/agent-workbench/npm-install.js",
+    "packaging/agent-workbench/npm-install.mjs",
+    "packaging/agent-workbench/installer.mjs",
+    "packaging/agent-workbench/installer.d.mts",
     "plugins/agent-workbench",
     "pnpm-lock.yaml",
     "scripts/install-agent-workbench-package.sh",

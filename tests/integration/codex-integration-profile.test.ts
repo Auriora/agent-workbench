@@ -154,7 +154,7 @@ describe("Codex integration profile", () => {
       registry: "ghcr.io",
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile_path: "packaging/agent-workbench/Containerfile",
-      installer_path: "scripts/install-agent-workbench-package.sh",
+      installer_path: "packaging/agent-workbench/installer.mjs",
       release_workflow_path: ".github/workflows/release-ghcr.yml"
     });
     expect(profile.install_package.dependency_install_model).toContain(
@@ -759,7 +759,7 @@ describe("Codex plugin artifacts", () => {
       registry: "ghcr.io",
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile: "packaging/agent-workbench/Containerfile",
-      installer: "scripts/install-agent-workbench-package.sh"
+      installer: "packaging/agent-workbench/installer.mjs"
     });
     expect(manifest.dependency_install).toMatchObject({
       package_manager: "pnpm@10.18.1",
@@ -796,7 +796,7 @@ describe("Codex plugin artifacts", () => {
     );
     expect(manifest.codex.plugin_mcp_config).toBe("plugins/agent-workbench/.mcp.json");
     expect(manifest.codex.plugin_hooks).toBe("plugins/agent-workbench/hooks/hooks.json");
-    expect(manifest.codex.plugin_install_model).toBe("scripts/install-agent-workbench-package.sh");
+    expect(manifest.codex.plugin_install_model).toBe("packaging/agent-workbench/installer.mjs");
     expect(containerfile).toContain("FROM node:24-bookworm-slim");
     expect(containerfile).toContain("COPY src ./src");
     expect(containerfile).toContain("rm -rf src/debug");

@@ -9,7 +9,7 @@
   },
   "image": "ghcr.io/bcherrington/agent-workbench",
   "containerfile": "packaging/agent-workbench/Containerfile",
-  "installer": "scripts/install-agent-workbench-package.sh",
+  "installer": "packaging/agent-workbench/installer.mjs",
   "entrypoint": "node --import tsx /opt/agent-workbench/src/mcp/stdio.ts",
   "dependency_install": {
     "package_manager": "pnpm@10.18.1",
@@ -78,7 +78,7 @@
     "plugin_manifest": "plugins/agent-workbench/.codex-plugin/plugin.json",
     "plugin_mcp_config": "plugins/agent-workbench/.mcp.json",
     "plugin_hooks": "plugins/agent-workbench/hooks/hooks.json",
-    "plugin_install_model": "scripts/install-agent-workbench-package.sh"
+    "plugin_install_model": "packaging/agent-workbench/installer.mjs"
   },
   "kiro": {
     "power_root": "plugins/agent-workbench/kiro-power",
