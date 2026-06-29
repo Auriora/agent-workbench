@@ -140,12 +140,19 @@ unavailable — a recorded manual run with the gap noted explicitly.
   per-OS launch smoke (T011b) is what confirms it end to end. If it does not
   expand, the localized fix is to have the installer write the absolute install
   prefix into the deployed Codex `.mcp.json`.
-- `plugins/agent-workbench/kiro-power/mcp.json` still uses the `bash -lc` launch
-  form. Kiro is outside this spec's Requirement 2 baseline (Claude/Codex only);
-  converting it is a follow-up so the Kiro entry point is not left shell-bound
-  indefinitely. The Kiro `.kiro.hook`/agent commands also still carry the inline
-  `AGENT_WORKBENCH_HOOK_FEEDBACK=basic` prefix; harmless (the in-script default is
-  now `basic`) but tracked with the same follow-up.
+- **Kiro MCP launch is currently broken (deferred fix).** Kiro is outside this
+  spec's Requirement 2 baseline (Claude/Codex only), and the launcher rename
+  introduced by T004 was not propagated to it: the installer now generates only
+  `bin/agent-workbench-mcp.mjs`, but `plugins/agent-workbench/kiro-power/mcp.json`
+  still launches `bash -lc exec ".../bin/agent-workbench-mcp"` — a file that no
+  longer exists. So Kiro's MCP server will fail to start until the Kiro entry
+  point is converted. This is more than the original "still uses `bash -lc` form"
+  note: the target is missing, not just shell-bound. Converting Kiro to a
+  shell-free launch against the `.mjs` launcher is a tracked follow-up
+  (`docs/runbooks/codex-agent-workbench-plugin.md` and the Power docs flag the
+  launcher reference as pending). The Kiro `.kiro.hook`/agent commands also still
+  carry the inline `AGENT_WORKBENCH_HOOK_FEEDBACK=basic` prefix; harmless (the
+  in-script default is now `basic`) but tracked with the same follow-up.
 - Claude command-hook exec form (`args`) is documented and confirmed. Codex
   exec-form `args` support for hook commands is taken on the strength of its
   parallel plugin model (it already expands `${PLUGIN_ROOT}` in hook commands);

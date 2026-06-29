@@ -21,7 +21,7 @@ It packages:
 
 The plugin does not reimplement runtime code. Its MCP binding launches the
 stable installed package launcher, not runtime source copied into Codex's plugin
-cache. Use `scripts/install-agent-workbench-package.sh` to install the package,
+cache. Use `npx @auriora/agent-workbench install` to install the package,
 register the local plugin marketplace entry, cachebust the plugin, and run
 `codex plugin add agent-workbench@<personal-marketplace>`.
 
@@ -30,17 +30,16 @@ runtime, reinstall the plugin, then restart Codex.
 
 ## Quick Start
 
-From this repository or an unpacked package source, install the package-backed
-Codex plugin:
-
-```bash
-scripts/install-agent-workbench-package.sh
-```
-
-For an npm package install, run:
+Install the package-backed Codex plugin (supported, shell-free, all OSes):
 
 ```bash
 npx @auriora/agent-workbench install
+```
+
+From a checkout or unpacked package source you can run the installer directly:
+
+```bash
+node packaging/agent-workbench/installer.mjs
 ```
 
 Verify the plugin is installed and enabled:
@@ -59,7 +58,7 @@ For task work, use `context_for_task` before broad reads and
 To update after source, dependency, skill, hook, or MCP config changes:
 
 ```bash
-scripts/install-agent-workbench-package.sh
+npx @auriora/agent-workbench install
 codex plugin add agent-workbench@auriora-local
 ```
 
@@ -88,8 +87,10 @@ for fixed-target launches outside the active workspace.
 
 The local plugin source lives at `~/plugins/agent-workbench` after package
 installation. The personal marketplace entry points at that source, and Codex
-loads an installed copy from its plugin cache. The plugin MCP binding must keep
-launching the package prefix through `bin/agent-workbench-mcp`.
+loads an installed copy from its plugin cache. The plugin MCP binding launches
+the installed package prefix through the portable shim
+(`${PLUGIN_ROOT}/mcp-launch.mjs`), which resolves the prefix and starts the
+server — not runtime source from Codex's plugin cache.
 
 The repository also includes `.agents/plugins/marketplace.json` for checkout
 marketplace inspection and `.well-known/mcp/server-card.json` for local MCP
@@ -132,8 +133,14 @@ the same quiet hook checks and emit plain Kiro hook context only when basic
 feedback is enabled and an actionable message exists.
 
 Install the package-backed runtime first, then add `kiro-power/` as a local
-Power in Kiro. The MCP binding launches
-`${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp`.
+Power in Kiro. The Kiro MCP binding launches the installed prefix under
+`${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/`.
+
+> **Pending (spec 033):** the Kiro `mcp.json` still references the old
+> `bin/agent-workbench-mcp`, which the installer no longer generates (it now
+> emits `bin/agent-workbench-mcp.mjs`). Kiro MCP launch is broken until the Kiro
+> entry point is converted — a tracked follow-up. Codex/Claude already launch
+> shell-free via `mcp-launch.mjs`.
 
 ## Claude Code Plugin
 
