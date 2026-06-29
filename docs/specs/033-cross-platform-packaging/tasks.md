@@ -32,13 +32,16 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
 
 - [x] T001a Implement the shared install-root resolver.
   - Depends on: none
-  - Files: `packaging/agent-workbench/install-root.mjs` (new, exported
-    `resolveInstallRoot(env, platform)`)
+  - Files: `plugins/agent-workbench/install-root.mjs` (new, exported
+    `resolveInstallRoot(env, platform)`). Canonical home is the plugin tree (a
+    deployed component) so the Codex shim imports it same-dir and the Claude
+    plugin vendors a single self-contained copy (no `../..` escape); the
+    `packaging/` installer imports it from the package source.
   - Acceptance: Returns `AGENT_WORKBENCH_INSTALL_ROOT` when set; else
     `$HOME/.local/share/agent-workbench` on POSIX and
     `%LOCALAPPDATA%\agent-workbench` (fallback `%HOME%\AppData\Local\agent-workbench`)
     on `win32` (Decision 3). Pure function, no shell calls.
-  - Evidence: `packaging/agent-workbench/install-root.mjs` implemented as a pure
+  - Evidence: `plugins/agent-workbench/install-root.mjs` implemented as a pure
     ESM function using `path.win32`/`path.posix` so it resolves a target OS's
     root from any host. Verified against 5 cases (POSIX default/override, Windows
     LOCALAPPDATA/fallback/override), all correct.
@@ -53,21 +56,38 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
     9 passed (override on both OSes, POSIX/darwin default, Windows
     LOCALAPPDATA + fallback, cross-host separator parity).
 
-- [ ] T002a Implement the portable MCP launch shim.
+- [x] T002a Implement the portable MCP launch shim.
   - Depends on: T001a
-  - Files: `plugins/agent-workbench/mcp-launch.mjs` (new, source of truth)
+  - Files: `plugins/agent-workbench/mcp-launch.mjs` (new, source of truth;
+    imports `./install-root.mjs`)
   - Acceptance: Resolves install root via T001a and spawns
     `node --import tsx <root>/src/mcp/stdio.ts` inheriting stdio; exits with the
-    child's code. No `bash`, no `${VAR:-default}`. Satisfies Requirement 2.2-2.3.
-  - Evidence: Pending.
+    child's code. Preserves the legacy bash launcher's behavior: defaults
+    `AGENT_WORKBENCH_DEFAULT_REPO_ROOT` to the launch `cwd` when unset, sets the
+    child `cwd` to the install root (so `--import tsx` resolves the bare `tsx`
+    specifier), and passes through extra argv. No `bash`, no `${VAR:-default}`.
+    Satisfies Requirement 2.2-2.3.
+  - Evidence: Shim exports a testable `planLaunch(env, argv, cwd)` behind an
+    `isMain` guard; spawns with signal forwarding (SIGINT/SIGTERM/SIGHUP).
+    `tests/integration/mcp-launch.test.ts` → 6 cases verify the entry path,
+    `cwd: root`, the repo-root default + preservation, argv passthrough, and the
+    no-shell property.
 
-- [ ] T002b Vendor the shim into the Claude plugin copy.
+- [x] T002b Vendor the shim and resolver into the Claude plugin copy.
   - Depends on: T002a
-  - Files: `plugins/agent-workbench/claude-plugin/mcp-launch.mjs`
-  - Acceptance: Copy is generated/synced from the T002a source (not
-    hand-maintained) so the two cannot drift; sync mechanism documented or
-    wired into the existing vendoring step. Satisfies P2.
-  - Evidence: Pending.
+  - Files: `plugins/agent-workbench/claude-plugin/mcp-launch.mjs`,
+    `plugins/agent-workbench/claude-plugin/install-root.mjs`,
+    `scripts/sync-claude-plugin-hooks.mjs` (extend), drift test in
+    `tests/integration/claude-plugin.test.ts`
+  - Acceptance: Both files are synced (not hand-maintained) from their plugin-tree
+    sources via the existing `npm run sync:claude-hooks` vendoring step, with the
+    byte-identical drift test extended to cover them so they cannot diverge.
+    Keeps `claude-plugin/` self-contained (no `../..` imports). Satisfies P2.
+  - Evidence: Added `VENDORED_PLUGIN_FILES` to the sync script; `npm run
+    sync:claude-hooks` writes both files. `claude-plugin.test.ts` extended with a
+    byte-identical guard for the plugin-root modules and an isolated-copy test
+    that imports the vendored shim and asserts `./install-root.mjs` resolves
+    inside the copied subtree. 22 tests pass across the three suites.
 
 - [ ] T003 Switch both `.mcp.json` files to exec-form `node` launch.
   - Depends on: T002b

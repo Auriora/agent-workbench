@@ -85,9 +85,15 @@ resolver so default-root parity holds across OSes.
   both `.mcp.json` files via `"command":"node","args":["${CLAUDE_PLUGIN_ROOT}/mcp-launch.mjs"]`.
   Resolves the install root through the shared resolver and `execFileSync`/spawns
   the server. Removes the `bash -lc` wrapper and the POSIX `${VAR:-default}`.
-- **Shared install-root resolver.** One function used by installer, host
-  launcher, and MCP shim so the default root is computed identically everywhere
-  (P3). Honors `AGENT_WORKBENCH_INSTALL_ROOT` first.
+- **Shared install-root resolver (`plugins/agent-workbench/install-root.mjs`).**
+  One function used by installer, host launcher, and MCP shim so the default root
+  is computed identically everywhere (P3). Honors `AGENT_WORKBENCH_INSTALL_ROOT`
+  first. The canonical copy lives in the plugin tree (a deployed component) so
+  the Codex shim imports it same-dir at runtime and the `packaging/` installer
+  imports it from the package source; the Claude plugin carries a single
+  vendored, byte-identical copy (Claude installs only the `claude-plugin/`
+  subtree, so it cannot import via `../..`). Implemented with `path.win32`/
+  `path.posix` so a target OS's root resolves correctly from any host.
 - **Hook entries.** `hooks.json` switches both hooks to exec form; the default
   feedback mode moves into the hook script (read env, fall back to `basic`),
   with the `env` field as a documented redundant default.
@@ -102,14 +108,19 @@ absolute path derived from `(AGENT_WORKBENCH_INSTALL_ROOT, platform, homedir)`.
 ### Install-root resolver
 
 ```js
-// shared module, imported by installer.mjs, mcp-launch.mjs, generated launcher
+// plugins/agent-workbench/install-root.mjs — canonical; vendored into claude-plugin.
+// Imported by installer.mjs (package source), mcp-launch.mjs, generated launcher.
+// Uses path.win32/path.posix and env-derived home so a target OS's root resolves
+// correctly from any host (pure given env/platform).
 export function resolveInstallRoot(env = process.env, platform = process.platform) {
   if (env.AGENT_WORKBENCH_INSTALL_ROOT) return env.AGENT_WORKBENCH_INSTALL_ROOT;
   if (platform === "win32") {
-    const base = env.LOCALAPPDATA || path.join(os.homedir(), "AppData", "Local");
-    return path.join(base, "agent-workbench");
+    const home = env.USERPROFILE || os.homedir();
+    const base = env.LOCALAPPDATA || path.win32.join(home, "AppData", "Local");
+    return path.win32.join(base, "agent-workbench");
   }
-  return path.join(os.homedir(), ".local", "share", "agent-workbench");
+  const home = env.HOME || os.homedir();
+  return path.posix.join(home, ".local", "share", "agent-workbench");
 }
 ```
 

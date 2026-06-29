@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 // @ts-expect-error -- ESM .mjs resolver imported into the TS test via esbuild.
-import { resolveInstallRoot } from "../../packaging/agent-workbench/install-root.mjs";
+import { resolveInstallRoot } from "../../plugins/agent-workbench/install-root.mjs";
 
 describe("resolveInstallRoot (spec 033, P3 default-root parity)", () => {
   describe("AGENT_WORKBENCH_INSTALL_ROOT override", () => {

@@ -39,6 +39,16 @@ unavailable — a recorded manual run with the gap noted explicitly.
   default, the Windows `%LOCALAPPDATA%` default and its `<home>\AppData\Local`
   fallback, and cross-host separator parity (win32 root resolved on a POSIX host
   with backslashes, and vice versa). Tasks T001a/T001b.
+- **Shim launch plan (R2) — PARTIAL (unit).** Linux host,
+  `npx vitest run tests/integration/mcp-launch.test.ts` → 6 passed. Verifies the
+  shim spawns `node --import tsx <root>/src/mcp/stdio.ts` with `cwd: root`,
+  defaults/preserves `AGENT_WORKBENCH_DEFAULT_REPO_ROOT`, passes argv through,
+  and uses no shell. Full per-OS launch handshake remains for T011b. Task T002a.
+- **Hook/shim drift (P2) — PASS.** `npx vitest run
+  tests/integration/claude-plugin.test.ts` → all passed, including a new
+  byte-identical guard for the vendored `mcp-launch.mjs`/`install-root.mjs` and
+  an isolated-copy import test proving the shim stays self-contained (no `../..`
+  escape). Task T002b.
 
 ## Residual Risks
 
