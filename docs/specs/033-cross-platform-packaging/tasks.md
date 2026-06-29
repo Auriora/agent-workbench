@@ -240,21 +240,41 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
 
 ## Phase 4: Packaging metadata and verification
 
-- [ ] T010a Update packaging manifests for the new install model.
+- [x] T010a Update packaging manifests for the new install model.
   - Depends on: T004, T006
-  - Files: `packaging/agent-workbench/npm-package.json`,
-    `packaging/agent-workbench/package-manifest.json`, root `package.json` `files`
+  - Files: `packaging/agent-workbench/package-manifest.json`, root `package.json`
+    (`bin` + `files`), `src/application/use-cases/describe-codex-integration-profile.ts`,
+    `tests/integration/codex-integration-profile.test.ts`
+    (`packaging/agent-workbench/npm-package.json` already updated in T005a)
   - Acceptance: `plugin_install_model` and `files` reference `installer.mjs` and
     `mcp-launch.mjs`; any `.sh` reference updated or removed.
-  - Evidence: Pending.
+  - Evidence: Root `package.json` `bin` (both `agent-workbench` and
+    `agent-workbench-plugin`) now points at `npm-install.mjs`; `files` lists
+    `npm-install.mjs`, `installer.mjs`, and `installer.d.mts` (and keeps the
+    `plugins/agent-workbench` tree that carries `mcp-launch.mjs`). The manifest
+    `installer` and `codex.plugin_install_model`, and the integration profile's
+    `install_package.installer_path`, all point at
+    `packaging/agent-workbench/installer.mjs`; the coupled
+    `codex-integration-profile.test.ts` assertions updated to match. The `.sh`
+    stays referenced as the retained thin POSIX delegator (T006). `npm run
+    typecheck` → exit 0; full suite → 474 passed.
 
-- [ ] T010b Update the README and verify packed contents.
+- [x] T010b Update the README and verify packed contents.
   - Depends on: T010a
   - Files: `packaging/agent-workbench/README.md`
   - Acceptance: README documents the Node install model (npm-only distribution,
     Decision 2). `npm pack --dry-run` includes `installer.mjs`/`mcp-launch.mjs`
     and excludes any retired `.sh`.
-  - Evidence: Pending.
+  - Evidence: README rewritten to document the shell-free Node install model:
+    npm (`@auriora/agent-workbench`) as the supported channel, `installer.mjs` as
+    the single source of install logic, the per-OS install prefix, the
+    fail-loud/per-OS-toolchain notes (core `tree-sitter` C++20 build; grammars
+    prebuilt; Windows MSVC), and the `.sh` as a retained thin POSIX delegator. The
+    stale "appends fallback `[mcp_servers]` to `config.toml` / merges
+    `hooks.json`" description was corrected. `npm pack --dry-run --json` (198
+    files) confirms `packaging/agent-workbench/installer.mjs`,
+    `npm-install.mjs`, `plugins/agent-workbench/mcp-launch.mjs`, and
+    `install-root.mjs` are packed and the legacy `npm-install.js` is gone.
 
 - [ ] T011a Add the cross-platform CI matrix and install smoke.
   - Depends on: T003, T005b, T009

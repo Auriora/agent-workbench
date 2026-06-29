@@ -1,8 +1,12 @@
 # Agent Workbench Package
 
-This package definition supports the npm installer shim and the GHCR image for
-the Agent Workbench MCP runtime, documentation, Codex plugin wrapper, skill,
-and hook scripts.
+This package definition supports the npm installer and the GHCR image for the
+Agent Workbench MCP runtime, documentation, Codex plugin wrapper, skill, and
+hook scripts.
+
+The supported distribution channel is the npm package
+(`@auriora/agent-workbench`). Install and launch are **shell-free** on Windows,
+macOS, and Linux: no POSIX shell is required on the install or runtime path.
 
 Checkout-only debug harnesses under `src/debug/`, `debug:*` package scripts,
 and active implementation specs under `docs/specs/` are removed from installed
@@ -25,22 +29,38 @@ pnpm install --frozen-lockfile
 pnpm rebuild:native
 ```
 
-Native runtime modules require Python 3, `make`, and a C++20-capable compiler.
-The runtime dependency set includes `tsx` because the installed MCP launcher
-uses the TypeScript stdio entrypoint directly.
+Native module builds need Python 3 and a C++20 toolchain. Only the core
+`tree-sitter` runtime binding compiles from source; the grammar packages ship
+prebuilt binaries for all targets. On Linux/macOS that toolchain is `make` plus
+`g++`/`clang++` (e.g. `build-essential` or the Xcode command line tools); on
+Windows it is the MSVC C++ build tools (the "Desktop development with C++"
+workload). The runtime dependency set includes `tsx` because the installed MCP
+launcher uses the TypeScript stdio entrypoint directly.
 
-The host installer is `scripts/install-agent-workbench-package.sh`. It copies
-the package contents to a stable local prefix, writes a launcher, installs the
-Codex plugin wrapper files, appends fallback Codex MCP configuration to
-`config.toml`, and merges hook configuration into `hooks.json` when the plugin
-system does not install hooks itself.
+The host installer is the shell-free Node module
+`packaging/agent-workbench/installer.mjs` — the single source of install logic.
+Using only `node:fs`/`path`/`os`/`child_process`, it validates the package
+contents, copies them to a per-OS local prefix
+(`%LOCALAPPDATA%\agent-workbench` on Windows, `~/.local/share/agent-workbench`
+on Linux/macOS), generates the `bin/agent-workbench-mcp.mjs` Node launcher, runs
+the native rebuild when dependencies are not already packaged, and installs the
+Codex plugin wrapper. It does **not** write a fallback `[mcp_servers]` block to
+`config.toml` or merge a user `hooks.json`; the plugin-bundled `.mcp.json` and
+`hooks/hooks.json` provide those. A missing prerequisite fails loud with per-OS
+remediation before any files are written.
 
 The npm package contract is `npm-package.json`. It exposes the
-`@auriora/agent-workbench` package and runs the same host installer through:
+`@auriora/agent-workbench` package; its `npm-install.mjs` entry point imports and
+runs `installer.mjs` in-process (no shell, no subprocess installer):
 
 ```bash
 npx @auriora/agent-workbench install
 ```
+
+`scripts/install-agent-workbench-package.sh` is retained only as a thin POSIX
+delegator (`exec node …/installer.mjs --source <repo> "$@"`) so it cannot
+diverge from the Node installer. It still requires bash, so it is not part of
+the shell-free path; prefer the npm command above.
 
 Build locally:
 

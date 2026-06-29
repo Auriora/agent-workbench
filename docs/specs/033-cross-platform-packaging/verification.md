@@ -63,6 +63,15 @@ unavailable — a recorded manual run with the gap noted explicitly.
   spawns route through a PATH×PATHEXT full-path lookup so Windows `.cmd` shims
   are reachable without a shell. The per-OS install smoke (windows/macos) remains
   for T011a. Task T004.
+- **Packaging metadata + packed contents (R1, P2) — PASS (Linux).** Root
+  `package.json` `bin`/`files`, `package-manifest.json` (`installer`,
+  `codex.plugin_install_model`), and the Codex integration profile's
+  `installer_path` all point at `packaging/agent-workbench/installer.mjs`; the
+  README documents the npm-only, shell-free Node install model. `npm pack
+  --dry-run --json` (198 files) confirms `installer.mjs`, `npm-install.mjs`,
+  `mcp-launch.mjs`, and `install-root.mjs` are packed and the legacy
+  `npm-install.js` is gone; the thin `.sh` delegator still ships. Full suite →
+  474 passed. Tasks T010a/T010b.
 - **Single-source installer (P2, R1.3) — PASS (Linux).** The legacy
   `scripts/install-agent-workbench-package.sh` is reduced to a thin delegator:
   `exec node packaging/agent-workbench/installer.mjs --source <repo> "$@"`. No
