@@ -1125,7 +1125,7 @@ Do not promote an item when:
 ### EB036: Per-Repo Runtime Daemon And Session Sharing
 
 - Priority: P0
-- Status: proposed spec from dogfood evidence
+- Status: active Spec 032
 - Friction signal: multiple Codex sessions in the same large repository can
   start separate Agent Workbench MCP processes that share one repo cache
   database and contend during startup graph warmup, surfacing
@@ -1161,8 +1161,177 @@ Do not promote an item when:
     requests, and blocked graph-store startup.
   - Dogfood post-warmup sweep against `aws-datalake` with multiple concurrent
     clients and no `database is locked` resource or tool failures.
-- Promotion target: create a focused runtime-daemon spec before implementing
-  broad graph-backed tool hardening.
+- Promotion target: active
+  [Spec 032](../specs/032-per-repo-runtime-daemon-cache/requirements.md)
+  before implementing broad graph-backed tool hardening.
+
+### EB037: Repo-Root Authority And Debug Override Gate
+
+- Priority: P0
+- Status: active Spec 029
+- Friction signal: external review and source inspection found that normal MCP
+  requests can provide `repo_root`, causing workspace/safety adapters to bind
+  to a caller-supplied root instead of the launched repository.
+- Runtime surface: MCP registry schemas, request parsing, root resolution,
+  workspace safety, integration health, debug harnesses, and generated
+  integration guidance.
+- Acceptance:
+  - Normal agent-facing resources and tools use the launch repo root only.
+  - Caller-supplied `repo_root` is blocked unless an explicit hidden debug gate
+    is enabled for Agent Workbench diagnostics.
+  - Normal Codex, Claude Code, Kiro, and common integration guidance does not
+    advertise `repo_root`.
+  - Debug mode reports root override status in diagnostic or health output
+    without making it part of normal workflow guidance.
+- Validation:
+  - MCP tests for normal blocking and debug allowance.
+  - Integration profile tests proving normal schemas and guidance omit
+    `repo_root`.
+  - Workspace safety tests proving effective root remains the launch root in
+    normal mode.
+- Promotion target: active
+  [Spec 029](../specs/029-repo-root-authority/requirements.md).
+
+### EB038: MCP Error Envelope Consistency
+
+- Priority: P0
+- Status: active Spec 030
+- Friction signal: external review and source inspection found uneven error
+  handling across MCP registries; some handlers wrap use-case failures while
+  others can rethrow after argument/provider checks.
+- Runtime surface: MCP registry helpers, presenters, runtime contracts,
+  telemetry, graph-backed tools, docs tools, validation planning, and
+  preview/apply edit tools.
+- Acceptance:
+  - Shared handler pattern covers parse, provider availability, use-case
+    invocation, domain failure, unknown failure, telemetry, and JSON text
+    response serialization.
+  - Invalid input, provider unavailable, workspace safety blocked, stale state,
+    environment unavailable, domain error, and internal error remain distinct
+    enough for agents to choose the next safe action.
+  - Recoverable runtime failures return structured envelopes instead of raw
+    thrown MCP errors.
+- Validation:
+  - Registry consistency tests for representative read-only, planning, and
+    workspace-write tools.
+  - Golden failures for malformed args, missing providers, domain errors, and
+    unknown errors.
+- Promotion target: active
+  [Spec 030](../specs/030-mcp-error-envelope-consistency/requirements.md).
+
+### EB039: Shared Path Policy And Secret Path Classification
+
+- Priority: P0
+- Status: active Spec 031
+- Friction signal: external review found drift risk between scanner/catalog
+  policy and workspace write safety; source inspection confirmed catalog
+  policy is richer than write safety and should become the shared authority.
+- Runtime surface: catalog scanner, docs/context routing, workspace safety,
+  preview/apply edit, validation planning, hook feedback, threat model, and
+  redaction boundaries.
+- Acceptance:
+  - One shared classifier returns generated, vendor, hidden, secret, ignored,
+    nested-repo, configured-skip, and explicit-allowlist decisions.
+  - Workspace safety derives read-only and write-refusal behavior from the
+    shared classifier instead of maintaining narrower duplicate root lists.
+  - Secret-bearing paths such as `.env*`, `.envrc`, private keys,
+    `credentials.*`, and `secrets.*` are handled consistently while safe
+    examples remain allowlistable.
+- Validation:
+  - Consistency tests compare scanner, workspace safety, docs/context, and hook
+    decisions for representative paths.
+  - Secret-path fixtures cover safe examples and denied credential paths.
+- Promotion target: active
+  [Spec 031](../specs/031-shared-path-policy/requirements.md).
+
+### EB040: Runtime Version Single Source
+
+- Priority: P1
+- Status: proposed spec
+- Friction signal: package version, MCP server metadata, integration health,
+  and integration profile currently duplicate `0.1.0`, risking install,
+  package, and health drift.
+- Runtime surface: package metadata, MCP server card, integration health,
+  common integration profile, Codex/Claude/Kiro packaging, tests, and release
+  checks.
+- Acceptance:
+  - Runtime version is derived from one source of truth at build/install time.
+  - Server-card metadata, health resources, integration profiles, and package
+    manifests agree.
+  - Tests fail when hardcoded version literals drift from package metadata.
+- Validation:
+  - Unit and integration tests for version propagation.
+  - Package dry-run or installer dry-run evidence that emitted metadata agrees.
+- Promotion target: create a focused metadata/version spec or include in the
+  release-readiness spec if scope stays small.
+
+### EB041: Claude Code Quick Guidance
+
+- Priority: P2
+- Status: proposed spec
+- Friction signal: Claude Code packaging exists, but external review found that
+  Claude needs a concise usage artifact instead of broad architecture docs.
+- Runtime surface: Claude Code plugin package, generated skills/instructions,
+  common integration profile, plugin README, and MCP call sequence guidance.
+- Acceptance:
+  - Provide a concise Claude-facing guide with the expected call sequence:
+    status/scope/overview, `context_for_task`, targeted reads, preview/apply,
+    and `verification_plan`.
+  - Preserve MCP as the runtime contract and avoid Claude-specific runtime
+    logic.
+  - Omit normal `repo_root` override guidance.
+- Validation:
+  - Plugin package validation includes the Claude guide artifact.
+  - Documentation review confirms guidance is concise and current.
+- Promotion target: create a docs-only integration guidance spec or fold into a
+  Claude packaging refresh slice.
+
+### EB042: Operator Path Documentation
+
+- Priority: P2
+- Status: proposed spec
+- Friction signal: external review found rich design docs but no small operator
+  path for install, first run, normal task, edit task, review task, and
+  troubleshooting.
+- Runtime surface: README, runbooks, documentation map, installer docs, doctor,
+  package validation, and common workflow guidance.
+- Acceptance:
+  - Add a short operator path that routes users through install, first run,
+    normal task, edit task, review task, troubleshooting, and where to find
+    deeper design docs.
+  - Keep durable docs current-state oriented and avoid duplicating design
+    details already owned elsewhere.
+  - Include validation and native dependency notes where they affect first run.
+- Validation:
+  - Markdown review and link/path checks.
+  - Fresh-install or dry-run evidence where operator steps reference commands.
+- Promotion target: create a docs/runbook spec or pair with doctor work.
+
+### EB043: Release-Readiness Gates
+
+- Priority: P1
+- Status: proposed spec
+- Friction signal: external review identified release risk across clean
+  installs, Node versions, Codex plugin registration, Claude plugin loading,
+  MCP startup, edit preview/apply, and uninstall/rollback.
+- Runtime surface: CI, package dry-run, installer dry-run, GHCR/npm release
+  packaging, Codex plugin install, Claude plugin validation, MCP smoke tests,
+  doctor, and release runbooks.
+- Acceptance:
+  - Add a release checklist covering clean install, Node 22 and Node 24, no
+    pre-existing Codex config, Codex plugin reinstall, Claude plugin local load,
+    MCP startup, first `repo:///status`, basic preview/apply, and
+    uninstall/rollback.
+  - Keep network/publishing actions explicit and human-approved.
+  - Make release blockers structured enough for agents to report without
+    overclaiming.
+- Validation:
+  - CI or local dry-run gates for package, installer, plugin validation, and
+    selected MCP smoke.
+  - Manual evidence slots for environment-specific checks that cannot run in
+    CI.
+- Promotion target: create a release-readiness spec after EB040 or fold EB040
+  into it if metadata versioning is the first release gate.
 
 ### EB044: Changed-Files Workbench Entry Point
 
@@ -1297,10 +1466,20 @@ Do not promote an item when:
 | Security-sensitive change detection | EB034, after threat-model reconciliation. |
 | Agent-readable changelog | EB035. |
 | Per-repo runtime daemon and shared sessions | EB036, under EB003 first-read reliability and EB014 large-repo graph warmup scale. |
+| Repo-root authority | EB037, under workspace safety and MCP surface hardening. |
+| MCP error envelope consistency | EB038, under runtime contracts and trust calibration. |
+| Shared path policy | EB039, with EB027 threat model and EB033 generated-file detection boundaries. |
+| Runtime version single source | EB040, with EB001 integration health and release packaging. |
+| Claude Code quick guidance | EB041, under coding-agent integration packaging. |
+| Operator path documentation | EB042, under adoption and runbook usability. |
+| Release-readiness gates | EB043, under package/release reliability. |
 | Changed-files Workbench entry point | EB044, with EB005, EB006, EB011, and EB016 boundaries. |
 | Native installer deprecation debt | EB045, with EB026 and EB043 packaging gates. |
 
 ## Immediate Next Specs
 
-1. Spec 024: plugin discoverability and drift hardening.
-2. Spec 026: agent skills standard compliance.
+1. Spec 029: repo-root authority.
+2. Spec 030: MCP error envelope consistency.
+3. Spec 031: shared path policy.
+4. Spec 032: per-repo runtime daemon and shared cache.
+5. Spec 026: agent skills standard compliance.

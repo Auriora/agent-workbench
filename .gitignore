@@ -5,3 +5,9 @@ node_modules/
 .pytest_cache/
 __pycache__/
 *.pyc
+.idea/
+.kiro/
+.agents/
+.claude/
+.claude-plugin/
+*.tgz
