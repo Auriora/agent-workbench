@@ -63,6 +63,16 @@ unavailable — a recorded manual run with the gap noted explicitly.
   spawns route through a PATH×PATHEXT full-path lookup so Windows `.cmd` shims
   are reachable without a shell. The per-OS install smoke (windows/macos) remains
   for T011a. Task T004.
+- **Cross-platform smoke matrix (R4.2) — PARTIAL (ubuntu verified, macOS/Windows
+  pending).** `.github/workflows/cross-platform-packaging.yml` runs a
+  `[ubuntu-latest, macos-latest, windows-latest]` matrix (Node 22) that installs
+  to a temp prefix and runs three end-to-end smokes against the installed copy:
+  `scripts/ci/install-smoke.mjs` (copy + sanitize + launcher), `mcp-launch-smoke.mjs`
+  (stdio `initialize` handshake), `hook-smoke.mjs` (SessionStart + PostToolUse,
+  no shell error). **Verified locally on Linux** — all three exit 0, the launch
+  smoke returns a real `serverInfo` handshake. macOS and Windows legs require a
+  GitHub runner and have **not** run yet — recorded gap per the Validation
+  Strategy, not silently skipped. Tasks T011a/T011b/T011c.
 - **Packaging metadata + packed contents (R1, P2) — PASS (Linux).** Root
   `package.json` `bin`/`files`, `package-manifest.json` (`installer`,
   `codex.plugin_install_model`), and the Codex integration profile's

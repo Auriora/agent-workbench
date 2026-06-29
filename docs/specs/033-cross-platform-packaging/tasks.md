@@ -278,26 +278,42 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
 
 - [ ] T011a Add the cross-platform CI matrix and install smoke.
   - Depends on: T003, T005b, T009
-  - Files: CI workflow under `.github/workflows/` (or repo CI equivalent)
+  - Files: `.github/workflows/cross-platform-packaging.yml`,
+    `scripts/ci/install-smoke.mjs`
   - Acceptance: Jobs on windows-latest, macos-latest, ubuntu-latest run the `bin`
     installer; assert files copied and launcher generated. If a Windows runner is
     unavailable, record a manual run instead and note the gap. Satisfies
     Requirement 4.2 (install).
-  - Evidence: Pending.
+  - Evidence: Workflow authored with a `[ubuntu-latest, macos-latest,
+    windows-latest]` matrix (Node 22, `fail-fast: false`) that runs
+    `scripts/ci/install-smoke.mjs` — installs to a temp prefix and asserts the
+    runtime copied, `src/debug`/`docs/specs` stripped, and
+    `bin/agent-workbench-mcp.mjs` generated. **ubuntu leg verified locally**
+    (`node scripts/ci/install-smoke.mjs` → exit 0). macOS/Windows legs await a
+    GitHub runner run — recorded gap, not yet green. (Open until the matrix runs
+    green or the gap is formally accepted.)
 
 - [ ] T011b MCP launch smoke on all three OSes.
   - Depends on: T011a
-  - Files: CI workflow (extends T011a jobs)
+  - Files: `.github/workflows/cross-platform-packaging.yml`,
+    `scripts/ci/mcp-launch-smoke.mjs`
   - Acceptance: Server launches from `.mcp.json` on all three OSes; assert stdio
     handshake. Satisfies Requirement 4.2 (launch).
-  - Evidence: Pending.
+  - Evidence: `scripts/ci/mcp-launch-smoke.mjs` launches the installed
+    `bin/agent-workbench-mcp.mjs` and asserts a JSON-RPC `initialize`/`serverInfo`
+    handshake over stdio. **ubuntu leg verified locally** (real handshake,
+    `serverInfo.name = agent-workbench`, exit 0). macOS/Windows await runner.
 
 - [ ] T011c Hook execution smoke on all three OSes.
   - Depends on: T011a
-  - Files: CI workflow (extends T011a jobs)
+  - Files: `.github/workflows/cross-platform-packaging.yml`,
+    `scripts/ci/hook-smoke.mjs`
   - Acceptance: SessionStart + PostToolUse fire on all three OSes; assert
     advisory output and no shell error. Satisfies Requirement 4.2 (hooks).
-  - Evidence: Pending.
+  - Evidence: `scripts/ci/hook-smoke.mjs` runs the installed SessionStart hook
+    (asserts the basic-default advisory) and PostToolUse hook (asserts clean exit,
+    no shell error) via exec-form `node <hook>.js`. **ubuntu leg verified
+    locally** (exit 0). macOS/Windows await runner.
 
 - [ ] T012a Document the supported platform matrix.
   - Depends on: T011a, T011b, T011c
