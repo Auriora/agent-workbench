@@ -171,12 +171,28 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
     actionable pnpm/corepack error and `installRoot` never created).
     `npm run typecheck` → exit 0; full suite → 474 passed.
 
-- [ ] T006 Retire or delegate the legacy `.sh` installer.
+- [x] T006 Retire or delegate the legacy `.sh` installer.
   - Depends on: T004
-  - Files: `scripts/install-agent-workbench-package.sh`
+  - Files: `scripts/install-agent-workbench-package.sh`,
+    `tests/integration/codex-integration-profile.test.ts`
   - Acceptance: Either removed, or reduced to a thin `exec node .../installer.mjs "$@"`
     delegator so it cannot diverge. Satisfies Requirement 1.3, P2.
-  - Evidence: Pending.
+  - Evidence: The `.sh` is now a thin delegator — it resolves the repo root and
+    `exec node packaging/agent-workbench/installer.mjs --source <repo> "$@"`,
+    injecting `--source` before `"$@"` so a user-supplied `--source` wins
+    (parseArgs is last-wins). All install logic lives only in `installer.mjs`
+    (single source, P2): no copy/sanitize/codex-registration logic remains in the
+    `.sh`. Verified on Linux: the exact CI line
+    `bash scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config`
+    delegates to the installer, plans 15 actions, exits 0, and writes nothing; a
+    trailing `--source` override is honored. `codex-integration-profile.test.ts`
+    updated — redundant `.sh`-internal string assertions removed (behavior is
+    covered by `installer.test.ts`), negatives kept, and a P2 pair added (`.sh`
+    contains `installer.mjs`, no longer contains `sanitize_deployed_runtime`/
+    `install_codex_plugin`). Full suite → 474 passed; `npm run typecheck` → exit
+    0; validator → exit 0. Note: a thin `.sh` still requires bash, so the POSIX
+    entry point is not itself shell-free; the shell-free install path is
+    npm → `npm-install.mjs` → `installer.mjs`.
 
 ## Phase 3: Shell-free hooks
 

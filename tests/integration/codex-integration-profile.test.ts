@@ -806,23 +806,15 @@ describe("Codex plugin artifacts", () => {
     expect(containerfile).toContain("COPY plugins ./plugins");
     expect(containerfile).toContain("pnpm install --frozen-lockfile");
     expect(containerfile).toContain("/opt/agent-workbench/src/mcp/stdio.ts");
-    expect(installer).toContain("plugins/agent-workbench/.mcp.json");
-    expect(installer).toContain("plugins/agent-workbench/hooks/hooks.json");
-    expect(installer).toContain("Node.js 22 or newer is required");
-    expect(installer).toContain("pnpm 10.18.1 is required");
-    expect(installer).toContain("ensure_native_build_prerequisites");
-    expect(installer).toContain("sanitize_deployed_runtime");
-    expect(installer).toContain('rm -rf "$INSTALL_ROOT/src/debug"');
-    expect(installer).toContain('rm -rf "$INSTALL_ROOT/docs/specs"');
-    expect(installer).toContain('name.startsWith("debug:")');
-    expect(installer).toContain("install_codex_plugin");
-    expect(installer).toContain("codex plugin add");
-    expect(installer).toContain("remove_legacy_agent_workbench_mcp_block");
-    expect(installer).toContain('if [ -z "\\${AGENT_WORKBENCH_DEFAULT_REPO_ROOT:-}" ]; then');
-    expect(installer).toContain('export AGENT_WORKBENCH_DEFAULT_REPO_ROOT="\\$PWD"');
-    expect(installer.indexOf('export AGENT_WORKBENCH_DEFAULT_REPO_ROOT="\\$PWD"')).toBeLessThan(
-      installer.indexOf('cd "$INSTALL_ROOT"')
-    );
+    // Spec 033 T006: the .sh is now a thin delegator to the single shell-free
+    // source of truth (installer.mjs) and carries no install logic that could
+    // diverge from it (Property P2). Behavioral coverage of copy/sanitize/
+    // launcher/fail-loud lives in tests/integration/installer.test.ts.
+    expect(installer).toContain("packaging/agent-workbench/installer.mjs");
+    expect(installer).not.toContain("sanitize_deployed_runtime");
+    expect(installer).not.toContain("install_codex_plugin");
+    expect(installer).not.toContain("ensure_native_build_prerequisites");
+    expect(installer).not.toContain("remove_legacy_agent_workbench_mcp_block");
     expect(installer).not.toContain("write_user_hooks_json");
     expect(installer).not.toContain("$CODEX_HOME/hooks.json");
     expect(installer).not.toContain("[mcp_servers.agent-workbench]");
@@ -850,7 +842,8 @@ describe("Codex plugin artifacts", () => {
 
   it("keeps cross-repo debug harnesses checkout-only", () => {
     const containerfile = fs.readFileSync(path.resolve("packaging/agent-workbench/Containerfile"), "utf8");
-    const installer = fs.readFileSync(path.resolve("scripts/install-agent-workbench-package.sh"), "utf8");
+    // Spec 033 T006: sanitize logic now lives in installer.mjs (the .sh delegates to it).
+    const installer = fs.readFileSync(path.resolve("packaging/agent-workbench/installer.mjs"), "utf8");
     const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as {
       scripts: Record<string, string>;
     };
@@ -862,8 +855,8 @@ describe("Codex plugin artifacts", () => {
     expect(containerfile).toContain("rm -rf src/debug");
     expect(containerfile).toContain("docs/specs");
     expect(containerfile).toContain('k.startsWith("debug:")');
-    expect(installer).toContain('rm -rf "$INSTALL_ROOT/src/debug"');
-    expect(installer).toContain('rm -rf "$INSTALL_ROOT/docs/specs"');
+    expect(installer).toContain('"src", "debug"');
+    expect(installer).toContain('"docs", "specs"');
     expect(installer).toContain('name.startsWith("debug:")');
   });
 

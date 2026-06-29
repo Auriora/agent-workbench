@@ -63,6 +63,18 @@ unavailable — a recorded manual run with the gap noted explicitly.
   spawns route through a PATH×PATHEXT full-path lookup so Windows `.cmd` shims
   are reachable without a shell. The per-OS install smoke (windows/macos) remains
   for T011a. Task T004.
+- **Single-source installer (P2, R1.3) — PASS (Linux).** The legacy
+  `scripts/install-agent-workbench-package.sh` is reduced to a thin delegator:
+  `exec node packaging/agent-workbench/installer.mjs --source <repo> "$@"`. No
+  copy/sanitize/codex-registration logic remains in the `.sh`, so it cannot
+  diverge from `installer.mjs`. Linux host: the CI line `bash
+  scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config`
+  delegates, plans 15 actions, exits 0, writes nothing; trailing `--source`
+  override honored. `codex-integration-profile.test.ts` now asserts the `.sh`
+  references `installer.mjs` and no longer contains the old bash logic markers.
+  Caveat: the thin `.sh` still needs bash; only the npm path
+  (`npm-install.mjs` → `installer.mjs`) is shell-free. Full suite → 474 passed.
+  Task T006.
 - **Fail-loud install (P4, R1.4) — PASS (Linux).** Prerequisite validation
   (required components, Node version, and — when a native rebuild is planned —
   pnpm + Python/make/C++) is hoisted ahead of the first write, so a missing
