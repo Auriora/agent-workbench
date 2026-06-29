@@ -21,8 +21,9 @@ Agent Workbench has one executable Codex runtime path per packaged install:
 - The Codex plugin installs quiet lifecycle hooks from `hooks/hooks.json`.
 - The Codex plugin registers the `agent-workbench` MCP server through
   `.mcp.json`.
-- The plugin MCP server launches the stable package prefix created by
-  `scripts/install-agent-workbench-package.sh`.
+- The plugin MCP server launches the stable package prefix created by the
+  package installer (`npx @auriora/agent-workbench install`, which runs the
+  shell-free `packaging/agent-workbench/installer.mjs`).
 - The plugin must not launch runtime code from Codex's plugin cache path.
 
 The npm and GHCR packages are distribution wrappers for complete installs. They
@@ -135,11 +136,15 @@ entry point and the generated `bin/agent-workbench-mcp.mjs` launcher invoke
 `node` directly, with no POSIX shell on the install or runtime path. The
 supported distribution channel is the npm package (Decision 2).
 
-| OS | Node | Native toolchain (for the build path) | Verification |
+| OS | Node | Native toolchain (build path only) | Verification |
 | --- | --- | --- | --- |
-| Linux (x64/arm64) | 22+ | `make` + `g++`/`clang++` (C++20), Python 3 — e.g. `build-essential` | Smoke matrix verified |
-| macOS | 22+ | Xcode command line tools (`xcode-select --install`), Python 3 | Smoke matrix pending runner |
-| Windows 10+ | 22+ | MSVC C++ build tools ("Desktop development with C++"), Python 3 | Smoke matrix pending runner |
+| Linux (x64/arm64) | 22+ | C++20 + Python 3 | Verified |
+| macOS | 22+ | C++20 + Python 3 | Pending runner |
+| Windows 10+ | 22+ | C++20 + Python 3 | Pending runner |
+
+Per-OS C++20 toolchain: Linux `make` + `g++`/`clang++` (e.g. `build-essential`);
+macOS the Xcode command line tools (`xcode-select --install`); Windows the MSVC
+C++ build tools (the "Desktop development with C++" workload).
 
 Default install prefix per OS: `%LOCALAPPDATA%\agent-workbench` on Windows
 (falling back to `%USERPROFILE%\AppData\Local`), and
@@ -210,19 +215,29 @@ integration:
 - host launcher for the MCP stdio server
 - dependency manifest and lockfile
 
-Run a package install from a checkout or unpacked package source:
+Run a package install. The supported, shell-free, cross-platform command is:
 
 ```bash
-scripts/install-agent-workbench-package.sh
+npx @auriora/agent-workbench install
 ```
 
-Use explicit locations when needed:
+Use explicit locations when needed (installer options go after `--`):
 
 ```bash
-scripts/install-agent-workbench-package.sh \
+npx @auriora/agent-workbench install -- \
   --prefix "$HOME/.local/share/agent-workbench" \
   --codex-home "$HOME/.codex"
 ```
+
+From a checkout or unpacked package source you can invoke the installer
+directly (also shell-free, all OSes):
+
+```bash
+node packaging/agent-workbench/installer.mjs --prefix "$HOME/.local/share/agent-workbench"
+```
+
+On POSIX hosts `scripts/install-agent-workbench-package.sh` remains as a thin
+bash delegator to the same `installer.mjs`.
 
 Unless `--skip-codex-config` is passed, the installer:
 
@@ -284,7 +299,7 @@ and package component paths without reading user-local Codex configuration.
 For package changes, also run:
 
 ```bash
-scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config
+node packaging/agent-workbench/installer.mjs --dry-run --skip-codex-config
 pnpm exec vitest run tests/integration/codex-integration-profile.test.ts
 pnpm pack:dry-run
 ```
@@ -303,21 +318,21 @@ as installed and enabled, rerun the package installer, then reinstall the
 plugin from the personal marketplace:
 
 ```bash
-scripts/install-agent-workbench-package.sh
+npx @auriora/agent-workbench install
 codex plugin add agent-workbench@auriora-local
 ```
 
-If the MCP server fails because `bin/agent-workbench-mcp` is missing under the
-package prefix, reinstall the package with the expected prefix:
+If the MCP server fails because `bin/agent-workbench-mcp.mjs` is missing under
+the package prefix, reinstall the package with the expected prefix:
 
 ```bash
-scripts/install-agent-workbench-package.sh \
+npx @auriora/agent-workbench install -- \
   --prefix "${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}"
 ```
 
 Hooks must not repair missing launchers, install packages, update plugins, or
-write Codex configuration. They stay silent by default and emit only compact
-local guidance when `AGENT_WORKBENCH_HOOK_FEEDBACK=basic` is set. If Codex asks
+write Codex configuration. They emit compact `basic` local guidance by default;
+set `AGENT_WORKBENCH_HOOK_FEEDBACK=silent` to suppress it. If Codex asks
 for hook trust review after install or update, review the plugin-bundled
 `hooks/hooks.json` and hook scripts under `plugins/agent-workbench/hooks/`.
 
@@ -347,7 +362,7 @@ The Power includes:
 Install or refresh the runtime package first:
 
 ```bash
-scripts/install-agent-workbench-package.sh \
+npx @auriora/agent-workbench install -- \
   --prefix "$HOME/.local/share/agent-workbench" \
   --skip-codex-config
 ```
@@ -378,7 +393,7 @@ The plugin includes:
 Install or refresh the runtime package first:
 
 ```bash
-scripts/install-agent-workbench-package.sh \
+npx @auriora/agent-workbench install -- \
   --prefix "$HOME/.local/share/agent-workbench" \
   --skip-codex-config
 ```
