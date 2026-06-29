@@ -290,10 +290,10 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         name: "agent-workbench-session-start",
         event: "SessionStart",
         path: "plugins/agent-workbench/hooks/session-start.js",
-        default_mode: "silent",
+        default_mode: "basic_feedback",
         blocks_workflow: false,
-        emits_when: ["AGENT_WORKBENCH_HOOK_FEEDBACK=basic"],
-        quiet_when: ["default configuration", "invalid payload"],
+        emits_when: ["default configuration"],
+        quiet_when: ["AGENT_WORKBENCH_HOOK_FEEDBACK=silent", "invalid payload"],
         schema_mapping: "Short MCP availability guidance only; no runtime analysis is executed."
       },
       {
@@ -301,12 +301,18 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         event: "PostToolUse",
         matcher: "^(apply_patch|write_file|create_file|rename_file)$",
         path: "plugins/agent-workbench/hooks/post-edit-feedback.js",
-        default_mode: "silent",
+        default_mode: "basic_feedback",
         blocks_workflow: false,
         emits_when: [
-          "AGENT_WORKBENCH_HOOK_FEEDBACK=basic and actionable path, conflict-marker, or syntax findings are detected"
+          "actionable path, conflict-marker, or syntax findings are detected"
         ],
-        quiet_when: ["clean edits", "successful edits", "unsupported payload", "hook errors"],
+        quiet_when: [
+          "AGENT_WORKBENCH_HOOK_FEEDBACK=silent",
+          "clean edits",
+          "successful edits",
+          "unsupported payload",
+          "hook errors"
+        ],
         schema_mapping: "Cheap local actionable findings only; no runtime diagnostics or tests are run."
       }
     ],

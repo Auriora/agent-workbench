@@ -4,7 +4,12 @@ import os from "node:os";
 import { pathToFileURL } from "node:url";
 
 export function feedbackMode(env = process.env) {
-  return env.AGENT_WORKBENCH_HOOK_FEEDBACK === "basic" ? "basic" : "silent";
+  // Command hooks have no `env` field, so the plugin can no longer inject
+  // AGENT_WORKBENCH_HOOK_FEEDBACK=basic via the hook command. Default to `basic`
+  // in-script when unset (the plugin's intended mode), while still honoring an
+  // explicit `silent` opt-out. See spec 033 (Decision 4 / Requirement 3.2).
+  const mode = env.AGENT_WORKBENCH_HOOK_FEEDBACK || "basic";
+  return mode === "basic" ? "basic" : "silent";
 }
 
 export function readStdin(stdin = process.stdin, timeoutMs = 250) {

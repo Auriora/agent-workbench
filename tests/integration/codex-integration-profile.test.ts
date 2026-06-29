@@ -53,7 +53,7 @@ describe("Codex integration profile", () => {
       expect.arrayContaining([
         expect.objectContaining({
           name: "agent-workbench-post-edit-feedback",
-          default_mode: "silent",
+          default_mode: "basic_feedback",
           blocks_workflow: false
         })
       ])

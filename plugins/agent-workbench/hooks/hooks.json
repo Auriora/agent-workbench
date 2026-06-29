@@ -6,7 +6,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "AGENT_WORKBENCH_HOOK_FEEDBACK=basic node \"${PLUGIN_ROOT}/hooks/session-start.js\"",
+            "command": "node",
+            "args": [
+              "${PLUGIN_ROOT}/hooks/session-start.js"
+            ],
             "timeout": 10,
             "statusMessage": "Loading Agent Workbench context"
           }
@@ -19,7 +22,10 @@
         "hooks": [
           {
             "type": "command",
-            "command": "AGENT_WORKBENCH_HOOK_FEEDBACK=basic node \"${PLUGIN_ROOT}/hooks/post-edit-feedback.js\"",
+            "command": "node",
+            "args": [
+              "${PLUGIN_ROOT}/hooks/post-edit-feedback.js"
+            ],
             "timeout": 10,
             "statusMessage": "Checking Agent Workbench edit feedback"
           }

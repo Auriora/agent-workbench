@@ -49,6 +49,11 @@ unavailable — a recorded manual run with the gap noted explicitly.
   `node scripts/validate-agent-workbench-plugin.mjs` → exit 0 (asserts no bash,
   no `-lc`, no POSIX default expansion, no cache/runtime-internal paths);
   `npx vitest run tests/integration/` → 54 passed. Task T003.
+- **Hook exec form + in-script default (R3) — PARTIAL (unit/shape).** Both
+  `hooks.json` switched to exec form (no inline `VAR=value`); `feedbackMode`
+  defaults to `basic` in-script (no hook `env` field exists). `npm run typecheck`
+  → exit 0; full suite `npx vitest run` → 465 passed; validator passed. Per-OS
+  hook firing remains for T011c. Tasks T007/T008/T009.
 - **Hook/shim drift (P2) — PASS.** `npx vitest run
   tests/integration/claude-plugin.test.ts` → all passed, including a new
   byte-identical guard for the vendored `mcp-launch.mjs`/`install-root.mjs` and
@@ -75,7 +80,15 @@ unavailable — a recorded manual run with the gap noted explicitly.
 - `plugins/agent-workbench/kiro-power/mcp.json` still uses the `bash -lc` launch
   form. Kiro is outside this spec's Requirement 2 baseline (Claude/Codex only);
   converting it is a follow-up so the Kiro entry point is not left shell-bound
-  indefinitely.
+  indefinitely. The Kiro `.kiro.hook`/agent commands also still carry the inline
+  `AGENT_WORKBENCH_HOOK_FEEDBACK=basic` prefix; harmless (the in-script default is
+  now `basic`) but tracked with the same follow-up.
+- Claude command-hook exec form (`args`) is documented and confirmed. Codex
+  exec-form `args` support for hook commands is taken on the strength of its
+  parallel plugin model (it already expands `${PLUGIN_ROOT}` in hook commands);
+  the live per-OS hook firing (T011c) confirms it. If Codex does not accept
+  `args`, the localized fix is a shell-free command string
+  (`node "${PLUGIN_ROOT}/hooks/<hook>.js"`, no inline `VAR=`).
 
 ## Closure Readiness
 

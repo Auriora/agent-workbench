@@ -37,7 +37,7 @@ it is bounded separately.
 | Hook/MCP exec form | `command`+`args` spawned without a shell | Use exec form everywhere |
 | `${CLAUDE_PLUGIN_ROOT}` | Expanded by Claude pre-invocation, all OSes | Safe in `args` on Windows |
 | Shell-form on Windows | PowerShell when Git Bash absent | `VAR=value cmd` breaks; avoid |
-| Env vars | `env` field on MCP/config; or read in-script | Replace inline assignment |
+| Env vars | MCP entries take an `env` field; **command hooks do NOT** — verified 2026-06-29 | Default the hook feedback mode in-script (no hook `env` field exists) |
 | Command resolution | PATH lookup; `.cmd`/`.bat` not spawnable in exec form | Use `node` (not npx); resolve in-script |
 
 ## High-Level Design
@@ -94,9 +94,13 @@ resolver so default-root parity holds across OSes.
   vendored, byte-identical copy (Claude installs only the `claude-plugin/`
   subtree, so it cannot import via `../..`). Implemented with `path.win32`/
   `path.posix` so a target OS's root resolves correctly from any host.
-- **Hook entries.** `hooks.json` switches both hooks to exec form; the default
-  feedback mode moves into the hook script (read env, fall back to `basic`),
-  with the `env` field as a documented redundant default.
+- **Hook entries.** Both `hooks.json` files switch to exec form
+  (`"command":"node","args":["${TOKEN}/hooks/<hook>.js"]`) with the per-runtime
+  token (Claude `${CLAUDE_PLUGIN_ROOT}`, Codex `${PLUGIN_ROOT}`), dropping the
+  POSIX inline `VAR=value` prefix. Command hooks have **no `env` field**
+  (verified), so the default feedback mode moves entirely into the hook script
+  (`feedbackMode` defaults to `basic` when the env var is unset, still honoring
+  an explicit `silent`). The in-script default is the contract, not a fallback.
 
 ### Data flow / data models
 
@@ -150,15 +154,18 @@ child.on("exit", code => process.exit(code ?? 1));
 { "type": "command",
   "command": "node",
   "args": ["${CLAUDE_PLUGIN_ROOT}/hooks/session-start.js"],
-  "env": { "AGENT_WORKBENCH_HOOK_FEEDBACK": "basic" },
   "timeout": 10 }
 ```
 
-The hook script gains a one-line default so it is correct even if a runtime
-ignores the `env` field:
+Command hooks have no `env` field, so the feedback mode is defaulted entirely in
+the shared hook helper — `basic` when unset, still honoring an explicit
+`silent`:
 
 ```js
-const feedback = process.env.AGENT_WORKBENCH_HOOK_FEEDBACK || "basic";
+export function feedbackMode(env = process.env) {
+  const mode = env.AGENT_WORKBENCH_HOOK_FEEDBACK || "basic";
+  return mode === "basic" ? "basic" : "silent";
+}
 ```
 
 This default must be added to the source hooks AND the vendored

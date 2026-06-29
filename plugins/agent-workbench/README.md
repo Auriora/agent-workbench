@@ -107,9 +107,11 @@ duplicated into `~/.codex/hooks.json`.
 
 ## Hook Behavior
 
-Hooks are silent by default. Set `AGENT_WORKBENCH_HOOK_FEEDBACK=basic` to emit
-compact session-start context only. File-edit hooks stay silent unless they have
-an actionable finding to report.
+Hooks emit compact `basic` feedback by default (session-start context only).
+Set `AGENT_WORKBENCH_HOOK_FEEDBACK=silent` to suppress all hook output. File-edit
+hooks stay silent unless they have an actionable finding to report regardless of
+mode. (The default moved in-script because plugin command hooks have no `env`
+field to carry it; see spec 033.)
 
 Post-edit feedback is limited to cheap local findings: generated/local artifact
 touches, workspace-escape-looking paths, merge-conflict markers, and syntax

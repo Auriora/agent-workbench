@@ -145,30 +145,47 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
 
 ## Phase 3: Shell-free hooks
 
-- [ ] T007 [P] Convert hook commands to exec form.
+- [x] T007 [P] Convert hook commands to exec form.
   - Depends on: none
-  - Files: `plugins/agent-workbench/claude-plugin/hooks/hooks.json` (and the
-    Codex `hooks/hooks.json` if it carries the same inline assignment)
-  - Acceptance: `"command":"node","args":["${CLAUDE_PLUGIN_ROOT}/hooks/<hook>.js"]`
-    plus `"env":{"AGENT_WORKBENCH_HOOK_FEEDBACK":"basic"}`; no `VAR=value`
-    prefix. Satisfies Requirement 3.1, 3.3.
-  - Evidence: Pending.
+  - Files: `plugins/agent-workbench/claude-plugin/hooks/hooks.json`,
+    `plugins/agent-workbench/hooks/hooks.json` (Codex)
+  - Acceptance: `"command":"node","args":["${TOKEN}/hooks/<hook>.js"]` with the
+    per-runtime token (Claude `${CLAUDE_PLUGIN_ROOT}`, Codex `${PLUGIN_ROOT}`);
+    no `VAR=value` prefix. Command hooks have **no `env` field** (verified
+    against the Claude hooks docs 2026-06-29), so the feedback default is carried
+    in-script by T008, not by an `env` entry. Satisfies Requirement 3.1, 3.3.
+  - Evidence: Both `hooks.json` files rewritten to exec form, inline
+    `AGENT_WORKBENCH_HOOK_FEEDBACK=basic` removed. Claude `args` exec form is
+    documented to spawn shell-free and Windows-safe; Codex uses the same shape
+    (its `${PLUGIN_ROOT}` hook-command usage already proves token support).
+    Validator + full suite green (see T009).
 
-- [ ] T008 Add the in-script feedback-mode default.
+- [x] T008 Add the in-script feedback-mode default.
   - Depends on: none
-  - Files: `plugins/agent-workbench/hooks/session-start.js`,
-    `plugins/agent-workbench/hooks/post-edit-feedback.js` (source of truth)
-  - Acceptance: Default `AGENT_WORKBENCH_HOOK_FEEDBACK` to `basic` in-process
-    when unset, so the hook is correct even if a runtime ignores `env`
-    (Decision 4). Satisfies Requirement 3.2.
-  - Evidence: Pending.
+  - Files: `plugins/agent-workbench/hooks/hook-common.js` (`feedbackMode`,
+    the shared decision point for both hooks), `plugins/agent-workbench/README.md`
+  - Acceptance: `feedbackMode` defaults `AGENT_WORKBENCH_HOOK_FEEDBACK` to
+    `basic` when unset (still honoring an explicit `silent`), so the hook is
+    correct without any `env` field — which command hooks do not support
+    (Decision 4 sharpened: the in-script default is now the sole mechanism, not a
+    fallback). Satisfies Requirement 3.2.
+  - Evidence: `feedbackMode` flipped to basic-default; README "silent by default"
+    contract updated to "basic by default, silent is opt-in". Codex integration
+    profile metadata (`describe-codex-integration-profile.ts` `default_mode`) and
+    its test updated to `basic_feedback`; kiro unit test updated for the new
+    default. `npm run typecheck` exit 0 (also fixed a pre-existing
+    `claude-plugin.test.ts` typecheck failure via a `.d.mts` for the sync
+    script); full suite 465 passed.
 
-- [ ] T009 Re-sync vendored Claude hook copies.
+- [x] T009 Re-sync vendored Claude hook copies.
   - Depends on: T008
   - Files: `plugins/agent-workbench/claude-plugin/hooks/{session-start.core.js,post-edit-feedback.core.js,hook-common.js}`
   - Acceptance: `npm run sync:claude-hooks` run; byte-identical drift test in
     `tests/integration/claude-plugin.test.ts` stays green. Satisfies P2.
-  - Evidence: Pending.
+  - Evidence: `npm run sync:claude-hooks` re-vendored the hook cores + plugin-root
+    modules; byte-identical drift guards stay green. Full suite
+    `npx vitest run` → 465 passed; `node scripts/validate-agent-workbench-plugin.mjs`
+    passed.
 
 ## Phase 4: Packaging metadata and verification
 
