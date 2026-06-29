@@ -45,7 +45,8 @@ export const REQUIRED_PATHS = [
   "plugins/agent-workbench/skills/agent-workbench/SKILL.md",
   "package.json",
   "pnpm-lock.yaml",
-  "tsconfig.json"
+  "tsconfig.json",
+  "scripts/rebuild-native.mjs"
 ];
 
 export const COPY_COMPONENTS = [
