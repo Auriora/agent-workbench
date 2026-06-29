@@ -31,8 +31,14 @@ unavailable — a recorded manual run with the gap noted explicitly.
 
 ## Evidence Log
 
-- Pending. Record per-OS CI run URLs or manual-run transcripts here as tasks
-  complete. Each entry: OS, Node version, command, outcome, link.
+- Record per-OS CI run URLs or manual-run transcripts here as tasks complete.
+  Each entry: OS, Node version, command, outcome, link.
+- **Resolver parity (P3) — PASS.** Linux host, Node (repo toolchain),
+  `npx vitest run tests/integration/install-root.test.ts` → 9 passed. Covers
+  the `AGENT_WORKBENCH_INSTALL_ROOT` override on both OSes, the POSIX/darwin
+  default, the Windows `%LOCALAPPDATA%` default and its `<home>\AppData\Local`
+  fallback, and cross-host separator parity (win32 root resolved on a POSIX host
+  with backslashes, and vice versa). Tasks T001a/T001b.
 
 ## Residual Risks
 

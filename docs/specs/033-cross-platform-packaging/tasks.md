@@ -30,7 +30,7 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
 
 ## Phase 1: Shared resolver and MCP launch
 
-- [ ] T001a Implement the shared install-root resolver.
+- [x] T001a Implement the shared install-root resolver.
   - Depends on: none
   - Files: `packaging/agent-workbench/install-root.mjs` (new, exported
     `resolveInstallRoot(env, platform)`)
@@ -38,15 +38,20 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
     `$HOME/.local/share/agent-workbench` on POSIX and
     `%LOCALAPPDATA%\agent-workbench` (fallback `%HOME%\AppData\Local\agent-workbench`)
     on `win32` (Decision 3). Pure function, no shell calls.
-  - Evidence: Pending.
+  - Evidence: `packaging/agent-workbench/install-root.mjs` implemented as a pure
+    ESM function using `path.win32`/`path.posix` so it resolves a target OS's
+    root from any host. Verified against 5 cases (POSIX default/override, Windows
+    LOCALAPPDATA/fallback/override), all correct.
 
-- [ ] T001b Unit-test the resolver for both platforms.
+- [x] T001b Unit-test the resolver for both platforms.
   - Depends on: T001a
-  - Files: resolver unit test (e.g. `tests/unit/install-root.test.ts`)
+  - Files: `tests/integration/install-root.test.ts`
   - Acceptance: Covers `win32` and POSIX, and the
     `AGENT_WORKBENCH_INSTALL_ROOT` override, via injected `platform`/`env`.
     Satisfies P3 (default-root parity).
-  - Evidence: Pending.
+  - Evidence: `npx vitest run tests/integration/install-root.test.ts` →
+    9 passed (override on both OSes, POSIX/darwin default, Windows
+    LOCALAPPDATA + fallback, cross-host separator parity).
 
 - [ ] T002a Implement the portable MCP launch shim.
   - Depends on: T001a
