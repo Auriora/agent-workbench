@@ -84,13 +84,34 @@ claude plugin uninstall agent-workbench@agent-workbench-local
 npm uninstall -g @auriora/agent-workbench   # only if nothing else uses it
 ```
 
-## 2b. Register the Codex plugin
+## 2b. Register the Codex plugin (verified, clone-free)
 
-Codex registration is **not yet turnkey from the npm package** — tracked in
-`docs/backlog/033-codex-npm-marketplace.md`. See
-[Codex Agent Workbench plugin and MCP setup](codex-agent-workbench-plugin.md)
-for the current flow (register the marketplace, then
-`codex plugin add agent-workbench@<marketplace>`).
+The npm package ships a package-scoped Codex marketplace
+(`plugins/agent-workbench/.agents/plugins/marketplace.json`, name
+`agent-workbench-local`), so Codex registers clone-free too.
+
+**macOS / Linux:**
+
+```bash
+PKG="$(npm root -g)/@auriora/agent-workbench"
+codex plugin marketplace add "$PKG/plugins/agent-workbench"
+codex plugin add agent-workbench@agent-workbench-local
+codex plugin list   # -> agent-workbench@agent-workbench-local  v0.3.0  installed, enabled
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$pkg = "$(npm root -g)\@auriora\agent-workbench"
+codex plugin marketplace add "$pkg\plugins\agent-workbench"
+codex plugin add agent-workbench@agent-workbench-local
+codex plugin list   # -> agent-workbench@agent-workbench-local  v0.3.0  installed, enabled
+```
+
+Start a new Codex session so the skill, hooks, and MCP server are discovered. See
+[Codex Agent Workbench plugin and MCP setup](codex-agent-workbench-plugin.md) for
+hook behavior, update/uninstall, and the separate `auriora-local` checkout
+marketplace used for plugin development.
 
 ## Verify the MCP server launches
 
