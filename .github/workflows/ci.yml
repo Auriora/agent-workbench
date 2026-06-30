@@ -29,7 +29,13 @@ jobs:
           corepack enable
           corepack prepare pnpm@10.18.1 --activate
 
+      # Node 24's V8 headers require C++20 to compile the tree-sitter core from
+      # source; Node 22 does not. ci.yml runs on Node 24, so set the flag here
+      # (the same workaround documented for end users). Grammars + better-sqlite3
+      # ship prebuilds and are unaffected.
       - name: Install dependencies
+        env:
+          CXXFLAGS: -std=c++20
         run: pnpm install --frozen-lockfile
 
       - name: Typecheck
