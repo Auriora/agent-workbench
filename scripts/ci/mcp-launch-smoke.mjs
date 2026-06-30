@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// Cross-platform MCP launch smoke (spec 033, T011b). Launches the installed
-// bin/agent-workbench-mcp.mjs and asserts a JSON-RPC initialize handshake over
-// stdio — proving the shell-free launcher starts the server on this OS.
-import os from "node:os";
+// Cross-platform MCP launch smoke (spec 033). Launches the portable plugin shim
+// (plugins/agent-workbench/mcp-launch.mjs) against this checkout as the runtime
+// root and asserts a JSON-RPC initialize handshake over stdio — proving the
+// shell-free shim -> entrypoint -> server path starts on this OS.
 import path from "node:path";
 import { spawn } from "node:child_process";
 
-const prefix = process.env.AW_CI_PREFIX || path.join(os.tmpdir(), "agent-workbench-ci");
-const launcher = path.join(prefix, "bin", "agent-workbench-mcp.mjs");
+const repoRoot = process.cwd();
+const launcher = path.join(repoRoot, "plugins", "agent-workbench", "mcp-launch.mjs");
 const TIMEOUT_MS = 60_000;
 
 function fail(message) {
@@ -16,7 +16,8 @@ function fail(message) {
 }
 
 const child = spawn(process.execPath, [launcher], {
-  cwd: prefix,
+  cwd: repoRoot,
+  env: { ...process.env, AGENT_WORKBENCH_INSTALL_ROOT: repoRoot },
   stdio: ["pipe", "pipe", "inherit"]
 });
 

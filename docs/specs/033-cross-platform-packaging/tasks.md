@@ -4,10 +4,20 @@ doc_type: spec
 artifact_type: tasks
 status: active
 owner: platform
-last_reviewed: 2026-06-29
+last_reviewed: 2026-06-30
 ---
 
 # Tasks
+
+> **Superseded (2026-06-30, v0.3.0):** T004–T006 and T010 built a copy-to-prefix
+> installer (`installer.mjs`, `install.sh`/`install.ps1`, the bash delegator,
+> `npm-install.mjs`). That model was removed and replaced with a normal npm
+> package — `npm install -g @auriora/agent-workbench` builds the native modules
+> and launches in place; the plugin shim resolves the runtime via a
+> `postinstall` pointer. The launch/hook tasks (T001–T003, T007–T009, T011) are
+> unchanged and still correct. See the direction-change banner in `design.md`
+> and `docs/backlog/033-npm-tarball-install-flow.md` (resolved). The graph and
+> per-task evidence below are retained as historical record.
 
 ## Task Dependency Graph
 

@@ -47,7 +47,8 @@ const requiredPaths = [
   ".agents/plugins/marketplace.json",
   ".well-known/mcp/server-card.json",
   "packaging/agent-workbench/package-manifest.json",
-  "scripts/install-agent-workbench-package.sh"
+  "packaging/agent-workbench/mcp-bin.mjs",
+  "scripts/postinstall.mjs"
 ];
 
 for (const relativePath of requiredPaths) {
@@ -106,7 +107,14 @@ assert(serverCard.privacy?.local_first === true, "Server card must advertise loc
 assert(serverCard.privacy?.network_required === false, "Server card must not require network access.");
 
 assert(manifest.version === packageJson.version, "Package manifest version must match package.json.");
-assert(manifest.installer === "packaging/agent-workbench/installer.mjs", "Package installer path drifted.");
+assert(
+  manifest.npm_bin === "packaging/agent-workbench/mcp-bin.mjs",
+  "Package npm bin path drifted."
+);
+assert(
+  manifest.install_command === "npm install -g @auriora/agent-workbench",
+  "Package install command drifted."
+);
 assertArrayEquals(
   manifest.dependency_install.runtime_dependencies,
   Object.keys(packageJson.dependencies ?? {}),

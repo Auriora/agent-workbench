@@ -4,10 +4,21 @@ doc_type: spec
 artifact_type: verification
 status: active
 owner: platform
-last_reviewed: 2026-06-29
+last_reviewed: 2026-06-30
 ---
 
 # Verification
+
+> **Superseded (2026-06-30, v0.3.0):** evidence below for the copy-to-prefix
+> installer (R1 "Shell-free installer", "Single-source installer", and the
+> `installer.mjs`/`npm-install.mjs`/`install.sh` references) describes a model
+> that has since been removed. The runtime now ships as a normal npm package; the
+> install path is verified end to end in `docs/backlog/033-npm-tarball-install-flow.md`
+> (resolved): `npm pack` → `npm install <tarball>` → `postinstall` writes the
+> runtime-root pointer → the plugin shim resolves it → MCP `initialize` handshake
+> succeeds against the installed copy. The launch and hook verification
+> (mcp-launch + hook smokes, now run against the checkout/installed runtime) is
+> unchanged and still correct.
 
 ## Validation Strategy
 

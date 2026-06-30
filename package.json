@@ -1,6 +1,6 @@
 {
   "name": "@auriora/agent-workbench",
-  "version": "0.2.0-rc.1",
+  "version": "0.3.0",
   "type": "module",
   "packageManager": "pnpm@10.18.1",
   "description": "Local-first Agent IDE runtime scaffold.",
@@ -19,8 +19,7 @@
     "workbench"
   ],
   "bin": {
-    "agent-workbench": "packaging/agent-workbench/npm-install.mjs",
-    "agent-workbench-plugin": "packaging/agent-workbench/npm-install.mjs"
+    "agent-workbench-mcp": "packaging/agent-workbench/mcp-bin.mjs"
   },
   "files": [
     "AGENTS.md",
@@ -36,12 +35,9 @@
     "package.json",
     "packaging/agent-workbench/package-manifest.json",
     "packaging/agent-workbench/npm-package.json",
-    "packaging/agent-workbench/npm-install.mjs",
-    "packaging/agent-workbench/installer.mjs",
-    "packaging/agent-workbench/installer.d.mts",
+    "packaging/agent-workbench/mcp-bin.mjs",
     "plugins/agent-workbench",
-    "pnpm-lock.yaml",
-    "scripts/install-agent-workbench-package.sh",
+    "scripts/postinstall.mjs",
     "scripts/rebuild-native.mjs",
     "src",
     "tsconfig.json"
@@ -54,6 +50,7 @@
     "test": "vitest run",
     "dev": "tsx src/index.ts",
     "mcp": "node src/mcp/stdio-entrypoint.mjs",
+    "postinstall": "node scripts/postinstall.mjs",
     "debug:mcp-status": "tsx src/debug/mcp-status.ts",
     "debug:mcp-use-case": "tsx src/debug/mcp-use-case.ts",
     "debug:mcp-profile": "tsx src/debug/mcp-use-case.ts --profile",

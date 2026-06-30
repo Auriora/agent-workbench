@@ -154,7 +154,6 @@ describe("Codex integration profile", () => {
       registry: "ghcr.io",
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile_path: "packaging/agent-workbench/Containerfile",
-      installer_path: "packaging/agent-workbench/installer.mjs",
       release_workflow_path: ".github/workflows/release-ghcr.yml"
     });
     expect(profile.install_package.dependency_install_model).toContain(
@@ -711,10 +710,9 @@ describe("Codex plugin artifacts", () => {
     expect(profile.plugin.mcp_binding_model).toBe("plugin_bundled_mcp_config");
   });
 
-  it("ships GHCR package metadata and an installer that covers runtime, plugin, skills, and hooks", () => {
+  it("ships GHCR container metadata plus npm install metadata covering runtime, plugin, skills, and hooks", () => {
     const manifestPath = path.resolve("packaging/agent-workbench/package-manifest.json");
     const containerfilePath = path.resolve("packaging/agent-workbench/Containerfile");
-    const installerPath = path.resolve("scripts/install-agent-workbench-package.sh");
     const workflowPath = path.resolve(".github/workflows/release-ghcr.yml");
     const ciWorkflowPath = path.resolve(".github/workflows/ci.yml");
     const pluginValidatorPath = path.resolve("scripts/validate-agent-workbench-plugin.mjs");
@@ -722,7 +720,8 @@ describe("Codex plugin artifacts", () => {
       registry: string;
       image: string;
       containerfile: string;
-      installer: string;
+      install_command: string;
+      npm_bin: string;
       dependency_install: {
         package_manager: string;
         node: string;
@@ -742,6 +741,7 @@ describe("Codex plugin artifacts", () => {
       };
     };
     const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as {
+      bin: Record<string, string>;
       scripts: Record<string, string>;
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
@@ -750,7 +750,6 @@ describe("Codex plugin artifacts", () => {
       };
     };
     const containerfile = fs.readFileSync(containerfilePath, "utf8");
-    const installer = fs.readFileSync(installerPath, "utf8");
     const workflow = fs.readFileSync(workflowPath, "utf8");
     const ciWorkflow = fs.readFileSync(ciWorkflowPath, "utf8");
     const pluginValidator = fs.readFileSync(pluginValidatorPath, "utf8");
@@ -759,8 +758,11 @@ describe("Codex plugin artifacts", () => {
       registry: "ghcr.io",
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile: "packaging/agent-workbench/Containerfile",
-      installer: "packaging/agent-workbench/installer.mjs"
+      install_command: "npm install -g @auriora/agent-workbench",
+      npm_bin: "packaging/agent-workbench/mcp-bin.mjs"
     });
+    // The container build still uses pnpm; the manifest's dependency_install
+    // describes that build, not the npm consumer install.
     expect(manifest.dependency_install).toMatchObject({
       package_manager: "pnpm@10.18.1",
       node: ">=22",
@@ -796,7 +798,7 @@ describe("Codex plugin artifacts", () => {
     );
     expect(manifest.codex.plugin_mcp_config).toBe("plugins/agent-workbench/.mcp.json");
     expect(manifest.codex.plugin_hooks).toBe("plugins/agent-workbench/hooks/hooks.json");
-    expect(manifest.codex.plugin_install_model).toBe("packaging/agent-workbench/installer.mjs");
+    expect(manifest.codex.plugin_install_model).toBe("npm install -g @auriora/agent-workbench");
     expect(containerfile).toContain("FROM node:24-bookworm-slim");
     expect(containerfile).toContain("COPY src ./src");
     expect(containerfile).toContain("rm -rf src/debug");
@@ -806,20 +808,11 @@ describe("Codex plugin artifacts", () => {
     expect(containerfile).toContain("COPY plugins ./plugins");
     expect(containerfile).toContain("pnpm install --frozen-lockfile");
     expect(containerfile).toContain("/opt/agent-workbench/src/mcp/stdio.ts");
-    // Spec 033 T006: the .sh is now a thin delegator to the single shell-free
-    // source of truth (installer.mjs) and carries no install logic that could
-    // diverge from it (Property P2). Behavioral coverage of copy/sanitize/
-    // launcher/fail-loud lives in tests/integration/installer.test.ts.
-    expect(installer).toContain("packaging/agent-workbench/installer.mjs");
-    expect(installer).not.toContain("sanitize_deployed_runtime");
-    expect(installer).not.toContain("install_codex_plugin");
-    expect(installer).not.toContain("ensure_native_build_prerequisites");
-    expect(installer).not.toContain("remove_legacy_agent_workbench_mcp_block");
-    expect(installer).not.toContain("write_user_hooks_json");
-    expect(installer).not.toContain("$CODEX_HOME/hooks.json");
-    expect(installer).not.toContain("[mcp_servers.agent-workbench]");
-    expect(installer).not.toContain("[[hooks.SessionStart]]");
-    expect(installer).not.toContain("[[hooks.PostToolUse]]");
+    // Spec 033 (npm model): the package is launched in place — no copy-to-prefix
+    // installer. The `agent-workbench-mcp` bin self-locates the runtime, and a
+    // postinstall records the pointer the plugin launcher reads.
+    expect(packageJson.bin["agent-workbench-mcp"]).toBe("packaging/agent-workbench/mcp-bin.mjs");
+    expect(packageJson.scripts.postinstall).toBe("node scripts/postinstall.mjs");
     expect(workflow).toContain("registry: ghcr.io");
     expect(workflow).toContain("packaging/agent-workbench/Containerfile");
     expect(packageJson.scripts["validate:plugin"]).toBe(
@@ -834,16 +827,13 @@ describe("Codex plugin artifacts", () => {
     expect(ciWorkflow).toContain("pnpm typecheck");
     expect(ciWorkflow).toContain("pnpm test");
     expect(ciWorkflow).toContain("pnpm run validate:plugin");
-    expect(ciWorkflow).toContain(
-      "scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config"
-    );
+    expect(ciWorkflow).toContain("node scripts/ci/install-smoke.mjs");
+    expect(ciWorkflow).toContain("node scripts/ci/mcp-launch-smoke.mjs");
     expect(ciWorkflow).toContain("pnpm pack:dry-run");
   });
 
   it("keeps cross-repo debug harnesses checkout-only", () => {
     const containerfile = fs.readFileSync(path.resolve("packaging/agent-workbench/Containerfile"), "utf8");
-    // Spec 033 T006: sanitize logic now lives in installer.mjs (the .sh delegates to it).
-    const installer = fs.readFileSync(path.resolve("packaging/agent-workbench/installer.mjs"), "utf8");
     const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as {
       scripts: Record<string, string>;
     };
@@ -852,12 +842,11 @@ describe("Codex plugin artifacts", () => {
     expect(packageJson.scripts["debug:mcp-tool-sweep"]).toBe("tsx src/debug/mcp-tool-sweep.ts");
     expect(publicSurfaceNames).not.toContain("debug:mcp-tool-sweep");
     expect(publicSurfaceNames).not.toContain("mcp_tool_sweep");
+    // Spec 033 (npm model): the GHCR container is the only build that copies and
+    // sanitizes a runtime tree, so the strip rules live in the Containerfile.
     expect(containerfile).toContain("rm -rf src/debug");
     expect(containerfile).toContain("docs/specs");
     expect(containerfile).toContain('k.startsWith("debug:")');
-    expect(installer).toContain('"src", "debug"');
-    expect(installer).toContain('"docs", "specs"');
-    expect(installer).toContain('name.startsWith("debug:")');
   });
 
   it("keeps plugin wrappers out of concrete runtime implementation paths", () => {

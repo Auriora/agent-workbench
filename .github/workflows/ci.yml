@@ -37,8 +37,10 @@ jobs:
       - name: Validate plugin and package metadata
         run: pnpm run validate:plugin
 
-      - name: Dry-run package installer
-        run: scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config
+      - name: Postinstall pointer + MCP launch smoke
+        run: |
+          node scripts/ci/install-smoke.mjs
+          node scripts/ci/mcp-launch-smoke.mjs
 
       - name: Validate npm package payload
         run: pnpm pack:dry-run

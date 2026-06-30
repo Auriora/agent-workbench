@@ -4,10 +4,28 @@ doc_type: spec
 artifact_type: design
 status: active
 owner: platform
-last_reviewed: 2026-06-29
+last_reviewed: 2026-06-30
 ---
 
 # Design
+
+> **Direction change (2026-06-30, v0.3.0): the copy-to-prefix installer is
+> superseded by a normal npm package.** Tasks T004–T006 and T010 shipped a
+> shell-free Node installer (`packaging/agent-workbench/installer.mjs`) that
+> copied the runtime to a per-OS prefix, plus archive installers
+> (`install.sh`/`install.ps1`) and a bash delegator. End-to-end testing of the
+> npm distribution showed that model fought npm itself (lockfile stripping,
+> dependency hoisting) and over-engineered what npm already does. It was removed
+> and replaced with a plain npm package: `npm install -g @auriora/agent-workbench`
+> builds the native modules normally and the runtime launches **in place** (no
+> copy). A failing native build is the user's toolchain to resolve (hints at
+> launch + README). The plugin launch path below (exec-form `node` invoking the
+> portable `mcp-launch.mjs` shim) is **unchanged and still correct** — the shim
+> now resolves the in-place runtime via a `postinstall`-written pointer (or the
+> `AGENT_WORKBENCH_INSTALL_ROOT` override) instead of a copied prefix. The
+> installer-specific tasks/evidence below are retained as historical record.
+> See `docs/backlog/033-npm-tarball-install-flow.md` (resolved) for the rationale
+> and the end-to-end verification.
 
 ## Overview
 

@@ -185,7 +185,7 @@ describe("Claude Code plugin artifacts", () => {
       "/repo"
     );
     expect(plan.root).toBe("/install/root");
-    expect(plan.args).toEqual(["--import", "tsx", path.join("/install/root", "src", "mcp", "stdio.ts")]);
+    expect(plan.args).toEqual([path.join("/install/root", "src", "mcp", "stdio-entrypoint.mjs")]);
     expect(plan.options.env.AGENT_WORKBENCH_DEFAULT_REPO_ROOT).toBe("/repo");
 
     fs.rmSync(stage, { recursive: true, force: true });

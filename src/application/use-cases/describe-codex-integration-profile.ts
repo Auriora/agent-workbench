@@ -250,7 +250,6 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile_path: "packaging/agent-workbench/Containerfile",
       manifest_path: "packaging/agent-workbench/package-manifest.json",
-      installer_path: "packaging/agent-workbench/installer.mjs",
       release_workflow_path: ".github/workflows/release-ghcr.yml",
       installed_components: [
         "src",
@@ -263,8 +262,8 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         "tsconfig.json",
         "AGENTS.md"
       ],
-      dependency_install_model: "The package manifest defines Node, pnpm, runtime module, dev/test module, native tool, and native rebuild requirements; the installer runs pnpm install --frozen-lockfile and pnpm rebuild:native when dependencies are not already packaged.",
-      mcp_install_model: "The installer registers the local Codex plugin; plugin-bundled .mcp.json launches the installed package prefix.",
+      dependency_install_model: "The package manifest defines Node, pnpm, runtime module, dev/test module, native tool, and native rebuild requirements; the GHCR container build runs pnpm install --frozen-lockfile and pnpm rebuild:native.",
+      mcp_install_model: "The plugin-bundled .mcp.json launches the npm-installed runtime through the portable mcp-launch.mjs shim; no runtime is copied into the plugin cache.",
       hook_install_model: "Hooks are installed through plugin-bundled hooks/hooks.json and may require Codex hook trust review after plugin install."
     },
     skills: [

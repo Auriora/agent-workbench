@@ -1,8 +1,9 @@
 name: Cross-platform packaging
 
-# Spec 033 verification: the install, MCP launch, and hook paths must work
-# shell-free on Windows, macOS, and Linux. Each job installs the runtime to a
-# temp prefix and runs the end-to-end smokes against that installed copy.
+# Spec 033 verification: the postinstall pointer, MCP launch, and hook paths
+# must work shell-free on Windows, macOS, and Linux. Each job installs the
+# package's dependencies (so npm/pnpm builds the native modules) and runs the
+# end-to-end smokes against this checkout as the in-place runtime root.
 
 on:
   pull_request:
@@ -22,9 +23,6 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-    env:
-      # Shared install prefix for the install -> launch -> hook smoke chain.
-      AW_CI_PREFIX: ${{ runner.temp }}/agent-workbench-ci
     steps:
       - uses: actions/checkout@v4
 
@@ -32,26 +30,26 @@ jobs:
         with:
           version: 10.18.1
 
-      # Node 22 is the supported floor (spec 033 Requirement 4.1).
+      # Node 22 is the supported floor (spec 033 Requirement 4.1). The
+      # tree-sitter core needs C++20, which Node 24's V8 headers require but
+      # Node 22's do not — so 22 is the build-clean floor.
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: pnpm
 
-      # NOTE: installing deps first means the install smoke exercises the
-      # node_modules-COPY path (verbatimSymlinks over the pnpm link farm), which
-      # is the Windows-fragile path flagged in the spec's verification.md. A red
-      # Windows leg may be the copy step on the junction farm — not a launch/hook
-      # defect. The canonical Windows install is the rebuild path (no packaged
-      # node_modules); see verification.md residual risks before diagnosing.
-      - name: Install dependencies (provides tsx + native modules for the smokes)
+      # Build the native modules the way an end user's `npm install` would, then
+      # run the smokes against this checkout as the in-place runtime root. A red
+      # leg here is a real native-build or launch defect on that OS — not a
+      # copy-step artifact (there is no copy-to-prefix step any more).
+      - name: Install dependencies (builds tree-sitter + native modules)
         run: pnpm install --frozen-lockfile
 
-      - name: Install smoke (T011a) — copy runtime, sanitize, generate launcher
+      - name: Postinstall pointer smoke — records the in-place runtime root
         run: node scripts/ci/install-smoke.mjs
 
-      - name: MCP launch smoke (T011b) — stdio initialize handshake
+      - name: MCP launch smoke — shim -> entrypoint -> stdio initialize handshake
         run: node scripts/ci/mcp-launch-smoke.mjs
 
-      - name: Hook smoke (T011c) — SessionStart + PostToolUse, no shell error
+      - name: Hook smoke — SessionStart + PostToolUse, no shell error
         run: node scripts/ci/hook-smoke.mjs

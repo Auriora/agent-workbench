@@ -1,13 +1,42 @@
 ---
 title: Make the npm-tarball install flow actually work
 doc_type: backlog
-status: proposed
+status: resolved
 owner: platform
 source_spec: docs/specs/033-cross-platform-packaging
-last_reviewed: 2026-06-29
+last_reviewed: 2026-06-30
 ---
 
 # Make the npm-tarball install flow actually work
+
+## Resolution (2026-06-30)
+
+Resolved by switching to a **normal npm package** (spec 033, v0.3.0). The
+copy-to-prefix installer (`installer.mjs`), its npm bin (`npm-install.mjs`), the
+archive installers (`install.sh`/`install.ps1`), and the bash delegator were all
+removed. `npm install -g @auriora/agent-workbench` now builds the native modules
+the normal way, and the runtime launches in place:
+
+1. **Lockfile strip** — no longer relevant. The install builds from
+   `package.json` dependencies; `pnpm-lock.yaml` was dropped from the `files`
+   allowlist and from every required-paths expectation.
+2. **Dependency hoisting** — no longer relevant. Nothing copies `node_modules`
+   to a prefix; the package is launched from wherever npm installed it, and bare
+   specifiers (`tsx`, `tree-sitter`) resolve from the hoisted tree normally.
+3. **tree-sitter C++20 on Node 24** — declared the **user's toolchain** to
+   resolve, with hints at server launch and in `postinstall`/README (use Node 22,
+   or rebuild with `CXXFLAGS=-std=c++20` / `CL=/std:c++20`). It is no longer the
+   project's job to orchestrate the native build for the npm channel.
+
+Verified end to end: `npm pack` → `npm install <tarball>` into a throwaway
+project → `postinstall` wrote the runtime-root pointer → the plugin shim resolved
+it (no override) → MCP `initialize` handshake succeeded against the installed
+copy. `npm_publish_status` can move past `pack-ready-not-published` once a
+registry publish is performed.
+
+---
+
+## Original routing note (superseded by the resolution above)
 
 ## Context
 

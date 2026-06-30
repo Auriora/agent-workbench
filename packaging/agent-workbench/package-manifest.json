@@ -1,6 +1,6 @@
 {
   "name": "agent-workbench",
-  "version": "0.2.0-rc.1",
+  "version": "0.3.0",
   "registry": "ghcr.io",
   "distribution": {
     "npm_contract": "packaging/agent-workbench/npm-package.json",
@@ -9,7 +9,8 @@
   },
   "image": "ghcr.io/bcherrington/agent-workbench",
   "containerfile": "packaging/agent-workbench/Containerfile",
-  "installer": "packaging/agent-workbench/installer.mjs",
+  "install_command": "npm install -g @auriora/agent-workbench",
+  "npm_bin": "packaging/agent-workbench/mcp-bin.mjs",
   "entrypoint": "node --import tsx /opt/agent-workbench/src/mcp/stdio.ts",
   "dependency_install": {
     "package_manager": "pnpm@10.18.1",
@@ -78,7 +79,7 @@
     "plugin_manifest": "plugins/agent-workbench/.codex-plugin/plugin.json",
     "plugin_mcp_config": "plugins/agent-workbench/.mcp.json",
     "plugin_hooks": "plugins/agent-workbench/hooks/hooks.json",
-    "plugin_install_model": "packaging/agent-workbench/installer.mjs"
+    "plugin_install_model": "npm install -g @auriora/agent-workbench"
   },
   "kiro": {
     "power_root": "plugins/agent-workbench/kiro-power",
@@ -104,6 +105,6 @@
       "plugins/agent-workbench/claude-plugin/hooks/session-start.js",
       "plugins/agent-workbench/claude-plugin/hooks/post-edit-feedback.js"
     ],
-    "install_model": "Load with claude --plugin-dir plugins/agent-workbench/claude-plugin after installing the package-backed runtime."
+    "install_model": "After `npm install -g @auriora/agent-workbench`, register the bundled Claude plugin: `claude plugin marketplace add <package>/plugins/agent-workbench` then `claude plugin install agent-workbench@agent-workbench-local --scope user`."
   }
 }

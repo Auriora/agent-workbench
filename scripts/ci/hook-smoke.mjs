@@ -2,12 +2,11 @@
 // Cross-platform hook execution smoke (spec 033, T011c). Fires the installed
 // SessionStart and PostToolUse hooks via exec-form `node <hook>.js` and asserts
 // advisory output with no shell error — the shell-free hook path on this OS.
-import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
-const prefix = process.env.AW_CI_PREFIX || path.join(os.tmpdir(), "agent-workbench-ci");
-const hooksDir = path.join(prefix, "plugins", "agent-workbench", "hooks");
+const repoRoot = process.cwd();
+const hooksDir = path.join(repoRoot, "plugins", "agent-workbench", "hooks");
 
 function fail(message) {
   process.stderr.write(`hook-smoke FAIL: ${message}\n`);
@@ -18,7 +17,7 @@ function runHook(name, payload) {
   const hookPath = path.join(hooksDir, name);
   const result = spawnSync(process.execPath, [hookPath], {
     input: JSON.stringify(payload),
-    cwd: prefix,
+    cwd: repoRoot,
     encoding: "utf8",
     timeout: 30_000
   });
@@ -37,7 +36,7 @@ if (!sessionStart.includes("Agent Workbench MCP is available")) {
 // error is the smoke (output may be empty when the file has no diagnostics).
 runHook("post-edit-feedback.js", {
   hook_event_name: "PostToolUse",
-  cwd: prefix,
+  cwd: repoRoot,
   tool_name: "Write",
   tool_input: { file_path: "src/mcp/stdio.ts" }
 });

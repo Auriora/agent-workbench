@@ -1,32 +1,52 @@
 #!/usr/bin/env node
-// Cross-platform install smoke (spec 033, T011a). Runs the shell-free installer
-// into a temp prefix and asserts the runtime was copied, sanitized, and a Node
-// launcher generated. Shares the prefix with the launch/hook smokes via
-// AW_CI_PREFIX so they exercise the same installed runtime end to end.
+// Cross-platform postinstall pointer smoke (spec 033). The package is launched
+// in place (npm install location) — never copied to a prefix. This smoke runs
+// the package `postinstall` against a temp state dir and asserts it records a
+// runtime-root pointer that resolves back to this checkout, which is the
+// mechanism the plugin launcher relies on to find the in-place runtime.
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 
-import { install } from "../../packaging/agent-workbench/installer.mjs";
+import {
+  resolveRuntimeRoot,
+  runtimePointerPath
+} from "../../plugins/agent-workbench/install-root.mjs";
 
-const prefix = process.env.AW_CI_PREFIX || path.join(os.tmpdir(), "agent-workbench-ci");
+const repoRoot = process.cwd();
+const stateHome = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-state-"));
 
 function assert(condition, message) {
   if (!condition) {
     process.stderr.write(`install-smoke FAIL: ${message}\n`);
+    fs.rmSync(stateHome, { recursive: true, force: true });
     process.exit(1);
   }
 }
 
-fs.rmSync(prefix, { recursive: true, force: true });
-const result = install({ source: process.cwd(), prefix, writeCodexConfig: false });
+// Redirect the per-OS state dir into the temp home on every platform, and make
+// sure no override masks the pointer mechanism we are exercising.
+const env = {
+  ...process.env,
+  HOME: stateHome,
+  USERPROFILE: stateHome,
+  LOCALAPPDATA: path.join(stateHome, "AppData", "Local")
+};
+delete env.AGENT_WORKBENCH_INSTALL_ROOT;
 
-const launcher = path.join(prefix, "bin", "agent-workbench-mcp.mjs");
-assert(fs.existsSync(launcher), `launcher generated at ${launcher}`);
-assert(fs.existsSync(path.join(prefix, "src", "mcp", "stdio.ts")), "src/mcp/stdio.ts copied");
-assert(fs.existsSync(path.join(prefix, "plugins", "agent-workbench", "mcp-launch.mjs")), "plugin shim copied");
-assert(!fs.existsSync(path.join(prefix, "src", "debug")), "src/debug stripped");
-assert(!fs.existsSync(path.join(prefix, "docs", "specs")), "docs/specs stripped");
-assert(fs.existsSync(path.join(prefix, "node_modules", "tsx")), "tsx available in install (launch prerequisite)");
+const result = spawnSync(process.execPath, [path.join("scripts", "postinstall.mjs")], {
+  cwd: repoRoot,
+  env,
+  encoding: "utf8"
+});
+assert(result.status === 0, `postinstall exited with status ${result.status}: ${result.stderr}`);
 
-process.stdout.write(`install-smoke OK on ${process.platform}: ${result.installRoot}\n`);
+const pointer = runtimePointerPath(env);
+assert(fs.existsSync(pointer), `runtime pointer written at ${pointer}`);
+
+const resolved = resolveRuntimeRoot(env);
+assert(resolved === repoRoot, `pointer resolves to this checkout (got ${resolved})`);
+
+fs.rmSync(stateHome, { recursive: true, force: true });
+process.stdout.write(`install-smoke OK on ${process.platform}: ${resolved}\n`);
