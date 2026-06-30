@@ -1,0 +1,2 @@
+# Committed so this generated-dir fixture exists in clean CI checkouts.
+# The catalog scanner classifies it as generated_or_vendor by directory name.

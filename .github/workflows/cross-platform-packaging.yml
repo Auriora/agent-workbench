@@ -22,7 +22,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # windows-2022 (not windows-latest): the newer windows-latest image
+        # ships Visual Studio 18, which node-gyp 11.x reports as an unknown
+        # version and refuses to use for the tree-sitter native build (it won't
+        # fall back to VS2017 on Node 22+). windows-2022 has the VS that node-gyp
+        # detects. Tracked to revisit when node-gyp gains VS18 support.
+        os: [ubuntu-latest, macos-latest, windows-2022]
     steps:
       - uses: actions/checkout@v4
 
