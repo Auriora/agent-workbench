@@ -11,15 +11,16 @@ It includes:
 - `hooks/` scripts that adapt Agent Workbench quiet hook behavior to Claude
   Code hook events
 
-The plugin does not contain or launch a second runtime implementation. MCP
-configuration launches the installed package prefix at
-`~/.local/share/agent-workbench/bin/agent-workbench-mcp` unless
-`AGENT_WORKBENCH_INSTALL_ROOT` overrides it.
+The plugin does not contain or launch a second runtime implementation. The
+`.mcp.json` launches the installed package prefix through the portable shim
+(`${CLAUDE_PLUGIN_ROOT}/mcp-launch.mjs`), which resolves the prefix
+(`~/.local/share/agent-workbench` by default, or `AGENT_WORKBENCH_INSTALL_ROOT`)
+and starts the server.
 
 Install or refresh the runtime package before loading the plugin:
 
 ```bash
-scripts/install-agent-workbench-package.sh \
+npx @auriora/agent-workbench install -- \
   --prefix "$HOME/.local/share/agent-workbench" \
   --skip-codex-config
 ```

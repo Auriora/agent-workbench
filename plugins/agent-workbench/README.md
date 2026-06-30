@@ -20,34 +20,44 @@ It packages:
 - `claude-plugin/` for Claude Code plugin, skill, MCP, and hook adapter packaging
 
 The plugin does not reimplement runtime code. Its MCP binding launches the
-stable installed package launcher, not runtime source copied into Codex's plugin
-cache. Use `scripts/install-agent-workbench-package.sh` to install the package,
-register the local plugin marketplace entry, cachebust the plugin, and run
-`codex plugin add agent-workbench@<personal-marketplace>`.
-
-After source or dependency changes, install a package containing the updated
-runtime, reinstall the plugin, then restart Codex.
+npm-installed runtime in place through the portable `node` shim, not runtime
+source copied into Codex's plugin cache.
 
 ## Quick Start
 
-From this repository or an unpacked package source, install the package-backed
-Codex plugin:
+Install the runtime from the **GitHub release tarball** (Agent Workbench is not
+published to the npm registry). npm builds the native modules during install, all
+OSes. **Node 22 is recommended** — on Node 24 the native core needs C++20, so a
+default install on Node 24 hits a build error first (use Node 22, or rebuild with
+`CXXFLAGS=-std=c++20`). A failing build is a local toolchain issue to resolve
+(Python 3 + a C/C++ toolchain). See `packaging/agent-workbench/README.md` for the
+full native-build prerequisites and
+[the install guide](../../docs/runbooks/install-agent-workbench.md) for the
+current release URL:
 
 ```bash
-scripts/install-agent-workbench-package.sh
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz
 ```
 
-For an npm package install, run:
+This README's Quick Start covers **Codex**. For **Claude Code**, skip to
+[Claude Code Plugin](#claude-code-plugin). Both register clone-free from the
+installed npm package.
+
+Then register this plugin with Codex from the installed package and verify it.
+Replace `<pkg>` with `$(npm root -g)/@auriora/agent-workbench`:
 
 ```bash
-npx @auriora/agent-workbench install
-```
-
-Verify the plugin is installed and enabled:
-
-```bash
+codex plugin marketplace add <pkg>/plugins/agent-workbench
+codex plugin add agent-workbench@agent-workbench-local
 codex plugin list
 ```
+
+The package ships a package-scoped marketplace
+(`plugins/agent-workbench/.agents/plugins/marketplace.json`, name
+`agent-workbench-local`), so this resolves without a checkout. (The repo-root
+`.agents/plugins/marketplace.json`, name `auriora-local`, is the maintainer's
+**checkout** marketplace for plugin development — a different name so the two
+never collide.)
 
 In a new Codex session, use Agent Workbench through MCP. The first useful
 resources are `repo:///status`, `repo:///scope`, and `repo:///overview`.
@@ -56,12 +66,18 @@ For task work, use `context_for_task` before broad reads and
 `integration:///profiles/codex` for the Codex integration profile and
 `integration:///health/agent-workbench` for integration health.
 
-To update after source, dependency, skill, hook, or MCP config changes:
+To update after source, dependency, skill, hook, or MCP config changes, reinstall
+the runtime from the new release tarball (see
+[the install guide](../../docs/runbooks/install-agent-workbench.md) for the URL),
+then re-add the plugin:
 
 ```bash
-scripts/install-agent-workbench-package.sh
-codex plugin add agent-workbench@auriora-local
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
+codex plugin add agent-workbench@agent-workbench-local
 ```
+
+The local marketplace points at the npm install path, so re-running
+`codex plugin add` after reinstalling re-installs from the refreshed source.
 
 Then restart Codex so the plugin cache, skill, hooks, and MCP server config are
 rediscovered.
@@ -69,11 +85,11 @@ rediscovered.
 To uninstall the Codex plugin from the current Codex installation:
 
 ```bash
-codex plugin remove agent-workbench@auriora-local
+codex plugin remove agent-workbench@agent-workbench-local
 ```
 
-Remove the installed package prefix separately only when no other local setup
-uses it.
+Remove the npm package separately (`npm uninstall -g @auriora/agent-workbench`)
+only when no other local setup uses it.
 
 Review plugin hook trust in Codex after install or update. Hooks are quiet and
 non-repairing; if the MCP launcher is missing, reinstall the package rather
@@ -86,10 +102,14 @@ for fixed-target launches outside the active workspace.
 
 ## Local Installation Model
 
-The local plugin source lives at `~/plugins/agent-workbench` after package
-installation. The personal marketplace entry points at that source, and Codex
-loads an installed copy from its plugin cache. The plugin MCP binding must keep
-launching the package prefix through `bin/agent-workbench-mcp`.
+Installing the release tarball with `npm install -g <release-url>` places the
+runtime (including this plugin source) in npm's global tree and builds the native
+modules in place. The
+package `postinstall` records a runtime-root pointer under the per-OS state dir;
+the plugin MCP binding launches that in-place runtime through the portable shim
+(`${PLUGIN_ROOT}/mcp-launch.mjs`), which reads the pointer (or the
+`AGENT_WORKBENCH_INSTALL_ROOT` override) and starts the server — not runtime
+source from Codex's plugin cache, and never copied to a prefix.
 
 The repository also includes `.agents/plugins/marketplace.json` for checkout
 marketplace inspection and `.well-known/mcp/server-card.json` for local MCP
@@ -100,16 +120,18 @@ including `codex-integration-profile` and `integration-health`.
 
 The package definition lives under `packaging/agent-workbench/` and releases an
 OCI image to GHCR. The image contains runtime source, docs, package metadata,
-the Codex plugin, MCP config, skills, hooks, and the package installer.
+the Codex plugin, MCP config, skills, and hooks.
 
 Hooks are installed through plugin-bundled `hooks/hooks.json`. They are not
 duplicated into `~/.codex/hooks.json`.
 
 ## Hook Behavior
 
-Hooks are silent by default. Set `AGENT_WORKBENCH_HOOK_FEEDBACK=basic` to emit
-compact session-start context only. File-edit hooks stay silent unless they have
-an actionable finding to report.
+Hooks emit compact `basic` feedback by default (session-start context only).
+Set `AGENT_WORKBENCH_HOOK_FEEDBACK=silent` to suppress all hook output. File-edit
+hooks stay silent unless they have an actionable finding to report regardless of
+mode. (The default moved in-script because plugin command hooks have no `env`
+field to carry it; see spec 033.)
 
 Post-edit feedback is limited to cheap local findings: generated/local artifact
 touches, workspace-escape-looking paths, merge-conflict markers, and syntax
@@ -129,9 +151,16 @@ uses adapter scripts instead of reusing `hooks/hooks.json`. The adapters reuse
 the same quiet hook checks and emit plain Kiro hook context only when basic
 feedback is enabled and an actionable message exists.
 
-Install the package-backed runtime first, then add `kiro-power/` as a local
-Power in Kiro. The MCP binding launches
-`${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp`.
+Install the runtime first (from the GitHub release tarball — see
+[the install guide](../../docs/runbooks/install-agent-workbench.md)), then add
+`kiro-power/` as a local Power in Kiro.
+
+> **Pending (spec 033):** the Kiro `mcp.json` still references the retired
+> `bin/agent-workbench-mcp` shell launcher and is **not** yet wired to the
+> portable `node` shim / npm runtime, so Kiro MCP launch is broken until the
+> Kiro entry point is converted — tracked in
+> `docs/backlog/033-kiro-shell-free-launcher.md`. Codex and Claude already
+> launch via `mcp-launch.mjs` against the npm-installed runtime.
 
 ## Claude Code Plugin
 
@@ -141,10 +170,18 @@ Claude-shaped hook configuration.
 
 Claude Code plugin components live at the plugin root. Only `plugin.json` is
 inside `.claude-plugin/`; `skills/`, `hooks/`, and `.mcp.json` must remain at
-the Claude plugin root. Test it locally with:
+the Claude plugin root.
+
+After installing the runtime (step 1 of
+[the install guide](../../docs/runbooks/install-agent-workbench.md)), install the
+plugin properly from the installed package (replace `<pkg>` with
+`npm root -g`/@auriora/agent-workbench):
 
 ```bash
-claude --plugin-dir plugins/agent-workbench/claude-plugin
+claude plugin marketplace add <pkg>/plugins/agent-workbench
+claude plugin install agent-workbench@agent-workbench-local --scope user
 ```
 
-After source or hook changes, run `/reload-plugins` in Claude Code.
+For plugin development from a checkout you can instead load it directly with
+`claude --plugin-dir plugins/agent-workbench/claude-plugin`. After source or hook
+changes, run `/reload-plugins` in Claude Code.

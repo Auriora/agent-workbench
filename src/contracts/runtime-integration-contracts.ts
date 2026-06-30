@@ -195,7 +195,6 @@ export const codexInstallPackageSpecSchema = z
     image: z.string(),
     containerfile_path: z.string(),
     manifest_path: z.string(),
-    installer_path: z.string(),
     release_workflow_path: z.string(),
     installed_components: z.array(z.string()),
     dependency_install_model: z.string(),

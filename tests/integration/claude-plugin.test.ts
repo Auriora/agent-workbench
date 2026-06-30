@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
-import { VENDORED_HOOK_FILES } from "../../scripts/sync-claude-plugin-hooks.mjs";
+import { VENDORED_HOOK_FILES, VENDORED_PLUGIN_FILES } from "../../scripts/sync-claude-plugin-hooks.mjs";
 
 describe("Claude Code plugin artifacts", () => {
   const pluginRoot = path.resolve("plugins/agent-workbench/claude-plugin");
@@ -37,12 +37,16 @@ describe("Claude Code plugin artifacts", () => {
       skills: "./skills/",
       mcpServers: "./.mcp.json"
     });
+    // Spec 033: shell-free exec-form launch via the portable shim; Claude
+    // expands ${CLAUDE_PLUGIN_ROOT} before invocation on every OS.
     expect(mcpConfig.mcpServers["agent-workbench"]).toMatchObject({
-      command: "bash",
-      args: expect.arrayContaining([
-        "exec \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp\""
-      ])
+      command: "node",
+      args: ["${CLAUDE_PLUGIN_ROOT}/mcp-launch.mjs"]
     });
+    const claudeMcpArgs = mcpConfig.mcpServers["agent-workbench"].args.join(" ");
+    expect(claudeMcpArgs).not.toContain("bash");
+    expect(claudeMcpArgs).not.toContain("-lc");
+    expect(claudeMcpArgs).not.toContain("${VAR:-");
     expect(Object.keys(hooksConfig.hooks).sort()).toEqual(["PostToolUse", "SessionStart"]);
     expect(skill).toContain("description: Use Agent Workbench as the MCP-backed IDE runtime");
     expect(skill).toContain("Claude Code Integration");
@@ -153,6 +157,38 @@ describe("Claude Code plugin artifacts", () => {
         `${target} is out of sync with hooks/${source}; run \`npm run sync:claude-hooks\``
       ).toBe(true);
     }
+  });
+
+  it("keeps vendored plugin-root modules byte-identical to the shared source", () => {
+    const sourceDir = path.resolve("plugins/agent-workbench");
+    for (const [source, target] of Object.entries(VENDORED_PLUGIN_FILES)) {
+      const sourceContent = fs.readFileSync(path.join(sourceDir, source));
+      const vendoredContent = fs.readFileSync(path.join(pluginRoot, target));
+      expect(
+        vendoredContent.equals(sourceContent),
+        `${target} is out of sync with ${source}; run \`npm run sync:claude-hooks\``
+      ).toBe(true);
+    }
+  });
+
+  it("resolves the MCP launch shim from an isolated plugin copy (no ../.. escape)", async () => {
+    // Same Claude copy-only-subtree layout as the hook isolation test: the shim's
+    // `import "./install-root.mjs"` must resolve inside the copied plugin root.
+    const stage = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-isolated-shim-"));
+    const isolatedRoot = path.join(stage, "agent-workbench");
+    fs.cpSync(pluginRoot, isolatedRoot, { recursive: true });
+
+    const { planLaunch } = await import(pathToFileURL(path.join(isolatedRoot, "mcp-launch.mjs")).href);
+    const plan = planLaunch(
+      { AGENT_WORKBENCH_INSTALL_ROOT: "/install/root" },
+      [],
+      "/repo"
+    );
+    expect(plan.root).toBe("/install/root");
+    expect(plan.args).toEqual([path.join("/install/root", "src", "mcp", "stdio-entrypoint.mjs")]);
+    expect(plan.options.env.AGENT_WORKBENCH_DEFAULT_REPO_ROOT).toBe("/repo");
+
+    fs.rmSync(stage, { recursive: true, force: true });
   });
 
   it("runs hooks from an isolated plugin copy (no parent hooks/ directory)", () => {

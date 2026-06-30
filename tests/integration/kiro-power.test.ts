@@ -103,10 +103,18 @@ describe("Kiro Power artifacts", () => {
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )
     ).toContain("Agent Workbench MCP is available.");
+    // Spec 033: command hooks have no env field, so feedback defaults to basic
+    // in-script when unset; silence is now an explicit opt-out.
     expect(
       sessionStart.buildKiroSessionStartContext(
         { hook_event_name: "agentSpawn" },
         {}
+      )
+    ).toContain("Agent Workbench MCP is available.");
+    expect(
+      sessionStart.buildKiroSessionStartContext(
+        { hook_event_name: "agentSpawn" },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "silent" }
       )
     ).toBeUndefined();
 

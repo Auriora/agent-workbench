@@ -53,7 +53,7 @@ describe("Codex integration profile", () => {
       expect.arrayContaining([
         expect.objectContaining({
           name: "agent-workbench-post-edit-feedback",
-          default_mode: "silent",
+          default_mode: "basic_feedback",
           blocks_workflow: false
         })
       ])
@@ -154,7 +154,6 @@ describe("Codex integration profile", () => {
       registry: "ghcr.io",
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile_path: "packaging/agent-workbench/Containerfile",
-      installer_path: "scripts/install-agent-workbench-package.sh",
       release_workflow_path: ".github/workflows/release-ghcr.yml"
     });
     expect(profile.install_package.dependency_install_model).toContain(
@@ -265,12 +264,12 @@ describe("Codex plugin artifacts", () => {
       mcpServers: "./.mcp.json"
     });
     expect(manifest.hooks).toBeUndefined();
+    // Spec 033: shell-free exec-form launch via the portable shim; Codex expands
+    // ${PLUGIN_ROOT} and the shim resolves the install prefix itself.
     expect(mcpConfig.mcpServers["agent-workbench"]).toMatchObject({
-      command: "bash",
+      command: "node",
       startup_timeout_sec: 30.0,
-      args: expect.arrayContaining([
-        "exec \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp\""
-      ])
+      args: ["${PLUGIN_ROOT}/mcp-launch.mjs"]
     });
     expect(Object.keys(hooksConfig.hooks).sort()).toEqual(["PostToolUse", "SessionStart"]);
     expect(skill).toContain("Agent Workbench is the executable runtime.");
@@ -310,6 +309,48 @@ describe("Codex plugin artifacts", () => {
       category: manifest.interface.category
     });
     expect(fs.existsSync(path.resolve(marketplace.plugins[0].source.path))).toBe(true);
+  });
+
+  it("ships a package-scoped Codex marketplace inside the plugin for turnkey npm registration", () => {
+    // The npm package ships a package-scoped marketplace at
+    // plugins/agent-workbench/.agents/plugins/marketplace.json so that
+    // `codex plugin marketplace add <pkg>/plugins/agent-workbench` registers
+    // `agent-workbench-local` clone-free, mirroring the Claude marketplace.
+    // The repo-root `.agents/plugins/marketplace.json` (auriora-local) stays
+    // for the checkout dev workflow; this one is named differently so the two
+    // never collide.
+    const marketplacePath = path.join(pluginRoot, ".agents/plugins/marketplace.json");
+    expect(fs.existsSync(marketplacePath)).toBe(true);
+    const marketplace = JSON.parse(fs.readFileSync(marketplacePath, "utf8")) as {
+      name: string;
+      plugins: Array<{
+        name: string;
+        source: { source: string; path: string };
+        policy: { installation: string; authentication: string };
+        category: string;
+      }>;
+    };
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(pluginRoot, ".codex-plugin/plugin.json"), "utf8")
+    ) as { name: string; interface: { category: string } };
+
+    expect(marketplace.name).toBe("agent-workbench-local");
+    expect(marketplace.name).not.toBe("auriora-local");
+    expect(marketplace.plugins).toHaveLength(1);
+    expect(marketplace.plugins[0]).toEqual({
+      name: manifest.name,
+      source: {
+        source: "local",
+        path: "."
+      },
+      policy: {
+        installation: "AVAILABLE",
+        authentication: "ON_INSTALL"
+      },
+      category: manifest.interface.category
+    });
+    // source "." must resolve to the Codex plugin root (the dir with .codex-plugin/plugin.json).
+    expect(fs.existsSync(path.join(pluginRoot, ".codex-plugin/plugin.json"))).toBe(true);
   });
 
   it("keeps MCP server-card metadata synchronized with registered resources and tools", () => {
@@ -680,21 +721,21 @@ describe("Codex plugin artifacts", () => {
     const pluginSurface = profile.active_surfaces.find((entry) => entry.surface === "plugins");
 
     expect(manifest.mcpServers).toBe("./.mcp.json");
-    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).toContain(
-      "/bin/agent-workbench-mcp"
-    );
-    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain(
-      "plugins/cache"
-    );
-    expect(mcpConfig.mcpServers["agent-workbench"].startup_timeout_sec).toBe(30.0);
-    expect(mcpConfig.mcpServers["agent-workbench"].command).toBe("bash");
+    // Spec 033: shell-free exec-form launch via the portable shim. The .mcp.json
+    // names only the shim; the shim resolves the install prefix and runtime
+    // internals (src/mcp, tsx, node_modules) at launch — none of those leak here.
+    expect(mcpConfig.mcpServers["agent-workbench"].command).toBe("node");
     expect(mcpConfig.mcpServers["agent-workbench"].args).toEqual([
-      "-lc",
-      'exec "${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp"'
+      "${PLUGIN_ROOT}/mcp-launch.mjs"
     ]);
-    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain("src/mcp");
-    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain("tsx");
-    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toContain("node_modules");
+    expect(mcpConfig.mcpServers["agent-workbench"].startup_timeout_sec).toBe(30.0);
+    const codexMcpArgs = mcpConfig.mcpServers["agent-workbench"].args.join(" ");
+    expect(codexMcpArgs).not.toContain("plugins/cache");
+    expect(codexMcpArgs).not.toContain("-lc");
+    expect(codexMcpArgs).not.toContain("${VAR:-");
+    expect(codexMcpArgs).not.toContain("src/mcp");
+    expect(codexMcpArgs).not.toContain("tsx");
+    expect(codexMcpArgs).not.toContain("node_modules");
     expect(mcpSurface).toEqual(
       expect.objectContaining({
         artifact_path: "plugins/agent-workbench/.mcp.json"
@@ -711,10 +752,9 @@ describe("Codex plugin artifacts", () => {
     expect(profile.plugin.mcp_binding_model).toBe("plugin_bundled_mcp_config");
   });
 
-  it("ships GHCR package metadata and an installer that covers runtime, plugin, skills, and hooks", () => {
+  it("ships GHCR container metadata plus npm install metadata covering runtime, plugin, skills, and hooks", () => {
     const manifestPath = path.resolve("packaging/agent-workbench/package-manifest.json");
     const containerfilePath = path.resolve("packaging/agent-workbench/Containerfile");
-    const installerPath = path.resolve("scripts/install-agent-workbench-package.sh");
     const workflowPath = path.resolve(".github/workflows/release-ghcr.yml");
     const ciWorkflowPath = path.resolve(".github/workflows/ci.yml");
     const pluginValidatorPath = path.resolve("scripts/validate-agent-workbench-plugin.mjs");
@@ -722,7 +762,8 @@ describe("Codex plugin artifacts", () => {
       registry: string;
       image: string;
       containerfile: string;
-      installer: string;
+      install_command: string;
+      npm_bin: string;
       dependency_install: {
         package_manager: string;
         node: string;
@@ -742,6 +783,7 @@ describe("Codex plugin artifacts", () => {
       };
     };
     const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as {
+      bin: Record<string, string>;
       scripts: Record<string, string>;
       dependencies: Record<string, string>;
       devDependencies: Record<string, string>;
@@ -750,7 +792,6 @@ describe("Codex plugin artifacts", () => {
       };
     };
     const containerfile = fs.readFileSync(containerfilePath, "utf8");
-    const installer = fs.readFileSync(installerPath, "utf8");
     const workflow = fs.readFileSync(workflowPath, "utf8");
     const ciWorkflow = fs.readFileSync(ciWorkflowPath, "utf8");
     const pluginValidator = fs.readFileSync(pluginValidatorPath, "utf8");
@@ -759,8 +800,12 @@ describe("Codex plugin artifacts", () => {
       registry: "ghcr.io",
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile: "packaging/agent-workbench/Containerfile",
-      installer: "scripts/install-agent-workbench-package.sh"
+      install_command:
+        "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz",
+      npm_bin: "packaging/agent-workbench/mcp-bin.mjs"
     });
+    // The container build still uses pnpm; the manifest's dependency_install
+    // describes that build, not the npm consumer install.
     expect(manifest.dependency_install).toMatchObject({
       package_manager: "pnpm@10.18.1",
       node: ">=22",
@@ -796,7 +841,9 @@ describe("Codex plugin artifacts", () => {
     );
     expect(manifest.codex.plugin_mcp_config).toBe("plugins/agent-workbench/.mcp.json");
     expect(manifest.codex.plugin_hooks).toBe("plugins/agent-workbench/hooks/hooks.json");
-    expect(manifest.codex.plugin_install_model).toBe("scripts/install-agent-workbench-package.sh");
+    expect(manifest.codex.plugin_install_model).toBe(
+      "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz"
+    );
     expect(containerfile).toContain("FROM node:24-bookworm-slim");
     expect(containerfile).toContain("COPY src ./src");
     expect(containerfile).toContain("rm -rf src/debug");
@@ -806,28 +853,11 @@ describe("Codex plugin artifacts", () => {
     expect(containerfile).toContain("COPY plugins ./plugins");
     expect(containerfile).toContain("pnpm install --frozen-lockfile");
     expect(containerfile).toContain("/opt/agent-workbench/src/mcp/stdio.ts");
-    expect(installer).toContain("plugins/agent-workbench/.mcp.json");
-    expect(installer).toContain("plugins/agent-workbench/hooks/hooks.json");
-    expect(installer).toContain("Node.js 22 or newer is required");
-    expect(installer).toContain("pnpm 10.18.1 is required");
-    expect(installer).toContain("ensure_native_build_prerequisites");
-    expect(installer).toContain("sanitize_deployed_runtime");
-    expect(installer).toContain('rm -rf "$INSTALL_ROOT/src/debug"');
-    expect(installer).toContain('rm -rf "$INSTALL_ROOT/docs/specs"');
-    expect(installer).toContain('name.startsWith("debug:")');
-    expect(installer).toContain("install_codex_plugin");
-    expect(installer).toContain("codex plugin add");
-    expect(installer).toContain("remove_legacy_agent_workbench_mcp_block");
-    expect(installer).toContain('if [ -z "\\${AGENT_WORKBENCH_DEFAULT_REPO_ROOT:-}" ]; then');
-    expect(installer).toContain('export AGENT_WORKBENCH_DEFAULT_REPO_ROOT="\\$PWD"');
-    expect(installer.indexOf('export AGENT_WORKBENCH_DEFAULT_REPO_ROOT="\\$PWD"')).toBeLessThan(
-      installer.indexOf('cd "$INSTALL_ROOT"')
-    );
-    expect(installer).not.toContain("write_user_hooks_json");
-    expect(installer).not.toContain("$CODEX_HOME/hooks.json");
-    expect(installer).not.toContain("[mcp_servers.agent-workbench]");
-    expect(installer).not.toContain("[[hooks.SessionStart]]");
-    expect(installer).not.toContain("[[hooks.PostToolUse]]");
+    // Spec 033 (npm model): the package is launched in place — no copy-to-prefix
+    // installer. The `agent-workbench-mcp` bin self-locates the runtime, and a
+    // postinstall records the pointer the plugin launcher reads.
+    expect(packageJson.bin["agent-workbench-mcp"]).toBe("packaging/agent-workbench/mcp-bin.mjs");
+    expect(packageJson.scripts.postinstall).toBe("node scripts/postinstall.mjs");
     expect(workflow).toContain("registry: ghcr.io");
     expect(workflow).toContain("packaging/agent-workbench/Containerfile");
     expect(packageJson.scripts["validate:plugin"]).toBe(
@@ -842,15 +872,13 @@ describe("Codex plugin artifacts", () => {
     expect(ciWorkflow).toContain("pnpm typecheck");
     expect(ciWorkflow).toContain("pnpm test");
     expect(ciWorkflow).toContain("pnpm run validate:plugin");
-    expect(ciWorkflow).toContain(
-      "scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config"
-    );
+    expect(ciWorkflow).toContain("node scripts/ci/install-smoke.mjs");
+    expect(ciWorkflow).toContain("node scripts/ci/mcp-launch-smoke.mjs");
     expect(ciWorkflow).toContain("pnpm pack:dry-run");
   });
 
   it("keeps cross-repo debug harnesses checkout-only", () => {
     const containerfile = fs.readFileSync(path.resolve("packaging/agent-workbench/Containerfile"), "utf8");
-    const installer = fs.readFileSync(path.resolve("scripts/install-agent-workbench-package.sh"), "utf8");
     const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as {
       scripts: Record<string, string>;
     };
@@ -859,12 +887,11 @@ describe("Codex plugin artifacts", () => {
     expect(packageJson.scripts["debug:mcp-tool-sweep"]).toBe("tsx src/debug/mcp-tool-sweep.ts");
     expect(publicSurfaceNames).not.toContain("debug:mcp-tool-sweep");
     expect(publicSurfaceNames).not.toContain("mcp_tool_sweep");
+    // Spec 033 (npm model): the GHCR container is the only build that copies and
+    // sanitizes a runtime tree, so the strip rules live in the Containerfile.
     expect(containerfile).toContain("rm -rf src/debug");
     expect(containerfile).toContain("docs/specs");
     expect(containerfile).toContain('k.startsWith("debug:")');
-    expect(installer).toContain('rm -rf "$INSTALL_ROOT/src/debug"');
-    expect(installer).toContain('rm -rf "$INSTALL_ROOT/docs/specs"');
-    expect(installer).toContain('name.startsWith("debug:")');
   });
 
   it("keeps plugin wrappers out of concrete runtime implementation paths", () => {

@@ -38,6 +38,7 @@ const serverCard = readJson(".well-known/mcp/server-card.json");
 
 const requiredPaths = [
   "plugins/agent-workbench/.codex-plugin/plugin.json",
+  "plugins/agent-workbench/.agents/plugins/marketplace.json",
   "plugins/agent-workbench/.mcp.json",
   "plugins/agent-workbench/hooks/hooks.json",
   "plugins/agent-workbench/hooks/session-start.js",
@@ -47,7 +48,8 @@ const requiredPaths = [
   ".agents/plugins/marketplace.json",
   ".well-known/mcp/server-card.json",
   "packaging/agent-workbench/package-manifest.json",
-  "scripts/install-agent-workbench-package.sh"
+  "packaging/agent-workbench/mcp-bin.mjs",
+  "scripts/postinstall.mjs"
 ];
 
 for (const relativePath of requiredPaths) {
@@ -64,14 +66,24 @@ assert(
 
 const mcpServer = codexMcp.mcpServers?.["agent-workbench"];
 assert(mcpServer, "Codex .mcp.json must define mcpServers.agent-workbench.");
-assert(mcpServer.command === "bash", "Codex MCP command must launch through bash.");
+// Spec 033: the MCP server launches shell-free via the portable shim. The shim
+// resolves the install prefix itself and spawns the server from there, so the
+// .mcp.json points at the plugin-root shim (not a bash wrapper). Assert the
+// shell-free shape rather than a brittle command string.
+assert(mcpServer.command === "node", "Codex MCP command must be a direct node invocation (no shell).");
 assert(
-  mcpServer.args?.join(" ") ===
-    '-lc exec "${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp"',
-  "Codex MCP args must launch the installed package prefix."
+  Array.isArray(mcpServer.args) &&
+    mcpServer.args.length === 1 &&
+    mcpServer.args[0] === "${PLUGIN_ROOT}/mcp-launch.mjs",
+  "Codex MCP args must invoke ${PLUGIN_ROOT}/mcp-launch.mjs."
+);
+const codexMcpArgs = mcpServer.args.join(" ");
+assert(
+  mcpServer.command !== "bash" && !codexMcpArgs.includes("-lc") && !codexMcpArgs.includes("${VAR:-"),
+  "Codex MCP launch must not use bash, -lc, or POSIX ${VAR:-default} expansion."
 );
 assert(
-  !mcpServer.args.join(" ").includes("plugins/cache"),
+  !codexMcpArgs.includes("plugins/cache"),
   "Codex MCP args must not launch runtime code from plugin cache."
 );
 
@@ -96,7 +108,15 @@ assert(serverCard.privacy?.local_first === true, "Server card must advertise loc
 assert(serverCard.privacy?.network_required === false, "Server card must not require network access.");
 
 assert(manifest.version === packageJson.version, "Package manifest version must match package.json.");
-assert(manifest.installer === "scripts/install-agent-workbench-package.sh", "Package installer path drifted.");
+assert(
+  manifest.npm_bin === "packaging/agent-workbench/mcp-bin.mjs",
+  "Package npm bin path drifted."
+);
+assert(
+  manifest.install_command ===
+    "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz",
+  "Package install command drifted."
+);
 assertArrayEquals(
   manifest.dependency_install.runtime_dependencies,
   Object.keys(packageJson.dependencies ?? {}),

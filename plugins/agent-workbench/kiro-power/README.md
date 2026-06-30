@@ -12,14 +12,19 @@ It includes:
 - `hooks/` scripts that adapt Agent Workbench quiet hooks to Kiro hook payloads
 
 The Power does not contain or launch a second runtime implementation. MCP
-configuration launches the installed package prefix at
-`~/.local/share/agent-workbench/bin/agent-workbench-mcp` unless
-`AGENT_WORKBENCH_INSTALL_ROOT` overrides it.
+configuration launches the installed package prefix under
+`~/.local/share/agent-workbench/bin/` (or `AGENT_WORKBENCH_INSTALL_ROOT`).
+
+> **Pending (spec 033):** `mcp.json` still launches `bin/agent-workbench-mcp`,
+> but the installer now generates `bin/agent-workbench-mcp.mjs`. Kiro MCP launch
+> will fail until the Kiro entry point is converted to the `.mjs` launcher — a
+> tracked follow-up. Codex and Claude already launch shell-free via
+> `mcp-launch.mjs`.
 
 Install or refresh the runtime package before adding the Power:
 
 ```bash
-scripts/install-agent-workbench-package.sh \
+npx @auriora/agent-workbench install -- \
   --prefix "$HOME/.local/share/agent-workbench" \
   --skip-codex-config
 ```

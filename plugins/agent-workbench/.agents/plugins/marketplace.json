@@ -1,0 +1,24 @@
+{
+  "name": "agent-workbench-local",
+  "interface": {
+    "displayName": "Agent Workbench (local npm package)"
+  },
+  "owner": {
+    "name": "Auriora",
+    "url": "https://github.com/bcherrington"
+  },
+  "plugins": [
+    {
+      "name": "agent-workbench",
+      "source": {
+        "source": "local",
+        "path": "."
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

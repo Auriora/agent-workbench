@@ -22,17 +22,22 @@ ${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-wo
 
 ## Onboarding
 
-1. Verify the package-backed runtime is installed:
+1. Verify the package-backed runtime is installed (the launcher is now
+   `bin/agent-workbench-mcp.mjs`):
 
    ```bash
-   test -x "${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp"
+   test -f "${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp.mjs"
    ```
 
-2. If the launcher is missing, install Agent Workbench from the repository or
-   unpacked package source:
+   > **Pending (spec 033):** this Power's `mcp.json` still launches the old
+   > `bin/agent-workbench-mcp`, which the installer no longer generates, so Kiro
+   > MCP launch is broken until the Kiro entry point is converted to the `.mjs`
+   > launcher (tracked follow-up).
+
+2. If the launcher is missing, install Agent Workbench:
 
    ```bash
-   scripts/install-agent-workbench-package.sh \
+   npx @auriora/agent-workbench install -- \
      --prefix "$HOME/.local/share/agent-workbench" \
      --skip-codex-config
    ```

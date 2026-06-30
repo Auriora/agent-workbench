@@ -250,7 +250,6 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile_path: "packaging/agent-workbench/Containerfile",
       manifest_path: "packaging/agent-workbench/package-manifest.json",
-      installer_path: "scripts/install-agent-workbench-package.sh",
       release_workflow_path: ".github/workflows/release-ghcr.yml",
       installed_components: [
         "src",
@@ -263,8 +262,8 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         "tsconfig.json",
         "AGENTS.md"
       ],
-      dependency_install_model: "The package manifest defines Node, pnpm, runtime module, dev/test module, native tool, and native rebuild requirements; the installer runs pnpm install --frozen-lockfile and pnpm rebuild:native when dependencies are not already packaged.",
-      mcp_install_model: "The installer registers the local Codex plugin; plugin-bundled .mcp.json launches the installed package prefix.",
+      dependency_install_model: "The package manifest defines Node, pnpm, runtime module, dev/test module, native tool, and native rebuild requirements; the GHCR container build runs pnpm install --frozen-lockfile and pnpm rebuild:native.",
+      mcp_install_model: "The plugin-bundled .mcp.json launches the npm-installed runtime through the portable mcp-launch.mjs shim; no runtime is copied into the plugin cache.",
       hook_install_model: "Hooks are installed through plugin-bundled hooks/hooks.json and may require Codex hook trust review after plugin install."
     },
     skills: [
@@ -290,10 +289,10 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         name: "agent-workbench-session-start",
         event: "SessionStart",
         path: "plugins/agent-workbench/hooks/session-start.js",
-        default_mode: "silent",
+        default_mode: "basic_feedback",
         blocks_workflow: false,
-        emits_when: ["AGENT_WORKBENCH_HOOK_FEEDBACK=basic"],
-        quiet_when: ["default configuration", "invalid payload"],
+        emits_when: ["default configuration"],
+        quiet_when: ["AGENT_WORKBENCH_HOOK_FEEDBACK=silent", "invalid payload"],
         schema_mapping: "Short MCP availability guidance only; no runtime analysis is executed."
       },
       {
@@ -301,12 +300,18 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         event: "PostToolUse",
         matcher: "^(apply_patch|write_file|create_file|rename_file)$",
         path: "plugins/agent-workbench/hooks/post-edit-feedback.js",
-        default_mode: "silent",
+        default_mode: "basic_feedback",
         blocks_workflow: false,
         emits_when: [
-          "AGENT_WORKBENCH_HOOK_FEEDBACK=basic and actionable path, conflict-marker, or syntax findings are detected"
+          "actionable path, conflict-marker, or syntax findings are detected"
         ],
-        quiet_when: ["clean edits", "successful edits", "unsupported payload", "hook errors"],
+        quiet_when: [
+          "AGENT_WORKBENCH_HOOK_FEEDBACK=silent",
+          "clean edits",
+          "successful edits",
+          "unsupported payload",
+          "hook errors"
+        ],
         schema_mapping: "Cheap local actionable findings only; no runtime diagnostics or tests are run."
       }
     ],

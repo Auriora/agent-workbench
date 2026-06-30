@@ -2,7 +2,7 @@
   "name": "Agent Workbench",
   "id": "agent-workbench",
   "description": "Local-first MCP runtime that gives coding agents bounded repository status, context, diagnostics, documentation, graph query, edit preview/apply, and validation-planning surfaces.",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "homepage": "https://github.com/bcherrington/agent-workbench",
   "transport": {
     "type": "stdio",
@@ -18,7 +18,7 @@
   "setup": {
     "codex_plugin": "plugins/agent-workbench",
     "mcp_config": "plugins/agent-workbench/.mcp.json",
-    "launcher": "${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp",
+    "launcher": "agent-workbench-mcp",
     "runbook": "docs/runbooks/codex-agent-workbench-plugin.md"
   },
   "resources": [
