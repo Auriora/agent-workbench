@@ -174,11 +174,21 @@ unavailable — a recorded manual run with the gap noted explicitly.
   is impractical because pnpm bakes the install path into `node_modules`/`.bin`.
 - `env`-field support on hook entries is assumed; the in-script default
   (task T008) is the mitigation if a runtime ignores it.
-- Codex `${PLUGIN_ROOT}` expansion inside `.mcp.json` args (not just hook
-  command strings) is taken on the strength of the existing hook usage; the live
-  per-OS launch smoke (T011b) is what confirms it end to end. If it does not
-  expand, the localized fix is to have the installer write the absolute install
-  prefix into the deployed Codex `.mcp.json`.
+- Plugin-root expansion inside `.mcp.json` args (not just hook command strings):
+  **Claude side confirmed (Linux), Codex side by-analogy + CI.** A live Claude
+  session (2026-06-30, Linux) launched the plugin MCP server as
+  `node <expanded-plugin-root>/claude-plugin/mcp-launch.mjs` (observed in the
+  process table) and served tool calls — direct evidence that Claude expands
+  `${CLAUDE_PLUGIN_ROOT}` inside `.mcp.json` args and the `node`+shim launch
+  works. (That live process was the dev's pre-existing 0.1.0 plugin copy, so it
+  evidences only the editor-side expansion, not the new pointer-based shim
+  resolution — the latter is covered by the npm-install→pointer→`initialize`
+  e2e in backlog `033-npm-tarball`.) Codex `${PLUGIN_ROOT}` expansion in
+  `.mcp.json` args is still taken on the strength of the existing Codex hook
+  usage (it already expands `${PLUGIN_ROOT}` in hook commands); the live per-OS
+  launch smoke (T011b, cross-platform-packaging.yml) confirms it end to end once
+  a runner runs the macOS/Windows legs. If it does not expand, the localized fix
+  is to write the absolute install prefix into the deployed Codex `.mcp.json`.
 - **Kiro MCP launch is currently broken (deferred fix).** Kiro is outside this
   spec's Requirement 2 baseline (Claude/Codex only), and the launcher rename
   introduced by T004 was not propagated to it: the installer now generates only
