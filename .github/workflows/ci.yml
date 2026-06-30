@@ -16,14 +16,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.18.1
-
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-          cache: pnpm
+
+      # Activate pnpm via corepack (bundled with Node) instead of a third-party
+      # action — the repo's Actions allowlist permits only github-owned and
+      # verified-creator actions, so pnpm/action-setup fails at startup. Version
+      # comes from package.json#/packageManager (pnpm@10.18.1).
+      - name: Enable pnpm (corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.18.1 --activate
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile

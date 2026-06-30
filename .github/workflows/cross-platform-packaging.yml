@@ -26,17 +26,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.18.1
-
       # Node 22 is the supported floor (spec 033 Requirement 4.1). The
       # tree-sitter core needs C++20, which Node 24's V8 headers require but
       # Node 22's do not — so 22 is the build-clean floor.
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: pnpm
+
+      # Activate pnpm via corepack (bundled with Node) instead of a third-party
+      # action — the repo's Actions allowlist permits only github-owned and
+      # verified-creator actions, so pnpm/action-setup fails at startup. Works
+      # identically on Windows/macOS/Linux. Version from package.json#/packageManager.
+      - name: Enable pnpm (corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.18.1 --activate
 
       # Build the native modules the way an end user's `npm install` would, then
       # run the smokes against this checkout as the in-place runtime root. A red
