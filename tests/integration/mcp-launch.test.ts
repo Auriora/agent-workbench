@@ -56,7 +56,7 @@ describe("mcp-launch shim planLaunch (spec 033)", () => {
 
   it("throws an actionable error when the runtime root cannot be resolved", () => {
     expect(() => planLaunch({ HOME: "/nonexistent-runtime-root" }, [], "/repo")).toThrow(
-      /npm install -g @auriora\/agent-workbench/
+      /runtime not found.*GitHub release tarball/s
     );
   });
 });

@@ -37,7 +37,8 @@ export function planLaunch(env = process.env, argv = process.argv.slice(2), cwd 
   const root = resolveRuntimeRoot(env);
   if (!root) {
     throw new Error(
-      "agent-workbench runtime not found. Install it with `npm install -g @auriora/agent-workbench`, " +
+      "agent-workbench runtime not found. Install it from the GitHub release tarball " +
+        "(npm install -g <url from https://github.com/Auriora/agent-workbench/releases>), " +
         "or set AGENT_WORKBENCH_INSTALL_ROOT to a checkout that contains src/mcp/stdio-entrypoint.mjs."
     );
   }

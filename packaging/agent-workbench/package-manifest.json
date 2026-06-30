@@ -5,11 +5,11 @@
   "distribution": {
     "npm_contract": "packaging/agent-workbench/npm-package.json",
     "npm_package": "@auriora/agent-workbench",
-    "npm_publish_status": "pack-ready-not-published"
+    "npm_publish_status": "github-release"
   },
   "image": "ghcr.io/bcherrington/agent-workbench",
   "containerfile": "packaging/agent-workbench/Containerfile",
-  "install_command": "npm install -g @auriora/agent-workbench",
+  "install_command": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz",
   "npm_bin": "packaging/agent-workbench/mcp-bin.mjs",
   "entrypoint": "node --import tsx /opt/agent-workbench/src/mcp/stdio.ts",
   "dependency_install": {
@@ -79,7 +79,7 @@
     "plugin_manifest": "plugins/agent-workbench/.codex-plugin/plugin.json",
     "plugin_mcp_config": "plugins/agent-workbench/.mcp.json",
     "plugin_hooks": "plugins/agent-workbench/hooks/hooks.json",
-    "plugin_install_model": "npm install -g @auriora/agent-workbench"
+    "plugin_install_model": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz"
   },
   "kiro": {
     "power_root": "plugins/agent-workbench/kiro-power",
@@ -105,6 +105,6 @@
       "plugins/agent-workbench/claude-plugin/hooks/session-start.js",
       "plugins/agent-workbench/claude-plugin/hooks/post-edit-feedback.js"
     ],
-    "install_model": "After `npm install -g @auriora/agent-workbench`, register the bundled Claude plugin: `claude plugin marketplace add <package>/plugins/agent-workbench` then `claude plugin install agent-workbench@agent-workbench-local --scope user`."
+    "install_model": "Install the runtime from the GitHub release tarball (`npm install -g <release-url>`; see docs/runbooks/install-agent-workbench.md), then register the bundled Claude plugin: `claude plugin marketplace add <package>/plugins/agent-workbench` then `claude plugin install agent-workbench@agent-workbench-local --scope user`."
   }
 }

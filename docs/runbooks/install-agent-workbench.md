@@ -33,9 +33,17 @@ hook/MCP details, see
 
 ## 1. Install the runtime (all OSes)
 
+Agent Workbench is distributed through **GitHub Releases** (it is not published to
+the npm registry). Install the release tarball directly by URL — npm builds the
+native modules and runs the package's `postinstall` the same as any package:
+
 ```bash
-npm install -g @auriora/agent-workbench
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz
 ```
+
+For a different version, take the tarball URL from the matching release on
+<https://github.com/Auriora/agent-workbench/releases>. Offline/air-gapped: download
+the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.3.0.tgz`.
 
 This builds the native modules in place and records a runtime-root pointer under
 the per-OS state directory (`%LOCALAPPDATA%\agent-workbench` on Windows,
@@ -70,10 +78,10 @@ Start a new Claude Code session so the skill, hooks, and MCP server are
 discovered. The first useful MCP resources are `repo:///status`,
 `repo:///scope`, and `repo:///overview`.
 
-To update after a new package version:
+To update after a new package version (use the new release's tarball URL):
 
 ```bash
-npm install -g @auriora/agent-workbench
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
 claude plugin marketplace update agent-workbench-local
 ```
 

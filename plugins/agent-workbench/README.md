@@ -25,15 +25,18 @@ source copied into Codex's plugin cache.
 
 ## Quick Start
 
-Install the runtime as a normal npm package (shell-free, all OSes). **Node 22 is
-recommended** — npm builds the native modules during install, and on Node 24 the
-native core needs C++20, so a default `npm install -g` on Node 24 hits a build
-error first (use Node 22, or rebuild with `CXXFLAGS=-std=c++20`). A failing build
-is a local toolchain issue to resolve (Python 3 + a C/C++ toolchain). See
-`packaging/agent-workbench/README.md` for the full native-build prerequisites:
+Install the runtime from the **GitHub release tarball** (Agent Workbench is not
+published to the npm registry). npm builds the native modules during install, all
+OSes. **Node 22 is recommended** — on Node 24 the native core needs C++20, so a
+default install on Node 24 hits a build error first (use Node 22, or rebuild with
+`CXXFLAGS=-std=c++20`). A failing build is a local toolchain issue to resolve
+(Python 3 + a C/C++ toolchain). See `packaging/agent-workbench/README.md` for the
+full native-build prerequisites and
+[the install guide](../../docs/runbooks/install-agent-workbench.md) for the
+current release URL:
 
 ```bash
-npm install -g @auriora/agent-workbench
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz
 ```
 
 This README's Quick Start covers **Codex**. For **Claude Code**, skip to
@@ -63,15 +66,18 @@ For task work, use `context_for_task` before broad reads and
 `integration:///profiles/codex` for the Codex integration profile and
 `integration:///health/agent-workbench` for integration health.
 
-To update after source, dependency, skill, hook, or MCP config changes:
+To update after source, dependency, skill, hook, or MCP config changes, reinstall
+the runtime from the new release tarball (see
+[the install guide](../../docs/runbooks/install-agent-workbench.md) for the URL),
+then re-add the plugin:
 
 ```bash
-npm install -g @auriora/agent-workbench
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
 codex plugin add agent-workbench@agent-workbench-local
 ```
 
 The local marketplace points at the npm install path, so re-running
-`codex plugin add` after `npm install -g` re-installs from the refreshed source.
+`codex plugin add` after reinstalling re-installs from the refreshed source.
 
 Then restart Codex so the plugin cache, skill, hooks, and MCP server config are
 rediscovered.
@@ -96,8 +102,9 @@ for fixed-target launches outside the active workspace.
 
 ## Local Installation Model
 
-`npm install -g @auriora/agent-workbench` places the runtime (including this
-plugin source) in npm's global tree and builds the native modules in place. The
+Installing the release tarball with `npm install -g <release-url>` places the
+runtime (including this plugin source) in npm's global tree and builds the native
+modules in place. The
 package `postinstall` records a runtime-root pointer under the per-OS state dir;
 the plugin MCP binding launches that in-place runtime through the portable shim
 (`${PLUGIN_ROOT}/mcp-launch.mjs`), which reads the pointer (or the
@@ -144,8 +151,9 @@ uses adapter scripts instead of reusing `hooks/hooks.json`. The adapters reuse
 the same quiet hook checks and emit plain Kiro hook context only when basic
 feedback is enabled and an actionable message exists.
 
-Install the npm runtime first (`npm install -g @auriora/agent-workbench`), then
-add `kiro-power/` as a local Power in Kiro.
+Install the runtime first (from the GitHub release tarball — see
+[the install guide](../../docs/runbooks/install-agent-workbench.md)), then add
+`kiro-power/` as a local Power in Kiro.
 
 > **Pending (spec 033):** the Kiro `mcp.json` still references the retired
 > `bin/agent-workbench-mcp` shell launcher and is **not** yet wired to the
@@ -164,8 +172,10 @@ Claude Code plugin components live at the plugin root. Only `plugin.json` is
 inside `.claude-plugin/`; `skills/`, `hooks/`, and `.mcp.json` must remain at
 the Claude plugin root.
 
-After `npm install -g @auriora/agent-workbench`, install the plugin properly
-from the npm package (replace `<pkg>` with `npm root -g`/@auriora/agent-workbench):
+After installing the runtime (step 1 of
+[the install guide](../../docs/runbooks/install-agent-workbench.md)), install the
+plugin properly from the installed package (replace `<pkg>` with
+`npm root -g`/@auriora/agent-workbench):
 
 ```bash
 claude plugin marketplace add <pkg>/plugins/agent-workbench

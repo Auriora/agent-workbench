@@ -4,13 +4,16 @@ This package definition supports the npm package and the GHCR image for the
 Agent Workbench MCP runtime, documentation, Codex/Claude plugin wrappers, skill,
 and hook scripts.
 
-The supported distribution channel is the npm package
-(`@auriora/agent-workbench`). It is a normal npm package: installing it builds
-the native modules and launches in place — there is no copy-to-prefix installer,
-no archive, and no shell on the install or runtime path.
+The supported distribution channel is the **GitHub release tarball** (package
+name `@auriora/agent-workbench`; it is **not** published to the npm registry). It
+is a normal npm package: installing the tarball builds the native modules and
+launches in place — there is no copy-to-prefix installer, no shell on the install
+or runtime path. Install it directly by release URL (see
+[the install guide](../../docs/runbooks/install-agent-workbench.md) for the
+current version):
 
 ```bash
-npm install -g @auriora/agent-workbench
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz
 ```
 
 Checkout-only debug harnesses under `src/debug/`, `debug:*` package scripts,

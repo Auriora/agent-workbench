@@ -41,7 +41,7 @@ Workbench plugin should not package or proxy those companion runtimes.
 
 This keeps source updates explicit:
 
-- Install a new package version with `npm install -g @auriora/agent-workbench`.
+- Install a new package version with `npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz`.
 - Re-add `agent-workbench@<personal-marketplace>`.
 - Restart Codex so skills, hooks, and MCP tools are discovered from the updated
   plugin cache.
@@ -205,7 +205,7 @@ custom installer, no copy-to-prefix step, and no POSIX shell on the path.
 Install or refresh the runtime with:
 
 ```bash
-npm install -g @auriora/agent-workbench
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
 ```
 
 This runs `scripts/postinstall.mjs`, which records the runtime-root pointer file
@@ -325,7 +325,7 @@ as installed and enabled, reinstall the npm runtime, then re-add the plugin from
 the personal marketplace:
 
 ```bash
-npm install -g @auriora/agent-workbench
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
 codex plugin add agent-workbench@auriora-local
 ```
 
@@ -334,7 +334,7 @@ pointer is missing. Reinstall the npm package so `postinstall` rewrites the
 pointer, or set the runtime-root override explicitly:
 
 ```bash
-npm install -g @auriora/agent-workbench
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
 # or point the shim at a checkout that contains src/mcp/stdio-entrypoint.mjs:
 export AGENT_WORKBENCH_INSTALL_ROOT="$HOME/Projects/agent-workbench"
 ```
@@ -374,7 +374,7 @@ The Power includes:
 Install or refresh the runtime package first:
 
 ```bash
-npm install -g @auriora/agent-workbench
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
 ```
 
 Then add `plugins/agent-workbench/kiro-power/` as a local Power in Kiro. If Kiro
@@ -403,7 +403,7 @@ The plugin includes:
 Install or refresh the runtime package first:
 
 ```bash
-npm install -g @auriora/agent-workbench
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
 ```
 
 Then register the Claude plugin from the npm package (replace `<pkg>` with

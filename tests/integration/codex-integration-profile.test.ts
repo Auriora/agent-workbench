@@ -800,7 +800,8 @@ describe("Codex plugin artifacts", () => {
       registry: "ghcr.io",
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile: "packaging/agent-workbench/Containerfile",
-      install_command: "npm install -g @auriora/agent-workbench",
+      install_command:
+        "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz",
       npm_bin: "packaging/agent-workbench/mcp-bin.mjs"
     });
     // The container build still uses pnpm; the manifest's dependency_install
@@ -840,7 +841,9 @@ describe("Codex plugin artifacts", () => {
     );
     expect(manifest.codex.plugin_mcp_config).toBe("plugins/agent-workbench/.mcp.json");
     expect(manifest.codex.plugin_hooks).toBe("plugins/agent-workbench/hooks/hooks.json");
-    expect(manifest.codex.plugin_install_model).toBe("npm install -g @auriora/agent-workbench");
+    expect(manifest.codex.plugin_install_model).toBe(
+      "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz"
+    );
     expect(containerfile).toContain("FROM node:24-bookworm-slim");
     expect(containerfile).toContain("COPY src ./src");
     expect(containerfile).toContain("rm -rf src/debug");
