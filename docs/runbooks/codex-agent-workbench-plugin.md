@@ -71,8 +71,21 @@ repo-level marketplace metadata. It points `agent-workbench` at the checked-in
 as the plugin manifest. This metadata is useful when testing the checkout as a
 marketplace source.
 
-After installing the npm runtime, register the Codex plugin from the personal
-marketplace:
+After installing the npm runtime, register the Codex plugin from the
+`auriora-local` marketplace.
+
+> **Known gap (spec 033):** npm→Codex registration is **not** turnkey. The
+> `auriora-local` marketplace is the maintainer's **checkout** marketplace
+> (`.agents/plugins/marketplace.json` at the repo root) and is **not shipped** in
+> the npm package, so on a clean machine
+> `codex plugin add agent-workbench@auriora-local` fails — no `auriora-local`
+> marketplace is registered. Register it from a checkout first with
+> `codex plugin marketplace add <repo-root>` (which reads
+> `.agents/plugins/marketplace.json`). Shipping a package-scoped Codex
+> marketplace so this is clone-free, like the Claude path, is tracked in
+> `docs/backlog/033-codex-npm-marketplace.md`.
+
+From a checkout with the `auriora-local` marketplace registered:
 
 ```bash
 codex plugin add agent-workbench@auriora-local

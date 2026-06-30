@@ -44,6 +44,30 @@ unavailable — a recorded manual run with the gap noted explicitly.
 
 - Record per-OS CI run URLs or manual-run transcripts here as tasks complete.
   Each entry: OS, Node version, command, outcome, link.
+- **Claude plugin registration from packed tarball (v0.3.0) — PASS (Linux).**
+  Linux host, Node 24 (v24.8.0), `claude` CLI 2.1.196, isolated
+  `CLAUDE_CONFIG_DIR`. `npm pack` → extract → `claude plugin marketplace add
+  <pkg>/plugins/agent-workbench` (→ "Successfully added marketplace:
+  agent-workbench-local") → `claude plugin install
+  agent-workbench@agent-workbench-local --scope user` (→ "Successfully
+  installed") → `claude plugin list` shows `agent-workbench@agent-workbench-local`
+  **Version 0.3.0**, scope user, status enabled. Confirms the shipped
+  package-scoped marketplace (`plugins/agent-workbench/.claude-plugin/marketplace.json`,
+  source `./claude-plugin`) resolves clone-free from the npm package. Combined
+  with the npm-install→pointer→`initialize` e2e (backlog 033-npm-tarball), both
+  halves of the Claude path are covered.
+- **Codex plugin registration from npm package — KNOWN GAP (not verified).** The
+  `auriora-local` marketplace is the maintainer's checkout marketplace
+  (`.agents/plugins/marketplace.json`, repo root) and is **not** in the tarball,
+  so `codex plugin add agent-workbench@auriora-local` fails on a clean machine. A
+  local attempt (isolated `CODEX_HOME`) resolved to the host's real
+  `~/.agents/plugins/marketplace.json` via an `auriora-local` name collision and
+  installed `0.1.0+codex...` from `~/plugins/agent-workbench` — i.e. it proved
+  **nothing** about the tarball. Docs (README Quick Start, runbook) now flag this
+  as a known gap like the Kiro launcher; a discriminating verify (override
+  `HOME`/`USERPROFILE` so `~/.agents` cannot shadow the tarball, expect 0.3.0)
+  and a package-scoped Codex marketplace are tracked in
+  `docs/backlog/033-codex-npm-marketplace.md`.
 - **Resolver parity (P3) — PASS.** Linux host, Node (repo toolchain),
   `npx vitest run tests/integration/install-root.test.ts` → 9 passed. Covers
   the `AGENT_WORKBENCH_INSTALL_ROOT` override on both OSes, the POSIX/darwin

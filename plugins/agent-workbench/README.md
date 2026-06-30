@@ -25,17 +25,35 @@ source copied into Codex's plugin cache.
 
 ## Quick Start
 
-Install the runtime as a normal npm package (shell-free, all OSes). npm builds
-the native modules during install; a failing build is a local toolchain issue to
-resolve (Python 3 + a C/C++ toolchain; on Node 24 the native core needs C++20,
-so use Node 22 or rebuild with `CXXFLAGS=-std=c++20`). See
+Install the runtime as a normal npm package (shell-free, all OSes). **Node 22 is
+recommended** — npm builds the native modules during install, and on Node 24 the
+native core needs C++20, so a default `npm install -g` on Node 24 hits a build
+error first (use Node 22, or rebuild with `CXXFLAGS=-std=c++20`). A failing build
+is a local toolchain issue to resolve (Python 3 + a C/C++ toolchain). See
 `packaging/agent-workbench/README.md` for the full native-build prerequisites:
 
 ```bash
 npm install -g @auriora/agent-workbench
 ```
 
-Then register this plugin with Codex from the installed package and verify it:
+This README's Quick Start covers **Codex**. For **Claude Code** — the verified
+clone-free registration path — skip to [Claude Code Plugin](#claude-code-plugin).
+
+Then register this plugin with Codex.
+
+> **Known gap (spec 033):** npm→Codex registration is **not** yet turnkey. The
+> `auriora-local` marketplace named below is the maintainer's **checkout**
+> marketplace (`.agents/plugins/marketplace.json` at the repo root) and is **not
+> shipped** in the npm package, so on a clean machine
+> `codex plugin add agent-workbench@auriora-local` fails with no marketplace
+> registered. Until a package-scoped Codex marketplace ships, register it from a
+> checkout (`codex plugin marketplace add <repo-root>`, which reads
+> `.agents/plugins/marketplace.json`). Tracked in
+> `docs/backlog/033-codex-npm-marketplace.md`. The Claude path below is the
+> verified clone-free flow.
+
+From a checkout that has registered the `auriora-local` marketplace, install and
+verify:
 
 ```bash
 codex plugin add agent-workbench@auriora-local
