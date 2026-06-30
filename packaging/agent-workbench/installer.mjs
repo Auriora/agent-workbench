@@ -289,10 +289,25 @@ function nativeRebuildNeeded(sourceRoot, installRoot) {
   return !(tsxInSource || tsxInInstall);
 }
 
+// Core tree-sitter compiles from source and needs C++20. Apply the flag to the
+// initial `pnpm install` too (not just rebuild:native), otherwise the from-source
+// build fails on Node 24 before rebuild:native ever runs. Per toolchain:
+// CXXFLAGS=-std=c++20 for GCC/Clang, CL=/std:c++20 for MSVC.
+function nativeBuildEnv(env = process.env) {
+  const out = { ...env };
+  if (process.platform === "win32") {
+    out.CL = `${out.CL ? `${out.CL} ` : ""}/std:c++20`;
+  } else {
+    out.CXXFLAGS = `${out.CXXFLAGS ? `${out.CXXFLAGS} ` : ""}-std=c++20`;
+  }
+  return out;
+}
+
 function runNativeRebuild(installRoot, ctx) {
+  const env = nativeBuildEnv();
   try {
-    spawnTool("pnpm", ["install", "--frozen-lockfile"], { cwd: installRoot }, ctx);
-    spawnTool("pnpm", ["rebuild:native"], { cwd: installRoot }, ctx);
+    spawnTool("pnpm", ["install", "--frozen-lockfile"], { cwd: installRoot, env }, ctx);
+    spawnTool("pnpm", ["rebuild:native"], { cwd: installRoot, env }, ctx);
   } catch (error) {
     if (process.platform === "win32" && error instanceof InstallError) {
       throw new InstallError(`${error.message}\n${remediation("msvc", "win32")}`);
