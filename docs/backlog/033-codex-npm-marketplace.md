@@ -1,13 +1,45 @@
 ---
 title: Ship a package-scoped Codex marketplace so npm→Codex registration is turnkey
 doc_type: backlog
-status: open
+status: resolved
 owner: platform
 source_spec: docs/specs/033-cross-platform-packaging
 last_reviewed: 2026-06-30
 ---
 
 # Ship a package-scoped Codex marketplace so npm→Codex registration is turnkey
+
+## Resolution (2026-06-30)
+
+Resolved by shipping a package-scoped Codex marketplace at
+`plugins/agent-workbench/.agents/plugins/marketplace.json` (name
+`agent-workbench-local`, plugin `source` `.`), mirroring the Claude
+`.claude-plugin/marketplace.json` pattern. It ships automatically under the
+`plugins/agent-workbench` `files` allowlist entry, and is guarded by
+`required_paths` (npm-package.json), the plugin validator, and a packed-metadata
+test in `tests/integration/codex-integration-profile.test.ts`. The maintainer's
+checkout marketplace (`.agents/plugins/marketplace.json` at the repo root, name
+`auriora-local`) is untouched — the distinct name keeps the two from colliding.
+
+**Registration verified (turnkey, tarball-verified):** `npm pack` → extract →
+with `HOME`/`USERPROFILE`/`CODEX_HOME` all overridden so the host's real
+`~/.agents` cannot shadow the tarball marketplace →
+`codex plugin marketplace add <pkg>/plugins/agent-workbench` →
+`codex plugin add agent-workbench@agent-workbench-local` →
+`codex plugin list` shows `agent-workbench@agent-workbench-local` **v0.3.0**,
+`installed, enabled`, resolved from the unpacked package path (not the
+personal-marketplace `0.1.0+codex...` build). Docs flipped to the two-step
+turnkey flow in `plugins/agent-workbench/README.md`,
+`docs/runbooks/install-agent-workbench.md`, and
+`docs/runbooks/codex-agent-workbench-plugin.md`.
+
+**Out of scope (still open):** this verified *registration*, not *launch*. Whether
+`${PLUGIN_ROOT}` expands inside `.mcp.json` args when Codex starts the MCP server
+remains the residual tracked in
+`docs/specs/033-cross-platform-packaging/verification.md` (it governs launch, not
+the marketplace).
+
+---
 
 ## Context
 

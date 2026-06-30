@@ -38,6 +38,7 @@ const serverCard = readJson(".well-known/mcp/server-card.json");
 
 const requiredPaths = [
   "plugins/agent-workbench/.codex-plugin/plugin.json",
+  "plugins/agent-workbench/.agents/plugins/marketplace.json",
   "plugins/agent-workbench/.mcp.json",
   "plugins/agent-workbench/hooks/hooks.json",
   "plugins/agent-workbench/hooks/session-start.js",

@@ -56,18 +56,22 @@ unavailable — a recorded manual run with the gap noted explicitly.
   source `./claude-plugin`) resolves clone-free from the npm package. Combined
   with the npm-install→pointer→`initialize` e2e (backlog 033-npm-tarball), both
   halves of the Claude path are covered.
-- **Codex plugin registration from npm package — KNOWN GAP (not verified).** The
-  `auriora-local` marketplace is the maintainer's checkout marketplace
-  (`.agents/plugins/marketplace.json`, repo root) and is **not** in the tarball,
-  so `codex plugin add agent-workbench@auriora-local` fails on a clean machine. A
-  local attempt (isolated `CODEX_HOME`) resolved to the host's real
-  `~/.agents/plugins/marketplace.json` via an `auriora-local` name collision and
-  installed `0.1.0+codex...` from `~/plugins/agent-workbench` — i.e. it proved
-  **nothing** about the tarball. Docs (README Quick Start, runbook) now flag this
-  as a known gap like the Kiro launcher; a discriminating verify (override
-  `HOME`/`USERPROFILE` so `~/.agents` cannot shadow the tarball, expect 0.3.0)
-  and a package-scoped Codex marketplace are tracked in
-  `docs/backlog/033-codex-npm-marketplace.md`.
+- **Codex plugin registration from packed tarball (v0.3.0) — PASS (turnkey,
+  tarball-verified).** A package-scoped Codex marketplace now ships at
+  `plugins/agent-workbench/.agents/plugins/marketplace.json` (name
+  `agent-workbench-local`, source `.`), distinct from the maintainer's checkout
+  `auriora-local`. Linux host, `codex` CLI 0.142.4: `npm pack` → extract → with
+  `HOME`/`USERPROFILE`/`CODEX_HOME` all overridden (so the host's real
+  `~/.agents` cannot shadow via name collision) →
+  `codex plugin marketplace add <pkg>/plugins/agent-workbench` →
+  `codex plugin add agent-workbench@agent-workbench-local` →
+  `codex plugin list` shows `agent-workbench@agent-workbench-local` **v0.3.0**,
+  `installed, enabled`, resolved from the unpacked package path. The earlier
+  contaminated attempt (isolated `CODEX_HOME` only) is why `HOME` override is the
+  discriminating control. Guarded by `required_paths`, the plugin validator, and
+  a packed-metadata test. Resolves `docs/backlog/033-codex-npm-marketplace.md`.
+  **Scope:** this is registration, not launch — the `${PLUGIN_ROOT}`-in-`.mcp.json`-args
+  launch residual below still stands.
 - **Resolver parity (P3) — PASS.** Linux host, Node (repo toolchain),
   `npx vitest run tests/integration/install-root.test.ts` → 9 passed. Covers
   the `AGENT_WORKBENCH_INSTALL_ROOT` override on both OSes, the POSIX/darwin

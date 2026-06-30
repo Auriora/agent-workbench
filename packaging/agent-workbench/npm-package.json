@@ -24,6 +24,7 @@
     "packaging/agent-workbench/mcp-bin.mjs",
     "packaging/agent-workbench/package-manifest.json",
     "plugins/agent-workbench/.codex-plugin/plugin.json",
+    "plugins/agent-workbench/.agents/plugins/marketplace.json",
     "plugins/agent-workbench/.mcp.json",
     "plugins/agent-workbench/hooks/hooks.json",
     "plugins/agent-workbench/hooks/session-start.js",

@@ -311,6 +311,48 @@ describe("Codex plugin artifacts", () => {
     expect(fs.existsSync(path.resolve(marketplace.plugins[0].source.path))).toBe(true);
   });
 
+  it("ships a package-scoped Codex marketplace inside the plugin for turnkey npm registration", () => {
+    // The npm package ships a package-scoped marketplace at
+    // plugins/agent-workbench/.agents/plugins/marketplace.json so that
+    // `codex plugin marketplace add <pkg>/plugins/agent-workbench` registers
+    // `agent-workbench-local` clone-free, mirroring the Claude marketplace.
+    // The repo-root `.agents/plugins/marketplace.json` (auriora-local) stays
+    // for the checkout dev workflow; this one is named differently so the two
+    // never collide.
+    const marketplacePath = path.join(pluginRoot, ".agents/plugins/marketplace.json");
+    expect(fs.existsSync(marketplacePath)).toBe(true);
+    const marketplace = JSON.parse(fs.readFileSync(marketplacePath, "utf8")) as {
+      name: string;
+      plugins: Array<{
+        name: string;
+        source: { source: string; path: string };
+        policy: { installation: string; authentication: string };
+        category: string;
+      }>;
+    };
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(pluginRoot, ".codex-plugin/plugin.json"), "utf8")
+    ) as { name: string; interface: { category: string } };
+
+    expect(marketplace.name).toBe("agent-workbench-local");
+    expect(marketplace.name).not.toBe("auriora-local");
+    expect(marketplace.plugins).toHaveLength(1);
+    expect(marketplace.plugins[0]).toEqual({
+      name: manifest.name,
+      source: {
+        source: "local",
+        path: "."
+      },
+      policy: {
+        installation: "AVAILABLE",
+        authentication: "ON_INSTALL"
+      },
+      category: manifest.interface.category
+    });
+    // source "." must resolve to the Codex plugin root (the dir with .codex-plugin/plugin.json).
+    expect(fs.existsSync(path.join(pluginRoot, ".codex-plugin/plugin.json"))).toBe(true);
+  });
+
   it("keeps MCP server-card metadata synchronized with registered resources and tools", () => {
     const serverCard = JSON.parse(
       fs.readFileSync(path.resolve(".well-known/mcp/server-card.json"), "utf8")

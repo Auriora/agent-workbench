@@ -65,33 +65,33 @@ plugin-cache source path:
 {"command": "node", "args": ["${PLUGIN_ROOT}/mcp-launch.mjs"]}
 ```
 
-The repository also includes `.agents/plugins/marketplace.json` for inspectable
-repo-level marketplace metadata. It points `agent-workbench` at the checked-in
-`./plugins/agent-workbench` source and uses the same `Developer Tools` category
-as the plugin manifest. This metadata is useful when testing the checkout as a
-marketplace source.
+There are **two** Codex marketplaces, named differently so they never collide:
 
-After installing the npm runtime, register the Codex plugin from the
-`auriora-local` marketplace.
+- **`agent-workbench-local`** — package-scoped, shipped in the npm package at
+  `plugins/agent-workbench/.agents/plugins/marketplace.json` (plugin source `.`).
+  This is the **end-user / npm install** path: `codex plugin marketplace add
+  <pkg>/plugins/agent-workbench` registers it clone-free.
+- **`auriora-local`** — the maintainer's **checkout** marketplace at the repo
+  root `.agents/plugins/marketplace.json` (plugin source `./plugins/agent-workbench`).
+  Used for **plugin development** from a checkout, alongside the cachebuster.
 
-> **Known gap (spec 033):** npm→Codex registration is **not** turnkey. The
-> `auriora-local` marketplace is the maintainer's **checkout** marketplace
-> (`.agents/plugins/marketplace.json` at the repo root) and is **not shipped** in
-> the npm package, so on a clean machine
-> `codex plugin add agent-workbench@auriora-local` fails — no `auriora-local`
-> marketplace is registered. Register it from a checkout first with
-> `codex plugin marketplace add <repo-root>` (which reads
-> `.agents/plugins/marketplace.json`). Shipping a package-scoped Codex
-> marketplace so this is clone-free, like the Claude path, is tracked in
-> `docs/backlog/033-codex-npm-marketplace.md`.
-
-From a checkout with the `auriora-local` marketplace registered:
+End-user (npm package) registration — replace `<pkg>` with
+`$(npm root -g)/@auriora/agent-workbench`:
 
 ```bash
+codex plugin marketplace add <pkg>/plugins/agent-workbench
+codex plugin add agent-workbench@agent-workbench-local
+```
+
+Plugin-development (checkout) registration, from the repo root:
+
+```bash
+codex plugin marketplace add .   # registers auriora-local from .agents/plugins/marketplace.json
 codex plugin add agent-workbench@auriora-local
 ```
 
-When changing plugin packaging, update the plugin cachebuster and reinstall:
+When changing plugin packaging during development, update the plugin cachebuster
+and reinstall:
 
 ```bash
 python3 /home/bcherrington/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py plugins/agent-workbench

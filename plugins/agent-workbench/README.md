@@ -36,29 +36,25 @@ is a local toolchain issue to resolve (Python 3 + a C/C++ toolchain). See
 npm install -g @auriora/agent-workbench
 ```
 
-This README's Quick Start covers **Codex**. For **Claude Code** — the verified
-clone-free registration path — skip to [Claude Code Plugin](#claude-code-plugin).
+This README's Quick Start covers **Codex**. For **Claude Code**, skip to
+[Claude Code Plugin](#claude-code-plugin). Both register clone-free from the
+installed npm package.
 
-Then register this plugin with Codex.
-
-> **Known gap (spec 033):** npm→Codex registration is **not** yet turnkey. The
-> `auriora-local` marketplace named below is the maintainer's **checkout**
-> marketplace (`.agents/plugins/marketplace.json` at the repo root) and is **not
-> shipped** in the npm package, so on a clean machine
-> `codex plugin add agent-workbench@auriora-local` fails with no marketplace
-> registered. Until a package-scoped Codex marketplace ships, register it from a
-> checkout (`codex plugin marketplace add <repo-root>`, which reads
-> `.agents/plugins/marketplace.json`). Tracked in
-> `docs/backlog/033-codex-npm-marketplace.md`. The Claude path below is the
-> verified clone-free flow.
-
-From a checkout that has registered the `auriora-local` marketplace, install and
-verify:
+Then register this plugin with Codex from the installed package and verify it.
+Replace `<pkg>` with `$(npm root -g)/@auriora/agent-workbench`:
 
 ```bash
-codex plugin add agent-workbench@auriora-local
+codex plugin marketplace add <pkg>/plugins/agent-workbench
+codex plugin add agent-workbench@agent-workbench-local
 codex plugin list
 ```
+
+The package ships a package-scoped marketplace
+(`plugins/agent-workbench/.agents/plugins/marketplace.json`, name
+`agent-workbench-local`), so this resolves without a checkout. (The repo-root
+`.agents/plugins/marketplace.json`, name `auriora-local`, is the maintainer's
+**checkout** marketplace for plugin development — a different name so the two
+never collide.)
 
 In a new Codex session, use Agent Workbench through MCP. The first useful
 resources are `repo:///status`, `repo:///scope`, and `repo:///overview`.
@@ -71,8 +67,11 @@ To update after source, dependency, skill, hook, or MCP config changes:
 
 ```bash
 npm install -g @auriora/agent-workbench
-codex plugin add agent-workbench@auriora-local
+codex plugin add agent-workbench@agent-workbench-local
 ```
+
+The local marketplace points at the npm install path, so re-running
+`codex plugin add` after `npm install -g` re-installs from the refreshed source.
 
 Then restart Codex so the plugin cache, skill, hooks, and MCP server config are
 rediscovered.
@@ -80,7 +79,7 @@ rediscovered.
 To uninstall the Codex plugin from the current Codex installation:
 
 ```bash
-codex plugin remove agent-workbench@auriora-local
+codex plugin remove agent-workbench@agent-workbench-local
 ```
 
 Remove the npm package separately (`npm uninstall -g @auriora/agent-workbench`)
