@@ -2,6 +2,9 @@
   "name": "@auriora/agent-workbench",
   "version": "0.3.0",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "packageManager": "pnpm@10.18.1",
   "description": "Local-first Agent IDE runtime scaffold.",
   "license": "MIT",
