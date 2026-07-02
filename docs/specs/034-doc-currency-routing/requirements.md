@@ -168,16 +168,16 @@ closure or promotion policy.
 
 ## Correctness Properties
 
-- **P1 Authority ordering:** Implementation-oriented document ranking never
+- **Property P1: Authority ordering:** Implementation-oriented document ranking never
   places a known archived, legacy, superseded, template, or sample document
   above a current canonical match with comparable textual relevance.
-- **P2 Visible uncertainty:** Unknown or conflicting authority evidence is
+- **Property P2: Visible uncertainty:** Unknown or conflicting authority evidence is
   visible in the response.
-- **P3 No ctime dependency:** Removing `ctime` from the host platform cannot
+- **Property P3: No ctime dependency:** Removing `ctime` from the host platform cannot
   change doc currency classification.
-- **P4 Optional Git evidence:** Git history enriches recency output but is not
+- **Property P4: Optional Git evidence:** Git history enriches recency output but is not
   required for docs search, task context, or direct reads to complete.
-- **P5 Historical access:** Exact historical queries can still return
+- **Property P5: Historical access:** Exact historical queries can still return
   non-authoritative historical docs with caveats.
 
 ## Success Criteria

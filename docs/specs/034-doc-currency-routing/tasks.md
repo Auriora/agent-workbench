@@ -13,10 +13,11 @@ last_reviewed: 2026-07-02
 
 ```text
 T001 -> T002 -> T003 -> T004
-T002 -> T005
-T003,T004 -> T006
-T006 -> T007 -> T008
-T005,T008 -> T009
+T003 -> T005
+T002 -> T006
+T004,T005 -> T007
+T006,T007 -> T008 -> T009
+T005,T009 -> T010
 ```
 
 ## Phase 1: Model And Classification
@@ -36,7 +37,16 @@ T005,T008 -> T009
     for routing input and leaves unknown keys ignored.
   - Evidence: Pending.
 
-- [ ] T003 Add optional Git history evidence port.
+- [ ] T003 Add documentation-map owner lookup.
+  - Depends on: T001
+  - Files: `src/application/use-cases/`, `src/domain/policies/`,
+    `docs/reference/documentation-map.md` fixtures or tests
+  - Acceptance: Currency classification can use documentation-map ownership as
+    stronger evidence than incidental text or frontmatter when identifying the
+    current source for a task.
+  - Evidence: Pending.
+
+- [ ] T004 Add optional Git history evidence port.
   - Depends on: T001
   - Files: `src/ports/`, `src/infrastructure/commands/` or appropriate
     infrastructure location
@@ -47,8 +57,8 @@ T005,T008 -> T009
 
 ## Phase 2: Runtime Surfaces
 
-- [ ] T004 Apply currency ranking to `context_for_task`.
-  - Depends on: T002
+- [ ] T005 Apply currency ranking to `context_for_task`.
+  - Depends on: T002, T003
   - Files: `src/application/use-cases/get-task-context.ts`,
     `tests/mcp/context-for-task-tool.test.ts`
   - Acceptance: Governing docs use frontmatter-aware currency classification;
@@ -56,36 +66,37 @@ T005,T008 -> T009
     stale or non-authoritative docs.
   - Evidence: Pending.
 
-- [ ] T005 Apply currency metadata to docs search and docs inventory.
+- [ ] T006 Apply currency metadata to docs search and docs inventory.
   - Depends on: T002, T003
   - Files: `src/application/use-cases/query-docs.ts`,
     `src/infrastructure/sqlite/graph-store.ts`, docs contract tests
   - Acceptance: `docs_search`, `repo:///docs/overview`, and `repo:///docs/map`
-    return consistent currency labels, caveats, and optional recency evidence
-    within budget.
+    return consistent currency labels, caveats, documentation-map current-source
+    routing, and optional recency evidence within budget.
   - Evidence: Pending.
 
-- [ ] T006 Add doc currency verifier workflow.
-  - Depends on: T003, T004
+- [ ] T007 Add doc currency verifier workflow.
+  - Depends on: T005
   - Files: packaged skill/prompt location or MCP registry/use-case files,
     depending on the chosen open decision
   - Acceptance: Agent can ask which docs are current for a task and receives
     canonical docs, supporting docs, non-authoritative docs, unknown docs,
-    caveats, and next actions.
+    caveats, and next actions. A packaged skill/prompt implementation is not
+    blocked by optional Git history support.
   - Evidence: Pending.
 
 ## Phase 3: Lifecycle Feedback And Documentation
 
-- [ ] T007 Prepare spec-lifecycle-manager handoff.
-  - Depends on: T006
+- [ ] T008 Prepare spec-lifecycle-manager handoff.
+  - Depends on: T007
   - Files: plugin docs or feedback artifact selected during implementation
   - Acceptance: Handoff includes frontmatter input signals, canonical-context
     guidance, Git-history optionality, and the rule that `ctime` must not be
     used for lifecycle or currency.
   - Evidence: Pending.
 
-- [ ] T008 Update durable Agent Workbench docs.
-  - Depends on: T006
+- [ ] T009 Update durable Agent Workbench docs.
+  - Depends on: T007, T008
   - Files: `docs/design/mcp-surface-design.md`,
     `docs/design/graph-store-design.md`,
     `docs/reference/runtime-contracts.md`,
@@ -94,8 +105,8 @@ T005,T008 -> T009
     and preserve the Workbench/spec-lifecycle-manager boundary.
   - Evidence: Pending.
 
-- [ ] T009 Validate and record closure readiness.
-  - Depends on: T005, T008
+- [ ] T010 Validate and record closure readiness.
+  - Depends on: T006, T009
   - Files: this spec package
   - Acceptance: `pnpm typecheck`, targeted docs/context tests, and any new
     skill/prompt validation pass or have documented waivers.
