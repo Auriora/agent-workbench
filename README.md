@@ -139,12 +139,26 @@ stale indexes, partial semantic coverage, missing checks, and residual risk.
 ## Install
 
 Agent Workbench is packaged as `@auriora/agent-workbench`, but it is distributed
-through GitHub release tarballs rather than the public npm registry. Install the
-runtime with npm from the release asset:
+through GitHub release tarballs rather than the public npm registry. Use Node.js
+22 when possible, because Node 24 requires C++20 flags when compiling the native
+`tree-sitter` core.
+
+On macOS or Linux with `nvm`:
 
 ```bash
+nvm install 22
+nvm use 22
 npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz
 ```
+
+If you must install under Node 24, pass C++20 flags to the native build:
+
+```bash
+CXXFLAGS="-std=c++20" npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz
+```
+
+Install Xcode Command Line Tools first if `node-gyp` cannot find a compiler:
+`xcode-select --install`.
 
 Then install the plugin for each coding agent that should use Agent Workbench.
 The package includes both plugin definitions, so no repository clone is needed.
@@ -181,8 +195,7 @@ Start a new Codex or Claude Code session after installing the plugin. The first
 useful MCP resources are `repo:///status`, `repo:///scope`, and
 `repo:///overview`.
 
-Use Node.js 22 when possible. Native dependencies need Python 3 and a C/C++
-toolchain; on Node 24, the tree-sitter core requires C++20. For full
+Native dependencies need Python 3 and a C/C++ toolchain. For full
 cross-platform setup, update, uninstall, and troubleshooting steps, see
 [Install Agent Workbench](docs/runbooks/install-agent-workbench.md).
 
