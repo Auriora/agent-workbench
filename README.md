@@ -136,6 +136,56 @@ changed files -> impact evidence -> diagnostics
 Do not mutate files. Use impact and diagnostics as evidence, then call out
 stale indexes, partial semantic coverage, missing checks, and residual risk.
 
+## Install
+
+Agent Workbench is packaged as `@auriora/agent-workbench`, but it is distributed
+through GitHub release tarballs rather than the public npm registry. Install the
+runtime with npm from the release asset:
+
+```bash
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz
+```
+
+Then install the plugin for each coding agent that should use Agent Workbench.
+The package includes both plugin definitions, so no repository clone is needed.
+
+### Install The Codex Plugin
+
+Register the package-scoped Codex marketplace, install the plugin, and verify
+that Codex sees it:
+
+```bash
+PKG="$(npm root -g)/@auriora/agent-workbench"
+codex plugin marketplace add "$PKG/plugins/agent-workbench"
+codex plugin add agent-workbench@agent-workbench-local
+codex plugin list
+```
+
+The expected plugin entry is `agent-workbench@agent-workbench-local`.
+
+### Install The Claude Code Plugin
+
+Register the package-scoped Claude Code marketplace, install the plugin for the
+current user, and verify that Claude Code sees it:
+
+```bash
+PKG="$(npm root -g)/@auriora/agent-workbench"
+claude plugin marketplace add "$PKG/plugins/agent-workbench"
+claude plugin install agent-workbench@agent-workbench-local --scope user
+claude plugin list
+```
+
+The expected plugin entry is `agent-workbench@agent-workbench-local`.
+
+Start a new Codex or Claude Code session after installing the plugin. The first
+useful MCP resources are `repo:///status`, `repo:///scope`, and
+`repo:///overview`.
+
+Use Node.js 22 when possible. Native dependencies need Python 3 and a C/C++
+toolchain; on Node 24, the tree-sitter core requires C++20. For full
+cross-platform setup, update, uninstall, and troubleshooting steps, see
+[Install Agent Workbench](docs/runbooks/install-agent-workbench.md).
+
 ## Development
 
 Use pnpm for local development:
