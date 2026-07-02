@@ -3,7 +3,7 @@ title: Spec closure log
 doc_type: history
 status: active
 owner: platform
-last_reviewed: 2026-06-13
+last_reviewed: 2026-07-02
 ---
 
 # Spec Closure Log
@@ -47,6 +47,7 @@ name their own final pre-removal tree commits.
 | Spec 023: MCP tool sweep quality | Removed from `docs/specs/` on 2026-06-11 after final pre-removal tree commit `7922693` completed sweep quality semantics, sandbox-only write validation, progress-report RCA, pagination, docs FTS warmup, and final eight-repo committed-sandbox validation. | Observability and debugging design, runtime operations design, runtime contracts, documentation map, debug harness tests, docs/query tests, graph/query tests, verification-plan tests, and final committed-sandbox sweep evidence. |
 | Spec 024: Plugin discoverability and drift hardening | Removed from `docs/specs/` on 2026-06-13 after final pre-removal tree commit `90b70bc` completed Codex marketplace metadata, MCP server-card metadata, drift tests, operator docs, CI workflow, repo-owned plugin/package validation, installer dry-run, package dry-run, and durable promotion. | Agent Workbench plugin README, Codex plugin runbook, documentation map, marketplace metadata, MCP server card, CI workflow, plugin/package validator, package metadata tests, focused integration tests, lifecycle lint, closure check, and final full Vitest validation. |
 | Spec 025: Brooks-Lint findings tracker | Removed from `docs/specs/` on 2026-06-11 after final pre-removal tree commit `539f174` completed architecture boundary remediation, tech-debt extraction splits, runtime contract modularization, MCP test harness hardening, focused validation/resource rule tests, broad fixture helper annotation, and durable test-maintainability gates. | Layered runtime architecture, system architecture, runtime contracts, MVP proof matrix, documentation map, architecture tests, MCP/integration tests, focused validation/resource tests, broad fixture tests, and final closure traceability. |
+| Spec 034: Doc currency routing | Removed from `docs/specs/` on 2026-07-02 after final pre-removal tree commit `8657e9e` completed document currency classification, docs search/inventory metadata, `context_for_task` ranking, `docs_current_for_task`, durable docs promotion, and spec-lifecycle-manager handoff. | MCP surface design, graph store design, runtime contracts, documentation map, spec-lifecycle-manager doc currency handoff, MCP server card, Codex integration profile, docs/context/MCP tests, lifecycle lint, closure check, and closure-risk review. |
 
 ### 2026-06-13 - 022-mcp-server-repository-support
 
@@ -86,6 +87,32 @@ name their own final pre-removal tree commits.
   lint; closure check.
 - **Residual risks:** MCP server-card convention churn, string-based drift-test
   brittleness, and intentionally deferred history reconnaissance.
+
+### 2026-07-02 - 034-doc-currency-routing
+
+- **Spec:** docs/specs/034-doc-currency-routing
+- **Title:** Doc currency routing
+- **Final spec commit:** 8657e9e
+- **Closure cleanup commit:** 9113803
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `.well-known/mcp/server-card.json`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/reference/documentation-map.md`
+  - `docs/reference/spec-lifecycle-manager-doc-currency-handoff.md`
+  - `src/contracts/runtime-core-contracts.ts`
+  - `src/contracts/runtime-docs-contracts.ts`
+  - `tests/docs/query-docs.test.ts`
+  - `tests/mcp/context-for-task-tool.test.ts`
+  - `tests/mcp/docs-surfaces.test.ts`
+- **Verification summary:** `pnpm typecheck`; targeted docs/MCP/contract
+  Vitest suite; `git diff --check`; no-`ctime` scan; spec lifecycle lint;
+  closure check; closure-risk review.
+- **Residual risks:** Full `pnpm test` currently has a repeated startup
+  warm-up race in `tests/mcp/stdio-entrypoint.test.ts` when run with the whole
+  suite; that file passes standalone and the targeted doc-currency suites pass.
 
 ## Closure Notes
 
