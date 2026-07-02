@@ -22,38 +22,57 @@ T005,T009 -> T010
 
 ## Phase 1: Model And Classification
 
-- [ ] T001 Add document currency model.
+- [x] T001 Add document currency model.
   - Files: `src/domain/policies/document-authority.ts` or sibling policy,
     `src/contracts/` if public fields are added
   - Acceptance: Model represents current, stale, superseded, historical, and
     unknown task-currency states without using `ctime`.
-  - Evidence: Pending.
+  - Evidence: Added `MarkdownDocCurrencySignal`,
+    `MarkdownDocCurrencyState`, and `classifyMarkdownDocCurrency` in
+    `src/domain/policies/document-authority.ts`; focused tests in
+    `tests/docs/document-currency.test.ts`; `pnpm typecheck` and targeted
+    Vitest docs/workspace suite passed.
 
-- [ ] T002 Add frontmatter signal extraction.
+- [x] T002 Add frontmatter signal extraction.
   - Depends on: T001
   - Files: `src/application/use-cases/markdown-docs.ts`,
     `src/domain/policies/`
   - Acceptance: Shared parser extracts supported first-block frontmatter keys
     for routing input and leaves unknown keys ignored.
-  - Evidence: Pending.
+  - Evidence: Added `extractMarkdownFrontmatterSignals` in
+    `src/application/use-cases/markdown-docs.ts` for supported first-block
+    routing keys only; covered by `tests/docs/document-currency.test.ts`;
+    `pnpm typecheck` and targeted Vitest docs/workspace suite passed.
 
-- [ ] T003 Add documentation-map owner lookup.
+- [x] T003 Add documentation-map owner lookup.
   - Depends on: T001
   - Files: `src/application/use-cases/`, `src/domain/policies/`,
     `docs/reference/documentation-map.md` fixtures or tests
   - Acceptance: Currency classification can use documentation-map ownership as
     stronger evidence than incidental text or frontmatter when identifying the
     current source for a task.
-  - Evidence: Pending.
+  - Evidence: Added `extractDocumentationMapOwners` and
+    `findDocumentationMapOwner` in
+    `src/application/use-cases/markdown-docs.ts`; currency classifier accepts
+    `documentation_map_owner`; covered by
+    `tests/docs/document-currency.test.ts`; `pnpm typecheck` and targeted
+    Vitest docs/workspace suite passed.
 
-- [ ] T004 Add optional Git history evidence port.
+- [x] T004 Add optional Git history evidence port.
   - Depends on: T001
   - Files: `src/ports/`, `src/infrastructure/commands/` or appropriate
     infrastructure location
   - Acceptance: Port can report latest touch and first-introduced evidence for
     tracked files, and structured unavailable states for non-Git or untracked
     files. No filesystem `ctime` usage.
-  - Evidence: Pending.
+  - Evidence: Added `GitHistoryPort` / `GitFileHistoryResult` in
+    `src/ports/index.ts` and `GitHistoryAdapter` in
+    `src/infrastructure/commands/index.ts`; adapter uses structured `git -C`
+    argv, reports unavailable states for missing Git, non-repo, untracked, no
+    history, and command failure, and does not use filesystem `ctime` or
+    `birthtime`; covered by `tests/workspace/git-history.test.ts`; `rg -n
+    "ctime|birthtime" src tests` returned no matches; `pnpm typecheck` and
+    targeted Vitest docs/workspace suite passed.
 
 ## Phase 2: Runtime Surfaces
 

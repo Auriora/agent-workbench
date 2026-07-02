@@ -9,6 +9,37 @@ export type MarkdownDocStatus =
   | "unknown";
 
 export type MarkdownDocAuthority = "canonical" | "supporting" | "non_authoritative";
+export type MarkdownDocCurrencyState = "current" | "stale" | "superseded" | "historical" | "unknown";
+
+export type MarkdownDocFrontmatterSignals = {
+  status?: string;
+  doc_type?: string;
+  last_reviewed?: string;
+  authority?: string;
+  canonical_owner?: string;
+  superseded_by?: string;
+  review_after?: string;
+  applies_to?: string;
+};
+
+export type DocumentationMapOwnerSignal = {
+  concern: string;
+  owner_path: string;
+  source_path: string;
+};
+
+export type GitFileHistorySignal = {
+  latest_touch?: {
+    commit: string;
+    committed_at: string;
+  };
+  first_seen?: {
+    commit: string;
+    committed_at: string;
+  };
+  status?: "available" | "unavailable";
+  unavailable_reason?: string;
+};
 
 export type MarkdownDocAuthoritySignal = {
   doc_status: MarkdownDocStatus;
@@ -17,15 +48,28 @@ export type MarkdownDocAuthoritySignal = {
   priority: number;
 };
 
+export type MarkdownDocCurrencySignal = MarkdownDocAuthoritySignal & {
+  currency_state: MarkdownDocCurrencyState;
+  currency_caveats: string[];
+  canonical_owner?: string;
+  superseded_by?: string;
+  last_reviewed?: string;
+  modified_at?: string;
+  git_first_seen?: string;
+  git_last_touched?: string;
+  currency_priority: number;
+};
+
 export function classifyMarkdownDoc(input: {
   path: string;
   title?: string;
   content?: string;
+  frontmatter?: MarkdownDocFrontmatterSignals;
 }): MarkdownDocAuthoritySignal {
   const lowerPath = input.path.toLowerCase();
   const lowerTitle = (input.title ?? "").toLowerCase();
   const lowerContent = (input.content ?? "").slice(0, 4000).toLowerCase();
-  const frontmatterStatus = frontmatterValue(lowerContent, "status");
+  const frontmatterStatus = input.frontmatter?.status ?? frontmatterValue(lowerContent, "status");
   const status = frontmatterStatus === undefined
     ? statusFromPathAndText({ lowerPath, lowerTitle, lowerContent })
     : statusFromFrontmatter(frontmatterStatus) ?? statusFromPathAndText({ lowerPath, lowerTitle, lowerContent });
@@ -39,8 +83,85 @@ export function classifyMarkdownDoc(input: {
   };
 }
 
+export function classifyMarkdownDocCurrency(input: {
+  path: string;
+  title?: string;
+  content?: string;
+  frontmatter?: MarkdownDocFrontmatterSignals;
+  modified_at?: string;
+  documentation_map_owner?: DocumentationMapOwnerSignal;
+  git_history?: GitFileHistorySignal;
+  now_iso8601?: string;
+}): MarkdownDocCurrencySignal {
+  const authority = classifyMarkdownDoc(input);
+  const frontmatter = input.frontmatter ?? {};
+  const currencyCaveats: string[] = [];
+  const canonicalOwner = normalizedOptional(frontmatter.canonical_owner) ?? input.documentation_map_owner?.owner_path;
+  const supersededBy = normalizedOptional(frontmatter.superseded_by);
+  const lastReviewed = normalizedOptional(frontmatter.last_reviewed);
+  const reviewAfter = normalizedOptional(frontmatter.review_after);
+  let currencyState = currencyStateFromAuthority(authority.doc_status);
+  let currencyPriority = priorityForCurrency(currencyState);
+
+  if (supersededBy !== undefined) {
+    currencyState = "superseded";
+    currencyPriority = priorityForCurrency(currencyState);
+    currencyCaveats.push(`Document declares superseded_by: ${supersededBy}.`);
+  }
+
+  if (canonicalOwner !== undefined && canonicalOwner !== input.path) {
+    currencyCaveats.push(`Current source should be corroborated with ${canonicalOwner}.`);
+    if (authority.authority !== "canonical" && currencyState === "current") {
+      currencyState = "unknown";
+      currencyPriority = priorityForCurrency(currencyState);
+    }
+  }
+
+  if (input.documentation_map_owner?.owner_path === input.path) {
+    currencyState = authority.doc_status === "legacy" || authority.doc_status === "archived"
+      ? currencyState
+      : "current";
+    currencyPriority += 4;
+    currencyCaveats.push(`Documentation map lists this document as owner for ${input.documentation_map_owner.concern}.`);
+  }
+
+  if (lastReviewed !== undefined) {
+    currencyCaveats.push(`last_reviewed: ${lastReviewed}.`);
+  }
+  if (reviewAfter !== undefined && isPastDate(reviewAfter, input.now_iso8601 ?? new Date().toISOString())) {
+    currencyState = currencyState === "superseded" ? currencyState : "stale";
+    currencyPriority = priorityForCurrency(currencyState);
+    currencyCaveats.push(`review_after has passed: ${reviewAfter}.`);
+  }
+  if (input.modified_at !== undefined) {
+    currencyCaveats.push(`modified_at: ${input.modified_at}.`);
+  }
+  if (input.git_history?.latest_touch !== undefined) {
+    currencyCaveats.push(`git_last_touched: ${input.git_history.latest_touch.committed_at}.`);
+  } else if (input.git_history?.status === "unavailable") {
+    currencyCaveats.push(`Git recency evidence unavailable: ${input.git_history.unavailable_reason ?? "unknown"}.`);
+  }
+
+  if (currencyCaveats.length === 0 && currencyState === "unknown") {
+    currencyCaveats.push("Document currency is unclear; corroborate with a current source before implementation.");
+  }
+
+  return {
+    ...authority,
+    currency_state: currencyState,
+    currency_caveats: currencyCaveats,
+    canonical_owner: canonicalOwner,
+    superseded_by: supersededBy,
+    last_reviewed: lastReviewed,
+    modified_at: input.modified_at,
+    git_first_seen: input.git_history?.first_seen?.committed_at,
+    git_last_touched: input.git_history?.latest_touch?.committed_at,
+    currency_priority: currencyPriority
+  };
+}
+
 function statusFromFrontmatter(value: string): MarkdownDocStatus | undefined {
-  const normalized = value.trim().replace(/^["']|["']$/gu, "");
+  const normalized = value.trim().replace(/^["']|["']$/gu, "").toLowerCase();
   if (["current", "accepted", "active", "published"].includes(normalized)) return "current";
   if (["draft", "proposed", "proposal", "review"].includes(normalized)) return "draft";
   if (["historical", "historic", "history"].includes(normalized)) return "historical";
@@ -111,6 +232,32 @@ function priorityForStatus(status: MarkdownDocStatus, authority: MarkdownDocAuth
   if (status === "template" || status === "sample") return -8;
   if (status === "legacy" || status === "archived") return -10;
   return 0;
+}
+
+function currencyStateFromAuthority(status: MarkdownDocStatus): MarkdownDocCurrencyState {
+  if (status === "current") return "current";
+  if (status === "historical" || status === "archived" || status === "legacy") return "historical";
+  return "unknown";
+}
+
+function priorityForCurrency(status: MarkdownDocCurrencyState): number {
+  if (status === "current") return 6;
+  if (status === "unknown") return 0;
+  if (status === "stale") return -3;
+  if (status === "historical") return -6;
+  if (status === "superseded") return -12;
+  return 0;
+}
+
+function normalizedOptional(value: string | undefined): string | undefined {
+  const normalized = value?.trim().replace(/^["']|["']$/gu, "");
+  return normalized === undefined || normalized.length === 0 ? undefined : normalized;
+}
+
+function isPastDate(value: string, nowIso8601: string): boolean {
+  const target = Date.parse(value);
+  const now = Date.parse(nowIso8601);
+  return !Number.isNaN(target) && !Number.isNaN(now) && target < now;
 }
 
 function frontmatterValue(content: string, key: string): string | undefined {

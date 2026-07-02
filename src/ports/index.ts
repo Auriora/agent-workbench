@@ -409,6 +409,39 @@ export type DocsIndexSearchResult =
       result_count: 0;
     };
 
+export type GitFileHistoryResult =
+  | {
+      status: "available";
+      path: string;
+      latest_touch: {
+        commit: string;
+        committed_at: string;
+      };
+      first_seen?: {
+        commit: string;
+        committed_at: string;
+      };
+    }
+  | {
+      status: "unavailable";
+      path: string;
+      reason:
+        | "git_unavailable"
+        | "not_git_repository"
+        | "untracked"
+        | "no_history"
+        | "command_failed";
+      message: string;
+    };
+
+export interface GitHistoryPort {
+  getFileHistory(input: {
+    repo_root: string;
+    path: string;
+    include_first_seen?: boolean;
+  }): Promise<GitFileHistoryResult>;
+}
+
 export interface EditPreviewStorePort {
   put(input: { preview: EditToken }): Promise<void>;
   get(input: { preview_token: string }): Promise<EditToken | null>;

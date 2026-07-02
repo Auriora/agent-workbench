@@ -1,6 +1,10 @@
 import path from "node:path";
 import type { DocsHeading, DocsLink } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
+import type {
+  DocumentationMapOwnerSignal,
+  MarkdownDocFrontmatterSignals
+} from "../../domain/policies/index.js";
 
 export function parseMarkdownHeadings(content: string): DocsHeading[] {
   const slugCounts = new Map<string, number>();
@@ -49,6 +53,79 @@ export function extractMarkdownDocLinks(input: {
     });
   }
   return links.sort((left, right) => left.target.localeCompare(right.target));
+}
+
+export function extractMarkdownFrontmatterSignals(content: string): MarkdownDocFrontmatterSignals {
+  const lines = content.split(/\r?\n/u);
+  if ((lines[0] ?? "").trim() !== "---") {
+    return {};
+  }
+  const signals: Record<string, string> = {};
+  const supported = new Set([
+    "status",
+    "doc_type",
+    "last_reviewed",
+    "authority",
+    "canonical_owner",
+    "superseded_by",
+    "review_after",
+    "applies_to"
+  ]);
+  for (let index = 1; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (line.trim() === "---") {
+      return signals;
+    }
+    const separator = line.indexOf(":");
+    if (separator <= 0) {
+      continue;
+    }
+    const key = line.slice(0, separator).trim();
+    if (!supported.has(key)) {
+      continue;
+    }
+    signals[key] = line.slice(separator + 1).trim().replace(/^["']|["']$/gu, "");
+  }
+  return {};
+}
+
+export function extractDocumentationMapOwners(input: {
+  mapPath: string;
+  content: string;
+}): DocumentationMapOwnerSignal[] {
+  const owners: DocumentationMapOwnerSignal[] = [];
+  for (const line of input.content.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("|") || /^(\|\s*-+)/u.test(trimmed)) {
+      continue;
+    }
+    const cells = trimmed
+      .slice(1, trimmed.endsWith("|") ? -1 : undefined)
+      .split("|")
+      .map((cell) => cell.trim());
+    if (cells.length < 2 || cells[0]?.toLowerCase() === "concern") {
+      continue;
+    }
+    const owner = /\[[^\]]+\]\(([^)#]+)(?:#[^)]+)?\)/u.exec(cells[1] ?? "");
+    if (owner?.[1] === undefined) {
+      continue;
+    }
+    owners.push({
+      concern: cells[0] ?? "",
+      owner_path: path
+        .normalize(path.join(path.dirname(input.mapPath), owner[1]))
+        .replaceAll("\\", "/"),
+      source_path: input.mapPath
+    });
+  }
+  return owners;
+}
+
+export function findDocumentationMapOwner(input: {
+  documentPath: string;
+  owners: readonly DocumentationMapOwnerSignal[];
+}): DocumentationMapOwnerSignal | undefined {
+  return input.owners.find((owner) => owner.owner_path === input.documentPath);
 }
 
 export function markdownTitleFromPath(value: string): string {
