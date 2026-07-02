@@ -1452,6 +1452,7 @@ describe("verification_plan MCP tool", () => {
       "check_markdown_set",
       "context_for_task",
       "diagnostics_for_files",
+      "docs_current_for_task",
       "docs_outline",
       "docs_read_section",
       "docs_scope",

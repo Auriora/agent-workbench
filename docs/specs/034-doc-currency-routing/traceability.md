@@ -52,9 +52,9 @@ last_reviewed: 2026-07-02
 
 ## Open Decision Impact
 
-- If the verifier ships first as a skill/prompt, T006 implementation lives in
+- If the verifier ships first as a skill/prompt, T007 implementation lives in
   packaging/plugin docs and the MCP tool is a follow-up.
-- If the verifier ships as an MCP tool, T006 must include contracts, registry
+- If the verifier ships as an MCP tool, T007 must include contracts, registry
   metadata, and presenter tests.
 - If `superseded` becomes a public `doc_status`, T001 and T005 must update
   contract schemas and golden fixtures.

@@ -5,6 +5,7 @@ import type {
   DocumentationMapOwnerSignal,
   MarkdownDocFrontmatterSignals
 } from "../../domain/policies/index.js";
+import { extractMarkdownFrontmatterSignals as extractMarkdownFrontmatterSignalsFromPolicy } from "../../domain/policies/index.js";
 
 export function parseMarkdownHeadings(content: string): DocsHeading[] {
   const slugCounts = new Map<string, number>();
@@ -56,37 +57,7 @@ export function extractMarkdownDocLinks(input: {
 }
 
 export function extractMarkdownFrontmatterSignals(content: string): MarkdownDocFrontmatterSignals {
-  const lines = content.split(/\r?\n/u);
-  if ((lines[0] ?? "").trim() !== "---") {
-    return {};
-  }
-  const signals: Record<string, string> = {};
-  const supported = new Set([
-    "status",
-    "doc_type",
-    "last_reviewed",
-    "authority",
-    "canonical_owner",
-    "superseded_by",
-    "review_after",
-    "applies_to"
-  ]);
-  for (let index = 1; index < lines.length; index += 1) {
-    const line = lines[index] ?? "";
-    if (line.trim() === "---") {
-      return signals;
-    }
-    const separator = line.indexOf(":");
-    if (separator <= 0) {
-      continue;
-    }
-    const key = line.slice(0, separator).trim();
-    if (!supported.has(key)) {
-      continue;
-    }
-    signals[key] = line.slice(separator + 1).trim().replace(/^["']|["']$/gu, "");
-  }
-  return {};
+  return extractMarkdownFrontmatterSignalsFromPolicy(content);
 }
 
 export function extractDocumentationMapOwners(input: {

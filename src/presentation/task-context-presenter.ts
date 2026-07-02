@@ -123,7 +123,15 @@ function sanitizeDocumentReference(input: GetTaskContextResult["context"]["gover
     evidence_kinds: input.evidence_kinds,
     doc_status: input.doc_status,
     authority: input.authority,
-    authority_caveat: input.authority_caveat
+    authority_caveat: input.authority_caveat,
+    currency_state: input.currency_state,
+    currency_caveats: input.currency_caveats,
+    canonical_owner: input.canonical_owner,
+    superseded_by: input.superseded_by,
+    last_reviewed: input.last_reviewed,
+    modified_at: input.modified_at,
+    git_first_seen: input.git_first_seen,
+    git_last_touched: input.git_last_touched
   });
 }
 

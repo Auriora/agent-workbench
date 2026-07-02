@@ -157,6 +157,21 @@ export type DocumentStatus = z.infer<typeof documentStatusSchema>;
 export const documentAuthoritySchema = z.enum(["canonical", "supporting", "non_authoritative"]);
 export type DocumentAuthority = z.infer<typeof documentAuthoritySchema>;
 
+export const documentCurrencyStateSchema = z.enum(["current", "stale", "superseded", "historical", "unknown"]);
+export type DocumentCurrencyState = z.infer<typeof documentCurrencyStateSchema>;
+
+export const documentCurrencyFieldsSchema = z.object({
+  currency_state: documentCurrencyStateSchema.optional(),
+  currency_caveats: z.array(z.string()).optional(),
+  canonical_owner: z.string().optional(),
+  superseded_by: z.string().optional(),
+  last_reviewed: z.string().optional(),
+  modified_at: z.string().optional(),
+  git_first_seen: z.string().optional(),
+  git_last_touched: z.string().optional()
+});
+export type DocumentCurrencyFields = z.infer<typeof documentCurrencyFieldsSchema>;
+
 export const documentReferenceSchema = z
   .object({
     path: z.string(),
@@ -165,7 +180,8 @@ export const documentReferenceSchema = z
     evidence_kinds: z.array(evidenceKindSchema),
     doc_status: documentStatusSchema.optional(),
     authority: documentAuthoritySchema.optional(),
-    authority_caveat: z.string().optional()
+    authority_caveat: z.string().optional(),
+    ...documentCurrencyFieldsSchema.shape
   })
   .strict();
 export type DocumentReference = z.infer<typeof documentReferenceSchema>;

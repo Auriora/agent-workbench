@@ -41,6 +41,12 @@ import {
   mcpEvidenceReason,
   mcpTransportLabels
 } from "./mcp-server-shape.js";
+import {
+  classifyMarkdownEntryCurrency,
+  currencyRank,
+  loadDocumentationMapOwners,
+  publicCurrency
+} from "./document-currency-routing.js";
 
 export type GetTaskContextResult = {
   context: Omit<TaskContext, "lifecycle_evidence"> & {
@@ -94,10 +100,11 @@ export async function getTaskContext(input: {
     jsTsPackageRoots: jsTsShape.package_roots,
     limit: maxFiles
   });
-  const governingDocs = selectGoverningDocs({
+  const governingDocs = await selectGoverningDocs({
     task: input.request.task,
     files: scanned.files,
-    limit: maxDocs
+    limit: maxDocs,
+    workspace: input.workspace
   });
   const validationHints = inferValidationHints(catalogFiles);
   const status = getCatalogRepoStatus({
@@ -483,32 +490,64 @@ function selectRelatedFiles(input: {
     .map((item) => toFileReference(item.file.path, item.file, item.reason));
 }
 
-function selectGoverningDocs(input: {
+async function selectGoverningDocs(input: {
   task: string;
   files: readonly FileCatalogEntry[];
   limit: number;
-}): TaskContext["governing_docs"] {
+  workspace?: WorkspaceFilePort;
+}): Promise<TaskContext["governing_docs"]> {
   const terms = tokenSet([input.task]);
   const docs = input.files.filter((file) => file.file_identity.language === "markdown");
-  return docs
+  const owners = await loadDocumentationMapOwners({
+    files: input.files,
+    workspace: input.workspace
+  });
+  const candidates = await Promise.all(docs
     .map((file) => ({
       file,
       score: scoreFile(file, terms) + docPriority(file.path)
     }))
     .filter((item) => item.score > 0)
     .sort((left, right) => right.score - left.score || left.file.path.localeCompare(right.file.path))
-    .slice(0, input.limit)
-    .map((item) => {
+    .slice(0, Math.max(input.limit * 4, input.limit))
+    .map(async (item) => {
       const title = titleFromPath(item.file.path);
-      const authority = classifyMarkdownDoc({ path: item.file.path, title });
-      return {
+      const content = input.workspace === undefined ? undefined : await readOptionalText(input.workspace, item.file.path);
+      const authority = classifyMarkdownEntryCurrency({
         path: item.file.path,
         title,
-        reason: `Matched task terms or repository documentation priority. ${authority.authority_caveat}`,
-        evidence_kinds: ["docs"],
-        ...publicAuthority(authority)
+        content,
+        mtime_ms: item.file.file_identity.mtime_ms,
+        owners
+      });
+      return {
+        score: item.score + currencyRank(authority),
+        doc: {
+          path: item.file.path,
+          title,
+          reason: [
+            "Matched task terms or repository documentation priority.",
+            authority.authority_caveat,
+            authority.currency_caveats[0]
+          ].filter((part) => part !== undefined && part.length > 0).join(" "),
+          evidence_kinds: ["docs" as const],
+          ...publicAuthority(authority),
+          ...publicCurrency(authority)
+        }
       };
-    });
+    }));
+  return candidates
+    .sort((left, right) => right.score - left.score || left.doc.path.localeCompare(right.doc.path))
+    .slice(0, input.limit)
+    .map((candidate) => candidate.doc);
+}
+
+async function readOptionalText(workspace: WorkspaceFilePort, filePath: string): Promise<string | undefined> {
+  try {
+    return await workspace.readText({ path: filePath });
+  } catch {
+    return undefined;
+  }
 }
 
 async function selectRankedSymbols(input: {

@@ -41,6 +41,40 @@ export type GitFileHistorySignal = {
   unavailable_reason?: string;
 };
 
+export function extractMarkdownFrontmatterSignals(content: string): MarkdownDocFrontmatterSignals {
+  const lines = content.split(/\r?\n/u);
+  if ((lines[0] ?? "").trim() !== "---") {
+    return {};
+  }
+  const signals: Record<string, string> = {};
+  const supported = new Set([
+    "status",
+    "doc_type",
+    "last_reviewed",
+    "authority",
+    "canonical_owner",
+    "superseded_by",
+    "review_after",
+    "applies_to"
+  ]);
+  for (let index = 1; index < lines.length; index += 1) {
+    const line = lines[index] ?? "";
+    if (line.trim() === "---") {
+      return signals;
+    }
+    const separator = line.indexOf(":");
+    if (separator <= 0) {
+      continue;
+    }
+    const key = line.slice(0, separator).trim();
+    if (!supported.has(key)) {
+      continue;
+    }
+    signals[key] = line.slice(separator + 1).trim().replace(/^["']|["']$/gu, "");
+  }
+  return {};
+}
+
 export type MarkdownDocAuthoritySignal = {
   doc_status: MarkdownDocStatus;
   authority: MarkdownDocAuthority;

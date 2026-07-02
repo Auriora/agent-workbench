@@ -1,5 +1,7 @@
 import type {
+  DocumentReference,
   DocsDocument,
+  DocsCurrentForTaskResult,
   DocsHeading,
   DocsLink,
   DocsMap,
@@ -12,7 +14,9 @@ import type {
   ResponseEnvelope
 } from "../contracts/index.js";
 import {
+  documentReferenceSchema,
   docsDocumentSchema,
+  docsCurrentForTaskResultSchema,
   docsHeadingSchema,
   docsLinkSchema,
   docsMapSchema,
@@ -34,6 +38,7 @@ import type {
   DocsReadSectionUseCaseResult,
   DocsSearchUseCaseResult
 } from "../application/use-cases/query-docs.js";
+import type { CurrentDocsForTaskUseCaseResult } from "../application/use-cases/current-docs-for-task.js";
 import {
   invalidResponseMeta,
   presentNextActions,
@@ -68,6 +73,38 @@ export function buildDocsSearchEnvelope(
   return makeEnvelope({
     data: sanitizeDocsSearch(result.search, context),
     meta: responseMetadataSchema.strip().parse(result.meta)
+  });
+}
+
+export function buildDocsCurrentForTaskEnvelope(
+  result: CurrentDocsForTaskUseCaseResult,
+  context: PresentationSessionContext = {}
+): ResponseEnvelope<DocsCurrentForTaskResult> {
+  return makeEnvelope({
+    data: sanitizeDocsCurrentForTask(result.current_docs, context),
+    meta: responseMetadataSchema.strip().parse(result.meta)
+  });
+}
+
+export function buildInvalidDocsCurrentForTaskInputEnvelope(input: {
+  repoRoot: string;
+  task?: string;
+  message: string;
+}): ResponseEnvelope<DocsCurrentForTaskResult> {
+  return makeEnvelope({
+    data: {
+      repo_root: input.repoRoot,
+      task: input.task ?? "",
+      status: "blocked",
+      canonical_docs: [],
+      supporting_docs: [],
+      non_authoritative_docs: [],
+      unknown_docs: [],
+      warnings: [],
+      next_actions: []
+    },
+    meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    errors: [invalidInputError(input.message)]
   });
 }
 
@@ -238,6 +275,23 @@ function sanitizeDocsSearch(
   });
 }
 
+function sanitizeDocsCurrentForTask(
+  input: DocsCurrentForTaskResult,
+  context: PresentationSessionContext
+): DocsCurrentForTaskResult {
+  return docsCurrentForTaskResultSchema.parse({
+    repo_root: input.repo_root,
+    task: input.task,
+    status: input.status,
+    canonical_docs: input.canonical_docs.map(sanitizeDocumentReference),
+    supporting_docs: input.supporting_docs.map(sanitizeDocumentReference),
+    non_authoritative_docs: input.non_authoritative_docs.map(sanitizeDocumentReference),
+    unknown_docs: input.unknown_docs.map(sanitizeDocumentReference),
+    warnings: sortWarnings(input.warnings).map(sanitizeWarning),
+    next_actions: presentNextActions(input.next_actions, context).map((action) => nextActionSchema.parse(action))
+  });
+}
+
 function sanitizeDocsOutline(
   input: DocsOutlineResult,
   context: PresentationSessionContext
@@ -286,7 +340,15 @@ function sanitizeDocument(input: DocsDocument): DocsDocument {
     direct_read_caveat: input.direct_read_caveat,
     doc_status: input.doc_status,
     authority: input.authority,
-    authority_caveat: input.authority_caveat
+    authority_caveat: input.authority_caveat,
+    currency_state: input.currency_state,
+    currency_caveats: input.currency_caveats,
+    canonical_owner: input.canonical_owner,
+    superseded_by: input.superseded_by,
+    last_reviewed: input.last_reviewed,
+    modified_at: input.modified_at,
+    git_first_seen: input.git_first_seen,
+    git_last_touched: input.git_last_touched
   });
 }
 
@@ -320,7 +382,35 @@ function sanitizeSearchHit(input: DocsSearchHit): DocsSearchHit {
     direct_read_caveat: input.direct_read_caveat,
     doc_status: input.doc_status,
     authority: input.authority,
-    authority_caveat: input.authority_caveat
+    authority_caveat: input.authority_caveat,
+    currency_state: input.currency_state,
+    currency_caveats: input.currency_caveats,
+    canonical_owner: input.canonical_owner,
+    superseded_by: input.superseded_by,
+    last_reviewed: input.last_reviewed,
+    modified_at: input.modified_at,
+    git_first_seen: input.git_first_seen,
+    git_last_touched: input.git_last_touched
+  });
+}
+
+function sanitizeDocumentReference(input: DocumentReference): DocumentReference {
+  return documentReferenceSchema.parse({
+    path: normalizeRepoPath(input.path),
+    title: input.title,
+    reason: input.reason,
+    evidence_kinds: [...input.evidence_kinds].sort(),
+    doc_status: input.doc_status,
+    authority: input.authority,
+    authority_caveat: input.authority_caveat,
+    currency_state: input.currency_state,
+    currency_caveats: input.currency_caveats,
+    canonical_owner: input.canonical_owner,
+    superseded_by: input.superseded_by,
+    last_reviewed: input.last_reviewed,
+    modified_at: input.modified_at,
+    git_first_seen: input.git_first_seen,
+    git_last_touched: input.git_last_touched
   });
 }
 

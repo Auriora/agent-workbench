@@ -3,7 +3,7 @@ title: Graph store design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-07-02
 ---
 
 # Graph Store Design
@@ -178,6 +178,19 @@ traversal-depth caps.
   evidence is considered fresh.
 - Readers during rebuild must either see the previous valid database or a
   `refreshing`/`cold` state, never a partial replacement.
+
+## Documentation Currency Evidence
+
+SQLite-backed `docs_search` remains an FTS routing surface. It joins indexed
+docs rows to file identity rows when available so search hits can expose
+document currency labels, caveats, and `mtime_ms`-derived `modified_at`
+metadata. Missing file identity or Git history evidence is optional enrichment
+loss, not a docs-search failure.
+
+The graph store must not persist or infer documentation creation time from
+filesystem `ctime`. Local Git first/last touch evidence may be collected by a
+bounded Git history port for selected final candidates, but broad docs search
+must not walk Git history as hidden work.
 
 ## Security And Access
 

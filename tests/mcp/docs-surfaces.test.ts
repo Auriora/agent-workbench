@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   CheckMarkdownDocumentRequest,
   CheckMarkdownSetRequest,
+  DocsCurrentForTaskRequest,
   DocsMapRequest,
   DocsOutlineRequest,
   DocsOverviewRequest,
@@ -20,6 +21,7 @@ import type {
   DocsReadSectionUseCaseResult,
   DocsSearchUseCaseResult
 } from "../../src/application/use-cases/query-docs.js";
+import type { CurrentDocsForTaskUseCaseResult } from "../../src/application/use-cases/current-docs-for-task.js";
 import { checkMarkdownDocumentTool } from "../../src/interface-adapters/mcp/registries/tools/check-markdown-document.js";
 import { checkMarkdownSetTool } from "../../src/interface-adapters/mcp/registries/tools/check-markdown-set.js";
 import { docsMapResource } from "../../src/interface-adapters/mcp/registries/resources/docs-map.js";
@@ -28,6 +30,7 @@ import { docsOutlineTool } from "../../src/interface-adapters/mcp/registries/too
 import { docsReadSectionTool } from "../../src/interface-adapters/mcp/registries/tools/docs-read-section.js";
 import { docsScopeTool } from "../../src/interface-adapters/mcp/registries/tools/docs-scope.js";
 import { docsSearchTool } from "../../src/interface-adapters/mcp/registries/tools/docs-search.js";
+import { docsCurrentForTaskTool } from "../../src/interface-adapters/mcp/registries/tools/docs-current-for-task.js";
 import type { DocsSessionScopeState } from "../../src/interface-adapters/mcp/registries/docs-session-scope.js";
 import {
   registerMcpResource,
@@ -159,6 +162,40 @@ describe("docs MCP tools", () => {
     expect(parsed.data.hits[0]).toMatchObject({
       path: "docs/guide.md",
       direct_read_caveat: expect.stringContaining("docs_read_section")
+    });
+  });
+
+  it("uses the injected docs_current_for_task provider with default repo root", async () => {
+    let parsedRequest: DocsCurrentForTaskRequest | undefined;
+    const registered = registerTool(docsCurrentForTaskTool, {
+      getCurrentDocsForTask: ({ request }) => {
+        parsedRequest = request;
+        return currentDocsResult(request.repo_root ?? "/missing", request.task);
+      }
+    });
+
+    const response = await registered.handler({
+      task: "Implement widget routing",
+      files: ["src/widget.ts"],
+      max_docs: 4
+    });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: CurrentDocsForTaskUseCaseResult["current_docs"];
+    };
+
+    expect(parsedRequest).toMatchObject({
+      repo_root: "/repo",
+      task: "Implement widget routing",
+      files: ["src/widget.ts"],
+      max_docs: 4
+    });
+    expect(parsed.data.canonical_docs[0]).toMatchObject({
+      path: "docs/guide.md",
+      currency_state: "current"
+    });
+    expect(parsed.data.unknown_docs[0]).toMatchObject({
+      path: "docs/unknown.md",
+      currency_state: "unknown"
     });
   });
 
@@ -479,6 +516,47 @@ function searchResult(repoRoot: string, query: string): DocsSearchUseCaseResult 
       ],
       warnings: [],
       truncated: false,
+      next_actions: []
+    },
+    meta: meta(repoRoot)
+  };
+}
+
+function currentDocsResult(repoRoot: string, task: string): CurrentDocsForTaskUseCaseResult {
+  return {
+    current_docs: {
+      repo_root: repoRoot,
+      task,
+      status: "needed",
+      canonical_docs: [
+        {
+          path: "docs/guide.md",
+          title: "Guide",
+          reason: "Current owner.",
+          evidence_kinds: ["docs"],
+          doc_status: "current",
+          authority: "canonical",
+          authority_caveat: "Current implementation guidance.",
+          currency_state: "current",
+          currency_caveats: []
+        }
+      ],
+      supporting_docs: [],
+      non_authoritative_docs: [],
+      unknown_docs: [
+        {
+          path: "docs/unknown.md",
+          title: "Unknown",
+          reason: "Needs corroboration.",
+          evidence_kinds: ["docs"],
+          doc_status: "unknown",
+          authority: "supporting",
+          authority_caveat: "Needs corroboration.",
+          currency_state: "unknown",
+          currency_caveats: ["Document currency is unclear."]
+        }
+      ],
+      warnings: [],
       next_actions: []
     },
     meta: meta(repoRoot)

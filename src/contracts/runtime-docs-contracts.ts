@@ -3,6 +3,8 @@ import {
   attentionSeveritySchema,
   capabilityLevelSchema,
   documentAuthoritySchema,
+  documentCurrencyFieldsSchema,
+  documentReferenceSchema,
   documentStatusSchema,
   evidenceKindSchema,
   nextActionSchema,
@@ -63,7 +65,8 @@ export const docsDocumentSchema = z
     direct_read_caveat: z.string(),
     doc_status: documentStatusSchema.optional(),
     authority: documentAuthoritySchema.optional(),
-    authority_caveat: z.string().optional()
+    authority_caveat: z.string().optional(),
+    ...documentCurrencyFieldsSchema.shape
   })
   .strict();
 export type DocsDocument = z.infer<typeof docsDocumentSchema>;
@@ -80,7 +83,8 @@ export const docsSearchHitSchema = z
     direct_read_caveat: z.string(),
     doc_status: documentStatusSchema.optional(),
     authority: documentAuthoritySchema.optional(),
-    authority_caveat: z.string().optional()
+    authority_caveat: z.string().optional(),
+    ...documentCurrencyFieldsSchema.shape
   })
   .strict();
 export type DocsSearchHit = z.infer<typeof docsSearchHitSchema>;
@@ -118,6 +122,17 @@ export const docsSearchRequestSchema = z
   })
   .strict();
 export type DocsSearchRequest = z.infer<typeof docsSearchRequestSchema>;
+
+export const docsCurrentForTaskRequestSchema = z
+  .object({
+    repo_root: z.string().optional(),
+    task: z.string().min(1),
+    files: z.array(z.string()).default([]),
+    scope_path: z.string().min(1).optional(),
+    max_docs: z.number().int().positive().max(50).default(10)
+  })
+  .strict();
+export type DocsCurrentForTaskRequest = z.infer<typeof docsCurrentForTaskRequestSchema>;
 
 export const docsOutlineRequestSchema = z
   .object({
@@ -235,6 +250,21 @@ export const docsSearchResultSchema = z
   })
   .strict();
 export type DocsSearchResult = z.infer<typeof docsSearchResultSchema>;
+
+export const docsCurrentForTaskResultSchema = z
+  .object({
+    repo_root: z.string(),
+    task: z.string(),
+    status: verificationStatusSchema,
+    canonical_docs: z.array(documentReferenceSchema),
+    supporting_docs: z.array(documentReferenceSchema),
+    non_authoritative_docs: z.array(documentReferenceSchema),
+    unknown_docs: z.array(documentReferenceSchema),
+    warnings: z.array(docsWarningSchema),
+    next_actions: z.array(nextActionSchema)
+  })
+  .strict();
+export type DocsCurrentForTaskResult = z.infer<typeof docsCurrentForTaskResultSchema>;
 
 export const docsOutlineResultSchema = z
   .object({

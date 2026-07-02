@@ -102,6 +102,83 @@ describe("docs query application contracts", () => {
     }
   });
 
+  it("exposes document currency metadata in docs inventory and indexed search", async () => {
+    const fixture = copyFixture();
+    try {
+      fs.mkdirSync(path.join(fixture.root, "docs", "design"), { recursive: true });
+      fs.mkdirSync(path.join(fixture.root, "docs", "reference"), { recursive: true });
+      fs.writeFileSync(path.join(fixture.root, "docs", "design", "current.md"), [
+        "---",
+        "status: current",
+        "---",
+        "# Current Design",
+        "",
+        "Widget routing is current."
+      ].join("\n"));
+      fs.writeFileSync(path.join(fixture.root, "docs", "design", "old.md"), [
+        "---",
+        "status: current",
+        "superseded_by: docs/design/current.md",
+        "---",
+        "# Old Design",
+        "",
+        "Widget routing is old."
+      ].join("\n"));
+      fs.writeFileSync(path.join(fixture.root, "docs", "reference", "documentation-map.md"), [
+        "| Concern | Canonical owner | Notes |",
+        "| --- | --- | --- |",
+        "| Widget routing | [Current Design](../design/current.md) | Current owner. |"
+      ].join("\n"));
+
+      const mapResult = await getDocsMap({
+        request: {
+          repo_root: fixture.root,
+          scope_path: "docs/design",
+          max_docs: 10,
+          max_headings_per_doc: 5
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot: fixture.root }),
+        default_repo_root: "."
+      });
+      const map = docsMapSchema.parse(mapResult.map);
+      expect(map.docs.find((doc) => doc.path === "docs/design/current.md")).toMatchObject({
+        currency_state: "current",
+        modified_at: expect.any(String),
+        currency_caveats: expect.arrayContaining([
+          expect.stringContaining("Documentation map lists this document as owner")
+        ])
+      });
+      expect(map.docs.find((doc) => doc.path === "docs/design/old.md")).toMatchObject({
+        currency_state: "superseded",
+        superseded_by: "docs/design/current.md"
+      });
+
+      const store = await indexFixtureDocs(fixture.root);
+      try {
+        const searchResult = await searchDocs({
+          request: {
+            repo_root: fixture.root,
+            query: "Widget routing old",
+            max_results: 5,
+            include_snippets: true
+          },
+          docs_index: store,
+          default_repo_root: "."
+        });
+        const search = docsSearchResultSchema.parse(searchResult.search);
+        expect(search.hits.find((hit) => hit.path === "docs/design/old.md")).toMatchObject({
+          currency_state: "superseded",
+          superseded_by: "docs/design/current.md"
+        });
+      } finally {
+        store.close();
+      }
+    } finally {
+      fixture.dispose();
+    }
+  });
+
   it("paginates docs maps with opaque cursors", async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-docs-pages-"));
     try {

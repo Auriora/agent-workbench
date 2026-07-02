@@ -169,7 +169,9 @@ Prepare a handoff for spec-lifecycle-manager with these requested rule changes:
 
 ## Open Questions
 
-- Should the first shipped verifier be a packaged skill/prompt or an MCP tool?
+- Resolved for Phase 2: the first shipped verifier is the read-only MCP tool
+  `docs_current_for_task`; packaged skill/prompt guidance can still build on
+  that executable surface later.
 - Should `superseded` become a distinct public `doc_status`, or stay represented
   as `legacy` plus `superseded_by` metadata?
 - What default age threshold, if any, should trigger stale `last_reviewed`

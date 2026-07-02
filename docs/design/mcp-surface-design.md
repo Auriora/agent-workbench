@@ -3,7 +3,7 @@ title: MCP surface design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-13
+last_reviewed: 2026-07-02
 ---
 
 # MCP Surface Design
@@ -178,6 +178,7 @@ configured binding.
 - `impact` with explicit traversal and result caps
 - `diagnostics_for_files`
 - `docs_search`
+- `docs_current_for_task`
 - `docs_outline`
 - `docs_read_section`
 - `verification_plan`
@@ -281,8 +282,10 @@ generated architecture answers remain post-MVP.
 
 Spec 034 adds documentation currency routing for active, current, archived,
 superseded, closure breadcrumb, removed-spec reference, and unknown states.
-Until fixture-backed classification is implemented, docs results remain routing
-evidence with direct-read caveats and must not invent lifecycle freshness.
+`context_for_task`, `docs_search`, `repo:///docs/overview`, and
+`repo:///docs/map` expose currency labels and caveats for document routing.
+Docs results remain routing evidence with direct-read caveats and must not
+invent lifecycle freshness.
 
 The currency model treats frontmatter as input evidence, not as standalone
 documentation authority. Useful input fields include `status`, `last_reviewed`,
@@ -297,9 +300,13 @@ missing optional enrichment rather than hidden.
 
 Task-oriented surfaces such as `context_for_task` should expose a small
 agent-facing workflow or next action for checking which docs are current for a
-particular task. Lifecycle-specific rules for active specs, promotion, closure,
-and stale durable-doc warnings belong in spec-lifecycle-manager; Agent Workbench
-consumes those labels as routing evidence but does not own lifecycle truth.
+particular task. The read-only `docs_current_for_task` tool is that executable
+workflow. It accepts a task, optional files, optional `scope_path`, and
+`max_docs`, then returns canonical docs, supporting docs, non-authoritative
+docs, unknown docs, caveats, and current-source next actions. Lifecycle-specific
+rules for active specs, promotion, closure, and stale durable-doc warnings
+belong in spec-lifecycle-manager; Agent Workbench consumes those labels as
+routing evidence but does not own lifecycle truth.
 
 `check_markdown_document` and `check_markdown_set` are read-only documentation
 quality tools. They parse direct Markdown content through the Markdown quality
@@ -794,6 +801,11 @@ Post-closure dogfood caveats from large mixed-language repositories:
   FTS-backed docs index and recorded objective Python Agent IDE parity evidence
   for docs-routing queries. Remaining broad-query ranking caveats belong to
   durable docs search tuning, not a scanner fallback.
+- Done: Spec 034 added document currency labels and caveats to
+  `context_for_task`, `docs_search`, `repo:///docs/overview`, and
+  `repo:///docs/map`, plus the read-only `docs_current_for_task` verifier
+  workflow. Frontmatter and file modified time are input evidence only;
+  lifecycle truth remains owned by lifecycle tooling.
 - Future: investigate smoke-test feedback where Agent Workbench context worked
   but `verification_plan` timed out and the agent fell back to local
   command-surface inspection. Capture the failing repo shape, host timeout, and

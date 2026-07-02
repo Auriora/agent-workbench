@@ -33,6 +33,11 @@ import {
   parseMarkdownHeadings
 } from "./markdown-docs.js";
 import { classifyMarkdownDoc } from "../../domain/policies/index.js";
+import {
+  classifyMarkdownEntryCurrency,
+  loadDocumentationMapOwners,
+  publicCurrency
+} from "./document-currency-routing.js";
 import { capNextActions } from "./response-metadata.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 
@@ -309,6 +314,10 @@ async function loadDocsIndex(input: {
     : markdownFiles;
   const warnings = mapSkippedPaths(scanned.skipped_paths ?? []);
   const documents: Array<DocsDocument & { content: string }> = [];
+  const owners = await loadDocumentationMapOwners({
+    files: scanned.files,
+    workspace: input.workspace
+  });
   const cursorOffset = decodeCursor(input.request.cursor, DOCS_CURSOR_KIND);
   const readLimit = Math.min(
     orderedMarkdownFiles.length,
@@ -319,7 +328,13 @@ async function loadDocsIndex(input: {
       const content = await input.workspace.readText({ path: file.path });
       const headings = parseMarkdownHeadings(content);
       const title = headings[0]?.text ?? markdownTitleFromPath(file.path);
-      const authority = classifyMarkdownDoc({ path: file.path, title, content });
+      const authority = classifyMarkdownEntryCurrency({
+        path: file.path,
+        title,
+        content,
+        mtime_ms: file.file_identity.mtime_ms,
+        owners
+      });
       documents.push({
         path: file.path,
         title,
@@ -329,6 +344,7 @@ async function loadDocsIndex(input: {
         evidence_kinds: ["docs"],
         direct_read_caveat: DIRECT_READ_CAVEAT,
         ...publicAuthority(authority),
+        ...publicCurrency(authority),
         content
       });
     } catch {
@@ -509,7 +525,17 @@ async function loadRequestedDoc(input: {
     const content = await input.workspace.readText({ path: entry.path });
     const headings = parseMarkdownHeadings(content);
     const title = headings[0]?.text ?? markdownTitleFromPath(entry.path);
-    const authority = classifyMarkdownDoc({ path: entry.path, title, content });
+    const owners = await loadDocumentationMapOwners({
+      files: input.index.scannedFiles,
+      workspace: input.workspace
+    });
+    const authority = classifyMarkdownEntryCurrency({
+      path: entry.path,
+      title,
+      content,
+      mtime_ms: entry.file_identity.mtime_ms,
+      owners
+    });
     return {
       doc: {
         path: entry.path,
@@ -520,6 +546,7 @@ async function loadRequestedDoc(input: {
         evidence_kinds: ["docs"],
         direct_read_caveat: DIRECT_READ_CAVEAT,
         ...publicAuthority(authority),
+        ...publicCurrency(authority),
         content
       }
     };
@@ -562,7 +589,13 @@ async function loadDirectMarkdownDoc(input: {
     const content = await input.workspace.readText({ path: input.path });
     const headings = parseMarkdownHeadings(content);
     const title = headings[0]?.text ?? markdownTitleFromPath(input.path);
-    const authority = classifyMarkdownDoc({ path: input.path, title, content });
+    const stat = await input.workspace.stat({ path: input.path });
+    const authority = classifyMarkdownEntryCurrency({
+      path: input.path,
+      title,
+      content,
+      mtime_ms: stat.mtime_ms
+    });
     return {
       doc: {
         path: input.path,
@@ -573,6 +606,7 @@ async function loadDirectMarkdownDoc(input: {
         evidence_kinds: ["docs"],
         direct_read_caveat: DIRECT_READ_CAVEAT,
         ...publicAuthority(authority),
+        ...publicCurrency(authority),
         content
       }
     };
@@ -762,7 +796,15 @@ function publicDocument(doc: DocsDocument & { content?: string }): DocsDocument 
     direct_read_caveat: doc.direct_read_caveat,
     doc_status: doc.doc_status,
     authority: doc.authority,
-    authority_caveat: doc.authority_caveat
+    authority_caveat: doc.authority_caveat,
+    currency_state: doc.currency_state,
+    currency_caveats: doc.currency_caveats,
+    canonical_owner: doc.canonical_owner,
+    superseded_by: doc.superseded_by,
+    last_reviewed: doc.last_reviewed,
+    modified_at: doc.modified_at,
+    git_first_seen: doc.git_first_seen,
+    git_last_touched: doc.git_last_touched
   };
 }
 

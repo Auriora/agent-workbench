@@ -110,6 +110,61 @@ describe("context_for_task use case", () => {
     );
   });
 
+  it("prefers current governing docs over superseded docs for implementation tasks", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-current-docs-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "docs", "design"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "docs", "reference"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "docs", "design", "current-widget.md"), [
+        "---",
+        "status: current",
+        "---",
+        "# Current Widget Design",
+        "",
+        "Widget routing implementation rules."
+      ].join("\n"));
+      fs.writeFileSync(path.join(repoRoot, "docs", "design", "old-widget.md"), [
+        "---",
+        "status: current",
+        "superseded_by: docs/design/current-widget.md",
+        "---",
+        "# Old Widget Design",
+        "",
+        "Widget routing implementation rules."
+      ].join("\n"));
+      fs.writeFileSync(path.join(repoRoot, "docs", "reference", "documentation-map.md"), [
+        "| Concern | Canonical owner | Notes |",
+        "| --- | --- | --- |",
+        "| Widget routing | [Current Widget Design](../design/current-widget.md) | Current owner. |"
+      ].join("\n"));
+
+      const result = await getTaskContext({
+        request: {
+          task: "Implement widget routing",
+          repo_root: repoRoot,
+          files: [],
+          symbols: [],
+          max_files: 3,
+          max_docs: 2
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.context.governing_docs[0]).toMatchObject({
+        path: "docs/design/current-widget.md",
+        currency_state: "current"
+      });
+      expect(result.context.governing_docs.find((doc) => doc.path === "docs/design/old-widget.md")).toMatchObject({
+        currency_state: "superseded",
+        superseded_by: "docs/design/current-widget.md"
+      });
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("summarizes skipped path evidence in bounded task context", async () => {
     const result = await getTaskContext({
       request: {

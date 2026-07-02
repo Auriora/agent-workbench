@@ -172,6 +172,12 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         description: "Configured bounded documentation search with routing caveats and direct-read follow-up guidance."
       },
       {
+        name: "docs_current_for_task",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Configured task-focused documentation currency check for current, supporting, non-authoritative, and uncertain docs."
+      },
+      {
         name: "docs_outline",
         kind: "tool",
         capability_class: "read_only",

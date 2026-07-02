@@ -9,7 +9,21 @@ last_reviewed: 2026-07-02
 
 # Canonical Context
 
-## Always-Canonical Sources
+## Purpose
+
+Define the current implementation authority for document currency routing so
+agents do not treat older docs, archived specs, or frontmatter alone as
+implementation truth.
+
+## Authority Hierarchy
+
+1. System, developer, user, and repository instructions.
+2. Durable documentation owners listed in the documentation map.
+3. Source contracts, implementation code, and fixture-backed tests.
+4. Active spec artifacts for this implementation package.
+5. Historical docs, archived specs, and delivery records as background only.
+
+## Always-Canonical External Sources
 
 - Root `AGENTS.md` and higher-priority agent instructions.
 - [Documentation map](../../reference/documentation-map.md) for durable
@@ -28,6 +42,11 @@ last_reviewed: 2026-07-02
   `src/application/use-cases/get-task-context.ts`, and
   `src/infrastructure/sqlite/graph-store.ts`.
 
+## Always-Canonical Sources
+
+Same as Always-Canonical External Sources above, plus source-code contracts and
+fixture-backed tests for runtime behavior.
+
 ## Spec-Canonical Working Sources
 
 - `requirements.md`
@@ -36,7 +55,7 @@ last_reviewed: 2026-07-02
 - `traceability.md`
 - this file
 
-## Imported Background Sources
+## Imported Sources
 
 - EB018 in
   [Agent Workbench executable backlog](../../requirements/agent-workbench-executable-backlog.md)
@@ -49,7 +68,12 @@ last_reviewed: 2026-07-02
   Spec-lifecycle-manager should own lifecycle-rule changes for users of that
   plugin.
 
-## Non-Canonical Background
+## Imported Background Sources
+
+Same imported sources as above. They inform this spec but do not override
+durable docs, source contracts, or current implementation evidence.
+
+## Non-Canonical Background Sources
 
 - Historical evaluation notes, closure logs, archived specs, and old design
   records are useful evidence of past behavior, but they are not implementation
@@ -60,7 +84,11 @@ last_reviewed: 2026-07-02
   creation time. Optional birth time evidence is out of scope unless a future
   fixture proves reliable cross-platform semantics.
 
-## Promotion Routes
+## Non-Canonical Background
+
+Same as Non-Canonical Background Sources above.
+
+## Promotion Map
 
 - Accepted public surface behavior promotes to
   [MCP surface design](../../design/mcp-surface-design.md).
@@ -72,3 +100,7 @@ last_reviewed: 2026-07-02
 - Accepted lifecycle-rule feedback for active specs, promotion, closure, and
   stale durable-doc warnings promotes to the spec-lifecycle-manager plugin or
   its durable docs, not to Agent Workbench runtime policy.
+
+## Promotion Routes
+
+Same as Promotion Map above.

@@ -16,7 +16,10 @@ import type {
   DocsSearchHit,
   Freshness
 } from "../../contracts/index.js";
-import { classifyMarkdownDoc } from "../../domain/policies/index.js";
+import {
+  classifyMarkdownDocCurrency,
+  extractMarkdownFrontmatterSignals
+} from "../../domain/policies/index.js";
 import type {
   DocsIndexDocumentWrite,
   DocsIndexPort,
@@ -128,6 +131,7 @@ type DocsSearchRow = {
   title: string;
   headings_text: string;
   selected_text: string;
+  mtime_ms: number | null;
   rank_score: number;
 };
 
@@ -1522,9 +1526,11 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           docs_documents.title,
           docs_fts.headings_text,
           docs_fts.selected_text,
+          files.mtime_ms,
           bm25(docs_fts, -7.0, -9.0, -6.0, -1.0) AS rank_score
         FROM docs_fts
         INNER JOIN docs_documents ON docs_documents.id = docs_fts.rowid
+        LEFT JOIN files ON files.snapshot_id = docs_documents.snapshot_id AND files.path = docs_documents.path
         WHERE docs_documents.snapshot_id = @snapshotId
           AND docs_fts MATCH @ftsQuery
           AND (@scopePath IS NULL OR docs_documents.path = @scopePath OR docs_documents.path LIKE @scopePrefix)
@@ -1828,15 +1834,18 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     const terms = tokenizeDocsQuery(input.query);
     const heading = bestHeadingMatch(input.row.headings_text, terms, input.query);
     const normalizedQuery = input.query.toLowerCase();
-    const authority = classifyMarkdownDoc({
+    const authority = classifyMarkdownDocCurrency({
       path: input.row.path,
       title: input.row.title,
-      content: input.row.selected_text
+      content: input.row.selected_text,
+      frontmatter: extractMarkdownFrontmatterSignals(input.row.selected_text),
+      modified_at: input.row.mtime_ms === null ? undefined : new Date(input.row.mtime_ms).toISOString()
     });
     const score = Math.max(0,
       Math.max(0, Number(input.row.rank_score)) +
       docsPathCategoryBoost(input.row.path) +
       authority.priority +
+      authority.currency_priority +
       docsFieldBoost({
         path: input.row.path,
         title: input.row.title,
@@ -1859,7 +1868,15 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       direct_read_caveat: "Docs search is routing evidence; use docs_read_section for precise claims.",
       doc_status: authority.doc_status,
       authority: authority.authority,
-      authority_caveat: authority.authority_caveat
+      authority_caveat: authority.authority_caveat,
+      currency_state: authority.currency_state,
+      currency_caveats: authority.currency_caveats,
+      canonical_owner: authority.canonical_owner,
+      superseded_by: authority.superseded_by,
+      last_reviewed: authority.last_reviewed,
+      modified_at: authority.modified_at,
+      git_first_seen: authority.git_first_seen,
+      git_last_touched: authority.git_last_touched
     };
   }
 

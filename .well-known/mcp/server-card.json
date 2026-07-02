@@ -109,6 +109,13 @@
       "budget_policy": "Bounded by optional scope_path, max_results, and snippet limits; scans Markdown docs without source mutation."
     },
     {
+      "name": "docs_current_for_task",
+      "description": "Identify current, supporting, non-authoritative, and uncertain docs for a task.",
+      "capability_class": "read_only",
+      "mutation_class": "none",
+      "budget_policy": "Bounded by optional scope_path, max_docs, and local Markdown scan; does not mutate source or require Git history."
+    },
+    {
       "name": "docs_outline",
       "description": "Read a bounded heading outline for one repo-relative Markdown document.",
       "capability_class": "read_only",

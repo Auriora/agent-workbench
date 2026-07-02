@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-06-13
+last_reviewed: 2026-07-02
 ---
 
 # Runtime Contracts
@@ -162,6 +162,34 @@ response or final report claims proof.
 Do not introduce synonyms for the core capability levels. Use
 `evidence_kinds`, provenance, confidence, caveats, and verification status to
 express narrower distinctions.
+
+## Document Currency Fields
+
+Document references, docs inventory entries, and docs-search hits may include
+document currency metadata:
+
+- `currency_state`: `current`, `stale`, `superseded`, `historical`, or
+  `unknown`.
+- `currency_caveats`: human-readable caveats explaining weak, stale,
+  superseded, historical, or uncertain evidence.
+- `canonical_owner` and `superseded_by`: repo-relative current-source routing
+  hints when known.
+- `last_reviewed`: frontmatter input evidence when present.
+- `modified_at`: file `mtime_ms` rendered as modified-time evidence only.
+- `git_first_seen` and `git_last_touched`: optional local Git recency evidence
+  when collected for bounded final candidates.
+
+Frontmatter fields such as `status`, `authority`, `canonical_owner`,
+`superseded_by`, `last_reviewed`, and `review_after` are input signals, not
+standalone authority. Documentation-map ownership, repository instructions,
+source contracts, active lifecycle context, and accepted durable docs are
+stronger evidence when they conflict. Filesystem `ctime` is not a creation-time
+or document-currency signal.
+
+`docs_current_for_task` returns grouped `DocumentReference` arrays for
+canonical, supporting, non-authoritative, and unknown docs. The result is
+repository routing evidence; precise claims still require direct reads and
+relevant validation.
 
 ## Debug Sweep Result Quality
 

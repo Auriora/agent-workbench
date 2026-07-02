@@ -6,6 +6,7 @@ import type {
   CheckMarkdownSetRequest,
   DiagnosticsForFilesRequest,
   DocsMapRequest,
+  DocsCurrentForTaskRequest,
   DocsOutlineRequest,
   DocsOverviewRequest,
   DocsReadSectionRequest,
@@ -33,6 +34,7 @@ import type {
   DocsReadSectionUseCaseResult,
   DocsSearchUseCaseResult
 } from "../../../application/use-cases/query-docs.js";
+import type { CurrentDocsForTaskUseCaseResult } from "../../../application/use-cases/current-docs-for-task.js";
 import type { FindReferencesUseCaseResult } from "../../../application/use-cases/find-references.js";
 import type { GetIntegrationHealthResult } from "../../../application/use-cases/get-integration-health.js";
 import type { GetRepoOverviewResult } from "../../../application/use-cases/get-repo-overview.js";
@@ -57,6 +59,7 @@ import { docsScopeTool } from "./tools/docs-scope.js";
 import { docsOutlineTool } from "./tools/docs-outline.js";
 import { docsReadSectionTool } from "./tools/docs-read-section.js";
 import { docsSearchTool } from "./tools/docs-search.js";
+import { docsCurrentForTaskTool } from "./tools/docs-current-for-task.js";
 import { applyWorkspaceEditTool } from "./tools/apply-workspace-edit.js";
 import { findReferencesTool } from "./tools/find-references.js";
 import { impactTool } from "./tools/impact.js";
@@ -74,6 +77,7 @@ export type McpRegistryContext = {
   getDocsOverview?: (input: { request: DocsOverviewRequest }) => Promise<DocsOverviewUseCaseResult> | DocsOverviewUseCaseResult;
   getDocsMap?: (input: { request: DocsMapRequest }) => Promise<DocsMapUseCaseResult> | DocsMapUseCaseResult;
   searchDocs?: (input: { request: DocsSearchRequest }) => Promise<DocsSearchUseCaseResult> | DocsSearchUseCaseResult;
+  getCurrentDocsForTask?: (input: { request: DocsCurrentForTaskRequest }) => Promise<CurrentDocsForTaskUseCaseResult> | CurrentDocsForTaskUseCaseResult;
   getDocsOutline?: (input: { request: DocsOutlineRequest }) => Promise<DocsOutlineUseCaseResult> | DocsOutlineUseCaseResult;
   readDocsSection?: (input: { request: DocsReadSectionRequest }) => Promise<DocsReadSectionUseCaseResult> | DocsReadSectionUseCaseResult;
   checkMarkdownDocument?: (input: { request: CheckMarkdownDocumentRequest }) => Promise<CheckMarkdownDocumentUseCaseResult> | CheckMarkdownDocumentUseCaseResult;
@@ -144,6 +148,7 @@ export const mcpTools: McpToolDeclaration[] = [
   diagnosticsForFilesTool,
   docsScopeTool,
   docsSearchTool,
+  docsCurrentForTaskTool,
   docsOutlineTool,
   docsReadSectionTool,
   checkMarkdownDocumentTool,

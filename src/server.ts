@@ -9,6 +9,7 @@ import {
 import { computeImpact } from "./application/use-cases/compute-impact.js";
 import { diagnoseChangedFiles } from "./application/use-cases/diagnose-changed-files.js";
 import { findReferences } from "./application/use-cases/find-references.js";
+import { getCurrentDocsForTask } from "./application/use-cases/current-docs-for-task.js";
 import {
   getIntegrationHealth,
   type IntegrationSurfaceInput
@@ -132,6 +133,13 @@ export function createAgentWorkbenchServer(
         default_repo_root: absoluteRepoRoot
       });
     },
+    getCurrentDocsForTask: ({ request }) =>
+      getCurrentDocsForTask({
+        request,
+        scanner,
+        workspace: workspaceForRepoRoot(request.repo_root),
+        default_repo_root: absoluteRepoRoot
+      }),
     getDocsOutline: ({ request }) =>
       getDocsOutline({
         request,

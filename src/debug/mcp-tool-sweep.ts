@@ -13,6 +13,7 @@ import { getRepoOverview } from "../application/use-cases/get-repo-overview.js";
 import { getRepoScope } from "../application/use-cases/get-repo-scope.js";
 import { getScannedRepoStatus } from "../application/use-cases/get-repo-status.js";
 import { getTaskContext } from "../application/use-cases/get-task-context.js";
+import { getCurrentDocsForTask } from "../application/use-cases/current-docs-for-task.js";
 import { indexRepositoryGraph } from "../application/use-cases/index-repository-graph.js";
 import { planVerification } from "../application/use-cases/plan-verification.js";
 import {
@@ -47,7 +48,7 @@ import {
   mcpTools
 } from "../interface-adapters/mcp/registries/index.js";
 import { buildCodexIntegrationProfileEnvelope } from "../presentation/integration-profile-presenter.js";
-import { buildDocsMapEnvelope, buildDocsOutlineEnvelope, buildDocsOverviewEnvelope, buildDocsReadSectionEnvelope, buildDocsSearchEnvelope } from "../presentation/docs-presenter.js";
+import { buildDocsCurrentForTaskEnvelope, buildDocsMapEnvelope, buildDocsOutlineEnvelope, buildDocsOverviewEnvelope, buildDocsReadSectionEnvelope, buildDocsSearchEnvelope } from "../presentation/docs-presenter.js";
 import { buildFindReferencesEnvelope } from "../presentation/find-references-presenter.js";
 import { buildImpactEnvelope } from "../presentation/impact-presenter.js";
 import { buildIntegrationHealthEnvelope } from "../presentation/integration-health-presenter.js";
@@ -546,6 +547,14 @@ async function callTool(input: {
     return buildDocsSearchEnvelope(await searchDocs({
       request: { repo_root: input.repoRoot, query: "sweep", max_results: 5, include_snippets: true },
       docs_index: input.runtime.graph,
+      default_repo_root: input.repoRoot
+    }));
+  }
+  if (input.toolName === "docs_current_for_task") {
+    return buildDocsCurrentForTaskEnvelope(await getCurrentDocsForTask({
+      request: { repo_root: input.repoRoot, task: "Check current docs for MCP sweep.", files: [], max_docs: 5 },
+      scanner: input.runtime.scanner,
+      workspace: input.runtime.workspace,
       default_repo_root: input.repoRoot
     }));
   }
