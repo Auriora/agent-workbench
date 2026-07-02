@@ -662,7 +662,7 @@ or runtime telemetry.
 ### EB018: Stale Documentation Filtering
 
 - Priority: P1
-- Status: proposed spec
+- Status: promoted to active Spec 034
 - Friction signal: agents can over-trust archived specs, superseded design
   notes, removed-spec references, stale open decisions, and closure breadcrumbs
   when docs search or first-read context surfaces them without lifecycle state.
@@ -681,6 +681,19 @@ or runtime telemetry.
     trust labels.
   - Return missing or unknown classification evidence explicitly instead of
     inventing freshness.
+  - Treat frontmatter fields such as `status`, `last_reviewed`,
+    `canonical_owner`, `superseded_by`, and `authority` as input signals, not
+    standalone documentation authority.
+  - Use file `mtime_ms` only as modified-time evidence and never use filesystem
+    `ctime` for document creation or currency.
+  - Optionally enrich final doc candidates with local Git first/last touch
+    evidence when available; missing Git evidence must be explicit and
+    non-blocking.
+  - Provide an agent-facing workflow, skill, prompt, or tool that verifies
+    which docs are current for a particular task before implementation.
+  - Feed active-spec, promotion, closure, and stale-durable-doc rule changes
+    back to spec-lifecycle-manager rather than duplicating lifecycle authority
+    inside Agent Workbench.
 - Validation:
   - Fixture repositories with active specs, archived specs, closure logs,
     superseded design docs, removed-spec references, and durable current docs.
@@ -688,7 +701,10 @@ or runtime telemetry.
     downranked without disappearing.
   - Regression tests proving exact historical prompts can still surface
     archived material with historical caveats.
-- Promotion target: create a future docs-context trust spec under EB003,
+  - Regression tests proving no `ctime` dependency and optional Git-history
+    enrichment behavior.
+- Promotion target: active
+  [Spec 034](../specs/034-doc-currency-routing/requirements.md) under EB003,
   EB006, and the documentation routing design.
 
 ### EB019: Repo Capability Inventory

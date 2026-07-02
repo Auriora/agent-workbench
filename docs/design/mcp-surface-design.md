@@ -279,11 +279,27 @@ outline and section reads are precise direct evidence rather than search
 ranking evidence. Documentation crosslink graphs, broad docs reports, and
 generated architecture answers remain post-MVP.
 
-Future documentation routing should add stale-doc classification for active,
-current, archived, superseded, closure breadcrumb, removed-spec reference, and
-unknown states. Until fixture-backed classification exists, docs results remain
-routing evidence with direct-read caveats and must not invent lifecycle
-freshness.
+Spec 034 adds documentation currency routing for active, current, archived,
+superseded, closure breadcrumb, removed-spec reference, and unknown states.
+Until fixture-backed classification is implemented, docs results remain routing
+evidence with direct-read caveats and must not invent lifecycle freshness.
+
+The currency model treats frontmatter as input evidence, not as standalone
+documentation authority. Useful input fields include `status`, `last_reviewed`,
+`canonical_owner`, `superseded_by`, and `authority`, but repository instructions,
+documentation-map owners, source contracts, active lifecycle context, and
+accepted durable docs remain stronger evidence when they conflict. File
+`mtime_ms` may be used as modified-time evidence. Filesystem `ctime` must not
+be used as creation-time or documentation-currency evidence. Local Git history
+may optionally enrich final doc candidates with first/last touch evidence when
+available, but missing Git evidence is non-blocking and must be reported as
+missing optional enrichment rather than hidden.
+
+Task-oriented surfaces such as `context_for_task` should expose a small
+agent-facing workflow or next action for checking which docs are current for a
+particular task. Lifecycle-specific rules for active specs, promotion, closure,
+and stale durable-doc warnings belong in spec-lifecycle-manager; Agent Workbench
+consumes those labels as routing evidence but does not own lifecycle truth.
 
 `check_markdown_document` and `check_markdown_set` are read-only documentation
 quality tools. They parse direct Markdown content through the Markdown quality
