@@ -93,7 +93,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/034-doc-currency-routing
 - **Title:** Doc currency routing
 - **Final spec commit:** 8657e9e
-- **Closure cleanup commit:** 9113803
+- **Closure cleanup commit:** 7595c5b
 - **Closure action:** removed
 - **Durable docs updated:**
   - `.well-known/mcp/server-card.json`
