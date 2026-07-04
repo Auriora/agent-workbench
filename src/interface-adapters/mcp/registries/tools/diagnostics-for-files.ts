@@ -18,7 +18,10 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const diagnosticsForFilesRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
@@ -45,7 +48,7 @@ export const diagnosticsForFilesTool: McpToolDeclaration = {
     server.tool(
       "diagnostics_for_files",
       "Run compact provider-backed diagnostics for repo-relative files without executing validation commands.",
-      diagnosticsForFilesRawShape,
+      mcpShapeForRootAuthority(diagnosticsForFilesRawShape, context),
       async (args: unknown) => {
         let request: DiagnosticsForFilesRequest;
         try {
@@ -62,7 +65,23 @@ export const diagnosticsForFilesTool: McpToolDeclaration = {
           return {
             content: [
               {
-                type: "text",
+                type: "text" as const,
+                text: JSON.stringify(envelope, null, 2)
+              }
+            ]
+          };
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          const envelope = buildInvalidDiagnosticsForFilesInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            message: rootDecision.message
+          });
+          return {
+            content: [
+              {
+                type: "text" as const,
                 text: JSON.stringify(envelope, null, 2)
               }
             ]
@@ -77,7 +96,7 @@ export const diagnosticsForFilesTool: McpToolDeclaration = {
           return {
             content: [
               {
-                type: "text",
+                type: "text" as const,
                 text: JSON.stringify(envelope, null, 2)
               }
             ]
@@ -87,17 +106,17 @@ export const diagnosticsForFilesTool: McpToolDeclaration = {
         let result;
         try {
           result = await context.diagnoseChangedFiles({
-            request: withDefaultRepoRoot(request, context.repoRoot)
+            request: rootDecision.request
           });
         } catch (error) {
           const envelope = buildInvalidDiagnosticsForFilesInputEnvelope({
-            repoRoot: request.repo_root ?? context.repoRoot,
+            repoRoot: rootDecision.request.repo_root,
             message: `diagnostics_for_files provider failed before diagnostics could complete: ${error instanceof Error ? error.message : String(error)}`
           });
           return {
             content: [
               {
-                type: "text",
+                type: "text" as const,
                 text: JSON.stringify(envelope, null, 2)
               }
             ]
@@ -108,7 +127,7 @@ export const diagnosticsForFilesTool: McpToolDeclaration = {
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: JSON.stringify(envelope, null, 2)
             }
           ]

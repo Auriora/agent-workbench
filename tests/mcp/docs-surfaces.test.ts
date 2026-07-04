@@ -57,18 +57,18 @@ describe("docs MCP resources", () => {
       uri: "repo:///docs/overview"
     });
 
-    const response = await registered.handler({ repo_root: "/fixture", scope_path: "docs/specs/032-example" });
+    const response = await registered.handler({ scope_path: "docs/specs/032-example" });
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: DocsOverviewUseCaseResult["overview"];
     };
 
     expect(parsedRequest).toMatchObject({
-      repo_root: "/fixture",
+      repo_root: "/repo",
       scope_path: "docs/specs/032-example",
       max_docs: 10,
       max_headings_per_doc: 5
     });
-    expect(parsed.data.repo_root).toBe("/fixture");
+    expect(parsed.data.repo_root).toBe("/repo");
     expect(parsed.data.important_docs[0]).toMatchObject({
       path: "README.md",
       direct_read_caveat: expect.stringContaining("docs_read_section")
@@ -85,7 +85,6 @@ describe("docs MCP resources", () => {
     });
 
     const response = await registered.handler({
-      repo_root: "/fixture",
       scope_path: "docs/specs/032-example",
       max_docs: 2,
       max_headings_per_doc: 1,
@@ -96,7 +95,7 @@ describe("docs MCP resources", () => {
     };
 
     expect(parsedRequest).toMatchObject({
-      repo_root: "/fixture",
+      repo_root: "/repo",
       max_docs: 2,
       max_headings_per_doc: 1,
       cursor: "next-page",

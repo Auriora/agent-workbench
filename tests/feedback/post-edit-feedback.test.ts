@@ -87,14 +87,12 @@ describe("post-edit feedback use case", () => {
       {
         tool: "diagnostics_for_files",
         args: {
-          repo_root: "/repo",
           files: ["src/app.py"]
         }
       },
       {
         tool: "verification_plan",
         args: {
-          repo_root: "/repo",
           changed_files: ["src/app.py"]
         }
       }
@@ -178,14 +176,12 @@ describe("post-edit feedback use case", () => {
       {
         tool: "diagnostics_for_files",
         args: {
-          repo_root: "/repo",
           files: ["src/a.ts", "src/b.ts", "src/c.ts"]
         }
       },
       {
         tool: "verification_plan",
         args: {
-          repo_root: "/repo",
           changed_files: ["src/a.ts", "src/b.ts", "src/c.ts"]
         }
       }

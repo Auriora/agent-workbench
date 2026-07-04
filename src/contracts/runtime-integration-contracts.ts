@@ -79,6 +79,13 @@ export const integrationHealthSchema = z
         unknown: z.number().int().nonnegative()
       })
       .strict(),
+    root_policy: z
+      .object({
+        authority: z.literal("launch_root"),
+        debug_repo_root_override: z.boolean()
+      })
+      .strict()
+      .optional(),
     next_actions: z.array(nextActionSchema)
   })
   .strict();

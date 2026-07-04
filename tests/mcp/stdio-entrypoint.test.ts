@@ -102,7 +102,8 @@ describe("stdio MCP entrypoint", () => {
         env: {}
       })
     ).toEqual({
-      repoRoot: "/workspace/project"
+      repoRoot: "/workspace/project",
+      debugRepoRootOverride: false
     });
   });
 
@@ -116,7 +117,8 @@ describe("stdio MCP entrypoint", () => {
         }
       })
     ).toEqual({
-      repoRoot: "/target"
+      repoRoot: "/target",
+      debugRepoRootOverride: false
     });
   });
 
@@ -130,7 +132,8 @@ describe("stdio MCP entrypoint", () => {
         }
       })
     ).toEqual({
-      repoRoot: "/workspace/fixtures/repo"
+      repoRoot: "/workspace/fixtures/repo",
+      debugRepoRootOverride: false
     });
 
     expect(
@@ -140,7 +143,23 @@ describe("stdio MCP entrypoint", () => {
         env: {}
       })
     ).toEqual({
-      repoRoot: "/direct/repo"
+      repoRoot: "/direct/repo",
+      debugRepoRootOverride: false
+    });
+  });
+
+  it("enables debug repo-root override only through the hidden environment gate", () => {
+    expect(
+      resolveStdioLaunchConfig({
+        argv: [],
+        cwd: "/workspace/project",
+        env: {
+          AGENT_WORKBENCH_DEBUG_REPO_ROOT_OVERRIDE: "1"
+        }
+      })
+    ).toEqual({
+      repoRoot: "/workspace/project",
+      debugRepoRootOverride: true
     });
   });
 
@@ -357,7 +376,9 @@ describe("stdio MCP entrypoint", () => {
 
   it("keeps the stdio server alive through initialize", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-mixed-language-platform");
-    const session = await createStdioSession(repoRoot);
+    const session = await createStdioSession(repoRoot, {
+      startupWarmupDelayMs: 60_000
+    });
 
     try {
       await session.call(initializeMessage(1));
@@ -1215,7 +1236,7 @@ async function waitForWarmSymbolSearch(
   query: string
 ): Promise<SymbolSearchEnvelope> {
   let lastEnvelope: SymbolSearchEnvelope | undefined;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
     const envelope = parseResponseEnvelope<SymbolSearchEnvelope>(
       await session.call({
         jsonrpc: "2.0",

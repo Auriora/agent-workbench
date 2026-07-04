@@ -74,12 +74,12 @@ describe("repo scope MCP resource", () => {
       uri: "repo:///scope"
     });
 
-    const response = await registered.handler({ repo_root: "/requested" });
+    const response = await registered.handler({});
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: GetRepoScopeResult["scope"];
     };
 
-    expect(parsed.data.repo_root).toBe("/requested");
+    expect(parsed.data.repo_root).toBe("/repo");
     expect(parsed.data.file_counts).toEqual({ python: 1 });
   });
 
@@ -121,7 +121,7 @@ describe("repo scope MCP resource", () => {
       }
     });
 
-    const response = await registered.handler({ repo_root: "/requested" });
+    const response = await registered.handler({});
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: { repo_root: string; languages: string[] };
       meta: { analysis_validity: string; verification_status: string };
@@ -129,7 +129,7 @@ describe("repo scope MCP resource", () => {
     };
 
     expect(parsed.data).toMatchObject({
-      repo_root: "/requested",
+      repo_root: "/repo",
       languages: []
     });
     expect(parsed.meta).toMatchObject({
@@ -198,12 +198,12 @@ describe("repo overview MCP resource", () => {
       uri: "repo:///overview"
     });
 
-    const response = await registered.handler({ repo_root: "/requested" });
+    const response = await registered.handler({});
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: GetRepoOverviewResult["overview"];
     };
 
-    expect(parsed.data.repo_root).toBe("/requested");
+    expect(parsed.data.repo_root).toBe("/repo");
     expect(parsed.data.recommended_first_calls).toEqual(result.overview.recommended_first_calls);
   });
 
@@ -215,14 +215,14 @@ describe("repo overview MCP resource", () => {
       }
     });
 
-    const response = await registered.handler({ repo_root: "/requested" });
+    const response = await registered.handler({});
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: { repo_root: string; summary: string; recommended_first_calls: unknown[] };
       meta: { analysis_validity: string; verification_status: string };
       errors: Array<{ code: string; message: string; retryable: boolean }>;
     };
 
-    expect(parsed.data.repo_root).toBe("/requested");
+    expect(parsed.data.repo_root).toBe("/repo");
     expect(parsed.data.summary).toContain("required runtime evidence could not be read");
     expect(parsed.data.recommended_first_calls).toEqual([]);
     expect(parsed.meta).toMatchObject({

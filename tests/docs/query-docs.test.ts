@@ -263,14 +263,12 @@ describe("docs query application contracts", () => {
         {
           tool: "docs_outline",
           args: {
-            repo_root: fixture.root,
             path: "docs/operations/runbook.md"
           }
         },
         {
           tool: "docs_read_section",
           args: {
-            repo_root: fixture.root,
             path: "docs/operations/runbook.md",
             heading_id: expect.any(String)
           }
@@ -577,7 +575,6 @@ describe("docs query application contracts", () => {
       {
         tool: "docs_outline",
         args: {
-          repo_root: root,
           path: "docs/no-heading.md"
         }
       }

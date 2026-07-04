@@ -6,9 +6,14 @@
 import path from "node:path";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createAgentWorkbenchServer } from "../server.js";
+import {
+  DEBUG_REPO_ROOT_OVERRIDE_ENV,
+  createRootAuthorityPolicy
+} from "../interface-adapters/mcp/registries/root-authority.js";
 
 export type StdioLaunchConfig = {
   repoRoot: string;
+  debugRepoRootOverride: boolean;
 };
 
 export function resolveStdioLaunchConfig(input: {
@@ -23,14 +28,20 @@ export function resolveStdioLaunchConfig(input: {
   const repoRoot = repoRootArg ?? env.AGENT_WORKBENCH_DEFAULT_REPO_ROOT ?? cwd;
 
   return {
-    repoRoot: path.resolve(cwd, repoRoot)
+    repoRoot: path.resolve(cwd, repoRoot),
+    debugRepoRootOverride: env[DEBUG_REPO_ROOT_OVERRIDE_ENV] === "1"
   };
 }
 
 export async function connectAgentWorkbenchStdio(
   config: StdioLaunchConfig = resolveStdioLaunchConfig()
 ): Promise<void> {
-  const server = createAgentWorkbenchServer(config.repoRoot);
+  const server = createAgentWorkbenchServer(config.repoRoot, {
+    rootAuthorityPolicy: createRootAuthorityPolicy({
+      launchRoot: config.repoRoot,
+      debugRepoRootOverride: config.debugRepoRootOverride
+    })
+  });
   await server.connect(new StdioServerTransport());
 }
 

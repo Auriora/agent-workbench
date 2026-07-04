@@ -3,7 +3,7 @@ title: Workspace safety contract
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -24,7 +24,14 @@ capability gates.
 
 ## Path Containment
 
-- Runtime operations are scoped to one repo root.
+- Runtime operations are scoped to one launched repo root.
+- Normal agent-facing MCP resources and tools must use the launched repo root.
+  Caller-supplied `repo_root` request fields are blocked unless Agent Workbench
+  is running in explicit maintainer debug override mode.
+- Debug repo-root override mode is enabled only by
+  `AGENT_WORKBENCH_DEBUG_REPO_ROOT_OVERRIDE=1` and is for local diagnostics,
+  fixture work, and Agent Workbench maintainer testing. It is not public
+  multi-repo runtime support.
 - All requested paths must be canonicalized before use.
 - Absolute paths are allowed only when they resolve inside the repo root or an
   explicitly configured generated-cache root.

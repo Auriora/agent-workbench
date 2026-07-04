@@ -72,9 +72,15 @@ import { previewWorkspaceEditTool } from "./tools/preview-workspace-edit.js";
 import { symbolSearchTool } from "./tools/symbol-search.js";
 import { verificationPlanTool } from "./tools/verification-plan.js";
 import type { DocsSessionScopeState } from "./docs-session-scope.js";
+import {
+  createRootAuthorityPolicy,
+  normalMcpParameters,
+  type RootAuthorityPolicy
+} from "./root-authority.js";
 
 export type McpRegistryContext = {
   repoRoot: string;
+  rootAuthorityPolicy?: RootAuthorityPolicy;
   docsSessionScope?: DocsSessionScopeState;
   getRepoStatus?: (input: { repo_root: string }) => Promise<GetRepoStatusResult> | GetRepoStatusResult;
   getRepoScope?: (input: { repo_root: string }) => Promise<GetRepoScopeResult> | GetRepoScopeResult;
@@ -138,7 +144,7 @@ export type McpSurfaceMetadata = {
   returns: string;
 };
 
-export const mcpResources: McpResourceDeclaration[] = [
+export const mcpResources: McpResourceDeclaration[] = normalizePublicMetadata([
   repoStatusResource,
   repoScopeResource,
   repoOverviewResource,
@@ -146,9 +152,9 @@ export const mcpResources: McpResourceDeclaration[] = [
   docsMapResource,
   codexIntegrationProfileResource,
   integrationHealthResource
-];
+]);
 
-export const mcpTools: McpToolDeclaration[] = [
+export const mcpTools: McpToolDeclaration[] = normalizePublicMetadata([
   contextForTaskTool,
   diagnosticsForFilesTool,
   docsScopeTool,
@@ -164,9 +170,21 @@ export const mcpTools: McpToolDeclaration[] = [
   previewWorkspaceEditTool,
   applyWorkspaceEditTool,
   verificationPlanTool
-];
+]);
 
 export const mcpPrompts: McpPromptDeclaration[] = [];
+
+function normalizePublicMetadata<T extends McpResourceDeclaration | McpToolDeclaration | McpPromptDeclaration>(
+  surfaces: T[]
+): T[] {
+  return surfaces.map((surface) => ({
+    ...surface,
+    metadata: {
+      ...surface.metadata,
+      parameters: normalMcpParameters(surface.metadata.parameters)
+    }
+  }));
+}
 
 export function registerAllMcpSurfaces(
   server: McpServer,
@@ -174,6 +192,9 @@ export function registerAllMcpSurfaces(
 ): void {
   const registryContext: McpRegistryContext = {
     ...context,
+    rootAuthorityPolicy: context.rootAuthorityPolicy ?? createRootAuthorityPolicy({
+      launchRoot: context.repoRoot
+    }),
     docsSessionScope: context.docsSessionScope ?? {}
   };
   for (const resource of mcpResources) {

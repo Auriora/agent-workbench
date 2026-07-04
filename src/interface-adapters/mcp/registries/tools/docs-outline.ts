@@ -18,7 +18,10 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const docsOutlineRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
@@ -43,7 +46,7 @@ export const docsOutlineTool: McpToolDeclaration = {
     server.tool(
       "docs_outline",
       "Read a bounded heading outline for one repo-relative Markdown document.",
-      docsOutlineRawShape,
+      mcpShapeForRootAuthority(docsOutlineRawShape, context),
       async (args: unknown) => {
         let request: DocsOutlineRequest;
         try {
@@ -53,6 +56,16 @@ export const docsOutlineTool: McpToolDeclaration = {
             repoRoot: context.repoRoot,
             path: readPath(args),
             message: formatMcpArgumentError(error, "Invalid docs_outline arguments.")
+          });
+          return textToolResponse(envelope);
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          const envelope = buildInvalidDocsOutlineInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            path: request.path,
+            message: rootDecision.message
           });
           return textToolResponse(envelope);
         }
@@ -67,7 +80,7 @@ export const docsOutlineTool: McpToolDeclaration = {
         }
 
         const result = await context.getDocsOutline({
-          request: withDefaultRepoRoot(request, context.repoRoot)
+          request: rootDecision.request
         });
         return textToolResponse(buildDocsOutlineEnvelope(result));
       }

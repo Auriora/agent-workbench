@@ -18,7 +18,10 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const editFileShape = z.object({
   path: z.string().min(1).describe("Repo-relative file path to replace."),
@@ -50,7 +53,7 @@ export const previewWorkspaceEditTool: McpToolDeclaration = {
     server.tool(
       "preview_workspace_edit",
       "Preview bounded workspace edits and return a token without mutating files.",
-      previewWorkspaceEditRawShape,
+      mcpShapeForRootAuthority(previewWorkspaceEditRawShape, context),
       async (args: unknown) => {
         let request: PreviewWorkspaceEditRequest;
         try {
@@ -58,6 +61,14 @@ export const previewWorkspaceEditTool: McpToolDeclaration = {
         } catch (error) {
           const message = formatMcpArgumentError(error, "Invalid preview_workspace_edit arguments.");
           return textResponse(buildInvalidPreviewWorkspaceEditInputEnvelope({ repoRoot: context.repoRoot, message }));
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          return textResponse(buildInvalidPreviewWorkspaceEditInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            message: rootDecision.message
+          }));
         }
 
         if (context.previewWorkspaceEdit === undefined) {
@@ -69,11 +80,11 @@ export const previewWorkspaceEditTool: McpToolDeclaration = {
 
         try {
           return textResponse(buildPreviewWorkspaceEditEnvelope(await context.previewWorkspaceEdit({
-            request: withDefaultRepoRoot(request, context.repoRoot)
+            request: rootDecision.request
           })));
         } catch (error) {
           return textResponse(buildInvalidPreviewWorkspaceEditInputEnvelope({
-            repoRoot: context.repoRoot,
+            repoRoot: rootDecision.request.repo_root,
             message: error instanceof Error ? error.message : "preview_workspace_edit failed."
           }));
         }

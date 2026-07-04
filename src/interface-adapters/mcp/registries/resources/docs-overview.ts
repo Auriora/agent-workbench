@@ -18,7 +18,7 @@ import {
 } from "../../arguments/index.js";
 import { requestWithSessionDocsScope } from "../docs-session-scope.js";
 import type { McpResourceDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import { resolveMcpRequestRepoRoot } from "../root-authority.js";
 
 export const docsOverviewResource: McpResourceDeclaration = {
   kind: "resource",
@@ -54,6 +54,15 @@ export const docsOverviewResource: McpResourceDeclaration = {
         return docsResourceResponse("repo:///docs/overview", envelope);
       }
 
+      const rootDecision = resolveMcpRequestRepoRoot(parsedRequest, context);
+      if (!rootDecision.ok) {
+        const envelope = buildInvalidDocsOverviewInputEnvelope({
+          repoRoot: rootDecision.repoRoot,
+          message: rootDecision.message
+        });
+        return docsResourceResponse("repo:///docs/overview", envelope);
+      }
+
       if (context.getDocsOverview === undefined) {
         const envelope = buildInvalidDocsOverviewInputEnvelope({
           repoRoot: context.repoRoot,
@@ -63,7 +72,7 @@ export const docsOverviewResource: McpResourceDeclaration = {
       }
 
       const scopedRequest = requestWithSessionDocsScope(
-        withDefaultRepoRoot(parsedRequest, context.repoRoot),
+        rootDecision.request,
         context.docsSessionScope
       );
       const result = await context.getDocsOverview({

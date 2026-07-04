@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -393,6 +393,33 @@ Preview/apply tokens must include enough identity to reject stale mutations.
   contract.
 - `generated_write`: writes generated cache or report artifacts only.
 
+## Integration Health Shape
+
+Integration health reports MCP surface discovery and callable state for the
+active server. It may include `root_policy` so diagnostics can distinguish
+normal launch-root authority from maintainer debug override mode.
+
+```json
+{
+  "repo_root": "/repo",
+  "runtime_version": "0.1.0",
+  "profile": "codex",
+  "root_policy": {
+    "authority": "launch_root",
+    "debug_repo_root_override": false
+  },
+  "surfaces": [],
+  "counts": {
+    "available": 0,
+    "unavailable": 0,
+    "blocked": 0,
+    "hidden": 0,
+    "unknown": 0
+  },
+  "next_actions": []
+}
+```
+
 ## Integration Profile Shape
 
 Integration profiles describe how common runtime capabilities map to coding
@@ -476,7 +503,6 @@ text:
     {
       "tool": "diagnostics_for_files",
       "args": {
-        "repo_root": "/repo",
         "files": ["src/a.ts", "src/b.ts", "src/c.ts"]
       }
     }

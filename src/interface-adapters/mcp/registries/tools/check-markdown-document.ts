@@ -18,7 +18,10 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const checkMarkdownDocumentRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
@@ -57,7 +60,7 @@ export const checkMarkdownDocumentTool: McpToolDeclaration = {
     server.tool(
       "check_markdown_document",
       "Check one Markdown document for parser-aware structure, frontmatter, link, list, and table quality findings.",
-      checkMarkdownDocumentRawShape,
+      mcpShapeForRootAuthority(checkMarkdownDocumentRawShape, context),
       async (args: unknown) => {
         let request: CheckMarkdownDocumentRequest;
         try {
@@ -67,6 +70,16 @@ export const checkMarkdownDocumentTool: McpToolDeclaration = {
             repoRoot: context.repoRoot,
             path: readPath(args),
             message: formatMcpArgumentError(error, "Invalid check_markdown_document arguments.")
+          });
+          return textToolResponse(envelope);
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          const envelope = buildInvalidCheckMarkdownDocumentInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            path: request.path,
+            message: rootDecision.message
           });
           return textToolResponse(envelope);
         }
@@ -81,7 +94,7 @@ export const checkMarkdownDocumentTool: McpToolDeclaration = {
         }
 
         const result = await context.checkMarkdownDocument({
-          request: withDefaultRepoRoot(request, context.repoRoot)
+          request: rootDecision.request
         });
         return textToolResponse(buildCheckMarkdownDocumentEnvelope(result));
       }

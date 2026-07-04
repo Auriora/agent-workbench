@@ -18,7 +18,10 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const editFileShape = z.object({
   path: z.string().min(1).describe("Repo-relative file path from the preview."),
@@ -50,7 +53,7 @@ export const applyWorkspaceEditTool: McpToolDeclaration = {
     server.tool(
       "apply_workspace_edit",
       "Apply a previously previewed bounded workspace edit after hash and safety checks.",
-      applyWorkspaceEditRawShape,
+      mcpShapeForRootAuthority(applyWorkspaceEditRawShape, context),
       async (args: unknown) => {
         let request: ApplyWorkspaceEditRequest;
         try {
@@ -58,6 +61,14 @@ export const applyWorkspaceEditTool: McpToolDeclaration = {
         } catch (error) {
           const message = formatMcpArgumentError(error, "Invalid apply_workspace_edit arguments.");
           return textResponse(buildInvalidApplyWorkspaceEditInputEnvelope({ repoRoot: context.repoRoot, message }));
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          return textResponse(buildInvalidApplyWorkspaceEditInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            message: rootDecision.message
+          }));
         }
 
         if (context.applyWorkspaceEdit === undefined) {
@@ -69,11 +80,11 @@ export const applyWorkspaceEditTool: McpToolDeclaration = {
 
         try {
           return textResponse(buildApplyWorkspaceEditEnvelope(await context.applyWorkspaceEdit({
-            request: withDefaultRepoRoot(request, context.repoRoot)
+            request: rootDecision.request
           })));
         } catch (error) {
           return textResponse(buildInvalidApplyWorkspaceEditInputEnvelope({
-            repoRoot: context.repoRoot,
+            repoRoot: rootDecision.request.repo_root,
             message: error instanceof Error ? error.message : "apply_workspace_edit failed."
           }));
         }

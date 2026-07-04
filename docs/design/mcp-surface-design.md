@@ -66,6 +66,15 @@ Shared argument parsers must handle repo paths, file paths, line/column pairs,
 booleans, enums, limits, payload modes, and usage context. Invalid input returns
 structured contract errors before any use case runs.
 
+Normal public MCP resources and tools are anchored to the server launch root.
+They must not advertise `repo_root` in normal metadata or tool schemas, and a
+caller-supplied `repo_root` request field must return a structured blocked or
+invalid-input envelope before the use case runs. Maintainer diagnostics may
+enable debug root overrides only through
+`AGENT_WORKBENCH_DEBUG_REPO_ROOT_OVERRIDE=1`; when enabled, integration health
+reports `root_policy.authority: launch_root` and
+`root_policy.debug_repo_root_override: true`.
+
 Backend tools and workers are not part of the MCP contract. Parser payloads,
 diagnostic provider output, lint output, test discovery records, worker state,
 or internal tool names must be translated into the MCP resource/tool schema by

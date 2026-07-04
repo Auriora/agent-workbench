@@ -19,7 +19,10 @@ import {
 } from "../../arguments/index.js";
 import { requestWithSessionDocsScope } from "../docs-session-scope.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const docsCurrentForTaskRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
@@ -50,7 +53,7 @@ export const docsCurrentForTaskTool: McpToolDeclaration = {
     server.tool(
       "docs_current_for_task",
       "Identify current, supporting, non-authoritative, and uncertain docs for a task.",
-      docsCurrentForTaskRawShape,
+      mcpShapeForRootAuthority(docsCurrentForTaskRawShape, context),
       async (args: unknown) => {
         let request: DocsCurrentForTaskRequest;
         try {
@@ -60,6 +63,16 @@ export const docsCurrentForTaskTool: McpToolDeclaration = {
             repoRoot: context.repoRoot,
             task: readTask(args),
             message: formatMcpArgumentError(error, "Invalid docs_current_for_task arguments.")
+          });
+          return textToolResponse(envelope);
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          const envelope = buildInvalidDocsCurrentForTaskInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            task: request.task,
+            message: rootDecision.message
           });
           return textToolResponse(envelope);
         }
@@ -74,7 +87,7 @@ export const docsCurrentForTaskTool: McpToolDeclaration = {
         }
 
         const scopedRequest = requestWithSessionDocsScope(
-          withDefaultRepoRoot(request, context.repoRoot),
+          rootDecision.request,
           context.docsSessionScope
         );
         const result = await context.getCurrentDocsForTask({

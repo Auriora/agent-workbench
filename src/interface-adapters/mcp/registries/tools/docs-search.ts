@@ -19,7 +19,10 @@ import {
 } from "../../arguments/index.js";
 import { requestWithSessionDocsScope } from "../docs-session-scope.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const docsSearchRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
@@ -52,7 +55,7 @@ export const docsSearchTool: McpToolDeclaration = {
     server.tool(
       "docs_search",
       "Search repository docs by path, title, heading, and bounded text snippets.",
-      docsSearchRawShape,
+      mcpShapeForRootAuthority(docsSearchRawShape, context),
       async (args: unknown) => {
         let request: DocsSearchRequest;
         try {
@@ -62,6 +65,16 @@ export const docsSearchTool: McpToolDeclaration = {
             repoRoot: context.repoRoot,
             query: readQuery(args),
             message: formatMcpArgumentError(error, "Invalid docs_search arguments.")
+          });
+          return textToolResponse(envelope);
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          const envelope = buildInvalidDocsSearchInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            query: request.query,
+            message: rootDecision.message
           });
           return textToolResponse(envelope);
         }
@@ -76,7 +89,7 @@ export const docsSearchTool: McpToolDeclaration = {
         }
 
         const scopedRequest = requestWithSessionDocsScope(
-          withDefaultRepoRoot(request, context.repoRoot),
+          rootDecision.request,
           context.docsSessionScope
         );
         const result = await context.searchDocs({

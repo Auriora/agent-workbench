@@ -15,7 +15,10 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const impactRawShape = {
   node_id: z.string().describe("Indexed graph node id to start bounded impact traversal from."),
@@ -48,7 +51,7 @@ export const impactTool: McpToolDeclaration = {
     server.tool(
       "impact",
       "Compute bounded graph impact for an indexed symbol without broad source scans.",
-      impactRawShape,
+      mcpShapeForRootAuthority(impactRawShape, context),
       async (args: unknown) => {
         let request: ImpactRequest;
         try {
@@ -56,6 +59,14 @@ export const impactTool: McpToolDeclaration = {
         } catch (error) {
           const message = formatMcpArgumentError(error, "Invalid impact arguments.");
           return textResponse(buildInvalidImpactInputEnvelope({ repoRoot: context.repoRoot, message }));
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          return textResponse(buildInvalidImpactInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            message: rootDecision.message
+          }));
         }
 
         if (context.computeImpact === undefined) {
@@ -66,7 +77,7 @@ export const impactTool: McpToolDeclaration = {
         }
 
         return textResponse(buildImpactEnvelope(await context.computeImpact({
-          request: withDefaultRepoRoot(request, context.repoRoot)
+          request: rootDecision.request
         })));
       }
     );

@@ -11,6 +11,7 @@ import {
   buildRuntimeResponseMeta,
   classifyRuntimeTrust,
   deriveRuntimeStatusCaveats,
+  presentNextActions,
   sessionAwareNextActions
 } from "../../src/application/use-cases/response-metadata.js";
 
@@ -112,6 +113,27 @@ describe("response metadata helpers", () => {
     ).toEqual([
       { tool: "verification_plan", args: { files: ["src/service.py"] } },
       { tool: "symbol_search", args: { query: "Service" } }
+    ]);
+  });
+
+  it("removes repo_root from public next action arguments", () => {
+    expect(
+      presentNextActions([
+        {
+          tool: "verification_plan",
+          args: {
+            repo_root: "/repo",
+            files: ["src/app.ts"]
+          }
+        }
+      ])
+    ).toEqual([
+      {
+        tool: "verification_plan",
+        args: {
+          files: ["src/app.ts"]
+        }
+      }
     ]);
   });
 

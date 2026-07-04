@@ -69,12 +69,12 @@ describe("repo status MCP resource", () => {
       uri: "repo:///status"
     });
 
-    const response = await registered.handler({ repo_root: "/requested" });
+    const response = await registered.handler({});
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: GetRepoStatusResult["status"];
     };
 
-    expect(parsed.data.repo_root).toBe("/requested");
+    expect(parsed.data.repo_root).toBe("/repo");
     expect(parsed.data.adapter_coverage).toEqual(result.status.adapter_coverage);
   });
 
@@ -143,7 +143,7 @@ describe("repo status MCP resource", () => {
       }
     });
 
-    const response = await registered.handler({ repo_root: "/requested" });
+    const response = await registered.handler({});
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: { repo_root: string; runtime_state: string; reason?: string };
       meta: { analysis_validity: string; verification_status: string };
@@ -151,7 +151,7 @@ describe("repo status MCP resource", () => {
     };
 
     expect(parsed.data).toMatchObject({
-      repo_root: "/requested",
+      repo_root: "/repo",
       runtime_state: "invalid_due_to_environment"
     });
     expect(parsed.data.reason).toContain("database is locked");

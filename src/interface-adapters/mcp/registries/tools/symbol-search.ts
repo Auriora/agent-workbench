@@ -18,7 +18,10 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const symbolSearchRawShape = {
   query: z.string().min(1).describe("Symbol name or text to search for in the indexed graph."),
@@ -53,7 +56,7 @@ export const symbolSearchTool: McpToolDeclaration = {
     server.tool(
       "symbol_search",
       "Search indexed graph symbols with bounded row and optional source-byte budgets.",
-      symbolSearchRawShape,
+      mcpShapeForRootAuthority(symbolSearchRawShape, context),
       async (args: unknown) => {
         let request: SymbolSearchRequest;
         try {
@@ -61,6 +64,14 @@ export const symbolSearchTool: McpToolDeclaration = {
         } catch (error) {
           const message = formatMcpArgumentError(error, "Invalid symbol_search arguments.");
           return textResponse(buildInvalidSymbolSearchInputEnvelope({ repoRoot: context.repoRoot, message }));
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          return textResponse(buildInvalidSymbolSearchInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            message: rootDecision.message
+          }));
         }
 
         if (context.searchSymbols === undefined) {
@@ -71,7 +82,7 @@ export const symbolSearchTool: McpToolDeclaration = {
         }
 
         return textResponse(buildSymbolSearchEnvelope(await context.searchSymbols({
-          request: withDefaultRepoRoot(request, context.repoRoot)
+          request: rootDecision.request
         })));
       }
     );

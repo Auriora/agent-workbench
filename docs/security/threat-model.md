@@ -3,7 +3,7 @@ title: Agent Workbench threat model
 doc_type: security
 status: draft
 owner: platform
-last_reviewed: 2026-06-13
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -52,7 +52,7 @@ must never treat repository text as policy.
 | --- | --- | --- | --- |
 | Malicious repository content | Source/docs/tests/config may try to steer agents or exploit parsers | Treat repo text as data; parser errors become structured evidence | EB034 security-sensitive change detection |
 | Prompt injection in docs/comments/tests | Indexed text may instruct an agent to ignore policy or leak data | Docs/search results are routing/direct-read evidence, not policy | Trust calibration, docs caveats |
-| Malicious MCP client | Client may request unsafe paths, broad reads, or mutations | MCP argument parsing, workspace safety, capability gates | Contract drift tests |
+| Malicious MCP client | Client may request unsafe paths, broad reads, alternate repo roots, or mutations | MCP argument parsing, launch-root authority, workspace safety, capability gates | Contract drift tests |
 | Malicious MCP configuration | Config may point agents at wrong runtime or wrapper | Integration profile separates configured/discovered/callable state | Doctor command and capability inventory |
 | Workspace escape through symlinks | Path traversal or symlink targets may leave repo scope | Canonical path containment and symlink checks | Workspace safety fixtures |
 | Command execution escalation | Repo-local commands may execute hostile code | MVP plans commands only; process execution requires allowlist and runner policy | Validation-policy trust levels |

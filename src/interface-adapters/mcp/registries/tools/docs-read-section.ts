@@ -18,7 +18,10 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const docsReadSectionRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
@@ -47,7 +50,7 @@ export const docsReadSectionTool: McpToolDeclaration = {
     server.tool(
       "docs_read_section",
       "Read one bounded Markdown section by repo-relative path and stable heading identifier.",
-      docsReadSectionRawShape,
+      mcpShapeForRootAuthority(docsReadSectionRawShape, context),
       async (args: unknown) => {
         let request: DocsReadSectionRequest;
         try {
@@ -58,6 +61,17 @@ export const docsReadSectionTool: McpToolDeclaration = {
             path: readString(args, "path"),
             headingId: readString(args, "heading_id"),
             message: formatMcpArgumentError(error, "Invalid docs_read_section arguments.")
+          });
+          return textToolResponse(envelope);
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          const envelope = buildInvalidDocsReadSectionInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            path: request.path,
+            headingId: request.heading_id,
+            message: rootDecision.message
           });
           return textToolResponse(envelope);
         }
@@ -73,7 +87,7 @@ export const docsReadSectionTool: McpToolDeclaration = {
         }
 
         const result = await context.readDocsSection({
-          request: withDefaultRepoRoot(request, context.repoRoot)
+          request: rootDecision.request
         });
         return textToolResponse(buildDocsReadSectionEnvelope(result));
       }

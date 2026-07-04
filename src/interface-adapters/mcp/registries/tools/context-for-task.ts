@@ -18,7 +18,10 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const contextForTaskRawShape = {
   task: z.string().min(1).describe("The implementation, review, or planning task to gather context for."),
@@ -55,7 +58,7 @@ export const contextForTaskTool: McpToolDeclaration = {
     server.tool(
       "context_for_task",
       "Gather compact task context from local repository evidence before editing.",
-      contextForTaskRawShape,
+      mcpShapeForRootAuthority(contextForTaskRawShape, context),
       async (args: unknown) => {
         let request: TaskContextRequest;
         try {
@@ -72,7 +75,23 @@ export const contextForTaskTool: McpToolDeclaration = {
           return {
             content: [
               {
-                type: "text",
+                type: "text" as const,
+                text: JSON.stringify(envelope, null, 2)
+              }
+            ]
+          };
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          const envelope = buildInvalidTaskContextInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            message: rootDecision.message
+          });
+          return {
+            content: [
+              {
+                type: "text" as const,
                 text: JSON.stringify(envelope, null, 2)
               }
             ]
@@ -87,7 +106,7 @@ export const contextForTaskTool: McpToolDeclaration = {
           return {
             content: [
               {
-                type: "text",
+                type: "text" as const,
                 text: JSON.stringify(envelope, null, 2)
               }
             ]
@@ -95,13 +114,13 @@ export const contextForTaskTool: McpToolDeclaration = {
         }
 
         const result = await context.getTaskContext({
-          request: withDefaultRepoRoot(request, context.repoRoot)
+          request: rootDecision.request
         });
         const envelope = buildTaskContextEnvelope(result);
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: JSON.stringify(envelope, null, 2)
             }
           ]

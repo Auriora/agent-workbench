@@ -96,6 +96,17 @@ describe("MCP registry metadata", () => {
     }
   });
 
+  it("does not advertise repo_root on normal public MCP metadata", () => {
+    const surfaces = [...mcpResources, ...mcpTools, ...mcpPrompts];
+
+    for (const surface of surfaces) {
+      expect(
+        surface.metadata.parameters.map((parameter) => parameter.name),
+        `${surface.kind}:${surface.name}`
+      ).not.toContain("repo_root");
+    }
+  });
+
   it("keeps MCP registry adapters free of concrete backend infrastructure imports", () => {
     const registryRoot = path.resolve("src/interface-adapters/mcp/registries");
     const sourceFiles = listTypeScriptFiles(registryRoot);

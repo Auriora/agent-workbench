@@ -15,13 +15,13 @@ license: GPL-3.0-or-later
 
 | Task | Requirements | Design Sections | Durable Targets | Verification |
 | --- | --- | --- | --- | --- |
-| T001 | R1, R2 | Root Authority Policy | Workspace safety contract, MCP surface design | Policy unit tests |
-| T002 | R2, R3 | Debug Gate | MCP surface design, threat model | Env/flag tests |
-| T003 | R1, R2 | Root Authority Policy, Low-Level Design | Workspace safety contract | MCP request tests |
-| T004 | R2, R3 | Metadata Filtering | Integration docs and profiles | Schema/profile tests |
-| T005 | R1, R2, R3, P1, P2, P3 | All | Runtime contracts if changed | Contract and MCP tests |
-| T006 | R1, R2, R3 | Operational Considerations | Workspace safety contract, MCP surface design, threat model | Markdown review |
-| T007 | R1, R2, R3, P1, P2, P3 | All | Closure docs/backlog route | `pnpm typecheck`, targeted MCP tests |
+| T001 | Requirement 1, Requirement 2 | Root Authority Policy | Workspace safety contract, MCP surface design | Policy unit tests |
+| T002 | Requirement 2, Requirement 3 | Debug Gate | MCP surface design, threat model | Env/flag tests |
+| T003 | Requirement 1, Requirement 2 | Root Authority Policy, Low-Level Design | Workspace safety contract | MCP request tests |
+| T004 | Requirement 2, Requirement 3 | Metadata Filtering | Integration docs and profiles | Schema/profile tests |
+| T005 | Requirement 1, Requirement 2, Requirement 3, P1, P2, P3 | All | Runtime contracts if changed | Contract and MCP tests |
+| T006 | Requirement 1, Requirement 2, Requirement 3 | Operational Considerations | Workspace safety contract, MCP surface design, threat model | Markdown review |
+| T007 | Requirement 1, Requirement 2, Requirement 3, P1, P2, P3 | All | Closure docs/backlog route | `pnpm typecheck`, targeted MCP tests |
 
 ## Requirement To Delivery Matrix
 

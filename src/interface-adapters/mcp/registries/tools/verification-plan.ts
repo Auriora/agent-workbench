@@ -18,7 +18,10 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const verificationPlanRawShape = {
   task: z.string().optional().describe("Optional task description to associate with the validation plan."),
@@ -51,7 +54,7 @@ export const verificationPlanTool: McpToolDeclaration = {
     server.tool(
       "verification_plan",
       "Plan validation commands and quiet static feedback without executing commands.",
-      verificationPlanRawShape,
+      mcpShapeForRootAuthority(verificationPlanRawShape, context),
       async (args: unknown) => {
         let request: VerificationPlanRequest;
         try {
@@ -68,7 +71,23 @@ export const verificationPlanTool: McpToolDeclaration = {
           return {
             content: [
               {
-                type: "text",
+                type: "text" as const,
+                text: JSON.stringify(envelope, null, 2)
+              }
+            ]
+          };
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          const envelope = buildInvalidVerificationPlanInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            message: rootDecision.message
+          });
+          return {
+            content: [
+              {
+                type: "text" as const,
                 text: JSON.stringify(envelope, null, 2)
               }
             ]
@@ -83,7 +102,7 @@ export const verificationPlanTool: McpToolDeclaration = {
           return {
             content: [
               {
-                type: "text",
+                type: "text" as const,
                 text: JSON.stringify(envelope, null, 2)
               }
             ]
@@ -93,17 +112,17 @@ export const verificationPlanTool: McpToolDeclaration = {
         let result;
         try {
           result = await context.planVerification({
-            request: withDefaultRepoRoot(request, context.repoRoot)
+            request: rootDecision.request
           });
         } catch (error) {
           const envelope = buildInvalidVerificationPlanInputEnvelope({
-            repoRoot: request.repo_root ?? context.repoRoot,
+            repoRoot: rootDecision.request.repo_root,
             message: `verification_plan provider failed before planning could complete: ${error instanceof Error ? error.message : String(error)}`
           });
           return {
             content: [
               {
-                type: "text",
+                type: "text" as const,
                 text: JSON.stringify(envelope, null, 2)
               }
             ]
@@ -113,7 +132,7 @@ export const verificationPlanTool: McpToolDeclaration = {
         return {
           content: [
             {
-              type: "text",
+              type: "text" as const,
               text: JSON.stringify(envelope, null, 2)
             }
           ]

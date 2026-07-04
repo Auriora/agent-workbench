@@ -13,6 +13,7 @@ import type { SearchSymbolsResult } from "../../src/application/use-cases/search
 import { findReferencesTool } from "../../src/interface-adapters/mcp/registries/tools/find-references.js";
 import { impactTool } from "../../src/interface-adapters/mcp/registries/tools/impact.js";
 import { symbolSearchTool } from "../../src/interface-adapters/mcp/registries/tools/symbol-search.js";
+import { createRootAuthorityPolicy } from "../../src/interface-adapters/mcp/registries/root-authority.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
 import {
   registerMcpTool as registerTool,
@@ -225,9 +226,48 @@ describe("graph query MCP tools", () => {
     expect(parsed.data.query).toBe("Runner");
   });
 
-  it("preserves explicit repo_root overrides for graph query tools", async () => {
+  it("blocks explicit repo_root overrides for graph query tools in normal mode", async () => {
     let parsedRequest: SymbolSearchRequest | undefined;
     const registered = registerTool(symbolSearchTool, {
+      searchSymbols: ({ request }) => {
+        parsedRequest = request;
+        return {
+          symbols: {
+            query: request.query,
+            repo_root: request.repo_root ?? "missing-default",
+            snapshot_id: "snapshot-1",
+            symbols: [],
+            next_actions: []
+          },
+          meta: meta()
+        };
+      }
+    });
+
+    const response = await registered.handler({
+      query: "Runner",
+      repo_root: "/other/repo"
+    });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      errors: Array<{ code: string; message: string }>;
+    };
+
+    expect(parsedRequest).toBeUndefined();
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "invalid_input",
+        message: expect.stringContaining("repo_root override is blocked")
+      })
+    ]);
+  });
+
+  it("allows explicit repo_root overrides for graph query tools in debug mode", async () => {
+    let parsedRequest: SymbolSearchRequest | undefined;
+    const registered = registerTool(symbolSearchTool, {
+      rootAuthorityPolicy: createRootAuthorityPolicy({
+        launchRoot: "/repo",
+        debugRepoRootOverride: true
+      }),
       searchSymbols: ({ request }) => {
         parsedRequest = request;
         return {

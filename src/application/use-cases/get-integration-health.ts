@@ -35,6 +35,10 @@ export type GetIntegrationHealthInput = {
   runtime_version: string;
   profile: string;
   surfaces: readonly IntegrationSurfaceInput[];
+  root_policy?: {
+    authority: "launch_root";
+    debug_repo_root_override: boolean;
+  };
 };
 
 export type GetIntegrationHealthResult = {
@@ -63,6 +67,7 @@ export function getIntegrationHealth(input: GetIntegrationHealthInput): GetInteg
       session,
       surfaces,
       counts: countSurfaces(surfaces),
+      root_policy: input.root_policy,
       next_actions: buildNextActions(surfaces)
     },
     meta: {

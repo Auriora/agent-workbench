@@ -17,7 +17,9 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpResourceDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 export const integrationHealthResource: McpResourceDeclaration = {
   kind: "resource",
@@ -54,6 +56,15 @@ export const integrationHealthResource: McpResourceDeclaration = {
         return integrationHealthResourceResponse(envelope);
       }
 
+      const rootDecision = resolveMcpRequestRepoRoot(parsedRequest, context);
+      if (!rootDecision.ok) {
+        const envelope = buildInvalidIntegrationHealthInputEnvelope({
+          repoRoot: rootDecision.repoRoot,
+          message: rootDecision.message
+        });
+        return integrationHealthResourceResponse(envelope);
+      }
+
       if (context.getIntegrationHealth === undefined) {
         const envelope = buildInvalidIntegrationHealthInputEnvelope({
           repoRoot: context.repoRoot,
@@ -63,7 +74,7 @@ export const integrationHealthResource: McpResourceDeclaration = {
       }
 
       const result = await context.getIntegrationHealth({
-        request: withDefaultRepoRoot(parsedRequest, context.repoRoot)
+        request: rootDecision.request
       });
       return integrationHealthResourceResponse(buildIntegrationHealthEnvelope(result));
     });

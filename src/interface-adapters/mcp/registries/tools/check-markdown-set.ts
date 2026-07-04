@@ -18,7 +18,10 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const requiredFrontmatterDefault = [
   "title",
@@ -63,7 +66,7 @@ export const checkMarkdownSetTool: McpToolDeclaration = {
     server.tool(
       "check_markdown_set",
       "Check a bounded explicit or scoped set of Markdown documents for quality findings.",
-      checkMarkdownSetRawShape,
+      mcpShapeForRootAuthority(checkMarkdownSetRawShape, context),
       async (args: unknown) => {
         let request: CheckMarkdownSetRequest;
         try {
@@ -72,6 +75,15 @@ export const checkMarkdownSetTool: McpToolDeclaration = {
           const envelope = buildInvalidCheckMarkdownSetInputEnvelope({
             repoRoot: context.repoRoot,
             message: formatMcpArgumentError(error, "Invalid check_markdown_set arguments.")
+          });
+          return textToolResponse(envelope);
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          const envelope = buildInvalidCheckMarkdownSetInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            message: rootDecision.message
           });
           return textToolResponse(envelope);
         }
@@ -85,7 +97,7 @@ export const checkMarkdownSetTool: McpToolDeclaration = {
         }
 
         const result = await context.checkMarkdownSet({
-          request: withDefaultRepoRoot(request, context.repoRoot)
+          request: rootDecision.request
         });
         return textToolResponse(buildCheckMarkdownSetEnvelope(result));
       }

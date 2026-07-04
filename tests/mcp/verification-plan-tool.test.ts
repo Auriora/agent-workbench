@@ -1471,7 +1471,7 @@ describe("verification_plan MCP tool", () => {
     expect(registeredToolNames(server)).not.toContain("static_feedback");
   });
 
-  it("binds composed-server validation workspaces to the request repo_root", async () => {
+  it("blocks composed-server validation workspace repo_root overrides in normal mode", async () => {
     const defaultRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-server-default-"));
     const targetRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-server-target-"));
     try {
@@ -1493,19 +1493,18 @@ describe("verification_plan MCP tool", () => {
         data: {
           status: string;
           static_feedback?: unknown;
-          planned_commands: Array<{ display: string }>;
         };
+        errors: Array<{ code: string; message: string }>;
       };
 
-      expect(parsed.data.status).toBe("planned");
+      expect(parsed.data.status).toBe("blocked");
       expect(parsed.data.static_feedback).toBeUndefined();
-      expect(parsed.data.planned_commands).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            display: "pnpm run test"
-          })
-        ])
-      );
+      expect(parsed.errors).toEqual([
+        expect.objectContaining({
+          code: "invalid_input",
+          message: expect.stringContaining("repo_root override is blocked")
+        })
+      ]);
     } finally {
       fs.rmSync(defaultRoot, { recursive: true, force: true });
       fs.rmSync(targetRoot, { recursive: true, force: true });

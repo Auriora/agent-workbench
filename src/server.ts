@@ -58,6 +58,11 @@ import {
   mcpResources,
   mcpTools
 } from "./interface-adapters/mcp/registries/index.js";
+import {
+  createRootAuthorityPolicy,
+  rootAuthorityPolicyFromEnv,
+  type RootAuthorityPolicy
+} from "./interface-adapters/mcp/registries/root-authority.js";
 import { describeCodexIntegrationProfile } from "./application/use-cases/describe-codex-integration-profile.js";
 
 export type AgentWorkbenchServerOptions = {
@@ -65,6 +70,7 @@ export type AgentWorkbenchServerOptions = {
   onGraphWarmupFailure?: (error: unknown) => void;
   startupWarmupDelayMs?: number;
   startupWarmupMaxFiles?: number;
+  rootAuthorityPolicy?: RootAuthorityPolicy;
 };
 
 const DEFAULT_STARTUP_WARMUP_DELAY_MS = 1000;
@@ -78,6 +84,10 @@ export function createAgentWorkbenchServer(
   options: AgentWorkbenchServerOptions = {}
 ) {
   const absoluteRepoRoot = path.resolve(repoRoot);
+  const rootAuthorityPolicy = options.rootAuthorityPolicy ?? rootAuthorityPolicyFromEnv({
+    launchRoot: absoluteRepoRoot,
+    env: process.env
+  });
   const scanner = new FileCatalogScannerAdapter();
   const clock = new SystemClockAdapter();
   const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
@@ -89,6 +99,10 @@ export function createAgentWorkbenchServer(
   const graphStore = createAsyncGraphStore(databasePath);
   const telemetry = createTelemetryAdapter(telemetryConfigFromEnv());
   const server = createAgentWorkbenchMcpServer(absoluteRepoRoot, {
+    rootAuthorityPolicy: createRootAuthorityPolicy({
+      launchRoot: absoluteRepoRoot,
+      debugRepoRootOverride: rootAuthorityPolicy.debugRepoRootOverride
+    }),
     telemetry,
     getRepoStatus: async ({ repo_root }) => {
       const store = await graphStore();
@@ -261,7 +275,11 @@ export function createAgentWorkbenchServer(
         default_repo_root: absoluteRepoRoot,
         runtime_version: "0.1.0",
         profile: "codex",
-        surfaces: registeredIntegrationSurfaces()
+        surfaces: registeredIntegrationSurfaces(),
+        root_policy: {
+          authority: "launch_root",
+          debug_repo_root_override: rootAuthorityPolicy.debugRepoRootOverride
+        }
       })
   });
 

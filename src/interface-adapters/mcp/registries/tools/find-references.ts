@@ -18,7 +18,10 @@ import {
   parseMcpArguments
 } from "../../arguments/index.js";
 import type { McpToolDeclaration } from "../index.js";
-import { withDefaultRepoRoot } from "../repo-root-default.js";
+import {
+  mcpShapeForRootAuthority,
+  resolveMcpRequestRepoRoot
+} from "../root-authority.js";
 
 const findReferencesRawShape = {
   node_id: z.string().optional().describe("Indexed graph node id to inspect."),
@@ -53,7 +56,7 @@ export const findReferencesTool: McpToolDeclaration = {
     server.tool(
       "find_references",
       "Find resolved and unresolved references for an indexed graph node or exact symbol.",
-      findReferencesRawShape,
+      mcpShapeForRootAuthority(findReferencesRawShape, context),
       async (args: unknown) => {
         let request: FindReferencesRequest;
         try {
@@ -61,6 +64,14 @@ export const findReferencesTool: McpToolDeclaration = {
         } catch (error) {
           const message = formatMcpArgumentError(error, "Invalid find_references arguments.");
           return textResponse(buildInvalidFindReferencesInputEnvelope({ repoRoot: context.repoRoot, message }));
+        }
+
+        const rootDecision = resolveMcpRequestRepoRoot(request, context);
+        if (!rootDecision.ok) {
+          return textResponse(buildInvalidFindReferencesInputEnvelope({
+            repoRoot: rootDecision.repoRoot,
+            message: rootDecision.message
+          }));
         }
 
         if (context.findReferences === undefined) {
@@ -71,7 +82,7 @@ export const findReferencesTool: McpToolDeclaration = {
         }
 
         return textResponse(buildFindReferencesEnvelope(await context.findReferences({
-          request: withDefaultRepoRoot(request, context.repoRoot)
+          request: rootDecision.request
         })));
       }
     );

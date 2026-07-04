@@ -38,7 +38,6 @@ describe("integration health MCP resource", () => {
     });
 
     const response = await registered.handler({
-      repo_root: "/fixture",
       client: "codex",
       discovery_state: "provided",
       discovered_tools: ["context_for_task"],
@@ -49,14 +48,14 @@ describe("integration health MCP resource", () => {
     };
 
     expect(parsedRequest).toMatchObject({
-      repo_root: "/fixture",
+      repo_root: "/repo",
       client: "codex",
       discovery_state: "provided",
       discovered_tools: ["context_for_task"],
       discovered_resources: ["repo:///status"],
       discovered_prompts: []
     });
-    expect(parsed.data.repo_root).toBe("/fixture");
+    expect(parsed.data.repo_root).toBe("/repo");
     expect(parsed.data.surfaces[0]).toMatchObject({
       name: "context_for_task",
       status: "available",
@@ -136,6 +135,10 @@ describe("integration health MCP resource", () => {
       };
 
       expect(parsed.data.repo_root).toBe(repoRoot);
+      expect(parsed.data.root_policy).toEqual({
+        authority: "launch_root",
+        debug_repo_root_override: false
+      });
       expect(parsed.data.session.discovery_state).toBe("unknown");
       expect(parsed.data.counts.unknown).toBeGreaterThan(0);
       expect(parsed.data.surfaces).toEqual(

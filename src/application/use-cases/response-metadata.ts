@@ -400,7 +400,7 @@ export function sessionAwareNextActions(
         `No integration health evidence was found for ${action.tool}; preserving public next action with unknown callability.`
       );
     }
-    pushUniqueAction({ action, seen, capped, limit: input.limit ?? 3 });
+    pushUniqueAction({ action: publicNextAction(action), seen, capped, limit: input.limit ?? 3 });
   }
 
   return {
@@ -431,6 +431,17 @@ function integrationSurfaceByTool(
     }
   }
   return surfaces;
+}
+
+function publicNextAction(action: NextAction): NextAction {
+  if (!Object.prototype.hasOwnProperty.call(action.args, "repo_root")) {
+    return action;
+  }
+  const { repo_root: _repoRoot, ...args } = action.args;
+  return {
+    ...action,
+    args
+  };
 }
 
 function pushUniqueAction(input: {

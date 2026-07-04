@@ -12,6 +12,7 @@ import {
 import type { McpResourceDeclaration } from "../index.js";
 import { formatMcpArgumentError } from "../../arguments/index.js";
 import { parseRepoStatusArguments } from "../../arguments/repo-status.js";
+import { resolveMcpRequestRepoRoot } from "../root-authority.js";
 
 export const repoOverviewResource: McpResourceDeclaration = {
   kind: "resource",
@@ -56,6 +57,23 @@ export const repoOverviewResource: McpResourceDeclaration = {
         };
       }
 
+      const rootDecision = resolveMcpRequestRepoRoot(args, context);
+      if (!rootDecision.ok) {
+        const envelope = buildInvalidRepoOverviewInputEnvelope({
+          repoRoot: rootDecision.repoRoot,
+          message: rootDecision.message
+        });
+        return {
+          contents: [
+            {
+              uri: "repo:///overview",
+              mimeType: "application/json",
+              text: JSON.stringify(envelope, null, 2)
+            }
+          ]
+        };
+      }
+
       if (context.getRepoOverview === undefined) {
         const envelope = buildInvalidRepoOverviewInputEnvelope({
           repoRoot: context.repoRoot,
@@ -72,7 +90,7 @@ export const repoOverviewResource: McpResourceDeclaration = {
         };
       }
 
-      const repoRoot = args.repo_root ?? context.repoRoot;
+      const repoRoot = rootDecision.request.repo_root;
       let envelope;
       try {
         const result = await context.getRepoOverview({
