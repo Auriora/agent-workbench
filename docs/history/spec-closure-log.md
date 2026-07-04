@@ -50,6 +50,7 @@ name their own final pre-removal tree commits.
 | Spec 024: Plugin discoverability and drift hardening | Removed from `docs/specs/` on 2026-06-13 after final pre-removal tree commit `90b70bc` completed Codex marketplace metadata, MCP server-card metadata, drift tests, operator docs, CI workflow, repo-owned plugin/package validation, installer dry-run, package dry-run, and durable promotion. | Agent Workbench plugin README, Codex plugin runbook, documentation map, marketplace metadata, MCP server card, CI workflow, plugin/package validator, package metadata tests, focused integration tests, lifecycle lint, closure check, and final full Vitest validation. |
 | Spec 025: Brooks-Lint findings tracker | Removed from `docs/specs/` on 2026-06-11 after final pre-removal tree commit `539f174` completed architecture boundary remediation, tech-debt extraction splits, runtime contract modularization, MCP test harness hardening, focused validation/resource rule tests, broad fixture helper annotation, and durable test-maintainability gates. | Layered runtime architecture, system architecture, runtime contracts, MVP proof matrix, documentation map, architecture tests, MCP/integration tests, focused validation/resource tests, broad fixture tests, and final closure traceability. |
 | Spec 029: Repo-root authority | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `5a8b098` completed launch-root authority for public MCP resources and tools, debug-only root override gating, public `repo_root` metadata hiding, integration-health root policy reporting, and durable promotion. | Workspace safety contract, MCP surface design, runtime contracts, threat model, documentation map, root-authority policy and MCP registry tests, response metadata tests, integration-health tests, focused MCP/contract validation, and final full Vitest validation. |
+| Spec 030: MCP error envelope consistency | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `8e66d18` completed the shared MCP envelope wrapper, representative tool migrations, distinct recoverable failure classes, durable contract/design promotion, and registry consistency tests. | Runtime contracts, MCP surface design, documentation map, executable backlog, shared MCP envelope wrapper, representative MCP registry tests, typecheck, plugin/package validation, full Vitest validation, lifecycle lint, scan, and closure-check. |
 | Spec 033: Cross-platform packaging | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `0d2cc48` completed shell-free npm package install, Codex/Claude MCP launch shims, shell-free hook entry points, package-scoped marketplaces, supported platform matrix documentation, and routed macOS/Windows runner evidence. | Codex Agent Workbench plugin runbook, packaging README, plugin README, cross-platform packaging workflow, install/MCP/hook smoke scripts, Codex/Claude package metadata tests, backlog follow-ups for Kiro launcher and turnkey core `tree-sitter`, documentation map, spec closure log, and archive index. |
 | Spec 034: Doc currency routing | Removed from `docs/specs/` on 2026-07-02 after final pre-removal tree commit `8657e9e` completed document currency classification, docs search/inventory metadata, `context_for_task` ranking, `docs_current_for_task`, durable docs promotion, and spec-lifecycle-manager handoff. | MCP surface design, graph store design, runtime contracts, documentation map, spec-lifecycle-manager doc currency handoff, MCP server card, Codex integration profile, docs/context/MCP tests, lifecycle lint, closure check, and closure-risk review. |
 
@@ -223,6 +224,31 @@ name their own final pre-removal tree commits.
   override remains maintainer-only through
   `AGENT_WORKBENCH_DEBUG_REPO_ROOT_OVERRIDE=1`; it is not public multi-repo
   runtime support.
+
+### 2026-07-04 - 030-mcp-error-envelope-consistency
+
+- **Spec:** docs/specs/030-mcp-error-envelope-consistency
+- **Title:** MCP error envelope consistency
+- **Final spec commit:** 8e66d18
+- **Closure cleanup commit:** pending current closure change
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/reference/runtime-contracts.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/reference/documentation-map.md`
+  - `docs/requirements/agent-workbench-executable-backlog.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Spec implementation validation recorded
+  `pnpm typecheck`, focused MCP error-envelope tests, broader MCP tool tests,
+  full `pnpm test` with 68 files and 494 tests, `pnpm run validate:plugin`,
+  `git diff --check`, lifecycle lint, active spec scan, and closure-check.
+  Closure cleanup reran lifecycle closure-check before removal and will rerun
+  archive validation after cleanup.
+- **Residual risks:** Non-representative tools and resources keep their current
+  handlers until a later wrapper expansion selects them. The closed slice
+  covers representative read-only, planning, graph-backed, docs, and
+  workspace-write tools.
 
 ## Closure Notes
 

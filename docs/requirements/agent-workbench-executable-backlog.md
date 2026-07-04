@@ -1216,7 +1216,7 @@ Do not promote an item when:
 ### EB038: MCP Error Envelope Consistency
 
 - Priority: P0
-- Status: active Spec 030
+- Status: closed Spec 030
 - Friction signal: external review and source inspection found uneven error
   handling across MCP registries; some handlers wrap use-case failures while
   others can rethrow after argument/provider checks.
@@ -1237,8 +1237,11 @@ Do not promote an item when:
     workspace-write tools.
   - Golden failures for malformed args, missing providers, domain errors, and
     unknown errors.
-- Promotion target: active
-  [Spec 030](../specs/030-mcp-error-envelope-consistency/requirements.md).
+- Promotion target: closed
+  [Spec 030](../history/spec-closure-log.md). Current behavior lives in
+  [Runtime contracts](../reference/runtime-contracts.md),
+  [MCP surface design](../design/mcp-surface-design.md), the shared MCP
+  envelope wrapper, representative tool registry tests, and closure evidence.
 
 ### EB039: Shared Path Policy And Secret Path Classification
 
@@ -1499,6 +1502,5 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-1. Spec 030: MCP error envelope consistency.
-2. Spec 031: shared path policy.
-3. Spec 032: per-repo runtime daemon and shared cache.
+1. Spec 031: shared path policy.
+2. Spec 032: per-repo runtime daemon and shared cache.
