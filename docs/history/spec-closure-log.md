@@ -150,7 +150,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/026-agent-skills-standard-compliance
 - **Title:** Agent Skills standard compliance
 - **Final spec commit:** e17ce9f
-- **Closure cleanup commit:** pending current closure change
+- **Closure cleanup commit:** 89dd49a
 - **Closure action:** removed
 - **Durable docs updated:**
   - `scripts/validate-agent-skills.mjs`
