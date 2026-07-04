@@ -14,14 +14,10 @@ import {
   buildTaskContextEnvelope
 } from "../../../../presentation/task-context-presenter.js";
 import {
-  formatMcpArgumentError,
-  parseMcpArguments
-} from "../../arguments/index.js";
+  classifiedFailureEnvelope,
+  registerMcpToolWithEnvelope
+} from "../../envelope.js";
 import type { McpToolDeclaration } from "../index.js";
-import {
-  mcpShapeForRootAuthority,
-  resolveMcpRequestRepoRoot
-} from "../root-authority.js";
 
 const contextForTaskRawShape = {
   task: z.string().min(1).describe("The implementation, review, or planning task to gather context for."),
@@ -55,77 +51,24 @@ export const contextForTaskTool: McpToolDeclaration = {
     returns: "ResponseEnvelope<TaskContext>"
   },
   register(server: McpServer, context) {
-    server.tool(
-      "context_for_task",
-      "Gather compact task context from local repository evidence before editing.",
-      mcpShapeForRootAuthority(contextForTaskRawShape, context),
-      async (args: unknown) => {
-        let request: TaskContextRequest;
-        try {
-          request = parseMcpArguments(taskContextRequestSchema, args);
-        } catch (error) {
-          const message = formatMcpArgumentError(
-            error,
-            "Invalid context_for_task arguments."
-          );
-          const envelope = buildInvalidTaskContextInputEnvelope({
-            repoRoot: context.repoRoot,
-            message
-          });
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(envelope, null, 2)
-              }
-            ]
-          };
-        }
-
-        const rootDecision = resolveMcpRequestRepoRoot(request, context);
-        if (!rootDecision.ok) {
-          const envelope = buildInvalidTaskContextInputEnvelope({
-            repoRoot: rootDecision.repoRoot,
-            message: rootDecision.message
-          });
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(envelope, null, 2)
-              }
-            ]
-          };
-        }
-
-        if (context.getTaskContext === undefined) {
-          const envelope = buildInvalidTaskContextInputEnvelope({
-            repoRoot: context.repoRoot,
-            message: "context_for_task provider is not configured."
-          });
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(envelope, null, 2)
-              }
-            ]
-          };
-        }
-
-        const result = await context.getTaskContext({
-          request: rootDecision.request
-        });
-        const envelope = buildTaskContextEnvelope(result);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(envelope, null, 2)
-            }
-          ]
-        };
-      }
-    );
+    registerMcpToolWithEnvelope({
+      server,
+      context,
+      name: "context_for_task",
+      description: "Gather compact task context from local repository evidence before editing.",
+      rawShape: contextForTaskRawShape,
+      schema: taskContextRequestSchema,
+      invalidInputMessage: "Invalid context_for_task arguments.",
+      getProvider: (registryContext) => registryContext.getTaskContext,
+      buildFailureEnvelope: (input) => classifiedFailureEnvelope(
+        buildInvalidTaskContextInputEnvelope({
+          repoRoot: input.repoRoot,
+          message: input.message
+        }),
+        input
+      ),
+      invoke: ({ provider, request }) => provider({ request }),
+      present: buildTaskContextEnvelope
+    });
   }
 };

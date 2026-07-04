@@ -14,14 +14,11 @@ import {
   buildSymbolSearchEnvelope
 } from "../../../../presentation/symbol-search-presenter.js";
 import {
-  formatMcpArgumentError,
-  parseMcpArguments
-} from "../../arguments/index.js";
+  classifiedFailureEnvelope,
+  classifyGraphQueryError,
+  registerMcpToolWithEnvelope
+} from "../../envelope.js";
 import type { McpToolDeclaration } from "../index.js";
-import {
-  mcpShapeForRootAuthority,
-  resolveMcpRequestRepoRoot
-} from "../root-authority.js";
 
 const symbolSearchRawShape = {
   query: z.string().min(1).describe("Symbol name or text to search for in the indexed graph."),
@@ -53,44 +50,25 @@ export const symbolSearchTool: McpToolDeclaration = {
     returns: "ResponseEnvelope<SymbolSearchResult>"
   },
   register(server: McpServer, context) {
-    server.tool(
-      "symbol_search",
-      "Search indexed graph symbols with bounded row and optional source-byte budgets.",
-      mcpShapeForRootAuthority(symbolSearchRawShape, context),
-      async (args: unknown) => {
-        let request: SymbolSearchRequest;
-        try {
-          request = parseMcpArguments(symbolSearchRequestSchema, args);
-        } catch (error) {
-          const message = formatMcpArgumentError(error, "Invalid symbol_search arguments.");
-          return textResponse(buildInvalidSymbolSearchInputEnvelope({ repoRoot: context.repoRoot, message }));
-        }
-
-        const rootDecision = resolveMcpRequestRepoRoot(request, context);
-        if (!rootDecision.ok) {
-          return textResponse(buildInvalidSymbolSearchInputEnvelope({
-            repoRoot: rootDecision.repoRoot,
-            message: rootDecision.message
-          }));
-        }
-
-        if (context.searchSymbols === undefined) {
-          return textResponse(buildInvalidSymbolSearchInputEnvelope({
-            repoRoot: context.repoRoot,
-            message: "symbol_search provider is not configured."
-          }));
-        }
-
-        return textResponse(buildSymbolSearchEnvelope(await context.searchSymbols({
-          request: rootDecision.request
-        })));
-      }
-    );
+    registerMcpToolWithEnvelope({
+      server,
+      context,
+      name: "symbol_search",
+      description: "Search indexed graph symbols with bounded row and optional source-byte budgets.",
+      rawShape: symbolSearchRawShape,
+      schema: symbolSearchRequestSchema,
+      invalidInputMessage: "Invalid symbol_search arguments.",
+      getProvider: (registryContext) => registryContext.searchSymbols,
+      buildFailureEnvelope: (input) => classifiedFailureEnvelope(
+        buildInvalidSymbolSearchInputEnvelope({
+          repoRoot: input.repoRoot,
+          message: input.message
+        }),
+        input
+      ),
+      invoke: ({ provider, request }) => provider({ request }),
+      present: buildSymbolSearchEnvelope,
+      classifyError: classifyGraphQueryError
+    });
   }
 };
-
-function textResponse(value: unknown) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }]
-  };
-}

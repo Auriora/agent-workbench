@@ -45,6 +45,17 @@ MCP is an interface adapter, not the presentation layer and not an application
 service. Each MCP handler validates transport input, calls one application use
 case, and delegates output construction to presenters.
 
+Tool handlers should use the shared MCP envelope wrapper for normal registry
+failure paths. The wrapper owns argument parsing, launch-root authority checks,
+provider availability checks, exception classification, and JSON text
+serialization. Registries still own their schema, provider binding, use-case
+invocation, and presenter binding. Recoverable parse, provider, use-case, and
+presentation failures return structured response envelopes with the failure
+classes defined in [Runtime contracts](../reference/runtime-contracts.md);
+they must not leak raw exceptions to MCP callers or collapse stale state,
+workspace-safety refusal, missing provider, and environment failure into one
+invalid-input bucket.
+
 Tools, resources, and prompts are declared through registries. A registry
 definition owns the input schema, shared argument parser, use-case binding,
 presenter binding, budget policy, and capability policy. It also owns the

@@ -14,15 +14,11 @@ import {
   buildInvalidDocsSearchInputEnvelope
 } from "../../../../presentation/docs-presenter.js";
 import {
-  formatMcpArgumentError,
-  parseMcpArguments
-} from "../../arguments/index.js";
+  classifiedFailureEnvelope,
+  registerMcpToolWithEnvelope
+} from "../../envelope.js";
 import { requestWithSessionDocsScope } from "../docs-session-scope.js";
 import type { McpToolDeclaration } from "../index.js";
-import {
-  mcpShapeForRootAuthority,
-  resolveMcpRequestRepoRoot
-} from "../root-authority.js";
 
 const docsSearchRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
@@ -52,52 +48,31 @@ export const docsSearchTool: McpToolDeclaration = {
     returns: "ResponseEnvelope<DocsSearchResult>"
   },
   register(server: McpServer, context) {
-    server.tool(
-      "docs_search",
-      "Search repository docs by path, title, heading, and bounded text snippets.",
-      mcpShapeForRootAuthority(docsSearchRawShape, context),
-      async (args: unknown) => {
-        let request: DocsSearchRequest;
-        try {
-          request = parseMcpArguments(docsSearchRequestSchema, args);
-        } catch (error) {
-          const envelope = buildInvalidDocsSearchInputEnvelope({
-            repoRoot: context.repoRoot,
-            query: readQuery(args),
-            message: formatMcpArgumentError(error, "Invalid docs_search arguments.")
-          });
-          return textToolResponse(envelope);
-        }
-
-        const rootDecision = resolveMcpRequestRepoRoot(request, context);
-        if (!rootDecision.ok) {
-          const envelope = buildInvalidDocsSearchInputEnvelope({
-            repoRoot: rootDecision.repoRoot,
-            query: request.query,
-            message: rootDecision.message
-          });
-          return textToolResponse(envelope);
-        }
-
-        if (context.searchDocs === undefined) {
-          const envelope = buildInvalidDocsSearchInputEnvelope({
-            repoRoot: context.repoRoot,
-            query: request.query,
-            message: "docs_search provider is not configured."
-          });
-          return textToolResponse(envelope);
-        }
-
-        const scopedRequest = requestWithSessionDocsScope(
-          rootDecision.request,
-          context.docsSessionScope
-        );
-        const result = await context.searchDocs({
-          request: scopedRequest
-        });
-        return textToolResponse(buildDocsSearchEnvelope(result));
-      }
-    );
+    registerMcpToolWithEnvelope({
+      server,
+      context,
+      name: "docs_search",
+      description: "Search repository docs by path, title, heading, and bounded text snippets.",
+      rawShape: docsSearchRawShape,
+      schema: docsSearchRequestSchema,
+      invalidInputMessage: "Invalid docs_search arguments.",
+      getProvider: (registryContext) => registryContext.searchDocs,
+      buildFailureEnvelope: (input) => classifiedFailureEnvelope(
+        buildInvalidDocsSearchInputEnvelope({
+          repoRoot: input.repoRoot,
+          query: input.request?.query ?? readQuery(input.args),
+          message: input.message
+        }),
+        input
+      ),
+      invoke: ({ provider, request, context: registryContext }) => provider({
+        request: requestWithSessionDocsScope(
+          request,
+          registryContext.docsSessionScope
+        )
+      }),
+      present: buildDocsSearchEnvelope
+    });
   }
 };
 
@@ -107,15 +82,4 @@ function readQuery(args: unknown): string | undefined {
   }
   const value = (args as { query?: unknown }).query;
   return typeof value === "string" ? value : undefined;
-}
-
-function textToolResponse(envelope: unknown) {
-  return {
-    content: [
-      {
-        type: "text" as const,
-        text: JSON.stringify(envelope, null, 2)
-      }
-    ]
-  };
 }

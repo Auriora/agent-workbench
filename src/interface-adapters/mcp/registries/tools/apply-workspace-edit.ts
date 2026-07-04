@@ -14,14 +14,11 @@ import {
   buildInvalidApplyWorkspaceEditInputEnvelope
 } from "../../../../presentation/workspace-edit-presenter.js";
 import {
-  formatMcpArgumentError,
-  parseMcpArguments
-} from "../../arguments/index.js";
+  classifiedFailureEnvelope,
+  classifyWorkspaceEditError,
+  registerMcpToolWithEnvelope
+} from "../../envelope.js";
 import type { McpToolDeclaration } from "../index.js";
-import {
-  mcpShapeForRootAuthority,
-  resolveMcpRequestRepoRoot
-} from "../root-authority.js";
 
 const editFileShape = z.object({
   path: z.string().min(1).describe("Repo-relative file path from the preview."),
@@ -50,51 +47,25 @@ export const applyWorkspaceEditTool: McpToolDeclaration = {
     returns: "ResponseEnvelope<ApplyWorkspaceEditResult>"
   },
   register(server: McpServer, context) {
-    server.tool(
-      "apply_workspace_edit",
-      "Apply a previously previewed bounded workspace edit after hash and safety checks.",
-      mcpShapeForRootAuthority(applyWorkspaceEditRawShape, context),
-      async (args: unknown) => {
-        let request: ApplyWorkspaceEditRequest;
-        try {
-          request = parseMcpArguments(applyWorkspaceEditRequestSchema, args);
-        } catch (error) {
-          const message = formatMcpArgumentError(error, "Invalid apply_workspace_edit arguments.");
-          return textResponse(buildInvalidApplyWorkspaceEditInputEnvelope({ repoRoot: context.repoRoot, message }));
-        }
-
-        const rootDecision = resolveMcpRequestRepoRoot(request, context);
-        if (!rootDecision.ok) {
-          return textResponse(buildInvalidApplyWorkspaceEditInputEnvelope({
-            repoRoot: rootDecision.repoRoot,
-            message: rootDecision.message
-          }));
-        }
-
-        if (context.applyWorkspaceEdit === undefined) {
-          return textResponse(buildInvalidApplyWorkspaceEditInputEnvelope({
-            repoRoot: context.repoRoot,
-            message: "apply_workspace_edit provider is not configured."
-          }));
-        }
-
-        try {
-          return textResponse(buildApplyWorkspaceEditEnvelope(await context.applyWorkspaceEdit({
-            request: rootDecision.request
-          })));
-        } catch (error) {
-          return textResponse(buildInvalidApplyWorkspaceEditInputEnvelope({
-            repoRoot: rootDecision.request.repo_root,
-            message: error instanceof Error ? error.message : "apply_workspace_edit failed."
-          }));
-        }
-      }
-    );
+    registerMcpToolWithEnvelope({
+      server,
+      context,
+      name: "apply_workspace_edit",
+      description: "Apply a previously previewed bounded workspace edit after hash and safety checks.",
+      rawShape: applyWorkspaceEditRawShape,
+      schema: applyWorkspaceEditRequestSchema,
+      invalidInputMessage: "Invalid apply_workspace_edit arguments.",
+      getProvider: (registryContext) => registryContext.applyWorkspaceEdit,
+      buildFailureEnvelope: (input) => classifiedFailureEnvelope(
+        buildInvalidApplyWorkspaceEditInputEnvelope({
+          repoRoot: input.repoRoot,
+          message: input.message
+        }),
+        input
+      ),
+      invoke: ({ provider, request }) => provider({ request }),
+      present: buildApplyWorkspaceEditEnvelope,
+      classifyError: classifyWorkspaceEditError
+    });
   }
 };
-
-function textResponse(value: unknown) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }]
-  };
-}

@@ -94,7 +94,10 @@ Then migrate remaining registries once tests prove the helper shape.
 
 ## Open Questions
 
-- Which failure classes should become public contract enum values, and which
-  should map onto existing validity and verification metadata?
-- Should resource handlers share the same wrapper in the first slice or follow
-  after representative tools are migrated?
+- Resolved 2026-07-04: failure classes are public `errors[0].code` strings
+  documented in `docs/reference/runtime-contracts.md`, not new TypeScript
+  contract enums. They map onto existing `analysis_validity`, `freshness`, and
+  `verification_status` metadata.
+- Resolved 2026-07-04: the first implementation slice covers representative
+  tool handlers. Resource handlers and remaining non-representative tools
+  follow after the wrapper shape is proven by MCP registry tests.

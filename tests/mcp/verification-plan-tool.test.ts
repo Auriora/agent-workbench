@@ -1328,14 +1328,14 @@ describe("verification_plan MCP tool", () => {
     };
 
     expect(parsed.meta).toMatchObject({
-      analysis_validity: "invalid",
+      analysis_validity: "invalid_due_to_environment",
       verification_status: "blocked"
     });
     expect(parsed.errors).toEqual([
       expect.objectContaining({
-        code: "invalid_input",
+        code: "environment_unavailable",
         message: expect.stringContaining("ENOENT"),
-        retryable: false
+        retryable: true
       })
     ]);
   });

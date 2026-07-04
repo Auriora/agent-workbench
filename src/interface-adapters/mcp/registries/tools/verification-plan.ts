@@ -14,14 +14,11 @@ import {
   buildVerificationPlanEnvelope
 } from "../../../../presentation/verification-plan-presenter.js";
 import {
-  formatMcpArgumentError,
-  parseMcpArguments
-} from "../../arguments/index.js";
+  classifiedFailureEnvelope,
+  classifyVerificationPlanError,
+  registerMcpToolWithEnvelope
+} from "../../envelope.js";
 import type { McpToolDeclaration } from "../index.js";
-import {
-  mcpShapeForRootAuthority,
-  resolveMcpRequestRepoRoot
-} from "../root-authority.js";
 
 const verificationPlanRawShape = {
   task: z.string().optional().describe("Optional task description to associate with the validation plan."),
@@ -51,93 +48,25 @@ export const verificationPlanTool: McpToolDeclaration = {
     returns: "ResponseEnvelope<VerificationPlan>"
   },
   register(server: McpServer, context) {
-    server.tool(
-      "verification_plan",
-      "Plan validation commands and quiet static feedback without executing commands.",
-      mcpShapeForRootAuthority(verificationPlanRawShape, context),
-      async (args: unknown) => {
-        let request: VerificationPlanRequest;
-        try {
-          request = parseMcpArguments(verificationPlanRequestSchema, args);
-        } catch (error) {
-          const message = formatMcpArgumentError(
-            error,
-            "Invalid verification_plan arguments."
-          );
-          const envelope = buildInvalidVerificationPlanInputEnvelope({
-            repoRoot: context.repoRoot,
-            message
-          });
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(envelope, null, 2)
-              }
-            ]
-          };
-        }
-
-        const rootDecision = resolveMcpRequestRepoRoot(request, context);
-        if (!rootDecision.ok) {
-          const envelope = buildInvalidVerificationPlanInputEnvelope({
-            repoRoot: rootDecision.repoRoot,
-            message: rootDecision.message
-          });
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(envelope, null, 2)
-              }
-            ]
-          };
-        }
-
-        if (context.planVerification === undefined) {
-          const envelope = buildInvalidVerificationPlanInputEnvelope({
-            repoRoot: context.repoRoot,
-            message: "verification_plan provider is not configured."
-          });
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(envelope, null, 2)
-              }
-            ]
-          };
-        }
-
-        let result;
-        try {
-          result = await context.planVerification({
-            request: rootDecision.request
-          });
-        } catch (error) {
-          const envelope = buildInvalidVerificationPlanInputEnvelope({
-            repoRoot: rootDecision.request.repo_root,
-            message: `verification_plan provider failed before planning could complete: ${error instanceof Error ? error.message : String(error)}`
-          });
-          return {
-            content: [
-              {
-                type: "text" as const,
-                text: JSON.stringify(envelope, null, 2)
-              }
-            ]
-          };
-        }
-        const envelope = buildVerificationPlanEnvelope(result);
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify(envelope, null, 2)
-            }
-          ]
-        };
-      }
-    );
+    registerMcpToolWithEnvelope({
+      server,
+      context,
+      name: "verification_plan",
+      description: "Plan validation commands and quiet static feedback without executing commands.",
+      rawShape: verificationPlanRawShape,
+      schema: verificationPlanRequestSchema,
+      invalidInputMessage: "Invalid verification_plan arguments.",
+      getProvider: (registryContext) => registryContext.planVerification,
+      buildFailureEnvelope: (input) => classifiedFailureEnvelope(
+        buildInvalidVerificationPlanInputEnvelope({
+          repoRoot: input.repoRoot,
+          message: input.message
+        }),
+        input
+      ),
+      invoke: ({ provider, request }) => provider({ request }),
+      present: buildVerificationPlanEnvelope,
+      classifyError: classifyVerificationPlanError
+    });
   }
 };

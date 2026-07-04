@@ -14,14 +14,11 @@ import {
   buildPreviewWorkspaceEditEnvelope
 } from "../../../../presentation/workspace-edit-presenter.js";
 import {
-  formatMcpArgumentError,
-  parseMcpArguments
-} from "../../arguments/index.js";
+  classifiedFailureEnvelope,
+  classifyWorkspaceEditError,
+  registerMcpToolWithEnvelope
+} from "../../envelope.js";
 import type { McpToolDeclaration } from "../index.js";
-import {
-  mcpShapeForRootAuthority,
-  resolveMcpRequestRepoRoot
-} from "../root-authority.js";
 
 const editFileShape = z.object({
   path: z.string().min(1).describe("Repo-relative file path to replace."),
@@ -50,51 +47,25 @@ export const previewWorkspaceEditTool: McpToolDeclaration = {
     returns: "ResponseEnvelope<PreviewWorkspaceEditResult>"
   },
   register(server: McpServer, context) {
-    server.tool(
-      "preview_workspace_edit",
-      "Preview bounded workspace edits and return a token without mutating files.",
-      mcpShapeForRootAuthority(previewWorkspaceEditRawShape, context),
-      async (args: unknown) => {
-        let request: PreviewWorkspaceEditRequest;
-        try {
-          request = parseMcpArguments(previewWorkspaceEditRequestSchema, args);
-        } catch (error) {
-          const message = formatMcpArgumentError(error, "Invalid preview_workspace_edit arguments.");
-          return textResponse(buildInvalidPreviewWorkspaceEditInputEnvelope({ repoRoot: context.repoRoot, message }));
-        }
-
-        const rootDecision = resolveMcpRequestRepoRoot(request, context);
-        if (!rootDecision.ok) {
-          return textResponse(buildInvalidPreviewWorkspaceEditInputEnvelope({
-            repoRoot: rootDecision.repoRoot,
-            message: rootDecision.message
-          }));
-        }
-
-        if (context.previewWorkspaceEdit === undefined) {
-          return textResponse(buildInvalidPreviewWorkspaceEditInputEnvelope({
-            repoRoot: context.repoRoot,
-            message: "preview_workspace_edit provider is not configured."
-          }));
-        }
-
-        try {
-          return textResponse(buildPreviewWorkspaceEditEnvelope(await context.previewWorkspaceEdit({
-            request: rootDecision.request
-          })));
-        } catch (error) {
-          return textResponse(buildInvalidPreviewWorkspaceEditInputEnvelope({
-            repoRoot: rootDecision.request.repo_root,
-            message: error instanceof Error ? error.message : "preview_workspace_edit failed."
-          }));
-        }
-      }
-    );
+    registerMcpToolWithEnvelope({
+      server,
+      context,
+      name: "preview_workspace_edit",
+      description: "Preview bounded workspace edits and return a token without mutating files.",
+      rawShape: previewWorkspaceEditRawShape,
+      schema: previewWorkspaceEditRequestSchema,
+      invalidInputMessage: "Invalid preview_workspace_edit arguments.",
+      getProvider: (registryContext) => registryContext.previewWorkspaceEdit,
+      buildFailureEnvelope: (input) => classifiedFailureEnvelope(
+        buildInvalidPreviewWorkspaceEditInputEnvelope({
+          repoRoot: input.repoRoot,
+          message: input.message
+        }),
+        input
+      ),
+      invoke: ({ provider, request }) => provider({ request }),
+      present: buildPreviewWorkspaceEditEnvelope,
+      classifyError: classifyWorkspaceEditError
+    });
   }
 };
-
-function textResponse(value: unknown) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }]
-  };
-}

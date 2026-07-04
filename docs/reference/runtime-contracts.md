@@ -270,6 +270,30 @@ Errors must be structured and actionable.
 }
 ```
 
+MCP handler failures use stable recovery-oriented `errors[0].code` values:
+
+- `invalid_input`: malformed arguments, blocked root override, or request
+  fields that cannot describe a valid operation.
+- `provider_unavailable`: the MCP registry is present, but the application
+  provider required by that handler was not configured in this session.
+- `workspace_safety_blocked`: a workspace edit or similar operation was refused
+  by path, containment, redaction, or mutation-safety policy.
+- `stale_state`: a request depends on a stale preview, expired token, changed
+  file hash, or other no-longer-current state.
+- `environment_unavailable`: local runtime evidence is unavailable because of
+  graph, SQLite, filesystem, permission, or comparable environment state.
+- `domain_error`: the use case rejected a well-formed request for a known
+  domain reason that is not safety, stale state, or environment availability.
+- `internal_error`: an unexpected handler or provider failure occurred.
+
+Recoverable MCP handler failures must still return a normal JSON response
+envelope. They must not escape as transport exceptions unless the failure
+prevents MCP response framing itself. Provider, environment, and internal
+failures use `analysis_validity: invalid_due_to_environment` and
+`verification_status: blocked`; stale-state failures use `freshness: stale`.
+Handlers may keep tool-specific data skeletons, but the failure code must match
+the next safe recovery action.
+
 ## Attention Item Shape
 
 Attention is MVP-limited to blockers and warnings.
