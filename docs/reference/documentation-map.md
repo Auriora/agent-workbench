@@ -3,7 +3,7 @@ title: Documentation map
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -74,6 +74,7 @@ copying tables, schemas, or enum definitions.
 | Multi-file post-edit repair delivery record | [Spec closure log](../history/spec-closure-log.md) | Closed Spec 020 delivery evidence. Current quiet multi-file diagnostics, skipped/deferred evidence, post-edit repair-loop outcomes, hook behavior, and telemetry behavior live in [Edit and validation loop design](../design/edit-and-validation-loop-design.md), [Coding agent integration design](../design/coding-agent-integration-design.md), and [Runtime contracts](runtime-contracts.md). |
 | Spec task traceability lookup delivery record | [Spec closure log](../history/spec-closure-log.md) | Closed Spec 021 delivery evidence. Current spec/task lifecycle evidence behavior lives in [Runtime contracts](runtime-contracts.md), [MCP surface design](../design/mcp-surface-design.md), [Coding agent integration design](../design/coding-agent-integration-design.md), and packaged Agent Workbench skill/Power guidance. |
 | MCP server repository support delivery record | [Spec closure log](../history/spec-closure-log.md) | Closed Spec 022 delivery evidence. Current MCP-server repo-shape detection, context routing, and safe validation-planning behavior lives in [MCP surface design](../design/mcp-surface-design.md) and [Coding agent integration design](../design/coding-agent-integration-design.md). |
+| Cross-platform packaging delivery record | [Spec closure log](../history/spec-closure-log.md) | Closed Spec 033 delivery evidence. Current npm package install, platform matrix, plugin launch, hook, and native dependency guidance lives in [Codex Agent Workbench plugin runbook](../runbooks/codex-agent-workbench-plugin.md), [packaging README](../../packaging/agent-workbench/README.md), and [Native dependency setup](../runbooks/native-dependency-setup.md). Kiro launcher and turnkey core `tree-sitter` work are routed to backlog. |
 | Doc currency lifecycle handoff | [Spec-lifecycle-manager doc currency handoff](spec-lifecycle-manager-doc-currency-handoff.md) | Feedback package for lifecycle tooling: frontmatter input signals, canonical-context guidance, optional Git recency evidence, and the no-`ctime` rule. Spec 034 is closed; delivery evidence lives in the [Spec closure log](../history/spec-closure-log.md). |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) | Owns fixture, budget, degraded-mode, and acceptance evidence. |
 | Architectural decisions | [ADRs](../adr/) | ADR status must match frontmatter and body text. |

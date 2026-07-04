@@ -3,8 +3,8 @@ title: Turnkey core tree-sitter native build
 doc_type: backlog
 status: proposed
 owner: platform
-source_spec: docs/specs/033-cross-platform-packaging
-last_reviewed: 2026-06-29
+source_spec: docs/specs/033-cross-platform-packaging at final spec commit 0d2cc48
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -50,5 +50,5 @@ local compiler. Two candidate options to evaluate:
 ## References
 
 - Spec 033 Requirement 5.1 (turnkey native build follow-up), Decision 1.
-- `docs/specs/033-cross-platform-packaging/verification.md` (Residual Risks).
+- Removed Spec 033 verification at final spec commit `0d2cc48` (Residual Risks).
 - `docs/runbooks/codex-agent-workbench-plugin.md` (Supported Platform Matrix).

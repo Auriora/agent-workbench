@@ -3,8 +3,8 @@ title: Ship a package-scoped Codex marketplace so npm→Codex registration is tu
 doc_type: backlog
 status: resolved
 owner: platform
-source_spec: docs/specs/033-cross-platform-packaging
-last_reviewed: 2026-06-30
+source_spec: docs/specs/033-cross-platform-packaging at final spec commit 0d2cc48
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -38,8 +38,8 @@ turnkey flow in `plugins/agent-workbench/README.md`,
 **Out of scope (still open):** this verified *registration*, not *launch*. Whether
 `${PLUGIN_ROOT}` expands inside `.mcp.json` args when Codex starts the MCP server
 remains the residual tracked in
-`docs/specs/033-cross-platform-packaging/verification.md` (it governs launch, not
-the marketplace).
+the removed Spec 033 verification at final spec commit `0d2cc48` (it governs
+launch, not the marketplace).
 
 ---
 

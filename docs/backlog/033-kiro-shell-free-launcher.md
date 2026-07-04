@@ -3,8 +3,8 @@ title: Convert Kiro Power to the shell-free .mjs launcher
 doc_type: backlog
 status: proposed
 owner: platform
-source_spec: docs/specs/033-cross-platform-packaging
-last_reviewed: 2026-06-29
+source_spec: docs/specs/033-cross-platform-packaging at final spec commit 0d2cc48
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -48,7 +48,7 @@ but the same shell-free cleanup).
 
 ## References
 
-- `docs/specs/033-cross-platform-packaging/verification.md` (Residual Risks).
+- Removed Spec 033 verification at final spec commit `0d2cc48` (Residual Risks).
 - `plugins/agent-workbench/kiro-power/mcp.json`,
   `plugins/agent-workbench/kiro-power/POWER.md`.
 - Codex/Claude shell-free model: `plugins/agent-workbench/mcp-launch.mjs`.

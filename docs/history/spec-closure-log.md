@@ -3,7 +3,7 @@ title: Spec closure log
 doc_type: history
 status: active
 owner: platform
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -49,6 +49,7 @@ name their own final pre-removal tree commits.
 | Spec 023: MCP tool sweep quality | Removed from `docs/specs/` on 2026-06-11 after final pre-removal tree commit `7922693` completed sweep quality semantics, sandbox-only write validation, progress-report RCA, pagination, docs FTS warmup, and final eight-repo committed-sandbox validation. | Observability and debugging design, runtime operations design, runtime contracts, documentation map, debug harness tests, docs/query tests, graph/query tests, verification-plan tests, and final committed-sandbox sweep evidence. |
 | Spec 024: Plugin discoverability and drift hardening | Removed from `docs/specs/` on 2026-06-13 after final pre-removal tree commit `90b70bc` completed Codex marketplace metadata, MCP server-card metadata, drift tests, operator docs, CI workflow, repo-owned plugin/package validation, installer dry-run, package dry-run, and durable promotion. | Agent Workbench plugin README, Codex plugin runbook, documentation map, marketplace metadata, MCP server card, CI workflow, plugin/package validator, package metadata tests, focused integration tests, lifecycle lint, closure check, and final full Vitest validation. |
 | Spec 025: Brooks-Lint findings tracker | Removed from `docs/specs/` on 2026-06-11 after final pre-removal tree commit `539f174` completed architecture boundary remediation, tech-debt extraction splits, runtime contract modularization, MCP test harness hardening, focused validation/resource rule tests, broad fixture helper annotation, and durable test-maintainability gates. | Layered runtime architecture, system architecture, runtime contracts, MVP proof matrix, documentation map, architecture tests, MCP/integration tests, focused validation/resource tests, broad fixture tests, and final closure traceability. |
+| Spec 033: Cross-platform packaging | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `0d2cc48` completed shell-free npm package install, Codex/Claude MCP launch shims, shell-free hook entry points, package-scoped marketplaces, supported platform matrix documentation, and routed macOS/Windows runner evidence. | Codex Agent Workbench plugin runbook, packaging README, plugin README, cross-platform packaging workflow, install/MCP/hook smoke scripts, Codex/Claude package metadata tests, backlog follow-ups for Kiro launcher and turnkey core `tree-sitter`, documentation map, spec closure log, and archive index. |
 | Spec 034: Doc currency routing | Removed from `docs/specs/` on 2026-07-02 after final pre-removal tree commit `8657e9e` completed document currency classification, docs search/inventory metadata, `context_for_task` ranking, `docs_current_for_task`, durable docs promotion, and spec-lifecycle-manager handoff. | MCP surface design, graph store design, runtime contracts, documentation map, spec-lifecycle-manager doc currency handoff, MCP server card, Codex integration profile, docs/context/MCP tests, lifecycle lint, closure check, and closure-risk review. |
 
 ### 2026-06-13 - 022-mcp-server-repository-support
@@ -115,6 +116,33 @@ name their own final pre-removal tree commits.
 - **Residual risks:** Full `pnpm test` currently has a repeated startup
   warm-up race in `tests/mcp/stdio-entrypoint.test.ts` when run with the whole
   suite; that file passes standalone and the targeted doc-currency suites pass.
+
+### 2026-07-04 - 033-cross-platform-packaging
+
+- **Spec:** docs/specs/033-cross-platform-packaging
+- **Title:** Cross-platform packaging
+- **Final spec commit:** 0d2cc48
+- **Closure cleanup commit:** pending cleanup hash
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/runbooks/codex-agent-workbench-plugin.md`
+  - `packaging/agent-workbench/README.md`
+  - `plugins/agent-workbench/README.md`
+  - `.github/workflows/cross-platform-packaging.yml`
+  - `docs/backlog/033-npm-tarball-install-flow.md`
+  - `docs/backlog/033-codex-npm-marketplace.md`
+  - `docs/backlog/033-turnkey-tree-sitter-core-build.md`
+  - `docs/backlog/033-kiro-shell-free-launcher.md`
+  - `docs/reference/documentation-map.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** `git diff --check`; `pnpm typecheck`;
+  `node scripts/validate-agent-workbench-plugin.mjs`; focused Spec 033 Vitest
+  slice; Linux `install-smoke`, `mcp-launch-smoke`, and `hook-smoke`;
+  `pnpm pack:dry-run`.
+- **Residual risks:** macOS/Windows workflow legs are authored but still need
+  runner history or release-readiness evidence; Kiro launcher conversion and
+  turnkey core `tree-sitter` prebuild work are routed to backlog.
 
 ## Closure Notes
 

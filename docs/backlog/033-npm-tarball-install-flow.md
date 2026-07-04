@@ -3,8 +3,8 @@ title: Make the npm-tarball install flow actually work
 doc_type: backlog
 status: resolved
 owner: platform
-source_spec: docs/specs/033-cross-platform-packaging
-last_reviewed: 2026-06-30
+source_spec: docs/specs/033-cross-platform-packaging at final spec commit 0d2cc48
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -92,7 +92,7 @@ end, or make `rebuild:native` run unconditionally on supported Node versions.
 
 ## References
 
-- `docs/specs/033-cross-platform-packaging/verification.md` (Residual Risks).
+- Removed Spec 033 verification at final spec commit `0d2cc48` (Residual Risks).
 - `packaging/agent-workbench/installer.mjs` (`REQUIRED_PATHS`,
   `nativeRebuildNeeded`), `scripts/rebuild-native.mjs`.
 - Related: `docs/backlog/033-turnkey-tree-sitter-core-build.md`.
