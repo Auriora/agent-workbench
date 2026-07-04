@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: traceability
 status: active
 owner: platform
-last_reviewed: 2026-06-29
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -57,7 +57,7 @@ license: GPL-3.0-or-later
 | MCP launch shim | T002a, T002b, T003 | Exec form; vendored Claude copy synced from source |
 | Installer (`installer.mjs`) | T004, T005a, T005b, T006, T010a, T010b | One cross-platform impl; `.sh` removed or delegated |
 | Hook entries | T007, T008, T009 | Exec form + in-script default + re-synced vendored copies |
-| Verification / Operational | T011a, T011b, T011c, T012a | CI matrix on windows/macos/ubuntu; matrix doc promoted |
+| Verification / Operational | T011a, T011b, T011c, T012a | CI matrix on windows/macos/ubuntu authored; Linux smokes passed locally; macOS/Windows runner evidence routed to workflow history or release-readiness evidence; matrix doc promoted |
 | Resolved Decisions | T012a, T012b | Native-build documented; turnkey-core follow-up routed |
 
 ## Open Decision Impact
@@ -75,3 +75,11 @@ All four open decisions were resolved in `design.md` (2026-06-29):
   T001a resolver and asserted by the T001b parity test (P3).
 - **Decision 4 (in-script hook default).** T008 makes the `basic` default the
   contract, so R3 holds even if a runtime ignores the `env` field.
+
+## Routed Verification Gaps
+
+T011a, T011b, and T011c are routed rather than open implementation tasks. The
+workflow and smoke scripts exist, and the Linux leg has local evidence. The
+remaining macOS/Windows proof is historical runner evidence to be supplied by
+`.github/workflows/cross-platform-packaging.yml` or a future release-readiness
+gate; it is not additional Spec 033 implementation scope.

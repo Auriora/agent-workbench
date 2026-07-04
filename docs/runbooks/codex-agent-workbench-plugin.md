@@ -162,9 +162,9 @@ install or runtime path. The supported distribution channel is the npm package
 
 | OS | Node | Native toolchain (build path only) | Verification |
 | --- | --- | --- | --- |
-| Linux (x64/arm64) | 22+ | C/C++ toolchain + Python 3 | Verified |
-| macOS | 22+ | C/C++ toolchain + Python 3 | Pending runner |
-| Windows 10+ | 22+ | C/C++ toolchain + Python 3 | Pending runner |
+| Linux (x64/arm64) | 22+ | C/C++ toolchain + Python 3 | Verified locally |
+| macOS | 22+ | C/C++ toolchain + Python 3 | Matrix authored; runner evidence pending |
+| Windows 10+ | 22+ | C/C++ toolchain + Python 3 | Matrix authored; runner evidence pending |
 
 Per-OS toolchain: Linux `make` + `g++`/`clang++` (e.g. `build-essential`);
 macOS the Xcode command line tools (`xcode-select --install`); Windows the MSVC
@@ -193,8 +193,10 @@ native binding cannot load.
 
 The cross-platform smoke matrix that backs the "Verification" column lives in
 `.github/workflows/cross-platform-packaging.yml` (install, MCP launch, and hook
-smokes per OS). The macOS/Windows legs are authored but await a runner; that gap
-is tracked in the spec's `verification.md`.
+smokes per OS). The macOS/Windows legs are authored but have not yet produced
+runner evidence; that historical-verification gap is tracked in Spec 033
+`verification.md` and can be cleared by future workflow history or
+release-readiness evidence.
 
 ## NPM Package Installation
 

@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: verification
 status: active
 owner: platform
-last_reviewed: 2026-06-30
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -44,6 +44,18 @@ unavailable — a recorded manual run with the gap noted explicitly.
 
 ## Evidence Log
 
+- **Closure cleanup validation (2026-07-04) — PASS with sandbox caveats.**
+  `git diff --check` -> exit 0; `pnpm typecheck` -> exit 0;
+  `node scripts/validate-agent-workbench-plugin.mjs` -> exit 0; focused Spec
+  033 Vitest slice
+  (`install-root.test.ts`, `mcp-launch.test.ts`, `claude-plugin.test.ts`,
+  `codex-integration-profile.test.ts`, `kiro-power.test.ts`) -> 5 files / 49
+  tests passed when rerun outside the managed sandbox. `node
+  scripts/ci/install-smoke.mjs` -> exit 0 in sandbox; `node
+  scripts/ci/mcp-launch-smoke.mjs` and `node scripts/ci/hook-smoke.mjs` -> exit
+  0 when rerun outside the managed sandbox. The sandbox-only failures were
+  nested `node` spawn restrictions (`spawnSync node EPERM`) and one MCP smoke
+  timeout caused by the managed execution context, not Spec 033 behavior.
 - **Claude plugin registration from packed tarball (v0.3.0) — PASS (Linux): `npm pack`, `claude plugin marketplace add`, `claude plugin install`, and `claude plugin list` confirmed installed/enabled package v0.3.0.**
   Linux host, Node 24 (v24.8.0), `claude` CLI 2.1.196, isolated
   `CLAUDE_CONFIG_DIR`. `npm pack` → extract → `claude plugin marketplace add
@@ -208,6 +220,16 @@ unavailable — a recorded manual run with the gap noted explicitly.
 
 ## Closure Readiness
 
-`ready_to_close` requires: all gates evidenced on all three OSes (or gaps
-recorded), durable platform-matrix doc promoted, and the native-build decision
-resolved.
+`ready_to_close`: ready with routed historical-verification gaps. All
+implementation work in this spec is complete or routed; Linux install, launch,
+and hook smokes passed locally; the macOS/Windows CI matrix is authored but has
+not yet produced runner evidence. That gap is recorded explicitly in this file
+and in the supported platform matrix, and should be satisfied by future workflow
+history or release-readiness gates rather than by more Spec 033 implementation.
+
+Durable platform-matrix documentation is promoted in
+`docs/runbooks/codex-agent-workbench-plugin.md`. The turnkey core
+`tree-sitter` native-build decision is routed to
+`docs/backlog/033-turnkey-tree-sitter-core-build.md`. The Kiro launcher breakage
+is outside the Claude/Codex baseline for this spec and is routed to
+`docs/backlog/033-kiro-shell-free-launcher.md`.

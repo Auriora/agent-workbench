@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: tasks
 status: active
 owner: platform
-last_reviewed: 2026-06-30
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -288,7 +288,7 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
     `npm-install.mjs`, `plugins/agent-workbench/mcp-launch.mjs`, and
     `install-root.mjs` are packed and the legacy `npm-install.js` is gone.
 
-- [ ] T011a Add the cross-platform CI matrix and install smoke.
+- [>] T011a Add the cross-platform CI matrix and install smoke.
   - Depends on: T003, T005b, T009
   - Files: `.github/workflows/cross-platform-packaging.yml`,
     `scripts/ci/install-smoke.mjs`
@@ -301,11 +301,13 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
     `scripts/ci/install-smoke.mjs` — installs to a temp prefix and asserts the
     runtime copied, `src/debug`/`docs/specs` stripped, and
     `bin/agent-workbench-mcp.mjs` generated. **ubuntu leg verified locally**
-    (`node scripts/ci/install-smoke.mjs` → exit 0). macOS/Windows legs await a
-    GitHub runner run — recorded gap, not yet green. (Open until the matrix runs
-    green or the gap is formally accepted.)
+    (`node scripts/ci/install-smoke.mjs` -> exit 0). macOS/Windows legs await a
+    GitHub runner run; this is a recorded historical-verification gap, not
+    remaining implementation in this spec.
+  - Destination: `.github/workflows/cross-platform-packaging.yml` runner history
+    or a future release-readiness gate records macOS/Windows execution evidence.
 
-- [ ] T011b MCP launch smoke on all three OSes.
+- [>] T011b MCP launch smoke on all three OSes.
   - Depends on: T011a
   - Files: `.github/workflows/cross-platform-packaging.yml`,
     `scripts/ci/mcp-launch-smoke.mjs`
@@ -314,9 +316,13 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
   - Evidence: `scripts/ci/mcp-launch-smoke.mjs` launches the installed
     `bin/agent-workbench-mcp.mjs` and asserts a JSON-RPC `initialize`/`serverInfo`
     handshake over stdio. **ubuntu leg verified locally** (real handshake,
-    `serverInfo.name = agent-workbench`, exit 0). macOS/Windows await runner.
+    `serverInfo.name = agent-workbench`, exit 0). macOS/Windows await runner;
+    this is a recorded historical-verification gap, not remaining implementation
+    in this spec.
+  - Destination: `.github/workflows/cross-platform-packaging.yml` runner history
+    or a future release-readiness gate records macOS/Windows execution evidence.
 
-- [ ] T011c Hook execution smoke on all three OSes.
+- [>] T011c Hook execution smoke on all three OSes.
   - Depends on: T011a
   - Files: `.github/workflows/cross-platform-packaging.yml`,
     `scripts/ci/hook-smoke.mjs`
@@ -325,9 +331,12 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
   - Evidence: `scripts/ci/hook-smoke.mjs` runs the installed SessionStart hook
     (asserts the basic-default advisory) and PostToolUse hook (asserts clean exit,
     no shell error) via exec-form `node <hook>.js`. **ubuntu leg verified
-    locally** (exit 0). macOS/Windows await runner.
+    locally** (exit 0). macOS/Windows await runner; this is a recorded
+    historical-verification gap, not remaining implementation in this spec.
+  - Destination: `.github/workflows/cross-platform-packaging.yml` runner history
+    or a future release-readiness gate records macOS/Windows execution evidence.
 
-- [ ] T012a Document the supported platform matrix.
+- [x] T012a Document the supported platform matrix.
   - Depends on: T011a, T011b, T011c
   - Files: `docs/runbooks/codex-agent-workbench-plugin.md` (Supported Platform
     Matrix), spec `verification.md`
@@ -341,11 +350,11 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
     native-build note (only core `tree-sitter` compiles from source; grammars and
     `better-sqlite3` ship prebuilds; no compiler needed when `node_modules` is
     packaged), and a Verification column tied to the smoke matrix. Stale
-    `npm-install.js`/`.sh` runbook references corrected. Held open until the
-    matrix's macOS/Windows rows are backed by green runner runs (T011), per the
-    spec's executed-run validation strategy.
+    `npm-install.js`/`.sh` runbook references corrected. The macOS/Windows
+    runner gap is recorded explicitly in the runbook and `verification.md`, and
+    no additional platform-matrix documentation remains in this spec.
 
-- [ ] T012b [follow-up] Route the turnkey-core native build to the backlog.
+- [x] T012b [follow-up] Route the turnkey-core native build to the backlog.
   - Depends on: T012a
   - Files: `docs/backlog/033-turnkey-tree-sitter-core-build.md`
   - Acceptance: Record a bounded follow-up spec for making the core
@@ -357,5 +366,5 @@ T011a-c ──► T012a platform-matrix docs ──► T012b backlog follow-up (
     bounded follow-up — context (only core `tree-sitter` compiles from source),
     options (b1) prebuild-publishing pin after an ABI/parser regression pass and
     (b2) `prebuildify` release-CI matrix, acceptance for the future spec, and
-    references to Decision 1 / Requirement 5.1. Routing note authored; remains
-    open under its T012a dependency until the matrix doc closes.
+    references to Decision 1 / Requirement 5.1. Routing note authored; no
+    additional routing work remains in this spec.
