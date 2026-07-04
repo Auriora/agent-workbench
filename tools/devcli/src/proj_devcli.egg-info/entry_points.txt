@@ -1,0 +1,2 @@
+[console_scripts]
+proj = auriora_dev.cli:app
