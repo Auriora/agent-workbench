@@ -122,7 +122,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/033-cross-platform-packaging
 - **Title:** Cross-platform packaging
 - **Final spec commit:** 0d2cc48
-- **Closure cleanup commit:** pending cleanup hash
+- **Closure cleanup commit:** 877553a
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/runbooks/codex-agent-workbench-plugin.md`
