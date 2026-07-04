@@ -31,6 +31,16 @@ describe("graph store", () => {
     }
   });
 
+  it("opens the graph database in WAL mode for concurrent readers and refresh writers", () => {
+    const store = openGraphStore(path.join(dir, "wal.sqlite"));
+    try {
+      expect(store.db.pragma("journal_mode", { simple: true })).toBe("wal");
+      expect(store.db.pragma("synchronous", { simple: true })).toBe(1);
+    } finally {
+      store.close();
+    }
+  });
+
   it("waits for startup schema work when another process holds the sqlite write lock", async () => {
     const databasePath = path.join(dir, "locked-startup.sqlite");
     const lock = await holdExclusiveSqliteLock(databasePath, 250);

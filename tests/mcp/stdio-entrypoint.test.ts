@@ -451,6 +451,53 @@ describe("stdio MCP entrypoint", () => {
     }
   });
 
+  it("allows only one startup graph warmup owner for concurrent stdio sessions in the same repo", async () => {
+    const fixtureRoot = createCleanFixtureCopy({
+      prefix: "agent-workbench-mcp-shared-warmup-",
+      sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
+    });
+    const firstSession = await createStdioSession(fixtureRoot, {
+      startupWarmupDelayMs: 0
+    });
+    const secondSession = await createStdioSession(fixtureRoot, {
+      startupWarmupDelayMs: 0
+    });
+
+    try {
+      await Promise.all([
+        firstSession.call(initializeMessage(1)),
+        secondSession.call(initializeMessage(1))
+      ]);
+      firstSession.notify({
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+        params: {}
+      });
+      secondSession.notify({
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+        params: {}
+      });
+
+      await waitForWarmSymbolSearch(firstSession, "Runner");
+
+      const graphStore = openGraphStore(graphStorePath(fixtureRoot));
+      try {
+        const snapshots = await graphStore.listSnapshots({ repo_root: fixtureRoot });
+        expect(snapshots).toHaveLength(1);
+        expect(snapshots[0]).toMatchObject({
+          freshness: "fresh"
+        });
+      } finally {
+        graphStore.close();
+      }
+    } finally {
+      await firstSession.close();
+      await secondSession.close();
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
   it("returns initial status before delayed startup warmup begins", async () => {
     const fixtureRoot = createCleanFixtureCopy({
       prefix: "agent-workbench-mcp-delayed-warmup-",

@@ -161,6 +161,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     this.db = new Database(databasePath, {
       timeout: options.busyTimeoutMs ?? DEFAULT_SQLITE_BUSY_TIMEOUT_MS
     });
+    this.db.pragma("journal_mode = WAL");
+    this.db.pragma("synchronous = NORMAL");
     if (options.enforceForeignKeys !== false) {
       this.db.pragma("foreign_keys = ON");
     }

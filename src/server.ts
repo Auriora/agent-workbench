@@ -66,6 +66,7 @@ const DEFAULT_STARTUP_WARMUP_DELAY_MS = 1000;
 const DEFAULT_STARTUP_WARMUP_MAX_FILES = 2000;
 const DEFAULT_STARTUP_WARMUP_RETAIN_LATEST_SNAPSHOTS = 3;
 const DEFAULT_STARTUP_WARMUP_RETAIN_LATEST_FRESH_SNAPSHOTS = 2;
+const STARTUP_WARMUP_LOCK_FILE = "startup-warmup.lock";
 
 export function createAgentWorkbenchServer(
   repoRoot: string,
@@ -282,6 +283,10 @@ export function createAgentWorkbenchServer(
 
   function startInitialGraphWarmup(): void {
     void (async () => {
+      const warmupLock = acquireStartupWarmupLock(startupWarmupLockPath(databasePath));
+      if (warmupLock === null) {
+        return;
+      }
       const store = await graphStore();
       const snapshotId = String(clock.nowUnixMs());
       const executionId = await runtime.requestWarmup({
@@ -336,6 +341,8 @@ export function createAgentWorkbenchServer(
           reason
         });
         throw error;
+      } finally {
+        warmupLock.release();
       }
     })().catch((error) => {
       // The warmup use case records failed snapshot/warmup state before throwing.
@@ -415,6 +422,96 @@ function graphStorePath(repoRoot: string): string {
   const cacheDir = path.join(repoRoot, ".cache", "agent-workbench");
   fs.mkdirSync(cacheDir, { recursive: true });
   return path.join(cacheDir, "graph.sqlite");
+}
+
+function startupWarmupLockPath(databasePath: string): string {
+  return path.join(path.dirname(databasePath), STARTUP_WARMUP_LOCK_FILE);
+}
+
+function acquireStartupWarmupLock(lockPath: string): { release: () => void } | null {
+  try {
+    return createStartupWarmupLock(lockPath);
+  } catch (error) {
+    if (!isFileExistsError(error)) {
+      throw error;
+    }
+  }
+
+  if (!startupWarmupLockIsStale(lockPath)) {
+    return null;
+  }
+
+  try {
+    fs.rmSync(lockPath, { force: true });
+    return createStartupWarmupLock(lockPath);
+  } catch (error) {
+    if (isFileExistsError(error)) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+function createStartupWarmupLock(lockPath: string): { release: () => void } {
+  const fd = fs.openSync(lockPath, "wx");
+  let released = false;
+  try {
+    fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, created_at: new Date().toISOString() }));
+  } finally {
+    fs.closeSync(fd);
+  }
+
+  return {
+    release: () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      try {
+        fs.rmSync(lockPath, { force: true });
+      } catch {
+        // The lock only coordinates startup warmup ownership; release failure
+        // must not mask the completed MCP request path.
+      }
+    }
+  };
+}
+
+function startupWarmupLockIsStale(lockPath: string): boolean {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+  } catch {
+    return true;
+  }
+
+  const pid =
+    typeof payload === "object" && payload !== null && "pid" in payload
+      ? (payload as { pid?: unknown }).pid
+      : undefined;
+  if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) {
+    return true;
+  }
+
+  try {
+    process.kill(pid, 0);
+    return false;
+  } catch (error) {
+    const code =
+      typeof error === "object" && error !== null && "code" in error
+        ? (error as { code?: unknown }).code
+        : undefined;
+    return code === "ESRCH";
+  }
+}
+
+function isFileExistsError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "EEXIST"
+  );
 }
 
 function registeredIntegrationSurfaces(): IntegrationSurfaceInput[] {
