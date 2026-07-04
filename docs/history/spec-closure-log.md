@@ -150,7 +150,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/029-repo-root-authority
 - **Title:** Repo-root authority
 - **Final spec commit:** 5a8b098
-- **Closure cleanup commit:** 6d3c80b
+- **Closure cleanup commit:** 605f542
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/reference/workspace-safety-contract.md`
