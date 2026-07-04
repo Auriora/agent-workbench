@@ -3,9 +3,12 @@ Copyright (C) 2026 Auriora
 SPDX-License-Identifier: GPL-3.0-or-later
 -->
 
-# Dev CLI
+# Agent Workbench Dev CLI
 
-This package provides the default developer interface for the template.
+`tools/devcli` provides the `awb` command for repository-owned maintenance
+workflows. The CLI is a thin wrapper over existing scripts and package commands;
+it does not replace the Node runtime, installer, plugin validator, or spec
+lifecycle runtime.
 
 ## Install
 
@@ -15,15 +18,37 @@ pip install --no-build-isolation -e tools/devcli
 
 ## Commands
 
+Read-only or validation commands:
+
 ```bash
-proj setup
-proj dev
-proj lint
-proj test
-proj spec show
-proj spec scaffold-split requirements
-proj spec new-task "fix login timeout"
+awb check
+awb package check
+awb plugin status
+awb mcp smoke --repo .
+awb cache inspect --repo .
+awb spec list
+awb spec summary docs/specs/028-dev-cli-workflow-tools
+awb spec lint docs/specs/028-dev-cli-workflow-tools
+awb doctor
+awb release preflight
 ```
 
-Replace the placeholder command implementations in `src/auriora_dev/cli.py` with project-specific behavior.
-Task files use grouped Kiro-style checklists with `[ ]`, `[-]`, and `[x]`, plus numbered tasks and sub-tasks.
+Local mutation commands:
+
+```bash
+awb package install-local
+awb plugin refresh
+```
+
+Use `--dry-run` on package and plugin mutation commands before changing local
+npm installs or Codex plugin registration.
+
+## Validation
+
+```bash
+pnpm test:devcli
+```
+
+The CLI tests mock or inspect command composition and do not require a real
+Codex plugin registry, Docker daemon, GitHub credentials, npm credentials, or
+user-level Codex configuration.

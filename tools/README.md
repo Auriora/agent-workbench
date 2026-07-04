@@ -7,8 +7,9 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 Put repository-owned developer tooling here.
 
-The default layout uses a dedicated Python CLI package:
+Agent Workbench uses a dedicated Python CLI package:
 
-- `tools/devcli/`: the developer CLI used for setup, dev, lint, test, and spec helpers
+- `tools/devcli/`: the `awb` developer CLI used for checks, package install,
+  plugin refresh, MCP smoke checks, cache inspection, and spec helpers
 
 Keep tooling code separate from application code so the project structure stays clear.

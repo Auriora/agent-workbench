@@ -47,6 +47,7 @@ copying tables, schemas, or enum definitions.
 | Markdown document quality | [Markdown document quality design](../design/markdown-document-quality-design.md) | Owns Markdown structure checks, compliance linting, link checks, table readability, and formatter preview/apply rules. |
 | Workspace safety policy | [Workspace safety contract](workspace-safety-contract.md) | Owns path containment, command execution, redaction, network, and generated-write rules. |
 | Native dependency setup and tree-sitter rebuilds | [Native dependency setup](../runbooks/native-dependency-setup.md) | Owns install/rebuild troubleshooting for native Node bindings. |
+| Developer CLI workflows | [Agent Workbench Dev CLI](../../tools/devcli/README.md) | Owns `awb` install, command groups, mutation boundaries, and CLI test command. Package/plugin runbooks remain authoritative for underlying install and registration commands. |
 | Edit preview/apply/rollback behavior | [Edit and validation loop design](../design/edit-and-validation-loop-design.md) | Owns bounded mutation workflow; schema vocabulary comes from runtime contracts. |
 | Attention lifecycle and ranking | [Attention layer design](../design/attention-layer-design.md) | Owns minimal blocker/warning behavior; full workflow guidance is post-MVP. |
 | Knowledge reports and graph communities | [Knowledge layer design](../design/knowledge-layer-design.md) | Post-MVP unless explicitly reduced to cheap persisted summaries. |

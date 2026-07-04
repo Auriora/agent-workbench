@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: change-impact
 status: active
 owner: platform
-last_reviewed: 2026-06-14
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -17,6 +17,7 @@ license: GPL-3.0-or-later
 | --- | --- | --- |
 | `tools/README.md` | modify | Replace generic tooling note with Agent Workbench CLI install and command overview. |
 | `tools/devcli/README.md` | modify | Replace template commands with project-specific `awb` commands, mutation boundaries, and examples. |
+| `docs/runbooks/install-agent-workbench.md` | clarify | Mention local checkout install through `awb package install-local` while preserving release-tarball install as the end-user path. |
 | `docs/runbooks/codex-agent-workbench-plugin.md` | clarify | Mention CLI wrappers for package check, install-local, plugin refresh, and plugin status while preserving underlying commands. |
 | `docs/reference/documentation-map.md` | clarify | Add `tools/` developer CLI docs as a repository tooling reference if documentation map currently omits it. |
 | `package.json` | optional modify | Add a script for running CLI tests if selected during implementation. |
@@ -32,13 +33,15 @@ license: GPL-3.0-or-later
 | `tools/devcli/src/auriora_dev/repo.py` | add | Repository root discovery and path handling. |
 | `tools/devcli/src/auriora_dev/commands/` | add | Command group modules for check, package, plugin, MCP, cache, spec, release, and doctor. |
 | `tools/devcli/tests/` | add | CLI unit tests with mocked external commands and fixture SQLite data. |
+| `scripts/install-agent-workbench-package.sh` | add | Repo-owned local package installer used by `awb package install-local`; the spec originally referenced this as existing, but implementation reconciled the missing source. |
 
 ## Behavior Impact
 
 - Adds a developer convenience CLI for repetitive local workflows.
 - Does not change Agent Workbench runtime behavior.
 - Does not change MCP contracts.
-- Does not change package installer semantics.
+- Adds the repo-owned local package installer that the CLI wraps; end-user
+  release-tarball install semantics remain unchanged.
 - Does not change plugin validation semantics.
 - Does not change release workflows except adding a local preflight wrapper.
 
@@ -59,6 +62,7 @@ pip install --no-build-isolation -e tools/devcli
 
 - `tools/README.md`
 - `tools/devcli/README.md`
+- `docs/runbooks/install-agent-workbench.md`
 - `docs/runbooks/codex-agent-workbench-plugin.md`
 - `docs/reference/documentation-map.md`
 - optional CI or package script documentation if added

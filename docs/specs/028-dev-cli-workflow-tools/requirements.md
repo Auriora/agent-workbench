@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: requirements
 status: active
 owner: platform
-last_reviewed: 2026-06-14
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -39,9 +39,11 @@ truth for packaging, plugin validation, runtime behavior, and spec lifecycle.
 - [Spec closure log](../../history/spec-closure-log.md)
 - Current tooling scaffold: `tools/README.md`, `tools/devcli/README.md`,
   `tools/devcli/pyproject.toml`, and `tools/devcli/src/auriora_dev/cli.py`
-- Existing command sources: `package.json`, `scripts/install-agent-workbench-package.sh`,
+- Existing command sources: `package.json`,
   `scripts/validate-agent-workbench-plugin.mjs`, `packaging/agent-workbench/`,
-  `.github/workflows/ci.yml`, and `.github/workflows/release-ghcr.yml`
+  `.github/workflows/ci.yml`, and `.github/workflows/release-ghcr.yml`.
+  This spec adds `scripts/install-agent-workbench-package.sh` as the
+  repo-owned local package installer that `awb package install-local` wraps.
 
 ## Current Findings
 

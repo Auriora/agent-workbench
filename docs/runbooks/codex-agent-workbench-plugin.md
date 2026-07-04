@@ -64,7 +64,7 @@ npm-installed runtime through the portable shim and must not point at a
 plugin-cache source path:
 
 ```json
-{"command": "node", "args": ["${PLUGIN_ROOT}/mcp-launch.mjs"]}
+{"command": "node", "cwd": ".", "args": ["./mcp-launch.mjs"]}
 ```
 
 There are **two** Codex marketplaces, named differently so they never collide:
@@ -156,7 +156,7 @@ include `codex-integration-profile` and `integration-health`.
 
 Install and launch are shell-free on all supported operating systems. `npm
 install` builds the native modules the normal way, and the plugins launch the
-runtime with `node ${PLUGIN_ROOT}/mcp-launch.mjs` — no POSIX shell on the
+runtime with `node ./mcp-launch.mjs` from the plugin root — no POSIX shell on the
 install or runtime path. The supported distribution channel is the npm package
 (Decision 2).
 
@@ -233,6 +233,21 @@ publish is performed. Validate the package payload with:
 pnpm pack:dry-run
 ```
 
+For local developer workflows, the `awb` CLI wraps the same authoritative
+commands without replacing them:
+
+```bash
+awb package check
+awb package install-local --dry-run
+awb package install-local
+awb plugin status
+awb plugin refresh --dry-run
+```
+
+`awb package install-local` delegates to
+`scripts/install-agent-workbench-package.sh`. `awb plugin refresh` mutates local
+Codex plugin registration and should be run dry first.
+
 ## Package Launch Model
 
 `npm install` exposes the `agent-workbench-mcp` bin
@@ -240,10 +255,10 @@ pnpm pack:dry-run
 straight from where npm installed the package — no copy, no prefix. The Codex
 and Claude plugins launch the same runtime through the portable `node`-based
 shim `plugins/agent-workbench/mcp-launch.mjs`, referenced in `.mcp.json` as
-`{"command": "node", "args": ["${PLUGIN_ROOT}/mcp-launch.mjs"]}` (Claude uses
-`${CLAUDE_PLUGIN_ROOT}`). A bare bin name or `npx` is not spawnable in MCP exec
-form on Windows (no PATHEXT, no shell), so `node` plus a script path is the only
-reliable cross-platform command shape.
+`{"command": "node", "cwd": ".", "args": ["./mcp-launch.mjs"]}`. Claude uses
+`${CLAUDE_PLUGIN_ROOT}` for its plugin root. A bare bin name or `npx` is not
+spawnable in MCP exec form on Windows (no PATHEXT, no shell), so `node` plus a
+script path is the only reliable cross-platform command shape.
 
 The shim resolves the runtime root from `AGENT_WORKBENCH_INSTALL_ROOT` (an
 override that means "the runtime root, or a checkout containing

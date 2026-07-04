@@ -6,9 +6,9 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "proj-devcli"
+name = "agent-workbench-devcli"
 version = "0.1.0"
-description = "Stable developer CLI for the lite project template"
+description = "Agent Workbench developer CLI"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -16,7 +16,7 @@ dependencies = [
 ]
 
 [project.scripts]
-proj = "auriora_dev.cli:app"
+awb = "auriora_dev.cli:app"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

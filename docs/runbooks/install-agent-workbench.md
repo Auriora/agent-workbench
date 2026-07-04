@@ -52,6 +52,18 @@ the per-OS state directory (`%LOCALAPPDATA%\agent-workbench` on Windows,
 `~/.local/share/agent-workbench` on POSIX). The plugin MCP binding launches that
 in-place runtime through the portable `node` shim; nothing is copied to a prefix.
 
+For local checkout testing, maintainers can build and install the current
+package tarball with the developer CLI:
+
+```bash
+awb package install-local --dry-run
+awb package install-local
+```
+
+The wrapper delegates to `scripts/install-agent-workbench-package.sh`, which
+packs the checkout, installs the tarball with `npm install -g`, and optionally
+registers the package-scoped Codex plugin.
+
 ## 2a. Register the Claude Code plugin (verified, clone-free)
 
 This is the verified clone-free path. The npm package ships a package-scoped

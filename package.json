@@ -49,6 +49,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:devcli": "python3 -m unittest discover -s tools/devcli/tests",
     "dev": "tsx src/index.ts",
     "mcp": "node src/mcp/stdio-entrypoint.mjs",
     "postinstall": "node scripts/postinstall.mjs",

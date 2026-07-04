@@ -2,8 +2,9 @@
   "mcpServers": {
     "agent-workbench": {
       "command": "node",
+      "cwd": ".",
       "args": [
-        "${PLUGIN_ROOT}/mcp-launch.mjs"
+        "./mcp-launch.mjs"
       ],
       "startup_timeout_sec": 30.0
     }

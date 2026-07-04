@@ -34,7 +34,7 @@ describe("mcp-launch shim planLaunch (spec 033)", () => {
     expect(plan.options.cwd).toBeUndefined();
     expect(plan.args).not.toContain("--import");
     expect(plan.args).not.toContain("tsx");
-    expect(plan.options.stdio).toBe("inherit");
+    expect(plan.options.stdio).toEqual(["pipe", "pipe", "pipe"]);
   });
 
   it("defaults AGENT_WORKBENCH_DEFAULT_REPO_ROOT to the launch cwd when unset", () => {

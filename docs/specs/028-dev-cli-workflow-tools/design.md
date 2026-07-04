@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: design
 status: active
 owner: platform
-last_reviewed: 2026-06-14
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -389,9 +389,12 @@ GitHub credentials.
 
 ## Open Questions
 
-- Should `awb package check` run focused integration tests by default, or gate
-  them behind `--with-integration`?
-- Should the plugin cachebuster helper remain an external Codex skill path or
-  be moved into repo-owned tooling?
-- Should CLI tests be run through a new `pnpm` script, a Python `pytest`
-  command, or both?
+None blocking. The implementation resolved the prior questions as follows:
+
+- `awb package check` runs focused integration tests only when
+  `--with-integration` is passed; the default stays fast and reports the skip.
+- `awb plugin refresh` keeps the documented external cachebuster helper path for
+  this slice. A repo-owned helper remains a future hardening option if that path
+  proves unstable.
+- CLI tests use standard-library `unittest` with Typer's test runner and are
+  exposed through `pnpm test:devcli`; no Python test dependency is added.

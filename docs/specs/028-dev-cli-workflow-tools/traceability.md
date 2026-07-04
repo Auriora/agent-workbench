@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: traceability
 status: active
 owner: platform
-last_reviewed: 2026-06-14
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -68,9 +68,11 @@ license: GPL-3.0-or-later
 
 ## Open Decision Impact
 
-| Decision | Affected requirements | Affected tasks | Blocking? |
+All decisions that previously blocked implementation are resolved.
+
+| Decision | Affected requirements | Affected tasks | Resolution |
 | --- | --- | --- | --- |
-| Primary CLI name: `awb` only or alias with `agent-workbench-dev` | R1, R11 | T001 | Blocks implementation naming |
-| Package check integration tests default or optional | R4, R12 | T005, T012 | Blocks package command defaults |
-| Plugin cachebuster helper path external or repo-owned | R6, R12 | T007 | Blocks refresh robustness |
-| CLI test runner: pytest or standard library | R12 | T012 | Blocks test command implementation |
+| Primary CLI name: `awb` only or alias with `agent-workbench-dev` | R1, R11 | T001 | Resolved as `awb` only; no `proj` or secondary alias. |
+| Package check integration tests default or optional | R4, R12 | T005, T012 | Resolved as optional `--with-integration`; default reports the skip. |
+| Plugin cachebuster helper path external or repo-owned | R6, R12 | T007 | External documented Codex skill helper retained for this slice. |
+| CLI test runner: pytest or standard library | R12 | T012 | Standard-library `unittest` exposed through `pnpm test:devcli`; no new Python test dependency. |

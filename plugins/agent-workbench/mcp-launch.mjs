@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// Portable MCP launch shim (spec 033). Referenced from .mcp.json as
-//   "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/mcp-launch.mjs"]
+// Portable MCP launch shim (spec 033). Referenced from plugin MCP config as
+// a direct `node <plugin-root>/mcp-launch.mjs` exec-form launch
 // so the server starts without a `bash -lc` wrapper or POSIX ${VAR:-default}.
 // A direct `node <script>` invocation is the only command shape that resolves
 // reliably on every OS: bare bin names and `.cmd`/`.ps1`/`npx` shims are not
@@ -57,7 +57,7 @@ export function planLaunch(env = process.env, argv = process.argv.slice(2), cwd 
   return {
     command: process.execPath,
     args: [entry, ...argv],
-    options: { stdio: "inherit", env: childEnv },
+    options: { stdio: ["pipe", "pipe", "pipe"], env: childEnv },
     root
   };
 }
@@ -71,7 +71,16 @@ function main() {
     process.exit(1);
     return;
   }
+
+  if (typeof process.execve === "function") {
+    process.execve(plan.command, [plan.command, ...plan.args], plan.options.env);
+  }
+
   const child = spawn(plan.command, plan.args, plan.options);
+
+  process.stdin.pipe(child.stdin);
+  child.stdout.pipe(process.stdout);
+  child.stderr.pipe(process.stderr);
 
   // Forward termination signals so the server dies with this shim (the bash
   // launcher used exec, so there was only one process to signal).

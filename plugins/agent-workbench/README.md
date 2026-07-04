@@ -109,7 +109,7 @@ runtime (including this plugin source) in npm's global tree and builds the nativ
 modules in place. The
 package `postinstall` records a runtime-root pointer under the per-OS state dir;
 the plugin MCP binding launches that in-place runtime through the portable shim
-(`${PLUGIN_ROOT}/mcp-launch.mjs`), which reads the pointer (or the
+(`./mcp-launch.mjs` with `cwd: "."`), which reads the pointer (or the
 `AGENT_WORKBENCH_INSTALL_ROOT` override) and starts the server — not runtime
 source from Codex's plugin cache, and never copied to a prefix.
 

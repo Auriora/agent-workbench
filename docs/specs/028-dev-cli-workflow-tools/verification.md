@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: verification
 status: active
 owner: platform
-last_reviewed: 2026-06-14
+last_reviewed: 2026-07-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -45,13 +45,17 @@ credentials, npm credentials, or package publishing access.
 | Date | Task IDs | Evidence | Result |
 | --- | --- | --- | --- |
 | 2026-06-14 | Spec creation | Requirements, design, change impact, tasks, traceability, and verification plan created. | Pending implementation |
+| 2026-07-04 | T002-T014 | `pnpm test:devcli` ran 10 unit tests covering help, command plans, package install pass-through, MCP smoke plan, cache fixture/missing database handling, and release no-publish behavior. | Passed |
+| 2026-07-04 | T005, T006 | `awb package check` via the Python CLI app ran `pnpm run validate:plugin`, `scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config`, and `pnpm pack:dry-run`. | Passed |
+| 2026-07-04 | T008 | `awb mcp smoke --repo . --timeout 30` passed outside sandbox after the sandbox blocked `tsx` IPC pipe creation with `listen EPERM`. | Passed with sandbox note |
+| 2026-07-04 | T010, T013 | `awb spec lint docs/specs/028-dev-cli-workflow-tools` and `lint_spec_package` reported 0 diagnostics. | Passed |
+| 2026-07-04 | T013 | `pnpm typecheck`, `pnpm test`, `pnpm run validate:plugin`, and `git diff --check` passed. | Passed |
 
 ## Residual Risks
 
 - The plugin cachebuster helper currently lives outside this repository in a
   Codex skill path. If that path changes, `awb plugin refresh` may need a
   repo-owned helper or explicit configuration.
-- MCP smoke behavior may require small additions to existing debug scripts
-  before the CLI can wrap a stable bounded workflow.
-- Adding Python test dependencies introduces a second toolchain for validation;
-  this is acceptable only if documented and CI-safe.
+- CI does not yet run `pnpm test:devcli`; this slice documents the local command
+  and keeps it free of user-local Codex, Docker, GitHub, npm credential, or
+  plugin-cache dependencies.
