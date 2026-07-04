@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { describe, expect, it } from "vitest";
 import type { FindReferencesUseCaseResult } from "../../src/application/use-cases/find-references.js";
 import type { GetRepoStatusResult } from "../../src/application/use-cases/get-repo-status.js";

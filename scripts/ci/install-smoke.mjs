@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Cross-platform postinstall pointer smoke (spec 033). The package is launched
 // in place (npm install location) — never copied to a prefix. This smoke runs
 // the package `postinstall` against a temp state dir and asserts it records a

@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -681,18 +686,34 @@ describe("Codex plugin artifacts", () => {
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )
     ).toBeUndefined();
-    expect(
-      sessionStart.buildSessionStartContext(
-        { cwd: "/repo" },
-        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
-      )
-    ).toBe("Agent Workbench MCP is available. Use repo:///status, repo:///scope, or repo:///overview when repository context is unclear.");
-    expect(
-      sessionStart.buildSessionStartContext(
-        { cwd: "/repo" },
-        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
-      )
-    ).not.toContain("/repo");
+    const sessionContext = sessionStart.buildSessionStartContext(
+      { cwd: "/repo" },
+      { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+    );
+    expect(sessionContext).toContain("Agent Workbench MCP is available.\nRepo orientation:");
+    expect(sessionContext).toContain("- root: /repo");
+    expect(sessionContext).toContain("dirty state not inspected");
+
+    const sessionFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-session-"));
+    fs.mkdirSync(path.join(sessionFixtureRoot, "src"), { recursive: true });
+    fs.mkdirSync(path.join(sessionFixtureRoot, "tests"), { recursive: true });
+    fs.mkdirSync(path.join(sessionFixtureRoot, "docs/specs/034-session-context"), {
+      recursive: true
+    });
+    fs.mkdirSync(path.join(sessionFixtureRoot, ".git"), { recursive: true });
+    fs.writeFileSync(path.join(sessionFixtureRoot, "package.json"), "{\"type\":\"module\"}\n");
+    fs.writeFileSync(
+      path.join(sessionFixtureRoot, ".git/HEAD"),
+      "ref: refs/heads/feature/session-context\n"
+    );
+    const fixtureSessionContext = sessionStart.buildSessionStartContext(
+      { cwd: sessionFixtureRoot },
+      { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+    );
+    expect(fixtureSessionContext).toContain("- roots: src, tests, docs");
+    expect(fixtureSessionContext).toContain("- config: package.json");
+    expect(fixtureSessionContext).toContain("- specs: 1 package(s): 034-session-context");
+    expect(fixtureSessionContext).toContain("- git: branch feature/session-context");
     expect(common.buildAdditionalContextOutput("SessionStart", "hello")).toEqual({
       hookSpecificOutput: {
         hookEventName: "SessionStart",

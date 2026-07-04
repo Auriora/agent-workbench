@@ -4,6 +4,8 @@ displayName: "Agent Workbench"
 description: "Use the Agent Workbench MCP runtime for repository status, scoped context, symbol navigation, edit planning, and validation planning."
 keywords: ["agent-workbench", "mcp", "repo status", "symbol search", "validation plan", "workspace edit", "code navigation"]
 author: "Auriora"
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Agent Workbench

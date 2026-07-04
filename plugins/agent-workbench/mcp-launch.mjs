@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Portable MCP launch shim (spec 033). Referenced from .mcp.json as
 //   "command": "node", "args": ["${CLAUDE_PLUGIN_ROOT}/mcp-launch.mjs"]
 // so the server starts without a `bash -lc` wrapper or POSIX ${VAR:-default}.

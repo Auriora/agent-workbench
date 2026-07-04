@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { describe, expect, it } from "vitest";
 import type { FileCatalogEntry } from "../../src/domain/models/index.js";
 import type { WorkspaceFilePort } from "../../src/ports/index.js";

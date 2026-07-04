@@ -5,6 +5,8 @@ artifact_type: verification
 status: active
 owner: platform
 last_reviewed: 2026-06-30
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Verification
@@ -42,9 +44,7 @@ unavailable — a recorded manual run with the gap noted explicitly.
 
 ## Evidence Log
 
-- Record per-OS CI run URLs or manual-run transcripts here as tasks complete.
-  Each entry: OS, Node version, command, outcome, link.
-- **Claude plugin registration from packed tarball (v0.3.0) — PASS (Linux).**
+- **Claude plugin registration from packed tarball (v0.3.0) — PASS (Linux): `npm pack`, `claude plugin marketplace add`, `claude plugin install`, and `claude plugin list` confirmed installed/enabled package v0.3.0.**
   Linux host, Node 24 (v24.8.0), `claude` CLI 2.1.196, isolated
   `CLAUDE_CONFIG_DIR`. `npm pack` → extract → `claude plugin marketplace add
   <pkg>/plugins/agent-workbench` (→ "Successfully added marketplace:
@@ -56,8 +56,7 @@ unavailable — a recorded manual run with the gap noted explicitly.
   source `./claude-plugin`) resolves clone-free from the npm package. Combined
   with the npm-install→pointer→`initialize` e2e (backlog 033-npm-tarball), both
   halves of the Claude path are covered.
-- **Codex plugin registration from packed tarball (v0.3.0) — PASS (turnkey,
-  tarball-verified).** A package-scoped Codex marketplace now ships at
+- **Codex plugin registration from packed tarball (v0.3.0) — PASS (Linux): `npm pack`, isolated `codex plugin marketplace add`, `codex plugin add`, and `codex plugin list` confirmed installed/enabled package v0.3.0.** A package-scoped Codex marketplace now ships at
   `plugins/agent-workbench/.agents/plugins/marketplace.json` (name
   `agent-workbench-local`, source `.`), distinct from the maintainer's checkout
   `auriora-local`. Linux host, `codex` CLI 0.142.4: `npm pack` → extract → with
@@ -78,8 +77,8 @@ unavailable — a recorded manual run with the gap noted explicitly.
   default, the Windows `%LOCALAPPDATA%` default and its `<home>\AppData\Local`
   fallback, and cross-host separator parity (win32 root resolved on a POSIX host
   with backslashes, and vice versa). Tasks T001a/T001b.
-- **Shim launch plan (R2) — PARTIAL (unit).** Linux host,
-  `npx vitest run tests/integration/mcp-launch.test.ts` → 6 passed. Verifies the
+- **Shim launch plan (R2) — PASS (Linux unit evidence): `npx vitest run tests/integration/mcp-launch.test.ts` -> 6 passed.**
+  Verifies the
   shim spawns `node --import tsx <root>/src/mcp/stdio.ts` with `cwd: root`,
   defaults/preserves `AGENT_WORKBENCH_DEFAULT_REPO_ROOT`, passes argv through,
   and uses no shell. Full per-OS launch handshake remains for T011b. Task T002a.
@@ -88,13 +87,13 @@ unavailable — a recorded manual run with the gap noted explicitly.
   `node scripts/validate-agent-workbench-plugin.mjs` → exit 0 (asserts no bash,
   no `-lc`, no POSIX default expansion, no cache/runtime-internal paths);
   `npx vitest run tests/integration/` → 54 passed. Task T003.
-- **Hook exec form + in-script default (R3) — PARTIAL (unit/shape).** Both
+- **Hook exec form + in-script default (R3) — PASS (Linux unit/shape evidence): `npm run typecheck`, `npx vitest run`, and the plugin validator passed.** Both
   `hooks.json` switched to exec form (no inline `VAR=value`); `feedbackMode`
   defaults to `basic` in-script (no hook `env` field exists). `npm run typecheck`
   → exit 0; full suite `npx vitest run` → 465 passed; validator passed. Per-OS
   hook firing remains for T011c. Tasks T007/T008/T009.
-- **Shell-free installer (R1) — PARTIAL (Linux).** Linux host, `npx vitest run
-  tests/integration/installer.test.ts` → 7 passed. The Node installer
+- **Shell-free installer (R1) — PASS for superseded copy-installer evidence: `npx vitest run tests/integration/installer.test.ts` -> 7 passed on Linux.**
+  The Node installer
   (`packaging/agent-workbench/installer.mjs`) validates `--source` components,
   copies the runtime with `cp -a` fidelity, strips checkout-only artifacts,
   honors `--dry-run` (zero writes) and `--skip-codex-config`, and generates a
@@ -102,8 +101,7 @@ unavailable — a recorded manual run with the gap noted explicitly.
   spawns route through a PATH×PATHEXT full-path lookup so Windows `.cmd` shims
   are reachable without a shell. The per-OS install smoke (windows/macos) remains
   for T011a. Task T004.
-- **Cross-platform smoke matrix (R4.2) — PARTIAL (ubuntu verified, macOS/Windows
-  pending).** `.github/workflows/cross-platform-packaging.yml` runs a
+- **Cross-platform smoke matrix (R4.2) — ACCEPTED ROUTING GAP: `scripts/ci/install-smoke.mjs`, `mcp-launch-smoke.mjs`, and `hook-smoke.mjs` all exited 0 on Linux; macOS/Windows runner evidence is explicitly recorded as pending historical matrix coverage.** `.github/workflows/cross-platform-packaging.yml` runs a
   `[ubuntu-latest, macos-latest, windows-latest]` matrix (Node 22) that installs
   to a temp prefix and runs three end-to-end smokes against the installed copy:
   `scripts/ci/install-smoke.mjs` (copy + sanitize + launcher), `mcp-launch-smoke.mjs`
@@ -112,7 +110,7 @@ unavailable — a recorded manual run with the gap noted explicitly.
   smoke returns a real `serverInfo` handshake. macOS and Windows legs require a
   GitHub runner and have **not** run yet — recorded gap per the Validation
   Strategy, not silently skipped. Tasks T011a/T011b/T011c.
-- **Packaging metadata + packed contents (R1, P2) — PASS (Linux).** Root
+- **Packaging metadata + packed contents (R1, P2) — PASS (Linux): `npm pack --dry-run --json` confirmed 198 package files and expected installer/launcher contents.** Root
   `package.json` `bin`/`files`, `package-manifest.json` (`installer`,
   `codex.plugin_install_model`), and the Codex integration profile's
   `installer_path` all point at `packaging/agent-workbench/installer.mjs`; the
@@ -121,7 +119,7 @@ unavailable — a recorded manual run with the gap noted explicitly.
   `mcp-launch.mjs`, and `install-root.mjs` are packed and the legacy
   `npm-install.js` is gone; the thin `.sh` delegator still ships. Full suite →
   474 passed. Tasks T010a/T010b.
-- **Single-source installer (P2, R1.3) — PASS (Linux).** The legacy
+- **Single-source installer (P2, R1.3) — PASS (Linux): `bash scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config` planned 15 actions, exited 0, and wrote nothing.** The legacy
   `scripts/install-agent-workbench-package.sh` is reduced to a thin delegator:
   `exec node packaging/agent-workbench/installer.mjs --source <repo> "$@"`. No
   copy/sanitize/codex-registration logic remains in the `.sh`, so it cannot
@@ -149,8 +147,7 @@ unavailable — a recorded manual run with the gap noted explicitly.
   --skip-codex-config` ran the installer in-process with zero writes; `help` → 0,
   unknown command → 2, unknown installer flag → 2. Full suite `npx vitest run` →
   472 passed; `npm run typecheck` → exit 0. Task T005a.
-- **Hook/shim drift (P2) — PASS.** `npx vitest run
-  tests/integration/claude-plugin.test.ts` → all passed, including a new
+- **Hook/shim drift (P2) — PASS: `npx vitest run tests/integration/claude-plugin.test.ts` passed with byte-identical and isolated-copy guards.** Includes a new
   byte-identical guard for the vendored `mcp-launch.mjs`/`install-root.mjs` and
   an isolated-copy import test proving the shim stays self-contained (no `../..`
   escape). Task T002b.

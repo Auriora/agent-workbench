@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { describe, expect, it } from "vitest";
 import type { ExtractionRequest } from "../../src/domain/models/index.js";
 import { cloudFormationTemplateExtraction } from "../../src/infrastructure/extraction/cloudformation-resource-extractor.js";

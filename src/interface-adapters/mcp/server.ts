@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TelemetryRecorderPort } from "../../ports/index.js";
 import { instrumentMcpServer } from "./instrumentation.js";

@@ -65,6 +65,7 @@
     "plugins/agent-workbench/kiro-power",
     "plugins/agent-workbench/skills",
     "package.json",
+    "LICENSE",
     "pnpm-lock.yaml",
     "tsconfig.json",
     "AGENTS.md"

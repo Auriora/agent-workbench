@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import type { WorkspaceFilePort } from "../../ports/index.js";
 
 export function uniqueSorted(values: readonly string[]): string[] {

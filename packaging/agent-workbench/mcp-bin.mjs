@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // `agent-workbench-mcp` bin (spec 033). Launches the Agent Workbench MCP server
 // straight from where npm installed this package — no copy, no prefix. Useful
 // for `claude mcp add agent-workbench -- node <abs>/packaging/agent-workbench/mcp-bin.mjs`

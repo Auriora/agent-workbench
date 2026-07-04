@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { ZodError, z, type ZodTypeAny } from "zod";
 
 export function parseMcpArguments<T extends ZodTypeAny>(

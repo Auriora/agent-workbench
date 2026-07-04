@@ -7,6 +7,8 @@ last_reviewed: 2026-06-03
 tags: [update, ai-agent, mcp, agent-workbench, python-agent-ide]
 links:
   tooling: [python-agent-ide, agent-workbench, mcp]
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Update: Agent Workbench and Python Agent IDE Evaluation

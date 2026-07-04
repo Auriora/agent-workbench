@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Cross-platform MCP launch smoke (spec 033). Launches the portable plugin shim
 // (plugins/agent-workbench/mcp-launch.mjs) against this checkout as the runtime
 // root and asserts a JSON-RPC initialize handshake over stdio — proving the

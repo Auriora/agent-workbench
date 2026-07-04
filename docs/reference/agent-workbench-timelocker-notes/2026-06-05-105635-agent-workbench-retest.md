@@ -7,6 +7,8 @@ last_reviewed: 2026-06-05
 tags: [update, ai-agent, mcp, agent-workbench]
 links:
   tooling: [agent-workbench, mcp]
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Update: Agent Workbench Retest

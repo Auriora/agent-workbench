@@ -1,3 +1,8 @@
+<!--
+Copyright (C) 2026 Auriora
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Agent Workbench Claude Code Plugin
 
 This directory packages the Claude Code-facing Agent Workbench integration.

@@ -1,3 +1,8 @@
+<!--
+Copyright (C) 2026 Auriora
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Agent Workbench Package
 
 This package definition supports the npm package and the GHCR image for the

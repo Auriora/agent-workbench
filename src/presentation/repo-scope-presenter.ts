@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { makeEnvelope, type RepoScope, type ResponseEnvelope } from "../contracts/index.js";
 import type { GetRepoScopeResult } from "../application/use-cases/get-repo-scope.js";
 import { invalidResponseMeta } from "../application/use-cases/response-metadata.js";

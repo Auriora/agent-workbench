@@ -1,3 +1,8 @@
+<!--
+Copyright (C) 2026 Auriora
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Docs Query Read Surfaces
 
 ## Agent Workbench Docs Search

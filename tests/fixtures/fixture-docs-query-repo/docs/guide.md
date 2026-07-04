@@ -1,3 +1,8 @@
+<!--
+Copyright (C) 2026 Auriora
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Guide
 
 This guide contains durable project instructions for docs search.

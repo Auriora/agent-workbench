@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import type { BuildPostEditFeedbackResult } from "../application/use-cases/build-post-edit-feedback.js";
 import {
   makeEnvelope,

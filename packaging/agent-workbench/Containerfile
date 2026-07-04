@@ -1,11 +1,14 @@
 # syntax=docker/dockerfile:1.7
 
+# Copyright (C) 2026 Auriora
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 FROM node:24-bookworm-slim AS runtime
 
 LABEL org.opencontainers.image.title="Agent Workbench"
 LABEL org.opencontainers.image.description="Agent Workbench MCP runtime, Codex plugin wrapper, and hook installer package."
 LABEL org.opencontainers.image.source="https://github.com/bcherrington/agent-workbench"
-LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.licenses="GPL-3.0-or-later"
 
 ENV PNPM_HOME="/opt/pnpm"
 ENV PATH="${PNPM_HOME}:${PATH}"
@@ -26,6 +29,7 @@ RUN corepack enable \
 
 COPY package.json pnpm-lock.yaml tsconfig.json ./
 COPY AGENTS.md ./
+COPY LICENSE ./
 COPY src ./src
 COPY docs ./docs
 COPY plugins ./plugins

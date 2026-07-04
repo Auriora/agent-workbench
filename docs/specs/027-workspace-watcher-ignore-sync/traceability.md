@@ -5,6 +5,8 @@ artifact_type: traceability
 status: active
 owner: platform
 last_reviewed: 2026-06-14
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Traceability

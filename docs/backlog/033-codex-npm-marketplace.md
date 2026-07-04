@@ -5,6 +5,8 @@ status: resolved
 owner: platform
 source_spec: docs/specs/033-cross-platform-packaging
 last_reviewed: 2026-06-30
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Ship a package-scoped Codex marketplace so npm→Codex registration is turnkey

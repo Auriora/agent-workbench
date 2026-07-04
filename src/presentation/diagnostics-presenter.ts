@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import type { DiagnoseChangedFilesResult } from "../application/use-cases/diagnose-changed-files.js";
 import {
   diagnosticFindingSchema,

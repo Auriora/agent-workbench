@@ -4,6 +4,8 @@ doc_type: runbook
 status: draft
 owner: platform
 last_reviewed: 2026-06-13
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Agent Workbench Codex Plugin
@@ -128,7 +130,12 @@ duplicated into `~/.codex/hooks.json`.
 ## Hook Behavior
 
 Hooks emit compact `basic` feedback by default (session-start context only).
-Set `AGENT_WORKBENCH_HOOK_FEEDBACK=silent` to suppress all hook output. File-edit
+The session-start hook emits Agent Workbench availability plus a small
+filesystem-only repo orientation capsule: root, common source/test/docs roots,
+common config files, docs/specs presence, git branch when `.git/HEAD` is
+directly readable, and first-call guidance. It does not run subprocesses, call
+MCP tools, inspect dirty state, or parse source. Set
+`AGENT_WORKBENCH_HOOK_FEEDBACK=silent` to suppress all hook output. File-edit
 hooks stay silent unless they have an actionable finding to report regardless of
 mode. (The default moved in-script because plugin command hooks have no `env`
 field to carry it; see spec 033.)

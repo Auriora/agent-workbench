@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import path from "node:path";
 import type { ExtractionRequest, GraphNodeWriteModel } from "../../domain/models/index.js";
 import { fullFileRange, lineRange, nodeId, uniqueSorted } from "./resource-shared.js";

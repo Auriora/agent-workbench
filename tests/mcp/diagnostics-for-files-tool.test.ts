@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { describe, expect, it } from "vitest";
 import type { DiagnoseChangedFilesResult } from "../../src/application/use-cases/diagnose-changed-files.js";
 import type { DiagnosticsForFilesRequest } from "../../src/contracts/index.js";

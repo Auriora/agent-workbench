@@ -1,18 +1,30 @@
+<!--
+Copyright (C) 2026 Auriora
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization
 
-This repository contains the Agent IDE runtime implementation scaffold and
-planning documentation for the restart concept.
+This repository contains the Agent Workbench runtime, packaged MCP/plugin
+integrations, fixture-backed tests, and durable design/reference documentation.
 
 - `src/`: TypeScript runtime source. Keep MCP adapters thin and place shared
   contracts, runtime state, graph storage, adapters, workflow, edit, and
   workspace safety code in the matching subdirectories.
 - `tests/`: Vitest contract tests, fixture repositories, and golden snapshots.
-- `docs/design/`: current design documents, including
-  `agent-ide-restart-concept.md`.
-- `docs/specs/001-agent-ide-runtime/`: MVP spec package and implementation
-  task list.
+- `plugins/agent-workbench/`: packaged Codex, Claude Code, and Kiro integration
+  files. Keep launchers and hooks thin wrappers over the installed runtime.
+- `packaging/agent-workbench/`: npm package metadata, portable MCP entrypoint,
+  and distribution manifest.
+- `docs/design/`, `docs/architecture/`, `docs/reference/`, `docs/runbooks/`,
+  `docs/requirements/`, and `docs/adr/`: durable documentation. Use
+  `docs/reference/documentation-map.md` to find the canonical owner before
+  changing behavior or contracts.
+- `docs/specs/`: active and historical implementation spec packages. Current
+  active packages are numbered `026` through `033`; do not add new work to the
+  closed `001` MVP package.
 - `docs/templates/`: reusable documentation templates and spec-package
   templates.
 - `.cache/`: local generated runtime/index data. This directory is ignored and
@@ -32,27 +44,33 @@ Use pnpm for local development:
 - `pnpm test`: run the Vitest suite.
 - `pnpm dev -- <repo-root>`: print the current cold runtime status for a repo.
 - `git status --short`: inspect pending changes.
-- `git diff -- docs/design/agent-ide-restart-concept.md`: review concept-doc
-  edits before committing.
+- `pnpm validate:plugin`: validate packaged plugin manifests, MCP bindings, and
+  hook shapes.
+- `pnpm pack:dry-run`: inspect the npm package contents without publishing.
+- `git diff -- README.md AGENTS.md`: review front-door documentation edits
+  before committing.
 - `find docs -type f | sort`: list tracked documentation candidates.
 
-Native dependency note: `tree-sitter` and `tree-sitter-python` are native
-Node bindings. Under Node 24, `node-gyp` may fail with `C++20 or later
-required` or tests may fail with `No native build was found` after install.
-Run `pnpm rebuild:native`; do not add parser fallbacks or switch away from
-tree-sitter to mask this install/build issue. `better-sqlite3`, `tree-sitter`,
-`tree-sitter-python`, and `esbuild` are the approved pnpm build-script
-dependencies in `package.json`.
+Native dependency note: `better-sqlite3`, `tree-sitter`, and the language
+grammar packages are native Node bindings. Under Node 24, `node-gyp` may fail
+with `C++20 or later required` or tests may fail with `No native build was
+found` after install. Run `pnpm rebuild:native`; do not add parser fallbacks or
+switch away from tree-sitter to mask this install/build issue. The approved
+pnpm build-script dependencies are the entries in `package.json` under
+`pnpm.onlyBuiltDependencies`.
 
 ## Coding Style & Naming Conventions
 
 Use TypeScript with ESM under `src/`. Keep shared enums and response shapes in
 `src/contracts/`, validate external/tool-facing data with structured schemas,
-and avoid duplicating contract vocabulary outside the canonical contract module.
+and avoid duplicating contract vocabulary outside the canonical contract module
+or `docs/reference/runtime-contracts.md`.
 
 Use Markdown for documentation. Keep headings concise and use sentence-style
 paragraphs with short bullet lists. New documentation files should use
-kebab-case names, for example `runtime-architecture.md`.
+kebab-case names, for example `runtime-architecture.md`. Before adding a new
+durable document, check `docs/reference/documentation-map.md` and update an
+existing canonical owner when possible.
 
 Follow the frontmatter pattern from `docs/templates/README.md`:
 

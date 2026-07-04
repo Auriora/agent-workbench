@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 export const orderRoute = "/api/orders";
 export const orderDetailRoute = "/api/orders/:orderId";
 export const assetUrl = "/assets/orders/list.json";

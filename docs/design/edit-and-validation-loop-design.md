@@ -4,6 +4,8 @@ doc_type: design
 status: draft
 owner: platform
 last_reviewed: 2026-06-13
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Edit And Validation Loop Design

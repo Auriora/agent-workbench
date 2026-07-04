@@ -1,3 +1,8 @@
+<!--
+Copyright (C) 2026 Auriora
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Fixture Docs Query Repo
 
 This repository fixture exercises documentation query and read surfaces.

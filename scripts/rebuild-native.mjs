@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Cross-platform native rebuild (spec 033). Core tree-sitter 0.25 compiles from
 // source and needs C++20, which the default build does not enable. This wrapper
 // injects the right C++20 flag per toolchain — `CXXFLAGS=-std=c++20` for

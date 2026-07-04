@@ -11,6 +11,7 @@
   "bin": "packaging/agent-workbench/mcp-bin.mjs",
   "required_paths": [
     "AGENTS.md",
+    "LICENSE",
     "README.md",
     "docs/runbooks/codex-agent-workbench-plugin.md",
     "docs/design/coding-agent-integration-design.md",

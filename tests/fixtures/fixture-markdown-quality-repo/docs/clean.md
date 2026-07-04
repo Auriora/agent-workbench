@@ -4,6 +4,8 @@ doc_type: design
 status: draft
 owner: platform
 last_reviewed: 2026-06-06
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Clean Document

@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import type { EditToken } from "../../contracts/index.js";
 import type { EditPreviewStorePort } from "../../ports/index.js";
 

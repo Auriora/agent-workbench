@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { planVerification } from "../../src/application/use-cases/plan-verification.js";

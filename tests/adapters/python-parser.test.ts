@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { describe, expect, it } from "vitest";
 import { extractPython, extractPythonSymbols } from "../../src/infrastructure/tree-sitter/python-parser.js";
 

@@ -1,6 +1,8 @@
 ---
 title: Problem Document
 doc_type: design
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Problem Document

@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Type declarations for the JS vendoring script so TS test files importing it
 // get typed maps instead of an implicit-any module (was a pre-existing
 // tests/integration/claude-plugin.test.ts typecheck failure).

@@ -1,3 +1,8 @@
+<!--
+Copyright (C) 2026 Auriora
+SPDX-License-Identifier: GPL-3.0-or-later
+-->
+
 # Agent Workbench
 
 Agent Workbench is a local-first IDE/runtime for coding agents. It exposes
@@ -138,17 +143,30 @@ stale indexes, partial semantic coverage, missing checks, and residual risk.
 
 ## Install
 
-Agent Workbench is packaged as `@auriora/agent-workbench`, but it is distributed
-through GitHub release tarballs rather than the public npm registry. Use Node.js
-22 when possible, because Node 24 requires C++20 flags when compiling the native
-`tree-sitter` core.
+Agent Workbench installs from the npm package tarball attached to a GitHub
+release. Do not clone the repository, copy files with `rsync`, or install from a
+checkout for normal use. The npm package builds native modules in place, records
+the installed runtime root during `postinstall`, and the Codex and Claude
+plugins launch that installed runtime through the bundled portable launcher.
 
-On macOS or Linux with `nvm`:
+Use Node.js 22 when possible, because Node 24 requires C++20 flags when
+compiling the native `tree-sitter` core.
+
+### 1. Install The Runtime Package
+
+On macOS or Linux with `nvm`, install the release tarball globally:
 
 ```bash
 nvm install 22
 nvm use 22
 npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz
+```
+
+For an offline install, download the `.tgz` from the matching GitHub release and
+install that local file:
+
+```bash
+npm install -g ./auriora-agent-workbench-0.3.0.tgz
 ```
 
 If you must install under Node 24, pass C++20 flags to the native build:
@@ -161,9 +179,10 @@ Install Xcode Command Line Tools first if `node-gyp` cannot find a compiler:
 `xcode-select --install`.
 
 Then install the plugin for each coding agent that should use Agent Workbench.
-The package includes both plugin definitions, so no repository clone is needed.
+The package includes the Codex and Claude Code plugin definitions, so each
+plugin is registered from the installed package directory.
 
-### Install The Codex Plugin
+### 2a. Install The Codex Plugin
 
 Register the package-scoped Codex marketplace, install the plugin, and verify
 that Codex sees it:
@@ -175,9 +194,11 @@ codex plugin add agent-workbench@agent-workbench-local
 codex plugin list
 ```
 
-The expected plugin entry is `agent-workbench@agent-workbench-local`.
+The expected plugin entry is `agent-workbench@agent-workbench-local`, installed
+and enabled. Start a new Codex session after installing so Codex discovers the
+skill, hooks, and MCP server configuration.
 
-### Install The Claude Code Plugin
+### 2b. Install The Claude Code Plugin
 
 Register the package-scoped Claude Code marketplace, install the plugin for the
 current user, and verify that Claude Code sees it:
@@ -189,11 +210,12 @@ claude plugin install agent-workbench@agent-workbench-local --scope user
 claude plugin list
 ```
 
-The expected plugin entry is `agent-workbench@agent-workbench-local`.
+The expected plugin entry is `agent-workbench@agent-workbench-local`, enabled
+for the user scope. Start a new Claude Code session after installing so Claude
+Code discovers the skill, hooks, and MCP server configuration.
 
-Start a new Codex or Claude Code session after installing the plugin. The first
-useful MCP resources are `repo:///status`, `repo:///scope`, and
-`repo:///overview`.
+The first useful MCP resources in either agent are `repo:///status`,
+`repo:///scope`, and `repo:///overview`.
 
 Native dependencies need Python 3 and a C/C++ toolchain. For full
 cross-platform setup, update, uninstall, and troubleshooting steps, see
@@ -214,6 +236,24 @@ pnpm dev -- <repo-root>
 Native tree-sitter bindings may require `pnpm rebuild:native` under newer Node
 versions. Do not add parser fallbacks to mask install/build issues.
 
+For package and plugin changes, also use:
+
+```bash
+pnpm validate:plugin
+pnpm pack:dry-run
+```
+
+`plugins/agent-workbench/` owns the packaged Codex, Claude Code, and Kiro
+integration files. `packaging/agent-workbench/` owns the npm package metadata,
+portable MCP entrypoint, and distribution manifest. Keep plugin hooks and MCP
+launchers as thin wrappers over the installed runtime; behavior belongs in
+`src/` and the durable contracts/docs listed below.
+
+Active implementation work is tracked under `docs/specs/`. Closed MVP behavior
+from Spec 001 has been promoted into durable design, reference, runbook,
+requirements, ADR, and history docs; do not add new implementation evidence to
+the closed MVP package.
+
 ## Documentation Map
 
 Start with [Documentation map](docs/reference/documentation-map.md) for the
@@ -221,3 +261,8 @@ canonical owner of each design, contract, proof, integration, and safety topic.
 
 Agent-visible behavior changes are tracked in
 [Agent-readable changelog](docs/reference/agent-readable-changelog.md).
+
+## License
+
+Agent Workbench is licensed under the GNU General Public License v3.0 or later.
+See [LICENSE](LICENSE) for the full license text.

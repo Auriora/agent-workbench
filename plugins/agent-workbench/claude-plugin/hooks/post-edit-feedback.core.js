@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";

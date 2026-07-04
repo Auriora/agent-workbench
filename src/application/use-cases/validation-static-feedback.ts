@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import type { StaticFeedback } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import { normalizeRepoPath, uniqueSorted } from "./validation-utils.js";

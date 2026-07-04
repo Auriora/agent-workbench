@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Vendors the shared (codex-origin) hook modules into the Claude Code plugin so
 // that claude-plugin/ is self-contained. Claude Code installs a plugin by copying
 // only its plugin-root subtree (here ./claude-plugin) into a per-user cache; any

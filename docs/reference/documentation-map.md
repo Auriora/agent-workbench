@@ -4,6 +4,8 @@ doc_type: reference
 status: draft
 owner: platform
 last_reviewed: 2026-07-02
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Documentation Map
@@ -72,7 +74,7 @@ copying tables, schemas, or enum definitions.
 | Multi-file post-edit repair delivery record | [Spec closure log](../history/spec-closure-log.md) | Closed Spec 020 delivery evidence. Current quiet multi-file diagnostics, skipped/deferred evidence, post-edit repair-loop outcomes, hook behavior, and telemetry behavior live in [Edit and validation loop design](../design/edit-and-validation-loop-design.md), [Coding agent integration design](../design/coding-agent-integration-design.md), and [Runtime contracts](runtime-contracts.md). |
 | Spec task traceability lookup delivery record | [Spec closure log](../history/spec-closure-log.md) | Closed Spec 021 delivery evidence. Current spec/task lifecycle evidence behavior lives in [Runtime contracts](runtime-contracts.md), [MCP surface design](../design/mcp-surface-design.md), [Coding agent integration design](../design/coding-agent-integration-design.md), and packaged Agent Workbench skill/Power guidance. |
 | MCP server repository support delivery record | [Spec closure log](../history/spec-closure-log.md) | Closed Spec 022 delivery evidence. Current MCP-server repo-shape detection, context routing, and safe validation-planning behavior lives in [MCP surface design](../design/mcp-surface-design.md) and [Coding agent integration design](../design/coding-agent-integration-design.md). |
-| Doc currency lifecycle handoff | [Spec-lifecycle-manager doc currency handoff](spec-lifecycle-manager-doc-currency-handoff.md) | Feedback package for lifecycle tooling: frontmatter input signals, canonical-context guidance, optional Git recency evidence, and the no-`ctime` rule. Active implementation tracking remains in [Spec 034](../specs/034-doc-currency-routing/requirements.md) until closure. |
+| Doc currency lifecycle handoff | [Spec-lifecycle-manager doc currency handoff](spec-lifecycle-manager-doc-currency-handoff.md) | Feedback package for lifecycle tooling: frontmatter input signals, canonical-context guidance, optional Git recency evidence, and the no-`ctime` rule. Spec 034 is closed; delivery evidence lives in the [Spec closure log](../history/spec-closure-log.md). |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) | Owns fixture, budget, degraded-mode, and acceptance evidence. |
 | Architectural decisions | [ADRs](../adr/) | ADR status must match frontmatter and body text. |
 

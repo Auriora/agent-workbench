@@ -4,7 +4,7 @@
   "type": "module",
   "packageManager": "pnpm@10.18.1",
   "description": "Local-first Agent IDE runtime scaffold.",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "author": "Auriora",
   "homepage": "https://github.com/Auriora/agent-workbench/tree/main/plugins/agent-workbench",
   "repository": {
@@ -23,6 +23,7 @@
   },
   "files": [
     "AGENTS.md",
+    "LICENSE",
     "README.md",
     "docs/design/coding-agent-integration-design.md",
     "docs/design/runtime-operations-design.md",

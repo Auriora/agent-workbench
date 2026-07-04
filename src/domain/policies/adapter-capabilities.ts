@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import type { AdapterEvidence, AdapterDomain, CapabilityLevel, EvidenceKind } from "../../contracts/index.js";
 import type { FileCatalogEntry, FileIdentity } from "../models/index.js";
 

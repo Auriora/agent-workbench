@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import type { CodexIntegrationProfile } from "../../contracts/index.js";
 
 export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
@@ -299,7 +304,8 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         blocks_workflow: false,
         emits_when: ["default configuration"],
         quiet_when: ["AGENT_WORKBENCH_HOOK_FEEDBACK=silent", "invalid payload"],
-        schema_mapping: "Short MCP availability guidance only; no runtime analysis is executed."
+        schema_mapping:
+          "Short MCP availability and cheap repository orientation guidance only; no runtime analysis, subprocesses, or MCP calls are executed."
       },
       {
         name: "agent-workbench-post-edit-feedback",

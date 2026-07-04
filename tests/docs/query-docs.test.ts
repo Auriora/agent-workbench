@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -502,7 +507,7 @@ describe("docs query application contracts", () => {
       expect(read.heading).toMatchObject({ id: "configure", text: "Configure" });
       expect(read.section).toMatchObject({
         path: "docs/guide.md",
-        start_line: 9,
+        start_line: 14,
         truncated: false,
         caveat: expect.stringContaining("direct-read evidence")
       });

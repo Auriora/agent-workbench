@@ -9,6 +9,8 @@ deciders:
   - platform
 supersedes:
 superseded_by:
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # ADR: Require Semantic Evidence Before Semantic Capability

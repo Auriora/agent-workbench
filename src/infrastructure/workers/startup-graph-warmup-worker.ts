@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { parentPort, workerData } from "node:worker_threads";
 import { indexRepositoryGraph } from "../../application/use-cases/index-repository-graph.js";
 import { SCHEMA_VERSION, openGraphStore } from "../sqlite/index.js";

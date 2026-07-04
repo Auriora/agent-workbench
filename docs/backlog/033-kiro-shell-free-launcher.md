@@ -5,6 +5,8 @@ status: proposed
 owner: platform
 source_spec: docs/specs/033-cross-platform-packaging
 last_reviewed: 2026-06-29
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Convert Kiro Power to the shell-free `.mjs` launcher

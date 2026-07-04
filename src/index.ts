@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import path from "node:path";
 import { getScannedRepoStatus } from "./application/use-cases/get-repo-status.js";
 import { FileCatalogScannerAdapter } from "./infrastructure/filesystem/index.js";

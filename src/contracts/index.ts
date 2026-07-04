@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 export * from "./runtime-contracts.js";
 export * as domainContracts from "./domain-contracts.js";
 export * as applicationContracts from "./application-contracts.js";

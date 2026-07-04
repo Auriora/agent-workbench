@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // npm postinstall (spec 033). Two jobs, both best-effort and non-fatal so a
 // failure here never fails `npm install`:
 //

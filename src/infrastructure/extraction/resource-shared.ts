@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import type { ExtractionRequest } from "../../domain/models/index.js";
 
 export function nodeId(snapshotId: string, filePath: string, kind: string, name: string): string {

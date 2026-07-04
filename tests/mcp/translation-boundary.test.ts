@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { describe, expect, it } from "vitest";
 import type { GetTaskContextResult } from "../../src/application/use-cases/get-task-context.js";
 import type { PlanVerificationResult } from "../../src/application/use-cases/plan-verification.js";

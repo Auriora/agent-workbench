@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { describeCodexIntegrationProfile } from "../../../../application/use-cases/describe-codex-integration-profile.js";
 import { buildCodexIntegrationProfileEnvelope } from "../../../../presentation/integration-profile-presenter.js";

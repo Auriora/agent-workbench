@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { buildFileCatalogEntry } from "../../domain/policies/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 

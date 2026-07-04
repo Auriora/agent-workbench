@@ -4,6 +4,8 @@ doc_type: requirements
 status: draft
 owner: platform
 last_reviewed: 2026-06-11
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
 ---
 
 # Agent Workbench Executable Backlog
@@ -703,9 +705,9 @@ or runtime telemetry.
     archived material with historical caveats.
   - Regression tests proving no `ctime` dependency and optional Git-history
     enrichment behavior.
-- Promotion target: active
-  [Spec 034](../specs/034-doc-currency-routing/requirements.md) under EB003,
-  EB006, and the documentation routing design.
+- Promotion target: closed Spec 034 delivery evidence in the
+  [Spec closure log](../history/spec-closure-log.md), with current behavior
+  owned by EB003, EB006, and the documentation routing design.
 
 ### EB019: Repo Capability Inventory
 

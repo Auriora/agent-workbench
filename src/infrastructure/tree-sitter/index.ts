@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 export * from "./cpp-extractor.js";
 export * from "./go-extractor.js";
 export * from "./javascript-extractor.js";

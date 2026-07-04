@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { z } from "zod";
 
 export const CONTRACT_VERSION = "0.1" as const;

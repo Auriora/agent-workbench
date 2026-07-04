@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import type { PlannedValidationCommand } from "../../contracts/index.js";
 import { planCommand } from "../../domain/policies/command-safety.js";
 import type { WorkspaceFilePort } from "../../ports/index.js";

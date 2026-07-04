@@ -1,3 +1,8 @@
+/*
+ * Copyright (C) 2026 Auriora
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import type { DocumentReference, DocsDocument, DocsSearchHit } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import {

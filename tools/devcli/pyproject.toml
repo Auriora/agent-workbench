@@ -1,3 +1,6 @@
+# Copyright (C) 2026 Auriora
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
