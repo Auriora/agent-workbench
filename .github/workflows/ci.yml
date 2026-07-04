@@ -50,6 +50,9 @@ jobs:
       - name: Validate plugin and package metadata
         run: pnpm run validate:plugin
 
+      - name: Validate owned Agent Skills
+        run: pnpm run validate:skills
+
       - name: Postinstall pointer + MCP launch smoke
         run: |
           node scripts/ci/install-smoke.mjs

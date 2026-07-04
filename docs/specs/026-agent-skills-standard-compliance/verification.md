@@ -27,10 +27,26 @@ repo-owned skill validation command or test and targeted documentation checks.
 
 ## Evidence Log
 
-| Date | Command | Result | Notes |
-| --- | --- | --- | --- |
-| 2026-06-07 | Local standard comparison | Completed | Compared installed/local skill shape against agentskills.io overview, specification, and best-practices pages. |
-| 2026-06-07 | Local `SKILL.md` audit | Completed | Found 72 skill files, no core frontmatter/name/description problems, and two over-500-line third-party cached skills. |
+- 2026-06-07: `research.md` records the agentskills.io overview,
+  specification, and best-practices requirements used by this spec.
+- 2026-06-07: `research.md` records a local audit snapshot with 72 discovered
+  skill files, no core frontmatter/name/description problems, and two
+  over-500-line third-party cached skills.
+- 2026-07-04: `pnpm run validate:skills` passed for the three
+  repository-owned packaged Agent Workbench skills with 0 errors and 0
+  warnings.
+- 2026-07-04: `pnpm exec vitest run
+  tests/integration/agent-skills-validation.test.ts` passed, covering valid
+  owned skill validation and actionable failure output for invalid frontmatter
+  and non-portable references.
+- 2026-07-04: `pnpm run validate:skills -- --advisory-cache --json` passed with
+  78 advisory warnings, 0 errors, and no user cache mutation.
+- 2026-07-04: `pnpm typecheck` passed after adding the validator integration
+  test.
+- 2026-07-04: `pnpm run validate:plugin` passed after skill validation changes.
+- 2026-07-04: `pnpm test` passed the full Vitest suite: 67 files and 488 tests.
+- 2026-07-04: `git diff --check` passed, and `spec_runtime.py lint
+  docs/specs/026-agent-skills-standard-compliance` reported 0 diagnostics.
 
 ## Required Gates For Implementation
 
@@ -54,3 +70,6 @@ repo-owned skill validation command or test and targeted documentation checks.
 - Brooks-Lint may remain useful in Codex-local form even if not strictly
   portable. Treat portability as a packaging decision, not a reason to break
   current workflows.
+- Advisory cache mode can report warnings for old installed plugin caches until
+  the user refreshes those plugins. Those warnings are intentionally
+  observation-only and do not fail CI.

@@ -43,7 +43,7 @@ copying tables, schemas, or enum definitions.
 | Adapter capability model and promotion gates | [Language adapter design](../design/language-adapter-design.md) | Owns adapter lifecycle and semantic promotion rules. |
 | Language priority table | [Language capability matrix](language-capability-matrix.md) | Reference view only; uses enums from runtime contracts. |
 | MCP resources and tools | [MCP surface design](../design/mcp-surface-design.md) | Owns MVP/non-MVP tool split and schema examples through runtime contracts. |
-| Coding-agent integrations | [Coding agent integration design](../design/coding-agent-integration-design.md) | Owns Codex, Claude Code, Kiro, Augment, Gemini, Junie, MCP, skills, hooks, commands, plugins, extensions, and ACP integration guidance. |
+| Coding-agent integrations | [Coding agent integration design](../design/coding-agent-integration-design.md) | Owns Codex, Claude Code, Kiro, Augment, Gemini, Junie, MCP, skills, hooks, commands, plugins, extensions, and ACP integration guidance. Agent Skills packaging compliance for checked-in Agent Workbench skills is validated by `pnpm run validate:skills` and summarized in the plugin runbook. |
 | Markdown document quality | [Markdown document quality design](../design/markdown-document-quality-design.md) | Owns Markdown structure checks, compliance linting, link checks, table readability, and formatter preview/apply rules. |
 | Workspace safety policy | [Workspace safety contract](workspace-safety-contract.md) | Owns path containment, command execution, redaction, network, and generated-write rules. |
 | Native dependency setup and tree-sitter rebuilds | [Native dependency setup](../runbooks/native-dependency-setup.md) | Owns install/rebuild troubleshooting for native Node bindings. |
@@ -96,7 +96,8 @@ machine-readable discoverability for public MCP resources and tools, including
 `codex-integration-profile` and `integration-health`.
 
 The CI workflow at `.github/workflows/ci.yml` owns automated typecheck, test,
-plugin/package validation, installer dry-run, and npm package dry-run gates.
+plugin/package validation, owned Agent Skills validation, installer dry-run,
+and npm package dry-run gates.
 
 ## Source-Of-Truth Rules
 

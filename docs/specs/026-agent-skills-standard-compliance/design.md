@@ -65,7 +65,7 @@ now has no payoff. Validation added in T002/T003 only gates owned paths.
 
 ### Validator
 
-Add a small script or Vitest test that:
+Add `scripts/validate-agent-skills.mjs` plus focused Vitest coverage that:
 
 - discovers owned `SKILL.md` files
 - parses YAML frontmatter
@@ -77,6 +77,15 @@ Add a small script or Vitest test that:
   target
 
 The validator should not scan or mutate user-level cache paths during CI.
+Default validation is limited to checked-in owned skill paths:
+
+- `plugins/agent-workbench/skills/**/SKILL.md`
+- `plugins/agent-workbench/claude-plugin/skills/**/SKILL.md`
+- `plugins/agent-workbench/kiro-power/skills/**/SKILL.md`
+
+The script exposes `--advisory-cache` for local, non-mutating cache inspection.
+That mode reads `CODEX_HOME` or `~/.codex` cache paths when present, reports
+cache findings as warnings, and does not fail CI.
 
 ### Documentation
 
@@ -120,5 +129,6 @@ explicitly in a follow-up task or spec.
 
 ## Open Questions
 
-- Should Agent Workbench maintain a generic skill validator script, or should
-  the check be embedded as a Vitest integration test?
+- Resolved 2026-07-04: Agent Workbench maintains a repository-owned validator
+  script and focused Vitest coverage for the script's success and failure
+  paths.

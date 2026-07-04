@@ -25,6 +25,26 @@ The plugin does not reimplement runtime code. Its MCP binding launches the
 npm-installed runtime in place through the portable `node` shim, not runtime
 source copied into Codex's plugin cache.
 
+## Agent Skills Compliance
+
+Agent Workbench uses a hybrid Agent Skills compliance model. The checked-in
+skills packaged by this repository are strict Agent Skills artifacts and are
+validated by:
+
+```bash
+pnpm run validate:skills
+```
+
+The validator checks only repository-owned skill paths by default:
+
+- `plugins/agent-workbench/skills/agent-workbench/SKILL.md`
+- `plugins/agent-workbench/claude-plugin/skills/agent-workbench/SKILL.md`
+- `plugins/agent-workbench/kiro-power/skills/agent-workbench/SKILL.md`
+
+Use `pnpm run validate:skills -- --advisory-cache` only for local, non-mutating
+inspection of user or marketplace caches. Advisory cache findings do not fail
+CI and do not make third-party cached skills Agent Workbench-owned.
+
 ## Quick Start
 
 Install the runtime from the **GitHub release tarball** (Agent Workbench is not

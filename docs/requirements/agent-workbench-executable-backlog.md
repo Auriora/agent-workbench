@@ -1186,7 +1186,7 @@ Do not promote an item when:
 ### EB037: Repo-Root Authority And Debug Override Gate
 
 - Priority: P0
-- Status: active Spec 029
+- Status: closed Spec 029
 - Friction signal: external review and source inspection found that normal MCP
   requests can provide `repo_root`, causing workspace/safety adapters to bind
   to a caller-supplied root instead of the launched repository.
@@ -1207,8 +1207,11 @@ Do not promote an item when:
     `repo_root`.
   - Workspace safety tests proving effective root remains the launch root in
     normal mode.
-- Promotion target: active
-  [Spec 029](../specs/029-repo-root-authority/requirements.md).
+- Promotion target: closed
+  [Spec 029](../history/spec-closure-log.md). Current behavior lives in
+  [Workspace safety contract](../reference/workspace-safety-contract.md),
+  [MCP surface design](../design/mcp-surface-design.md), and
+  [Runtime contracts](../reference/runtime-contracts.md).
 
 ### EB038: MCP Error Envelope Consistency
 
@@ -1496,8 +1499,7 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-1. Spec 029: repo-root authority.
+1. Spec 026: agent skills standard compliance.
 2. Spec 030: MCP error envelope consistency.
 3. Spec 031: shared path policy.
 4. Spec 032: per-repo runtime daemon and shared cache.
-5. Spec 026: agent skills standard compliance.

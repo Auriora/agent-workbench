@@ -59,6 +59,7 @@
     "debug:sample-smoke": "tsx src/debug/sample-smoke.ts",
     "debug:mcp-tool-sweep": "tsx src/debug/mcp-tool-sweep.ts",
     "validate:plugin": "node scripts/validate-agent-workbench-plugin.mjs",
+    "validate:skills": "node scripts/validate-agent-skills.mjs",
     "sync:claude-hooks": "node scripts/sync-claude-plugin-hooks.mjs",
     "pack:dry-run": "npm_config_cache=/tmp/agent-workbench-npm-cache npm pack --dry-run --json",
     "rebuild:native": "node scripts/rebuild-native.mjs"

@@ -323,6 +323,37 @@ That validator checks the Codex plugin manifest, `.mcp.json`, hooks, skill,
 repo marketplace metadata, MCP server card, package manifest dependency lists,
 and package component paths without reading user-local Codex configuration.
 
+CI also runs the repository-owned Agent Skills validator:
+
+```bash
+pnpm run validate:skills
+```
+
+Agent Workbench uses a hybrid Agent Skills compliance model. Checked-in skills
+packaged by this repository are strict Agent Skills artifacts:
+
+- `plugins/agent-workbench/skills/agent-workbench/SKILL.md`
+- `plugins/agent-workbench/claude-plugin/skills/agent-workbench/SKILL.md`
+- `plugins/agent-workbench/kiro-power/skills/agent-workbench/SKILL.md`
+
+`pnpm run validate:skills` validates only those owned paths by default. It
+checks YAML frontmatter, required `name` and `description` fields, parent
+directory name matching, name syntax, description length, `SKILL.md` size, and
+skill-root-relative Markdown references.
+
+User-local and marketplace cached skills are observations, not CI failures. For
+a local advisory scan, run:
+
+```bash
+pnpm run validate:skills -- --advisory-cache
+```
+
+Advisory cache findings report as warnings and must not mutate
+`~/.codex/skills`, `~/.codex/plugins/cache`, or any third-party plugin cache.
+Brooks-Lint remains a Codex-local skill set outside this repository; its
+cross-root shared references are accepted until that skill set is explicitly
+promoted into a plugin or repository-owned package.
+
 For package changes, also run:
 
 ```bash
