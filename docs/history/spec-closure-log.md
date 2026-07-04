@@ -150,7 +150,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/028-dev-cli-workflow-tools
 - **Title:** Developer CLI workflow tools
 - **Final spec commit:** e4a5bd7
-- **Closure cleanup commit:** pending current closure change
+- **Closure cleanup commit:** b1ae411
 - **Closure action:** removed
 - **Durable docs updated:**
   - `tools/README.md`
