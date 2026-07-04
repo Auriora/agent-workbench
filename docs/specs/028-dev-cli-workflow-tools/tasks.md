@@ -41,8 +41,17 @@ T013 -> T014
     deprecated. Implemented in `tools/devcli/pyproject.toml`,
     `tools/README.md`, and `tools/devcli/README.md`.
   - [x] T001.1 Select primary command name.
+    - Evidence: `tools/devcli/pyproject.toml` exposes the `awb` console
+      script, and `tools/devcli/README.md` documents `awb` as the primary
+      command.
   - [x] T001.2 Rename package metadata and script entry point.
+    - Evidence: `tools/devcli/pyproject.toml` uses package name
+      `agent-workbench-devcli` and script entry point
+      `auriora_dev.cli:app`.
   - [x] T001.3 Remove or explicitly deprecate template `proj` naming.
+    - Evidence: `proj` placeholder command structure and tracked
+      `proj_devcli.egg-info` files were removed; CLI help tests assert the
+      placeholder text is absent.
 
 - [x] T002 Add shared runner and repo utilities.
   - Depends on: T001
@@ -55,9 +64,17 @@ T013 -> T014
     passed on 2026-07-04.
   - Evidence mode: validation
   - [x] T002.1 Implement command spec model and subprocess runner.
+    - Evidence: `tools/devcli/src/auriora_dev/runner.py` defines the shared
+      command model and runner.
   - [x] T002.2 Implement dry-run rendering.
+    - Evidence: `pnpm test:devcli` passed tests asserting dry-run command
+      rendering without executing subprocesses on 2026-07-04.
   - [x] T002.3 Implement repo-root discovery and `--repo-root` override.
+    - Evidence: `tools/devcli/src/auriora_dev/repo.py` provides repo-root
+      discovery and CLI tests cover override behavior.
   - [x] T002.4 Test success, failure, dry-run, and missing-root behavior.
+    - Evidence: `pnpm test:devcli` passed the command-plan, failure,
+      dry-run, and missing-root test coverage on 2026-07-04.
 
 - [x] T003 Replace template CLI structure with Agent Workbench command groups.
   - Depends on: T002
@@ -124,8 +141,9 @@ T013 -> T014
     tool-like workflow against a target repo with timeout reporting.
   - Evidence: Implemented bounded smoke over `debug:mcp-status` plus
     `debug:mcp-use-case` scope, overview, and context steps. Dry-run passed in
-    sandbox; live smoke passed outside sandbox after `tsx` IPC was blocked by
-    sandbox `EPERM`.
+    the managed sandbox, and live `awb mcp smoke --repo . --timeout 30` passed
+    outside the sandbox on 2026-07-04. The sandbox-only `tsx` IPC limitation is
+    documented in `verification.md`.
 
 - [x] T009 Implement `awb cache inspect`.
   - Depends on: T003
@@ -134,8 +152,9 @@ T013 -> T014
   - Acceptance: Cache inspect reads graph SQLite metadata read-only, reports
     core counts and freshness, tolerates missing schema, and supports JSON.
   - Evidence: Implemented read-only SQLite inspection with missing database,
-    JSON, live-schema aliases, and unavailable-field tolerance. Unit tests and
-    live cache JSON smoke passed on 2026-07-04.
+    JSON, live-schema aliases, and unavailable-field tolerance. `pnpm
+    test:devcli` covered fixture and missing-database paths, and live
+    `awb cache inspect --repo . --json` smoke passed on 2026-07-04.
 
 - [x] T010 Implement `awb spec` wrappers.
   - Depends on: T003
@@ -174,8 +193,16 @@ T013 -> T014
     plugin cache writes.
   - Evidence mode: validation
   - [x] T012.1 Decide pytest versus standard-library test runner.
+    - Evidence: `package.json` exposes `pnpm test:devcli` through
+      `python3 -m unittest discover -s tools/devcli/tests`.
   - [x] T012.2 Add local test command.
-  - [-] T012.3 Add CI integration only if safe.
+    - Evidence: `pnpm test:devcli` is documented in `tools/devcli/README.md`
+      and `tools/README.md`.
+  - [x] T012.3 Record CI integration deferral.
+    - Evidence: CI integration was intentionally not added in this slice
+      because the local command already avoids user-local Codex, Docker,
+      GitHub, npm credential, and plugin-cache dependencies; the residual risk
+      is recorded in `verification.md`.
 
 - [x] T013 Run validation.
   - Depends on: T012

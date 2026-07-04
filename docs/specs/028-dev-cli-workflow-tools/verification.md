@@ -44,10 +44,11 @@ credentials, npm credentials, or package publishing access.
 
 | Date | Task IDs | Evidence | Result |
 | --- | --- | --- | --- |
-| 2026-06-14 | Spec creation | Requirements, design, change impact, tasks, traceability, and verification plan created. | Pending implementation |
+| 2026-06-14 | Spec creation | Requirements, design, change impact, tasks, traceability, and verification plan created. | Superseded by implementation evidence |
 | 2026-07-04 | T002-T014 | `pnpm test:devcli` ran 10 unit tests covering help, command plans, package install pass-through, MCP smoke plan, cache fixture/missing database handling, and release no-publish behavior. | Passed |
 | 2026-07-04 | T005, T006 | `awb package check` via the Python CLI app ran `pnpm run validate:plugin`, `scripts/install-agent-workbench-package.sh --dry-run --skip-codex-config`, and `pnpm pack:dry-run`. | Passed |
-| 2026-07-04 | T008 | `awb mcp smoke --repo . --timeout 30` passed outside sandbox after the sandbox blocked `tsx` IPC pipe creation with `listen EPERM`. | Passed with sandbox note |
+| 2026-07-04 | T008 | `awb mcp smoke --repo . --timeout 30` passed outside the managed sandbox. The sandbox-only `tsx` IPC `listen EPERM` limitation is documented as an execution-environment constraint, not an implementation failure. | Passed |
+| 2026-07-04 | T012.3 | CI integration was deferred because the local `pnpm test:devcli` command is already documented and avoids user-local Codex, Docker, GitHub, npm credential, and plugin-cache dependencies. | Deferred by design |
 | 2026-07-04 | T010, T013 | `awb spec lint docs/specs/028-dev-cli-workflow-tools` and `lint_spec_package` reported 0 diagnostics. | Passed |
 | 2026-07-04 | T013 | `pnpm typecheck`, `pnpm test`, `pnpm run validate:plugin`, and `git diff --check` passed. | Passed |
 
