@@ -1499,7 +1499,6 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-1. Spec 026: agent skills standard compliance.
-2. Spec 030: MCP error envelope consistency.
-3. Spec 031: shared path policy.
-4. Spec 032: per-repo runtime daemon and shared cache.
+1. Spec 030: MCP error envelope consistency.
+2. Spec 031: shared path policy.
+3. Spec 032: per-repo runtime daemon and shared cache.

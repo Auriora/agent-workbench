@@ -145,6 +145,35 @@ name their own final pre-removal tree commits.
   runner history or release-readiness evidence; Kiro launcher conversion and
   turnkey core `tree-sitter` prebuild work are routed to backlog.
 
+### 2026-07-04 - 026-agent-skills-standard-compliance
+
+- **Spec:** docs/specs/026-agent-skills-standard-compliance
+- **Title:** Agent Skills standard compliance
+- **Final spec commit:** e17ce9f
+- **Closure cleanup commit:** pending current closure change
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `scripts/validate-agent-skills.mjs`
+  - `tests/integration/agent-skills-validation.test.ts`
+  - `.github/workflows/ci.yml`
+  - `package.json`
+  - `plugins/agent-workbench/README.md`
+  - `plugins/agent-workbench/claude-plugin/skills/agent-workbench/SKILL.md`
+  - `docs/runbooks/codex-agent-workbench-plugin.md`
+  - `docs/reference/documentation-map.md`
+  - `docs/requirements/agent-workbench-executable-backlog.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** `pnpm run validate:skills`; focused
+  `tests/integration/agent-skills-validation.test.ts`; advisory cache audit;
+  `pnpm typecheck`; `pnpm run validate:plugin`; `git diff --check`; spec
+  lifecycle lint; full `pnpm test` with 67 files and 488 tests.
+- **Residual risks:** Advisory cache mode can report warnings for old installed
+  plugin caches until the user refreshes those plugins. Those warnings remain
+  observation-only and do not fail CI. Brooks-Lint remains a non-owned
+  Codex-local skill set until explicitly promoted into a plugin or
+  repository-owned package.
+
 ### 2026-07-04 - 028-dev-cli-workflow-tools
 
 - **Spec:** docs/specs/028-dev-cli-workflow-tools
