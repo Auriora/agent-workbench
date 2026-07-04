@@ -145,6 +145,32 @@ name their own final pre-removal tree commits.
   runner history or release-readiness evidence; Kiro launcher conversion and
   turnkey core `tree-sitter` prebuild work are routed to backlog.
 
+### 2026-07-04 - 028-dev-cli-workflow-tools
+
+- **Spec:** docs/specs/028-dev-cli-workflow-tools
+- **Title:** Developer CLI workflow tools
+- **Final spec commit:** e4a5bd7
+- **Closure cleanup commit:** pending current closure change
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `tools/README.md`
+  - `tools/devcli/README.md`
+  - `docs/runbooks/install-agent-workbench.md`
+  - `docs/runbooks/codex-agent-workbench-plugin.md`
+  - `docs/reference/documentation-map.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Spec implementation validation recorded
+  `pnpm test:devcli`, `awb package check`, `awb spec lint
+  docs/specs/028-dev-cli-workflow-tools`, `pnpm run validate:plugin`,
+  `git diff --check`, `pnpm typecheck`, `pnpm test`, and live
+  `awb mcp smoke --repo . --timeout 30` outside the managed sandbox. Closure
+  cleanup reran `git diff --check`, lifecycle lint, and closure-check before
+  removal.
+- **Residual risks:** CI does not yet run `pnpm test:devcli`; the local command
+  is documented and intentionally avoids user-local Codex, Docker, GitHub, npm
+  credential, and plugin-cache dependencies.
+
 ### 2026-07-04 - 029-repo-root-authority
 
 - **Spec:** docs/specs/029-repo-root-authority
