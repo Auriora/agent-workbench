@@ -35,11 +35,13 @@ turnkey flow in `plugins/agent-workbench/README.md`,
 `docs/runbooks/install-agent-workbench.md`, and
 `docs/runbooks/codex-agent-workbench-plugin.md`.
 
-**Out of scope (still open):** this verified *registration*, not *launch*. Whether
-`${PLUGIN_ROOT}` expands inside `.mcp.json` args when Codex starts the MCP server
-remains the residual tracked in
-the removed Spec 033 verification at final spec commit `0d2cc48` (it governs
-launch, not the marketplace).
+**Launch follow-up (resolved 2026-07-04):** Codex did not expand
+`${PLUGIN_ROOT}` in package-backed MCP or hook command args. The package now
+uses plugin-root-relative Codex launch shapes: `.mcp.json` runs
+`node ./mcp-launch.mjs` with `cwd: "."`, and `hooks/hooks.json` runs
+`node ./hooks/session-start.js` / `node ./hooks/post-edit-feedback.js` with
+`cwd: "."`. The plugin validator and Codex integration tests reject
+`${PLUGIN_ROOT}` in Codex hook config.
 
 ---
 

@@ -256,7 +256,7 @@ describe("Codex plugin artifacts", () => {
     const hooksConfig = JSON.parse(
       fs.readFileSync(path.join(pluginRoot, "hooks/hooks.json"), "utf8")
     ) as {
-      hooks: Record<string, unknown>;
+      hooks: Record<string, Array<{ hooks: Array<{ command: string; cwd?: string; args?: string[] }> }>>;
     };
     const skill = fs.readFileSync(
       path.join(pluginRoot, "skills/agent-workbench/SKILL.md"),
@@ -278,6 +278,17 @@ describe("Codex plugin artifacts", () => {
       args: ["./mcp-launch.mjs"]
     });
     expect(Object.keys(hooksConfig.hooks).sort()).toEqual(["PostToolUse", "SessionStart"]);
+    expect(hooksConfig.hooks.SessionStart[0].hooks[0]).toMatchObject({
+      command: "node",
+      cwd: ".",
+      args: ["./hooks/session-start.js"]
+    });
+    expect(hooksConfig.hooks.PostToolUse[0].hooks[0]).toMatchObject({
+      command: "node",
+      cwd: ".",
+      args: ["./hooks/post-edit-feedback.js"]
+    });
+    expect(JSON.stringify(hooksConfig)).not.toContain("${PLUGIN_ROOT}");
     expect(skill).toContain("Agent Workbench is the executable runtime.");
     expect(skill).toContain("Do not add primary-plus-fallback routes");
   });

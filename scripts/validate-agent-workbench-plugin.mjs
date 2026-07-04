@@ -94,6 +94,28 @@ assert(
 );
 
 assertArrayEquals(Object.keys(codexHooks.hooks ?? {}), ["PostToolUse", "SessionStart"], "Codex hooks");
+const sessionStartHook = codexHooks.hooks?.SessionStart?.[0]?.hooks?.[0];
+const postToolUseHook = codexHooks.hooks?.PostToolUse?.[0]?.hooks?.[0];
+assert(sessionStartHook, "Codex SessionStart hook must be configured.");
+assert(postToolUseHook, "Codex PostToolUse hook must be configured.");
+assert(
+  sessionStartHook.command === "node" &&
+    sessionStartHook.cwd === "." &&
+    Array.isArray(sessionStartHook.args) &&
+    sessionStartHook.args[0] === "./hooks/session-start.js",
+  "Codex SessionStart hook must launch ./hooks/session-start.js from plugin root."
+);
+assert(
+  postToolUseHook.command === "node" &&
+    postToolUseHook.cwd === "." &&
+    Array.isArray(postToolUseHook.args) &&
+    postToolUseHook.args[0] === "./hooks/post-edit-feedback.js",
+  "Codex PostToolUse hook must launch ./hooks/post-edit-feedback.js from plugin root."
+);
+assert(
+  !JSON.stringify(codexHooks).includes("${PLUGIN_ROOT}"),
+  "Codex hooks must not rely on ${PLUGIN_ROOT} expansion."
+);
 
 const marketplaceEntry = marketplace.plugins?.find((plugin) => plugin.name === "agent-workbench");
 assert(marketplaceEntry, "Marketplace must expose agent-workbench.");

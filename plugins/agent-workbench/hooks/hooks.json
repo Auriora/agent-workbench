@@ -7,8 +7,9 @@
           {
             "type": "command",
             "command": "node",
+            "cwd": ".",
             "args": [
-              "${PLUGIN_ROOT}/hooks/session-start.js"
+              "./hooks/session-start.js"
             ],
             "timeout": 10,
             "statusMessage": "Loading Agent Workbench context"
@@ -23,8 +24,9 @@
           {
             "type": "command",
             "command": "node",
+            "cwd": ".",
             "args": [
-              "${PLUGIN_ROOT}/hooks/post-edit-feedback.js"
+              "./hooks/post-edit-feedback.js"
             ],
             "timeout": 10,
             "statusMessage": "Checking Agent Workbench edit feedback"
