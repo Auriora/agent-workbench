@@ -230,7 +230,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/030-mcp-error-envelope-consistency
 - **Title:** MCP error envelope consistency
 - **Final spec commit:** 8e66d18
-- **Closure cleanup commit:** pending current closure change
+- **Closure cleanup commit:** cddec92
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/reference/runtime-contracts.md`
