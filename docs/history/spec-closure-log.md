@@ -53,6 +53,7 @@ name their own final pre-removal tree commits.
 | Spec 029: Repo-root authority | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `5a8b098` completed launch-root authority for public MCP resources and tools, debug-only root override gating, public `repo_root` metadata hiding, integration-health root policy reporting, and durable promotion. | Workspace safety contract, MCP surface design, runtime contracts, threat model, documentation map, root-authority policy and MCP registry tests, response metadata tests, integration-health tests, focused MCP/contract validation, and final full Vitest validation. |
 | Spec 030: MCP error envelope consistency | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `8e66d18` completed the shared MCP envelope wrapper, representative tool migrations, distinct recoverable failure classes, durable contract/design promotion, and registry consistency tests. | Runtime contracts, MCP surface design, documentation map, executable backlog, shared MCP envelope wrapper, representative MCP registry tests, typecheck, plugin/package validation, full Vitest validation, lifecycle lint, scan, and closure-check. |
 | Spec 031: Shared path policy | Removed from `docs/specs/` on 2026-07-05 after final pre-removal tree commit `686270d` completed shared path classification, workspace safety migration, scanner/docs routing alignment, hook vocabulary drift coverage, secret-path fixtures, and durable promotion. | Workspace safety contract, threat model, executable backlog EB033 boundary, path-policy consistency tests, workspace safety tests, scanner/docs/hook/MCP validation tests, typecheck, plugin validation, full Vitest validation, lifecycle lint, closure-check, and closure-risk review. |
+| Spec 032: Per-repo runtime daemon and shared cache | Removed from `docs/specs/` on 2026-07-05 after final pre-removal tree commit `878392f` completed per-repo daemon startup, local IPC proxying, daemon-owned graph-store access, shared startup warmup, daemon health diagnostics, and parallel sub-agent cold-start coverage. | Runtime operations design, graph store design, MCP surface design, runtime contracts, executable backlog EB036, daemon launcher tests, daemon entrypoint integration tests, stdio/resource regression tests, docs metadata tests, package integration checks, MCP smoke, closure log, and archive index. |
 | Spec 033: Cross-platform packaging | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `0d2cc48` completed shell-free npm package install, Codex/Claude MCP launch shims, shell-free hook entry points, package-scoped marketplaces, supported platform matrix documentation, and routed macOS/Windows runner evidence. | Codex Agent Workbench plugin runbook, packaging README, plugin README, cross-platform packaging workflow, install/MCP/hook smoke scripts, Codex/Claude package metadata tests, backlog follow-ups for Kiro launcher and turnkey core `tree-sitter`, documentation map, spec closure log, and archive index. |
 | Spec 034: Doc currency routing | Removed from `docs/specs/` on 2026-07-02 after final pre-removal tree commit `8657e9e` completed document currency classification, docs search/inventory metadata, `context_for_task` ranking, `docs_current_for_task`, durable docs promotion, and spec-lifecycle-manager handoff. | MCP surface design, graph store design, runtime contracts, documentation map, spec-lifecycle-manager doc currency handoff, MCP server card, Codex integration profile, docs/context/MCP tests, lifecycle lint, closure check, and closure-risk review. |
 | Spec 034: Release notes generation | Removed from `docs/specs/` on 2026-07-05 after final pre-removal tree commit `5b40e6d` completed `awb release notes`, Git range/tag evidence collection, per-commit file evidence, candidate grouping, validation inputs, Markdown/JSON/agent outputs, draft/final boundaries, release-note skill guidance, and durable release-process documentation. | Agent Workbench Dev CLI README, Codex Agent Workbench plugin runbook, agent-readable changelog, backlog EB035, documentation map, dev CLI tests, package/plugin validation, typecheck, full Vitest validation, archive index, and closure log. |
@@ -326,6 +327,35 @@ name their own final pre-removal tree commits.
   table because the packaged hook is plain JavaScript; drift tests cover that
   vocabulary. Broader generated-file source-of-truth inference remains routed to
   EB033.
+
+### 2026-07-05 - 032-per-repo-runtime-daemon-cache
+
+- **Spec:** docs/specs/032-per-repo-runtime-daemon-cache
+- **Title:** Per-repo runtime daemon and shared cache
+- **Final spec commit:** 878392f
+- **Closure cleanup commit:** pending-cleanup-commit
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/runtime-operations-design.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/backlog/README.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Spec implementation validation recorded
+  `pnpm typecheck`, focused daemon launcher tests, daemon entrypoint
+  integration tests, stdio/resource regression tests, docs metadata tests,
+  full `pnpm test`, real package-entrypoint MCP smoke, two-client dogfood
+  sweep, and `git diff --check`. Pre-install verification also passed
+  `pnpm run validate:plugin`, `pnpm run validate:skills`, `pnpm test:devcli`,
+  `awb package check --with-integration`, `awb mcp smoke --repo . --timeout
+  30`, installer dry-run, package dry-run, and isolated package install smoke
+  with Node 24 `CXXFLAGS=-std=c++20`.
+- **Residual risks:** Daemon diagnostics report `graph_freshness: unknown`
+  until richer live graph freshness plumbing is added. The debug surface is MCP
+  integration health only; no dev CLI doctor command shipped. Installer cleanup
+  for stale daemon metadata remains deferred until future evidence requires it.
 
 ## Closure Notes
 

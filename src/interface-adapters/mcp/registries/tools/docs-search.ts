@@ -22,7 +22,7 @@ import type { McpToolDeclaration } from "../index.js";
 
 const docsSearchRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
-  scope_path: z.string().min(1).optional().describe("Optional repo-relative docs scope prefix, such as docs/specs/032-per-repo-runtime-daemon-cache."),
+  scope_path: z.string().min(1).optional().describe("Optional repo-relative docs scope prefix, such as docs/specs/NNN-short-name."),
   query: z.string().min(1).describe("Documentation search query."),
   max_results: z.number().int().positive().max(50).default(10).describe("Maximum ranked docs hits to return."),
   include_snippets: z.boolean().default(true).describe("Whether to include bounded snippets when safe."),

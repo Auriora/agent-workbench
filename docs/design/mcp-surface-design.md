@@ -292,9 +292,8 @@ direct-read caveat. Search results are routing evidence only; agents must use
 `docs_read_section` before making precise documentation claims.
 Callers may pass `scope_path` to constrain results to one repo-relative
 documentation subtree. For spec implementation work, pass the active spec
-package path, such as `docs/specs/032-per-repo-runtime-daemon-cache`, so
-`docs_search` only returns hits from that package when resolving canonical
-spec evidence.
+package path, such as `docs/specs/NNN-short-name`, so `docs_search` only
+returns hits from that package when resolving canonical spec evidence.
 `docs_scope` can set the same docs `scope_path` as an in-memory default for
 the current MCP server session. The default applies to `docs_search`,
 `repo:///docs/overview`, and `repo:///docs/map` when a request omits

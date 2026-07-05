@@ -1545,4 +1545,5 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-1. Spec 032: per-repo runtime daemon and shared cache.
+No immediate next spec is selected. Use the backlog items above and current
+dogfood evidence to choose the next active package.
