@@ -70,7 +70,10 @@ Workbench Markdown tools when the MCP server is available.
 
 ## Evidence Log
 
-- T001-T006: Pending.
+- T001-T002: Complete on 2026-07-05. OQ001-OQ003 are resolved in requirements
+  and design; direct registry inventory found 7 resources, 15 tools, 0 prompts,
+  and no public standard-envelope exclusions.
+- T003-T006: Pending.
 - T011: Pending.
 - T007-T010: Pending.
 - T012-T013: Pending.

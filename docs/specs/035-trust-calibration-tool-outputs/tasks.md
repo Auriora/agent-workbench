@@ -65,7 +65,7 @@ T015 -> T016
 
 **Purpose**: Remove stale planning blockers before source implementation.
 
-- [ ] T001 Reconcile resolved requirements open questions.
+- [x] T001 Reconcile resolved requirements open questions.
   - Depends on: none
   - Requirements: R1, R2, R4, CP007
   - Files: `docs/specs/035-trust-calibration-tool-outputs/requirements.md`,
@@ -74,9 +74,12 @@ T015 -> T016
     implementation readiness; each question records the accepted design
     decision and destination.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: Complete on 2026-07-05. Direct read confirmed
+    `requirements.md` records OQ001-OQ003 under `## Resolved Design Questions`
+    with implementation-planning status resolved, and `design.md` records
+    D001-D003 plus the statement that those decisions resolve OQ001-OQ003.
 
-- [ ] T002 Confirm public surface inventory and explicit exclusions.
+- [x] T002 Confirm public surface inventory and explicit exclusions.
   - Depends on: T001
   - Requirements: R1, R2, R4, R5, CP005
   - Files: `src/interface-adapters/mcp/registries/index.ts`,
@@ -88,12 +91,36 @@ T015 -> T016
     exclusion, and confirms there are no public standard-envelope exclusions
     except non-framable transport failures.
   - Evidence mode: validation
-  - Evidence: Pending.
-  - [ ] T002.1 Enumerate `mcpResources` and `mcpTools` from
+  - Evidence: Complete on 2026-07-05. Direct read of
+    `src/interface-adapters/mcp/registries/index.ts` found 7 public
+    `mcpResources`, 15 public `mcpTools`, and 0 public `mcpPrompts`. Every
+    registered resource/tool maps to a `TrustSurfaceKind` below. There are no
+    public standard-envelope exclusions; only non-framable transport startup
+    failures and private/debug helpers remain excluded by design.
+    Resource inventory:
+    `repo:///status` -> `repository_status`; `repo:///scope` ->
+    `repository_status`; `repo:///overview` -> `repository_status`;
+    `repo:///docs/overview` -> `docs_routing`; `repo:///docs/map` ->
+    `docs_routing`; `integration:///profiles/codex` -> `integration_health`;
+    `integration:///health/agent-workbench` -> `integration_health`.
+    Tool inventory:
+    `context_for_task` -> `context_routing`; `diagnostics_for_files` ->
+    `diagnostics_static`; `docs_scope` -> `docs_session_scope`;
+    `docs_search` -> `docs_routing`; `docs_current_for_task` ->
+    `docs_routing`; `docs_outline` -> `docs_routing`;
+    `docs_read_section` -> `docs_direct_read`;
+    `check_markdown_document` -> `markdown_quality`;
+    `check_markdown_set` -> `markdown_quality`; `symbol_search` ->
+    `graph_symbol_routing`; `find_references` -> `graph_reference_routing`;
+    `impact` -> `graph_impact_routing`; `preview_workspace_edit` ->
+    `edit_preview`; `apply_workspace_edit` -> `edit_apply`;
+    `verification_plan` -> `validation_plan`.
+  - [x] T002.1 Enumerated `mcpResources` and `mcpTools` from
     `src/interface-adapters/mcp/registries/index.ts`.
-  - [ ] T002.2 Map each resource/tool to one `TrustSurfaceKind`.
-  - [ ] T002.3 Record any exclusion candidate with rationale, destination, and
-    residual risk before implementation starts.
+  - [x] T002.2 Mapped each resource/tool to one `TrustSurfaceKind`.
+  - [x] T002.3 Recorded exclusion state: no public standard-envelope exclusions;
+    non-framable transport startup failures and private/debug helpers remain
+    excluded by design.
 
 ## Phase 2: Contract And Shared Policy
 
