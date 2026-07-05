@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: design
 status: active
 owner: platform
-last_reviewed: 2026-06-14
+last_reviewed: 2026-07-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -43,7 +43,7 @@ filesystem watcher / hook signal
   -> normalize repo-relative event
   -> apply shared inclusion policy
   -> debounce and coalesce queue
-  -> delete old evidence, refresh changed evidence, or schedule rescan
+  -> mark snapshot stale and schedule bounded rescan for included changes
   -> update snapshot freshness
   -> MCP tools expose fresh, refreshing, stale, or degraded evidence
 ```
@@ -89,27 +89,45 @@ The queue should normalize events by repo-relative path:
 - `renamed` becomes delete `old_path` and refresh `path`.
 - ignored paths are dropped before coalescing.
 
+Platform watcher adapters must normalize OS-specific behavior before events
+reach the application queue:
+
+- recursive watching is best effort; event filtering is authoritative on every
+  platform even when directory-level exclusion is available
+- atomic-save temp files and editor swap files are filtered by the shared path
+  policy before coalescing
+- rename events without an old path are treated as a fresh path event plus stale
+  snapshot marking
+- case-only renames are normalized through repo-relative path comparison without
+  assuming case-sensitive filesystems
+- symlink escapes, symlink loops, permission errors, deleted watch roots, and
+  nested Git repositories produce stale or degraded watcher state instead of
+  partial event application
+- native overflow signals from inotify, FSEvents, ReadDirectoryChangesW, or a
+  polling adapter mark the snapshot stale and request bounded rescan
+
 The debounce interval should be configurable through runtime configuration,
 with a conservative default. The queue must also have a maximum event budget.
 Budget overflow marks the snapshot stale and schedules bounded rescan.
 
-### Incremental Refresh
+### Change Handling Strategy
 
-Delete handling should call store maintenance for the active snapshot:
+The first watcher implementation is stale-rescan first. It must not add a
+single-file parser/indexer path, and it must not mutate docs or graph FTS tables
+directly from events. Included create, modify, delete, and rename events mark the
+active snapshot stale, coalesce duplicate work, and schedule one bounded
+background rescan through the existing repository indexing path.
 
-- file catalog entry
-- nodes
-- edges
-- unresolved references
-- node FTS rows
-- docs rows and docs FTS rows
+This choice avoids a second indexing pipeline and matches the current durable
+port shape: graph file cleanup has file-scoped operations, but docs indexing is
+currently snapshot-scoped. A later spec may add per-file graph/docs maintenance
+only after it defines a clean port contract and fixture-backed tests for docs
+rows, docs FTS rows, graph nodes, edges, unresolved references, and node FTS
+rows.
 
-Modify/create handling should recompute file identity, infer language, and run
-the existing extraction path for that file. The implementation should prefer a
-single-file entry point in the existing indexing use case rather than a second
-indexing pipeline. If the existing pipeline cannot support single-file refresh
-cleanly, the first watcher implementation should mark stale and schedule a
-bounded rescan instead of adding a parallel indexer.
+The queue should deduplicate rescan requests while a rescan is already pending
+or running. A successful rescan publishes a new fresh snapshot; failure keeps the
+previous snapshot available with stale or degraded freshness metadata.
 
 ### Freshness State
 
@@ -143,13 +161,16 @@ must not bypass inclusion policy.
   included-root selection, policy filtering, debounce, and overflow fallback.
 - Platform-specific watcher behavior should be hidden inside infrastructure;
   application use cases should consume normalized `WorkspaceFileEvent` records.
+- Watcher enablement, debounce interval, and queue budget should be configured
+  through existing runtime/domain contract surfaces, not by adding a new
+  top-level `src/config/` ownership root unless a later design promotes one.
 
 ## Open Questions
 
-- Should the first implementation perform single-file graph refresh, or should
-  it mark stale and schedule bounded rescan until a clean single-file indexer
-  entry point exists?
-- Which runtime configuration surface should own debounce interval and event
-  budget?
-- Should ignore-rule diagnostics distinguish `.gitignore` and `.aiignore`, or
-  keep one ignore-file skip category in tool responses?
+- Resolved 2026-07-05: the first implementation marks included file changes
+  stale and schedules bounded rescan. It does not add single-file graph/docs
+  refresh.
+- Resolved 2026-07-05: watcher enablement, debounce interval, and event budget
+  live in existing runtime/domain contract surfaces for this spec.
+- Open: should ignore-rule diagnostics distinguish `.gitignore` and
+  `.aiignore`, or keep one ignore-file skip category in tool responses?

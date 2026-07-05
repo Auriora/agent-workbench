@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: tasks
 status: active
 owner: platform
-last_reviewed: 2026-06-14
+last_reviewed: 2026-07-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -38,9 +38,11 @@ T007 -> T008
 
 - [ ] T002 Define watcher runtime configuration.
   - Depends on: T001
-  - Files: `src/config/`, `src/contracts/`, `tests/`
+  - Files: `src/domain/models/`, `src/contracts/`, `src/server.ts`,
+    `tests/`
   - Acceptance: Debounce interval, queue budget, and watcher enablement have
-    explicit defaults and contract coverage.
+    explicit defaults and contract coverage without adding a new `src/config/`
+    ownership root.
   - Evidence: Pending.
 
 ## Phase 2: Watcher Adapter And Queue
@@ -54,8 +56,11 @@ T007 -> T008
   - Evidence: Pending.
   - [ ] T003.1 Derive watch roots from included `indexed_roots`.
   - [ ] T003.2 Filter events through shared inclusion policy.
-  - [ ] T003.3 Cover create, modify, delete, rename, and ignored events.
-  - [ ] T003.4 Cover watcher shutdown and reset.
+  - [ ] T003.3 Normalize OS watcher edge cases including rename without old
+    path, case-only rename, atomic-save temp files, permission errors, deleted
+    roots, symlink escapes, and native overflow.
+  - [ ] T003.4 Cover create, modify, delete, rename, ignored events, watcher
+    shutdown, and reset.
 
 - [ ] T004 Add debounced change queue use case.
   - Depends on: T003
@@ -71,22 +76,24 @@ T007 -> T008
     mutate SQLite directly.
   - Evidence: Pending.
 
-## Phase 3: Evidence Maintenance
+## Phase 3: Evidence Invalidation
 
-- [ ] T006 Implement delete maintenance path.
+- [ ] T006 Implement stale-rescan scheduling for included changes.
   - Depends on: T004, T005
-  - Files: `src/infrastructure/sqlite/graph-store.ts`,
-    `src/application/use-cases/`, `tests/graph/`
-  - Acceptance: Deleting an included file removes active-snapshot catalog,
-    graph, unresolved reference, node FTS, docs, and docs FTS evidence.
+  - Files: `src/application/use-cases/`, `src/infrastructure/workers/`,
+    `tests/runtime/`, `tests/graph/`
+  - Acceptance: Create, modify, delete, and rename events for included files
+    mark the active snapshot stale and schedule one bounded background rescan
+    through the existing repository indexing path.
   - Evidence: Pending.
 
-- [ ] T007 Implement refresh or stale-rescan decision for edited files.
+- [ ] T007 Guard against parallel single-file indexing.
   - Depends on: T006
   - Files: `src/application/use-cases/index-repository-graph.ts`,
     `src/infrastructure/workers/`, `tests/graph/`, `tests/runtime/`
-  - Acceptance: Edited included files either refresh through one indexing
-    path or mark stale and schedule bounded rescan with structured caveats.
+  - Acceptance: Included file changes do not mutate graph, docs, node FTS, or
+    docs FTS through a new per-file indexing path; failures keep stale or
+    degraded freshness metadata with structured caveats.
   - Evidence: Pending.
 
 ## Phase 4: Freshness And Validation

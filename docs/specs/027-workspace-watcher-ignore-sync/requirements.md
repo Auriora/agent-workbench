@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: requirements
 status: active
 owner: platform
-last_reviewed: 2026-06-14
+last_reviewed: 2026-07-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -36,8 +36,8 @@ fresh without watching dependency caches or generated output.
   scope.
 - Reuse the same inclusion policy as catalog scans, including root `.gitignore`
   and `.aiignore` rules.
-- Keep file edit and delete events reflected in graph, docs, FTS, and file
-  catalog evidence.
+- Keep file edit and delete events from being reported as fresh before graph,
+  docs, FTS, and file catalog evidence is refreshed.
 - Debounce and batch filesystem events before indexing work.
 - Recover safely from watcher overflow, ignored-rule changes, and runtime
   restarts.
@@ -52,6 +52,10 @@ fresh without watching dependency caches or generated output.
 - Do not return partial query results as a timeout guard; report stale or
   refreshing evidence when freshness cannot be proven.
 - Do not make watcher behavior depend on a specific editor or Git hook.
+- Do not add a single-file graph or docs indexer in this first implementation.
+  Included file changes SHALL mark the active snapshot stale and schedule a
+  bounded rescan until a separate fixture-backed design adds a clean per-file
+  indexing and docs-maintenance entry point.
 
 ## Requirements
 
@@ -101,22 +105,23 @@ so that saves and generated editor activity do not thrash indexing.
    reports overflow, THEN the system SHALL mark evidence stale and schedule a
    bounded background rescan instead of applying incomplete events.
 
-### Requirement 4: Incremental Evidence Maintenance
+### Requirement 4: Evidence Invalidation And Bounded Rescan
 
 **User Story:** As an agent using graph and docs tools, I want changed and
-deleted files reflected without rebuilding stale historical rows.
+deleted files to invalidate freshness immediately, so that stale historical rows
+are never presented as current evidence.
 
 #### Acceptance Criteria
 
-1. GIVEN a deleted included file, WHEN its event is processed, THEN the system
-   SHALL remove its file catalog row and related nodes, edges, unresolved
-   references, FTS rows, and docs rows for the active snapshot.
-2. GIVEN a modified included file with supported language identity, WHEN its
-   event is processed, THEN the system SHALL refresh that file's file catalog,
-   graph, docs, and FTS evidence in the active snapshot.
-3. IF a modified file cannot be refreshed because parser or indexing evidence
-   is unavailable, THEN the system SHALL mark freshness stale or degraded with
-   a structured caveat.
+1. GIVEN a created, modified, deleted, or renamed included file, WHEN its event
+   is processed, THEN the system SHALL mark the active snapshot stale before any
+   graph-backed or docs-backed tool can report fresh evidence.
+2. GIVEN an included file change, WHEN the queue drains, THEN the system SHALL
+   schedule one bounded background rescan through the existing repository
+   indexing path rather than mutating graph, docs, or FTS tables through a
+   parallel per-file indexer.
+3. IF bounded rescan cannot start or complete, THEN the system SHALL keep
+   watcher freshness stale or degraded with a structured caveat.
 
 ### Requirement 5: Freshness Authority
 
@@ -138,7 +143,8 @@ changes.
 
 - A path excluded by catalog scan policy is never indexed because of a watcher
   event.
-- A deleted included file leaves no active-snapshot graph, docs, or FTS rows.
+- Included file changes cannot be reported as fresh until a bounded rescan
+  publishes a fresh snapshot.
 - Watcher overflow cannot produce a `fresh` snapshot claim.
 - `.gitignore` and `.aiignore` changes invalidate prior inclusion decisions.
 - Hooks and filesystem watchers converge through one event handling path.
@@ -147,6 +153,7 @@ changes.
 
 - A concrete watcher adapter implements `WorkspaceWatcherPort`.
 - Watcher setup derives roots from included scope.
-- File create, modify, delete, and rename paths are covered by tests.
+- File create, modify, delete, and rename paths are covered by tests that prove
+  stale marking and bounded rescan scheduling.
 - Ignore-file changes trigger stale state and bounded rescan behavior.
 - Runtime status and MCP responses expose watcher freshness accurately.
