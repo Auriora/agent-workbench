@@ -333,7 +333,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/032-per-repo-runtime-daemon-cache
 - **Title:** Per-repo runtime daemon and shared cache
 - **Final spec commit:** 878392f
-- **Closure cleanup commit:** pending-cleanup-commit
+- **Closure cleanup commit:** 668e21a
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/runtime-operations-design.md`
