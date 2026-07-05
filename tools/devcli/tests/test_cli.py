@@ -22,7 +22,11 @@ from auriora_dev.commands.check import build_check_plan  # noqa: E402
 from auriora_dev.commands.mcp import build_smoke_plan  # noqa: E402
 from auriora_dev.commands.package import build_install_plan, build_package_check_plan  # noqa: E402
 from auriora_dev.commands.plugin import build_refresh_plan  # noqa: E402
-from auriora_dev.commands.release import build_preflight_plan  # noqa: E402
+from auriora_dev.commands.release import (  # noqa: E402
+    build_github_release_plan,
+    build_preflight_plan,
+    update_release_version,
+)
 from auriora_dev.commands.spec import build_spec_plan  # noqa: E402
 
 
@@ -103,6 +107,128 @@ class CliTests(unittest.TestCase):
         self.assertIn(("pnpm", "pack:dry-run"), argv)
         self.assertNotIn(("git", "push"), argv)
         self.assertNotIn(("npm", "publish"), argv)
+
+    def test_github_release_plan_creates_tarball_tag_and_release(self) -> None:
+        plan = build_github_release_plan(
+            ROOT,
+            version="0.4.0",
+            notes_file=Path("notes.md"),
+            title=None,
+            draft=False,
+            prerelease=False,
+            existing=False,
+            create_tag=True,
+            push_tag=True,
+            preflight=False,
+            with_integration=False,
+        )
+        self.assertEqual(
+            [spec.argv for spec in plan],
+            [
+                ("env", "npm_config_cache=/tmp/agent-workbench-npm-cache", "npm", "pack"),
+                ("git", "tag", "v0.4.0"),
+                ("git", "push", "origin", "v0.4.0"),
+                (
+                    "gh",
+                    "release",
+                    "create",
+                    "v0.4.0",
+                    "auriora-agent-workbench-0.4.0.tgz",
+                    "--title",
+                    "v0.4.0",
+                    "--notes-file",
+                    "notes.md",
+                ),
+            ],
+        )
+        self.assertTrue(all(spec.mutates for spec in plan))
+
+    def test_github_release_plan_uploads_existing_release_without_tag_steps(self) -> None:
+        plan = build_github_release_plan(
+            ROOT,
+            version="v0.4.0",
+            notes_file=None,
+            title="ignored",
+            draft=True,
+            prerelease=True,
+            existing=True,
+            create_tag=True,
+            push_tag=True,
+            preflight=False,
+            with_integration=False,
+        )
+        self.assertEqual(
+            [spec.argv for spec in plan],
+            [
+                ("env", "npm_config_cache=/tmp/agent-workbench-npm-cache", "npm", "pack"),
+                (
+                    "gh",
+                    "release",
+                    "upload",
+                    "v0.4.0",
+                    "auriora-agent-workbench-0.4.0.tgz",
+                    "--clobber",
+                ),
+            ],
+        )
+
+    def test_bump_version_updates_release_metadata_and_current_docs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for relative in [
+                "packaging/agent-workbench",
+                ".well-known/mcp",
+                "plugins/agent-workbench/.codex-plugin",
+                "plugins/agent-workbench/claude-plugin/.claude-plugin",
+                "docs/runbooks",
+            ]:
+                (root / relative).mkdir(parents=True, exist_ok=True)
+            for relative, payload in [
+                ("package.json", {"name": "@auriora/agent-workbench", "version": "0.3.0"}),
+                (
+                    "packaging/agent-workbench/package-manifest.json",
+                    {
+                        "version": "0.3.0",
+                        "install_command": "old",
+                        "codex": {"plugin_install_model": "old"},
+                    },
+                ),
+                ("packaging/agent-workbench/npm-package.json", {"install_command": "old"}),
+                (".well-known/mcp/server-card.json", {"version": "0.3.0"}),
+                ("plugins/agent-workbench/.codex-plugin/plugin.json", {"version": "0.3.0"}),
+                ("plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json", {"version": "0.3.0"}),
+            ]:
+                (root / relative).write_text(json.dumps(payload) + "\n", encoding="utf-8")
+            for relative in [
+                "README.md",
+                "docs/runbooks/install-agent-workbench.md",
+                "packaging/agent-workbench/README.md",
+                "plugins/agent-workbench/README.md",
+            ]:
+                (root / relative).write_text(
+                    "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz\n",
+                    encoding="utf-8",
+                )
+
+            changed = update_release_version(root, "0.4.0")
+
+            self.assertIn(root / "package.json", changed)
+            package = json.loads((root / "package.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (root / "packaging/agent-workbench/package-manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            npm_contract = json.loads(
+                (root / "packaging/agent-workbench/npm-package.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(package["version"], "0.4.0")
+            self.assertEqual(manifest["version"], "0.4.0")
+            self.assertNotIn("version", npm_contract)
+            self.assertIn("v0.4.0/auriora-agent-workbench-0.4.0.tgz", manifest["install_command"])
+            self.assertIn("v0.4.0/auriora-agent-workbench-0.4.0.tgz", (root / "README.md").read_text(encoding="utf-8"))
 
     def test_cache_inspect_missing_database(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

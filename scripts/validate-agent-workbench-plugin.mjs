@@ -40,6 +40,9 @@ const codexMcp = readJson("plugins/agent-workbench/.mcp.json");
 const codexHooks = readJson("plugins/agent-workbench/hooks/hooks.json");
 const marketplace = readJson(".agents/plugins/marketplace.json");
 const serverCard = readJson(".well-known/mcp/server-card.json");
+const expectedInstallCommand =
+  `npm install -g https://github.com/Auriora/agent-workbench/releases/download/v${packageJson.version}/` +
+  `auriora-agent-workbench-${packageJson.version}.tgz`;
 
 const requiredPaths = [
   "plugins/agent-workbench/.codex-plugin/plugin.json",
@@ -130,8 +133,7 @@ assert(
   "Package npm bin path drifted."
 );
 assert(
-  manifest.install_command ===
-    "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz",
+  manifest.install_command === expectedInstallCommand,
   "Package install command drifted."
 );
 assertArrayEquals(

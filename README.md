@@ -159,20 +159,20 @@ On macOS or Linux with `nvm`, install the release tarball globally:
 ```bash
 nvm install 22
 nvm use 22
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.4.0/auriora-agent-workbench-0.4.0.tgz
 ```
 
 For an offline install, download the `.tgz` from the matching GitHub release and
 install that local file:
 
 ```bash
-npm install -g ./auriora-agent-workbench-0.3.0.tgz
+npm install -g ./auriora-agent-workbench-0.4.0.tgz
 ```
 
 If you must install under Node 24, pass C++20 flags to the native build:
 
 ```bash
-CXXFLAGS="-std=c++20" npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz
+CXXFLAGS="-std=c++20" npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.4.0/auriora-agent-workbench-0.4.0.tgz
 ```
 
 Install Xcode Command Line Tools first if `node-gyp` cannot find a compiler:
