@@ -132,6 +132,13 @@ Adapter domain describes what kind of surface an adapter covers.
 - `refreshing`: refresh is in progress.
 - `unknown`: freshness cannot be determined.
 
+Watcher freshness is evaluated separately from query execution before response
+metadata preserves a `fresh` claim. A watcher-clean snapshot requires the queue
+to be drained, scope to be synchronized, ignore rules to be synchronized, and no
+background rescan to be pending. Watcher processing maps to `refreshing`;
+overflow, scope drift, ignore-rule drift, or required rescan maps to `stale`;
+watcher startup or processing failure maps to degraded evidence with a caveat.
+
 ## Analysis Validity
 
 - `valid`: evidence is usable for the requested operation.
@@ -251,8 +258,9 @@ caveat kinds are:
   language or platform that has no useful adapter coverage.
 - parser and watcher caveats such as `missing_tree_sitter_parser`,
   `missing_parser_grammar`, `parser_timeout`, `parser_crash`,
-  `missing_optional_enrichment_evidence`, `missing_test_runner`, and
-  `stale_watcher_snapshot`.
+  `missing_optional_enrichment_evidence`, `missing_test_runner`,
+  `watcher_refreshing`, `stale_watcher_snapshot`, and
+  `degraded_watcher_freshness`.
 
 ## Error Shape
 

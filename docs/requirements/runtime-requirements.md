@@ -46,7 +46,7 @@ workflow designers.
 | REQ-010 | MVP mutating edits must support preview, apply, path containment, and drift checks; rollback is post-MVP unless fixture-proven. | Edit manager | Edit and validation design, workspace safety contract | Edit contract tests |
 | REQ-011 | Validation planning must identify diagnostics, formatting, lint, and tests without executing commands by default. | Workflow service | Edit and validation design, workspace safety contract | Validation planner fixtures |
 | REQ-012 | MVP attention must be limited to blockers and warnings that change the next safe action. | Workflow service | Attention design, runtime contracts | Attention fixture tests |
-| REQ-013 | Watcher-clean snapshots must be the freshness authority for hot reads. | Repo runtime, graph store | Graph design | Watcher freshness tests |
+| REQ-013 | Watcher-clean snapshots must be the freshness authority for hot reads: included file changes, watcher overflow, scope drift, and ignore-rule drift must prevent fresh claims until bounded rescan publishes synchronized evidence. | Repo runtime, graph store | Runtime operations design, graph design | Watcher freshness tests |
 | REQ-014 | Parser work must run with timeouts, isolation, and recovery behavior. | Extractor registry | Language adapter design | Worker failure tests |
 | REQ-015 | Large result caches must live in SQLite or compact row stores, not unbounded JSON files. | Graph store | Performance principles | Storage review |
 | REQ-016 | The MVP must include Markdown/config routing plus one partial-semantic language path; TypeScript/JavaScript, C#, and CloudFormation/SAM are post-MVP unless scoped as resource-backed fixtures. | MVP | Spec package, MVP proof matrix | MVP acceptance tests |

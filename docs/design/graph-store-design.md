@@ -174,10 +174,11 @@ traversal-depth caps.
   incremental refresh work is running.
 - Watcher-clean snapshots are the freshness authority for hot reads.
 - Stale rows must be labeled in downstream MCP responses.
-- A watcher-clean snapshot means the event queue is drained, no refresh is in
-  progress, and config scope has not changed since the snapshot began.
-- Rename, delete, and config-change events invalidate affected rows before new
-  evidence is considered fresh.
+- A watcher-clean snapshot means the watcher queue is drained, no refresh is in
+  progress, scope is synchronized, and root ignore-file rules have not changed
+  since the snapshot began.
+- Create, modify, rename, delete, ignore-rule, and config-change events
+  invalidate snapshot freshness before new evidence is considered fresh.
 - Readers during rebuild must either see the previous valid database or a
   `refreshing`/`cold` state, never a partial replacement.
 
@@ -209,7 +210,8 @@ repository-shape evidence such as `.github/`, `.devcontainer/`, `.gitignore`,
 `.dockerignore`, `.editorconfig`, `.env.example`, `.env.sample`, and
 `.env.template` may be indexed; secret-bearing `.env` files, hidden caches, and
 agent/tool runtime state must stay out of graph evidence. Root `.gitignore`
-patterns are used as an additional skip signal, not as the sole safety policy.
+and `.aiignore` patterns are used as additional skip signals, not as the sole
+safety policy.
 
 ## Observability And Operations
 

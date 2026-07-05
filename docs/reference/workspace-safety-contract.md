@@ -45,10 +45,10 @@ capability gates.
 ## Shared Path Classification
 
 `src/domain/policies/path-policy.ts` is the shared path-classification source
-for scanner skips, workspace write safety, docs routing, validation planning,
-hook feedback, and presentation redaction routing. Compatibility imports through
-`catalog-path-policy.ts` are allowed, but new policy decisions should be added
-to the shared classifier first.
+for scanner skips, workspace watcher event filtering, workspace write safety,
+docs routing, validation planning, hook feedback, and presentation redaction
+routing. Compatibility imports through `catalog-path-policy.ts` are allowed, but
+new policy decisions should be added to the shared classifier first.
 
 The classifier returns a base category and stable reason. Surfaces then map that
 classification to their own behavior:
@@ -61,6 +61,11 @@ classification to their own behavior:
 | `gitignore` | Skip or caveat as repository-ignored evidence | Refuse by default |
 | `secret` | Skip or redact secret-bearing paths | Refuse by default |
 | `nested_git_repository` | Skip nested checkout evidence | Refuse by default |
+
+Root `.gitignore` and `.aiignore` files are loaded through the same ignore-rule
+parser for catalog scans, file identity checks, watcher filtering, and hook
+workspace signals. Matching paths are reported with the stable `gitignore`
+classification unless a later contract splits ignore-file diagnostics.
 
 Secret-bearing path detection includes `.env`, `.env.*` except safe examples
 such as `.env.example`, `.env.sample`, and `.env.template`, plus `.envrc`,

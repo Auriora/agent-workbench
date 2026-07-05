@@ -49,6 +49,7 @@ name their own final pre-removal tree commits.
 | Spec 023: MCP tool sweep quality | Removed from `docs/specs/` on 2026-06-11 after final pre-removal tree commit `7922693` completed sweep quality semantics, sandbox-only write validation, progress-report RCA, pagination, docs FTS warmup, and final eight-repo committed-sandbox validation. | Observability and debugging design, runtime operations design, runtime contracts, documentation map, debug harness tests, docs/query tests, graph/query tests, verification-plan tests, and final committed-sandbox sweep evidence. |
 | Spec 024: Plugin discoverability and drift hardening | Removed from `docs/specs/` on 2026-06-13 after final pre-removal tree commit `90b70bc` completed Codex marketplace metadata, MCP server-card metadata, drift tests, operator docs, CI workflow, repo-owned plugin/package validation, installer dry-run, package dry-run, and durable promotion. | Agent Workbench plugin README, Codex plugin runbook, documentation map, marketplace metadata, MCP server card, CI workflow, plugin/package validator, package metadata tests, focused integration tests, lifecycle lint, closure check, and final full Vitest validation. |
 | Spec 025: Brooks-Lint findings tracker | Removed from `docs/specs/` on 2026-06-11 after final pre-removal tree commit `539f174` completed architecture boundary remediation, tech-debt extraction splits, runtime contract modularization, MCP test harness hardening, focused validation/resource rule tests, broad fixture helper annotation, and durable test-maintainability gates. | Layered runtime architecture, system architecture, runtime contracts, MVP proof matrix, documentation map, architecture tests, MCP/integration tests, focused validation/resource tests, broad fixture tests, and final closure traceability. |
+| Spec 027: Workspace watcher ignore sync | Removed from `docs/specs/` on 2026-07-05 after final pre-removal tree commit `73fa695` completed shared root ignore policy, filesystem watcher adapter, debounced change queue, hook routing, stale-rescan scheduling, no parallel per-file indexer guard, and watcher freshness surfaces. | Runtime operations design, runtime contracts, graph store design, workspace safety contract, runtime requirements, documentation map, watcher/queue/status/MCP tests, archive index, and closure log. |
 | Spec 029: Repo-root authority | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `5a8b098` completed launch-root authority for public MCP resources and tools, debug-only root override gating, public `repo_root` metadata hiding, integration-health root policy reporting, and durable promotion. | Workspace safety contract, MCP surface design, runtime contracts, threat model, documentation map, root-authority policy and MCP registry tests, response metadata tests, integration-health tests, focused MCP/contract validation, and final full Vitest validation. |
 | Spec 030: MCP error envelope consistency | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `8e66d18` completed the shared MCP envelope wrapper, representative tool migrations, distinct recoverable failure classes, durable contract/design promotion, and registry consistency tests. | Runtime contracts, MCP surface design, documentation map, executable backlog, shared MCP envelope wrapper, representative MCP registry tests, typecheck, plugin/package validation, full Vitest validation, lifecycle lint, scan, and closure-check. |
 | Spec 031: Shared path policy | Removed from `docs/specs/` on 2026-07-05 after final pre-removal tree commit `686270d` completed shared path classification, workspace safety migration, scanner/docs routing alignment, hook vocabulary drift coverage, secret-path fixtures, and durable promotion. | Workspace safety contract, threat model, executable backlog EB033 boundary, path-policy consistency tests, workspace safety tests, scanner/docs/hook/MCP validation tests, typecheck, plugin validation, full Vitest validation, lifecycle lint, closure-check, and closure-risk review. |
@@ -172,6 +173,33 @@ name their own final pre-removal tree commits.
   observation-only and do not fail CI. Brooks-Lint remains a non-owned
   Codex-local skill set until explicitly promoted into a plugin or
   repository-owned package.
+
+### 2026-07-05 - 027-workspace-watcher-ignore-sync
+
+- **Spec:** docs/specs/027-workspace-watcher-ignore-sync
+- **Title:** Workspace watcher ignore sync
+- **Final spec commit:** 73fa695
+- **Closure cleanup commit:**  13aff8e
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/runtime-operations-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/reference/workspace-safety-contract.md`
+  - `docs/requirements/runtime-requirements.md`
+  - `docs/reference/documentation-map.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Spec implementation validation recorded focused
+  watcher, queue, graph no-indexer, response metadata, status, MCP status,
+  contract, path-policy, and full Vitest validation; `pnpm typecheck`; `git diff
+  --check`; lifecycle lint; closure-check. Closure cleanup reran lifecycle lint
+  and closure-check before removal.
+- **Residual risks:** Per-file graph/docs/FTS refresh remains out of scope until
+  a future fixture-backed spec defines explicit port contracts. Ignore-rule
+  diagnostics intentionally keep one `gitignore` skip category for root
+  `.gitignore` and `.aiignore` unless a later contract splits the response
+  vocabulary.
 
 ### 2026-07-04 - 028-dev-cli-workflow-tools
 

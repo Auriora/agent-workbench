@@ -262,6 +262,39 @@ Runtime status should expose:
 - runtime owner state
 - OTEL trace ids where useful for debugging
 
+## Workspace Watcher Freshness
+
+The workspace watcher is the runtime's local freshness signal, not a second
+indexing pipeline. Filesystem events, hook signals, and future editor signals
+feed the same application-level change queue. The queue applies the shared path
+policy, debounces bursts, coalesces repeated events, marks included changes
+stale, and schedules bounded background rescan through the existing repository
+indexing path.
+
+The first implementation is stale-rescan first:
+
+- watcher roots are derived from `indexed_roots`, defaulting to `.`;
+- default skipped roots, configured skipped roots, generated/vendor paths,
+  hidden local-state paths, nested Git repositories, symlink escapes, root
+  `.gitignore`, and root `.aiignore` are filtered before events reach indexing
+  work;
+- create, modify, delete, and rename events for included files mark the active
+  snapshot stale before hot-path tools can report fresh evidence;
+- repeated modify events are coalesced within the debounce window;
+- rename events are handled as delete old path plus refresh new path when both
+  paths are available, or as a fresh-path event plus stale snapshot marking when
+  the platform watcher omits the old path;
+- event-budget overflow, native watcher overflow, deleted watch roots,
+  permission errors, and processing failures keep watcher freshness stale or
+  degraded with structured caveats;
+- hooks route through the same queue and must not write SQLite, graph, docs, or
+  FTS rows directly.
+
+The queue intentionally does not perform per-file graph/docs/FTS mutation in
+this slice. A future incremental indexer must define explicit port contracts and
+fixture-backed tests before changing graph, docs, node FTS, or docs FTS rows
+directly from file events.
+
 ## Related Docs
 
 - [Layered runtime architecture](layered-runtime-architecture.md)
