@@ -64,6 +64,10 @@ export function planLaunch(env = process.env, argv = process.argv.slice(2), cwd 
   };
 }
 
+export function canUseExecve(platform = process.platform, execve = process.execve) {
+  return platform !== "win32" && typeof execve === "function";
+}
+
 function hasRepoRootArg(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -87,7 +91,7 @@ function main() {
     return;
   }
 
-  if (typeof process.execve === "function") {
+  if (canUseExecve()) {
     process.execve(plan.command, [plan.command, ...plan.args], plan.options.env);
   }
 

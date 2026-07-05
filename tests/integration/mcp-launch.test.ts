@@ -9,7 +9,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 // @ts-expect-error -- ESM .mjs shim imported into the TS test via esbuild.
-import { planLaunch } from "../../plugins/agent-workbench/mcp-launch.mjs";
+import { canUseExecve, planLaunch } from "../../plugins/agent-workbench/mcp-launch.mjs";
 import {
   materializeCodexMcpConfig,
   resolveRuntimeRoot,
@@ -73,6 +73,12 @@ describe("mcp-launch shim planLaunch (spec 033)", () => {
     const plan = planLaunch(baseEnv, [], "/repo");
     expect(plan.command).not.toContain("bash");
     expect(plan.args).not.toContain("-lc");
+  });
+
+  it("does not use process.execve on Windows even when Node exposes the function", () => {
+    expect(canUseExecve("win32", () => undefined)).toBe(false);
+    expect(canUseExecve("linux", () => undefined)).toBe(true);
+    expect(canUseExecve("linux", null)).toBe(false);
   });
 
   it("throws an actionable error when the runtime root cannot be resolved", () => {
