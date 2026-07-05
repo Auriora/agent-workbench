@@ -295,7 +295,7 @@ def classify_area(path: str) -> str:
     if (
         path.startswith("docs/specs/")
         or path.startswith("docs/backlog/")
-        or path == "docs/requirements/agent-workbench-executable-backlog.md"
+        or path == "docs/backlog/README.md"
     ):
         return "specs_planning"
     return "internal_maintenance"
@@ -431,7 +431,23 @@ def render_release_notes(
     include_evidence: bool,
     final: bool,
 ) -> str:
-    lines: list[str] = [f"# Agent Workbench v{evidence.version}", ""]
+    lines: list[str] = []
+    if release_format != "github":
+        reviewed_date = evidence.generated_at.split("T", 1)[0]
+        status = "published" if final else "draft"
+        lines.extend(
+            [
+                "---",
+                f"title: Agent Workbench v{evidence.version} release notes",
+                "doc_type: release-notes",
+                f"status: {status}",
+                "owner: platform",
+                f"last_reviewed: {reviewed_date}",
+                "---",
+                "",
+            ]
+        )
+    lines.extend([f"# Agent Workbench v{evidence.version}", ""])
     state = "Final reviewed notes" if final else "Generated draft; review before publishing"
     lines.extend([f"> {state}.", ""])
 
@@ -561,6 +577,7 @@ def render_agent_instructions(
         [
             "## Rules",
             "",
+            "- Include repository frontmatter when writing `docs/release-notes/vX.Y.Z.md`.",
             "- Group related commits into consumer-visible outcomes.",
             (
                 "- Include package, install, command, MCP, compatibility, upgrade, "

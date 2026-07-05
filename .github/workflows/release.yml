@@ -1,0 +1,143 @@
+# Copyright (C) 2026 Auriora
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Release Package
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to package, for example v0.4.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Enable pnpm (corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.18.1 --activate
+
+      - name: Resolve release version
+        id: release
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+        run: |
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            tag="${DISPATCH_TAG}"
+          else
+            tag="${GITHUB_REF_NAME}"
+          fi
+          if [[ ! "${tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must look like vX.Y.Z, got ${tag}" >&2
+            exit 1
+          fi
+          version="${tag#v}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "notes=docs/release-notes/${tag}.md" >> "${GITHUB_OUTPUT}"
+          echo "tarball=auriora-agent-workbench-${version}.tgz" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify release metadata
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+          TAG: ${{ steps.release.outputs.tag }}
+          NOTES: ${{ steps.release.outputs.notes }}
+        run: |
+          test -f "${NOTES}" || { echo "Missing release notes: ${NOTES}" >&2; exit 1; }
+          node <<'NODE'
+          const fs = require("node:fs");
+          const version = process.env.VERSION;
+          const tag = process.env.TAG;
+          const expectedInstall =
+            `npm install -g https://github.com/Auriora/agent-workbench/releases/download/${tag}/` +
+            `auriora-agent-workbench-${version}.tgz`;
+          const checks = [
+            ["package.json", ["version"], version],
+            ["packaging/agent-workbench/package-manifest.json", ["version"], version],
+            [".well-known/mcp/server-card.json", ["version"], version],
+            ["plugins/agent-workbench/.codex-plugin/plugin.json", ["version"], version],
+            ["plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json", ["version"], version],
+            ["packaging/agent-workbench/package-manifest.json", ["install_command"], expectedInstall],
+            ["packaging/agent-workbench/package-manifest.json", ["codex", "plugin_install_model"], expectedInstall],
+            ["packaging/agent-workbench/npm-package.json", ["install_command"], expectedInstall]
+          ];
+          const failures = [];
+          for (const [file, pointer, expected] of checks) {
+            let value = JSON.parse(fs.readFileSync(file, "utf8"));
+            for (const key of pointer) {
+              value = value?.[key];
+            }
+            if (value !== expected) {
+              failures.push(`${file}#/${pointer.join("/")} is ${JSON.stringify(value)}, expected ${JSON.stringify(expected)}`);
+            }
+          }
+          if (failures.length > 0) {
+            console.error(failures.join("\n"));
+            process.exit(1);
+          }
+          NODE
+
+      - name: Install dependencies
+        env:
+          CXXFLAGS: -std=c++20
+        run: pnpm install --frozen-lockfile
+
+      - name: Install dev CLI dependencies
+        run: python3 -m pip install --no-build-isolation -e tools/devcli
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test dev CLI
+        run: pnpm test:devcli
+
+      - name: Test
+        run: pnpm test
+
+      - name: Validate plugin and package metadata
+        run: pnpm run validate:plugin
+
+      - name: Validate owned Agent Skills
+        run: pnpm run validate:skills
+
+      - name: Validate npm package payload
+        run: pnpm pack:dry-run
+
+      - name: Build release tarball
+        run: npm_config_cache=/tmp/agent-workbench-npm-cache npm pack
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+          NOTES: ${{ steps.release.outputs.notes }}
+          TARBALL: ${{ steps.release.outputs.tarball }}
+        run: |
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            gh release edit "${TAG}" --title "${TAG}" --notes-file "${NOTES}"
+            gh release upload "${TAG}" "${TARBALL}" --clobber
+          else
+            gh release create "${TAG}" "${TARBALL}" --title "${TAG}" --notes-file "${NOTES}"
+          fi

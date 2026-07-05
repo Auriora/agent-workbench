@@ -26,7 +26,9 @@ from auriora_dev.commands.plugin import build_refresh_plan  # noqa: E402
 from auriora_dev.commands.release import (  # noqa: E402
     build_github_release_plan,
     build_preflight_plan,
+    build_release_tag_plan,
     update_release_version,
+    verify_release_artifacts,
 )
 from auriora_dev.commands.release_notes import parse_name_status  # noqa: E402
 from auriora_dev.commands.spec import build_spec_plan  # noqa: E402
@@ -128,7 +130,7 @@ class CliTests(unittest.TestCase):
             [spec.argv for spec in plan],
             [
                 ("env", "npm_config_cache=/tmp/agent-workbench-npm-cache", "npm", "pack"),
-                ("git", "tag", "v0.4.0"),
+                ("git", "tag", "-a", "v0.4.0", "-m", "Release v0.4.0"),
                 ("git", "push", "origin", "v0.4.0"),
                 (
                     "gh",
@@ -144,6 +146,41 @@ class CliTests(unittest.TestCase):
             ],
         )
         self.assertTrue(all(spec.mutates for spec in plan))
+
+    def test_release_tag_plan_creates_annotated_tag_and_pushes(self) -> None:
+        plan = build_release_tag_plan(
+            ROOT,
+            version="0.4.0",
+            remote="origin",
+            push=True,
+            force=False,
+        )
+
+        self.assertEqual(
+            [spec.argv for spec in plan],
+            [
+                ("git", "tag", "-a", "v0.4.0", "-m", "Release v0.4.0"),
+                ("git", "push", "origin", "v0.4.0"),
+            ],
+        )
+        self.assertTrue(all(spec.mutates for spec in plan))
+
+    def test_release_tag_plan_force_replaces_tag_and_pushes_forcefully(self) -> None:
+        plan = build_release_tag_plan(
+            ROOT,
+            version="v0.4.0",
+            remote="upstream",
+            push=True,
+            force=True,
+        )
+
+        self.assertEqual(
+            [spec.argv for spec in plan],
+            [
+                ("git", "tag", "-f", "-a", "v0.4.0", "-m", "Release v0.4.0"),
+                ("git", "push", "--force", "upstream", "v0.4.0"),
+            ],
+        )
 
     def test_github_release_plan_uploads_existing_release_without_tag_steps(self) -> None:
         plan = build_github_release_plan(
@@ -231,6 +268,55 @@ class CliTests(unittest.TestCase):
             self.assertNotIn("version", npm_contract)
             self.assertIn("v0.4.0/auriora-agent-workbench-0.4.0.tgz", manifest["install_command"])
             self.assertIn("v0.4.0/auriora-agent-workbench-0.4.0.tgz", (root / "README.md").read_text(encoding="utf-8"))
+
+    def test_verify_release_artifacts_requires_matching_metadata_and_release_note(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_release_artifacts_fixture(Path(tmp))
+
+            notes_path = verify_release_artifacts(root, "v0.4.0")
+
+            self.assertEqual(notes_path, root / "docs/release-notes/v0.4.0.md")
+
+    def test_verify_release_artifacts_reports_missing_release_note(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_release_artifacts_fixture(Path(tmp))
+            (root / "docs/release-notes/v0.4.0.md").unlink()
+
+            with self.assertRaisesRegex(ValueError, "Missing release notes"):
+                verify_release_artifacts(root, "0.4.0")
+
+    def test_release_tag_command_dry_run_checks_artifacts_and_pushes_tag(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_release_artifacts_fixture(Path(tmp))
+
+            result = CliRunner().invoke(
+                app,
+                ["release", "tag", "0.4.0", "--repo-root", str(root), "--dry-run"],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn("release notes: docs/release-notes/v0.4.0.md", result.output)
+            self.assertIn("cmd: git tag -a v0.4.0 -m Release v0.4.0", result.output)
+            self.assertIn("cmd: git push origin v0.4.0", result.output)
+
+    def test_release_tag_command_requires_clean_tree_unless_forced(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_release_artifacts_fixture(Path(tmp))
+            (root / "uncommitted.txt").write_text("dirty\n", encoding="utf-8")
+
+            blocked = CliRunner().invoke(
+                app,
+                ["release", "tag", "0.4.0", "--repo-root", str(root), "--dry-run"],
+            )
+            forced = CliRunner().invoke(
+                app,
+                ["release", "tag", "0.4.0", "--repo-root", str(root), "--dry-run", "--force"],
+            )
+
+            self.assertEqual(blocked.exit_code, 1, blocked.output)
+            self.assertIn("Working tree is dirty; pass --force to continue.", blocked.output)
+            self.assertEqual(forced.exit_code, 0, forced.output)
+            self.assertIn("cmd: git tag -f -a v0.4.0 -m Release v0.4.0", forced.output)
 
     def test_release_name_status_parser_preserves_rename_and_copy_scores(self) -> None:
         changes = parse_name_status("M\tREADME.md\nR100\told.md\tnew.md\nC085\tsrc/a.py\tsrc/b.py\n")
@@ -448,6 +534,48 @@ class CliTests(unittest.TestCase):
             (root / "docs/runbooks/release.md").write_text("Release notes workflow\n", encoding="utf-8")
             self._git(root, "add", ".")
             self._git(root, "commit", "-m", "Document release notes workflow")
+        return root
+
+    def _make_release_artifacts_fixture(self, root: Path) -> Path:
+        for relative in [
+            "packaging/agent-workbench",
+            ".well-known/mcp",
+            "plugins/agent-workbench/.codex-plugin",
+            "plugins/agent-workbench/claude-plugin/.claude-plugin",
+            "docs/release-notes",
+        ]:
+            (root / relative).mkdir(parents=True, exist_ok=True)
+        install_command = (
+            "npm install -g "
+            "https://github.com/Auriora/agent-workbench/releases/download/v0.4.0/"
+            "auriora-agent-workbench-0.4.0.tgz"
+        )
+        for relative, payload in [
+            ("package.json", {"name": "@auriora/agent-workbench", "version": "0.4.0"}),
+            (
+                "packaging/agent-workbench/package-manifest.json",
+                {
+                    "version": "0.4.0",
+                    "install_command": install_command,
+                    "codex": {"plugin_install_model": install_command},
+                },
+            ),
+            ("packaging/agent-workbench/npm-package.json", {"install_command": install_command}),
+            (".well-known/mcp/server-card.json", {"version": "0.4.0"}),
+            ("plugins/agent-workbench/.codex-plugin/plugin.json", {"version": "0.4.0"}),
+            ("plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json", {"version": "0.4.0"}),
+        ]:
+            (root / relative).write_text(json.dumps(payload) + "\n", encoding="utf-8")
+        (root / "docs/release-notes/v0.4.0.md").write_text(
+            "# Agent Workbench v0.4.0\n\n## Highlights\n\n- Release fixture.\n",
+            encoding="utf-8",
+        )
+        (root / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n", encoding="utf-8")
+        self._git(root, "init")
+        self._git(root, "config", "user.email", "dev@example.com")
+        self._git(root, "config", "user.name", "Dev User")
+        self._git(root, "add", ".")
+        self._git(root, "commit", "-m", "Prepare release")
         return root
 
     def _git(self, root: Path, *args: str) -> None:

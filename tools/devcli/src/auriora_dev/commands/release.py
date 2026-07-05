@@ -58,6 +58,43 @@ def build_preflight_plan(root: Path, *, with_integration: bool) -> list[CommandS
     ]
 
 
+def build_release_tag_plan(
+    root: Path,
+    *,
+    version: str,
+    remote: str,
+    push: bool,
+    force: bool,
+) -> list[CommandSpec]:
+    tag = release_tag(version)
+    tag_argv = ["git", "tag"]
+    if force:
+        tag_argv.append("-f")
+    tag_argv.extend(["-a", tag, "-m", f"Release {tag}"])
+    plan = [
+        CommandSpec(
+            tuple(tag_argv),
+            root,
+            "Create annotated release tag",
+            mutates=True,
+        )
+    ]
+    if push:
+        push_argv = ["git", "push"]
+        if force:
+            push_argv.append("--force")
+        push_argv.extend([remote, tag])
+        plan.append(
+            CommandSpec(
+                tuple(push_argv),
+                root,
+                "Push release tag",
+                mutates=True,
+            )
+        )
+    return plan
+
+
 def release_tag(version: str) -> str:
     return f"v{normalize_version(version)}"
 
@@ -115,7 +152,12 @@ def build_github_release_plan(
         return plan
     if create_tag:
         plan.append(
-            CommandSpec(("git", "tag", tag), root, "Create release tag", mutates=True)
+            CommandSpec(
+                ("git", "tag", "-a", tag, "-m", f"Release {tag}"),
+                root,
+                "Create release tag",
+                mutates=True,
+            )
         )
     if push_tag:
         plan.append(
@@ -170,6 +212,36 @@ def current_package_version(root: Path) -> str:
     if not isinstance(version, str):
         raise ValueError("package.json#/version is missing or is not a string.")
     return normalize_version(version)
+
+
+def verify_release_artifacts(root: Path, version: str) -> Path:
+    normalized = normalize_version(version)
+    expected_install_command = install_command(normalized)
+    failures: list[str] = []
+
+    for relative, pointer in VERSION_JSON_POINTERS:
+        path = root / relative
+        value = _get_json_pointer(_read_json(path), pointer)
+        if value != normalized:
+            failures.append(
+                f"{relative}#/{'/'.join(pointer)} is {value!r}; expected {normalized!r}."
+            )
+
+    for relative, pointer in INSTALL_COMMAND_JSON_POINTERS:
+        path = root / relative
+        value = _get_json_pointer(_read_json(path), pointer)
+        if value != expected_install_command:
+            failures.append(
+                f"{relative}#/{'/'.join(pointer)} does not match the v{normalized} install command."
+            )
+
+    notes_path = root / "docs" / "release-notes" / f"v{normalized}.md"
+    if not notes_path.exists():
+        failures.append(f"Missing release notes: {notes_path.relative_to(root)}.")
+
+    if failures:
+        raise ValueError("Release artifact checks failed:\n- " + "\n- ".join(failures))
+    return notes_path
 
 
 def update_release_version(root: Path, version: str) -> list[Path]:
@@ -234,6 +306,38 @@ def _set_json_pointer(data: dict[str, Any], pointer: tuple[str, ...], value: str
     return True
 
 
+def _get_json_pointer(data: dict[str, Any], pointer: tuple[str, ...]) -> Any:
+    current: Any = data
+    for key in pointer:
+        if not isinstance(current, dict) or key not in current:
+            raise ValueError(f"Missing JSON object path: {'/'.join(pointer)}")
+        current = current[key]
+    return current
+
+
+def _git_status_short(root: Path) -> str:
+    status = subprocess.run(
+        ("git", "status", "--short"),
+        cwd=root,
+        check=False,
+        text=True,
+        capture_output=True,
+    )
+    if status.returncode != 0:
+        raise RuntimeError("git status --short failed.")
+    return status.stdout
+
+
+def _ensure_clean_worktree(root: Path, *, allow_dirty: bool, override_flag: str) -> None:
+    if allow_dirty:
+        return
+    status = _git_status_short(root)
+    if status.strip():
+        typer.secho(f"Working tree is dirty; pass {override_flag} to continue.", fg=typer.colors.RED)
+        typer.echo(status, nl=not status.endswith("\n"))
+        raise typer.Exit(code=1)
+
+
 def _print_metadata(root: Path) -> None:
     package = json.loads((root / "package.json").read_text(encoding="utf-8"))
     typer.echo(f"package: {package.get('name')} {package.get('version')}")
@@ -261,20 +365,11 @@ def register(app: typer.Typer) -> None:
         root = resolve_repo_root(repo_root)
         _print_metadata(root)
         if not dry_run:
-            status = subprocess.run(
-                ("git", "status", "--short"),
-                cwd=root,
-                check=False,
-                text=True,
-                capture_output=True,
-            )
-            if status.returncode != 0:
-                typer.secho("git status --short failed.", fg=typer.colors.RED)
-                raise typer.Exit(code=status.returncode)
-            if status.stdout.strip() and not allow_dirty:
-                typer.secho("Working tree is dirty; pass --allow-dirty to continue.", fg=typer.colors.RED)
-                typer.echo(status.stdout, nl=not status.stdout.endswith("\n"))
-                raise typer.Exit(code=1)
+            try:
+                _ensure_clean_worktree(root, allow_dirty=allow_dirty, override_flag="--allow-dirty")
+            except RuntimeError as exc:
+                typer.secho(str(exc), fg=typer.colors.RED)
+                raise typer.Exit(code=1) from exc
         results = run_plan(
             build_preflight_plan(root, with_integration=with_integration),
             dry_run=dry_run,
@@ -320,6 +415,44 @@ def register(app: typer.Typer) -> None:
         for path in changed:
             typer.echo(f"- {path.relative_to(root)}")
 
+    @release_app.command("tag")
+    def tag_release(
+        version: str | None = typer.Argument(
+            None,
+            help="Release version. Defaults to package.json#/version.",
+        ),
+        remote: str = typer.Option("origin", "--remote", help="Git remote to push the tag to."),
+        no_push: bool = typer.Option(False, "--no-push", help="Create the local tag without pushing it."),
+        force: bool = typer.Option(
+            False,
+            "--force",
+            help="Allow a dirty working tree and replace an existing local/remote tag.",
+        ),
+        repo_root: Path | None = typer.Option(None, "--repo-root", help="Repository root override."),
+        dry_run: bool = typer.Option(False, "--dry-run", help="Print commands without running them."),
+    ) -> None:
+        from auriora_dev.repo import resolve_repo_root
+
+        root = resolve_repo_root(repo_root)
+        normalized = normalize_version(version or current_package_version(root))
+        try:
+            notes_path = verify_release_artifacts(root, normalized)
+            _ensure_clean_worktree(root, allow_dirty=force, override_flag="--force")
+        except (RuntimeError, ValueError) as exc:
+            typer.secho(str(exc), fg=typer.colors.RED)
+            raise typer.Exit(code=1) from exc
+        typer.echo(f"release tag: {release_tag(normalized)}")
+        typer.echo(f"release notes: {notes_path.relative_to(root)}")
+        plan = build_release_tag_plan(
+            root,
+            version=normalized,
+            remote=remote,
+            push=not no_push,
+            force=force,
+        )
+        results = run_plan(plan, dry_run=dry_run)
+        summarize(results)
+
     @release_app.command("github")
     def github_release(
         version: str | None = typer.Argument(
@@ -364,20 +497,11 @@ def register(app: typer.Typer) -> None:
         root = resolve_repo_root(repo_root)
         normalized = normalize_version(version or current_package_version(root))
         if not dry_run and not allow_dirty:
-            status = subprocess.run(
-                ("git", "status", "--short"),
-                cwd=root,
-                check=False,
-                text=True,
-                capture_output=True,
-            )
-            if status.returncode != 0:
-                typer.secho("git status --short failed.", fg=typer.colors.RED)
-                raise typer.Exit(code=status.returncode)
-            if status.stdout.strip():
-                typer.secho("Working tree is dirty; pass --allow-dirty to continue.", fg=typer.colors.RED)
-                typer.echo(status.stdout, nl=not status.stdout.endswith("\n"))
-                raise typer.Exit(code=1)
+            try:
+                _ensure_clean_worktree(root, allow_dirty=allow_dirty, override_flag="--allow-dirty")
+            except RuntimeError as exc:
+                typer.secho(str(exc), fg=typer.colors.RED)
+                raise typer.Exit(code=1) from exc
         plan = build_github_release_plan(
             root,
             version=normalized,

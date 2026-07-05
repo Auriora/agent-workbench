@@ -312,6 +312,38 @@ docker build -f packaging/agent-workbench/Containerfile -t ghcr.io/bcherrington/
 
 Tagged GitHub releases publish through the GHCR workflow.
 
+## Release Process
+
+The supported release path keeps mutable preparation local and immutable
+packaging in GitHub Actions:
+
+1. Update release metadata with `awb release bump-version X.Y.Z`.
+2. Generate and refine release notes into `docs/release-notes/vX.Y.Z.md`.
+3. Commit the version and release-note changes.
+4. Run release validation locally when practical:
+
+```bash
+awb release preflight
+```
+
+5. Tag and push the release:
+
+```bash
+awb release tag X.Y.Z
+```
+
+`awb release tag` verifies package metadata, install commands, plugin/server-card
+versions, and `docs/release-notes/vX.Y.Z.md`; it refuses a dirty working tree
+unless `--force` is passed. It creates an annotated `vX.Y.Z` tag for `HEAD` and
+pushes it to `origin` by default. Use `--no-push` to create only the local tag.
+
+The `.github/workflows/release.yml` workflow runs on pushed `v*` tags. It
+rechecks the version/release-note contract, installs dependencies, runs
+typecheck, tests, plugin validation, skill validation, package dry-run, builds
+the npm tarball, creates or updates the GitHub release from
+`docs/release-notes/vX.Y.Z.md`, and uploads the tarball. The workflow does not
+rewrite package metadata, create commits, or move tags.
+
 ## Release Notes Workflow
 
 Use `awb release notes` to generate a reviewable release-note draft from local
@@ -329,17 +361,14 @@ awb release notes \
 
 The command collects commits, range-level changed files, per-commit changed
 files, release tag evidence, and optional validation notes. The generated draft
-is not final by default. A maintainer or LLM-backed agent should refine the
-draft into consumer-readable notes, preserve uncertainty, and avoid claiming
+is not final by default. Use the packaged `release-notes` Agent Skill or a
+maintainer review to refine the evidence into consumer-readable notes matching
+`docs/release-notes/v0.4.0.md`, preserve uncertainty, and avoid claiming
 validation that was not supplied.
 
-Publish with reviewed notes explicitly:
-
-```bash
-awb release github X.Y.Z --notes-file docs/release-notes/vX.Y.Z.md
-```
-
-Release publishing does not implicitly generate or refine notes.
+Do not keep `vX.Y.Z-draft.md`, `vX.Y.Z-evidence.json`, or `vX.Y.Z-agent.md`
+unless the user explicitly asks for those intermediate artifacts. The durable
+release artifact is `docs/release-notes/vX.Y.Z.md`.
 
 ## Validation
 
@@ -374,8 +403,11 @@ Agent Workbench uses a hybrid Agent Skills compliance model. Checked-in skills
 packaged by this repository are strict Agent Skills artifacts:
 
 - `plugins/agent-workbench/skills/agent-workbench/SKILL.md`
+- `plugins/agent-workbench/skills/release-notes/SKILL.md`
 - `plugins/agent-workbench/claude-plugin/skills/agent-workbench/SKILL.md`
+- `plugins/agent-workbench/claude-plugin/skills/release-notes/SKILL.md`
 - `plugins/agent-workbench/kiro-power/skills/agent-workbench/SKILL.md`
+- `plugins/agent-workbench/kiro-power/skills/release-notes/SKILL.md`
 
 `pnpm run validate:skills` validates only those owned paths by default. It
 checks YAML frontmatter, required `name` and `description` fields, parent

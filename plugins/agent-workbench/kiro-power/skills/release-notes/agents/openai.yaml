@@ -1,0 +1,4 @@
+interface:
+  display_name: "Release Notes"
+  short_description: "Generate Agent Workbench release notes"
+  default_prompt: "Generate reviewed Agent Workbench release notes from git evidence."

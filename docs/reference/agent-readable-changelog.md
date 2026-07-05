@@ -26,6 +26,43 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
+## 2026-07-05: Tag-Driven Release Packaging
+
+### Agent-Visible Changes
+
+- Added `awb release tag` for local release tagging after version metadata and
+  `docs/release-notes/vX.Y.Z.md` exist.
+- Added a tag-triggered GitHub release workflow that validates release metadata,
+  runs tests and package checks, builds the npm tarball, and publishes the
+  GitHub release asset from the checked-in release note.
+- Added packaged `release-notes` skills for Codex, Claude Code, and Kiro
+  integrations.
+
+### Contract Changes
+
+- Release preparation is local and mutable; GitHub Actions treats a pushed tag as
+  immutable input and fails on mismatched metadata instead of committing fixes or
+  moving tags.
+- `awb release tag` creates annotated `vX.Y.Z` tags and pushes to `origin` by
+  default. `--force` is required to replace an existing tag or tag from a dirty
+  working tree.
+
+### Required Agent Behavior Changes
+
+- Generate and refine final notes before tagging. Do not rely on the release
+  workflow to create notes.
+- Keep draft, evidence, and agent-instruction release-note files out of the
+  durable release unless the user explicitly asks to keep them.
+- Use the `release-notes` skill when asked to prepare consumer-readable release
+  notes.
+
+### Migration Notes
+
+- Use `awb release bump-version X.Y.Z`, commit version and release notes, then
+  run `awb release tag X.Y.Z`.
+- `awb release github` remains available for manual publishing, but the
+  preferred package release path is the `v*` tag workflow.
+
 ## 2026-07-05: Release Notes Evidence Workflow
 
 ### Agent-Visible Changes
@@ -62,7 +99,7 @@ Each version or dated entry should include:
 ### Migration Notes
 
 - Use `awb release notes --dry-run` before writing release-note files.
-- Pass reviewed final notes to `awb release github --notes-file`; release
+- Refine reviewed final notes into `docs/release-notes/vX.Y.Z.md`; release
   publishing does not generate or refine notes implicitly.
 
 ## 2026-06-13: Product Positioning And Lifecycle Boundary
