@@ -73,7 +73,11 @@ Workbench Markdown tools when the MCP server is available.
 - T001-T002: Complete on 2026-07-05. OQ001-OQ003 are resolved in requirements
   and design; direct registry inventory found 7 resources, 15 tools, 0 prompts,
   and no public standard-envelope exclusions.
-- T003-T006: Pending.
+- T003-T006: Complete on 2026-07-05. Added additive trust schemas, shared trust
+  policy derivation, `makeTrustedEnvelope`, and focused tests. Validation:
+  `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts
+  tests/contracts/response-metadata.test.ts` passed with 35 tests; `pnpm
+  typecheck` passed.
 - T011: Pending.
 - T007-T010: Pending.
 - T012-T013: Pending.

@@ -6,6 +6,7 @@
 import type {
   AdapterEvidence,
   AnalysisValidity,
+  AttentionItem,
   CapabilityLevel,
   EvidenceKind,
   Freshness,
@@ -13,11 +14,17 @@ import type {
   IntegrationHealth,
   IntegrationSurfaceHealth,
   NextAction,
+  ResponseEnvelope,
   ResponseMetadata,
+  RuntimeError,
   RuntimeStatusCaveat,
   ScopeMetadata,
+  TrustCalibration,
+  TrustUse,
+  TrustVerificationRequirement,
   VerificationStatus
 } from "../../contracts/index.js";
+import { makeEnvelope } from "../../contracts/index.js";
 import type { SnapshotState, WarmupExecution } from "../../domain/models/runtime.js";
 
 export type RuntimeTrustState =
@@ -60,6 +67,324 @@ const runtimeCaveatSeverities: Record<
 
 export function uniqueSorted<T extends string>(values: readonly T[]): T[] {
   return Array.from(new Set(values)).sort();
+}
+
+export type TrustSurfaceKind =
+  | "context_routing"
+  | "docs_routing"
+  | "docs_direct_read"
+  | "graph_symbol_routing"
+  | "graph_reference_routing"
+  | "graph_impact_routing"
+  | "diagnostics_static"
+  | "markdown_quality"
+  | "validation_plan"
+  | "edit_preview"
+  | "edit_apply"
+  | "repository_status"
+  | "docs_session_scope"
+  | "integration_health"
+  | "generic_error";
+
+export type TrustSurfacePolicy = {
+  surface_kind: TrustSurfaceKind;
+  includes_direct_read?: boolean;
+  includes_executed_validation?: boolean;
+  mutation_applied?: boolean;
+};
+
+type MutableTrustCalibration = {
+  safe_to_use_for: Set<TrustUse>;
+  not_safe_to_use_for: Set<TrustUse>;
+  must_verify_by: Set<TrustVerificationRequirement>;
+};
+
+const proofLikeTrustUses: readonly TrustUse[] = [
+  "bounded_executed_validation_claim",
+  "implementation_claim",
+  "passed_validation_claim",
+  "task_completion_claim",
+  "closure_claim",
+  "safe_mutation_claim",
+  "whole_program_impact_claim",
+  "security_or_vulnerability_claim"
+];
+
+export function buildTrustCalibration(input: {
+  policy: TrustSurfacePolicy;
+  meta: Omit<ResponseMetadata, "trust">;
+  warnings?: readonly AttentionItem[];
+  errors?: readonly RuntimeError[];
+}): TrustCalibration {
+  const calibration = baseTrustCalibration(input.policy);
+  strengthenTrustFromEvidence(calibration, input.policy, input.meta);
+  applyVerificationStatusRules(calibration, input.policy, input.meta.verification_status);
+  applyFailureStateRules(calibration, {
+    meta: input.meta,
+    warnings: input.warnings ?? [],
+    errors: input.errors ?? []
+  });
+  return finalizeTrustCalibration(calibration);
+}
+
+export function makeTrustedEnvelope<T>(input: {
+  data: T;
+  meta: Omit<ResponseMetadata, "trust">;
+  trust_policy: TrustSurfacePolicy;
+  warnings?: AttentionItem[];
+  errors?: RuntimeError[];
+}): ResponseEnvelope<T> {
+  const warnings = input.warnings ?? [];
+  const errors = input.errors ?? [];
+  return makeEnvelope({
+    data: input.data,
+    meta: {
+      ...input.meta,
+      trust: buildTrustCalibration({
+        policy: input.trust_policy,
+        meta: input.meta,
+        warnings,
+        errors
+      })
+    },
+    warnings,
+    errors
+  });
+}
+
+function baseTrustCalibration(policy: TrustSurfacePolicy): MutableTrustCalibration {
+  const calibration = mutableTrustCalibration();
+  switch (policy.surface_kind) {
+    case "repository_status":
+    case "docs_session_scope":
+    case "integration_health":
+      addAll(calibration.safe_to_use_for, ["navigation", "next_read_selection", "runtime_availability"]);
+      addAll(calibration.not_safe_to_use_for, proofLikeTrustUses);
+      addAll(calibration.must_verify_by, [
+        "direct_read_relevant_source",
+        "inspect_ranked_evidence",
+        "run_planned_validation"
+      ]);
+      return calibration;
+    case "context_routing":
+    case "docs_routing":
+      addAll(calibration.safe_to_use_for, ["navigation", "next_read_selection"]);
+      addAll(calibration.not_safe_to_use_for, proofLikeTrustUses);
+      addAll(calibration.must_verify_by, [
+        "direct_read_relevant_source",
+        "inspect_ranked_evidence",
+        "run_planned_validation"
+      ]);
+      return calibration;
+    case "graph_symbol_routing":
+    case "graph_reference_routing":
+    case "graph_impact_routing":
+      addAll(calibration.safe_to_use_for, ["navigation", "next_read_selection"]);
+      addAll(calibration.not_safe_to_use_for, [
+        "safe_mutation_claim",
+        "whole_program_impact_claim",
+        "passed_validation_claim",
+        "task_completion_claim",
+        "closure_claim",
+        "security_or_vulnerability_claim"
+      ]);
+      addAll(calibration.must_verify_by, ["direct_read_relevant_source", "run_planned_validation"]);
+      return calibration;
+    case "docs_direct_read":
+      addAll(calibration.safe_to_use_for, ["precise_direct_read_claim"]);
+      addAll(calibration.not_safe_to_use_for, proofLikeTrustUses);
+      addAll(calibration.must_verify_by, ["direct_read_relevant_source", "run_planned_validation"]);
+      return calibration;
+    case "diagnostics_static":
+    case "markdown_quality":
+      addAll(calibration.safe_to_use_for, ["navigation"]);
+      addAll(calibration.not_safe_to_use_for, [
+        "passed_validation_claim",
+        "task_completion_claim",
+        "closure_claim",
+        "safe_mutation_claim",
+        "whole_program_impact_claim",
+        "security_or_vulnerability_claim"
+      ]);
+      addAll(calibration.must_verify_by, [
+        "review_diagnostics_output",
+        "direct_read_relevant_source",
+        "run_planned_validation"
+      ]);
+      return calibration;
+    case "validation_plan":
+      addAll(calibration.safe_to_use_for, ["validation_planning"]);
+      addAll(calibration.not_safe_to_use_for, [
+        "passed_validation_claim",
+        "task_completion_claim",
+        "closure_claim",
+        "safe_mutation_claim",
+        "whole_program_impact_claim",
+        "security_or_vulnerability_claim"
+      ]);
+      addAll(calibration.must_verify_by, ["run_planned_validation", "obtain_executed_validation_evidence"]);
+      return calibration;
+    case "edit_preview":
+      addAll(calibration.safe_to_use_for, ["edit_preview_review"]);
+      addAll(calibration.not_safe_to_use_for, [
+        "applied_edit_observation",
+        "safe_mutation_claim",
+        "task_completion_claim",
+        "closure_claim",
+        "passed_validation_claim",
+        "whole_program_impact_claim",
+        "security_or_vulnerability_claim"
+      ]);
+      addAll(calibration.must_verify_by, ["review_generated_diff", "run_planned_validation"]);
+      return calibration;
+    case "edit_apply":
+      if (policy.mutation_applied === true) {
+        addAll(calibration.safe_to_use_for, ["applied_edit_observation"]);
+      } else {
+        addAll(calibration.not_safe_to_use_for, ["applied_edit_observation"]);
+      }
+      addAll(calibration.not_safe_to_use_for, [
+        "safe_mutation_claim",
+        "passed_validation_claim",
+        "task_completion_claim",
+        "closure_claim",
+        "whole_program_impact_claim",
+        "security_or_vulnerability_claim"
+      ]);
+      addAll(calibration.must_verify_by, ["review_generated_diff", "run_planned_validation"]);
+      return calibration;
+    case "generic_error":
+      addAll(calibration.safe_to_use_for, ["navigation"]);
+      addAll(calibration.not_safe_to_use_for, proofLikeTrustUses);
+      addAll(calibration.must_verify_by, [
+        "direct_read_relevant_source",
+        "refresh_runtime_snapshot",
+        "resolve_blocked_environment",
+        "run_planned_validation"
+      ]);
+      return calibration;
+  }
+}
+
+function strengthenTrustFromEvidence(
+  calibration: MutableTrustCalibration,
+  policy: TrustSurfacePolicy,
+  meta: Omit<ResponseMetadata, "trust">
+): void {
+  if (policy.includes_direct_read === true && meta.evidence_kinds.includes("direct_read")) {
+    calibration.safe_to_use_for.add("precise_direct_read_claim");
+  }
+  if (
+    policy.includes_executed_validation === true &&
+    meta.evidence_kinds.includes("executed_command") &&
+    meta.verification_status === "done"
+  ) {
+    calibration.safe_to_use_for.add("bounded_executed_validation_claim");
+  }
+  if (
+    (meta.evidence_kinds.includes("parser") ||
+      meta.evidence_kinds.includes("compiler_api") ||
+      meta.evidence_kinds.includes("lsp")) &&
+    (meta.capability_level === "partial_semantic" || meta.capability_level === "semantic")
+  ) {
+    calibration.safe_to_use_for.add("local_structure_reference");
+  }
+}
+
+function applyVerificationStatusRules(
+  calibration: MutableTrustCalibration,
+  policy: TrustSurfacePolicy,
+  status: VerificationStatus
+): void {
+  if (status === "planned") {
+    calibration.safe_to_use_for.add("validation_planning");
+    calibration.not_safe_to_use_for.add("passed_validation_claim");
+    calibration.must_verify_by.add("run_planned_validation");
+  }
+  if (status === "needed") {
+    calibration.must_verify_by.add("run_planned_validation");
+  }
+  if (status === "blocked") {
+    calibration.not_safe_to_use_for.add("passed_validation_claim");
+    calibration.must_verify_by.add("resolve_blocked_environment");
+  }
+  if (
+    status === "done" &&
+    policy.includes_executed_validation !== true &&
+    !calibration.safe_to_use_for.has("bounded_executed_validation_claim")
+  ) {
+    calibration.not_safe_to_use_for.add("passed_validation_claim");
+  }
+}
+
+function applyFailureStateRules(
+  calibration: MutableTrustCalibration,
+  input: {
+    meta: Omit<ResponseMetadata, "trust">;
+    warnings: readonly AttentionItem[];
+    errors: readonly RuntimeError[];
+  }
+): void {
+  if (!isFailureState(input)) {
+    return;
+  }
+
+  for (const use of proofLikeTrustUses) {
+    calibration.safe_to_use_for.delete(use);
+    calibration.not_safe_to_use_for.add(use);
+  }
+  addAll(calibration.must_verify_by, [
+    "refresh_runtime_snapshot",
+    "resolve_blocked_environment",
+    "direct_read_relevant_source",
+    "run_planned_validation"
+  ]);
+}
+
+function isFailureState(input: {
+  meta: Omit<ResponseMetadata, "trust">;
+  warnings: readonly AttentionItem[];
+  errors: readonly RuntimeError[];
+}): boolean {
+  return (
+    input.meta.analysis_validity === "invalid" ||
+    input.meta.analysis_validity === "invalid_due_to_environment" ||
+    input.meta.analysis_validity === "partial" ||
+    input.meta.freshness === "stale" ||
+    input.meta.freshness === "cold" ||
+    input.meta.freshness === "refreshing" ||
+    input.meta.freshness === "unknown" ||
+    input.meta.verification_status === "blocked" ||
+    input.meta.verification_status === "planned" ||
+    input.warnings.length > 0 ||
+    input.errors.length > 0 ||
+    (input.meta.caveats ?? []).some((caveat) => caveat.severity === "blocker")
+  );
+}
+
+function finalizeTrustCalibration(calibration: MutableTrustCalibration): TrustCalibration {
+  for (const use of calibration.not_safe_to_use_for) {
+    calibration.safe_to_use_for.delete(use);
+  }
+  return {
+    safe_to_use_for: uniqueSorted([...calibration.safe_to_use_for]),
+    not_safe_to_use_for: uniqueSorted([...calibration.not_safe_to_use_for]),
+    must_verify_by: uniqueSorted([...calibration.must_verify_by])
+  };
+}
+
+function mutableTrustCalibration(): MutableTrustCalibration {
+  return {
+    safe_to_use_for: new Set<TrustUse>(),
+    not_safe_to_use_for: new Set<TrustUse>(),
+    must_verify_by: new Set<TrustVerificationRequirement>()
+  };
+}
+
+function addAll<T>(target: Set<T>, values: readonly T[]): void {
+  for (const value of values) {
+    target.add(value);
+  }
 }
 
 export function strongestCapabilityLevel(levels: readonly CapabilityLevel[]): CapabilityLevel {

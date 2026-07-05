@@ -127,7 +127,7 @@ T015 -> T016
 **Purpose**: Define the trust schema and derivation behavior before touching
 surface presenters.
 
-- [ ] T003 Add trust calibration contract schemas and types.
+- [x] T003 Add trust calibration contract schemas and types.
   - Depends on: T002
   - Requirements: R1, R3, R5, CP004, CP007
   - Files: `src/contracts/runtime-response-contracts.ts`,
@@ -139,16 +139,20 @@ surface presenters.
     enum meanings remain unchanged; older metadata without `trust` still
     parses.
   - Evidence mode: implementation
-  - Evidence: Pending.
-  - [ ] T003.1 Add `trustUseSchema`, `trustVerificationRequirementSchema`, and
+  - Evidence: Complete on 2026-07-05. Added trust schemas and inferred types in
+    `src/contracts/runtime-response-contracts.ts`, extended
+    `responseMetadataSchema` with optional `trust`, and covered additive
+    compatibility, invalid enum values, contradictory safe/unsafe values, and
+    barrel exports in `tests/contracts/runtime-contracts.test.ts`.
+  - [x] T003.1 Added `trustUseSchema`, `trustVerificationRequirementSchema`, and
     `trustCalibrationSchema`.
-  - [ ] T003.2 Extend `responseMetadataSchema` with optional `trust`.
-  - [ ] T003.3 Export schemas and inferred types through existing contract
+  - [x] T003.2 Extended `responseMetadataSchema` with optional `trust`.
+  - [x] T003.3 Exported schemas and inferred types through existing contract
     barrels.
-  - [ ] T003.4 Add schema tests for valid values, invalid values, optional
+  - [x] T003.4 Added schema tests for valid values, invalid values, optional
     compatibility, and stable existing metadata semantics.
 
-- [ ] T004 Implement shared trust policy and derivation helpers.
+- [x] T004 Implement shared trust policy and derivation helpers.
   - Depends on: T003
   - Requirements: R1, R2, R3, R5, CP001, CP002, CP003, CP006
   - Files: `src/application/use-cases/response-metadata.ts`,
@@ -159,16 +163,22 @@ surface presenters.
     routing, planned validation, direct reads, executed validation, and failure
     states remain distinct.
   - Evidence mode: implementation
-  - Evidence: Pending.
-  - [ ] T004.1 Add `TrustSurfaceKind` and `TrustSurfacePolicy`.
-  - [ ] T004.2 Add `buildTrustCalibration` and deterministic set handling.
-  - [ ] T004.3 Add failure-state overrides for stale, cold, refreshing,
+  - Evidence: Complete on 2026-07-05. Added `TrustSurfaceKind`,
+    `TrustSurfacePolicy`, `buildTrustCalibration`, deterministic sorted output,
+    unsafe-wins conflict handling, evidence strengthening, verification-status
+    handling, and conservative failure-state overrides in
+    `src/application/use-cases/response-metadata.ts`. Focused tests cover
+    routing, planned validation, executed validation, direct-read scope,
+    parser-backed scope, failure states, and CP001-CP007 behavior.
+  - [x] T004.1 Added `TrustSurfaceKind` and `TrustSurfacePolicy`.
+  - [x] T004.2 Added `buildTrustCalibration` and deterministic set handling.
+  - [x] T004.3 Added failure-state overrides for stale, cold, refreshing,
     partial, invalid, invalid-due-to-environment, blocked, warning, error, and
     blocker-caveat responses.
-  - [ ] T004.4 Add tests for CP001 through CP007 using the repository's current
+  - [x] T004.4 Added tests for CP001 through CP007 using the repository's current
     Vitest test pattern.
 
-- [ ] T005 Add final trusted-envelope integration point.
+- [x] T005 Add final trusted-envelope integration point.
   - Depends on: T004
   - Requirements: R1, R2, R5, CP006, CP007
   - Files: `src/contracts/runtime-response-contracts.ts`,
@@ -178,14 +188,19 @@ surface presenters.
     data, warnings, and errors are known; structured error envelopes can use
     `generic_error` trust without duplicating handler logic.
   - Evidence mode: implementation
-  - Evidence: Pending.
-  - [ ] T005.1 Implement `makeTrustedEnvelope` as the required public
+  - Evidence: Complete on 2026-07-05. Added `makeTrustedEnvelope` in
+    `src/application/use-cases/response-metadata.ts` so public presenters can
+    derive `meta.trust` after data, warnings, and errors are known. Existing
+    `makeEnvelope` behavior remains unchanged for private/internal call sites.
+    Tests prove top-level warnings and errors affect `meta.trust` for
+    structured generic-error envelopes.
+  - [x] T005.1 Implemented `makeTrustedEnvelope` as the required public
     standard-envelope integration point.
-  - [ ] T005.2 Preserve existing `makeEnvelope` behavior for private/internal
+  - [x] T005.2 Preserved existing `makeEnvelope` behavior for private/internal
     call sites that are not public Workbench surfaces.
-  - [ ] T005.3 Add tests proving top-level warnings and errors affect trust.
+  - [x] T005.3 Added tests proving top-level warnings and errors affect trust.
 
-- [ ] T006 Checkpoint - contract and policy validation.
+- [x] T006 Checkpoint - contract and policy validation.
   - Depends on: T005
   - Requirements: R1, R2, R3, R5, CP001, CP002, CP003, CP004, CP006, CP007
   - Files: `tests/contracts/runtime-contracts.test.ts`,
@@ -195,7 +210,10 @@ surface presenters.
   - Validation: `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts
     tests/contracts/response-metadata.test.ts`
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Complete on 2026-07-05. `pnpm exec vitest run
+    tests/contracts/runtime-contracts.test.ts
+    tests/contracts/response-metadata.test.ts` passed with 35 tests, and
+    `pnpm typecheck` passed.
 
 - [ ] T011 Add public surface policy coverage tests.
   - Depends on: T006

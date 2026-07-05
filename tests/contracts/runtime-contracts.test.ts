@@ -30,11 +30,15 @@ import {
   previewWorkspaceEditResultSchema,
   repoOverviewSchema,
   repoScopeSchema,
+  responseMetadataSchema,
   responseEnvelopeSchema,
   symbolSearchRequestSchema,
   symbolSearchResultSchema,
   taskContextRequestSchema,
   taskContextSchema,
+  trustCalibrationSchema,
+  trustUseSchema,
+  trustVerificationRequirementSchema,
   verificationPlanRequestSchema,
   verificationPlanSchema
 } from "../../src/contracts/index.js";
@@ -68,6 +72,9 @@ describe("runtime contract categories", () => {
       "codexIntegrationProfileSchema",
       "checkMarkdownDocumentResultSchema",
       "markdownFormatPlanSchema",
+      "trustCalibrationSchema",
+      "trustUseSchema",
+      "trustVerificationRequirementSchema",
       "makeEnvelope"
     ] as const;
 
@@ -162,6 +169,57 @@ describe("runtime contracts", () => {
     expect(responseEnvelopeSchema(z.object({ ok: z.literal(true) })).parse(envelope)).toEqual(
       envelope
     );
+  });
+
+  it("accepts additive trust calibration while preserving older metadata", () => {
+    const legacyMetadata = {
+      analysis_validity: "valid",
+      freshness: "fresh",
+      scope: {
+        repo_root: "/repo",
+        indexed_roots: ["src"],
+        skipped_roots: [],
+        languages: ["typescript"]
+      },
+      capability_level: "resource_backed",
+      evidence_kinds: ["docs"],
+      verification_status: "needed",
+      truncated: false
+    };
+
+    expect(responseMetadataSchema.parse(legacyMetadata)).toEqual(legacyMetadata);
+    expect(
+      responseMetadataSchema.parse({
+        ...legacyMetadata,
+        trust: {
+          safe_to_use_for: ["navigation"],
+          not_safe_to_use_for: ["task_completion_claim"],
+          must_verify_by: ["direct_read_relevant_source"]
+        }
+      })
+    ).toMatchObject({
+      trust: {
+        safe_to_use_for: ["navigation"],
+        not_safe_to_use_for: ["task_completion_claim"],
+        must_verify_by: ["direct_read_relevant_source"]
+      }
+    });
+  });
+
+  it("rejects unknown trust vocabulary and contradictory trust uses", () => {
+    expect(trustUseSchema.parse("navigation")).toBe("navigation");
+    expect(trustVerificationRequirementSchema.parse("run_planned_validation")).toBe(
+      "run_planned_validation"
+    );
+    expect(() => trustUseSchema.parse("proof")).toThrow();
+    expect(() => trustVerificationRequirementSchema.parse("run_any_command")).toThrow();
+    expect(() =>
+      trustCalibrationSchema.parse({
+        safe_to_use_for: ["navigation"],
+        not_safe_to_use_for: ["navigation"],
+        must_verify_by: []
+      })
+    ).toThrow();
   });
 
   it("models structured runtime status caveats for degraded and blocked states", () => {

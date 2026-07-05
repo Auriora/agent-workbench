@@ -52,6 +52,59 @@ export const budgetMetadataSchema = z
   .strict();
 export type BudgetMetadata = z.infer<typeof budgetMetadataSchema>;
 
+export const trustUseSchema = z.enum([
+  "navigation",
+  "next_read_selection",
+  "local_structure_reference",
+  "precise_direct_read_claim",
+  "runtime_availability",
+  "validation_planning",
+  "edit_preview_review",
+  "applied_edit_observation",
+  "bounded_executed_validation_claim",
+  "implementation_claim",
+  "passed_validation_claim",
+  "task_completion_claim",
+  "closure_claim",
+  "safe_mutation_claim",
+  "whole_program_impact_claim",
+  "security_or_vulnerability_claim"
+]);
+export type TrustUse = z.infer<typeof trustUseSchema>;
+
+export const trustVerificationRequirementSchema = z.enum([
+  "direct_read_relevant_source",
+  "inspect_ranked_evidence",
+  "run_planned_validation",
+  "review_diagnostics_output",
+  "review_generated_diff",
+  "refresh_runtime_snapshot",
+  "resolve_blocked_environment",
+  "consult_lifecycle_authority",
+  "obtain_executed_validation_evidence",
+  "perform_security_review"
+]);
+export type TrustVerificationRequirement = z.infer<typeof trustVerificationRequirementSchema>;
+
+export const trustCalibrationSchema = z
+  .object({
+    safe_to_use_for: z.array(trustUseSchema),
+    not_safe_to_use_for: z.array(trustUseSchema),
+    must_verify_by: z.array(trustVerificationRequirementSchema)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const safeUses = new Set(value.safe_to_use_for);
+    const contradictoryUses = value.not_safe_to_use_for.filter((use) => safeUses.has(use));
+    for (const use of contradictoryUses) {
+      context.addIssue({
+        code: "custom",
+        message: `Trust use '${use}' cannot be both safe and unsafe.`
+      });
+    }
+  });
+export type TrustCalibration = z.infer<typeof trustCalibrationSchema>;
+
 export const responseMetadataSchema = z.object({
   analysis_validity: analysisValiditySchema,
   freshness: freshnessSchema,
@@ -61,7 +114,8 @@ export const responseMetadataSchema = z.object({
   verification_status: verificationStatusSchema,
   truncated: z.boolean(),
   budget: budgetMetadataSchema.optional(),
-  caveats: z.array(runtimeStatusCaveatSchema).optional()
+  caveats: z.array(runtimeStatusCaveatSchema).optional(),
+  trust: trustCalibrationSchema.optional()
 });
 export type ResponseMetadata = z.infer<typeof responseMetadataSchema>;
 
