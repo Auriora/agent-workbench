@@ -393,10 +393,29 @@ export AGENT_WORKBENCH_INSTALL_ROOT="$HOME/Projects/agent-workbench"
 ```
 
 Hooks must not repair missing launchers, install packages, update plugins, or
-write Codex configuration. They emit compact `basic` local guidance by default;
-set `AGENT_WORKBENCH_HOOK_FEEDBACK=silent` to suppress it. If Codex asks for
-hook trust review after install or update, review `CODEX_HOME/hooks.json` and
-the hook scripts under the installed package's `plugins/agent-workbench/hooks/`.
+write Codex configuration. They are quiet and action-gated by default; set
+`AGENT_WORKBENCH_HOOK_FEEDBACK=silent` only when a host integration needs no
+user-visible hook output. If Codex asks for hook trust review after install or
+update, review
+`CODEX_HOME/hooks.json` and the hook scripts under the installed package's
+`plugins/agent-workbench/hooks/`.
+
+Agent CLIs do not share one hook configuration schema. Keep shared behavior in
+the hook core modules, but package thin CLI-specific adapters and install
+configuration for each host:
+
+- Codex user hooks use a single shell `command` string in `CODEX_HOME/hooks.json`.
+- Claude Code plugin hooks use `command` plus `args` in `hooks/hooks.json`.
+- Kiro custom-agent hooks use shell command strings from agent configuration.
+
+Run `pnpm exec vitest run tests/integration/hook-cli-compatibility.test.ts`
+after changing hook scripts, hook installers, or packaged hook configs.
+
+For short-lived hook payload diagnostics, prefix a hook command with
+`AGENT_WORKBENCH_HOOK_DEBUG=1`. Debug logging remains stdout-silent and writes a
+redacted payload summary only: event name, tool name, input keys, response status
+fields, extracted paths, outcome, and finding counts. Do not leave this enabled
+after capture.
 
 To uninstall the Codex plugin, remove the plugin entry from Codex:
 

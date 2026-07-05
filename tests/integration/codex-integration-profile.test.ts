@@ -560,7 +560,7 @@ describe("Codex plugin artifacts", () => {
     expect(durableDocs).not.toContain("[mcp_servers.agent-workbench]");
   });
 
-  it("keeps hooks silent by default and emits only basic MCP guidance when configured", async () => {
+  it("keeps hooks quiet by default and allows explicit silent opt-out", async () => {
     const postEdit = await import(
       pathToFileURL(path.join(pluginRoot, "hooks/post-edit-feedback.js")).href
     );
@@ -599,9 +599,19 @@ describe("Codex plugin artifacts", () => {
           tool_name: "write_file",
           tool_input: { path: "generated/out.txt" }
         },
-        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+        {}
       )
     ).toBe("Generated/local artifact changed: generated/out.txt.");
+    expect(
+      postEdit.buildPostEditContext(
+        {
+          cwd: "/repo",
+          tool_name: "write_file",
+          tool_input: { path: "generated/out.txt" }
+        },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "silent" }
+      )
+    ).toBeUndefined();
     expect(
       postEdit.buildPostEditContext(
         {
@@ -690,8 +700,12 @@ describe("Codex plugin artifacts", () => {
     ).toBeUndefined();
     const sessionContext = sessionStart.buildSessionStartContext(
       { cwd: "/repo" },
-      { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      {}
     );
+    expect(sessionStart.buildSessionStartContext(
+      { cwd: "/repo" },
+      { AGENT_WORKBENCH_HOOK_FEEDBACK: "silent" }
+    )).toBeUndefined();
     expect(sessionContext).toContain("Agent Workbench MCP is available.\nRepo orientation:");
     expect(sessionContext).toContain("- root: /repo");
     expect(sessionContext).toContain("dirty state not inspected");

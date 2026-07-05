@@ -6,7 +6,7 @@
 
 // Cross-platform hook execution smoke (spec 033, T011c). Fires the installed
 // SessionStart and PostToolUse hooks from an arbitrary repo cwd and asserts
-// advisory output with no shell error.
+// quiet, action-gated success with no shell error.
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
@@ -31,14 +31,14 @@ function runHook(name, payload) {
   return result.stdout || "";
 }
 
-// SessionStart emits the basic-default advisory (no env field; in-script default).
+// Codex hooks emit lifecycle context by default and must exit cleanly.
 const sessionStart = runHook("session-start.js", { hook_event_name: "SessionStart" });
-if (!sessionStart.includes("Agent Workbench MCP is available")) {
-  fail(`session-start.js did not emit the advisory; got: ${sessionStart.slice(0, 200)}`);
+if (!sessionStart.includes("Agent Workbench MCP is available.")) {
+  fail(`session-start.js did not emit expected lifecycle context; got: ${sessionStart.slice(0, 200)}`);
 }
 
 // PostToolUse runs diagnostics over a changed file; a clean exit with no shell
-// error is the smoke (output may be empty when the file has no diagnostics).
+// error is the smoke (output is empty when the file has no diagnostics).
 runHook("post-edit-feedback.js", {
   hook_event_name: "PostToolUse",
   cwd: repoRoot,

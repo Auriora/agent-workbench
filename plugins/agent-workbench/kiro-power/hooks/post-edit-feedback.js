@@ -42,9 +42,10 @@ export function extractKiroChangedFiles(payload) {
 }
 
 export function buildKiroPostEditContext(payload, env = process.env) {
+  const effectiveEnv = withBasicDefault(env);
   const changedFiles = extractKiroChangedFiles(payload);
   if (changedFiles.length === 0) {
-    return buildPostEditContext(payload, env);
+    return buildPostEditContext(payload, effectiveEnv);
   }
 
   const messages = [];
@@ -57,7 +58,7 @@ export function buildKiroPostEditContext(payload, env = process.env) {
           path: changedFile
         }
       },
-      env
+      effectiveEnv
     );
     if (message) {
       messages.push(message);
@@ -65,6 +66,13 @@ export function buildKiroPostEditContext(payload, env = process.env) {
   }
 
   return messages.length > 0 ? messages.join("\n") : undefined;
+}
+
+function withBasicDefault(env) {
+  return {
+    ...env,
+    AGENT_WORKBENCH_HOOK_FEEDBACK: env.AGENT_WORKBENCH_HOOK_FEEDBACK || "basic"
+  };
 }
 
 async function main() {

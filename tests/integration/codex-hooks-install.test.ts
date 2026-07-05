@@ -76,25 +76,26 @@ describe("Codex hook installation", () => {
     }
 
     const installed = JSON.parse(fs.readFileSync(hooksPath, "utf8")) as {
-      hooks: Record<string, Array<{ hooks: Array<{ command: string; cwd?: string; args: string[] }> }>>;
+      hooks: Record<string, Array<{ hooks: Array<{ command: string; cwd?: string; args?: string[] }> }>>;
     };
     const sessionHook = installed.hooks.SessionStart[0].hooks[0];
     const postEditHook = installed.hooks.PostToolUse[0].hooks[0];
+    const sessionHookScript = path.join(packageRoot, "plugins/agent-workbench/hooks/session-start.js");
+    const postEditHookScript = path.join(packageRoot, "plugins/agent-workbench/hooks/post-edit-feedback.js");
 
     expect(installed.hooks.SessionStart).toHaveLength(1);
     expect(installed.hooks.PostToolUse).toHaveLength(1);
-    expect(sessionHook).toMatchObject({
-      command: "node",
-      args: [path.join(packageRoot, "plugins/agent-workbench/hooks/session-start.js")]
-    });
+    expect(sessionHook.command).toContain(process.execPath);
+    expect(sessionHook.command).toContain(sessionHookScript);
+    expect(sessionHook.args).toBeUndefined();
     expect(sessionHook.cwd).toBeUndefined();
-    expect(postEditHook).toMatchObject({
-      command: "node",
-      args: [path.join(packageRoot, "plugins/agent-workbench/hooks/post-edit-feedback.js")]
-    });
+    expect(postEditHook.command).toContain(process.execPath);
+    expect(postEditHook.command).toContain(postEditHookScript);
+    expect(postEditHook.args).toBeUndefined();
     expect(postEditHook.cwd).toBeUndefined();
 
-    const result = spawnSync(sessionHook.command, sessionHook.args, {
+    const result = spawnSync(sessionHook.command, {
+      shell: true,
       cwd: repoRoot,
       input: JSON.stringify({ hook_event_name: "SessionStart", cwd: repoRoot }),
       encoding: "utf8"

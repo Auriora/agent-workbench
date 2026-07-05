@@ -81,6 +81,18 @@ function withoutAgentWorkbenchHooks(groups) {
     .filter((group) => !Array.isArray(group?.hooks) || group.hooks.length > 0);
 }
 
+function shellQuote(value) {
+  if (value.length === 0) {
+    return "''";
+  }
+  return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function hookCommand(packageRoot, scriptName) {
+  const scriptPath = path.join(packageRoot, "plugins", "agent-workbench", "hooks", scriptName);
+  return `${shellQuote(process.execPath)} ${shellQuote(scriptPath)}`;
+}
+
 function installHooks(config, packageRoot) {
   const hooks = { ...config.hooks };
   hooks.SessionStart = withoutAgentWorkbenchHooks(hooks.SessionStart);
@@ -91,8 +103,7 @@ function installHooks(config, packageRoot) {
     hooks: [
       {
         type: "command",
-        command: "node",
-        args: [path.join(packageRoot, "plugins", "agent-workbench", "hooks", "session-start.js")],
+        command: hookCommand(packageRoot, "session-start.js"),
         timeout: 10,
         statusMessage: "Loading Agent Workbench context"
       }
@@ -103,8 +114,7 @@ function installHooks(config, packageRoot) {
     hooks: [
       {
         type: "command",
-        command: "node",
-        args: [path.join(packageRoot, "plugins", "agent-workbench", "hooks", "post-edit-feedback.js")],
+        command: hookCommand(packageRoot, "post-edit-feedback.js"),
         timeout: 10,
         statusMessage: "Checking Agent Workbench edit feedback"
       }

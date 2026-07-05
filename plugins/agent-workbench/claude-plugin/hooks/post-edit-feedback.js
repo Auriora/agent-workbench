@@ -16,7 +16,14 @@ import {
 } from "./hook-common.js";
 
 export function buildClaudePostEditContext(payload, env = process.env) {
-  return buildPostEditContext(payload, env);
+  return buildPostEditContext(payload, withBasicDefault(env));
+}
+
+function withBasicDefault(env) {
+  return {
+    ...env,
+    AGENT_WORKBENCH_HOOK_FEEDBACK: env.AGENT_WORKBENCH_HOOK_FEEDBACK || "basic"
+  };
 }
 
 async function main() {

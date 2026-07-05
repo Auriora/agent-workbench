@@ -61,7 +61,7 @@ are active:
 - The plugin packages this skill, quiet hooks, and MCP server configuration.
 - The plugin MCP server launches the installed Agent Workbench package
   entrypoint; it must not launch runtime code from the plugin cache.
-- Hooks are wrappers and must stay silent unless configured for basic feedback.
+- Hooks are wrappers and must stay quiet and action-gated unless explicitly silenced.
 
 ## Failure Discipline
 

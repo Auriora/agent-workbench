@@ -9,15 +9,13 @@ import os from "node:os";
 import { pathToFileURL } from "node:url";
 
 export function feedbackMode(env = process.env) {
-  // Command hooks have no `env` field, so the plugin can no longer inject
-  // AGENT_WORKBENCH_HOOK_FEEDBACK=basic via the hook command. Default to `basic`
-  // in-script when unset (the plugin's intended mode), while still honoring an
-  // explicit `silent` opt-out. See spec 033 (Decision 4 / Requirement 3.2).
+  // Hooks are quiet and action-gated by default. Use an explicit `silent`
+  // value only when a host integration wants no user-visible hook output.
   const mode = env.AGENT_WORKBENCH_HOOK_FEEDBACK || "basic";
   return mode === "basic" ? "basic" : "silent";
 }
 
-export function readStdin(stdin = process.stdin, timeoutMs = 250) {
+export function readStdin(stdin = process.stdin, timeoutMs = 1000) {
   return new Promise((resolve) => {
     let payload = "";
     const timer = setTimeout(() => {
@@ -84,6 +82,10 @@ export function appendHookLog(name, record, env = process.env) {
   } catch {
     // Hook logs are diagnostic only. Never surface logging failures to Codex.
   }
+}
+
+export function hookDebugEnabled(env = process.env) {
+  return /^(?:1|true|yes)$/iu.test(env.AGENT_WORKBENCH_HOOK_DEBUG ?? "");
 }
 
 export async function runQuietHook(main) {

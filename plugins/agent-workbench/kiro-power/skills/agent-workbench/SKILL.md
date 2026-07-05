@@ -61,7 +61,7 @@ directory.
 - `AGENTS.md` and Kiro steering give repository guidance.
 - The MCP server is the only executable runtime surface.
 - The Power packages this skill, quiet hooks, and MCP server configuration.
-- Hooks are wrappers and must stay silent unless configured for basic feedback.
+- Hooks are wrappers and must stay quiet and action-gated unless explicitly silenced.
 
 ## Failure Discipline
 

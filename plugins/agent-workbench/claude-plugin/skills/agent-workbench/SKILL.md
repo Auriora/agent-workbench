@@ -51,7 +51,7 @@ from Claude Code's plugin cache.
 - `CLAUDE.md` and repository instructions give project guidance.
 - The MCP server is the only executable runtime surface.
 - The plugin packages this skill, quiet hooks, and MCP server configuration.
-- Hooks are wrappers and must stay silent unless configured for basic feedback.
+- Hooks are wrappers and must stay quiet and action-gated unless explicitly silenced.
 
 ## Failure Discipline
 

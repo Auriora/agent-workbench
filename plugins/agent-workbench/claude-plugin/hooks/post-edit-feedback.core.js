@@ -11,6 +11,7 @@ import {
   appendHookLog,
   emitAdditionalContext,
   feedbackMode,
+  hookDebugEnabled,
   isMain,
   parsePayload,
   readStdin,
@@ -178,13 +179,14 @@ export function buildPostEditFindings(payload) {
 
 export function buildPostEditContext(payload, env = process.env) {
   if (feedbackMode(env) !== "basic") {
+    buildPostEditFeedback(payload, env);
     return undefined;
   }
 
-  return buildPostEditFeedback(payload).visible_message;
+  return buildPostEditFeedback(payload, env).visible_message;
 }
 
-export function buildPostEditFeedback(payload) {
+export function buildPostEditFeedback(payload, env = process.env) {
   const cwd = typeof payload.cwd === "string" ? payload.cwd : process.cwd();
   const changedFiles = extractChangedFiles(payload)
     .map((file) => normalizeRepoRelativePath(file, cwd))
@@ -203,7 +205,7 @@ export function buildPostEditFeedback(payload) {
     blocking: message.startsWith("Workspace escape")
   }));
 
-  return {
+  const feedback = {
     status: findings.some((finding) => finding.blocking)
       ? "blocked"
       : findings.length > 0
@@ -233,6 +235,66 @@ export function buildPostEditFeedback(payload) {
           }
         ]
   };
+  appendPostEditDebug(payload, feedback, env);
+  return feedback;
+}
+
+function appendPostEditDebug(payload, feedback, env) {
+  if (!hookDebugEnabled(env)) {
+    return;
+  }
+
+  const cwd = typeof payload.cwd === "string" ? payload.cwd : process.cwd();
+  const toolInput = objectValue(payload.tool_input);
+  appendHookLog(
+    "agent-workbench-post-edit-debug",
+    {
+      status: "payload_summary",
+      hook_event_name: typeof payload.hook_event_name === "string" ? payload.hook_event_name : undefined,
+      tool_name: typeof payload.tool_name === "string" ? payload.tool_name : undefined,
+      cwd,
+      tool_input_keys: Object.keys(toolInput).sort(),
+      tool_response: summarizeToolResponse(payload.tool_response),
+      tool_succeeded: toolSucceeded(payload),
+      extracted_files: extractChangedFiles(payload),
+      checked_files: feedback.checked_files,
+      outcome: feedback.outcome,
+      deferred_reasons: feedback.deferred_checks.map((check) => check.reason),
+      finding_count: feedback.findings.length
+    },
+    env
+  );
+}
+
+function summarizeToolResponse(response) {
+  if (response === undefined) {
+    return { kind: "absent" };
+  }
+  if (response === null) {
+    return { kind: "null" };
+  }
+  if (typeof response === "string") {
+    return {
+      kind: "string",
+      byte_length: Buffer.byteLength(response, "utf8"),
+      line_count: response ? response.split(/\r?\n/).length : 0
+    };
+  }
+  if (typeof response === "object") {
+    const object = response;
+    const summary = {
+      kind: "object",
+      keys: Object.keys(object).sort()
+    };
+    for (const key of ["code", "exit_code", "exitCode", "status", "success", "error", "is_error"]) {
+      const value = object[key];
+      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+        summary[key] = value;
+      }
+    }
+    return summary;
+  }
+  return { kind: typeof response };
 }
 
 function buildHookDeferredChecks(input) {

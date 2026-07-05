@@ -151,16 +151,15 @@ depend on Codex running them from the plugin directory.
 
 ## Hook Behavior
 
-Hooks emit compact `basic` feedback by default (session-start context only).
-The session-start hook emits Agent Workbench availability plus a small
+Codex hooks are quiet and action-gated by default. Set
+`AGENT_WORKBENCH_HOOK_FEEDBACK=silent` only when a host integration needs no
+user-visible hook output. By default, the session-start hook emits Agent
+Workbench availability plus a small
 filesystem-only repo orientation capsule: root, common source/test/docs roots,
 common config files, docs/specs presence, git branch when `.git/HEAD` is
 directly readable, and first-call guidance. It does not run subprocesses, call
-MCP tools, inspect dirty state, or parse source. Set
-`AGENT_WORKBENCH_HOOK_FEEDBACK=silent` to suppress all hook output. File-edit
-hooks stay silent unless they have an actionable finding to report regardless of
-mode. (The default moved in-script because plugin command hooks have no `env`
-field to carry it; see spec 033.)
+MCP tools, inspect dirty state, or parse source. File-edit hooks stay quiet
+unless they have an actionable finding to report.
 
 Post-edit feedback is limited to cheap local findings: generated/local artifact
 touches, workspace-escape-looking paths, merge-conflict markers, and syntax

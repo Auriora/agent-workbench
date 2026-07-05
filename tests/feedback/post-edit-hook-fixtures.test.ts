@@ -11,7 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 type HookModule = {
   buildPostEditContext(payload: unknown, env?: NodeJS.ProcessEnv): string | undefined;
-  buildPostEditFeedback(payload: unknown): {
+  buildPostEditFeedback(payload: unknown, env?: NodeJS.ProcessEnv): {
     status: string;
     outcome: string;
     checked_files: string[];
@@ -59,6 +59,69 @@ describe("post-edit hook fixtures", () => {
     });
     expect(hook.buildPostEditContext(payload(["src/clean.ts"]), basicFeedbackEnv(logPath))).toBeUndefined();
     expect(readHookRecords(logPath)).toEqual([]);
+  });
+
+  it("runs diagnostics in silent mode without visible hook output", () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-silent-edit-"));
+    fs.mkdirSync(path.join(tempRoot, "src"), { recursive: true });
+    fs.writeFileSync(path.join(tempRoot, "src/bad.json"), "{\"ok\": \n");
+
+    expect(hook.buildPostEditContext({
+      cwd: tempRoot,
+      tool_name: "write",
+      tool_input: {
+        file_path: "src/bad.json"
+      }
+    }, {
+      ...process.env,
+      AGENT_WORKBENCH_HOOK_FEEDBACK: "silent",
+      AGENT_WORKBENCH_HOOK_LOG_PATH: logPath
+    })).toBeUndefined();
+    expect(readHookRecords(logPath)).toEqual([]);
+
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  });
+
+  it("writes opt-in redacted payload summaries for hook debugging", () => {
+    const debugLogPath = path.join(path.dirname(logPath), "debug.jsonl");
+    const feedback = hook.buildPostEditFeedback({
+      cwd: fixtureRoot,
+      hook_event_name: "PostToolUse",
+      tool_name: "apply_patch",
+      tool_input: {
+        file_path: "src/clean.ts",
+        content: "do not log this"
+      },
+      tool_response: {
+        code: 0,
+        output: "do not log this either"
+      }
+    }, {
+      ...process.env,
+      AGENT_WORKBENCH_HOOK_DEBUG: "1",
+      AGENT_WORKBENCH_HOOK_LOG_PATH: debugLogPath
+    });
+
+    expect(feedback.outcome).toBe("checked");
+    expect(readHookRecords(debugLogPath)).toEqual([
+      expect.objectContaining({
+        status: "payload_summary",
+        hook_event_name: "PostToolUse",
+        tool_name: "apply_patch",
+        tool_input_keys: ["content", "file_path"],
+        tool_response: {
+          kind: "object",
+          keys: ["code", "output"],
+          code: 0
+        },
+        tool_succeeded: true,
+        extracted_files: ["src/clean.ts"],
+        checked_files: ["src/clean.ts"],
+        outcome: "checked",
+        finding_count: 0
+      })
+    ]);
+    expect(fs.readFileSync(debugLogPath, "utf8")).not.toContain("do not log this");
   });
 
   it("returns concise actionable findings for syntax and generated-file fixtures", () => {
