@@ -49,7 +49,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         purpose: "Codex plugin that packages skill guidance, quiet hook scripts, and MCP configuration for packaged installs.",
         behavior: [
           "Registers the Agent Workbench MCP server through plugin-bundled .mcp.json.",
-          "Loads lifecycle hooks from plugin-bundled hooks/hooks.json.",
+          "Installs lifecycle hooks into CODEX_HOME/hooks.json with absolute package paths.",
           "Launches the installed package entrypoint instead of runtime code copied into the plugin cache."
         ],
         constraints: [
@@ -89,9 +89,11 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       {
         surface: "hooks",
         status: "available",
-        artifact_path: "plugins/agent-workbench/hooks/hooks.json",
-        purpose: "Optional quiet Codex lifecycle wrappers for session start and post-edit feedback.",
+        artifact_path: "scripts/install-codex-hooks.mjs",
+        purpose: "Installer-generated quiet Codex lifecycle wrappers for session start and post-edit feedback.",
         behavior: [
+          "Merge absolute installed-package hook script paths into CODEX_HOME/hooks.json.",
+          "Replace stale Agent Workbench hook entries idempotently.",
           "Default to silent mode.",
           "Basic mode emits concise MCP follow-up guidance only."
         ],
@@ -275,7 +277,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       ],
       dependency_install_model: "The package manifest defines Node, pnpm, runtime module, dev/test module, native tool, and native rebuild requirements; the GHCR container build runs pnpm install --frozen-lockfile and pnpm rebuild:native.",
       mcp_install_model: "The plugin-bundled .mcp.json launches the npm-installed runtime through the portable mcp-launch.mjs shim; no runtime is copied into the plugin cache.",
-      hook_install_model: "Hooks are installed through plugin-bundled hooks/hooks.json and may require Codex hook trust review after plugin install."
+      hook_install_model: "The package installer writes Agent Workbench hooks into CODEX_HOME/hooks.json with absolute paths to the installed package hook scripts."
     },
     skills: [
       {
@@ -398,11 +400,11 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       {
         target_agent: "codex",
         surface: "hooks",
-        path: "plugins/agent-workbench/hooks/hooks.json",
+        path: "scripts/install-codex-hooks.mjs",
         status: "supported",
         provenance: "codex_wrapper",
         regeneration_safe: true,
-        notes: ["Quiet optional guidance hooks; no analysis execution."]
+        notes: ["Installer-owned quiet optional guidance hooks; no analysis execution."]
       }
     ]
   };

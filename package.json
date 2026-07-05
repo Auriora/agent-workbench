@@ -38,6 +38,7 @@
     "packaging/agent-workbench/npm-package.json",
     "packaging/agent-workbench/mcp-bin.mjs",
     "plugins/agent-workbench",
+    "scripts/install-codex-hooks.mjs",
     "scripts/postinstall.mjs",
     "scripts/rebuild-native.mjs",
     "src",

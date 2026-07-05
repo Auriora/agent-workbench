@@ -64,6 +64,7 @@
     "plugins/agent-workbench/hooks",
     "plugins/agent-workbench/kiro-power",
     "plugins/agent-workbench/skills",
+    "scripts/install-codex-hooks.mjs",
     "package.json",
     "LICENSE",
     "pnpm-lock.yaml",
@@ -79,7 +80,7 @@
     "mcp_server_id": "agent-workbench",
     "plugin_manifest": "plugins/agent-workbench/.codex-plugin/plugin.json",
     "plugin_mcp_config": "plugins/agent-workbench/.mcp.json",
-    "plugin_hooks": "plugins/agent-workbench/hooks/hooks.json",
+    "hook_installer": "scripts/install-codex-hooks.mjs",
     "plugin_install_model": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz"
   },
   "kiro": {

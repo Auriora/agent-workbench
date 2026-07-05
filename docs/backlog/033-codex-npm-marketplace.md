@@ -37,11 +37,13 @@ turnkey flow in `plugins/agent-workbench/README.md`,
 
 **Launch follow-up (resolved 2026-07-04):** Codex did not expand
 `${PLUGIN_ROOT}` in package-backed MCP or hook command args. The package now
-uses plugin-root-relative Codex launch shapes: `.mcp.json` runs
-`node ./mcp-launch.mjs` with `cwd: "."`, and `hooks/hooks.json` runs
-`node ./hooks/session-start.js` / `node ./hooks/post-edit-feedback.js` with
-`cwd: "."`. The plugin validator and Codex integration tests reject
-`${PLUGIN_ROOT}` in Codex hook config.
+uses a plugin-root-relative MCP launch shape: `.mcp.json` runs
+`node ./mcp-launch.mjs` with `cwd: "."`. Hooks are installed by
+`scripts/install-codex-hooks.mjs` into `CODEX_HOME/hooks.json` with absolute
+installed-package script paths, because Codex may execute hooks from an
+arbitrary workspace cwd. The plugin validator and Codex integration tests reject
+`${PLUGIN_ROOT}` in Codex hook config and keep the plugin-bundled
+`hooks/hooks.json` empty.
 
 ---
 

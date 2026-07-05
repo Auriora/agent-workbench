@@ -20,7 +20,9 @@ Workbench from Codex without creating a second executable runtime path.
 Agent Workbench has one executable Codex runtime path per packaged install:
 
 - The Codex plugin installs the `agent-workbench` skill.
-- The Codex plugin installs quiet lifecycle hooks from `hooks/hooks.json`.
+- The package installer writes quiet lifecycle hooks into
+  `CODEX_HOME/hooks.json` with absolute paths to the installed package hook
+  scripts.
 - The Codex plugin registers the `agent-workbench` MCP server through
   `.mcp.json`.
 - The plugin MCP server launches the npm-installed runtime in place through the
@@ -58,8 +60,9 @@ active workspace.
 
 The local plugin source lives at `plugins/agent-workbench/`.
 
-The plugin manifest includes `skills` and `mcpServers`. Codex auto-discovers
-`hooks/hooks.json` when the plugin is enabled. The `.mcp.json` file launches the
+The plugin manifest includes `skills` and `mcpServers`. The package installer
+updates `CODEX_HOME/hooks.json`; the plugin-bundled `hooks/hooks.json` remains
+empty to avoid cwd-dependent hook execution. The `.mcp.json` file launches the
 npm-installed runtime through the portable shim and must not point at a
 plugin-cache source path:
 
@@ -391,9 +394,9 @@ export AGENT_WORKBENCH_INSTALL_ROOT="$HOME/Projects/agent-workbench"
 
 Hooks must not repair missing launchers, install packages, update plugins, or
 write Codex configuration. They emit compact `basic` local guidance by default;
-set `AGENT_WORKBENCH_HOOK_FEEDBACK=silent` to suppress it. If Codex asks
-for hook trust review after install or update, review the plugin-bundled
-`hooks/hooks.json` and hook scripts under `plugins/agent-workbench/hooks/`.
+set `AGENT_WORKBENCH_HOOK_FEEDBACK=silent` to suppress it. If Codex asks for
+hook trust review after install or update, review `CODEX_HOME/hooks.json` and
+the hook scripts under the installed package's `plugins/agent-workbench/hooks/`.
 
 To uninstall the Codex plugin, remove the plugin entry from Codex:
 
@@ -433,8 +436,8 @@ does not automatically import the bundled skill, import
 Steering & Skills panel or copy it to `~/.kiro/skills/agent-workbench`.
 
 Kiro hooks are configured through Kiro agent configuration, not Codex
-`hooks/hooks.json`. Use `kiro-power/agents/agent-workbench.json` as the source
-for a global or workspace Kiro custom agent.
+`CODEX_HOME/hooks.json`. Use `kiro-power/agents/agent-workbench.json` as the
+source for a global or workspace Kiro custom agent.
 
 ## Claude Code Plugin Packaging
 

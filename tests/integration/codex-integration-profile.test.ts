@@ -179,7 +179,8 @@ describe("Codex integration profile", () => {
       ])
     );
     expect(profile.install_package.mcp_install_model).toMatch(/plugin-bundled \.mcp\.json/);
-    expect(profile.install_package.hook_install_model).toMatch(/plugin-bundled hooks\/hooks\.json/);
+    expect(profile.install_package.hook_install_model).toMatch(/CODEX_HOME\/hooks\.json/);
+    expect(profile.install_package.hook_install_model).toMatch(/absolute paths/);
     expect(profile.guardrails).toEqual(
       expect.arrayContaining([
         "Source edits require package reinstall, plugin reinstall, and Codex restart to reload MCP source behavior.",
@@ -269,25 +270,14 @@ describe("Codex plugin artifacts", () => {
       mcpServers: "./.mcp.json"
     });
     expect(manifest.hooks).toBeUndefined();
-    // Spec 033: shell-free exec-form launch via the portable shim; Codex
-    // launches plugin MCP servers from the plugin root when cwd is ".".
+    // Spec 033: shell-free exec-form launch via the portable MCP shim.
     expect(mcpConfig.mcpServers["agent-workbench"]).toMatchObject({
       command: "node",
       cwd: ".",
       startup_timeout_sec: 30.0,
       args: ["./mcp-launch.mjs"]
     });
-    expect(Object.keys(hooksConfig.hooks).sort()).toEqual(["PostToolUse", "SessionStart"]);
-    expect(hooksConfig.hooks.SessionStart[0].hooks[0]).toMatchObject({
-      command: "node",
-      cwd: ".",
-      args: ["./hooks/session-start.js"]
-    });
-    expect(hooksConfig.hooks.PostToolUse[0].hooks[0]).toMatchObject({
-      command: "node",
-      cwd: ".",
-      args: ["./hooks/post-edit-feedback.js"]
-    });
+    expect(hooksConfig.hooks).toEqual({});
     expect(JSON.stringify(hooksConfig)).not.toContain("${PLUGIN_ROOT}");
     expect(skill).toContain("Agent Workbench is the executable runtime.");
     expect(skill).toContain("Do not add primary-plus-fallback routes");
@@ -776,7 +766,7 @@ describe("Codex plugin artifacts", () => {
     expect(pluginSurface?.behavior).toEqual(
       expect.arrayContaining([
         "Registers the Agent Workbench MCP server through plugin-bundled .mcp.json.",
-        "Loads lifecycle hooks from plugin-bundled hooks/hooks.json.",
+        "Installs lifecycle hooks into CODEX_HOME/hooks.json with absolute package paths.",
         "Launches the installed package entrypoint instead of runtime code copied into the plugin cache."
       ])
     );
@@ -810,7 +800,7 @@ describe("Codex plugin artifacts", () => {
       excluded_components: string[];
       codex: {
         plugin_mcp_config: string;
-        plugin_hooks: string;
+        hook_installer: string;
         plugin_install_model: string;
       };
     };
@@ -872,7 +862,7 @@ describe("Codex plugin artifacts", () => {
       expect.arrayContaining(["docs/specs", "src/debug", "package.json scripts matching debug:*"])
     );
     expect(manifest.codex.plugin_mcp_config).toBe("plugins/agent-workbench/.mcp.json");
-    expect(manifest.codex.plugin_hooks).toBe("plugins/agent-workbench/hooks/hooks.json");
+    expect(manifest.codex.hook_installer).toBe("scripts/install-codex-hooks.mjs");
     expect(manifest.codex.plugin_install_model).toBe(
       "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz"
     );

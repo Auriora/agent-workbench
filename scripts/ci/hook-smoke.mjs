@@ -5,8 +5,8 @@
  */
 
 // Cross-platform hook execution smoke (spec 033, T011c). Fires the installed
-// SessionStart and PostToolUse hooks via exec-form `node <hook>.js` and asserts
-// advisory output with no shell error — the shell-free hook path on this OS.
+// SessionStart and PostToolUse hooks from an arbitrary repo cwd and asserts
+// advisory output with no shell error.
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 

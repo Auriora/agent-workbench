@@ -72,6 +72,11 @@ if [[ "$dry_run" == true ]]; then
     echo "dry-run: LINK=\"\${XDG_DATA_HOME:-\$HOME/.local/share}/agent-workbench/codex-plugin\""
     echo "dry-run: ln -sfn \"\$PKG/plugins/agent-workbench\" \"\$LINK\""
     if [[ -n "$codex_home" ]]; then
+      echo "dry-run: node scripts/install-codex-hooks.mjs --package-root \"\$PKG\" --codex-home \"$codex_home\" --dry-run"
+    else
+      echo "dry-run: node scripts/install-codex-hooks.mjs --package-root \"\$PKG\" --dry-run"
+    fi
+    if [[ -n "$codex_home" ]]; then
       echo "dry-run: CODEX_HOME=$codex_home codex plugin marketplace add \"\$LINK\""
       echo "dry-run: CODEX_HOME=$codex_home codex plugin add agent-workbench@agent-workbench-local"
     else
@@ -90,6 +95,11 @@ if [[ "$skip_codex_config" == false ]]; then
   link="${XDG_DATA_HOME:-$HOME/.local/share}/agent-workbench/codex-plugin"
   mkdir -p "$(dirname "$link")"
   ln -sfn "$pkg/plugins/agent-workbench" "$link"
+  hook_args=(node scripts/install-codex-hooks.mjs --package-root "$pkg")
+  if [[ -n "$codex_home" ]]; then
+    hook_args+=(--codex-home "$codex_home")
+  fi
+  "${hook_args[@]}"
   if [[ -n "$codex_home" ]]; then
     CODEX_HOME="$codex_home" codex plugin marketplace add "$link"
     CODEX_HOME="$codex_home" codex plugin add agent-workbench@agent-workbench-local

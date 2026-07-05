@@ -142,10 +142,12 @@ including `codex-integration-profile` and `integration-health`.
 
 The package definition lives under `packaging/agent-workbench/` and releases an
 OCI image to GHCR. The image contains runtime source, docs, package metadata,
-the Codex plugin, MCP config, skills, and hooks.
+the Codex plugin, MCP config, skills, hook scripts, and hook installer.
 
-Hooks are installed through plugin-bundled `hooks/hooks.json`. They are not
-duplicated into `~/.codex/hooks.json`.
+Codex hooks are installed into `CODEX_HOME/hooks.json` by
+`scripts/install-codex-hooks.mjs` with absolute paths to the installed package
+hook scripts. The plugin-bundled `hooks/hooks.json` stays empty so hooks do not
+depend on Codex running them from the plugin directory.
 
 ## Hook Behavior
 

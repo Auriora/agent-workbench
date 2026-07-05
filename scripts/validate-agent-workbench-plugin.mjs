@@ -54,6 +54,7 @@ const requiredPaths = [
   ".well-known/mcp/server-card.json",
   "packaging/agent-workbench/package-manifest.json",
   "packaging/agent-workbench/mcp-bin.mjs",
+  "scripts/install-codex-hooks.mjs",
   "scripts/postinstall.mjs"
 ];
 
@@ -93,24 +94,9 @@ assert(
   "Codex MCP args must not launch runtime code from plugin cache."
 );
 
-assertArrayEquals(Object.keys(codexHooks.hooks ?? {}), ["PostToolUse", "SessionStart"], "Codex hooks");
-const sessionStartHook = codexHooks.hooks?.SessionStart?.[0]?.hooks?.[0];
-const postToolUseHook = codexHooks.hooks?.PostToolUse?.[0]?.hooks?.[0];
-assert(sessionStartHook, "Codex SessionStart hook must be configured.");
-assert(postToolUseHook, "Codex PostToolUse hook must be configured.");
 assert(
-  sessionStartHook.command === "node" &&
-    sessionStartHook.cwd === "." &&
-    Array.isArray(sessionStartHook.args) &&
-    sessionStartHook.args[0] === "./hooks/session-start.js",
-  "Codex SessionStart hook must launch ./hooks/session-start.js from plugin root."
-);
-assert(
-  postToolUseHook.command === "node" &&
-    postToolUseHook.cwd === "." &&
-    Array.isArray(postToolUseHook.args) &&
-    postToolUseHook.args[0] === "./hooks/post-edit-feedback.js",
-  "Codex PostToolUse hook must launch ./hooks/post-edit-feedback.js from plugin root."
+  Object.keys(codexHooks.hooks ?? {}).length === 0,
+  "Codex plugin-bundled hooks must remain empty; installer writes absolute-path hooks into CODEX_HOME/hooks.json."
 );
 assert(
   !JSON.stringify(codexHooks).includes("${PLUGIN_ROOT}"),
