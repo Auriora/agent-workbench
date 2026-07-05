@@ -8,6 +8,8 @@ import fs from "node:fs";
 import path from "node:path";
 import type { FileIdentityPort } from "../../ports/index.js";
 import type { FileIdentity } from "../../domain/models/index.js";
+import { catalogSkipReason, normalizeCatalogPath } from "../../domain/policies/index.js";
+import { readRootIgnoreRules } from "./ignore-file-policy.js";
 
 function hashText(value: string): string {
   return `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`;
@@ -22,6 +24,9 @@ function hasRootPrefix(relativePath: string, roots: readonly string[]): boolean 
     const normalizedRoot = normalizeRelativePath(root).replace(/^\/+|\/+$/g, "");
     if (normalizedRoot.length === 0) {
       return false;
+    }
+    if (normalizedRoot === ".") {
+      return true;
     }
     return relativePath === normalizedRoot || relativePath.startsWith(`${normalizedRoot}/`);
   });
@@ -156,7 +161,7 @@ export class FileIdentityAdapter implements FileIdentityPort {
       return true;
     }
 
-    const relativePath = normalizeRelativePath(relativeToRepo === "" ? "." : relativeToRepo);
+    const relativePath = normalizeCatalogPath(relativeToRepo === "" ? "." : relativeToRepo);
     if (relativePath.length === 0 || relativePath === ".") {
       return false;
     }
@@ -165,10 +170,30 @@ export class FileIdentityAdapter implements FileIdentityPort {
       return true;
     }
 
-    if (hasRootPrefix(relativePath, input.skipped_roots)) {
-      return true;
-    }
+    const stats = statPathOrNull(absolutePath);
+    return (
+      catalogSkipReason({
+        relativePath,
+        isDirectory: stats?.isDirectory() ?? false,
+        skippedRoots: input.skipped_roots,
+        gitignoreRules: readRootIgnoreRules(absoluteRepoRoot),
+        hasNestedGitRepository: stats?.isDirectory() === true && isNestedGitRepository(absoluteRepoRoot, absolutePath)
+      }) !== null
+    );
+  }
+}
 
+function statPathOrNull(absolutePath: string): fs.Stats | null {
+  try {
+    return fs.statSync(absolutePath);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function isNestedGitRepository(repoRoot: string, absolutePath: string): boolean {
+  if (path.resolve(repoRoot) === path.resolve(absolutePath)) {
     return false;
   }
+  return fs.existsSync(path.join(absolutePath, ".git"));
 }

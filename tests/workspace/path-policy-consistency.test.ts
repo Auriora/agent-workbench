@@ -13,6 +13,7 @@ import {
   parseGitignoreRules
 } from "../../src/domain/policies/index.js";
 import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/file-catalog-scanner.js";
+import { FileIdentityAdapter } from "../../src/infrastructure/filesystem/file-identity.js";
 import { resolveWorkspacePath } from "../../src/infrastructure/filesystem/workspace-safety.js";
 
 type HookModule = {
@@ -52,10 +53,13 @@ describe("shared path policy consistency", () => {
     fs.writeFileSync(path.join(repoRoot, ".vscode", "settings.json"), "{}\n");
     fs.writeFileSync(path.join(repoRoot, "ignored.log"), "debug\n");
     fs.writeFileSync(path.join(repoRoot, "keep.log"), "keep\n");
+    fs.writeFileSync(path.join(repoRoot, "assistant.log"), "assistant trace\n");
+    fs.writeFileSync(path.join(repoRoot, "assistant.keep"), "kept assistant trace\n");
     fs.writeFileSync(path.join(repoRoot, "ignored-dir", "state.json"), "{}\n");
     fs.writeFileSync(path.join(repoRoot, "nested", ".git", "HEAD"), "ref: refs/heads/main\n");
     fs.writeFileSync(path.join(repoRoot, "nested", "foreign.ts"), "export const foreign = true;\n");
     fs.writeFileSync(path.join(repoRoot, ".gitignore"), "*.log\n!keep.log\nignored-dir/\n");
+    fs.writeFileSync(path.join(repoRoot, ".aiignore"), "assistant.*\n!assistant.keep\n");
   });
 
   afterEach(() => {
@@ -92,7 +96,15 @@ describe("shared path policy consistency", () => {
     const skippedByPath = new Map(scan.skipped_paths?.map((skipped) => [skipped.path, skipped.reason]));
 
     expect(scan.files.map((file) => file.path)).toEqual(
-      expect.arrayContaining([".env.example", ".gitignore", "generated/out.ts", "keep.log", "src/app.ts"])
+      expect.arrayContaining([
+        ".aiignore",
+        ".env.example",
+        ".gitignore",
+        "assistant.keep",
+        "generated/out.ts",
+        "keep.log",
+        "src/app.ts"
+      ])
     );
     expect(skippedByPath.get(".env")).toBe("secret");
     expect(skippedByPath.get(".envrc")).toBe("secret");
@@ -103,8 +115,43 @@ describe("shared path policy consistency", () => {
     expect(skippedByPath.get("vendor")).toBe("generated_or_vendor");
     expect(skippedByPath.get(".vscode")).toBe("hidden_path");
     expect(skippedByPath.get("ignored.log")).toBe("gitignore");
+    expect(skippedByPath.get("assistant.log")).toBe("gitignore");
     expect(skippedByPath.get("ignored-dir")).toBe("gitignore");
     expect(skippedByPath.get("nested")).toBe("nested_git_repository");
+
+    const fileIdentity = new FileIdentityAdapter();
+    await expect(
+      fileIdentity.isSkipped({
+        path: path.join(repoRoot, "ignored.log"),
+        repo_root: repoRoot,
+        indexed_roots: ["."],
+        skipped_roots: ["configured-skip"]
+      })
+    ).resolves.toBe(true);
+    await expect(
+      fileIdentity.isSkipped({
+        path: path.join(repoRoot, "assistant.log"),
+        repo_root: repoRoot,
+        indexed_roots: ["."],
+        skipped_roots: ["configured-skip"]
+      })
+    ).resolves.toBe(true);
+    await expect(
+      fileIdentity.isSkipped({
+        path: path.join(repoRoot, "assistant.keep"),
+        repo_root: repoRoot,
+        indexed_roots: ["."],
+        skipped_roots: ["configured-skip"]
+      })
+    ).resolves.toBe(false);
+    await expect(
+      fileIdentity.isSkipped({
+        path: path.join(repoRoot, "nested"),
+        repo_root: repoRoot,
+        indexed_roots: ["."],
+        skipped_roots: ["configured-skip"]
+      })
+    ).resolves.toBe(true);
 
     for (const target of [
       ".env",

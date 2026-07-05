@@ -135,6 +135,19 @@ export const runtimeErrorSchema = z.object({
 });
 export type RuntimeError = z.infer<typeof runtimeErrorSchema>;
 
+export const DEFAULT_WORKSPACE_WATCHER_ENABLED = false as const;
+export const DEFAULT_WORKSPACE_WATCHER_DEBOUNCE_MS = 250;
+export const DEFAULT_WORKSPACE_WATCHER_EVENT_BUDGET = 1000;
+
+export const workspaceWatcherConfigSchema = z
+  .object({
+    enabled: z.boolean().default(DEFAULT_WORKSPACE_WATCHER_ENABLED),
+    debounce_ms: z.number().int().min(0).max(60_000).default(DEFAULT_WORKSPACE_WATCHER_DEBOUNCE_MS),
+    event_budget: z.number().int().min(1).max(100_000).default(DEFAULT_WORKSPACE_WATCHER_EVENT_BUDGET)
+  })
+  .strict();
+export type WorkspaceWatcherConfigContract = z.infer<typeof workspaceWatcherConfigSchema>;
+
 export const fileReferenceSchema = z
   .object({
     path: z.string(),

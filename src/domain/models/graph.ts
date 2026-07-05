@@ -3,7 +3,13 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import type { AdapterEvidence } from "../../contracts/index.js";
+import {
+  DEFAULT_WORKSPACE_WATCHER_DEBOUNCE_MS,
+  DEFAULT_WORKSPACE_WATCHER_ENABLED,
+  DEFAULT_WORKSPACE_WATCHER_EVENT_BUDGET,
+  type AdapterEvidence,
+  type WorkspaceWatcherConfigContract
+} from "../../contracts/index.js";
 
 export interface SourceRange {
   start_line: number;
@@ -159,6 +165,20 @@ export interface WorkspaceWatchRequest {
   paths?: readonly string[];
   recursive?: boolean;
   debounce_ms?: number;
+  event_budget?: number;
+  enabled?: boolean;
+}
+
+export type WorkspaceWatcherConfig = WorkspaceWatcherConfigContract;
+
+export function resolveWorkspaceWatcherConfig(
+  input: Partial<WorkspaceWatcherConfig> = {}
+): WorkspaceWatcherConfig {
+  return {
+    enabled: input.enabled ?? DEFAULT_WORKSPACE_WATCHER_ENABLED,
+    debounce_ms: input.debounce_ms ?? DEFAULT_WORKSPACE_WATCHER_DEBOUNCE_MS,
+    event_budget: input.event_budget ?? DEFAULT_WORKSPACE_WATCHER_EVENT_BUDGET
+  };
 }
 
 export interface WorkspaceWatchHandle {

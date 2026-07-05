@@ -14,6 +14,10 @@ import {
   capabilityLevelSchema,
   CONTRACT_VERSION,
   runtimeStatusCaveatSchema,
+  workspaceWatcherConfigSchema,
+  DEFAULT_WORKSPACE_WATCHER_DEBOUNCE_MS,
+  DEFAULT_WORKSPACE_WATCHER_ENABLED,
+  DEFAULT_WORKSPACE_WATCHER_EVENT_BUDGET,
   makeEnvelope,
   applyWorkspaceEditRequestSchema,
   applyWorkspaceEditResultSchema,
@@ -36,6 +40,7 @@ import {
 } from "../../src/contracts/index.js";
 import { capabilityLevelSchema as domainCapabilityLevelSchema } from "../../src/contracts/domain-contracts.js";
 import * as runtimeContracts from "../../src/contracts/runtime-contracts.js";
+import { resolveWorkspaceWatcherConfig } from "../../src/domain/models/index.js";
 
 describe("runtime contract categories", () => {
   it("re-export canonical contracts by category", () => {
@@ -192,6 +197,34 @@ describe("runtime contracts", () => {
     expect(responseEnvelopeSchema(z.object({ ok: z.literal(true) })).parse(envelope)).toEqual(
       envelope
     );
+  });
+
+  it("models workspace watcher defaults through contract and domain surfaces", () => {
+    expect(workspaceWatcherConfigSchema.parse({})).toEqual({
+      enabled: DEFAULT_WORKSPACE_WATCHER_ENABLED,
+      debounce_ms: DEFAULT_WORKSPACE_WATCHER_DEBOUNCE_MS,
+      event_budget: DEFAULT_WORKSPACE_WATCHER_EVENT_BUDGET
+    });
+    expect(resolveWorkspaceWatcherConfig()).toEqual(workspaceWatcherConfigSchema.parse({}));
+    expect(
+      workspaceWatcherConfigSchema.parse({
+        enabled: true,
+        debounce_ms: 500,
+        event_budget: 250
+      })
+    ).toEqual({
+      enabled: true,
+      debounce_ms: 500,
+      event_budget: 250
+    });
+    expect(resolveWorkspaceWatcherConfig({ debounce_ms: 750 })).toEqual({
+      enabled: DEFAULT_WORKSPACE_WATCHER_ENABLED,
+      debounce_ms: 750,
+      event_budget: DEFAULT_WORKSPACE_WATCHER_EVENT_BUDGET
+    });
+    expect(() => workspaceWatcherConfigSchema.parse({ debounce_ms: -1 })).toThrow();
+    expect(() => workspaceWatcherConfigSchema.parse({ event_budget: 0 })).toThrow();
+    expect(() => workspaceWatcherConfigSchema.parse({ unexpected: true })).toThrow();
   });
 
   it("models integration health with explicit session callability states", () => {

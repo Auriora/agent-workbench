@@ -88,6 +88,14 @@ export type GitignoreRule = {
   hasSlash: boolean;
 };
 
+export const ROOT_IGNORE_FILE_NAMES = [".gitignore", ".aiignore"] as const;
+export type RootIgnoreFileName = (typeof ROOT_IGNORE_FILE_NAMES)[number];
+
+export type RootIgnoreFileContent = {
+  name: RootIgnoreFileName;
+  content: string;
+};
+
 export type PathPolicyCategory =
   | "source"
   | "generated"
@@ -176,6 +184,10 @@ export function parseGitignoreRules(content: string): GitignoreRule[] {
     });
   }
   return rules;
+}
+
+export function parseRootIgnoreFileRules(ignoreFiles: readonly RootIgnoreFileContent[]): GitignoreRule[] {
+  return ignoreFiles.flatMap((ignoreFile) => parseGitignoreRules(ignoreFile.content));
 }
 
 export function classifyPathPolicy(input: {

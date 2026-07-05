@@ -11,7 +11,6 @@ import {
   catalogSkipReason,
   mergeSkippedRoots,
   normalizeCatalogPath,
-  parseGitignoreRules,
   type GitignoreRule
 } from "../../domain/policies/index.js";
 import type {
@@ -21,6 +20,7 @@ import type {
   FileIdentityPort
 } from "../../ports/index.js";
 import { FileIdentityAdapter } from "./file-identity.js";
+import { readRootIgnoreRules } from "./ignore-file-policy.js";
 
 const MAX_SKIPPED_PATHS = 100;
 
@@ -297,20 +297,6 @@ function isNestedGitRepository(repoRoot: string, absolutePath: string): boolean 
 
 function compareCatalogEntries(left: fs.Dirent, right: fs.Dirent): number {
   return catalogTraversalPriority(left) - catalogTraversalPriority(right) || left.name.localeCompare(right.name);
-}
-
-function readRootIgnoreRules(repoRoot: string): GitignoreRule[] {
-  return [".gitignore", ".aiignore"].flatMap((ignoreFileName) => readRootIgnoreFileRules(repoRoot, ignoreFileName));
-}
-
-function readRootIgnoreFileRules(repoRoot: string, ignoreFileName: string): GitignoreRule[] {
-  const ignoreFilePath = path.join(repoRoot, ignoreFileName);
-  if (!fs.existsSync(ignoreFilePath)) return [];
-  try {
-    return parseGitignoreRules(fs.readFileSync(ignoreFilePath, "utf8"));
-  } catch (_error) {
-    return [];
-  }
 }
 
 function catalogTraversalPriority(entry: fs.Dirent): number {

@@ -24,26 +24,29 @@ T007 -> T008
 
 ## Phase 1: Inclusion Policy Foundation
 
-- [ ] T001 Extract shared ignore-file policy.
+- [x] T001 Extract shared ignore-file policy.
   - Files: `src/domain/policies/`, `src/infrastructure/filesystem/`,
     `tests/workspace/`
   - Acceptance: Catalog scan, file identity checks, docs path checks, and
     watcher design can call one inclusion decision path for default skips,
     configured skips, `.gitignore`, and `.aiignore`.
-  - Evidence: Pending.
-  - [ ] T001.1 Move root ignore-file loading behind a shared helper.
-  - [ ] T001.2 Preserve existing `.gitignore` behavior.
-  - [ ] T001.3 Preserve `.aiignore` behavior.
-  - [ ] T001.4 Add tests for combined ignore rules and negation precedence.
-
-- [ ] T002 Define watcher runtime configuration.
+  - Evidence: Phase 1 implementation extracted root ignore-file loading into src/infrastructure/filesystem/ignore-file-policy.ts backed by ROOT_IGNORE_FILE_NAMES and parseRootIgnoreFileRules in src/domain/policies/path-policy.ts. FileCatalogScannerAdapter and FileIdentityAdapter now call the same root ignore loading and catalogSkipReason path for default skips, configured skips, .gitignore, .aiignore, and nested Git repositories. tests/workspace/path-policy-consistency.test.ts covers combined .gitignore/.aiignore rules, negation precedence, scanner skip paths, and FileIdentityAdapter agreement. Validation: pnpm exec vitest run tests/workspace/path-policy-consistency.test.ts tests/workspace/file-catalog-scanner.test.ts tests/contracts/runtime-contracts.test.ts passed; pnpm typecheck passed.
+  - [x] T001.1 Move root ignore-file loading behind a shared helper.
+  - Evidence: Files changed: src/infrastructure/filesystem/ignore-file-policy.ts added readRootIgnoreRules; src/domain/policies/path-policy.ts added ROOT_IGNORE_FILE_NAMES and parseRootIgnoreFileRules; src/infrastructure/filesystem/file-catalog-scanner.ts imports readRootIgnoreRules instead of private root ignore-file loading. Validation: pnpm exec vitest run tests/workspace/path-policy-consistency.test.ts tests/workspace/file-catalog-scanner.test.ts tests/contracts/runtime-contracts.test.ts passed; pnpm typecheck passed.
+  - [x] T001.2 Preserve existing `.gitignore` behavior.
+  - Evidence: Files changed: .gitignore loading routes through ROOT_IGNORE_FILE_NAMES and readRootIgnoreRules. Existing coverage in tests/workspace/file-catalog-scanner.test.ts asserts debug.log is skipped, keep.log is included by !keep.log, and ignored-dir is skipped. Validation passed: pnpm exec vitest run tests/workspace/path-policy-consistency.test.ts tests/workspace/file-catalog-scanner.test.ts tests/contracts/runtime-contracts.test.ts.
+  - [x] T001.3 Preserve `.aiignore` behavior.
+  - Evidence: Files changed: .aiignore loading routes through ROOT_IGNORE_FILE_NAMES and readRootIgnoreRules. Existing coverage in tests/workspace/file-catalog-scanner.test.ts asserts scratch is skipped, run.prompt.log is skipped, and keep.prompt.log is included by !keep.prompt.log. Validation passed: pnpm exec vitest run tests/workspace/path-policy-consistency.test.ts tests/workspace/file-catalog-scanner.test.ts tests/contracts/runtime-contracts.test.ts.
+  - [x] T001.4 Add tests for combined ignore rules and negation precedence.
+  - Evidence: Test changed: tests/workspace/path-policy-consistency.test.ts creates both .gitignore and .aiignore, asserts skipped paths for ignored.log and assistant.log, asserts negated assistant.keep remains included, and asserts FileIdentityAdapter matches scanner decisions. Validation passed: pnpm exec vitest run tests/workspace/path-policy-consistency.test.ts tests/workspace/file-catalog-scanner.test.ts tests/contracts/runtime-contracts.test.ts.
+- [x] T002 Define watcher runtime configuration.
   - Depends on: T001
   - Files: `src/domain/models/`, `src/contracts/`, `src/server.ts`,
     `tests/`
   - Acceptance: Debounce interval, queue budget, and watcher enablement have
     explicit defaults and contract coverage without adding a new `src/config/`
     ownership root.
-  - Evidence: Pending.
+  - Evidence: Phase 1 implementation added watcher defaults to existing runtime/domain contract surfaces: DEFAULT_WORKSPACE_WATCHER_ENABLED, DEFAULT_WORKSPACE_WATCHER_DEBOUNCE_MS, DEFAULT_WORKSPACE_WATCHER_EVENT_BUDGET, workspaceWatcherConfigSchema, WorkspaceWatchRequest event_budget/enabled fields, and resolveWorkspaceWatcherConfig. tests/contracts/runtime-contracts.test.ts verifies default parsing, explicit override parsing, strict unknown-key rejection, numeric bounds, and parity between the contract schema and domain resolver. Validation: pnpm exec vitest run tests/workspace/path-policy-consistency.test.ts tests/workspace/file-catalog-scanner.test.ts tests/contracts/runtime-contracts.test.ts passed; pnpm typecheck passed.
 
 ## Phase 2: Watcher Adapter And Queue
 
