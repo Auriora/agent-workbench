@@ -5,9 +5,9 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { classifyPathPolicy, parseGitignoreRules, type GitignoreRule } from "../../domain/policies/index.js";
 
-const DEFAULT_GENERATED_ROOTS = [".cache", "generated", "dist", "build"];
-const DEFAULT_VENDOR_ROOTS = ["node_modules", ".venv", "venv", "__pycache__"];
+const DEFAULT_WORKSPACE_GENERATED_ROOTS = ["generated"];
 
 export type PathDecision =
   | {
@@ -27,6 +27,7 @@ export type WorkspaceSafetyPolicy = {
   repoRoot: string;
   generatedRoots?: string[];
   vendorRoots?: string[];
+  skippedRoots?: string[];
   allowGeneratedWrites?: boolean;
 };
 
@@ -37,10 +38,6 @@ function normalizeRepoRoot(repoRoot: string): string {
 function isInside(parent: string, child: string): boolean {
   const relative = path.relative(parent, child);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
-function hasRootPrefix(relativePath: string, roots: string[]): boolean {
-  return roots.some((root) => relativePath === root || relativePath.startsWith(`${root}/`));
 }
 
 export function resolveWorkspacePath(
@@ -71,16 +68,24 @@ export function resolveWorkspacePath(
   }
 
   const relativePath = path.relative(repoRoot, realCandidate).split(path.sep).join("/");
-  const generatedRoots = policy.generatedRoots ?? DEFAULT_GENERATED_ROOTS;
-  const vendorRoots = policy.vendorRoots ?? DEFAULT_VENDOR_ROOTS;
-  const readOnly =
-    hasRootPrefix(relativePath, generatedRoots) || hasRootPrefix(relativePath, vendorRoots);
+  const classification = classifyPathPolicy({
+    relativePath,
+    isDirectory: directoryExists(realCandidate),
+    skippedRoots: policy.skippedRoots ?? [],
+    generatedRoots: policy.generatedRoots ?? DEFAULT_WORKSPACE_GENERATED_ROOTS,
+    vendorRoots: policy.vendorRoots ?? [],
+    gitignoreRules: readRootIgnoreRules(repoRoot)
+  });
+  const readOnly = classification.writePolicy === "refuse";
+  const generatedOverrideAllowed =
+    policy.allowGeneratedWrites === true &&
+    ["generated", "vendor", "configured_skip"].includes(classification.category);
 
-  if (options.write && readOnly && !policy.allowGeneratedWrites) {
+  if (options.write && readOnly && !generatedOverrideAllowed) {
     return {
       allowed: false,
       reason: "path_refused",
-      message: "Generated or vendor paths are read-only by default.",
+      message: workspaceRefusalMessage(classification.reason),
       requestedPath
     };
   }
@@ -91,6 +96,46 @@ export function resolveWorkspacePath(
     relativePath,
     readOnly
   };
+}
+
+function directoryExists(absolutePath: string): boolean {
+  try {
+    return fs.statSync(absolutePath).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function readRootIgnoreRules(repoRoot: string): GitignoreRule[] {
+  return [".gitignore", ".aiignore"].flatMap((ignoreFileName) => readRootIgnoreFileRules(repoRoot, ignoreFileName));
+}
+
+function readRootIgnoreFileRules(repoRoot: string, ignoreFileName: string): GitignoreRule[] {
+  const ignoreFilePath = path.join(repoRoot, ignoreFileName);
+  if (!fs.existsSync(ignoreFilePath)) return [];
+  try {
+    return parseGitignoreRules(fs.readFileSync(ignoreFilePath, "utf8"));
+  } catch (_error) {
+    return [];
+  }
+}
+
+function workspaceRefusalMessage(reason: string): string {
+  switch (reason) {
+    case "secret":
+      return "Secret-bearing paths are refused by default.";
+    case "hidden_path":
+      return "Hidden local paths are read-only by default.";
+    case "gitignore":
+      return "Ignored paths are read-only by default.";
+    case "configured_skip":
+      return "Configured skipped paths are read-only by default.";
+    case "nested_git_repository":
+      return "Nested repository paths are read-only by default.";
+    case "generated_or_vendor":
+    default:
+      return "Generated or vendor paths are read-only by default.";
+  }
 }
 
 export class WorkspaceSafetyAdapter {

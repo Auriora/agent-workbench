@@ -708,6 +708,8 @@ function catalogWarningDetail(reason: CatalogSkipReason): string {
       return "Hidden local path is not allowlisted as repository-shape evidence.";
     case "gitignore":
       return "Path matched repository ignore rules.";
+    case "nested_git_repository":
+      return "Nested git checkout was excluded from catalog evidence.";
   }
 }
 

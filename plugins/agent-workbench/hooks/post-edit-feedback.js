@@ -18,7 +18,53 @@ import {
 } from "./hook-common.js";
 
 const PATH_KEYS = ["path", "file_path", "filename"];
-const READ_ONLY_ROOTS = [".cache", "generated", "dist", "build", "node_modules", "vendor"];
+const READ_ONLY_ROOTS = [
+  ".cache",
+  ".claude",
+  ".codex",
+  ".devenv",
+  ".direnv",
+  ".git",
+  ".gocache",
+  ".gradle",
+  ".home",
+  ".local",
+  ".m2",
+  ".mypy_cache",
+  ".nox",
+  ".npm",
+  ".nuxt",
+  ".pixi",
+  ".pnpm-store",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".sandbox",
+  ".terraform",
+  ".tox",
+  ".venv",
+  ".yarn",
+  "__pycache__",
+  "3rdparty",
+  "artifacts",
+  "bin",
+  "build",
+  "coverage",
+  "dist",
+  "generated",
+  "node_modules",
+  "obj",
+  "publish",
+  "target",
+  "test-artifacts",
+  "testresults",
+  "third_party",
+  "thirdparty",
+  "vendor",
+  "venv"
+];
+const SECRET_ENV_PATTERN = /(^|\/)\.env(?:$|\.(?!example$|sample$|template$)[^/]+$)/u;
+const SECRET_BASENAME_PATTERN =
+  /^(?:\.envrc|credentials(?:\.[^/]+)?|secrets(?:\.[^/]+)?|.+\.(?:key|pem|p12|pfx))$/iu;
 const MAX_INLINE_CHECK_FILES = 5;
 const MAX_FILE_BYTES = 512 * 1024;
 const CHECK_TIMEOUT_MS = 3000;
@@ -102,8 +148,9 @@ export function buildPostEditFindings(payload) {
       continue;
     }
 
-    if (isReadOnlyGeneratedPath(normalized.relativePath)) {
-      findings.push(`Generated/local artifact changed: ${normalized.relativePath}.`);
+    const policyReason = hookPathPolicyReason(normalized.relativePath);
+    if (policyReason) {
+      findings.push(`${hookPolicyFindingLabel(policyReason)} changed: ${normalized.relativePath}.`);
     }
 
     checkable.push(normalized.relativePath);
@@ -152,7 +199,7 @@ export function buildPostEditFeedback(payload) {
   const findings = buildPostEditFindings(payload).map((message) => ({
     severity: message.startsWith("Workspace escape") ? "blocker" : "warning",
     message,
-    category: message.includes("Generated/local artifact") ? "edit_risk" : "diagnostic",
+    category: message.includes(" changed: ") ? "edit_risk" : "diagnostic",
     blocking: message.startsWith("Workspace escape")
   }));
 
@@ -327,8 +374,34 @@ function normalizeRepoRelativePath(file, cwd) {
   return { status: "inside", relativePath };
 }
 
-function isReadOnlyGeneratedPath(file) {
-  return READ_ONLY_ROOTS.some((root) => file === root || file.startsWith(`${root}/`));
+export function hookPathPolicyReason(file) {
+  const normalized = file.replaceAll("\\", "/").replace(/^\.\/+/, "");
+  if (isSecretPath(normalized)) {
+    return "secret";
+  }
+  return READ_ONLY_ROOTS.some((root) => normalized === root || normalized.startsWith(`${root}/`))
+    ? "generated_or_vendor"
+    : undefined;
+}
+
+function hookPolicyFindingLabel(reason) {
+  switch (reason) {
+    case "secret":
+      return "Secret-bearing path";
+    case "generated_or_vendor":
+    default:
+      return "Generated/local artifact";
+  }
+}
+
+function isSecretPath(file) {
+  const basename = file.slice(file.lastIndexOf("/") + 1);
+  return (
+    file === ".env" ||
+    file.endsWith("/.env") ||
+    SECRET_ENV_PATTERN.test(file) ||
+    SECRET_BASENAME_PATTERN.test(basename)
+  );
 }
 
 function checkChangedFile(cwd, relativePath) {

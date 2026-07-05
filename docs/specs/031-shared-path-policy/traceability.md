@@ -44,5 +44,6 @@ license: GPL-3.0-or-later
 
 ## Open Decision Impact
 
-- Decide whether hook feedback imports a shared generated policy table or keeps
-  a mirrored table with drift tests.
+- Resolved 2026-07-04: hook feedback keeps a mirrored JavaScript table with
+  drift tests because the packaged hook cannot import TypeScript runtime policy
+  directly.

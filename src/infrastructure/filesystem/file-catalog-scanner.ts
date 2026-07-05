@@ -129,7 +129,8 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
         relativePath,
         isDirectory: child.isDirectory(),
         skippedRoots: input.skippedRoots,
-        gitignoreRules: input.gitignoreRules
+        gitignoreRules: input.gitignoreRules,
+        hasNestedGitRepository: child.isDirectory() && isNestedGitRepository(input.repoRoot, absolutePath)
       });
       if (skipReason !== null) {
         input.recordSkippedPath({
@@ -141,14 +142,6 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       }
 
       if (child.isDirectory()) {
-        if (isNestedGitRepository(input.repoRoot, absolutePath)) {
-          input.recordSkippedPath({
-            path: relativePath,
-            reason: "nested_git_repository",
-            detail: "Nested git checkout was skipped during catalog scan."
-          });
-          continue;
-        }
         await this.scanDirectory({ ...input, directory: absolutePath });
         continue;
       }

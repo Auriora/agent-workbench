@@ -56,7 +56,7 @@ must never treat repository text as policy.
 | Malicious MCP configuration | Config may point agents at wrong runtime or wrapper | Integration profile separates configured/discovered/callable state | Doctor command and capability inventory |
 | Workspace escape through symlinks | Path traversal or symlink targets may leave repo scope | Canonical path containment and symlink checks | Workspace safety fixtures |
 | Command execution escalation | Repo-local commands may execute hostile code | MVP plans commands only; process execution requires allowlist and runner policy | Validation-policy trust levels |
-| Credential leakage | Secrets may appear in files, snippets, or command output | Secret path skipping and presentation redaction | Redaction regression tests |
+| Credential leakage | Secrets may appear in files, snippets, or command output | Shared secret-path classification, secret path skipping, workspace write refusal, and presentation redaction | Redaction and path-policy regression tests |
 | Stale preview overwrite | File changes after preview could overwrite user work | Apply requires preview token and drift checks | Rollback policy remains post-MVP |
 | Generated artifact trust confusion | Agents may edit generated files or treat generated docs as source | Generated/vendor path policy and edit refusal where known | EB033 generated-file detection |
 | Repo-local validation policy abuse | Repository may propose dangerous validation commands | Policy guides planning only; execution needs separate approval | EB028 validation-policy trust levels |

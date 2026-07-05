@@ -58,7 +58,10 @@ PathClassification
 
 ## Open Questions
 
-- Should hook feedback import a generated/shared policy table or keep a
-  mirrored JavaScript table with drift tests?
-- Should nested Git repository detection block reads, writes, or only ranking
-  by default?
+- Resolved 2026-07-04: hook feedback keeps a mirrored JavaScript policy table
+  because the packaged hook is plain JavaScript and must stay a thin wrapper.
+  Drift tests compare hook vocabulary against runtime classifier behavior.
+- Resolved 2026-07-04: nested Git repository detection is a scanner skip
+  reason and a write-refusal reason by default. The scanner remains the surface
+  that detects nested checkouts; workspace safety refuses nested-repo paths when
+  classified by policy inputs.

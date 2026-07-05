@@ -42,6 +42,31 @@ capability gates.
 - Workspace writes must refuse paths outside tracked or explicitly configured
   writable roots.
 
+## Shared Path Classification
+
+`src/domain/policies/path-policy.ts` is the shared path-classification source
+for scanner skips, workspace write safety, docs routing, validation planning,
+hook feedback, and presentation redaction routing. Compatibility imports through
+`catalog-path-policy.ts` are allowed, but new policy decisions should be added
+to the shared classifier first.
+
+The classifier returns a base category and stable reason. Surfaces then map that
+classification to their own behavior:
+
+| Classification reason | Default read behavior | Default write behavior |
+| --- | --- | --- |
+| `generated_or_vendor` | Skip from catalog evidence or mark read-only | Refuse unless explicitly allowed for generated output |
+| `configured_skip` | Skip from catalog evidence or mark read-only | Refuse unless explicitly allowed |
+| `hidden_path` | Skip unless allowlisted as repository-shape evidence | Refuse by default |
+| `gitignore` | Skip or caveat as repository-ignored evidence | Refuse by default |
+| `secret` | Skip or redact secret-bearing paths | Refuse by default |
+| `nested_git_repository` | Skip nested checkout evidence | Refuse by default |
+
+Secret-bearing path detection includes `.env`, `.env.*` except safe examples
+such as `.env.example`, `.env.sample`, and `.env.template`, plus `.envrc`,
+`credentials.*`, `secrets.*`, and private-key or certificate-key file
+extensions. Content redaction remains a separate presentation boundary.
+
 ## Command Execution
 
 The MVP should plan validation commands by default. Command execution is
