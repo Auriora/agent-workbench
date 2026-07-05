@@ -127,7 +127,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/034-release-notes-generation
 - **Title:** Release notes generation
 - **Final spec commit:** 5b40e6d
-- **Closure cleanup commit:** 08a955b
+- **Closure cleanup commit:** fe25872
 - **Closure action:** removed
 - **Durable docs updated:**
   - `tools/devcli/README.md`
@@ -207,7 +207,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/027-workspace-watcher-ignore-sync
 - **Title:** Workspace watcher ignore sync
 - **Final spec commit:** 73fa695
-- **Closure cleanup commit:**  13aff8e
+- **Closure cleanup commit:** 4887c69
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/runtime-operations-design.md`
