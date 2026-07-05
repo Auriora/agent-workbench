@@ -55,6 +55,7 @@ name their own final pre-removal tree commits.
 | Spec 031: Shared path policy | Removed from `docs/specs/` on 2026-07-05 after final pre-removal tree commit `686270d` completed shared path classification, workspace safety migration, scanner/docs routing alignment, hook vocabulary drift coverage, secret-path fixtures, and durable promotion. | Workspace safety contract, threat model, executable backlog EB033 boundary, path-policy consistency tests, workspace safety tests, scanner/docs/hook/MCP validation tests, typecheck, plugin validation, full Vitest validation, lifecycle lint, closure-check, and closure-risk review. |
 | Spec 033: Cross-platform packaging | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `0d2cc48` completed shell-free npm package install, Codex/Claude MCP launch shims, shell-free hook entry points, package-scoped marketplaces, supported platform matrix documentation, and routed macOS/Windows runner evidence. | Codex Agent Workbench plugin runbook, packaging README, plugin README, cross-platform packaging workflow, install/MCP/hook smoke scripts, Codex/Claude package metadata tests, backlog follow-ups for Kiro launcher and turnkey core `tree-sitter`, documentation map, spec closure log, and archive index. |
 | Spec 034: Doc currency routing | Removed from `docs/specs/` on 2026-07-02 after final pre-removal tree commit `8657e9e` completed document currency classification, docs search/inventory metadata, `context_for_task` ranking, `docs_current_for_task`, durable docs promotion, and spec-lifecycle-manager handoff. | MCP surface design, graph store design, runtime contracts, documentation map, spec-lifecycle-manager doc currency handoff, MCP server card, Codex integration profile, docs/context/MCP tests, lifecycle lint, closure check, and closure-risk review. |
+| Spec 034: Release notes generation | Removed from `docs/specs/` on 2026-07-05 after final pre-removal tree commit `5b40e6d` completed `awb release notes`, Git range/tag evidence collection, per-commit file evidence, candidate grouping, validation inputs, Markdown/JSON/agent outputs, draft/final boundaries, release-note skill guidance, and durable release-process documentation. | Agent Workbench Dev CLI README, Codex Agent Workbench plugin runbook, agent-readable changelog, backlog EB035, documentation map, dev CLI tests, package/plugin validation, typecheck, full Vitest validation, archive index, and closure log. |
 
 ### 2026-06-13 - 022-mcp-server-repository-support
 
@@ -120,6 +121,33 @@ name their own final pre-removal tree commits.
 - **Residual risks:** Full `pnpm test` currently has a repeated startup
   warm-up race in `tests/mcp/stdio-entrypoint.test.ts` when run with the whole
   suite; that file passes standalone and the targeted doc-currency suites pass.
+
+### 2026-07-05 - 034-release-notes-generation
+
+- **Spec:** docs/specs/034-release-notes-generation
+- **Title:** Release notes generation
+- **Final spec commit:** 5b40e6d
+- **Closure cleanup commit:** 08a955b
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `tools/devcli/README.md`
+  - `docs/runbooks/codex-agent-workbench-plugin.md`
+  - `docs/reference/agent-readable-changelog.md`
+  - `docs/backlog/README.md`
+  - `docs/reference/documentation-map.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Spec implementation validation recorded
+  `python3 -m unittest tools/devcli/tests/test_cli.py`, package/plugin
+  validation, package dry-run, `pnpm typecheck`, full `pnpm test`, and
+  `git diff --check`. Closure cleanup reran lifecycle lint, archive-index check,
+  docs metadata/link tests, dev CLI tests, package/plugin validation, and full
+  Vitest validation before removal.
+- **Residual risks:** Release-note classification is intentionally path-based
+  and still requires maintainer or agent review before publishing. GitHub PR
+  metadata enrichment and cross-repo extraction remain deferred until proven
+  necessary. A separate plugin remains unnecessary while the repo-local `awb`
+  command and packaged `release-notes` skill cover this repository.
 
 ### 2026-07-04 - 033-cross-platform-packaging
 

@@ -3,7 +3,7 @@ title: Agent-readable changelog
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-06-13
+last_reviewed: 2026-07-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
