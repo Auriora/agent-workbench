@@ -189,12 +189,16 @@ describe("Codex integration profile", () => {
     );
     expect(profile.runtime_version).toBe("0.1.0");
     expect(mcpSurface?.constraints).toEqual(
-      expect.arrayContaining(["Source edits are picked up after package reinstall and Codex restart."])
+      expect.arrayContaining([
+        "Plugin cache cwd must not be used as the default workspace root.",
+        "Source edits are picked up after package reinstall and Codex restart."
+      ])
     );
     expect(mcpSurface?.behavior).toEqual(
       expect.arrayContaining([
         "Launches the production MCP server through the installed package launcher.",
-        "Defaults omitted repo roots to the Codex session working directory."
+        "Preserves Codex's session cwd as the default repo root by materializing the installed MCP config to an absolute shim path without overriding cwd.",
+        "Supports explicit repo roots through arguments or AGENT_WORKBENCH_DEFAULT_REPO_ROOT for fixed-target launches."
       ])
     );
     expect(sourceDependencyArtifact).toMatchObject({
@@ -252,8 +256,9 @@ describe("Codex plugin artifacts", () => {
       hooks?: string;
     };
     const mcpConfig = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8")) as {
-      mcpServers: Record<string, { command: string; cwd: string; args: string[]; startup_timeout_sec: number }>;
+      mcpServers: Record<string, { command: string; cwd?: string; args: string[]; startup_timeout_sec: number }>;
     };
+    const pluginRunbook = fs.readFileSync(path.resolve("docs/runbooks/codex-agent-workbench-plugin.md"), "utf8");
     const hooksConfig = JSON.parse(
       fs.readFileSync(path.join(pluginRoot, "hooks/hooks.json"), "utf8")
     ) as {
@@ -273,10 +278,13 @@ describe("Codex plugin artifacts", () => {
     // Spec 033: shell-free exec-form launch via the portable MCP shim.
     expect(mcpConfig.mcpServers["agent-workbench"]).toMatchObject({
       command: "node",
-      cwd: ".",
       startup_timeout_sec: 30.0,
-      args: ["./mcp-launch.mjs"]
+      args: ["${PLUGIN_ROOT}/mcp-launch.mjs"]
     });
+    expect(mcpConfig.mcpServers["agent-workbench"].cwd).toBeUndefined();
+    expect(pluginRunbook).toContain("RCA checklist for this failure mode");
+    expect(pluginRunbook).toContain("leaves `cwd` unset");
+    expect(pluginRunbook).toContain("rejects a Codex MCP `cwd`");
     expect(hooksConfig.hooks).toEqual({});
     expect(JSON.stringify(hooksConfig)).not.toContain("${PLUGIN_ROOT}");
     expect(skill).toContain("Agent Workbench is the executable runtime.");
@@ -751,7 +759,7 @@ describe("Codex plugin artifacts", () => {
       mcpServers: string;
     };
     const mcpConfig = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8")) as {
-      mcpServers: Record<string, { command: string; cwd: string; args: string[]; startup_timeout_sec: number }>;
+      mcpServers: Record<string, { command: string; cwd?: string; args: string[]; startup_timeout_sec: number }>;
     };
     const profile = codexIntegrationProfileSchema.parse(describeCodexIntegrationProfile());
     const mcpSurface = profile.active_surfaces.find((entry) => entry.surface === "mcp");
@@ -759,11 +767,12 @@ describe("Codex plugin artifacts", () => {
 
     expect(manifest.mcpServers).toBe("./.mcp.json");
     // Spec 033: shell-free exec-form launch via the portable shim. The .mcp.json
-    // names only the shim; the shim resolves the install prefix and runtime
-    // internals (src/mcp, tsx, node_modules) at launch — none of those leak here.
+    // names the plugin-root shim without overriding cwd; the shim resolves the
+    // install prefix and runtime internals (src/mcp, tsx, node_modules) at launch
+    // — none of those leak here.
     expect(mcpConfig.mcpServers["agent-workbench"].command).toBe("node");
-    expect(mcpConfig.mcpServers["agent-workbench"].cwd).toBe(".");
-    expect(mcpConfig.mcpServers["agent-workbench"].args).toEqual(["./mcp-launch.mjs"]);
+    expect(mcpConfig.mcpServers["agent-workbench"].cwd).toBeUndefined();
+    expect(mcpConfig.mcpServers["agent-workbench"].args).toEqual(["${PLUGIN_ROOT}/mcp-launch.mjs"]);
     expect(mcpConfig.mcpServers["agent-workbench"].startup_timeout_sec).toBe(30.0);
     const codexMcpArgs = mcpConfig.mcpServers["agent-workbench"].args.join(" ");
     expect(codexMcpArgs).not.toContain("plugins/cache");

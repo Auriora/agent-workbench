@@ -33,12 +33,13 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         purpose: "Executable runtime surface for Codex through plugin-bundled stdio MCP.",
         behavior: [
           "Launches the production MCP server through the installed package launcher.",
-          "Defaults omitted repo roots to the Codex session working directory.",
+          "Preserves Codex's session cwd as the default repo root by materializing the installed MCP config to an absolute shim path without overriding cwd.",
           "Supports explicit repo roots through arguments or AGENT_WORKBENCH_DEFAULT_REPO_ROOT for fixed-target launches.",
           "Lists configured public MCP bindings; a given Codex session may expose only the subset discovered by the active client configuration."
         ],
         constraints: [
           "No plugin-cache runtime path.",
+          "Plugin cache cwd must not be used as the default workspace root.",
           "Source edits are picked up after package reinstall and Codex restart."
         ]
       },

@@ -4,21 +4,29 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// npm postinstall (spec 033). Two jobs, both best-effort and non-fatal so a
+// npm postinstall (spec 033). Three jobs, all best-effort and non-fatal so a
 // failure here never fails `npm install`:
 //
 //   1. Record a runtime-root pointer so the plugins' mcp-launch.mjs shim can
 //      find this package's location at launch time (the package is launched in
 //      place — it is never copied to a prefix).
-//   2. If the native modules npm just built are unloadable, print an actionable
+//   2. Materialize the installed Codex MCP config to an absolute shim path
+//      because current package-backed Codex MCP launches do not expand
+//      `${PLUGIN_ROOT}` there.
+//   3. If the native modules npm just built are unloadable, print an actionable
 //      hint. This is a thin bonus: when tree-sitter itself fails to compile, npm
 //      aborts the dependency build *before* this parent postinstall runs, so the
 //      authoritative hint lives at server launch (src/mcp/stdio-entrypoint.mjs)
 //      and in the README prerequisites.
 import { createRequire } from "node:module";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { runtimePointerPath, writeRuntimeRoot } from "../plugins/agent-workbench/install-root.mjs";
+import {
+  materializeCodexMcpConfig,
+  runtimePointerPath,
+  writeRuntimeRoot
+} from "../plugins/agent-workbench/install-root.mjs";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -31,6 +39,19 @@ try {
       `  The plugin launcher will not find the runtime automatically; set\n` +
       `  AGENT_WORKBENCH_INSTALL_ROOT=${packageRoot} before launching, or write it to\n` +
       `  ${safePointerPath()}.`
+  );
+}
+
+try {
+  if (!fs.existsSync(path.join(packageRoot, ".git"))) {
+    const configPath = materializeCodexMcpConfig(packageRoot);
+    console.log(`agent-workbench: materialized Codex MCP config ${configPath}`);
+  }
+} catch (error) {
+  console.warn(
+    `agent-workbench: could not materialize the Codex MCP config (${error.message}).\n` +
+      `  The package can still launch when the host provides an explicit plugin-root\n` +
+      `  path, but package-backed Codex sessions may fail to start the MCP server.`
   );
 }
 

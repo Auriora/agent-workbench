@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 // @ts-expect-error -- ESM .mjs shim imported into the TS test via esbuild.
 import { planLaunch } from "../../plugins/agent-workbench/mcp-launch.mjs";
 import {
+  materializeCodexMcpConfig,
   resolveRuntimeRoot,
   runtimePointerPath,
   writeRuntimeRoot
@@ -37,9 +38,24 @@ describe("mcp-launch shim planLaunch (spec 033)", () => {
     expect(plan.options.stdio).toEqual(["pipe", "pipe", "pipe"]);
   });
 
-  it("defaults AGENT_WORKBENCH_DEFAULT_REPO_ROOT to the launch cwd when unset", () => {
+  it("defaults AGENT_WORKBENCH_DEFAULT_REPO_ROOT to a workspace launch cwd when unset", () => {
     const plan = planLaunch(baseEnv, [], "/repo");
     expect(plan.options.env.AGENT_WORKBENCH_DEFAULT_REPO_ROOT).toBe("/repo");
+  });
+
+  it("does not derive the target repo root from PWD", () => {
+    const plan = planLaunch({ ...baseEnv, PWD: "/workspace/repo" }, [], "/repo");
+    expect(plan.options.env.AGENT_WORKBENCH_DEFAULT_REPO_ROOT).toBe("/repo");
+  });
+
+  it("allows plugin-cache launches when a fixed target repo root is explicit", () => {
+    const cacheCwd = "/home/user/.codex/plugins/cache/agent-workbench-local/agent-workbench/0.3.0";
+    const withEnv = planLaunch({ ...baseEnv, AGENT_WORKBENCH_DEFAULT_REPO_ROOT: "/workspace/repo" }, [], cacheCwd);
+    const withArg = planLaunch(baseEnv, ["--repo-root", "/workspace/repo"], cacheCwd);
+
+    expect(withEnv.options.env.AGENT_WORKBENCH_DEFAULT_REPO_ROOT).toBe("/workspace/repo");
+    expect(withArg.options.env.AGENT_WORKBENCH_DEFAULT_REPO_ROOT).toBeUndefined();
+    expect(withArg.args).toEqual([entry, "--repo-root", "/workspace/repo"]);
   });
 
   it("preserves an explicit AGENT_WORKBENCH_DEFAULT_REPO_ROOT", () => {
@@ -94,5 +110,32 @@ describe("runtime-root pointer resolution (spec 033)", () => {
 
   it("returns null when no override and no pointer file exist", () => {
     expect(resolveRuntimeRoot(env(), "linux")).toBeNull();
+  });
+});
+
+describe("installed Codex MCP config materialization", () => {
+  let packageRoot: string;
+
+  beforeEach(() => {
+    packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-package-root-"));
+    fs.mkdirSync(path.join(packageRoot, "plugins", "agent-workbench"), { recursive: true });
+  });
+
+  afterEach(() => {
+    fs.rmSync(packageRoot, { recursive: true, force: true });
+  });
+
+  it("rewrites installed Codex MCP config to an absolute shim path without binding cwd", () => {
+    const configPath = materializeCodexMcpConfig(packageRoot);
+    const mcpConfig = JSON.parse(fs.readFileSync(configPath, "utf8")) as {
+      mcpServers: Record<string, { command: string; cwd?: string; args: string[]; startup_timeout_sec: number }>;
+    };
+    const server = mcpConfig.mcpServers["agent-workbench"];
+
+    expect(server.command).toBe("node");
+    expect(server.cwd).toBeUndefined();
+    expect(server.args).toEqual([path.join(packageRoot, "plugins", "agent-workbench", "mcp-launch.mjs")]);
+    expect(path.isAbsolute(server.args[0])).toBe(true);
+    expect(server.startup_timeout_sec).toBe(30.0);
   });
 });

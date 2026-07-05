@@ -35,15 +35,15 @@ turnkey flow in `plugins/agent-workbench/README.md`,
 `docs/runbooks/install-agent-workbench.md`, and
 `docs/runbooks/codex-agent-workbench-plugin.md`.
 
-**Launch follow-up (resolved 2026-07-04):** Codex did not expand
-`${PLUGIN_ROOT}` in package-backed MCP or hook command args. The package now
-uses a plugin-root-relative MCP launch shape: `.mcp.json` runs
-`node ./mcp-launch.mjs` with `cwd: "."`. Hooks are installed by
-`scripts/install-codex-hooks.mjs` into `CODEX_HOME/hooks.json` with absolute
-installed-package script paths, because Codex may execute hooks from an
-arbitrary workspace cwd. The plugin validator and Codex integration tests reject
-`${PLUGIN_ROOT}` in Codex hook config and keep the plugin-bundled
-`hooks/hooks.json` empty.
+**Launch follow-up (revised 2026-07-05):** Codex hook commands cannot rely on
+`${PLUGIN_ROOT}`, so hooks are installed by `scripts/install-codex-hooks.mjs`
+into `CODEX_HOME/hooks.json` with absolute installed-package script paths. MCP
+has a different authority boundary: `.mcp.json` must resolve the shim with
+`${PLUGIN_ROOT}/mcp-launch.mjs` and must not set `cwd`, because Codex's session
+cwd is the default repo root. The plugin validator and Codex integration tests
+reject `${PLUGIN_ROOT}` in Codex hook config, keep the plugin-bundled
+`hooks/hooks.json` empty, and reject MCP configs that bind `cwd` to the plugin
+cache.
 
 ---
 

@@ -3,7 +3,7 @@ title: Runtime requirements
 doc_type: requirements
 status: draft
 owner: platform
-last_reviewed: 2026-05-31
+last_reviewed: 2026-07-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -55,6 +55,7 @@ workflow designers.
 | REQ-017 | MVP tool surfaces must fit the contract MVP: status, scope, overview, context, symbol search, references, bounded impact, preview/apply, and validation plan. | MCP surface | Runtime contracts, MCP design | MCP contract tests |
 | REQ-018 | Workspace safety must cover path containment, generated/vendor write policy, command planning/execution gates, environment handling, redaction, and generated writes. | Runtime, MCP, edit manager, command runner | Workspace safety contract | Negative safety tests |
 | REQ-019 | MCP must be the authoritative executable integration surface for coding agents. Agent-specific plugins, hooks, commands, skills, rules, steering, guidelines, extensions, and ACP packaging must be generated or configured around MCP definitions, not implemented as parallel runtime behavior. | Agent integration | Coding agent integration design, MCP design | Integration contract tests |
+| REQ-019A | Agent plugin MCP bindings must launch the installed runtime entrypoint and preserve the target workspace as the analyzed repo root. For Codex, the source plugin config may use `${PLUGIN_ROOT}` only as package input, npm `postinstall` must materialize the installed config to an absolute shim path without setting `cwd`, the session cwd supplies the default repo root, and the install-root pointer or `AGENT_WORKBENCH_INSTALL_ROOT` supplies the runtime root; plugin cache directories are integration artifact caches, not executable runtime roots or default repository roots. | Agent integration, MCP launch | MCP design, coding agent integration design, plugin runbooks | Plugin launch contract tests and MCP smoke tests |
 | REQ-020 | The runtime must define common integration specs for instruction packs, skill packs, hook intents, command specs, MCP binding specs, integration manifests, and agent capability metadata before adding vendor-specific emitters. | Agent integration | Coding agent integration design, layered architecture | Architecture boundary tests |
 | REQ-021 | Vendor-specific integration emitters must not depend on SQLite, tree-sitter, filesystem watchers, process execution, or application/domain internals. They may depend on runtime contracts, MCP definitions, and common integration specs. | Agent integration | Layered architecture | Dependency boundary tests |
 | REQ-022 | Markdown document quality contracts must distinguish parser-backed structure checks, repository compliance linting, and readability formatting. Executable tools are post-MVP unless promoted by fixture-backed scope decision. | Documentation quality | Markdown document quality design | Documentation contract fixture tests |

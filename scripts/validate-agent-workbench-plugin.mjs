@@ -77,12 +77,15 @@ assert(mcpServer, "Codex .mcp.json must define mcpServers.agent-workbench.");
 // .mcp.json points at the plugin-root shim (not a bash wrapper). Assert the
 // shell-free shape rather than a brittle command string.
 assert(mcpServer.command === "node", "Codex MCP command must be a direct node invocation (no shell).");
-assert(mcpServer.cwd === ".", "Codex MCP cwd must be the plugin root (.).");
+assert(
+  mcpServer.cwd === undefined,
+  "Codex MCP must not set cwd; the session cwd is the default repo root."
+);
 assert(
   Array.isArray(mcpServer.args) &&
     mcpServer.args.length === 1 &&
-    mcpServer.args[0] === "./mcp-launch.mjs",
-  "Codex MCP args must invoke ./mcp-launch.mjs from the plugin root."
+    mcpServer.args[0] === "${PLUGIN_ROOT}/mcp-launch.mjs",
+  "Codex MCP args must invoke the plugin-root shim with ${PLUGIN_ROOT}."
 );
 const codexMcpArgs = mcpServer.args.join(" ");
 assert(

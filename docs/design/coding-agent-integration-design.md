@@ -3,7 +3,7 @@ title: Coding agent integration design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-13
+last_reviewed: 2026-07-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -142,12 +142,17 @@ configuration, but each agent has different packaging rules.
 
 The runtime must not make any plugin format the core abstraction.
 
-For Codex packaged installs, the GHCR package installs the runtime under a
-stable host prefix and registers the Codex plugin through the personal
+For Codex packaged installs, the npm package installs the runtime under the
+package install location and registers the Codex plugin through the personal
 marketplace. The Codex plugin packages skill guidance, quiet hooks, and MCP
 configuration; its MCP binding launches the installed package entrypoint, not
-runtime code copied into Codex's plugin cache. Source or dependency changes
-require a rebuilt package install, plugin reinstall, and Codex restart.
+runtime code copied into Codex's plugin cache. Plugin cache paths are never
+default repository roots. The source Codex plugin config uses
+`${PLUGIN_ROOT}/mcp-launch.mjs` only as package input; npm `postinstall`
+rewrites the installed config to an absolute shim path and does not set `cwd`.
+Codex's session cwd is therefore the analyzed repo root unless an explicit
+fixed target is supplied. Source or dependency changes require a rebuilt package
+install, plugin reinstall, and Codex restart.
 Operational setup lives in
 [Codex Agent Workbench plugin and MCP setup](../runbooks/codex-agent-workbench-plugin.md).
 

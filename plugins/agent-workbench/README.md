@@ -117,10 +117,14 @@ Review plugin hook trust in Codex after install or update. Hooks are quiet and
 non-repairing; if the MCP launcher is missing, reinstall the package rather
 than relying on SessionStart or PostToolUse hooks to repair setup.
 
-For normal Codex workspace sessions, do not set
-`AGENT_WORKBENCH_DEFAULT_REPO_ROOT`; the MCP server should default to Codex's
-active working directory. Use that environment variable or `--repo-root` only
-for fixed-target launches outside the active workspace.
+For normal Codex workspace sessions, leave
+`AGENT_WORKBENCH_DEFAULT_REPO_ROOT` unset. The source plugin MCP config carries
+`${PLUGIN_ROOT}/mcp-launch.mjs` only as package input; npm `postinstall`
+materializes the installed config to an absolute shim path and does not set
+`cwd`. Codex's session cwd remains the active workspace, and the shim passes
+that cwd to the installed MCP runtime as the default repo root. Use
+`AGENT_WORKBENCH_DEFAULT_REPO_ROOT` or `--repo-root` only for fixed-target
+launches outside the active workspace.
 
 ## Local Installation Model
 
@@ -129,9 +133,11 @@ runtime (including this plugin source) in npm's global tree and builds the nativ
 modules in place. The
 package `postinstall` records a runtime-root pointer under the per-OS state dir;
 the plugin MCP binding launches that in-place runtime through the portable shim
-(`./mcp-launch.mjs` with `cwd: "."`), which reads the pointer (or the
-`AGENT_WORKBENCH_INSTALL_ROOT` override) and starts the server — not runtime
-source from Codex's plugin cache, and never copied to a prefix.
+(an absolute `mcp-launch.mjs` path without a `cwd` override), which reads the
+pointer (or the `AGENT_WORKBENCH_INSTALL_ROOT` override) and starts the server
+— not runtime source from Codex's plugin cache, and never copied to a prefix.
+The plugin cache is also not a repository-root fallback; Codex's session cwd is
+the workspace root unless a fixed target is supplied explicitly.
 
 The repository also includes `.agents/plugins/marketplace.json` for checkout
 marketplace inspection and `.well-known/mcp/server-card.json` for local MCP

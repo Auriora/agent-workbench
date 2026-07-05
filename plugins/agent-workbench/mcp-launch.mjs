@@ -23,7 +23,7 @@
 // so no cwd juggling is needed to resolve the bare `tsx` specifier.
 //
 //   - default AGENT_WORKBENCH_DEFAULT_REPO_ROOT to the launch cwd when unset
-//     (that cwd is the repo the MCP client launched from);
+//     (the Codex session workspace cwd, because .mcp.json must not override cwd);
 //   - pass through any extra argv.
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -35,7 +35,9 @@ import { resolveRuntimeRoot } from "./install-root.mjs";
  *
  * @param {NodeJS.ProcessEnv} [env=process.env]
  * @param {string[]} [argv=process.argv.slice(2)] Extra args to pass through.
- * @param {string} [cwd=process.cwd()] Launch directory (the client's repo root).
+ * @param {string} [cwd=process.cwd()] Launch directory. For Codex plugin
+ *   launches this is the session workspace cwd; the plugin root is supplied in
+ *   argv via `${PLUGIN_ROOT}/mcp-launch.mjs`, not by overriding process cwd.
  * @returns {{ command: string, args: string[], options: object, root: string }}
  */
 export function planLaunch(env = process.env, argv = process.argv.slice(2), cwd = process.cwd()) {
@@ -50,7 +52,7 @@ export function planLaunch(env = process.env, argv = process.argv.slice(2), cwd 
   const entry = path.join(root, "src", "mcp", "stdio-entrypoint.mjs");
 
   const childEnv = { ...env };
-  if (!childEnv.AGENT_WORKBENCH_DEFAULT_REPO_ROOT) {
+  if (!childEnv.AGENT_WORKBENCH_DEFAULT_REPO_ROOT && !hasRepoRootArg(argv)) {
     childEnv.AGENT_WORKBENCH_DEFAULT_REPO_ROOT = cwd;
   }
 
@@ -60,6 +62,19 @@ export function planLaunch(env = process.env, argv = process.argv.slice(2), cwd 
     options: { stdio: ["pipe", "pipe", "pipe"], env: childEnv },
     root
   };
+}
+
+function hasRepoRootArg(argv) {
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--repo-root" && argv[index + 1]) {
+      return true;
+    }
+    if (arg.startsWith("--repo-root=") && arg.slice("--repo-root=".length)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function main() {

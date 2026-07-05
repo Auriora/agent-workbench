@@ -3,7 +3,7 @@ title: MCP surface design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -85,6 +85,18 @@ enable debug root overrides only through
 `AGENT_WORKBENCH_DEBUG_REPO_ROOT_OVERRIDE=1`; when enabled, integration health
 reports `root_policy.authority: launch_root` and
 `root_policy.debug_repo_root_override: true`.
+
+For packaged agent integrations, the launch root is the target workspace or an
+explicit fixed target supplied by the host integration. Plugin cache paths are
+artifact caches for skills, hooks, manifests, and launch shims; they must not
+become the analyzed repository root and must not be used as an alternate
+runtime source tree. Codex source plugin config uses `${PLUGIN_ROOT}` only as
+package input; npm `postinstall` materializes the installed config to an
+absolute `mcp-launch.mjs` shim path and must not set `cwd`. Codex's session cwd
+therefore remains the target workspace and the shim forwards that cwd as the
+default repo root. Claude, Kiro, and future plugin bindings must make their
+equivalent handoff explicit instead of deriving repository scope from an
+artifact cache path.
 
 Backend tools and workers are not part of the MCP contract. Parser payloads,
 diagnostic provider output, lint output, test discovery records, worker state,

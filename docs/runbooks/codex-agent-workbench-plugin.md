@@ -51,10 +51,13 @@ This keeps source updates explicit:
   plugin cache.
 
 For normal Codex workspace sessions, leave
-`AGENT_WORKBENCH_DEFAULT_REPO_ROOT` unset. The MCP process should default to the
-active Codex workspace. Use an explicit `repo_root` argument or
-`AGENT_WORKBENCH_DEFAULT_REPO_ROOT` only for fixed-target launches outside an
-active workspace.
+`AGENT_WORKBENCH_DEFAULT_REPO_ROOT` unset. The source plugin MCP config carries
+`${PLUGIN_ROOT}/mcp-launch.mjs` only as package input; npm `postinstall`
+materializes the installed config to an absolute shim path and does not set
+`cwd`. Codex's session cwd remains the active workspace, and the shim passes
+that cwd to the installed MCP runtime as the default repo root. Use an explicit
+`--repo-root` argument or `AGENT_WORKBENCH_DEFAULT_REPO_ROOT` only for
+fixed-target launches outside an active workspace.
 
 ## Plugin Installation
 
@@ -66,8 +69,13 @@ empty to avoid cwd-dependent hook execution. The `.mcp.json` file launches the
 npm-installed runtime through the portable shim and must not point at a
 plugin-cache source path:
 
+In source, this config uses `${PLUGIN_ROOT}/mcp-launch.mjs` as package input.
+In the installed npm package, `postinstall` rewrites the config to an absolute
+shim path because current package-backed Codex MCP launches do not expand
+`${PLUGIN_ROOT}` in MCP args:
+
 ```json
-{"command": "node", "cwd": ".", "args": ["./mcp-launch.mjs"]}
+{"command": "node", "args": ["/abs/pkg/plugins/agent-workbench/mcp-launch.mjs"]}
 ```
 
 There are **two** Codex marketplaces, named differently so they never collide:
@@ -159,8 +167,8 @@ include `codex-integration-profile` and `integration-health`.
 
 Install and launch are shell-free on all supported operating systems. `npm
 install` builds the native modules the normal way, and the plugins launch the
-runtime with `node ./mcp-launch.mjs` from the plugin root — no POSIX shell on the
-install or runtime path. The supported distribution channel is the npm package
+runtime with `node` plus a plugin-root shim path — no POSIX shell on the install
+or runtime path. The supported distribution channel is the npm package
 (Decision 2).
 
 | OS | Node | Native toolchain (build path only) | Verification |
@@ -258,10 +266,11 @@ Codex plugin registration and should be run dry first.
 straight from where npm installed the package — no copy, no prefix. The Codex
 and Claude plugins launch the same runtime through the portable `node`-based
 shim `plugins/agent-workbench/mcp-launch.mjs`, referenced in `.mcp.json` as
-`{"command": "node", "cwd": ".", "args": ["./mcp-launch.mjs"]}`. Claude uses
-`${CLAUDE_PLUGIN_ROOT}` for its plugin root. A bare bin name or `npx` is not
-spawnable in MCP exec form on Windows (no PATHEXT, no shell), so `node` plus a
-script path is the only reliable cross-platform command shape.
+`{"command": "node", "args": ["/abs/pkg/plugins/agent-workbench/mcp-launch.mjs"]}`
+after npm `postinstall` materializes the installed package. Claude uses
+`${CLAUDE_PLUGIN_ROOT}` for its equivalent plugin root token. A bare bin name or
+`npx` is not spawnable in MCP exec form on Windows (no PATHEXT, no shell), so
+`node` plus a script path is the only reliable cross-platform command shape.
 
 The shim resolves the runtime root from `AGENT_WORKBENCH_INSTALL_ROOT` (an
 override that means "the runtime root, or a checkout containing
@@ -391,6 +400,31 @@ npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y
 # or point the shim at a checkout that contains src/mcp/stdio-entrypoint.mjs:
 export AGENT_WORKBENCH_INSTALL_ROOT="$HOME/Projects/agent-workbench"
 ```
+
+If MCP resources report a plugin cache path as `repo_root`, the runtime install
+is present but the workspace-root handoff is broken. Check the cached
+`.mcp.json` first: it must use an absolute `mcp-launch.mjs` path and must not set
+`cwd`. Do not point the runtime or default repo root at the cache. For fixed-target
+diagnostics, set the target explicitly:
+
+```bash
+export AGENT_WORKBENCH_DEFAULT_REPO_ROOT="$PWD"
+```
+
+RCA checklist for this failure mode:
+
+- Symptom: MCP responses report `repo_root` under
+  `~/.codex/plugins/cache/agent-workbench-local/...`.
+- Root cause: the plugin MCP config bound the process `cwd` to the plugin root
+  so the shim could resolve, causing `stdio-launch.ts` to treat the cache as the
+  session repo root.
+- Correct contract: source `.mcp.json` uses `${PLUGIN_ROOT}/mcp-launch.mjs`
+  only as package input; installed `.mcp.json` uses an absolute `mcp-launch.mjs`
+  shim path and leaves `cwd` unset. The shim resolves the installed runtime root
+  separately and forwards Codex's session cwd as the default repo root.
+- Regression gates: `pnpm run validate:plugin` rejects a Codex MCP `cwd`, and
+  `tests/integration/codex-integration-profile.test.ts` plus
+  `tests/integration/mcp-launch.test.ts` assert the path-source split.
 
 Hooks must not repair missing launchers, install packages, update plugins, or
 write Codex configuration. They are quiet and action-gated by default; set
