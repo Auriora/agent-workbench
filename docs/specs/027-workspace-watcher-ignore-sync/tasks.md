@@ -105,7 +105,7 @@ T007 -> T008
 
 ## Phase 4: Freshness And Validation
 
-- [ ] T008 Expose watcher freshness in runtime and MCP surfaces.
+- [x] T008 Expose watcher freshness in runtime and MCP surfaces.
   - Depends on: T007
   - Files: `src/application/use-cases/get-repo-status.ts`,
     `src/application/use-cases/response-metadata.ts`, `src/presentation/`,
@@ -113,4 +113,4 @@ T007 -> T008
   - Acceptance: Tools report fresh only when watcher state, queue state,
     scope, and ignore rules are synchronized; stale and refreshing states are
     visible in status and caveats.
-  - Evidence: Pending.
+  - Evidence: Phase 4 added WatcherFreshnessState to src/application/use-cases/response-metadata.ts and threads watcher freshness through src/application/use-cases/get-repo-status.ts into RuntimeStatus.watcher_freshness. Runtime metadata preserves fresh only for synchronized watcher state: queue drained, scope synchronized, and ignore rules synchronized. Active queues report refreshing, stale scope or overflow reports stale_watcher_snapshot, and watcher failures report degraded_watcher_freshness. tests/contracts/response-metadata.test.ts covers fresh, refreshing, stale, and degraded watcher classification and caveats. tests/runtime/status.test.ts proves snapshot-backed status is downgraded by watcher state and exposes watcher_freshness. tests/mcp/repo-status-resource.test.ts proves stale watcher freshness and caveats survive the MCP repo:///status envelope. Validation: pnpm exec vitest run tests/contracts/response-metadata.test.ts tests/runtime/status.test.ts tests/mcp/repo-status-resource.test.ts tests/mcp/stdio-entrypoint.test.ts tests/mcp/telemetry-instrumentation.test.ts tests/contracts/runtime-contracts.test.ts passed; pnpm test passed 75 files / 525 tests; pnpm typecheck passed; git diff --check passed; lifecycle lint passed; Agent Workbench diagnostics reported no actionable findings; markdown check for tasks.md found 0 issues.

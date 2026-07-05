@@ -13,7 +13,8 @@ import type { SnapshotState, WarmupExecution } from "../../domain/models/runtime
 import { summarizeAdapterEvidence } from "../../domain/policies/index.js";
 import {
   buildRuntimeResponseMeta,
-  uniqueSorted
+  uniqueSorted,
+  type WatcherFreshnessState
 } from "./response-metadata.js";
 import type {
   FileCatalogPort,
@@ -27,6 +28,7 @@ export type RuntimeStatusState =
   | "refreshing"
   | "fresh"
   | "stale"
+  | "degraded"
   | "partial"
   | "invalid"
   | "invalid_due_to_environment";
@@ -41,6 +43,7 @@ export type RuntimeStatus = {
   snapshot_id?: string;
   owner_state?: SnapshotState["owner_state"];
   warmup_state?: WarmupExecution["state"];
+  watcher_freshness?: WatcherFreshnessState;
   reason?: string;
 };
 
@@ -59,6 +62,7 @@ export function getCatalogRepoStatus(input: {
   freshness?: Freshness;
   snapshot?: SnapshotState | null;
   warmup?: WarmupExecution | null;
+  watcher?: WatcherFreshnessState;
   row_limit?: number;
   truncated?: boolean;
 }): GetRepoStatusResult {
@@ -72,6 +76,7 @@ export function getCatalogRepoStatus(input: {
     coverage,
     snapshot: input.snapshot,
     warmup: input.warmup,
+    watcher: input.watcher,
     freshness: input.freshness,
     truncated: input.truncated,
     budget: input.row_limit === undefined ? undefined : { row_limit: input.row_limit }
@@ -95,6 +100,9 @@ export function getCatalogRepoStatus(input: {
   if (input.warmup?.state !== undefined) {
     status.warmup_state = input.warmup.state;
   }
+  if (input.watcher !== undefined) {
+    status.watcher_freshness = input.watcher;
+  }
   const reason = input.snapshot?.reason ?? input.warmup?.reason;
   if (reason !== undefined) {
     status.reason = reason;
@@ -110,6 +118,7 @@ export async function getSnapshotRepoStatus(input: {
   snapshots: SnapshotPort;
   catalog: FileCatalogPort;
   warmups?: WarmupCoordinatorPort;
+  watcher?: WatcherFreshnessState;
   snapshot_id?: string;
   indexed_roots?: readonly string[];
   skipped_roots?: readonly string[];
@@ -130,7 +139,8 @@ export async function getSnapshotRepoStatus(input: {
       files: [],
       freshness: "cold",
       snapshot,
-      warmup
+      warmup,
+      watcher: input.watcher
     });
   }
 
@@ -146,6 +156,7 @@ export async function getSnapshotRepoStatus(input: {
     skipped_roots: input.skipped_roots ?? [],
     snapshot,
     warmup,
+    watcher: input.watcher,
     files,
     row_limit: rowLimit,
     truncated: files.length >= rowLimit
@@ -158,6 +169,7 @@ export async function getScannedRepoStatus(input: {
   indexed_roots?: readonly string[];
   skipped_roots?: readonly string[];
   max_files?: number;
+  watcher?: WatcherFreshnessState;
 }): Promise<GetRepoStatusResult> {
   const scanned = await input.scanner.scan({
     repo_root: input.repo_root,
@@ -170,7 +182,8 @@ export async function getScannedRepoStatus(input: {
     indexed_roots: scanned.indexed_roots,
     skipped_roots: scanned.skipped_roots,
     files: scanned.files,
-    freshness: "unknown"
+    freshness: "unknown",
+    watcher: input.watcher
   });
 
   return {
@@ -191,6 +204,7 @@ export function getSnapshotMetadataRepoStatus(input: {
   skipped_roots: readonly string[];
   snapshot: SnapshotState | null;
   warmup?: WarmupExecution | null;
+  watcher?: WatcherFreshnessState;
   files?: readonly FileCatalogEntry[];
   row_limit?: number;
   truncated?: boolean;
@@ -206,6 +220,7 @@ export function getSnapshotMetadataRepoStatus(input: {
     coverage,
     snapshot: input.snapshot,
     warmup: input.warmup,
+    watcher: input.watcher,
     freshness: input.snapshot?.freshness ?? "cold",
     hasEvidence: input.snapshot !== null,
     truncated: input.truncated,
@@ -230,6 +245,9 @@ export function getSnapshotMetadataRepoStatus(input: {
   }
   if (input.warmup?.state !== undefined) {
     status.warmup_state = input.warmup.state;
+  }
+  if (input.watcher !== undefined) {
+    status.watcher_freshness = input.watcher;
   }
   const reason = input.snapshot?.reason ?? input.warmup?.reason;
   if (reason !== undefined) {

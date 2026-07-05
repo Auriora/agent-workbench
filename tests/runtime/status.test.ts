@@ -13,6 +13,7 @@ import {
 } from "../../src/application/use-cases/get-repo-status.js";
 import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
 import type { SnapshotState } from "../../src/domain/models/runtime.js";
+import type { WatcherFreshnessState } from "../../src/application/use-cases/response-metadata.js";
 import type {
   FileCatalogPort,
   SnapshotPort,
@@ -289,6 +290,108 @@ describe("runtime status", () => {
       expect(result.status.freshness, testCase.name).toBe(testCase.expected.freshness);
       expect(result.meta.analysis_validity, testCase.name).toBe(testCase.expected.analysis_validity);
       expect(result.meta.freshness, testCase.name).toBe(testCase.expected.freshness);
+    }
+  });
+
+  it("exposes watcher freshness and prevents fresh claims when watcher evidence is not synchronized", async () => {
+    const file = buildFileCatalogEntry({
+      file_identity: {
+        path: "src/service.py",
+        language: "python",
+        content_hash: "sha256:python",
+        size_bytes: 10,
+        mtime_ms: 1
+      }
+    });
+    const cases = [
+      {
+        name: "synchronized watcher",
+        watcher: watcherFreshness({
+          status: "fresh",
+          queue_state: "drained",
+          scope_status: "synchronized",
+          ignore_rules_status: "synchronized"
+        }),
+        expected: {
+          runtime_state: "fresh",
+          freshness: "fresh",
+          caveatKind: undefined
+        }
+      },
+      {
+        name: "pending watcher queue",
+        watcher: watcherFreshness({
+          status: "refreshing",
+          queue_state: "pending",
+          scope_status: "synchronized",
+          ignore_rules_status: "synchronized"
+        }),
+        expected: {
+          runtime_state: "refreshing",
+          freshness: "refreshing",
+          caveatKind: "watcher_refreshing"
+        }
+      },
+      {
+        name: "scope changed",
+        watcher: watcherFreshness({
+          status: "stale",
+          queue_state: "drained",
+          scope_status: "changed",
+          ignore_rules_status: "synchronized"
+        }),
+        expected: {
+          runtime_state: "stale",
+          freshness: "stale",
+          caveatKind: "stale_watcher_snapshot"
+        }
+      },
+      {
+        name: "watcher processing failure",
+        watcher: watcherFreshness({
+          status: "degraded",
+          queue_state: "failed",
+          scope_status: "unknown",
+          ignore_rules_status: "unknown"
+        }),
+        expected: {
+          runtime_state: "degraded",
+          freshness: "stale",
+          caveatKind: "degraded_watcher_freshness"
+        }
+      }
+    ];
+
+    for (const testCase of cases) {
+      const result = await getSnapshotRepoStatus({
+        repo_root: "/repo",
+        snapshots: snapshotPort(snapshot({ freshness: "fresh" })),
+        catalog: catalogPort([file]),
+        watcher: testCase.watcher,
+        max_files: 10
+      });
+
+      expect(result.status.runtime_state, testCase.name).toBe(testCase.expected.runtime_state);
+      expect(result.status.freshness, testCase.name).toBe(testCase.expected.freshness);
+      expect(result.status.watcher_freshness, testCase.name).toEqual(testCase.watcher);
+      expect(result.meta.freshness, testCase.name).toBe(testCase.expected.freshness);
+      if (testCase.expected.caveatKind === undefined) {
+        expect(result.meta.caveats ?? [], testCase.name).not.toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              kind: expect.stringMatching(/watcher/)
+            })
+          ])
+        );
+      } else {
+        expect(result.meta.caveats ?? [], testCase.name).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              kind: testCase.expected.caveatKind
+            })
+          ])
+        );
+      }
     }
   });
 
@@ -637,5 +740,12 @@ function warmupPort(value: Awaited<ReturnType<WarmupCoordinatorPort["getState"]>
     },
     async markOwner() {},
     async completeWarmup() {}
+  };
+}
+
+function watcherFreshness(input: WatcherFreshnessState): WatcherFreshnessState {
+  return {
+    ...input,
+    reason: input.reason ?? "test watcher state"
   };
 }

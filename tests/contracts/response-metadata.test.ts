@@ -12,7 +12,8 @@ import {
   classifyRuntimeTrust,
   deriveRuntimeStatusCaveats,
   presentNextActions,
-  sessionAwareNextActions
+  sessionAwareNextActions,
+  type WatcherFreshnessState
 } from "../../src/application/use-cases/response-metadata.js";
 
 describe("response metadata helpers", () => {
@@ -62,6 +63,82 @@ describe("response metadata helpers", () => {
     });
   });
 
+  it("requires synchronized watcher freshness before preserving fresh status", () => {
+    expect(
+      classifyRuntimeTrust({
+        snapshot: snapshot({ freshness: "fresh" }),
+        freshness: "fresh",
+        hasEvidence: true,
+        watcher: watcherFreshness({
+          status: "fresh",
+          queue_state: "drained",
+          scope_status: "synchronized",
+          ignore_rules_status: "synchronized"
+        })
+      })
+    ).toEqual({
+      runtime_state: "fresh",
+      freshness: "fresh",
+      analysis_validity: "valid"
+    });
+
+    expect(
+      classifyRuntimeTrust({
+        snapshot: snapshot({ freshness: "fresh" }),
+        freshness: "fresh",
+        hasEvidence: true,
+        watcher: watcherFreshness({
+          status: "stale",
+          queue_state: "drained",
+          scope_status: "changed",
+          ignore_rules_status: "synchronized"
+        })
+      })
+    ).toEqual({
+      runtime_state: "stale",
+      freshness: "stale",
+      analysis_validity: "valid"
+    });
+  });
+
+  it("classifies watcher processing and watcher failures as visible freshness states", () => {
+    expect(
+      classifyRuntimeTrust({
+        snapshot: snapshot({ freshness: "fresh" }),
+        freshness: "fresh",
+        hasEvidence: true,
+        watcher: watcherFreshness({
+          status: "refreshing",
+          queue_state: "pending",
+          scope_status: "synchronized",
+          ignore_rules_status: "synchronized"
+        })
+      })
+    ).toEqual({
+      runtime_state: "refreshing",
+      freshness: "refreshing",
+      analysis_validity: "valid"
+    });
+
+    expect(
+      classifyRuntimeTrust({
+        snapshot: snapshot({ freshness: "fresh" }),
+        freshness: "fresh",
+        hasEvidence: true,
+        watcher: watcherFreshness({
+          status: "degraded",
+          queue_state: "failed",
+          scope_status: "unknown",
+          ignore_rules_status: "unknown"
+        })
+      })
+    ).toEqual({
+      runtime_state: "degraded",
+      freshness: "stale",
+      analysis_validity: "partial"
+    });
+  });
+
   it("classifies missing snapshot as cold invalid evidence", () => {
     expect(
       classifyRuntimeTrust({
@@ -100,6 +177,54 @@ describe("response metadata helpers", () => {
         evidence_kinds: []
       })
     ]);
+  });
+
+  it("adds structured caveats for watcher refreshing, stale, and degraded states", () => {
+    const cases = [
+      {
+        watcher: watcherFreshness({
+          status: "refreshing",
+          queue_state: "pending",
+          scope_status: "synchronized",
+          ignore_rules_status: "synchronized"
+        }),
+        expectedKind: "watcher_refreshing"
+      },
+      {
+        watcher: watcherFreshness({
+          status: "stale",
+          queue_state: "overflowed",
+          scope_status: "synchronized",
+          ignore_rules_status: "synchronized"
+        }),
+        expectedKind: "stale_watcher_snapshot"
+      },
+      {
+        watcher: watcherFreshness({
+          status: "degraded",
+          queue_state: "failed",
+          scope_status: "unknown",
+          ignore_rules_status: "unknown"
+        }),
+        expectedKind: "degraded_watcher_freshness"
+      }
+    ];
+
+    for (const testCase of cases) {
+      expect(
+        deriveRuntimeStatusCaveats({
+          coverage: [pythonCoverage()],
+          snapshot: snapshot({ freshness: "fresh" }),
+          watcher: testCase.watcher
+        })
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: testCase.expectedKind
+          })
+        ])
+      );
+    }
   });
 
   it("filters next actions to public MCP tools only", () => {
@@ -275,6 +400,13 @@ function pythonCoverage(): AdapterEvidence {
     provenance: "tree_sitter",
     confidence: "high",
     metadata: {}
+  };
+}
+
+function watcherFreshness(input: WatcherFreshnessState): WatcherFreshnessState {
+  return {
+    ...input,
+    reason: input.reason ?? "test watcher state"
   };
 }
 

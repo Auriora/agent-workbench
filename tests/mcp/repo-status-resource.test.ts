@@ -240,4 +240,72 @@ describe("repo status MCP resource", () => {
       })
     ]);
   });
+
+  it("exposes stale watcher freshness and caveats in the MCP resource envelope", async () => {
+    const registered = registerMcpResource(repoStatusResource, {
+      repoRoot: "/repo",
+      getRepoStatus: ({ repo_root }) => ({
+        status: {
+          repo_root,
+          runtime_state: "stale",
+          freshness: "stale",
+          indexed_roots: ["."],
+          skipped_roots: [],
+          adapter_coverage: [],
+          watcher_freshness: {
+            status: "stale",
+            queue_state: "overflowed",
+            scope_status: "synchronized",
+            ignore_rules_status: "synchronized",
+            reason: "Workspace watcher overflow requires bounded rescan."
+          }
+        },
+        meta: {
+          analysis_validity: "valid",
+          freshness: "stale",
+          scope: {
+            repo_root,
+            indexed_roots: ["."],
+            skipped_roots: [],
+            languages: []
+          },
+          capability_level: "unsupported",
+          evidence_kinds: [],
+          verification_status: "needed",
+          truncated: false,
+          caveats: [
+            {
+              kind: "stale_watcher_snapshot",
+              severity: "blocker",
+              message: "Workspace watcher overflow requires bounded rescan.",
+              evidence_kinds: []
+            }
+          ]
+        }
+      })
+    });
+
+    const response = await registered.handler({});
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
+      data: GetRepoStatusResult["status"];
+      meta: GetRepoStatusResult["meta"];
+      errors: unknown[];
+    };
+
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.data.watcher_freshness).toEqual({
+      status: "stale",
+      queue_state: "overflowed",
+      scope_status: "synchronized",
+      ignore_rules_status: "synchronized",
+      reason: "Workspace watcher overflow requires bounded rescan."
+    });
+    expect(parsed.data.freshness).toBe("stale");
+    expect(parsed.meta.freshness).toBe("stale");
+    expect(parsed.meta.caveats).toEqual([
+      expect.objectContaining({
+        kind: "stale_watcher_snapshot"
+      })
+    ]);
+  });
 });

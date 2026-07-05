@@ -25,6 +25,7 @@ export type RuntimeTrustState =
   | "refreshing"
   | "fresh"
   | "stale"
+  | "degraded"
   | "partial"
   | "invalid"
   | "invalid_due_to_environment";
@@ -33,6 +34,14 @@ export type RuntimeTrustClassification = {
   runtime_state: RuntimeTrustState;
   freshness: Freshness;
   analysis_validity: AnalysisValidity;
+};
+
+export type WatcherFreshnessState = {
+  status: "fresh" | "refreshing" | "stale" | "degraded";
+  queue_state: "drained" | "pending" | "overflowed" | "unavailable" | "failed";
+  scope_status: "synchronized" | "changed" | "unknown";
+  ignore_rules_status: "synchronized" | "changed" | "unknown";
+  reason?: string;
 };
 
 const runtimeCaveatSeverities: Record<
@@ -99,7 +108,13 @@ export function classifyRuntimeTrust(input: {
   warmup?: WarmupExecution | null;
   freshness: Freshness;
   hasEvidence: boolean;
+  watcher?: WatcherFreshnessState;
 }): RuntimeTrustClassification {
+  const watcherClassification = classifyWatcherFreshness(input.watcher, input.hasEvidence);
+  if (watcherClassification !== undefined) {
+    return watcherClassification;
+  }
+
   if (input.snapshot === null) {
     return {
       runtime_state: "cold",
@@ -163,10 +178,55 @@ export function classifyRuntimeTrust(input: {
   };
 }
 
+function classifyWatcherFreshness(
+  watcher: WatcherFreshnessState | undefined,
+  hasEvidence: boolean
+): RuntimeTrustClassification | undefined {
+  if (watcher === undefined || isFreshWatcherState(watcher)) {
+    return undefined;
+  }
+
+  if (watcher.status === "refreshing" || watcher.queue_state === "pending") {
+    return {
+      runtime_state: "refreshing",
+      freshness: "refreshing",
+      analysis_validity: hasEvidence ? "valid" : "partial"
+    };
+  }
+
+  if (
+    watcher.status === "degraded" ||
+    watcher.queue_state === "failed" ||
+    watcher.queue_state === "unavailable"
+  ) {
+    return {
+      runtime_state: "degraded",
+      freshness: "stale",
+      analysis_validity: "partial"
+    };
+  }
+
+  return {
+    runtime_state: "stale",
+    freshness: "stale",
+    analysis_validity: hasEvidence ? "valid" : "partial"
+  };
+}
+
+function isFreshWatcherState(watcher: WatcherFreshnessState): boolean {
+  return (
+    watcher.status === "fresh" &&
+    watcher.queue_state === "drained" &&
+    watcher.scope_status === "synchronized" &&
+    watcher.ignore_rules_status === "synchronized"
+  );
+}
+
 export function deriveRuntimeStatusCaveats(input: {
   coverage: readonly AdapterEvidence[];
   snapshot?: SnapshotState | null;
   warmup?: WarmupExecution | null;
+  watcher?: WatcherFreshnessState;
 }): RuntimeStatusCaveat[] {
   const caveats: RuntimeStatusCaveat[] = [];
   const reason = (input.snapshot?.reason ?? input.warmup?.reason ?? "").toLowerCase();
@@ -270,7 +330,49 @@ export function deriveRuntimeStatusCaveats(input: {
     });
   }
 
+  const watcherCaveat = watcherFreshnessCaveat(input.watcher);
+  if (watcherCaveat !== undefined) {
+    caveats.push(watcherCaveat);
+  }
+
   return dedupeRuntimeCaveats(caveats);
+}
+
+function watcherFreshnessCaveat(
+  watcher: WatcherFreshnessState | undefined
+): RuntimeStatusCaveat | undefined {
+  if (watcher === undefined || isFreshWatcherState(watcher)) {
+    return undefined;
+  }
+
+  if (watcher.status === "refreshing" || watcher.queue_state === "pending") {
+    return {
+      kind: "watcher_refreshing",
+      severity: "warning",
+      message: watcher.reason ?? "Workspace watcher queue is still processing; freshness is refreshing until the queue drains and rescan evidence is published.",
+      evidence_kinds: []
+    };
+  }
+
+  if (
+    watcher.status === "degraded" ||
+    watcher.queue_state === "failed" ||
+    watcher.queue_state === "unavailable"
+  ) {
+    return {
+      kind: "degraded_watcher_freshness",
+      severity: runtimeCaveatSeverities.watcher,
+      message: watcher.reason ?? "Workspace watcher freshness is degraded; snapshot evidence must be treated as stale until a successful bounded rescan completes.",
+      evidence_kinds: []
+    };
+  }
+
+  return {
+    kind: "stale_watcher_snapshot",
+    severity: runtimeCaveatSeverities.watcher,
+    message: watcher.reason ?? "Workspace watcher freshness is stale because queue, scope, or ignore-rule synchronization is not proven.",
+    evidence_kinds: []
+  };
 }
 
 export function buildRuntimeResponseMeta(input: {
@@ -281,6 +383,7 @@ export function buildRuntimeResponseMeta(input: {
   coverage: readonly AdapterEvidence[];
   snapshot?: SnapshotState | null;
   warmup?: WarmupExecution | null;
+  watcher?: WatcherFreshnessState;
   freshness?: Freshness;
   hasEvidence?: boolean;
   verification_status?: VerificationStatus;
@@ -294,7 +397,8 @@ export function buildRuntimeResponseMeta(input: {
     snapshot: input.snapshot,
     warmup: input.warmup,
     freshness: input.freshness ?? input.snapshot?.freshness ?? "fresh",
-    hasEvidence: input.hasEvidence ?? input.coverage.length > 0
+    hasEvidence: input.hasEvidence ?? input.coverage.length > 0,
+    watcher: input.watcher
   });
   const evidenceKinds = uniqueSorted<EvidenceKind>(input.coverage.flatMap((item) => item.evidence_kinds));
   const caveats =
@@ -303,7 +407,8 @@ export function buildRuntimeResponseMeta(input: {
       : deriveRuntimeStatusCaveats({
           coverage: input.coverage,
           snapshot: input.snapshot,
-          warmup: input.warmup
+          warmup: input.warmup,
+          watcher: input.watcher
         });
 
   return {

@@ -114,7 +114,9 @@ export const runtimeStatusCaveatKindSchema = z.enum([
   "missing_optional_enrichment_evidence",
   "unsupported_language_or_platform",
   "missing_test_runner",
-  "stale_watcher_snapshot"
+  "stale_watcher_snapshot",
+  "watcher_refreshing",
+  "degraded_watcher_freshness"
 ]);
 export type RuntimeStatusCaveatKind = z.infer<typeof runtimeStatusCaveatKindSchema>;
 
