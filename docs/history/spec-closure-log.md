@@ -3,7 +3,7 @@ title: Spec closure log
 doc_type: history
 status: active
 owner: platform
-last_reviewed: 2026-07-04
+last_reviewed: 2026-07-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -51,6 +51,7 @@ name their own final pre-removal tree commits.
 | Spec 025: Brooks-Lint findings tracker | Removed from `docs/specs/` on 2026-06-11 after final pre-removal tree commit `539f174` completed architecture boundary remediation, tech-debt extraction splits, runtime contract modularization, MCP test harness hardening, focused validation/resource rule tests, broad fixture helper annotation, and durable test-maintainability gates. | Layered runtime architecture, system architecture, runtime contracts, MVP proof matrix, documentation map, architecture tests, MCP/integration tests, focused validation/resource tests, broad fixture tests, and final closure traceability. |
 | Spec 029: Repo-root authority | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `5a8b098` completed launch-root authority for public MCP resources and tools, debug-only root override gating, public `repo_root` metadata hiding, integration-health root policy reporting, and durable promotion. | Workspace safety contract, MCP surface design, runtime contracts, threat model, documentation map, root-authority policy and MCP registry tests, response metadata tests, integration-health tests, focused MCP/contract validation, and final full Vitest validation. |
 | Spec 030: MCP error envelope consistency | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `8e66d18` completed the shared MCP envelope wrapper, representative tool migrations, distinct recoverable failure classes, durable contract/design promotion, and registry consistency tests. | Runtime contracts, MCP surface design, documentation map, executable backlog, shared MCP envelope wrapper, representative MCP registry tests, typecheck, plugin/package validation, full Vitest validation, lifecycle lint, scan, and closure-check. |
+| Spec 031: Shared path policy | Removed from `docs/specs/` on 2026-07-05 after final pre-removal tree commit `686270d` completed shared path classification, workspace safety migration, scanner/docs routing alignment, hook vocabulary drift coverage, secret-path fixtures, and durable promotion. | Workspace safety contract, threat model, executable backlog EB033 boundary, path-policy consistency tests, workspace safety tests, scanner/docs/hook/MCP validation tests, typecheck, plugin validation, full Vitest validation, lifecycle lint, closure-check, and closure-risk review. |
 | Spec 033: Cross-platform packaging | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `0d2cc48` completed shell-free npm package install, Codex/Claude MCP launch shims, shell-free hook entry points, package-scoped marketplaces, supported platform matrix documentation, and routed macOS/Windows runner evidence. | Codex Agent Workbench plugin runbook, packaging README, plugin README, cross-platform packaging workflow, install/MCP/hook smoke scripts, Codex/Claude package metadata tests, backlog follow-ups for Kiro launcher and turnkey core `tree-sitter`, documentation map, spec closure log, and archive index. |
 | Spec 034: Doc currency routing | Removed from `docs/specs/` on 2026-07-02 after final pre-removal tree commit `8657e9e` completed document currency classification, docs search/inventory metadata, `context_for_task` ranking, `docs_current_for_task`, durable docs promotion, and spec-lifecycle-manager handoff. | MCP surface design, graph store design, runtime contracts, documentation map, spec-lifecycle-manager doc currency handoff, MCP server card, Codex integration profile, docs/context/MCP tests, lifecycle lint, closure check, and closure-risk review. |
 
@@ -249,6 +250,29 @@ name their own final pre-removal tree commits.
   handlers until a later wrapper expansion selects them. The closed slice
   covers representative read-only, planning, graph-backed, docs, and
   workspace-write tools.
+
+### 2026-07-05 - 031-shared-path-policy
+
+- **Spec:** docs/specs/031-shared-path-policy
+- **Title:** Shared path policy
+- **Final spec commit:** 686270d
+- **Closure cleanup commit:** 93e61b5
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/reference/workspace-safety-contract.md`
+  - `docs/security/threat-model.md`
+  - `docs/requirements/agent-workbench-executable-backlog.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Spec implementation validation recorded focused
+  path-policy, workspace safety, scanner, docs, hook, edit, and MCP validation
+  tests; `pnpm typecheck`; `pnpm run validate:plugin`; full `pnpm test`;
+  lifecycle lint; active-spec scan; `git diff --check`; closure-check; and
+  closure-risk review with low risk and no findings before removal.
+- **Residual risks:** Hook feedback intentionally mirrors the shared policy
+  table because the packaged hook is plain JavaScript; drift tests cover that
+  vocabulary. Broader generated-file source-of-truth inference remains routed to
+  EB033.
 
 ## Closure Notes
 
