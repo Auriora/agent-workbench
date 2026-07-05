@@ -489,7 +489,7 @@ command-safety policy.
 
 ## Cross-Repo Dogfood Follow-Up Status
 
-TimeLocker dogfood after Spec 002 left two MCP-resource polish items:
+Early dogfood after Spec 002 left two MCP-resource polish items:
 
 - Done: align `repo:///scope` and `repo:///overview` freshness metadata with
   snapshot-backed `repo:///status` when a fresh graph snapshot exists. Scope and
@@ -502,7 +502,7 @@ TimeLocker dogfood after Spec 002 left two MCP-resource polish items:
   `.github/workflows/*`. The delivery record is
   [Spec closure log](../history/spec-closure-log.md).
 
-OneMount dogfood left Go and broad-scan follow-up items:
+Go repository dogfood left broad-scan follow-up items:
 
 - Done: add `.gocache` to the default skipped roots so Go build/test cache files do
   not consume scan budget or crowd out source files.
@@ -526,7 +526,8 @@ OneMount dogfood left Go and broad-scan follow-up items:
   `impact` keeps local or graph-scope caveats instead of claiming whole-program
   Go semantics.
 
-FreeCAD dogfood left C++ monorepo and Codex-discoverability follow-up items:
+Large C++ repository dogfood left monorepo and Codex-discoverability follow-up
+items:
 
 - Done: make `repo:///status` capability and language metadata consistent with
   `repo:///scope` for large mixed-language repositories. Status may stay cheap,
@@ -832,9 +833,9 @@ Post-closure dogfood caveats from large mixed-language repositories:
   from `docs_read_section`. Crosslink graphs and generated reports remain
   deferred until usage evidence proves they are needed.
 - Done: Spec 013 replaced scanner-backed `docs_search` ranking with a SQLite
-  FTS-backed docs index and recorded objective Python Agent IDE parity evidence
-  for docs-routing queries. Remaining broad-query ranking caveats belong to
-  durable docs search tuning, not a scanner fallback.
+  FTS-backed docs index and recorded objective parity evidence for docs-routing
+  queries. Remaining broad-query ranking caveats belong to durable docs search
+  tuning, not a scanner fallback.
 - Done: Spec 034 added document currency labels and caveats to
   `context_for_task`, `docs_search`, `repo:///docs/overview`, and
   `repo:///docs/map`, plus the read-only `docs_current_for_task` verifier

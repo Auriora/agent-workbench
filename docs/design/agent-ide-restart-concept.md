@@ -674,4 +674,5 @@ rename, change signature, safe delete, and broad graph exploration tools.
   - [Knowledge layer design](knowledge-layer-design.md)
 - Reference: [Language capability matrix](../reference/language-capability-matrix.md)
 - Delivery record: [Spec closure log](../history/spec-closure-log.md)
-- Existing PoC: `/home/bcherrington/Projects/Auriora/agent-ide`
+- Predecessor proof of concept: superseded by the current Agent Workbench
+  design and closure evidence.

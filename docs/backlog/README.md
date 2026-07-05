@@ -1,14 +1,14 @@
 ---
-title: Agent Workbench executable backlog
-doc_type: requirements
+title: Agent Workbench backlog
+doc_type: backlog
 status: draft
 owner: platform
-last_reviewed: 2026-06-11
+last_reviewed: 2026-07-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
 
-# Agent Workbench Executable Backlog
+# Agent Workbench Backlog
 
 ## Purpose
 
@@ -61,8 +61,8 @@ part of the workflow:
 
 - hook logs for deferred diagnostics, timeout reasons, unknown tool failures,
   cache refresh volume, and quiet-success behavior;
-- Jaeger or OpenTelemetry traces for slow MCP tools, common call sequences,
-  degraded spans, and shell fallback after a tool should have helped;
+- local runtime traces for slow MCP tools, common call sequences, degraded
+  spans, and shell fallback after a tool should have helped;
 - git history for fixes to agent mistakes, generated-artifact cleanup,
   validation-policy changes, and recurring repair commits;
 - PR review comments for bugs, stale docs, missing tests, generated artifacts,
@@ -82,9 +82,8 @@ part of the workflow:
 - existing human IDE features such as symbol outline, problems panel, test
   explorer, source-control view, call hierarchy, refactor preview, task runner,
   and extension marketplace;
-- existing agent tools such as CodeGraph, Graphify, Python Agent IDE, GitHub
-  MCP, ActivityWatch MCP, spec-lifecycle MCP, Figma MCP, Context7,
-  sequential-thinking, and memory.
+- comparable agent tooling patterns, translated into local, fixture-backed
+  Agent Workbench requirements instead of copied by name.
 
 ### Evidence Source Decisions
 
@@ -97,13 +96,13 @@ or runtime telemetry.
 | --- | --- | --- | --- | --- |
 | Codex chat history and sessions | Mine now | Existing local JSONL scanner with repo filtering, category counts, and bounded excerpts | Do not emit full transcripts; keep generated reports under `.tmp/` unless manually promoted | EB009 |
 | Codex hook logs | Mine now | Existing scanner status/reason counts plus category matching | Clean and errored hooks remain quiet; use aggregate reasons, not noisy per-event output | EB005, EB009 |
-| Jaeger/OpenTelemetry traces | Mine next | Span summary for slow tools, degraded states, skipped evidence, retry/fallback chains, and shell fallback after tool availability | Local/exported traces only; redact attributes; never require a live Jaeger server for normal validation | EB001, EB003, EB009 |
+| Local runtime traces | Mine next | Span summary for slow tools, degraded states, skipped evidence, retry/fallback chains, and shell fallback after tool availability | Local/exported traces only; redact attributes; never require a live trace service for normal validation | EB001, EB003, EB009 |
 | MCP server logs | Mine next | Transport/session/tool-list error summaries and long-call aggregates | Treat protocol logs as operational evidence; redact arguments and paths outside the repo | EB001, EB007, EB009 |
 | `AGENTS.md` files | Mine next | Repo instruction inventory for repeated validation, safety, dependency, and workflow requirements | Read-only scan; preserve repository scope and precedence; do not rewrite instructions automatically | EB004, EB008, EB009 |
 | Spec and task docs | Mine next | Active/archived spec inventory, traceability gaps, stale open decisions, missing verification evidence | Defer generic lifecycle ownership to spec-lifecycle-manager; Agent Workbench only consumes task context | EB006, EB009 |
 | Git history | Mine later | Commit-message and changed-file summaries for generated-artifact cleanup, validation fixes, and recurring agent repair commits | Avoid mining private author intent; classify only local repo metadata and bounded diffs | EB008, EB009 |
-| PR review comments | Mine later | Review finding categories for missing tests, stale docs, risky diffs, and generated artifacts | Require explicit GitHub/PR context; do not make network access part of local default scans | EB005, EB008, EB009 |
-| CI logs | Mine later | Failed-check summaries for wrong validation slices, missing native builds, environment mismatch, and package-manager errors | Use bounded logs from explicit local files or approved GitHub context; redact secrets | EB004, EB009 |
+| Review comments | Mine later | Review finding categories for missing tests, stale docs, risky diffs, and generated artifacts | Require explicit review context; do not make network access part of local default scans | EB005, EB008, EB009 |
+| CI logs | Mine later | Failed-check summaries for wrong validation slices, missing native builds, environment mismatch, and package-manager errors | Use bounded logs from explicit local files or approved CI context; redact secrets | EB004, EB009 |
 | Shell command logs | Defer | Optional command-frequency and failure-pattern summary when a reliable local source exists | Do not scrape interactive shell history by default; require explicit opt-in and redaction design | EB004, EB009 |
 | Issue trackers and backlogs | Defer | Category summary when a project provides exported local issue/backlog data | No network default; treat external tracker content as advisory planning evidence | EB009 |
 | Human IDE feature references | Mine manually | Reference matrix for problems panel, test explorer, SCM, call hierarchy, refactor preview, and task runner patterns | Do not copy product-specific UX; translate only agent-facing workflow needs | EB001, EB004, EB005, EB010 |
@@ -188,7 +187,7 @@ or runtime telemetry.
   - Runtime fixtures for cold, refreshing, stale, failed, and
     permission-limited repos.
   - Cross-repo smoke summaries for representative repo shapes.
-  - OpenTelemetry spans for latency, degraded state, and skipped evidence.
+  - Local trace spans for latency, degraded state, and skipped evidence.
 - Promotion target: continue through runtime operations and MCP surface work;
   create targeted specs for repeated failure classes.
 
@@ -317,7 +316,7 @@ or runtime telemetry.
 - Status: archived Spec 018 plus future follow-up work
 - Friction signal: local history scans and hook logs expose repeated product
   issues that do not appear in static repo fixtures.
-- Runtime surface: `src/debug/codex-history-mining.ts`, OpenTelemetry, hooks,
+- Runtime surface: `src/debug/codex-history-mining.ts`, local traces, hooks,
   and future usage summaries.
 - Acceptance:
   - Scanner summarizes repo categories and hook counts.
@@ -353,21 +352,12 @@ or runtime telemetry.
   - Treat local project scans as advisory evidence until a candidate ecosystem
     has representative fixture repositories and validation expectations.
 - Validation:
-  - Active and archived specs for JavaScript/TypeScript, Go, SAM, CMake/C++,
-    .NET, Markdown, PHP/Laravel, Nuxt/Vue, Rust, Ruby, and future ecosystems.
-  - Local `/home/bcherrington/Projects` scan on 2026-06-07 recorded broad
-    ecosystem signals for HTML/web markup, Node/npm, Docker/Compose, CMake,
-    PlatformIO/Arduino, PHP/Laravel, Rust/Cargo, Ruby/Rails, Go, .NET, SQL,
-    CloudFormation/SAM, Helm, Nix, and MCP repositories.
-  - Recency review should count distinct recently touched projects per
-    ecosystem. The 30-day scan favored Markdown/config, Python, Docker/Compose,
-    Node/npm, HTML/CSS/JS/TS, C/C++/CMake, SQL, C#/.NET, Go, SAM, web test
-    tooling, and one PlatformIO/Arduino client project. PHP/Laravel is raised
-    to Level 1 priority because an identified PHP developer can test and give
-    feedback. Nuxt/Vue web-app support is also Level 1 because the same tester
-    works in JS/TS Nuxt and would exercise the same priority tool surfaces.
-    Rust appeared in the 90-day window; Ruby/Rails was present in the wider tree
-    but not recent.
+  - Active and archived specs for current language and ecosystem adapters.
+  - Local project scans should record broad ecosystem signals without naming
+    external repositories or people.
+  - Recency review should count distinct recently touched project shapes per
+    ecosystem and promote only those with representative fixtures and tester
+    availability.
 - Promotion target: continue active language and ecosystem specs.
 
 ### EB011: Contextual Tool Exposure And Dynamic Router
@@ -486,9 +476,9 @@ or runtime telemetry.
 
 - Priority: P1
 - Status: proposed spec
-- Friction signal: `aws-datalake` startup warmup no longer stack-overflows
-  after the scalar intrinsic traversal fix, but full graph warmup remained
-  CPU-bound for more than four minutes while the snapshot stayed
+- Friction signal: large-repo startup warmup no longer stack-overflows after
+  traversal fixes, but full graph warmup remained CPU-bound for more than four
+  minutes while the snapshot stayed
   `refreshing`; the run had already written roughly 159k nodes and 247k edges
   before it was stopped.
 - Runtime surface: MCP startup warmup, `repo:///status`, graph extraction,
@@ -511,8 +501,8 @@ or runtime telemetry.
 - Validation:
   - Fixture or synthetic large-repo graph warmup tests with bounded generated
     files, resource-backed templates, Markdown docs, and parser-backed source.
-  - Regression using an `aws-datalake`-shaped fixture or recorded metrics for
-    the observed 159k-node/247k-edge warmup scale.
+  - Regression using a large-repo fixture or recorded metrics for the observed
+    159k-node/247k-edge warmup scale.
   - Tests for interrupted warmup, stale refreshing snapshots, progress
     reporting, and subsequent restart behavior.
   - Telemetry or debug harness output that records phase timings and row-count
@@ -524,9 +514,8 @@ or runtime telemetry.
 
 - Priority: P1
 - Status: candidate spec
-- Friction signal: `aws-datalake` document-audit dogfooding found roughly 150
-  durable Markdown docs outside `docs/specs`, concentrated in `docs/data-flow`,
-  `docs/reference`, and `docs/runbooks`. A first Markdown quality call was too
+- Friction signal: large documentation-set dogfooding found roughly 150 durable
+  Markdown docs outside `docs/specs`. A first Markdown quality call was too
   broad for the current `check_markdown_set` limit, forcing a filesystem
   inventory pass and focused subset calls.
 - Runtime surface: `check_markdown_set`, `check_markdown_document`,
@@ -555,8 +544,8 @@ or runtime telemetry.
   - Golden responses for first chunk, continuation chunk, final chunk,
     spec-excluded audit, explicit spec-included audit, and budget-truncated
     audit.
-  - Regression proving a broad aws-datalake-shaped durable-doc audit can be
-    completed as bounded structured calls without direct filesystem fallback.
+  - Regression proving a broad durable-doc audit can be completed as bounded
+    structured calls without direct filesystem fallback.
   - Performance test or debug harness showing set checks do not rescan the full
     repository once per selected document.
 - Promotion target: create a future Markdown document audit scale spec under
@@ -1178,8 +1167,8 @@ Do not promote an item when:
   - Tests that a second repo gets a separate daemon and graph store.
   - Tests for daemon crash/restart, stale socket cleanup, malformed socket
     requests, and blocked graph-store startup.
-  - Dogfood post-warmup sweep against `aws-datalake` with multiple concurrent
-    clients and no `database is locked` resource or tool failures.
+  - Dogfood post-warmup sweep against a large repository with multiple
+    concurrent clients and no `database is locked` resource or tool failures.
 - Promotion target: active
   [Spec 032](../specs/032-per-repo-runtime-daemon-cache/requirements.md)
   before implementing broad graph-backed tool hardening.
@@ -1188,7 +1177,7 @@ Do not promote an item when:
 
 - Priority: P0
 - Status: closed Spec 029
-- Friction signal: external review and source inspection found that normal MCP
+- Friction signal: review and source inspection found that normal MCP
   requests can provide `repo_root`, causing workspace/safety adapters to bind
   to a caller-supplied root instead of the launched repository.
 - Runtime surface: MCP registry schemas, request parsing, root resolution,
@@ -1218,7 +1207,7 @@ Do not promote an item when:
 
 - Priority: P0
 - Status: closed Spec 030
-- Friction signal: external review and source inspection found uneven error
+- Friction signal: review and source inspection found uneven error
   handling across MCP registries; some handlers wrap use-case failures while
   others can rethrow after argument/provider checks.
 - Runtime surface: MCP registry helpers, presenters, runtime contracts,
@@ -1248,7 +1237,7 @@ Do not promote an item when:
 
 - Priority: P0
 - Status: closed Spec 031
-- Friction signal: external review found drift risk between scanner/catalog
+- Friction signal: review found drift risk between scanner/catalog
   policy and workspace write safety; source inspection confirmed catalog
   policy is richer than write safety and should become the shared authority.
 - Runtime surface: catalog scanner, docs/context routing, workspace safety,
@@ -1297,7 +1286,7 @@ Do not promote an item when:
 
 - Priority: P2
 - Status: proposed spec
-- Friction signal: Claude Code packaging exists, but external review found that
+- Friction signal: Claude Code packaging exists, but review found that
   Claude needs a concise usage artifact instead of broad architecture docs.
 - Runtime surface: Claude Code plugin package, generated skills/instructions,
   common integration profile, plugin README, and MCP call sequence guidance.
@@ -1318,7 +1307,7 @@ Do not promote an item when:
 
 - Priority: P2
 - Status: proposed spec
-- Friction signal: external review found rich design docs but no small operator
+- Friction signal: review found rich design docs but no small operator
   path for install, first run, normal task, edit task, review task, and
   troubleshooting.
 - Runtime surface: README, runbooks, documentation map, installer docs, doctor,
@@ -1339,7 +1328,7 @@ Do not promote an item when:
 
 - Priority: P1
 - Status: proposed spec
-- Friction signal: external review identified release risk across clean
+- Friction signal: review identified release risk across clean
   installs, Node versions, Codex plugin registration, Claude plugin loading,
   MCP startup, edit preview/apply, and uninstall/rollback.
 - Runtime surface: CI, package dry-run, installer dry-run, GHCR/npm release
@@ -1365,11 +1354,10 @@ Do not promote an item when:
 
 - Priority: P1
 - Status: proposed spec
-- Friction signal: 2026-06-19 session-scoped plugin feedback from a
-  Rails/spec-lifecycle phase reported that Agent Workbench was available but
-  not naturally used. The agent defaulted to shell, spec-lifecycle MCP,
-  subagents, and Docker validation because the visible Workbench surface did
-  not provide an obvious first action after worktree changes, and the
+- Friction signal: session-scoped plugin feedback reported that Agent Workbench
+  was available but not naturally used. The agent defaulted to shell, lifecycle
+  tooling, subagents, and validation commands because the visible Workbench
+  surface did not provide an obvious first action after worktree changes, and the
   advertised `repo:///status`, `repo:///scope`, and `repo:///overview`
   resources did not map cleanly to the callable tool surface the agent saw.
 - Runtime surface: integration health, agent-specific plugin guidance,
@@ -1406,8 +1394,8 @@ Do not promote an item when:
   - Fixture tests proving lifecycle evidence is consumed read-only and never
     mutates spec status, closes tasks, or replaces spec-lifecycle-manager
     preflight.
-  - Dogfood rerun on a Rails/spec-lifecycle task to check whether an agent uses
-    the Workbench entry point before falling back to shell-only status and
+  - Dogfood rerun on a lifecycle-driven task to check whether an agent uses the
+    Workbench entry point before falling back to shell-only status and
     validation planning.
 - Promotion target: create a focused post-edit or agent-adoption spec after
   active P0 MCP hardening specs, or fold into EB005 follow-up work if the
@@ -1453,6 +1441,52 @@ Do not promote an item when:
   - Release tarball install smoke using the documented Claude Code path.
 - Promotion target: fold into EB026 doctor work or EB043 release-readiness work
   when packaging dependency hygiene is scheduled.
+
+### EB046: Kiro Shell-Free Launcher
+
+- Priority: P1
+- Status: proposed spec
+- Friction signal: cross-platform packaging converted the primary runtime
+  launcher to the portable Node shim, but the Kiro package still needs a
+  verified shell-free entry point.
+- Runtime surface: Kiro Power metadata, MCP launch configuration, package
+  install paths, integration tests, and plugin documentation.
+- Acceptance:
+  - Kiro launches the MCP server through the portable Node launcher without
+    relying on a retired shell wrapper.
+  - Kiro hook and agent commands avoid inline shell environment prefixes where
+    the runtime can supply defaults.
+  - Plugin documentation no longer carries a packaging caveat for Kiro launch.
+- Validation:
+  - Kiro integration tests assert the new launch shape.
+  - Plugin validation covers Kiro metadata and packaged paths.
+  - Manual or scripted launch smoke evidence proves the MCP server starts from
+    an installed package.
+- Promotion target: create a focused integration packaging spec or fold into
+  EB043 release-readiness gates if the fix remains packaging-only.
+
+### EB047: Turnkey Native Parser Install
+
+- Priority: P2
+- Status: proposed spec
+- Friction signal: native parser setup still requires local compiler/toolchain
+  readiness on some platforms, reducing confidence in clean installs.
+- Runtime surface: package dependency constraints, native dependency setup,
+  postinstall guidance, release CI, doctor command, and install smoke tests.
+- Acceptance:
+  - Decide whether to rely on upstream prebuilt parser packages, publish
+    package-owned prebuilds, or keep the compiler prerequisite explicit.
+  - Clean installs either succeed without a local compiler on supported targets
+    or fail with a precise doctor/runbook explanation.
+  - Parser, SQLite, and validation behavior remain explicit; do not add hidden
+    parser or command-execution fallbacks to mask native setup problems.
+- Validation:
+  - Clean install smoke on supported Node/platform combinations.
+  - Native module load checks for SQLite and parser packages.
+  - Release or doctor evidence that distinguishes missing toolchain, ABI drift,
+    and package metadata errors.
+- Promotion target: fold into EB026 doctor work or EB043 release-readiness work
+  when package install reliability is scheduled.
 
 ## Extension Idea Coverage
 
@@ -1503,6 +1537,8 @@ Do not promote an item when:
 | Release-readiness gates | EB043, under package/release reliability. |
 | Changed-files Workbench entry point | EB044, with EB005, EB006, EB011, and EB016 boundaries. |
 | Native installer deprecation debt | EB045, with EB026 and EB043 packaging gates. |
+| Kiro shell-free launcher | EB046, with EB043 packaging gates. |
+| Turnkey native parser install | EB047, with EB026 and EB043 packaging gates. |
 
 ## Immediate Next Specs
 

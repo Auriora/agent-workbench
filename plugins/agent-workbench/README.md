@@ -192,9 +192,9 @@ Install the runtime first (from the GitHub release tarball — see
 > **Pending (spec 033):** the Kiro `mcp.json` still references the retired
 > `bin/agent-workbench-mcp` shell launcher and is **not** yet wired to the
 > portable `node` shim / npm runtime, so Kiro MCP launch is broken until the
-> Kiro entry point is converted — tracked in
-> `docs/backlog/033-kiro-shell-free-launcher.md`. Codex and Claude already
-> launch via `mcp-launch.mjs` against the npm-installed runtime.
+> Kiro entry point is converted. The follow-up is tracked in the Agent Workbench
+> backlog as `EB046`. Codex and Claude already launch via `mcp-launch.mjs`
+> against the npm-installed runtime.
 
 ## Claude Code Plugin
 

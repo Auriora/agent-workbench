@@ -76,6 +76,6 @@ license: GPL-3.0-or-later
 
 - `tools/devcli/README.md`
 - `docs/reference/agent-readable-changelog.md`
-- `docs/requirements/agent-workbench-executable-backlog.md`
+- `docs/backlog/README.md`
 - `docs/reference/documentation-map.md` if a new durable release-note guidance
   document is added

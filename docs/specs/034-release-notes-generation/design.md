@@ -173,7 +173,7 @@ Release-impact areas:
 - Documentation and runbooks: `README.md`, `docs/runbooks/`, durable docs
 - Tests and validation: `tests/`, `.github/workflows/`
 - Specs and planning: `docs/specs/`, `docs/backlog/`,
-  `docs/requirements/agent-workbench-executable-backlog.md`
+  `docs/backlog/README.md`
 - Internal maintenance: changes without direct consumer impact
 
 Audience impact:

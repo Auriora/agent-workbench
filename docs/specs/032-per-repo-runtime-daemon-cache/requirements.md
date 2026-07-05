@@ -24,7 +24,7 @@ for all connected agent sessions.
 - [Runtime operations design](../../design/runtime-operations-design.md)
 - [Graph store design](../../design/graph-store-design.md)
 - [MCP surface design](../../design/mcp-surface-design.md)
-- [Agent Workbench executable backlog](../../requirements/agent-workbench-executable-backlog.md#eb036-per-repo-runtime-daemon-and-session-sharing)
+- [Agent Workbench backlog](../../backlog/README.md#eb036-per-repo-runtime-daemon-and-session-sharing)
 - `src/server.ts`
 - `src/mcp/stdio.ts`
 - `src/mcp/stdio-launch.ts`

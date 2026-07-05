@@ -148,7 +148,7 @@ generic package-manager commands. Compiler APIs, `tsserver`, bundler execution,
 framework-specific route/component hierarchy edges, and cross-language JS/TS
 symbols remain deferred until separate fixture-backed promotion gates exist.
 
-OneMount dogfood confirmed the first Go slice should start before deep
+Go repository dogfood confirmed the first Go slice should start before deep
 reference/impact work with file identity, project discovery, and basic routing
 symbols. A Go-heavy repository must surface `.go` files in scope, recognize
 `go.mod` and test/build configuration, and expose package-level declarations
@@ -180,13 +180,11 @@ command is available, the plan blocks generic host commands and reports the
 governing evidence. Docker Compose and devcontainer files are environment
 evidence, not proof that host commands are forbidden by themselves.
 
-The Modena AEC .NET dogfood comparison in
-[`docs/reference/dotnet/modena-aec-dotnet-evaluation-2026-06-05.md`](../reference/dotnet/modena-aec-dotnet-evaluation-2026-06-05.md)
-is the current concrete reference for the C#/.NET slice. It shows that the
-first useful .NET step is likely resource-backed project graph extraction:
-solution/project files, target frameworks, SDK type, package/project
-references, app roles, generated-output policy, and validation planning. C# and
-Razor symbol/reference semantics should follow only with fixture-backed design.
+Dogfood for C#/.NET repositories showed that the first useful step is
+resource-backed project graph extraction: solution/project files, target
+frameworks, SDK type, package/project references, app roles, generated-output
+policy, and validation planning. C# and Razor symbol/reference semantics should
+follow only with fixture-backed design.
 The delivered resource-backed slice classifies `.sln`, `.csproj`, `.fsproj`,
 `.vbproj`, C#, and Razor files as routing evidence, skips common .NET
 build/test/publish outputs, promotes solution/project/app/controller/Razor/EF
@@ -198,14 +196,14 @@ markers when cheaply parseable. Validation planning returns non-executed
 test-project, and repo-local policy evidence. C# and Razor symbol/reference
 semantics remain deferred until fixture-backed parser design promotes them.
 
-FreeCAD dogfood confirmed the first C/C++ slice should start with reliable file
-identity and project-shape evidence before broad blast-radius claims. Common
-C/C++ extensions such as `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp`, and
-`.hxx` must classify as C/C++ instead of `text`; Python stub files such as
-`.pyi` must classify with Python-like routing evidence. The initial C/C++ graph
-should extract classes, functions, methods, includes, and CMake target
-membership before reference and impact results are promoted beyond low
-confidence.
+Dogfood for large C/C++ repositories confirmed the first C/C++ slice should
+start with reliable file identity and project-shape evidence before broad
+blast-radius claims. Common C/C++ extensions such as `.c`, `.cc`, `.cpp`,
+`.cxx`, `.h`, `.hh`, `.hpp`, and `.hxx` must classify as C/C++ instead of
+`text`; Python stub files such as `.pyi` must classify with Python-like routing
+evidence. The initial C/C++ graph should extract classes, functions, methods,
+includes, and CMake target membership before reference and impact results are
+promoted beyond low confidence.
 
 The delivered CMake/C++ slice remains `resource_backed`. Broad
 `context_for_task` ranking prefers first-party C/C++ source roots, tests,
@@ -307,11 +305,9 @@ The adapter should understand common intrinsic functions and SAM conventions:
 Lambda events, API routes, environment variables, policies, outputs, and
 handler strings.
 
-The AWS datalake dogfood comparison in
-[`docs/reference/aws-iac/aws-datalake-agent-workbench-evaluation-2026-06-05.md`](../reference/aws-iac/aws-datalake-agent-workbench-evaluation-2026-06-05.md)
-is the current concrete reference for this adapter's missing behavior: SAM
-logical ID lookup, template-to-handler edges, Lambda handler grouping,
-template-aware impact, and AWS validation planning.
+Infrastructure dogfood identified this adapter's missing behavior: template
+logical ID lookup, template-to-handler edges, handler grouping, template-aware
+impact, and infrastructure validation planning.
 
 The delivered SAM/CloudFormation support is resource-backed. It emits routing
 nodes for template logical IDs, Lambda handler strings, resolved handler-file

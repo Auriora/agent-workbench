@@ -232,7 +232,7 @@ T014 -> T015 -> T016
 - [x] T016 Promote durable docs and close readiness.
   - Depends on: T015
   - Files: `docs/reference/agent-readable-changelog.md`,
-    `docs/requirements/agent-workbench-executable-backlog.md`,
+    `docs/backlog/README.md`,
     `docs/reference/documentation-map.md` if a new durable doc is added
   - Acceptance: Durable docs describe accepted release-note workflow, reusable
     guidance destination, draft/final boundary, validation inputs, and plugin

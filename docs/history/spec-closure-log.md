@@ -25,15 +25,15 @@ name their own final pre-removal tree commits.
 | Spec | Closure action | Durable destination |
 | --- | --- | --- |
 | Spec 001: Agent IDE runtime | Removed from `docs/specs/` on 2026-06-06 after MVP completion and durable promotion. | Runtime requirements, layered/runtime/design docs, MCP surface design, graph store design, runtime contracts, workspace safety contract, ADRs, runbooks, and MVP proof matrix. |
-| Spec 002: TimeLocker dogfood follow-ups | Removed from `docs/specs/` on 2026-06-06 after follow-up behavior was routed into later cross-repo work. | Documentation map, executable backlog, and cross-repo runtime design/reference docs. |
-| Spec 003: Cross-repo trust discovery | Removed from `docs/specs/` on 2026-06-06 after trust, scope, and first-slice routing behavior was promoted. | MCP surface design, runtime operations design, workspace safety contract, language adapter design, and executable backlog. |
+| Spec 002: Early dogfood follow-ups | Removed from `docs/specs/` on 2026-06-06 after follow-up behavior was routed into later cross-repo work. | Documentation map, backlog, and cross-repo runtime design/reference docs. |
+| Spec 003: Cross-repo trust discovery | Removed from `docs/specs/` on 2026-06-06 after trust, scope, and first-slice routing behavior was promoted. | MCP surface design, runtime operations design, workspace safety contract, language adapter design, and backlog. |
 | Spec 004: Overview ranking polish | Removed from `docs/specs/` on 2026-06-06 after overview ranking behavior was promoted. | MCP surface design and documentation map. |
 | Spec 005: .NET repository shape hardening | Removed from `docs/specs/` on 2026-06-06 after generated-output and validation-planning behavior was promoted. | Language adapter design, MCP surface design, runtime operations design, and language capability matrix. |
-| Spec 006: Infrastructure template routing | Removed from `docs/specs/` on 2026-06-06 after infrastructure routing behavior was promoted. | Language adapter design, MCP surface design, and executable backlog. |
+| Spec 006: Infrastructure template routing | Removed from `docs/specs/` on 2026-06-06 after infrastructure routing behavior was promoted. | Language adapter design, MCP surface design, and backlog. |
 | Spec 007: Redaction boundary polish | Removed from `docs/specs/` on 2026-06-06 after presentation redaction behavior was promoted. | MCP surface design and workspace safety contract. |
 | Spec 008: Lambda result presentation | Removed from `docs/specs/` on 2026-06-06 after Lambda grouping behavior was promoted. | MCP surface design and language adapter design. |
 | Spec 009: CMake C++ routing and validation | Removed from `docs/specs/` on 2026-06-06 after CMake/C++ routing behavior was promoted. | Language adapter design, MCP surface design, and language capability matrix. |
-| Spec 010: Agent IDE capability analysis | Removed from `docs/specs/` on 2026-06-06 after portable lessons were promoted. | Agent IDE capability analysis reference, executable backlog, and follow-up specs. |
+| Spec 010: Agent IDE capability analysis | Removed from `docs/specs/` on 2026-06-06 after portable lessons were promoted. | Durable design docs, backlog, and follow-up specs. |
 | Spec 011: Diagnostics and post-edit feedback | Removed from `docs/specs/` on 2026-06-06 after diagnostics and quiet hook feedback behavior was promoted. | MCP surface design, edit and validation loop design, and coding agent integration design. |
 | Spec 012: Docs query and read surfaces | Removed from `docs/specs/` on 2026-06-06 after docs query/read behavior was promoted. | MCP surface design and Markdown document quality design. |
 | Spec 013: FTS-backed docs search | Removed from `docs/specs/` on 2026-06-06 after FTS docs search behavior was promoted. | MCP surface design, graph store design, and runtime operations design. |
@@ -66,7 +66,7 @@ name their own final pre-removal tree commits.
   - `docs/design/mcp-surface-design.md`
   - `docs/design/coding-agent-integration-design.md`
   - `docs/reference/documentation-map.md`
-  - `docs/requirements/agent-workbench-executable-backlog.md`
+  - `docs/backlog/README.md`
   - `docs/history/spec-closure-log.md`
   - `docs/history/spec-archive-index.md`
 
@@ -107,7 +107,7 @@ name their own final pre-removal tree commits.
   - `docs/design/graph-store-design.md`
   - `docs/reference/runtime-contracts.md`
   - `docs/reference/documentation-map.md`
-  - `docs/reference/spec-lifecycle-manager-doc-currency-handoff.md`
+  - `docs/reference/documentation-map.md`
   - `src/contracts/runtime-core-contracts.ts`
   - `src/contracts/runtime-docs-contracts.ts`
   - `tests/docs/query-docs.test.ts`
@@ -132,10 +132,7 @@ name their own final pre-removal tree commits.
   - `packaging/agent-workbench/README.md`
   - `plugins/agent-workbench/README.md`
   - `.github/workflows/cross-platform-packaging.yml`
-  - `docs/backlog/033-npm-tarball-install-flow.md`
-  - `docs/backlog/033-codex-npm-marketplace.md`
-  - `docs/backlog/033-turnkey-tree-sitter-core-build.md`
-  - `docs/backlog/033-kiro-shell-free-launcher.md`
+  - `docs/backlog/README.md`
   - `docs/reference/documentation-map.md`
   - `docs/history/spec-closure-log.md`
   - `docs/history/spec-archive-index.md`
@@ -163,7 +160,7 @@ name their own final pre-removal tree commits.
   - `plugins/agent-workbench/claude-plugin/skills/agent-workbench/SKILL.md`
   - `docs/runbooks/codex-agent-workbench-plugin.md`
   - `docs/reference/documentation-map.md`
-  - `docs/requirements/agent-workbench-executable-backlog.md`
+  - `docs/backlog/README.md`
   - `docs/history/spec-closure-log.md`
   - `docs/history/spec-archive-index.md`
 - **Verification summary:** `pnpm run validate:skills`; focused
@@ -237,7 +234,7 @@ name their own final pre-removal tree commits.
   - `docs/reference/runtime-contracts.md`
   - `docs/design/mcp-surface-design.md`
   - `docs/reference/documentation-map.md`
-  - `docs/requirements/agent-workbench-executable-backlog.md`
+  - `docs/backlog/README.md`
   - `docs/history/spec-closure-log.md`
   - `docs/history/spec-archive-index.md`
 - **Verification summary:** Spec implementation validation recorded
@@ -261,7 +258,7 @@ name their own final pre-removal tree commits.
 - **Durable docs updated:**
   - `docs/reference/workspace-safety-contract.md`
   - `docs/security/threat-model.md`
-  - `docs/requirements/agent-workbench-executable-backlog.md`
+  - `docs/backlog/README.md`
   - `docs/history/spec-closure-log.md`
   - `docs/history/spec-archive-index.md`
 - **Verification summary:** Spec implementation validation recorded focused

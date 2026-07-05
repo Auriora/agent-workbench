@@ -94,4 +94,4 @@ claiming that a vulnerability exists or does not exist.
 - [Workspace safety contract](../reference/workspace-safety-contract.md)
 - [Runtime contracts](../reference/runtime-contracts.md)
 - [Lifecycle bridge contract](../reference/lifecycle-bridge-contract.md)
-- [Agent Workbench executable backlog](../requirements/agent-workbench-executable-backlog.md)
+- [Agent Workbench backlog](../backlog/README.md)

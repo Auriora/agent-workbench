@@ -27,7 +27,7 @@ unverified work.
 - [Agent Workbench Dev CLI](../../../tools/devcli/README.md)
 - [Codex Agent Workbench plugin runbook](../../runbooks/codex-agent-workbench-plugin.md)
 - [Install Agent Workbench runbook](../../runbooks/install-agent-workbench.md)
-- [Agent Workbench executable backlog](../../requirements/agent-workbench-executable-backlog.md#eb035-agent-readable-changelog)
+- [Agent Workbench backlog](../../backlog/README.md#eb035-agent-readable-changelog)
 - `tools/devcli/src/auriora_dev/commands/release.py`
 - `tools/devcli/tests/test_cli.py`
 

@@ -69,7 +69,7 @@ Implementation evidence:
 - Durable workflow guidance was promoted to `tools/devcli/README.md`,
   `docs/runbooks/codex-agent-workbench-plugin.md`,
   `docs/reference/agent-readable-changelog.md`, and
-  `docs/requirements/agent-workbench-executable-backlog.md`.
+  `docs/backlog/README.md`.
 
 ## Residual Risks
 

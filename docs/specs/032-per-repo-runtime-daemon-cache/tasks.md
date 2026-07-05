@@ -72,7 +72,7 @@ T006,T007 -> T008
 - [ ] T008 Promote durable docs and close readiness.
   - Depends on: T006, T007
   - Files: `docs/design/runtime-operations-design.md`,
-    `docs/design/mcp-surface-design.md`, `docs/requirements/agent-workbench-executable-backlog.md`
+    `docs/design/mcp-surface-design.md`, `docs/backlog/README.md`
   - Acceptance: Durable docs describe accepted daemon/cache behavior and EB036
     is marked promoted or routed.
   - Evidence: Pending.
