@@ -1246,7 +1246,7 @@ Do not promote an item when:
 ### EB039: Shared Path Policy And Secret Path Classification
 
 - Priority: P0
-- Status: active Spec 031
+- Status: closed Spec 031
 - Friction signal: external review found drift risk between scanner/catalog
   policy and workspace write safety; source inspection confirmed catalog
   policy is richer than write safety and should become the shared authority.
@@ -1265,8 +1265,11 @@ Do not promote an item when:
   - Consistency tests compare scanner, workspace safety, docs/context, and hook
     decisions for representative paths.
   - Secret-path fixtures cover safe examples and denied credential paths.
-- Promotion target: active
-  [Spec 031](../specs/031-shared-path-policy/requirements.md).
+- Promotion target: closed
+  [Spec 031](../history/spec-closure-log.md). Current behavior lives in
+  [Workspace safety contract](../reference/workspace-safety-contract.md),
+  [Threat model](../security/threat-model.md), the shared path classifier, and
+  path-policy consistency tests.
 
 ### EB040: Runtime Version Single Source
 
@@ -1502,5 +1505,4 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-1. Spec 031: shared path policy.
-2. Spec 032: per-repo runtime daemon and shared cache.
+1. Spec 032: per-repo runtime daemon and shared cache.
