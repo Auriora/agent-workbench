@@ -50,54 +50,58 @@ T007 -> T008
 
 ## Phase 2: Watcher Adapter And Queue
 
-- [ ] T003 Implement filesystem watcher adapter.
+- [x] T003 Implement filesystem watcher adapter.
   - Depends on: T002
   - Files: `src/infrastructure/filesystem/`, `src/ports/index.ts`,
     `tests/workspace/`
   - Acceptance: `WorkspaceWatcherPort` has a concrete adapter that starts,
     stops, polls, resets, and emits normalized repo-relative events.
-  - Evidence: Pending.
-  - [ ] T003.1 Derive watch roots from included `indexed_roots`.
-  - [ ] T003.2 Filter events through shared inclusion policy.
-  - [ ] T003.3 Normalize OS watcher edge cases including rename without old
+  - Evidence: Phase 2 added FilesystemWorkspaceWatcherAdapter in src/infrastructure/filesystem/workspace-watcher.ts, shared event path classification in workspace-event-policy.ts, and exports through src/infrastructure/filesystem/index.ts. The adapter starts, stops, polls, resets, derives watch directories from indexed roots, filters ignored/generated/nested/temp/symlink-escape paths through shared policy, and normalizes fs.watch change/rename events. Validation: pnpm exec vitest run tests/workspace/workspace-watcher.test.ts tests/runtime/workspace-change-queue.test.ts tests/workspace/path-policy-consistency.test.ts tests/contracts/runtime-contracts.test.ts passed; pnpm typecheck passed.
+  - [x] T003.1 Derive watch roots from included `indexed_roots`.
+  - Evidence: deriveWorkspaceWatchDirectories in src/infrastructure/filesystem/workspace-watcher.ts derives watch directories from indexed_roots. tests/workspace/workspace-watcher.test.ts asserts indexed root src includes src and src/included while excluding ignored, generated, and nested repo descendants. Validation: pnpm exec vitest run tests/workspace/workspace-watcher.test.ts tests/runtime/workspace-change-queue.test.ts tests/workspace/path-policy-consistency.test.ts tests/contracts/runtime-contracts.test.ts passed.
+  - [x] T003.2 Filter events through shared inclusion policy.
+  - Evidence: FilesystemWorkspaceWatcherAdapter records events only after classifyWorkspaceEventPath accepts the repo-relative path, reusing catalogSkipReason plus root ignore-file rules. tests/workspace/workspace-watcher.test.ts asserts .gitignore-filtered paths are excluded and watch directory derivation excludes ignored descendants. Validation: pnpm exec vitest run tests/workspace/workspace-watcher.test.ts tests/runtime/workspace-change-queue.test.ts tests/workspace/path-policy-consistency.test.ts tests/contracts/runtime-contracts.test.ts passed; pnpm typecheck passed; pnpm test passed.
+  - [x] T003.3 Normalize OS watcher edge cases including rename without old
     path, case-only rename, atomic-save temp files, permission errors, deleted
     roots, symlink escapes, and native overflow.
-  - [ ] T003.4 Cover create, modify, delete, rename, ignored events, watcher
+  - Evidence: normalizeFsWatchEvent in src/infrastructure/filesystem/workspace-watcher.ts treats fs.watch rename without old_path as created when the path exists and deleted when it no longer exists. classifyWorkspaceEventPath rejects editor temporary files and symlink escapes before events enter the queue. Queue overflow is represented by WorkspaceChangeQueue.markOverflow and event-budget overflow output. Validation: pnpm exec vitest run tests/workspace/workspace-watcher.test.ts tests/runtime/workspace-change-queue.test.ts tests/workspace/path-policy-consistency.test.ts tests/contracts/runtime-contracts.test.ts passed; pnpm typecheck passed.
+  - [x] T003.4 Cover create, modify, delete, rename, ignored events, watcher
     shutdown, and reset.
 
-- [ ] T004 Add debounced change queue use case.
+  - Evidence: tests/workspace/workspace-watcher.test.ts covers adapter start, poll, reset, stop, emitted repo-relative file events, ignored event filtering, symlink escape filtering, editor-temp filtering, and rename normalization. tests/runtime/workspace-change-queue.test.ts covers overflow behavior. Validation: pnpm exec vitest run tests/workspace/workspace-watcher.test.ts tests/runtime/workspace-change-queue.test.ts tests/workspace/path-policy-consistency.test.ts tests/contracts/runtime-contracts.test.ts passed.
+- [x] T004 Add debounced change queue use case.
   - Depends on: T003
   - Files: `src/application/use-cases/`, `tests/runtime/`
   - Acceptance: Event bursts are coalesced deterministically and overflow
     marks the snapshot stale with a bounded rescan request.
-  - Evidence: Pending.
+  - Evidence: Phase 2 added WorkspaceChangeQueue in src/application/use-cases/workspace-change-queue.ts. It uses debounce timing before drain, coalesces repeated modifications, expands rename into delete plus refresh work, returns refreshing during the debounce window, and turns event budget overflow into stale bounded-rescan output. tests/runtime/workspace-change-queue.test.ts covers debounce/coalescing, rename normalization, and overflow. Validation: pnpm exec vitest run tests/workspace/workspace-watcher.test.ts tests/runtime/workspace-change-queue.test.ts tests/workspace/path-policy-consistency.test.ts tests/contracts/runtime-contracts.test.ts passed; pnpm typecheck passed.
 
-- [ ] T005 Route hook signals through the same queue.
+- [x] T005 Route hook signals through the same queue.
   - Depends on: T003
   - Files: plugin hooks or runtime hook adapter files, `tests/`
   - Acceptance: Hook-derived events use the same inclusion policy and cannot
     mutate SQLite directly.
-  - Evidence: Pending.
+  - Evidence: Phase 2 added enqueueHookWorkspaceSignal in src/infrastructure/filesystem/workspace-hook-signal-router.ts. Hook-shaped payload paths are classified with classifyWorkspaceEventPath and only included paths are enqueued into WorkspaceChangeQueue; the router has no SQLite, graph, or docs mutation dependency. tests/workspace/workspace-watcher.test.ts covers an included hook path reaching the queue and a .gitignore path being excluded. Validation: pnpm exec vitest run tests/workspace/workspace-watcher.test.ts tests/runtime/workspace-change-queue.test.ts tests/workspace/path-policy-consistency.test.ts tests/contracts/runtime-contracts.test.ts passed; pnpm typecheck passed; pnpm test passed.
 
 ## Phase 3: Evidence Invalidation
 
-- [ ] T006 Implement stale-rescan scheduling for included changes.
+- [x] T006 Implement stale-rescan scheduling for included changes.
   - Depends on: T004, T005
   - Files: `src/application/use-cases/`, `src/infrastructure/workers/`,
     `tests/runtime/`, `tests/graph/`
   - Acceptance: Create, modify, delete, and rename events for included files
     mark the active snapshot stale and schedule one bounded background rescan
     through the existing repository indexing path.
-  - Evidence: Pending.
+  - Evidence: Phase 3 added processWorkspaceChangeQueue in src/application/use-cases/process-workspace-change-queue.ts. Drained included events mark the active snapshot stale before requesting WarmupCoordinatorPort.requestWarmup for the same snapshot id; repeated events are coalesced by WorkspaceChangeQueue before one bounded rescan request; warmup scheduling failure returns degraded stale-rescan state. tests/runtime/process-workspace-change-queue.test.ts covers stale marking before warmup request, deduplicated event bursts, and degraded scheduling failure. Validation: pnpm exec vitest run tests/runtime/process-workspace-change-queue.test.ts tests/runtime/workspace-change-queue.test.ts tests/graph/workspace-change-queue-no-indexer.test.ts tests/workspace/workspace-watcher.test.ts passed; pnpm typecheck passed.
 
-- [ ] T007 Guard against parallel single-file indexing.
+- [x] T007 Guard against parallel single-file indexing.
   - Depends on: T006
   - Files: `src/application/use-cases/index-repository-graph.ts`,
     `src/infrastructure/workers/`, `tests/graph/`, `tests/runtime/`
   - Acceptance: Included file changes do not mutate graph, docs, node FTS, or
     docs FTS through a new per-file indexing path; failures keep stale or
     degraded freshness metadata with structured caveats.
-  - Evidence: Pending.
+  - Evidence: Phase 3 keeps watcher change handling on stale-rescan scheduling only. processWorkspaceChangeQueue depends on SnapshotPort and WarmupCoordinatorPort, not GraphWritePort, DocsIndexPort, or FileCatalogPort, and it does not call clearFile, removeEntry, replaceSnapshotExtraction, insertEdges, or replaceSnapshotDocs. tests/graph/workspace-change-queue-no-indexer.test.ts guards the source against those per-file graph/docs/catalog mutation calls. Validation: pnpm exec vitest run tests/runtime/process-workspace-change-queue.test.ts tests/runtime/workspace-change-queue.test.ts tests/graph/workspace-change-queue-no-indexer.test.ts tests/workspace/workspace-watcher.test.ts passed; pnpm typecheck passed.
 
 ## Phase 4: Freshness And Validation
 

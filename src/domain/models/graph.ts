@@ -163,6 +163,7 @@ export interface WorkspaceFileEvent {
 export interface WorkspaceWatchRequest {
   repo_root: string;
   paths?: readonly string[];
+  skipped_roots?: readonly string[];
   recursive?: boolean;
   debounce_ms?: number;
   event_budget?: number;

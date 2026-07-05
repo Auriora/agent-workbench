@@ -219,6 +219,9 @@ export function classifyPathPolicy(input: {
   if (baseInput.hasNestedGitRepository) {
     return skippedClassification(relativePath, "nested_repo", "nested_git_repository");
   }
+  if (!input.isDirectory && isTemporaryWorkspaceFile(relativePath)) {
+    return skippedClassification(relativePath, "generated", "generated_or_vendor");
+  }
   if (!input.isDirectory && hasSkippedFileExtension(relativePath)) {
     return skippedClassification(relativePath, "generated", "generated_or_vendor");
   }
@@ -346,6 +349,17 @@ function hasSkippedFileExtension(relativePath: string): boolean {
   const basename = relativePath.slice(relativePath.lastIndexOf("/") + 1).toLowerCase();
   const dot = basename.lastIndexOf(".");
   return dot > 0 && DEFAULT_SKIPPED_FILE_EXTENSIONS.has(basename.slice(dot));
+}
+
+function isTemporaryWorkspaceFile(relativePath: string): boolean {
+  const basename = relativePath.slice(relativePath.lastIndexOf("/") + 1).toLowerCase();
+  return (
+    basename.endsWith("~") ||
+    basename.startsWith(".#") ||
+    basename.endsWith(".swp") ||
+    basename.endsWith(".swo") ||
+    basename.endsWith(".tmp")
+  );
 }
 
 function isHiddenPathSkippedByDefault(relativePath: string, isDirectory: boolean): boolean {
