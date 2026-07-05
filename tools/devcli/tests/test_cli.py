@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -27,6 +28,7 @@ from auriora_dev.commands.release import (  # noqa: E402
     build_preflight_plan,
     update_release_version,
 )
+from auriora_dev.commands.release_notes import parse_name_status  # noqa: E402
 from auriora_dev.commands.spec import build_spec_plan  # noqa: E402
 
 
@@ -230,6 +232,159 @@ class CliTests(unittest.TestCase):
             self.assertIn("v0.4.0/auriora-agent-workbench-0.4.0.tgz", manifest["install_command"])
             self.assertIn("v0.4.0/auriora-agent-workbench-0.4.0.tgz", (root / "README.md").read_text(encoding="utf-8"))
 
+    def test_release_name_status_parser_preserves_rename_and_copy_scores(self) -> None:
+        changes = parse_name_status("M\tREADME.md\nR100\told.md\tnew.md\nC085\tsrc/a.py\tsrc/b.py\n")
+
+        self.assertEqual(changes[0].status, "M")
+        self.assertIsNone(changes[0].old_path)
+        self.assertEqual(changes[1].status, "R")
+        self.assertEqual(changes[1].raw_status, "R100")
+        self.assertEqual(changes[1].score, 100)
+        self.assertEqual(changes[1].old_path, "old.md")
+        self.assertEqual(changes[1].path, "new.md")
+        self.assertEqual(changes[2].status, "C")
+        self.assertEqual(changes[2].score, 85)
+
+    def test_release_notes_dry_run_uses_latest_tag_and_per_commit_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_release_notes_fixture(Path(tmp))
+
+            result = CliRunner().invoke(
+                app,
+                [
+                    "release",
+                    "notes",
+                    "--repo-root",
+                    str(root),
+                    "--version",
+                    "0.4.0",
+                    "--dry-run",
+                    "--include-evidence",
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertIn("# Agent Workbench v0.4.0", result.output)
+            self.assertIn("Generated draft; review before publishing", result.output)
+            self.assertIn("Packaging and install flow changed", result.output)
+            self.assertIn("Developer CLI and automation changed", result.output)
+            self.assertIn("Range: `v0.3.0..HEAD`", result.output)
+            self.assertIn("Commits: 3", result.output)
+
+    def test_release_notes_writes_markdown_json_and_agent_instructions(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_release_notes_fixture(Path(tmp))
+
+            result = CliRunner().invoke(
+                app,
+                [
+                    "release",
+                    "notes",
+                    "--repo-root",
+                    str(root),
+                    "--version",
+                    "0.4.0",
+                    "--validation-note",
+                    "python -m unittest tools/devcli/tests/test_cli.py passed",
+                    "--output",
+                    "docs/release-notes/v0.4.0-draft.md",
+                    "--evidence-output",
+                    "docs/release-notes/v0.4.0-evidence.json",
+                    "--agent-instructions",
+                    "docs/release-notes/v0.4.0-agent.md",
+                    "--format",
+                    "markdown",
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            notes = root / "docs/release-notes/v0.4.0-draft.md"
+            evidence_path = root / "docs/release-notes/v0.4.0-evidence.json"
+            agent = root / "docs/release-notes/v0.4.0-agent.md"
+            self.assertTrue(notes.exists())
+            self.assertTrue(evidence_path.exists())
+            self.assertTrue(agent.exists())
+            evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+            self.assertEqual(evidence["selected_from_tag"], "v0.3.0")
+            self.assertEqual(evidence["version"], "0.4.0")
+            self.assertIn("from_revision", evidence)
+            self.assertIn("to_revision", evidence)
+            self.assertEqual(len(evidence["commits"]), 3)
+            self.assertTrue(any(commit["files"] for commit in evidence["commits"]))
+            self.assertIn("docs/release-notes/v0.4.0-evidence.json", agent.read_text(encoding="utf-8"))
+            self.assertIn("python -m unittest", notes.read_text(encoding="utf-8"))
+
+    def test_release_notes_dry_run_does_not_create_output_parent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_release_notes_fixture(Path(tmp))
+
+            result = CliRunner().invoke(
+                app,
+                [
+                    "release",
+                    "notes",
+                    "--repo-root",
+                    str(root),
+                    "--version",
+                    "0.4.0",
+                    "--output",
+                    "docs/release-notes/v0.4.0-draft.md",
+                    "--evidence-output",
+                    "docs/release-notes/v0.4.0-evidence.json",
+                    "--agent-instructions",
+                    "docs/release-notes/v0.4.0-agent.md",
+                    "--dry-run",
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertFalse((root / "docs/release-notes").exists())
+            self.assertIn("# Agent Workbench v0.4.0", result.output)
+
+    def test_release_notes_empty_range_exits_nonzero_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_release_notes_fixture(Path(tmp), after_tag_commits=False)
+
+            result = CliRunner().invoke(
+                app,
+                [
+                    "release",
+                    "notes",
+                    "--repo-root",
+                    str(root),
+                    "--from",
+                    "v0.3.0",
+                    "--version",
+                    "0.4.0",
+                    "--output",
+                    "docs/release-notes/v0.4.0-draft.md",
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 1, result.output)
+            self.assertIn("has no commits", result.output)
+            self.assertFalse((root / "docs/release-notes").exists())
+
+    def test_release_notes_help_lists_evidence_and_review_options(self) -> None:
+        result = CliRunner().invoke(app, ["release", "notes", "--help"])
+
+        self.assertEqual(result.exit_code, 0, result.output)
+        for expected in [
+            "--from",
+            "--to",
+            "--version",
+            "--output",
+            "--format",
+            "--include-evidence",
+            "--evidence-output",
+            "--validation-note",
+            "--validation-file",
+            "--final",
+            "--dry-run",
+            "--agent-instructions",
+        ]:
+            self.assertIn(expected, result.output)
+
     def test_cache_inspect_missing_database(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             data = inspect_database(Path(tmp) / "missing.sqlite")
@@ -261,6 +416,42 @@ class CliTests(unittest.TestCase):
         self.assertEqual(data["metrics"]["unresolved_references"], "unavailable")
         self.assertEqual(data["latest_snapshot"]["id"], "s1")
         json.dumps(data)
+
+    def _make_release_notes_fixture(self, root: Path, *, after_tag_commits: bool = True) -> Path:
+        (root / "docs").mkdir(parents=True)
+        (root / "tools/devcli/src").mkdir(parents=True)
+        (root / "packaging/agent-workbench").mkdir(parents=True)
+        (root / "package.json").write_text(
+            json.dumps({"name": "@auriora/agent-workbench", "version": "0.3.0"}) + "\n",
+            encoding="utf-8",
+        )
+        (root / "pnpm-lock.yaml").write_text("lockfileVersion: '9.0'\n", encoding="utf-8")
+        self._git(root, "init")
+        self._git(root, "config", "user.email", "dev@example.com")
+        self._git(root, "config", "user.name", "Dev User")
+        (root / "README.md").write_text("Agent Workbench\n", encoding="utf-8")
+        self._git(root, "add", ".")
+        self._git(root, "commit", "-m", "Initial release baseline")
+        self._git(root, "tag", "v0.3.0")
+        self._git(root, "tag", "v0.4.0-rc.1")
+
+        if after_tag_commits:
+            (root / "tools/devcli/src/release_tool.py").write_text("print('notes')\n", encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "Add release notes command")
+            package = json.loads((root / "package.json").read_text(encoding="utf-8"))
+            package["version"] = "0.4.0"
+            (root / "package.json").write_text(json.dumps(package) + "\n", encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "Update package metadata")
+            (root / "docs/runbooks").mkdir(parents=True)
+            (root / "docs/runbooks/release.md").write_text("Release notes workflow\n", encoding="utf-8")
+            self._git(root, "add", ".")
+            self._git(root, "commit", "-m", "Document release notes workflow")
+        return root
+
+    def _git(self, root: Path, *args: str) -> None:
+        subprocess.run(("git", *args), cwd=root, check=True, text=True, capture_output=True)
 
 
 if __name__ == "__main__":

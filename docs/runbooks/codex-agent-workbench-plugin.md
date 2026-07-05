@@ -312,6 +312,35 @@ docker build -f packaging/agent-workbench/Containerfile -t ghcr.io/bcherrington/
 
 Tagged GitHub releases publish through the GHCR workflow.
 
+## Release Notes Workflow
+
+Use `awb release notes` to generate a reviewable release-note draft from local
+Git evidence before creating a GitHub release:
+
+```bash
+awb release notes \
+  --from vX.Y.Z \
+  --to HEAD \
+  --version X.Y.Z \
+  --output docs/release-notes/vX.Y.Z-draft.md \
+  --evidence-output docs/release-notes/vX.Y.Z-evidence.json \
+  --agent-instructions docs/release-notes/vX.Y.Z-agent.md
+```
+
+The command collects commits, range-level changed files, per-commit changed
+files, release tag evidence, and optional validation notes. The generated draft
+is not final by default. A maintainer or LLM-backed agent should refine the
+draft into consumer-readable notes, preserve uncertainty, and avoid claiming
+validation that was not supplied.
+
+Publish with reviewed notes explicitly:
+
+```bash
+awb release github X.Y.Z --notes-file docs/release-notes/vX.Y.Z.md
+```
+
+Release publishing does not implicitly generate or refine notes.
+
 ## Validation
 
 Use these checks before considering plugin/runtime setup changes complete:

@@ -31,6 +31,7 @@ awb spec summary docs/specs/028-dev-cli-workflow-tools
 awb spec lint docs/specs/028-dev-cli-workflow-tools
 awb doctor
 awb release preflight
+awb release notes --from v0.3.0 --to HEAD --version 0.4.0 --dry-run
 ```
 
 Local mutation commands:
@@ -42,6 +43,33 @@ awb plugin refresh
 
 Use `--dry-run` on package and plugin mutation commands before changing local
 npm installs or Codex plugin registration.
+
+## Release Notes
+
+Generate first-pass release notes from Git evidence before publishing a GitHub
+release:
+
+```bash
+awb release notes \
+  --from v0.3.0 \
+  --to HEAD \
+  --version 0.4.0 \
+  --output docs/release-notes/v0.4.0-draft.md \
+  --evidence-output docs/release-notes/v0.4.0-evidence.json \
+  --agent-instructions docs/release-notes/v0.4.0-agent.md
+```
+
+The default output is a generated draft. Review it manually or with an
+LLM-backed agent before using it as release notes:
+
+```bash
+awb release github 0.4.0 --notes-file docs/release-notes/v0.4.0.md
+```
+
+`awb release notes` uses Git history and changed-file evidence only. It does not
+query GitHub or claim validation unless `--validation-note` or
+`--validation-file` is supplied. `--dry-run` prints the draft and creates no
+files or directories.
 
 ## Validation
 

@@ -12,6 +12,14 @@ from typing import Any
 import typer
 
 from auriora_dev.commands.package import build_package_check_plan
+from auriora_dev.commands.release_notes import (
+    ReleaseNotesError,
+    collect_release_notes_evidence,
+    evidence_to_json,
+    render_agent_instructions,
+    render_release_notes,
+    write_text_output,
+)
 from auriora_dev.runner import CommandSpec, run_plan, summarize
 
 
@@ -385,5 +393,108 @@ def register(app: typer.Typer) -> None:
         )
         results = run_plan(plan, dry_run=dry_run)
         summarize(results)
+
+    @release_app.command("notes")
+    def release_notes(
+        from_ref: str | None = typer.Option(
+            None,
+            "--from",
+            help="Lower bound ref. Defaults to latest reachable stable vX.Y.Z tag.",
+        ),
+        to_ref: str = typer.Option("HEAD", "--to", help="Upper bound ref."),
+        version: str | None = typer.Option(
+            None,
+            "--version",
+            help="Display version. Defaults to package.json#/version.",
+        ),
+        output: Path | None = typer.Option(None, "--output", help="Markdown output path."),
+        release_format: str = typer.Option(
+            "draft",
+            "--format",
+            help="Output format: draft, github, markdown, or agent.",
+        ),
+        include_evidence: bool = typer.Option(
+            False,
+            "--include-evidence",
+            help="Include compact evidence in Markdown output.",
+        ),
+        evidence_output: Path | None = typer.Option(
+            None,
+            "--evidence-output",
+            help="Structured JSON evidence output path.",
+        ),
+        validation_note: str | None = typer.Option(
+            None,
+            "--validation-note",
+            help="Manual validation summary to include.",
+        ),
+        validation_file: Path | None = typer.Option(
+            None,
+            "--validation-file",
+            help="Local validation evidence file to include.",
+        ),
+        final: bool = typer.Option(
+            False,
+            "--final",
+            help="Mark output as maintainer-reviewed final notes.",
+        ),
+        dry_run: bool = typer.Option(
+            False,
+            "--dry-run",
+            help="Print generated notes without writing files or directories.",
+        ),
+        agent_instructions: Path | None = typer.Option(
+            None,
+            "--agent-instructions",
+            help="Write an agent-ready refinement prompt.",
+        ),
+        repo_root: Path | None = typer.Option(None, "--repo-root", help="Repository root override."),
+    ) -> None:
+        from auriora_dev.repo import resolve_repo_root
+
+        if release_format not in {"draft", "github", "markdown", "agent"}:
+            typer.secho("--format must be one of: draft, github, markdown, agent.", fg=typer.colors.RED)
+            raise typer.Exit(code=2)
+        root = resolve_repo_root(repo_root)
+        try:
+            evidence = collect_release_notes_evidence(
+                root,
+                from_ref=from_ref,
+                to_ref=to_ref,
+                version=version or current_package_version(root),
+                validation_note=validation_note,
+                validation_file=validation_file,
+            )
+            markdown = render_release_notes(
+                evidence,
+                release_format=release_format,  # type: ignore[arg-type]
+                include_evidence=include_evidence,
+                final=final,
+            )
+            if evidence_output is not None:
+                evidence_path = evidence_output if evidence_output.is_absolute() else root / evidence_output
+                write_text_output(evidence_path, evidence_to_json(evidence), dry_run=dry_run)
+                if not dry_run:
+                    typer.echo(f"Wrote evidence: {evidence_path.relative_to(root)}")
+            else:
+                evidence_path = None
+            if agent_instructions is not None:
+                agent_path = agent_instructions if agent_instructions.is_absolute() else root / agent_instructions
+                write_text_output(
+                    agent_path,
+                    render_agent_instructions(evidence, evidence_output=evidence_output),
+                    dry_run=dry_run,
+                )
+                if not dry_run:
+                    typer.echo(f"Wrote agent instructions: {agent_path.relative_to(root)}")
+            if output is not None and not dry_run:
+                output_path = output if output.is_absolute() else root / output
+                write_text_output(output_path, markdown, dry_run=False)
+                typer.echo(f"Wrote release notes: {output_path.relative_to(root)}")
+                return
+            typer.echo(markdown)
+        except ReleaseNotesError as exc:
+            typer.secho(str(exc), fg=typer.colors.RED)
+            raise typer.Exit(code=1) from exc
 
     app.add_typer(release_app, name="release")

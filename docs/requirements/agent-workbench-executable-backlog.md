@@ -1102,7 +1102,7 @@ or runtime telemetry.
 ### EB035: Agent-Readable Changelog
 
 - Priority: P1
-- Status: documented changelog created
+- Status: documented changelog and release-note evidence workflow created
 - Friction signal: human changelogs do not always tell agents which behavior,
   contract, or workflow expectations changed.
 - Runtime surface: durable reference docs, package metadata, integration
@@ -1115,7 +1115,8 @@ or runtime telemetry.
   - Link entries to specs, commits, proof evidence, or release records when
     available.
 - Validation:
-  - Markdown review and future package/release checklist integration.
+  - Markdown review and package/release checklist integration through
+    `awb release notes`.
 - Promotion target: maintain
   [Agent-readable changelog](../reference/agent-readable-changelog.md) as a
   durable adoption surface.

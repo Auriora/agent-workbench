@@ -48,7 +48,28 @@ license: GPL-3.0-or-later
 
 ## Evidence Log
 
-- Pending.
+- `python3 -m unittest tools/devcli/tests/test_cli.py`: passed, 19 tests.
+- `pnpm validate:plugin`: passed.
+- `pnpm pack:dry-run`: passed; npm emitted existing unknown-env-config warnings.
+- `pnpm typecheck`: passed.
+- `pnpm test`: passed, 75 files and 528 tests.
+- `git diff --check`: passed.
+
+Implementation evidence:
+
+- `tools/devcli/src/auriora_dev/commands/release_notes.py` owns release-note
+  data structures, Git range/tag evidence collection, per-commit file evidence,
+  classification, grouping, rendering, JSON output, agent instructions, and file
+  writes.
+- `tools/devcli/src/auriora_dev/commands/release.py` registers
+  `awb release notes` and delegates to the helper module.
+- `tools/devcli/tests/test_cli.py` covers name-status parsing, tag detection,
+  per-commit evidence, JSON evidence, agent instructions, dry-run no-write
+  behavior, empty ranges, and CLI help.
+- Durable workflow guidance was promoted to `tools/devcli/README.md`,
+  `docs/runbooks/codex-agent-workbench-plugin.md`,
+  `docs/reference/agent-readable-changelog.md`, and
+  `docs/requirements/agent-workbench-executable-backlog.md`.
 
 ## Residual Risks
 

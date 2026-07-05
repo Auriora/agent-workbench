@@ -26,6 +26,45 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
+## 2026-07-05: Release Notes Evidence Workflow
+
+### Agent-Visible Changes
+
+- Added `awb release notes` for generating reviewable release-note drafts from
+  local Git evidence.
+- Release-note evidence includes the selected range, selected tag when inferred,
+  resolved revisions, branch, commits, range-level changed files, per-commit
+  changed files, candidate groups, validation evidence, and skipped enrichment.
+- The command can write Markdown notes, JSON evidence, and an agent instruction
+  prompt for LLM-backed refinement.
+
+### Contract Changes
+
+- Release-note drafts are not final by default. Agents must treat them as
+  evidence-backed first-pass outlines until a maintainer or refinement pass
+  reviews them.
+- Validation claims must come from `--validation-note`, `--validation-file`, or
+  a future structured validation source. Agents must not infer passed validation
+  from changed tests alone.
+- GitHub PR metadata is not part of the first implementation; skipped enrichment
+  is recorded in the evidence packet.
+
+### Required Agent Behavior Changes
+
+- Use generated JSON evidence as the source of truth when refining release
+  notes.
+- Group by consumer outcome rather than commit count.
+- Preserve low-confidence groups in `Needs Review` or `Known Issues` instead of
+  guessing.
+- Keep package, install, command, MCP, compatibility, upgrade, and validation
+  impacts visible when evidence supports them.
+
+### Migration Notes
+
+- Use `awb release notes --dry-run` before writing release-note files.
+- Pass reviewed final notes to `awb release github --notes-file`; release
+  publishing does not generate or refine notes implicitly.
+
 ## 2026-06-13: Product Positioning And Lifecycle Boundary
 
 ### Agent-Visible Changes
