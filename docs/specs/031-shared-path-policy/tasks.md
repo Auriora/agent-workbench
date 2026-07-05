@@ -23,7 +23,7 @@ T006,T007 -> T008
   - Files: `src/`, `tests/`, `plugins/agent-workbench/hooks/`
   - Acceptance: Scanner, docs, context, validation, preview/apply, hooks, and
     redaction consumers are mapped.
-  - Evidence: Inventory completed during implementation: scanner and docs/context/validation consumers use catalog skip reasons; workspace safety and plugin hook had local path-risk lists; redaction remains content/presentation-specific. Evidence: rg inventory plus focused implementation diff.
+  - Evidence: Inventory completed during implementation with `rg -n "catalogSkipReason|DEFAULT_GENERATED_ROOTS|DEFAULT_VENDOR_ROOTS|path-risk|redact" src tests plugins/agent-workbench/hooks`; scanner and docs/context/validation consumers used catalog skip reasons, workspace safety and plugin hook had local path-risk lists, and redaction remained content/presentation-specific. The focused implementation diff then migrated those consumers to the shared classifier or tested hook vocabulary.
 
   - Evidence mode: implementation
 - [x] T002 Create shared classifier.
