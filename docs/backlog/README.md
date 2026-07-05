@@ -827,7 +827,7 @@ or runtime telemetry.
 ### EB023: Trust Calibration In Tool Outputs
 
 - Priority: P0
-- Status: proposed spec
+- Status: active Spec 035 design stage
 - Friction signal: useful routing evidence can be over-read as proof by agents
   unless every major response states what it is safe for.
 - Runtime surface: shared response metadata, presenters, `context_for_task`,
@@ -1545,5 +1545,4 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-No immediate next spec is selected. Use the backlog items above and current
-dogfood evidence to choose the next active package.
+1. Spec 035: trust calibration in tool outputs.
