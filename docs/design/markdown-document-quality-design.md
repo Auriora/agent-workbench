@@ -90,7 +90,9 @@ findings. It is not an external linter and does not execute formatters.
 The read-only checker detects:
 
 - skipped heading levels, such as `h2` directly to `h4`
-- duplicate headings in the same scope
+- duplicate headings under the same parent heading path. Repeated section labels
+  under different parents, such as per-requirement `Acceptance Criteria`
+  sections, are valid structure.
 
 Deferred checks:
 

@@ -72,6 +72,7 @@ function checkHeadings(input: {
   const findings: MarkdownQualityFinding[] = [];
   const headings = input.document.blocks.filter(isHeading);
   const seen = new Set<string>();
+  const headingPath: string[] = [];
   let previousDepth = 0;
   for (const heading of headings) {
     if (previousDepth > 0 && heading.depth > previousDepth + 1) {
@@ -91,7 +92,10 @@ function checkHeadings(input: {
       );
     }
     const normalized = normalizeHeading(heading.text);
-    if (seen.has(normalized)) {
+    headingPath.splice(heading.depth - 1);
+    const parentPath = headingPath.slice(0, heading.depth - 1);
+    const scopedHeadingKey = [...parentPath, normalized].join("\u0000");
+    if (seen.has(scopedHeadingKey)) {
       findings.push(
         finding({
           document: input.document,
@@ -107,7 +111,8 @@ function checkHeadings(input: {
         })
       );
     }
-    seen.add(normalized);
+    seen.add(scopedHeadingKey);
+    headingPath[heading.depth - 1] = normalized;
     previousDepth = heading.depth;
   }
   return findings;

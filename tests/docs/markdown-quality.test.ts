@@ -82,6 +82,23 @@ describe("Markdown quality checker", () => {
     }
   });
 
+  it("allows repeated spec section labels under different parent headings", async () => {
+    const fixture = copyFixture();
+    try {
+      const result = await checkFixtureDocument(fixture.root, "docs/spec-requirements.md");
+      const check = checkMarkdownDocumentResultSchema.parse(result.check);
+
+      expect(check).toMatchObject({
+        status: "done",
+        findings: [],
+        warnings: [],
+        truncated: false
+      });
+    } finally {
+      fixture.dispose();
+    }
+  });
+
   it("skips generated or vendor paths before reading document text", async () => {
     const fixture = copyFixture();
     try {
