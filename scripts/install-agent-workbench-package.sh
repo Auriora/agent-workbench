@@ -61,6 +61,40 @@ if [[ -n "$prefix" ]]; then
   npm_root+=(--prefix "$prefix")
 fi
 
+run_codex() {
+  if [[ -n "$codex_home" ]]; then
+    CODEX_HOME="$codex_home" codex "$@"
+  else
+    codex "$@"
+  fi
+}
+
+realpath_or_echo() {
+  local path_value="${1:?path is required}"
+  readlink -f "$path_value" 2>/dev/null || printf '%s\n' "$path_value"
+}
+
+codex_marketplace_root() {
+  local marketplace_name="${1:?marketplace name is required}"
+  run_codex plugin marketplace list | awk -v marketplace="$marketplace_name" '$1 == marketplace { print $2; exit }'
+}
+
+ensure_codex_marketplace() {
+  local marketplace_name="${1:?marketplace name is required}"
+  local source_path="${2:?marketplace source is required}"
+  local existing_root
+  existing_root="$(codex_marketplace_root "$marketplace_name")"
+  if [[ -n "$existing_root" ]]; then
+    if [[ "$(realpath_or_echo "$existing_root")" == "$(realpath_or_echo "$source_path")" ]]; then
+      echo "Codex marketplace '$marketplace_name' already points to $existing_root"
+      return
+    fi
+    echo "Replacing Codex marketplace '$marketplace_name' source: $existing_root -> $source_path"
+    run_codex plugin marketplace remove "$marketplace_name"
+  fi
+  run_codex plugin marketplace add "$source_path"
+}
+
 if [[ "$dry_run" == true ]]; then
   if [[ -n "${CXXFLAGS:-}" ]]; then
     echo "dry-run: CXXFLAGS=$CXXFLAGS"
@@ -100,13 +134,8 @@ if [[ "$skip_codex_config" == false ]]; then
     hook_args+=(--codex-home "$codex_home")
   fi
   "${hook_args[@]}"
-  if [[ -n "$codex_home" ]]; then
-    CODEX_HOME="$codex_home" codex plugin marketplace add "$link"
-    CODEX_HOME="$codex_home" codex plugin add agent-workbench@agent-workbench-local
-  else
-    codex plugin marketplace add "$link"
-    codex plugin add agent-workbench@agent-workbench-local
-  fi
+  ensure_codex_marketplace agent-workbench-local "$link"
+  run_codex plugin add agent-workbench@agent-workbench-local
 fi
 
 echo "Installed local Agent Workbench package."
