@@ -25,7 +25,11 @@ import { getRepoScope } from "./application/use-cases/get-repo-scope.js";
 import { getSnapshotRepoStatus } from "./application/use-cases/get-repo-status.js";
 import type { IndexRepositoryGraphResult } from "./application/use-cases/index-repository-graph.js";
 import { planVerification } from "./application/use-cases/plan-verification.js";
+import { processWorkspaceChangeQueue, type WorkspaceChangeQueueProcessResult } from "./application/use-cases/process-workspace-change-queue.js";
 import { previewWorkspaceEdit } from "./application/use-cases/preview-workspace-edit.js";
+import type { WatcherFreshnessState } from "./application/use-cases/response-metadata.js";
+import { WorkspaceChangeQueue } from "./application/use-cases/workspace-change-queue.js";
+import { resolveWorkspaceWatcherConfig, type WorkspaceWatcherConfig, type WorkspaceWatchHandle } from "./domain/models/index.js";
 import {
   getDocsMap,
   getDocsOutline,
@@ -38,6 +42,7 @@ import { InMemoryEditPreviewStoreAdapter } from "./infrastructure/edit-preview-s
 import { JsonSyntaxDiagnosticsProviderAdapter } from "./infrastructure/diagnostics/index.js";
 import {
   FileCatalogScannerAdapter,
+  FilesystemWorkspaceWatcherAdapter,
   WorkspaceFileAdapter,
   WorkspaceSafetyAdapter
 } from "./infrastructure/filesystem/index.js";
@@ -71,6 +76,9 @@ export type AgentWorkbenchServerOptions = {
   startupWarmupDelayMs?: number;
   startupWarmupMaxFiles?: number;
   rootAuthorityPolicy?: RootAuthorityPolicy;
+  workspaceWatcher?: Partial<WorkspaceWatcherConfig>;
+  workspaceWatcherIndexedRoots?: readonly string[];
+  workspaceWatcherSkippedRoots?: readonly string[];
 };
 
 const DEFAULT_STARTUP_WARMUP_DELAY_MS = 1000;
@@ -98,6 +106,63 @@ export function createAgentWorkbenchServer(
   const databasePath = graphStorePath(absoluteRepoRoot);
   const graphStore = createAsyncGraphStore(databasePath);
   const telemetry = createTelemetryAdapter(telemetryConfigFromEnv());
+  const workspaceWatcherConfig = resolveWorkspaceWatcherConfig(options.workspaceWatcher);
+  const workspaceWatcher = new FilesystemWorkspaceWatcherAdapter();
+  const workspaceChangeQueue = new WorkspaceChangeQueue({
+    clock,
+    config: workspaceWatcherConfig
+  });
+  let workspaceWatchHandle: WorkspaceWatchHandle | null = null;
+  let workspaceWatcherFreshness: WatcherFreshnessState | undefined;
+
+  async function updateWorkspaceWatcherFreshness(
+    repoRoot: string,
+    store: GraphStore
+  ): Promise<WatcherFreshnessState | undefined> {
+    if (!workspaceWatcherConfig.enabled) {
+      return undefined;
+    }
+
+    try {
+      if (workspaceWatchHandle === null) {
+        workspaceWatchHandle = await workspaceWatcher.start({
+          repo_root: repoRoot,
+          paths: options.workspaceWatcherIndexedRoots ?? ["."],
+          skipped_roots: options.workspaceWatcherSkippedRoots ?? [],
+          enabled: workspaceWatcherConfig.enabled,
+          debounce_ms: workspaceWatcherConfig.debounce_ms,
+          event_budget: workspaceWatcherConfig.event_budget
+        });
+      }
+
+      const events = await workspaceWatcher.poll({
+        watch_id: workspaceWatchHandle.id,
+        max_events: workspaceWatcherConfig.event_budget
+      });
+      for (const event of events) {
+        workspaceChangeQueue.enqueue(event);
+      }
+      workspaceWatcherFreshness = watcherFreshnessFromQueueResult(
+        await processWorkspaceChangeQueue({
+          repo_root: repoRoot,
+          queue: workspaceChangeQueue,
+          snapshots: store,
+          warmups: runtime,
+          clock
+        })
+      );
+    } catch (error) {
+      workspaceWatcherFreshness = {
+        status: "degraded",
+        queue_state: "failed",
+        scope_status: "unknown",
+        ignore_rules_status: "unknown",
+        reason: error instanceof Error ? error.message : String(error)
+      };
+    }
+    return workspaceWatcherFreshness;
+  }
+
   const server = createAgentWorkbenchMcpServer(absoluteRepoRoot, {
     rootAuthorityPolicy: createRootAuthorityPolicy({
       launchRoot: absoluteRepoRoot,
@@ -106,11 +171,13 @@ export function createAgentWorkbenchServer(
     telemetry,
     getRepoStatus: async ({ repo_root }) => {
       const store = await graphStore();
+      const watcher = await updateWorkspaceWatcherFreshness(repo_root, store);
       return getSnapshotRepoStatus({
         repo_root,
         snapshots: store,
         catalog: store,
-        warmups: runtime
+        warmups: runtime,
+        watcher
       });
     },
     getRepoScope: async ({ repo_root }) => {
@@ -438,6 +505,40 @@ function createAsyncGraphStore(databasePath: string): () => Promise<GraphStore> 
   return () => {
     graphStore ??= Promise.resolve().then(() => openGraphStore(databasePath));
     return graphStore;
+  };
+}
+
+function watcherFreshnessFromQueueResult(
+  result: WorkspaceChangeQueueProcessResult
+): WatcherFreshnessState {
+  if (result.status === "idle") {
+    return {
+      status: "fresh",
+      queue_state: "drained",
+      scope_status: "synchronized",
+      ignore_rules_status: "synchronized"
+    };
+  }
+
+  if (result.status === "degraded") {
+    return {
+      status: "degraded",
+      queue_state: "failed",
+      scope_status: "unknown",
+      ignore_rules_status: "unknown",
+      reason: result.reason
+    };
+  }
+
+  return {
+    status: "refreshing",
+    queue_state: "pending",
+    scope_status: "synchronized",
+    ignore_rules_status: "synchronized",
+    reason:
+      result.status === "stale_rescan_scheduled"
+        ? "Workspace watcher scheduled bounded rescan."
+        : undefined
   };
 }
 

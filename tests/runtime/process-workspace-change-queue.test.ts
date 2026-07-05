@@ -60,8 +60,10 @@ class RecordingSnapshots implements SnapshotPort {
 class RecordingWarmups implements WarmupCoordinatorPort {
   public readonly requests: Array<{ repo_root: string; snapshot_id: string; force?: boolean }> = [];
 
+  constructor(private readonly activeState: WarmupExecution | null = null) {}
+
   public async getState(): Promise<WarmupExecution | null> {
-    return null;
+    return this.activeState;
   }
 
   public async requestWarmup(input: {
@@ -168,6 +170,51 @@ describe("process workspace change queue", () => {
     expect(warmups.requests).toHaveLength(1);
   });
 
+  it("reuses a planned warmup instead of scheduling duplicate bounded rescans", async () => {
+    const clock = new MutableClock("2026-07-05T12:00:00.000Z");
+    const queue = new WorkspaceChangeQueue({
+      clock,
+      config: {
+        debounce_ms: 0,
+        event_budget: 10
+      }
+    });
+    queue.enqueue({ kind: "modified", path: "src/app.ts", recorded_at: clock.nowIso8601() });
+    const snapshots = new RecordingSnapshots(snapshot("snap-1"));
+    const warmups = new RecordingWarmups(warmup("planned", "warmup-existing", "snap-existing"));
+
+    await expect(
+      processWorkspaceChangeQueue({
+        repo_root: "/repo",
+        queue,
+        snapshots,
+        warmups,
+        clock
+      })
+    ).resolves.toEqual({
+      status: "stale_rescan_scheduled",
+      repo_root: "/repo",
+      events: [
+        {
+          kind: "modified",
+          path: "src/app.ts",
+          recorded_at: "2026-07-05T12:00:00.000Z"
+        }
+      ],
+      bounded_rescan_required: true,
+      snapshot_id: "snap-existing",
+      execution_id: "warmup-existing"
+    });
+    expect(snapshots.freshnessMarks).toEqual([
+      {
+        snapshot_id: "snap-1",
+        freshness: "stale",
+        reason: "Workspace watcher observed included file changes."
+      }
+    ]);
+    expect(warmups.requests).toEqual([]);
+  });
+
   it("keeps watcher freshness degraded when bounded rescan scheduling fails", async () => {
     const clock = new MutableClock("2026-07-05T12:00:00.000Z");
     const queue = new WorkspaceChangeQueue({
@@ -222,6 +269,23 @@ function snapshot(id: string): SnapshotState {
     freshness: "fresh",
     owner_state: "owner",
     created_at: "2026-07-05T12:00:00.000Z",
+    updated_at: "2026-07-05T12:00:00.000Z"
+  };
+}
+
+function warmup(
+  state: WarmupExecution["state"],
+  executionId: string,
+  snapshotId: string
+): WarmupExecution {
+  return {
+    execution_id: executionId,
+    repo_root: "/repo",
+    snapshot_id: snapshotId,
+    state,
+    owner_id: "owner",
+    queued_jobs: state === "running" ? 1 : 0,
+    started_at: "2026-07-05T12:00:00.000Z",
     updated_at: "2026-07-05T12:00:00.000Z"
   };
 }

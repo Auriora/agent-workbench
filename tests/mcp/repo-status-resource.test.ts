@@ -9,6 +9,8 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { repoStatusResource } from "../../src/interface-adapters/mcp/registries/resources/repo-status.js";
 import type { GetRepoStatusResult } from "../../src/application/use-cases/get-repo-status.js";
+import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
+import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
 import {
   getRegisteredResource,
@@ -190,6 +192,102 @@ describe("repo status MCP resource", () => {
     }
   });
 
+  it("feeds live watcher events into repo status freshness when watcher mode is enabled", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-status-watch-"));
+    const sourceDir = path.join(repoRoot, "src");
+    const sourcePath = path.join(sourceDir, "app.ts");
+    fs.mkdirSync(sourceDir, { recursive: true });
+    fs.writeFileSync(sourcePath, "export const app = true;\n");
+
+    const store = openGraphStore(graphStorePath(repoRoot));
+    try {
+      await store.upsertSnapshot({
+        snapshot: {
+          id: "1001",
+          repo_root: repoRoot,
+          workspace_root: repoRoot,
+          repo_identity: repoRoot,
+          config_identity: "default",
+          schema_version: SCHEMA_VERSION,
+          freshness: "fresh",
+          owner_state: "owner",
+          created_at: "2026-07-05T12:00:00.000Z",
+          updated_at: "2026-07-05T12:00:00.000Z"
+        }
+      });
+      await store.upsertEntry({
+        snapshot_id: "1001",
+        entry: buildFileCatalogEntry({
+          file_identity: {
+            path: "src/app.ts",
+            language: "typescript",
+            content_hash: "sha256:before",
+            size_bytes: fs.statSync(sourcePath).size,
+            mtime_ms: fs.statSync(sourcePath).mtimeMs,
+            indexed_at: "2026-07-05T12:00:00.000Z"
+          }
+        })
+      });
+    } finally {
+      store.close();
+    }
+
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, {
+        startGraphWarmup: false,
+        workspaceWatcher: {
+          enabled: true,
+          debounce_ms: 0,
+          event_budget: 10
+        }
+      });
+
+      const initialResponse = await getRegisteredResource(server, "repo:///status").readCallback({});
+      const initial = JSON.parse(initialResponse.contents[0]?.text ?? "{}") as {
+        data: GetRepoStatusResult["status"];
+      };
+      expect(initial.data.freshness).toBe("fresh");
+      expect(initial.data.watcher_freshness).toMatchObject({
+        status: "fresh",
+        queue_state: "drained"
+      });
+
+      fs.writeFileSync(sourcePath, "export const app = false;\n");
+
+      const parsed = await waitForWatcherFreshness(repoRoot, async () => {
+        const response = await getRegisteredResource(server, "repo:///status").readCallback({});
+        return JSON.parse(response.contents[0]?.text ?? "{}") as {
+          data: GetRepoStatusResult["status"];
+          meta: GetRepoStatusResult["meta"];
+        };
+      });
+
+      expect(parsed.data.freshness).toBe("refreshing");
+      expect(parsed.data.watcher_freshness).toMatchObject({
+        status: "refreshing",
+        queue_state: "pending",
+        scope_status: "synchronized",
+        ignore_rules_status: "synchronized"
+      });
+      expect(parsed.meta.caveats).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          kind: "watcher_refreshing"
+        })
+      ]));
+
+      const verifyStore = openGraphStore(graphStorePath(repoRoot));
+      try {
+        await expect(verifyStore.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({
+          freshness: "stale"
+        });
+      } finally {
+        verifyStore.close();
+      }
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("preserves no-coverage status caveats in the MCP resource envelope", async () => {
     const registered = registerMcpResource(repoStatusResource, {
       repoRoot: "/repo",
@@ -309,3 +407,33 @@ describe("repo status MCP resource", () => {
     ]);
   });
 });
+
+function graphStorePath(repoRoot: string): string {
+  const cacheDir = path.join(repoRoot, ".cache", "agent-workbench");
+  fs.mkdirSync(cacheDir, { recursive: true });
+  return path.join(cacheDir, "graph.sqlite");
+}
+
+async function waitForWatcherFreshness(
+  repoRoot: string,
+  readStatus: () => Promise<{
+    data: GetRepoStatusResult["status"];
+    meta: GetRepoStatusResult["meta"];
+  }>
+): Promise<{
+  data: GetRepoStatusResult["status"];
+  meta: GetRepoStatusResult["meta"];
+}> {
+  const deadline = Date.now() + 3_000;
+  let last = await readStatus();
+  while (Date.now() < deadline) {
+    if (last.data.watcher_freshness?.status === "refreshing") {
+      return last;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    last = await readStatus();
+  }
+  throw new Error(
+    `Timed out waiting for watcher freshness in ${repoRoot}; last status was ${JSON.stringify(last.data.watcher_freshness)}`
+  );
+}

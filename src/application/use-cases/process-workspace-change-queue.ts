@@ -86,6 +86,17 @@ export async function processWorkspaceChangeQueue(input: {
         reason: staleReason(drain.status)
       });
     }
+    const activeWarmup = await input.warmups.getState({ repo_root: input.repo_root });
+    if (activeWarmup?.state === "planned" || activeWarmup?.state === "running") {
+      return {
+        status: "stale_rescan_scheduled",
+        repo_root: input.repo_root,
+        events: drain.events,
+        bounded_rescan_required: true,
+        snapshot_id: activeWarmup.snapshot_id,
+        execution_id: activeWarmup.execution_id
+      };
+    }
     const executionId = await input.warmups.requestWarmup({
       repo_root: input.repo_root,
       snapshot_id: snapshotId

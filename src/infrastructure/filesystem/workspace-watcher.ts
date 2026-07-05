@@ -102,6 +102,7 @@ export class FilesystemWorkspaceWatcherAdapter implements WorkspaceWatcherPort {
       const watcher = fs.watch(directory, (eventType, fileName) => {
         this.recordFsEvent(session, directory, eventType, fileName);
       });
+      watcher.unref();
       watcher.on("error", () => {
         session.events.push({
           kind: "modified",
