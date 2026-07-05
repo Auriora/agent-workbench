@@ -5,6 +5,7 @@
 
 import type {
   IntegrationHealth,
+  IntegrationDaemonHealth,
   IntegrationHealthRequest,
   IntegrationSessionEvidence,
   IntegrationSurfaceHealth,
@@ -39,6 +40,7 @@ export type GetIntegrationHealthInput = {
     authority: "launch_root";
     debug_repo_root_override: boolean;
   };
+  daemon?: IntegrationDaemonHealth;
 };
 
 export type GetIntegrationHealthResult = {
@@ -68,6 +70,7 @@ export function getIntegrationHealth(input: GetIntegrationHealthInput): GetInteg
       surfaces,
       counts: countSurfaces(surfaces),
       root_policy: input.root_policy,
+      daemon: input.daemon,
       next_actions: buildNextActions(surfaces)
     },
     meta: {

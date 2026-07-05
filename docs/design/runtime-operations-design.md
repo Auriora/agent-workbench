@@ -113,7 +113,10 @@ safety, parser, or cache invalidation rules.
 ## Runtime Ownership
 
 Only one runtime should own expensive warm-up and refresh work for a repo
-fingerprint at a time.
+fingerprint at a time. The accepted implementation direction is a per-repo
+daemon: the first MCP stdio launcher for a canonical repo root starts the
+daemon when no healthy owner exists, and later launchers connect to it instead
+of opening their own graph store or starting their own warm-up writer.
 
 Ownership states:
 
@@ -129,6 +132,23 @@ The owner record lives in generated runtime cache state and includes repo
 fingerprint, process identity, heartbeat time, schema version, and snapshot id.
 Manual refresh follows the same ownership rule and reports `owner_active` when
 another process owns the repo.
+
+Daemon identity is derived from canonical repo root, runtime version, graph
+schema version, and daemon protocol version. The IPC endpoint is local-only:
+Unix domain sockets on POSIX and named pipes on Windows. Repo-local metadata
+under `.cache/agent-workbench/daemon/` records PID, socket or pipe path, and
+identity evidence; live daemon health reports connected client count, warm-up
+state, graph freshness, and last failure when available. Socket paths use a
+short identity hash under an owner-only OS temp directory on POSIX to avoid
+path-length failures; Windows named pipes use the same identity hash in the
+pipe name.
+
+Cold daemon startup is serialized with a repo-local startup lock so parallel
+agent clients and same-session sub-agents elect one daemon starter. Stale owner
+cleanup requires positive evidence. The launcher may remove stale socket
+metadata only when PID and socket evidence prove the owner is gone. Ambiguous
+evidence must produce a structured blocked state rather than destructive
+cleanup.
 
 ## Async And Concurrency Model
 
@@ -168,6 +188,21 @@ Concurrency rules:
 - Multiple read transactions may run concurrently against the last valid
   snapshot.
 - Parser workers cannot mutate graph state directly.
+- MCP client processes must proxy graph-backed requests to the daemon-owned
+  runtime after the daemon is active; they must not open independent graph
+  stores for the same repo.
+- Parallel clients for the same repo must not spawn competing cold-start daemon
+  owners; they wait on the same repo daemon socket after one launcher wins the
+  startup lock.
+- The daemon exits only after the last client disconnects plus a 30-second idle
+  grace period. A reconnect during the grace period cancels shutdown.
+
+Daemon and graph-store failures must use the runtime envelope vocabulary.
+Refreshing graph state maps to `refreshing`; incompatible or missing daemon
+identity maps to `invalid_due_to_environment`; ambiguous owner state, blocked
+graph-store startup, malformed socket handshakes, and unavailable graph evidence
+map to `blocked` with the missing evidence named. Raw `database is locked`
+output must not escape as non-JSON tool output.
 - Obsolete extraction results are rejected when their file hash or snapshot id
   no longer matches.
 - Watcher bursts are debounced before enqueueing incremental work.

@@ -63,6 +63,19 @@ export const integrationSessionEvidenceSchema = z
   .strict();
 export type IntegrationSessionEvidence = z.infer<typeof integrationSessionEvidenceSchema>;
 
+export const integrationDaemonHealthSchema = z
+  .object({
+    pid: z.number().int().positive(),
+    socket_path: z.string(),
+    repo_root: z.string(),
+    connected_clients: z.number().int().nonnegative(),
+    warmup_state: z.string(),
+    graph_freshness: z.string(),
+    last_failure: z.string().optional()
+  })
+  .strict();
+export type IntegrationDaemonHealth = z.infer<typeof integrationDaemonHealthSchema>;
+
 export const integrationHealthSchema = z
   .object({
     repo_root: z.string(),
@@ -86,6 +99,7 @@ export const integrationHealthSchema = z
       })
       .strict()
       .optional(),
+    daemon: integrationDaemonHealthSchema.optional(),
     next_actions: z.array(nextActionSchema)
   })
   .strict();

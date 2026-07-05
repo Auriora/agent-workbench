@@ -3,7 +3,7 @@ title: Graph store design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-02
+last_reviewed: 2026-07-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -172,6 +172,13 @@ traversal-depth caps.
 - Graph writes must be serialized per repository through `GraphTransactionPort`.
 - Reads may continue against the last valid snapshot while warm-up or
   incremental refresh work is running.
+- For packaged MCP launch, graph-store ownership is held by the per-repo daemon.
+  The stdio launcher connects to the daemon over local IPC and does not open the
+  SQLite graph store in the client process. Daemon-hosted MCP sessions share one
+  daemon-created graph-store factory for the repo identity. Concurrent cold
+  launchers, including parallel sub-agents in one session, elect one daemon
+  starter before any graph store is opened. Startup warm-up is scheduled once
+  per daemon lifetime.
 - Watcher-clean snapshots are the freshness authority for hot reads.
 - Stale rows must be labeled in downstream MCP responses.
 - A watcher-clean snapshot means the watcher queue is drained, no refresh is in

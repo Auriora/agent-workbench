@@ -1133,7 +1133,7 @@ Do not promote an item when:
 ### EB036: Per-Repo Runtime Daemon And Session Sharing
 
 - Priority: P0
-- Status: active Spec 032
+- Status: promoted by Spec 032 on 2026-07-05
 - Friction signal: multiple Codex sessions in the same large repository can
   start separate Agent Workbench MCP processes that share one repo cache
   database and contend during startup graph warmup, surfacing
@@ -1169,9 +1169,12 @@ Do not promote an item when:
     requests, and blocked graph-store startup.
   - Dogfood post-warmup sweep against a large repository with multiple
     concurrent clients and no `database is locked` resource or tool failures.
-- Promotion target: active
-  [Spec 032](../specs/032-per-repo-runtime-daemon-cache/requirements.md)
-  before implementing broad graph-backed tool hardening.
+- Promotion evidence: Spec 032 added the per-repo daemon launcher, local IPC
+  handshake, stale metadata cleanup, daemon-owned shared graph-store factory,
+  once-per-daemon startup warmup scheduling, daemon integration-health
+  diagnostics, focused daemon tests, stdio MCP regression tests, and a
+  concurrent dogfood sweep against this repository with no raw SQLite lock
+  output.
 
 ### EB037: Repo-Root Authority And Debug Override Gate
 

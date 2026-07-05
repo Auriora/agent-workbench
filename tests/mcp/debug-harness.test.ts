@@ -113,8 +113,12 @@ describe("repo-local MCP debug harness", () => {
 
   it("runs sample smoke reports into .tmp without modifying target repos", async () => {
     const outputDir = path.resolve(".tmp", "test-sample-smoke", String(Date.now()));
-    const targetRepo = path.resolve("tests/fixtures/fixture-mixed-language-platform");
-    const before = snapshotDirectory(targetRepo);
+    const targetRepo = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-sample-smoke-target-"));
+    fs.cpSync(path.resolve("tests/fixtures/fixture-mixed-language-platform"), targetRepo, {
+      recursive: true,
+      filter: (source) => path.basename(source) !== ".cache"
+    });
+    const before = snapshotDirectory(targetRepo, { ignoreGeneratedCache: true });
     try {
       const config = resolveSampleSmokeConfig({
         argv: ["--repo", targetRepo, "--output-dir", outputDir, "--context"],
@@ -142,9 +146,10 @@ describe("repo-local MCP debug harness", () => {
       expect(parsed.results[0]?.envelopes).toHaveProperty("scope");
       expect(parsed.results[0]?.envelopes).toHaveProperty("overview");
       expect(parsed.results[0]?.envelopes).toHaveProperty("context");
-      expect(snapshotDirectory(targetRepo)).toEqual(before);
+      expect(snapshotDirectory(targetRepo, { ignoreGeneratedCache: true })).toEqual(before);
     } finally {
       fs.rmSync(outputDir, { recursive: true, force: true });
+      fs.rmSync(targetRepo, { recursive: true, force: true });
     }
   });
 
@@ -475,10 +480,14 @@ describe("repo-local MCP debug harness", () => {
   });
 });
 
-function snapshotDirectory(directory: string): string[] {
+function snapshotDirectory(
+  directory: string,
+  options: { ignoreGeneratedCache?: boolean } = {}
+): string[] {
   return fs
     .readdirSync(directory, { recursive: true, withFileTypes: true })
     .map((entry) => path.relative(directory, path.join(entry.parentPath, entry.name)))
+    .filter((relative) => !options.ignoreGeneratedCache || relative !== ".cache" && !relative.startsWith(".cache/"))
     .sort();
 }
 

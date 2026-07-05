@@ -4,12 +4,11 @@
  */
 
 import path from "node:path";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { createAgentWorkbenchServer } from "../server.js";
+import type { Readable, Writable } from "node:stream";
 import {
   DEBUG_REPO_ROOT_OVERRIDE_ENV,
-  createRootAuthorityPolicy
 } from "../interface-adapters/mcp/registries/root-authority.js";
+import { connectOrStartDaemon } from "./daemon.js";
 
 export type StdioLaunchConfig = {
   repoRoot: string;
@@ -34,15 +33,25 @@ export function resolveStdioLaunchConfig(input: {
 }
 
 export async function connectAgentWorkbenchStdio(
-  config: StdioLaunchConfig = resolveStdioLaunchConfig()
+  config: StdioLaunchConfig = resolveStdioLaunchConfig(),
+  io: {
+    stdin?: Readable;
+    stdout?: Writable;
+    stderr?: Writable;
+  } = {}
 ): Promise<void> {
-  const server = createAgentWorkbenchServer(config.repoRoot, {
-    rootAuthorityPolicy: createRootAuthorityPolicy({
-      launchRoot: config.repoRoot,
-      debugRepoRootOverride: config.debugRepoRootOverride
-    })
+  const socket = await connectOrStartDaemon({
+    repoRoot: config.repoRoot,
+    debugRepoRootOverride: config.debugRepoRootOverride
   });
-  await server.connect(new StdioServerTransport());
+  const stdin = io.stdin ?? process.stdin;
+  const stdout = io.stdout ?? process.stdout;
+  const stderr = io.stderr ?? process.stderr;
+  socket.on("error", (error) => {
+    stderr.write(`agent-workbench: daemon socket error: ${error.message}\n`);
+  });
+  stdin.pipe(socket);
+  socket.pipe(stdout);
 }
 
 function findRepoRootArg(argv: string[]): string | undefined {

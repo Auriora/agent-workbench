@@ -13,6 +13,7 @@ import type { McpResourceDeclaration } from "../index.js";
 import { formatMcpArgumentError } from "../../arguments/index.js";
 import { parseRepoStatusArguments } from "../../arguments/repo-status.js";
 import { resolveMcpRequestRepoRoot } from "../root-authority.js";
+import { providerFailureMessage } from "./provider-failure.js";
 
 export const repoScopeResource: McpResourceDeclaration = {
   kind: "resource",
@@ -127,9 +128,4 @@ function getRepoResourceArgumentInput(request: unknown): unknown {
   }
 
   return undefined;
-}
-
-function providerFailureMessage(resourceUri: string, error: unknown): string {
-  const reason = error instanceof Error ? error.message : String(error);
-  return `${resourceUri} provider could not read required runtime evidence: ${reason}`;
 }

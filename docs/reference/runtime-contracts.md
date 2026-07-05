@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-04
+last_reviewed: 2026-07-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -154,6 +154,26 @@ watcher startup or processing failure maps to degraded evidence with a caveat.
 - `needed`: validation is required before relying on the result.
 - `blocked`: validation could not proceed.
 - `not_applicable`: validation does not apply to this result.
+
+## Daemon Health
+
+`integration:///health/agent-workbench` may include `data.daemon` when the MCP
+runtime is hosted by the per-repo daemon. The block is diagnostic evidence, not
+normal task context. It contains:
+
+- `pid`
+- `socket_path`
+- `repo_root`
+- `connected_clients`
+- `warmup_state`
+- `graph_freshness`
+- `last_failure` when available
+
+Daemon or graph-store startup failures use existing envelope vocabulary:
+incompatible or missing daemon identity maps to `invalid_due_to_environment`;
+ambiguous owner state, malformed socket handshakes, blocked graph-store
+startup, and unavailable graph evidence map to `verification_status: blocked`.
+Raw SQLite lock text must not be emitted as non-JSON MCP output.
 
 ## Evidence Semantics
 

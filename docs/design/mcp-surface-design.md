@@ -199,6 +199,12 @@ evidence remains `unknown` and must not be treated as callable proof. The
 health resource does not execute tools, inspect client internals, or mutate the
 workspace.
 
+When the runtime is hosted by the per-repo daemon, integration health also
+includes a compact `daemon` block with PID, socket path, repo root, connected
+client count, warm-up state, graph freshness, and last failure when available.
+Normal agent-facing resources such as `repo:///status` remain compact and expose
+only freshness or blocked-state information needed for the next safe action.
+
 `integration:///profiles/codex` describes the configured Codex wrapper,
 plugin, skill, hook, packaging, and MCP binding model. It is documentation and
 configuration evidence, not proof that a specific Codex session exposed every

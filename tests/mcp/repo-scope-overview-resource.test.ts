@@ -139,10 +139,11 @@ describe("repo scope MCP resource", () => {
     expect(parsed.errors).toEqual([
       expect.objectContaining({
         code: "provider_unavailable",
-        message: expect.stringContaining("database is locked"),
+        message: expect.stringContaining("graph store is temporarily unavailable"),
         retryable: true
       })
     ]);
+    expect(JSON.stringify(parsed.errors)).not.toMatch(/database is locked/i);
   });
 });
 
@@ -232,10 +233,11 @@ describe("repo overview MCP resource", () => {
     expect(parsed.errors).toEqual([
       expect.objectContaining({
         code: "provider_unavailable",
-        message: expect.stringContaining("database is locked"),
+        message: expect.stringContaining("graph store is temporarily unavailable"),
         retryable: true
       })
     ]);
+    expect(JSON.stringify(parsed.errors)).not.toMatch(/database is locked/i);
   });
 
   it("prioritizes durable root and guide docs over templates and update notes", async () => {

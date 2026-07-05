@@ -156,7 +156,8 @@ describe("repo status MCP resource", () => {
       repo_root: "/repo",
       runtime_state: "invalid_due_to_environment"
     });
-    expect(parsed.data.reason).toContain("database is locked");
+    expect(parsed.data.reason).toContain("graph store is temporarily unavailable");
+    expect(parsed.data.reason).not.toMatch(/database is locked/i);
     expect(parsed.meta).toMatchObject({
       analysis_validity: "invalid_due_to_environment",
       verification_status: "blocked"
@@ -164,10 +165,11 @@ describe("repo status MCP resource", () => {
     expect(parsed.errors).toEqual([
       expect.objectContaining({
         code: "provider_unavailable",
-        message: expect.stringContaining("database is locked"),
+        message: expect.stringContaining("graph store is temporarily unavailable"),
         retryable: true
       })
     ]);
+    expect(JSON.stringify(parsed.errors)).not.toMatch(/database is locked/i);
   });
 
   it("keeps default status bounded without scanned coverage when no snapshot exists", async () => {

@@ -69,6 +69,7 @@ import {
   type RootAuthorityPolicy
 } from "./interface-adapters/mcp/registries/root-authority.js";
 import { describeCodexIntegrationProfile } from "./application/use-cases/describe-codex-integration-profile.js";
+import type { IntegrationDaemonHealth } from "./contracts/index.js";
 
 export type AgentWorkbenchServerOptions = {
   startGraphWarmup?: boolean;
@@ -76,6 +77,8 @@ export type AgentWorkbenchServerOptions = {
   startupWarmupDelayMs?: number;
   startupWarmupMaxFiles?: number;
   rootAuthorityPolicy?: RootAuthorityPolicy;
+  graphStore?: () => Promise<GraphStore>;
+  daemonDiagnostics?: () => IntegrationDaemonHealth;
   workspaceWatcher?: Partial<WorkspaceWatcherConfig>;
   workspaceWatcherIndexedRoots?: readonly string[];
   workspaceWatcherSkippedRoots?: readonly string[];
@@ -104,7 +107,7 @@ export function createAgentWorkbenchServer(
   const markdownParser = new MarkdownParserAdapter();
   const markdownChecker = new MarkdownStructureCheckerAdapter();
   const databasePath = graphStorePath(absoluteRepoRoot);
-  const graphStore = createAsyncGraphStore(databasePath);
+  const graphStore = options.graphStore ?? createAsyncGraphStore(databasePath);
   const telemetry = createTelemetryAdapter(telemetryConfigFromEnv());
   const workspaceWatcherConfig = resolveWorkspaceWatcherConfig(options.workspaceWatcher);
   const workspaceWatcher = new FilesystemWorkspaceWatcherAdapter();
@@ -346,7 +349,8 @@ export function createAgentWorkbenchServer(
         root_policy: {
           authority: "launch_root",
           debug_repo_root_override: rootAuthorityPolicy.debugRepoRootOverride
-        }
+        },
+        daemon: options.daemonDiagnostics?.()
       })
   });
 
@@ -500,7 +504,7 @@ function readStartupGraphWarmupResult(message: unknown): IndexRepositoryGraphRes
   return (message as { result: IndexRepositoryGraphResult }).result;
 }
 
-function createAsyncGraphStore(databasePath: string): () => Promise<GraphStore> {
+export function createAsyncGraphStore(databasePath: string): () => Promise<GraphStore> {
   let graphStore: Promise<GraphStore> | undefined;
   return () => {
     graphStore ??= Promise.resolve().then(() => openGraphStore(databasePath));
@@ -542,7 +546,7 @@ function watcherFreshnessFromQueueResult(
   };
 }
 
-function graphStorePath(repoRoot: string): string {
+export function graphStorePath(repoRoot: string): string {
   const cacheDir = path.join(repoRoot, ".cache", "agent-workbench");
   fs.mkdirSync(cacheDir, { recursive: true });
   return path.join(cacheDir, "graph.sqlite");

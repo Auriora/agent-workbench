@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: requirements
 status: active
 owner: platform
-last_reviewed: 2026-06-18
+last_reviewed: 2026-07-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -49,7 +49,7 @@ for all connected agent sessions.
 
 ## Requirements
 
-### Requirement 1: One Daemon Per Repo
+### Requirement 1 (R1): One Daemon Per Repo
 
 **User Story:** As a developer running multiple agents in one repo, I want all
 Workbench clients to share one repo runtime, so that startup warmup and cache
@@ -59,12 +59,15 @@ writes do not contend.
 
 1. GIVEN the first MCP instance for a repo starts, WHEN no daemon is active,
    THEN THE SYSTEM SHALL start one daemon for that repo.
-2. GIVEN a later MCP instance for the same repo starts, WHEN the daemon is
+2. GIVEN multiple MCP instances for the same repo start concurrently, including
+   parallel sub-agents in the same session, THEN THE SYSTEM SHALL atomically
+   elect one daemon starter and route the remaining clients to that daemon.
+3. GIVEN a later MCP instance for the same repo starts, WHEN the daemon is
    healthy, THEN THE SYSTEM SHALL route the client to the existing daemon.
-3. GIVEN a different repo starts, THEN THE SYSTEM SHALL use a separate daemon,
+4. GIVEN a different repo starts, THEN THE SYSTEM SHALL use a separate daemon,
    socket, and graph store for that repo.
 
-### Requirement 2: Shared Cache Writes Are Serialized
+### Requirement 2 (R2): Shared Cache Writes Are Serialized
 
 **User Story:** As an agent using graph-backed tools, I want cache refreshes to
 be coordinated, so that I receive structured freshness states instead of SQLite
@@ -80,7 +83,7 @@ lock failures.
    return `refreshing`, `blocked`, or `invalid_due_to_environment` envelopes and
    SHALL NOT expose raw `database is locked` output.
 
-### Requirement 3: Daemon Lifecycle Tracks Clients
+### Requirement 3 (R3): Daemon Lifecycle Tracks Clients
 
 **User Story:** As a local user, I want the daemon to stay alive while agents
 are connected and stop after they leave, so that warm cache state is reused
@@ -97,7 +100,7 @@ without leaving unmanaged processes.
 4. IF a daemon crashes, THEN THE SYSTEM SHALL clean stale socket state and allow
    a new daemon to start.
 
-### Requirement 4: Debug And Doctor Visibility
+### Requirement 4 (R4): Debug And Doctor Visibility
 
 **User Story:** As a maintainer, I want daemon state visible in diagnostics, so
 that shared-cache failures can be diagnosed without guessing.
@@ -115,7 +118,8 @@ that shared-cache failures can be diagnosed without guessing.
 
 ## Correctness Properties
 
-- **P1 Single writer:** At most one warmup writer owns graph writes for a repo.
+- **P1 Single owner:** At most one daemon startup owner and one warmup writer own
+  graph writes for a repo, even when clients launch concurrently.
 - **P2 Shared read stability:** Concurrent clients can read the latest usable
   snapshot during refresh without raw SQLite lock errors.
 - **P3 Client lifecycle:** Daemon lifetime is reference-counted by connected
