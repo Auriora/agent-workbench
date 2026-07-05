@@ -11,13 +11,11 @@ import typer
 from auriora_dev.runner import CommandSpec, run_plan, summarize
 
 
-DEFAULT_SPEC_RUNTIME = Path(
-    "/home/bcherrington/.codex/plugins/cache/auriora-local/spec-lifecycle-manager/0.2.1/skills/spec-lifecycle-manager/scripts/spec_runtime.py"
-)
-
-
 def spec_runtime_path() -> Path:
-    return Path(os.environ.get("SPEC_LIFECYCLE_RUNTIME", str(DEFAULT_SPEC_RUNTIME)))
+    runtime = os.environ.get("SPEC_LIFECYCLE_RUNTIME")
+    if runtime is None:
+        raise typer.BadParameter("Set SPEC_LIFECYCLE_RUNTIME to the lifecycle runtime script.")
+    return Path(runtime)
 
 
 def build_spec_plan(root: Path, command: str, path: Path | None = None) -> list[CommandSpec]:

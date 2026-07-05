@@ -103,12 +103,11 @@ codex plugin marketplace add .   # registers auriora-local from .agents/plugins/
 codex plugin add agent-workbench@auriora-local
 ```
 
-When changing plugin packaging during development, update the plugin cachebuster
-and reinstall:
+When changing plugin packaging during development, refresh the local plugin
+registration:
 
 ```bash
-python3 /home/bcherrington/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py plugins/agent-workbench
-codex plugin add agent-workbench@auriora-local
+awb plugin refresh
 ```
 
 After reinstall, start a new Codex session to pick up changed skills, hooks,

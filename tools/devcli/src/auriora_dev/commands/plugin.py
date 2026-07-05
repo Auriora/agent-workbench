@@ -12,17 +12,8 @@ import typer
 from auriora_dev.runner import CommandSpec, run_plan, summarize
 
 
-CACHEBUSTER = Path("/home/bcherrington/.codex/skills/.system/plugin-creator/scripts/update_plugin_cachebuster.py")
-
-
 def build_refresh_plan(root: Path) -> list[CommandSpec]:
     return [
-        CommandSpec(
-            ("python3", str(CACHEBUSTER), "plugins/agent-workbench"),
-            root,
-            "Refresh plugin cachebuster",
-            mutates=True,
-        ),
         CommandSpec(
             ("codex", "plugin", "add", "agent-workbench@auriora-local"),
             root,

@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from typer.testing import CliRunner
 
@@ -89,12 +91,13 @@ class CliTests(unittest.TestCase):
     def test_plugin_refresh_plan_is_explicitly_mutating(self) -> None:
         plan = build_refresh_plan(ROOT)
         self.assertTrue(all(spec.mutates for spec in plan))
-        self.assertEqual(plan[1].argv, ("codex", "plugin", "add", "agent-workbench@auriora-local"))
+        self.assertEqual(plan[0].argv, ("codex", "plugin", "add", "agent-workbench@auriora-local"))
 
     def test_spec_plan_targets_docs_specs_runtime(self) -> None:
-        plan = build_spec_plan(ROOT, "lint", Path("docs/specs/028-dev-cli-workflow-tools"))
+        with patch.dict(os.environ, {"SPEC_LIFECYCLE_RUNTIME": "/tmp/lifecycle-runtime"}):
+            plan = build_spec_plan(ROOT, "lint", Path("docs/specs/028-dev-cli-workflow-tools"))
         self.assertEqual(plan[0].argv[0], "python3")
-        self.assertIn("spec_runtime.py", plan[0].argv[1])
+        self.assertEqual(plan[0].argv[1], "/tmp/lifecycle-runtime")
         self.assertEqual(plan[0].argv[2:], ("lint", "docs/specs/028-dev-cli-workflow-tools"))
 
     def test_mcp_smoke_plan_uses_supported_debug_use_cases(self) -> None:
