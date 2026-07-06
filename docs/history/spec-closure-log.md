@@ -57,6 +57,7 @@ name their own final pre-removal tree commits.
 | Spec 033: Cross-platform packaging | Removed from `docs/specs/` on 2026-07-04 after final pre-removal tree commit `0d2cc48` completed shell-free npm package install, Codex/Claude MCP launch shims, shell-free hook entry points, package-scoped marketplaces, supported platform matrix documentation, and routed macOS/Windows runner evidence. | Codex Agent Workbench plugin runbook, packaging README, plugin README, cross-platform packaging workflow, install/MCP/hook smoke scripts, Codex/Claude package metadata tests, backlog follow-ups for Kiro launcher and turnkey core `tree-sitter`, documentation map, spec closure log, and archive index. |
 | Spec 034: Doc currency routing | Removed from `docs/specs/` on 2026-07-02 after final pre-removal tree commit `8657e9e` completed document currency classification, docs search/inventory metadata, `context_for_task` ranking, `docs_current_for_task`, durable docs promotion, and spec-lifecycle-manager handoff. | MCP surface design, graph store design, runtime contracts, documentation map, spec-lifecycle-manager doc currency handoff, MCP server card, Codex integration profile, docs/context/MCP tests, lifecycle lint, closure check, and closure-risk review. |
 | Spec 034: Release notes generation | Removed from `docs/specs/` on 2026-07-05 after final pre-removal tree commit `5b40e6d` completed `awb release notes`, Git range/tag evidence collection, per-commit file evidence, candidate grouping, validation inputs, Markdown/JSON/agent outputs, draft/final boundaries, release-note skill guidance, and durable release-process documentation. | Agent Workbench Dev CLI README, Codex Agent Workbench plugin runbook, agent-readable changelog, backlog EB035, documentation map, dev CLI tests, package/plugin validation, typecheck, full Vitest validation, archive index, and closure log. |
+| Spec 035: Trust calibration in tool outputs | Removed from `docs/specs/` on 2026-07-06 after final pre-removal tree commit `86e4a81` completed additive `meta.trust` response metadata, shared trust policy derivation, public presenter and registry coverage, direct-read and integration-profile remediation, golden MCP trust tests, durable docs promotion, and post-reload smoke verification. | Runtime contracts, MCP surface design, documentation map, backlog EB023, response metadata contracts, shared response metadata helpers, public MCP presenter and registry tests, trust golden tests, lifecycle lint, full Vitest validation, live MCP smoke, cross-repo local smoke, archive index, and closure log. |
 
 ### 2026-06-13 - 022-mcp-server-repository-support
 
@@ -149,6 +150,33 @@ name their own final pre-removal tree commits.
   metadata enrichment and cross-repo extraction remain deferred until proven
   necessary. A separate plugin remains unnecessary while the repo-local `awb`
   command and packaged `release-notes` skill cover this repository.
+
+### 2026-07-06 - 035-trust-calibration-tool-outputs
+
+- **Spec:** docs/specs/035-trust-calibration-tool-outputs
+- **Title:** Trust calibration in tool outputs
+- **Final spec commit:** 86e4a81
+- **Closure cleanup commit:** pending cleanup commit
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/reference/runtime-contracts.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/reference/documentation-map.md`
+  - `docs/backlog/README.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Spec implementation validation recorded
+  `pnpm typecheck`, full `pnpm test` with 78 files and 566 tests, focused
+  docs/contract/MCP validation with 8 files and 79 tests, docs metadata tests,
+  lifecycle lint, `git diff --check`, and implementation review. Post-reload
+  verification exercised live MCP `context_for_task`, `docs_search`,
+  `diagnostics_for_files`, and `verification_plan`; the debug sample smoke
+  passed on this repo and 10 local cross-repo samples, and the broader MCP tool
+  sweep produced no invalid envelopes.
+- **Residual risks:** Cross-repo tool-sweep blocked/degraded results were
+  limited to harness verification limits and write-safety skips; no trust
+  calibration regression was found. `meta.trust` remains additive, so consumers
+  that ignore unknown metadata keep the previous response contract behavior.
 
 ### 2026-07-04 - 033-cross-platform-packaging
 
