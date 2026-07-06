@@ -156,7 +156,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/035-trust-calibration-tool-outputs
 - **Title:** Trust calibration in tool outputs
 - **Final spec commit:** 86e4a81
-- **Closure cleanup commit:** pending cleanup commit
+- **Closure cleanup commit:** c90769b
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/reference/runtime-contracts.md`
