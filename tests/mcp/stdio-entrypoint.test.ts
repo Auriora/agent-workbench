@@ -49,10 +49,17 @@ import { holdExclusiveSqliteLockUntilReleased } from "../helpers/sqlite-lock.js"
 type StdioMessage = {
   id?: number;
   result?: {
+    instructions?: string;
     contents?: Array<{ text: string }>;
     content?: Array<{ text: string }>;
     resources?: Array<{ uri: string; name: string }>;
-    tools?: Array<{ name: string; description: string }>;
+    tools?: Array<{
+      name: string;
+      description: string;
+      inputSchema?: {
+        properties?: Record<string, { description?: string }>;
+      };
+    }>;
   };
 };
 
@@ -71,6 +78,14 @@ type PresenterGoldens = {
   impact: ReturnType<typeof buildImpactEnvelope>;
   verificationPlan: ReturnType<typeof buildVerificationPlanEnvelope>;
   preview: ReturnType<typeof buildPreviewWorkspaceEditEnvelope>;
+};
+
+type ListedTool = {
+  name: string;
+  description: string;
+  inputSchema?: {
+    properties?: Record<string, { description?: string }>;
+  };
 };
 
 async function withTimeout<T>(
@@ -251,6 +266,9 @@ describe("stdio MCP entrypoint", () => {
         }
       }
     ]);
+    const initialize = messageWithId(messages, 1) as {
+      result: { instructions?: string };
+    };
     const listedResources = messageWithId(messages, 2) as {
       result: { resources: Array<{ uri: string; name: string }> };
     };
@@ -264,7 +282,7 @@ describe("stdio MCP entrypoint", () => {
       result: { contents: Array<{ text: string }> };
     };
     const listedTools = messageWithId(messages, 6) as {
-      result: { tools: Array<{ name: string; description: string }> };
+      result: { tools: ListedTool[] };
     };
     const taskContext = messageWithId(messages, 7) as {
       result: { content: Array<{ text: string }> };
@@ -292,6 +310,10 @@ describe("stdio MCP entrypoint", () => {
       data: { planned_commands: Array<{ display: string; execution: string }>; static_feedback?: unknown };
     };
 
+    expect(initialize.result.instructions).toContain("Use Agent Workbench before broad repository inspection");
+    expect(initialize.result.instructions).toContain("tool_search");
+    expect(initialize.result.instructions).toContain("context_for_task");
+    expect(initialize.result.instructions).toContain("verification_plan");
     expect(listedResources.result.resources).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -353,6 +375,25 @@ describe("stdio MCP entrypoint", () => {
           name: "apply_workspace_edit"
         })
       ])
+    );
+    const toolsByName = new Map(listedTools.result.tools.map((tool) => [tool.name, tool]));
+    expect(toolsByName.get("context_for_task")?.description).toContain(
+      "Use this before broad file reads"
+    );
+    expect(toolsByName.get("verification_plan")?.description).toContain(
+      "never executes commands"
+    );
+    expect(toolsByName.get("preview_workspace_edit")?.description).toContain(
+      "before apply_workspace_edit"
+    );
+    expect(toolsByName.get("apply_workspace_edit")?.description).toContain(
+      "Use only after preview_workspace_edit"
+    );
+    expect(toolsByName.get("context_for_task")?.inputSchema?.properties?.task?.description).toContain(
+      "implementation, review, debugging, or planning task"
+    );
+    expect(toolsByName.get("verification_plan")?.inputSchema?.properties?.max_commands?.description).toContain(
+      "not executed"
     );
     expect(parsedTaskContext.data).toMatchObject({
       task: "Update package validation",
@@ -966,7 +1007,7 @@ type OverviewEnvelope = {
 };
 
 type ListedToolsEnvelope = {
-  tools: Array<{ name: string; description: string }>;
+  tools: ListedTool[];
 };
 
 type ContextEnvelope = {

@@ -17,10 +17,13 @@ local scripts.
 ## Default Workflow
 
 1. Read `repo:///status`, `repo:///scope`, and `repo:///overview` before relying on runtime output.
-2. Use `context_for_task` before broad file reads.
-3. Use targeted symbol, reference, and impact surfaces for implementation work.
-4. Use preview/apply surfaces for workspace writes when available.
-5. Use `verification_plan` for validation planning and quiet post-edit static feedback.
+2. If `mcp__agent_workbench` tools are not visible in the current Codex tool
+   list, call tool discovery for `agent-workbench context_for_task
+   verification_plan diagnostics_for_files docs_search`.
+3. Use `context_for_task` before broad file reads.
+4. Use targeted symbol, reference, and impact surfaces for implementation work.
+5. Use preview/apply surfaces for workspace writes when available.
+6. Use `verification_plan` for validation planning and quiet post-edit static feedback.
 
 ## Spec Lifecycle Boundary
 

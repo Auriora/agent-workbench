@@ -25,10 +25,12 @@ import {
 
 const docsReadSectionRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
-  path: z.string().min(1).describe("Repo-relative Markdown document path."),
-  heading_id: z.string().min(1).describe("Stable heading identifier returned by docs_outline."),
-  max_bytes: z.number().int().positive().max(12000).default(4000).describe("Maximum section bytes to return.")
+  path: z.string().min(1).describe("Repo-relative Markdown document path inspected with docs_outline."),
+  heading_id: z.string().min(1).describe("Stable heading identifier returned by docs_outline for the section to read."),
+  max_bytes: z.number().int().positive().max(12000).default(4000).describe("Maximum section bytes to return; increase only when the selected section is truncated.")
 };
+
+const docsReadSectionDescription = "Use this after docs_outline when exact documentation evidence is needed. Pass the heading_id from the outline; it reads one bounded Markdown section and avoids broad full-document dumps.";
 
 export const docsReadSectionTool: McpToolDeclaration = {
   kind: "tool",
@@ -37,19 +39,19 @@ export const docsReadSectionTool: McpToolDeclaration = {
     capability_class: "read_only",
     mutation_class: "none",
     budget_policy: "Bounded by max_bytes for one Markdown section; reads no generated/vendor paths.",
-    description: "Read one bounded Markdown section by repo-relative path and stable heading identifier.",
+    description: docsReadSectionDescription,
     parameters: [
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
-      { name: "path", description: "Repo-relative Markdown document path.", required: true },
-      { name: "heading_id", description: "Stable heading identifier returned by docs_outline.", required: true },
-      { name: "max_bytes", description: "Maximum section bytes to return.", required: false }
+      { name: "path", description: "Repo-relative Markdown document path inspected with docs_outline.", required: true },
+      { name: "heading_id", description: "Stable heading identifier returned by docs_outline for the section to read.", required: true },
+      { name: "max_bytes", description: "Maximum section bytes to return; increase only when truncated.", required: false }
     ],
     returns: "ResponseEnvelope<DocsReadSectionResult>"
   },
   register(server: McpServer, context) {
     server.tool(
       "docs_read_section",
-      "Read one bounded Markdown section by repo-relative path and stable heading identifier.",
+      docsReadSectionDescription,
       mcpShapeForRootAuthority(docsReadSectionRawShape, context),
       async (args: unknown) => {
         let request: DocsReadSectionRequest;

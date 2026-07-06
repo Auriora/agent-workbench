@@ -721,6 +721,8 @@ describe("Codex plugin artifacts", () => {
     expect(sessionContext).toContain("Agent Workbench MCP is available.\nRepo orientation:");
     expect(sessionContext).toContain("- root: /repo");
     expect(sessionContext).toContain("dirty state not inspected");
+    expect(sessionContext).toContain("tool_search");
+    expect(sessionContext).toContain("context_for_task verification_plan diagnostics_for_files docs_search");
 
     const sessionFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-session-"));
     fs.mkdirSync(path.join(sessionFixtureRoot, "src"), { recursive: true });

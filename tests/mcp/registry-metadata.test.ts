@@ -62,6 +62,38 @@ describe("MCP registry metadata", () => {
     }
   });
 
+  it("documents every MCP tool with actionable usage guidance", () => {
+    const requiredTermsByTool: Record<string, string[]> = {
+      apply_workspace_edit: ["Use only after preview_workspace_edit", "mutates files only when"],
+      check_markdown_document: ["Use this before committing", "without changing the file"],
+      check_markdown_set: ["Use this before docs-wide commits", "without mutation"],
+      context_for_task: ["Use this before broad file reads", "routing evidence"],
+      diagnostics_for_files: ["Use this for cheap static diagnostics", "without running tests"],
+      docs_current_for_task: ["Use this before updating or promoting documentation", "does not mutate files"],
+      docs_outline: ["Use this after choosing a Markdown document", "before docs_read_section"],
+      docs_read_section: ["Use this after docs_outline", "exact documentation evidence"],
+      docs_scope: ["Use this to show, set, or clear", "before docs_search"],
+      docs_search: ["Use this to find canonical docs", "Prefer docs_scope or scope_path"],
+      find_references: ["Use this after symbol_search", "cursor pagination"],
+      impact: ["Use this after selecting a graph node_id", "does not mutate files"],
+      preview_workspace_edit: ["Use this before apply_workspace_edit", "does not mutate files"],
+      symbol_search: ["Use this before broad grep", "node_id values"],
+      verification_plan: ["Use this before running validation commands", "never executes commands"]
+    };
+
+    expect(Object.keys(requiredTermsByTool).sort()).toEqual(
+      mcpTools.map((tool) => tool.name).sort()
+    );
+
+    for (const tool of mcpTools) {
+      expect(tool.metadata.description, tool.name).toMatch(/^Use (this|only)\b/);
+      expect(tool.metadata.description.length, tool.name).toBeGreaterThanOrEqual(120);
+      for (const term of requiredTermsByTool[tool.name] ?? []) {
+        expect(tool.metadata.description, tool.name).toContain(term);
+      }
+    }
+  });
+
   it("covers every public standard-envelope surface with an explicit trust policy", () => {
     const surfaces = [...mcpResources, ...mcpTools, ...mcpPrompts];
     const surfaceKeys = surfaces.map((surface) => `${surface.kind}:${surface.name}`).sort();

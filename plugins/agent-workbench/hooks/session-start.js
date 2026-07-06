@@ -121,7 +121,8 @@ export function buildSessionStartContext(payload, env = process.env) {
     `- docs: ${docs.length ? compactList(docs) : "none detected by hook"}`,
     `- specs: ${specSummary}`,
     `- git: ${branch ? `branch ${branch}` : "not detected"}; dirty state not inspected`,
-    "- first calls: repo:///status, repo:///scope, repo:///overview; use context_for_task once task is known; run git status --short before edits."
+    "- first calls: repo:///status, repo:///scope, repo:///overview; use context_for_task once task is known; run git status --short before edits.",
+    "- if mcp__agent_workbench tools are not visible, call tool_search for: agent-workbench context_for_task verification_plan diagnostics_for_files docs_search."
   ].join("\n");
 }
 

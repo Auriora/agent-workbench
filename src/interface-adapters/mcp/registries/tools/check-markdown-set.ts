@@ -33,14 +33,16 @@ const requiredFrontmatterDefault = [
 
 const checkMarkdownSetRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
-  paths: z.array(z.string().min(1)).default([]).describe("Explicit repo-relative Markdown document paths."),
-  scope_path: z.string().min(1).optional().describe("Optional bounded repo-relative scope prefix, such as docs or docs/specs."),
-  max_documents: z.number().int().positive().max(100).default(20).describe("Maximum Markdown documents to check."),
-  max_findings: z.number().int().positive().max(500).default(100).describe("Maximum aggregate findings to return."),
-  max_evidence_bytes: z.number().int().positive().max(2000).default(240).describe("Maximum evidence bytes per finding."),
-  max_file_bytes: z.number().int().positive().max(1_000_000).default(200_000).describe("Maximum document size to check."),
-  required_frontmatter: z.array(z.string().min(1)).default([...requiredFrontmatterDefault]).describe("Required frontmatter fields for this check.")
+  paths: z.array(z.string().min(1)).default([]).describe("Explicit repo-relative Markdown document paths to check; use this for a known edited set."),
+  scope_path: z.string().min(1).optional().describe("Optional bounded repo-relative scope prefix, such as docs or docs/specs, used when paths is empty or incomplete."),
+  max_documents: z.number().int().positive().max(100).default(20).describe("Maximum Markdown documents to check from explicit paths or scope_path."),
+  max_findings: z.number().int().positive().max(500).default(100).describe("Maximum aggregate findings to return across checked documents."),
+  max_evidence_bytes: z.number().int().positive().max(2000).default(240).describe("Maximum evidence bytes per finding; evidence is truncated when longer."),
+  max_file_bytes: z.number().int().positive().max(1_000_000).default(200_000).describe("Maximum document size to check before returning a bounded file-level failure."),
+  required_frontmatter: z.array(z.string().min(1)).default([...requiredFrontmatterDefault]).describe("Required frontmatter fields for each checked document; pass an empty array only when intentionally omitted.")
 };
+
+const checkMarkdownSetDescription = "Use this before docs-wide commits, spec closure, or documentation promotion to check explicit Markdown files or a bounded docs scope. Keep paths or scope_path narrow; it returns aggregate bounded findings without mutation.";
 
 export const checkMarkdownSetTool: McpToolDeclaration = {
   kind: "tool",
@@ -49,23 +51,23 @@ export const checkMarkdownSetTool: McpToolDeclaration = {
     capability_class: "read_only",
     mutation_class: "none",
     budget_policy: "Bounded by explicit paths or scope_path plus max_documents, max_findings, file-size, and evidence limits.",
-    description: "Check a bounded explicit or scoped set of Markdown documents for quality findings.",
+    description: checkMarkdownSetDescription,
     parameters: [
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
-      { name: "paths", description: "Explicit repo-relative Markdown document paths.", required: false },
-      { name: "scope_path", description: "Optional bounded repo-relative scope prefix.", required: false },
-      { name: "max_documents", description: "Maximum Markdown documents to check.", required: false },
-      { name: "max_findings", description: "Maximum aggregate findings to return.", required: false },
-      { name: "max_evidence_bytes", description: "Maximum evidence bytes per finding.", required: false },
-      { name: "max_file_bytes", description: "Maximum document size to check.", required: false },
-      { name: "required_frontmatter", description: "Required frontmatter fields for this check.", required: false }
+      { name: "paths", description: "Explicit repo-relative Markdown document paths to check when the edited set is known.", required: false },
+      { name: "scope_path", description: "Optional bounded repo-relative scope prefix used when paths is empty or incomplete.", required: false },
+      { name: "max_documents", description: "Maximum Markdown documents to check from explicit paths or scope_path.", required: false },
+      { name: "max_findings", description: "Maximum aggregate findings to return across checked documents.", required: false },
+      { name: "max_evidence_bytes", description: "Maximum evidence bytes per finding; evidence is truncated when longer.", required: false },
+      { name: "max_file_bytes", description: "Maximum document size to check before returning a bounded file-level failure.", required: false },
+      { name: "required_frontmatter", description: "Required frontmatter fields; pass an empty array only when intentionally omitted.", required: false }
     ],
     returns: "ResponseEnvelope<CheckMarkdownSetResult>"
   },
   register(server: McpServer, context) {
     server.tool(
       "check_markdown_set",
-      "Check a bounded explicit or scoped set of Markdown documents for quality findings.",
+      checkMarkdownSetDescription,
       mcpShapeForRootAuthority(checkMarkdownSetRawShape, context),
       async (args: unknown) => {
         let request: CheckMarkdownSetRequest;

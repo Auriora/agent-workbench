@@ -54,7 +54,7 @@ describe("diagnostics_for_files MCP tool", () => {
 
     expect(registered).toMatchObject({
       name: "diagnostics_for_files",
-      description: "Run compact provider-backed diagnostics for repo-relative files without executing validation commands."
+      description: expect.stringContaining("Use this for cheap static diagnostics")
     });
 
     const response = await registered.handler({

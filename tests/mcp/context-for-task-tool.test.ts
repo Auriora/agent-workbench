@@ -1188,7 +1188,7 @@ describe("context_for_task MCP tool", () => {
 
     expect(registered).toMatchObject({
       name: "context_for_task",
-      description: "Gather compact task context from local repository evidence before editing."
+      description: expect.stringContaining("Use this before broad file reads")
     });
 
     const response = await registered.handler({

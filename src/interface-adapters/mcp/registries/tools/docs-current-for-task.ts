@@ -26,11 +26,13 @@ import {
 
 const docsCurrentForTaskRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
-  task: z.string().min(1).describe("Task to verify current documentation for."),
-  files: z.array(z.string()).default([]).describe("Known repo-relative files or docs relevant to the task."),
-  scope_path: z.string().min(1).optional().describe("Optional repo-relative docs scope prefix."),
-  max_docs: z.number().int().positive().max(50).default(10).describe("Maximum docs per category to return.")
+  task: z.string().min(1).describe("Task, behavior change, spec package, or implementation area to classify documentation for."),
+  files: z.array(z.string()).default([]).describe("Known repo-relative source or docs files relevant to the task."),
+  scope_path: z.string().min(1).optional().describe("Optional repo-relative docs scope prefix; overrides any docs_scope session value."),
+  max_docs: z.number().int().positive().max(50).default(10).describe("Maximum documents per classification category to return.")
 };
+
+const docsCurrentForTaskDescription = "Use this before updating or promoting documentation to classify docs as current, supporting, non-authoritative, or uncertain for a task. Pass the task plus known files or a docs_scope/scope_path; it does not mutate files.";
 
 export const docsCurrentForTaskTool: McpToolDeclaration = {
   kind: "tool",
@@ -39,20 +41,20 @@ export const docsCurrentForTaskTool: McpToolDeclaration = {
     capability_class: "read_only",
     mutation_class: "none",
     budget_policy: "Bounded by optional scope_path, max_docs, and local Markdown scan; does not mutate source or require Git history.",
-    description: "Identify current, supporting, non-authoritative, and uncertain docs for a task.",
+    description: docsCurrentForTaskDescription,
     parameters: [
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
-      { name: "task", description: "Task to verify current documentation for.", required: true },
-      { name: "files", description: "Known repo-relative files or docs relevant to the task.", required: false },
-      { name: "scope_path", description: "Optional repo-relative docs scope prefix.", required: false },
-      { name: "max_docs", description: "Maximum docs per category to return.", required: false }
+      { name: "task", description: "Task, behavior change, spec package, or implementation area to classify documentation for.", required: true },
+      { name: "files", description: "Known repo-relative source or docs files relevant to the task.", required: false },
+      { name: "scope_path", description: "Optional repo-relative docs scope prefix; overrides any docs_scope session value.", required: false },
+      { name: "max_docs", description: "Maximum documents per classification category to return.", required: false }
     ],
     returns: "ResponseEnvelope<DocsCurrentForTaskResult>"
   },
   register(server: McpServer, context) {
     server.tool(
       "docs_current_for_task",
-      "Identify current, supporting, non-authoritative, and uncertain docs for a task.",
+      docsCurrentForTaskDescription,
       mcpShapeForRootAuthority(docsCurrentForTaskRawShape, context),
       async (args: unknown) => {
         let request: DocsCurrentForTaskRequest;

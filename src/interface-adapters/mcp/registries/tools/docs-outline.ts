@@ -25,8 +25,10 @@ import {
 
 const docsOutlineRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
-  path: z.string().min(1).describe("Repo-relative Markdown document path.")
+  path: z.string().min(1).describe("Repo-relative Markdown document path returned by docs_search or known from the task.")
 };
+
+const docsOutlineDescription = "Use this after choosing a Markdown document, usually from docs_search, to get stable heading_id values before docs_read_section. It returns a bounded heading outline only, not full document text.";
 
 export const docsOutlineTool: McpToolDeclaration = {
   kind: "tool",
@@ -35,17 +37,17 @@ export const docsOutlineTool: McpToolDeclaration = {
     capability_class: "read_only",
     mutation_class: "none",
     budget_policy: "Bounded heading outline for one Markdown document; reads no generated/vendor paths.",
-    description: "Read a bounded heading outline for one repo-relative Markdown document.",
+    description: docsOutlineDescription,
     parameters: [
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
-      { name: "path", description: "Repo-relative Markdown document path.", required: true }
+      { name: "path", description: "Repo-relative Markdown document path returned by docs_search or known from the task.", required: true }
     ],
     returns: "ResponseEnvelope<DocsOutlineResult>"
   },
   register(server: McpServer, context) {
     server.tool(
       "docs_outline",
-      "Read a bounded heading outline for one repo-relative Markdown document.",
+      docsOutlineDescription,
       mcpShapeForRootAuthority(docsOutlineRawShape, context),
       async (args: unknown) => {
         let request: DocsOutlineRequest;

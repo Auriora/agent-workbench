@@ -282,6 +282,86 @@ caveat kinds are:
   `watcher_refreshing`, `stale_watcher_snapshot`, and
   `degraded_watcher_freshness`.
 
+### Trust Calibration
+
+Public MCP resources and tools that return the standard response envelope include
+additive `meta.trust` calibration. Older consumers may ignore this optional
+field; the contract version remains unchanged because existing metadata fields
+and enum meanings are preserved.
+
+```json
+{
+  "meta": {
+    "trust": {
+      "safe_to_use_for": ["navigation", "next_read_selection"],
+      "not_safe_to_use_for": ["task_completion_claim", "safe_mutation_claim"],
+      "must_verify_by": ["direct_read_relevant_source", "run_planned_validation"]
+    }
+  }
+}
+```
+
+`safe_to_use_for` and `not_safe_to_use_for` use the same `TrustUse` vocabulary.
+Generated trust arrays must be deterministic, deduplicated, and disjoint; if a
+use would appear in both safe and unsafe sets, unsafe wins. Current trust uses
+are:
+
+- `navigation`
+- `next_read_selection`
+- `local_structure_reference`
+- `precise_direct_read_claim`
+- `runtime_availability`
+- `validation_planning`
+- `edit_preview_review`
+- `applied_edit_observation`
+- `bounded_executed_validation_claim`
+- `implementation_claim`
+- `passed_validation_claim`
+- `task_completion_claim`
+- `closure_claim`
+- `safe_mutation_claim`
+- `whole_program_impact_claim`
+- `security_or_vulnerability_claim`
+
+`must_verify_by` names the evidence class required before a stronger claim is
+safe. Current verification requirements are:
+
+- `direct_read_relevant_source`
+- `inspect_ranked_evidence`
+- `run_planned_validation`
+- `review_diagnostics_output`
+- `review_generated_diff`
+- `refresh_runtime_snapshot`
+- `resolve_blocked_environment`
+- `consult_lifecycle_authority`
+- `obtain_executed_validation_evidence`
+- `perform_security_review`
+
+Trust calibration is derived by shared response metadata helpers from the
+surface policy, capability level, evidence kinds, freshness, analysis validity,
+verification status, warnings, errors, and blocker caveats. Public presenters
+must derive trust only after top-level warnings and errors are known. MCP
+adapters must not copy per-tool trust prose or invent alternate vocabularies.
+
+Routing-only evidence is safe for navigation and next-read selection, not for
+implementation, completion, closure, safe mutation, whole-program impact, passed
+validation, or security/vulnerability claims. Parser-backed or partial-semantic
+evidence may add `local_structure_reference`, but broad impact and mutation
+safety still require direct review and validation. Direct-read evidence may add
+`precise_direct_read_claim` only for the returned bounded section or file.
+Planned validation may add `validation_planning`; it is not executed validation.
+Executed validation may add `bounded_executed_validation_claim` only when the
+surface explicitly represents executed-command evidence.
+
+Failure-state responses keep proof-like uses unsafe. Invalid input, blocked
+validation, stale state, cold or refreshing evidence, partial evidence,
+environment failure, warnings, errors, and blocker caveats add the matching
+requirements such as `refresh_runtime_snapshot`,
+`resolve_blocked_environment`, `direct_read_relevant_source`, or
+`run_planned_validation`. Recoverable MCP handler failures still return normal
+JSON envelopes with `meta.trust` unless the failure prevents MCP response
+framing itself.
+
 ## Error Shape
 
 Errors must be structured and actionable.

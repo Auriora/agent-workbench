@@ -413,7 +413,7 @@ coverage is enforced.
 **Purpose**: Promote accepted runtime behavior and prove the spec can close
 after implementation.
 
-- [ ] T014 Promote accepted trust calibration behavior to durable docs.
+- [x] T014 Promote accepted trust calibration behavior to durable docs.
   - Depends on: T013
   - Requirements: R1, R2, R3, R4, R5, CP004, CP007
   - Files: `docs/reference/runtime-contracts.md`,
@@ -423,16 +423,23 @@ after implementation.
     policy derivation point, covered public surfaces, exclusions, compatibility
     behavior, and EB023 status/promotion evidence.
   - Evidence mode: implementation
-  - Evidence: Pending.
-  - [ ] T014.1 Update runtime contracts with schema, vocabulary, failure-state
+  - Evidence: Complete on 2026-07-06. Promoted implemented trust behavior to
+    `docs/reference/runtime-contracts.md`, including optional `meta.trust`,
+    vocabulary, shared derivation, evidence distinctions, failure-state
+    semantics, and additive compatibility. Promoted presenter policy coverage
+    and the non-framable transport exclusion to
+    `docs/design/mcp-surface-design.md`, added documentation-map ownership for
+    trust calibration, and updated EB023 in `docs/backlog/README.md` with
+    implementation and validation evidence.
+  - [x] T014.1 Update runtime contracts with schema, vocabulary, failure-state
     semantics, and additive compatibility notes.
-  - [ ] T014.2 Update MCP surface design with presenter derivation, covered
+  - [x] T014.2 Update MCP surface design with presenter derivation, covered
     surfaces, and trust policy boundaries.
-  - [ ] T014.3 Update documentation map if ownership routing changes.
-  - [ ] T014.4 Update backlog EB023 with implementation and validation
+  - [x] T014.3 Update documentation map if ownership routing changes.
+  - [x] T014.4 Update backlog EB023 with implementation and validation
     evidence.
 
-- [ ] T015 Run full validation and implementation review.
+- [x] T015 Run full validation and implementation review.
   - Depends on: T014
   - Requirements: R1, R2, R3, R4, R5, CP001, CP002, CP003, CP004, CP005, CP006,
     CP007
@@ -444,15 +451,26 @@ after implementation.
     `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts`, spec lint,
     Markdown quality checks for changed docs, and `git diff --check`.
   - Evidence mode: validation
-  - Evidence: Pending.
-  - [ ] T015.1 Run typecheck and full Vitest suite.
-  - [ ] T015.2 Run spec lint, docs link/metadata tests, Markdown quality
+  - Evidence: Complete on 2026-07-06. `pnpm typecheck` passed; full
+    `pnpm test` passed with 78 files and 562 tests; focused docs/contract/MCP
+    validation passed with 5 files and 40 tests, including
+    `tests/docs/docs-links-metadata.test.ts` and `tests/mcp/trust-golden.test.ts`.
+    Spec lifecycle lint passed with 0 errors, 0 warnings, and 0 info findings;
+    `git diff --check` passed. Workbench Markdown quality checked the changed
+    durable/spec docs; findings were limited to pre-existing backlog table
+    readability warnings outside the EB023 edited section and are waived for
+    this spec with no implementation risk. Implementation review found no
+    requirements, correctness-property, or durable-promotion blockers. The
+    worktree contains unrelated dirty files outside this Phase 5 slice; they
+    were not reviewed, staged, or modified for Spec 035.
+  - [x] T015.1 Run typecheck and full Vitest suite.
+  - [x] T015.2 Run spec lint, docs link/metadata tests, Markdown quality
     checks, and diff whitespace validation.
-  - [ ] T015.3 Perform implementation review against requirements,
+  - [x] T015.3 Perform implementation review against requirements,
     correctness properties, and durable-doc promotion targets.
-  - [ ] T015.4 Resolve, reject with rationale, or route every review finding.
+  - [x] T015.4 Resolve, reject with rationale, or route every review finding.
 
-- [ ] T016 Prepare closure package and remove active spec after durable
+- [>] T016 Prepare closure package and remove active spec after durable
   promotion is accepted.
   - Depends on: T015
   - Requirements: R5, CP005, CP007
@@ -463,4 +481,11 @@ after implementation.
     validation, promotion, and residual-risk evidence; the active spec package
     is removed only after closure readiness passes.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Routed on 2026-07-06. Durable promotion and validation are
+    complete, but active spec removal requires a final spec commit hash that
+    contains the complete final package. Destination: close-spec workflow after
+    the Phase 5 implementation is committed. That follow-up should run closure
+    check, add the closure-log/archive-index entries with the final spec commit,
+    remove `docs/specs/035-trust-calibration-tool-outputs/`, and create the
+    cleanup commit.
+  - Destination: close Spec 035 after the final Phase 5 spec commit.

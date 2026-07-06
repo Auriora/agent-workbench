@@ -14,9 +14,11 @@ import {
 import type { McpToolDeclaration } from "../index.js";
 
 const docsScopeRawShape = {
-  action: z.enum(["set", "clear", "show"]).default("show").describe("Whether to set, clear, or show the session docs scope."),
-  scope_path: z.string().min(1).optional().describe("Repo-relative docs scope prefix to set, such as docs/specs/032-example.")
+  action: z.enum(["set", "clear", "show"]).default("show").describe("Choose show to inspect, set to constrain later docs calls, or clear to remove the session docs scope."),
+  scope_path: z.string().min(1).optional().describe("Repo-relative docs scope prefix to set, such as docs/specs/032-example; required when action is set.")
 };
+
+const docsScopeDescription = "Use this to show, set, or clear the default docs scope_path for this MCP session before docs_search, docs_current_for_task, or section reads. It only changes in-memory session state and never scans or mutates files.";
 
 type DocsScopeResponse = {
   status: "set" | "cleared" | "unchanged";
@@ -31,9 +33,9 @@ export const docsScopeTool: McpToolDeclaration = {
     capability_class: "read_only",
     mutation_class: "none",
     budget_policy: "Bounded in-memory MCP session state only; no repository scan and no source mutation.",
-    description: "Set, clear, or show the default docs scope_path for this MCP server session.",
+    description: docsScopeDescription,
     parameters: [
-      { name: "action", description: "set, clear, or show the session docs scope.", required: false },
+      { name: "action", description: "Choose show, set, or clear for the in-memory session docs scope.", required: false },
       { name: "scope_path", description: "Repo-relative docs scope prefix required when action is set.", required: false }
     ],
     returns: "ResponseEnvelope<DocsScopeResult>"
@@ -41,7 +43,7 @@ export const docsScopeTool: McpToolDeclaration = {
   register(server: McpServer, context) {
     server.tool(
       "docs_scope",
-      "Set, clear, or show the default docs scope_path for this MCP server session.",
+      docsScopeDescription,
       docsScopeRawShape,
       async (args: unknown) => textResponse(envelopeForDocsScope(context.repoRoot, applyDocsScopeArgs(args, context.docsSessionScope)))
     );

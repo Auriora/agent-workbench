@@ -88,7 +88,14 @@ Workbench Markdown tools when the MCP server is available.
   `tests/mcp/trust-golden.test.ts`; the Phase 4 checkpoint command covering
   shared policy, registry metadata, structured error envelopes, and trust
   golden responses passed with 38 tests.
-- T014-T016: Pending.
+- T014-T015: Complete on 2026-07-06. Durable trust behavior was promoted to
+  runtime contracts, MCP surface design, the documentation map, and EB023.
+  Validation passed: `pnpm typecheck`, full `pnpm test` with 78 files and 562
+  tests, focused docs/contract/MCP validation with 5 files and 40 tests,
+  lifecycle lint with no diagnostics, and `git diff --check`.
+- T016: Routed to the close-spec workflow after the final Phase 5 spec commit
+  records the completed package. Active package removal is intentionally not
+  performed before that final spec commit exists.
 
 Record command output summaries, waivers, and review findings in `tasks.md`
 before marking the corresponding task complete.

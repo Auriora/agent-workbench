@@ -117,9 +117,9 @@ Presenters own response consistency across every MCP resource and tool:
 - shared response envelope construction
 - metadata composition for freshness, capability, evidence, verification,
   budgets, and truncation
-- shared helpers for metadata labels and compact next-action lists, so trust
-  labels are generated in one place and only included when they calibrate agent
-  behavior
+- shared helpers for metadata labels, trust calibration, and compact
+  next-action lists, so trust labels are generated in one place and only
+  included when they calibrate agent behavior
 - warning, blocker, and error formatting
 - source section packing and stable ordering
 - retryable `next_action` mapping
@@ -134,6 +134,34 @@ Presenters decide whether a backend result is actionable enough to show. A file
 with no findings should normally produce no feedback. A backend that cannot
 process an optional file should be silent unless the current tool promised that
 analysis or the failure changes the recommended next action.
+
+Public standard-envelope presenters must use the shared trusted-envelope path.
+The presenter selects a typed trust surface policy, finishes data sanitization,
+and passes final warnings and errors to the shared response helper so
+`meta.trust` reflects the complete envelope. MCP adapters and registries remain
+thin: they validate input, bind providers, call use cases, and call presenters;
+they do not hand-write trust caveats or create fallback trust routes.
+
+The public surface policy coverage is:
+
+| Surface family | Trust policy |
+| --- | --- |
+| `repo:///status`, `repo:///scope`, `repo:///overview` | `repository_status` |
+| `repo:///docs/overview`, `repo:///docs/map`, `docs_search`, `docs_current_for_task`, `docs_outline` | `docs_routing` |
+| `docs_read_section` | `docs_direct_read` with direct-read evidence |
+| `docs_scope` | `docs_session_scope` |
+| `check_markdown_document`, `check_markdown_set` | `markdown_quality` with bounded direct-read evidence when present |
+| `context_for_task` | `context_routing` |
+| `symbol_search`, `find_references`, `impact` | graph symbol/reference/impact routing policies |
+| `diagnostics_for_files` and public post-edit feedback envelopes | `diagnostics_static` |
+| `verification_plan` | `validation_plan` |
+| `preview_workspace_edit` | `edit_preview` |
+| `apply_workspace_edit` | `edit_apply` when the use case reports an applied mutation |
+| `integration:///health/agent-workbench`, `integration:///profiles/codex` | `integration_health` |
+
+Recoverable public handler failures return structured envelopes that still carry
+trust calibration. Transport failures that prevent MCP response framing are the
+only expected public exclusion.
 
 ## MVP Resources
 

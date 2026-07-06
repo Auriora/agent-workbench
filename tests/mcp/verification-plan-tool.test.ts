@@ -1265,7 +1265,7 @@ describe("verification_plan MCP tool", () => {
 
     expect(registered).toMatchObject({
       name: "verification_plan",
-      description: "Plan validation commands and quiet static feedback without executing commands."
+      description: expect.stringContaining("Use this before running validation commands")
     });
 
     const response = await registered.handler({

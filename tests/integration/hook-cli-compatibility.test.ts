@@ -59,6 +59,8 @@ describe("agent CLI hook compatibility", () => {
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("Agent Workbench MCP is available.");
     expect(result.stdout).toContain(`- root: ${repoRoot}`);
+    expect(result.stdout).toContain("tool_search");
+    expect(result.stdout).toContain("context_for_task verification_plan diagnostics_for_files docs_search");
   });
 
   it("passes PostToolUse stdin through the Codex shell command shape", () => {
@@ -136,6 +138,10 @@ describe("agent CLI hook compatibility", () => {
       hookEventName: "SessionStart",
       additionalContext: expect.stringContaining("Agent Workbench MCP is available.")
     });
+    expect(parsed.hookSpecificOutput?.additionalContext).toContain("tool_search");
+    expect(parsed.hookSpecificOutput?.additionalContext).toContain(
+      "context_for_task verification_plan diagnostics_for_files docs_search"
+    );
   });
 
   it("runs Kiro custom-agent hooks as shell command strings with plain text output", () => {
@@ -165,5 +171,7 @@ describe("agent CLI hook compatibility", () => {
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("Agent Workbench MCP is available.");
     expect(result.stdout).toContain("repo:///status");
+    expect(result.stdout).toContain("tool_search");
+    expect(result.stdout).toContain("context_for_task verification_plan diagnostics_for_files docs_search");
   });
 });

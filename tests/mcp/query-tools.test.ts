@@ -37,7 +37,7 @@ describe("graph query MCP tools", () => {
 
     expect(registered).toMatchObject({
       name: "symbol_search",
-      description: "Search indexed graph symbols with bounded row and optional source-byte budgets."
+      description: expect.stringContaining("Use this before broad grep")
     });
     const response = await registered.handler({ query: "Runner" });
     const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {

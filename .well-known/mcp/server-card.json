@@ -82,105 +82,105 @@
   "tools": [
     {
       "name": "context_for_task",
-      "description": "Gather compact task context from local repository evidence before editing.",
+      "description": "Use this before broad file reads, edits, or code review. Provide the task plus any known files or symbols; it returns bounded routing evidence, likely files, governing docs, risks, and suggested next Agent Workbench calls without mutating files.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded by max_files and max_docs; scans local file catalog only."
     },
     {
       "name": "diagnostics_for_files",
-      "description": "Run compact provider-backed diagnostics for repo-relative files without executing validation commands.",
+      "description": "Use this for cheap static diagnostics on explicit repo files before or after edits. It reports provider-backed findings without running tests, typechecks, linters, or mutating files.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded by max_files and provider budgets; never mutates files or executes validation commands."
     },
     {
       "name": "docs_scope",
-      "description": "Set, clear, or show the default docs scope_path for this MCP server session.",
+      "description": "Use this to show, set, or clear the default docs scope_path for this MCP session before docs_search, docs_current_for_task, or section reads. It only changes in-memory session state and never scans or mutates files.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded in-memory MCP session state only; no repository scan and no source mutation."
     },
     {
       "name": "docs_search",
-      "description": "Search repository docs by path, title, heading, and bounded text snippets.",
+      "description": "Use this to find canonical docs before adding or changing documentation, specs, contracts, or behavior. Prefer docs_scope or scope_path for active spec packages; results include bounded snippets and cursors for additional pages.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded by optional scope_path, max_results, and snippet limits; scans Markdown docs without source mutation."
     },
     {
       "name": "docs_current_for_task",
-      "description": "Identify current, supporting, non-authoritative, and uncertain docs for a task.",
+      "description": "Use this before updating or promoting documentation to classify docs as current, supporting, non-authoritative, or uncertain for a task. Pass the task plus known files or a docs_scope/scope_path; it does not mutate files.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded by optional scope_path, max_docs, and local Markdown scan; does not mutate source or require Git history."
     },
     {
       "name": "docs_outline",
-      "description": "Read a bounded heading outline for one repo-relative Markdown document.",
+      "description": "Use this after choosing a Markdown document, usually from docs_search, to get stable heading_id values before docs_read_section. It returns a bounded heading outline only, not full document text.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded heading outline for one Markdown document; reads no generated/vendor paths."
     },
     {
       "name": "docs_read_section",
-      "description": "Read one bounded Markdown section by repo-relative path and stable heading identifier.",
+      "description": "Use this after docs_outline when exact documentation evidence is needed. Pass the heading_id from the outline; it reads one bounded Markdown section and avoids broad full-document dumps.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded by max_bytes for one Markdown section; reads no generated/vendor paths."
     },
     {
       "name": "check_markdown_document",
-      "description": "Check one Markdown document for parser-aware structure, frontmatter, link, list, and table quality findings.",
+      "description": "Use this before committing or promoting one Markdown document. It checks parser-aware structure, frontmatter, links, lists, and tables, returning bounded evidence without changing the file.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded by one repo-relative Markdown document, max_file_bytes, max_findings, and evidence byte limits."
     },
     {
       "name": "check_markdown_set",
-      "description": "Check a bounded explicit or scoped set of Markdown documents for quality findings.",
+      "description": "Use this before docs-wide commits, spec closure, or documentation promotion to check explicit Markdown files or a bounded docs scope. Keep paths or scope_path narrow; it returns aggregate bounded findings without mutation.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded by explicit paths or scope_path plus max_documents, max_findings, file-size, and evidence limits."
     },
     {
       "name": "symbol_search",
-      "description": "Search indexed graph symbols with bounded row and optional source-byte budgets.",
+      "description": "Use this before broad grep when looking for definitions, indexed symbols, or graph node ids. Search by name or identifier, then use returned node_id values with find_references or impact.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded by max_results and source_byte_limit."
     },
     {
       "name": "find_references",
-      "description": "Find resolved and unresolved references for an indexed graph node or exact symbol.",
+      "description": "Use this after symbol_search or context_for_task provides a node_id, or when an exact symbol name is known. It returns bounded resolved and unresolved references with cursor pagination for truncated pages.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded by max_depth and max_results."
     },
     {
       "name": "impact",
-      "description": "Compute bounded graph impact for an indexed symbol without broad source scans.",
+      "description": "Use this after selecting a graph node_id to estimate affected symbols and files before edits. It performs bounded indexed graph traversal, does not scan source broadly, and does not mutate files.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded by max_depth and max_nodes."
     },
     {
       "name": "preview_workspace_edit",
-      "description": "Preview bounded workspace edits and return a token without mutating files.",
+      "description": "Use this before apply_workspace_edit to validate bounded full-file replacements. It does not mutate files; keep the returned preview_token and pass identical replacement text to apply_workspace_edit.",
       "capability_class": "workspace_write",
       "mutation_class": "planning",
       "budget_policy": "Bounded to 20 full-file replacement edits and token TTL <= 1 hour; preview does not mutate files."
     },
     {
       "name": "apply_workspace_edit",
-      "description": "Apply a previously previewed bounded workspace edit after hash and safety checks.",
+      "description": "Use only after preview_workspace_edit. Provide the preview_token and identical full-file replacements; it mutates files only when the token, paths, hashes, and workspace-safety checks still match.",
       "capability_class": "workspace_write",
       "mutation_class": "workspace_write",
       "budget_policy": "Bounded to 20 full-file replacement edits and requires a matching preview token."
     },
     {
       "name": "verification_plan",
-      "description": "Plan validation commands and quiet static feedback without executing commands.",
+      "description": "Use this before running validation commands or after edits. Provide the task and relevant files; it plans bounded typecheck, test, lint, docs, or smoke commands and optional static feedback, but never executes commands.",
       "capability_class": "planning",
       "mutation_class": "planning",
       "budget_policy": "Bounded by max_commands; never executes validation commands."
