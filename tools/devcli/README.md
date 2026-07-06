@@ -32,7 +32,7 @@ awb spec lint docs/specs/028-dev-cli-workflow-tools
 awb doctor
 awb release preflight
 awb release notes --from v0.3.0 --to HEAD --version 0.4.0 --dry-run
-awb release tag 0.4.0 --dry-run
+awb release trigger 0.4.0 --dry-run
 ```
 
 Local mutation commands:
@@ -72,7 +72,7 @@ release from the immutable tag:
 ```bash
 awb release bump-version 0.4.0
 awb release notes --from v0.3.0 --to HEAD --version 0.4.0 --dry-run
-awb release tag 0.4.0
+awb release trigger 0.4.0
 ```
 
 `awb release notes` uses Git history and changed-file evidence only. It does not
@@ -80,11 +80,17 @@ query GitHub or claim validation unless `--validation-note` or
 `--validation-file` is supplied. `--dry-run` prints the draft and creates no
 files or directories.
 
-`awb release tag` requires matching release metadata and
+`awb release trigger` is the preferred command after release notes and version
+metadata are committed. It requires matching release metadata and
 `docs/release-notes/vX.Y.Z.md`, refuses a dirty working tree by default, creates
-an annotated `vX.Y.Z` tag for `HEAD`, and pushes it to `origin`. Use `--no-push`
-to keep the tag local. Use `--force` only when deliberately replacing an
-existing tag; it also allows a dirty working tree.
+an annotated `vX.Y.Z` tag for `HEAD`, and pushes it to `origin` so GitHub
+Actions builds and publishes the release. Use `--no-push` to keep the tag
+local. Use `--force` only when deliberately replacing an existing tag; it also
+allows a dirty working tree. `awb release tag` remains as a compatibility alias
+for the same tag-and-push flow.
+
+`awb release github` is for the older local `gh release create/upload` flow.
+Do not use it for the normal tag-triggered GitHub Actions release process.
 
 ## Validation
 

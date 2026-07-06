@@ -115,6 +115,12 @@ class CliTests(unittest.TestCase):
         self.assertNotIn(("git", "push"), argv)
         self.assertNotIn(("npm", "publish"), argv)
 
+    def test_release_help_exposes_trigger_command(self) -> None:
+        result = CliRunner().invoke(app, ["release", "--help"])
+        self.assertEqual(result.exit_code, 0, result.output)
+        self.assertIn("trigger", result.output)
+        self.assertIn("tag", result.output)
+
     def test_github_release_plan_creates_tarball_tag_and_release(self) -> None:
         plan = build_github_release_plan(
             ROOT,
@@ -288,13 +294,13 @@ class CliTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Missing release notes"):
                 verify_release_artifacts(root, "0.4.0")
 
-    def test_release_tag_command_dry_run_checks_artifacts_and_pushes_tag(self) -> None:
+    def test_release_trigger_command_dry_run_checks_artifacts_and_pushes_tag(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self._make_release_artifacts_fixture(Path(tmp))
 
             result = CliRunner().invoke(
                 app,
-                ["release", "tag", "0.4.0", "--repo-root", str(root), "--dry-run"],
+                ["release", "trigger", "0.4.0", "--repo-root", str(root), "--dry-run"],
             )
 
             self.assertEqual(result.exit_code, 0, result.output)
@@ -309,7 +315,7 @@ class CliTests(unittest.TestCase):
 
             blocked = CliRunner().invoke(
                 app,
-                ["release", "tag", "0.4.0", "--repo-root", str(root), "--dry-run"],
+                ["release", "tag", "0.4.0", "--repo-root", str(root)],
             )
             forced = CliRunner().invoke(
                 app,

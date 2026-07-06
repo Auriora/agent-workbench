@@ -18,7 +18,7 @@ or runtime path. Install it directly by release URL (see
 current version):
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.4.0/auriora-agent-workbench-0.4.0.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.0/auriora-agent-workbench-0.5.0.tgz
 ```
 
 Checkout-only debug harnesses under `src/debug/`, `debug:*` package scripts,

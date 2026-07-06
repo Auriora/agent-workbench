@@ -350,6 +350,36 @@ def _print_metadata(root: Path) -> None:
         typer.echo(f"{path.relative_to(root)}: {state}")
 
 
+def _run_release_tag_command(
+    root: Path,
+    *,
+    version: str | None,
+    remote: str,
+    no_push: bool,
+    force: bool,
+    dry_run: bool,
+) -> None:
+    normalized = normalize_version(version or current_package_version(root))
+    try:
+        notes_path = verify_release_artifacts(root, normalized)
+        if not dry_run:
+            _ensure_clean_worktree(root, allow_dirty=force, override_flag="--force")
+    except (RuntimeError, ValueError) as exc:
+        typer.secho(str(exc), fg=typer.colors.RED)
+        raise typer.Exit(code=1) from exc
+    typer.echo(f"release tag: {release_tag(normalized)}")
+    typer.echo(f"release notes: {notes_path.relative_to(root)}")
+    plan = build_release_tag_plan(
+        root,
+        version=normalized,
+        remote=remote,
+        push=not no_push,
+        force=force,
+    )
+    results = run_plan(plan, dry_run=dry_run)
+    summarize(results)
+
+
 def register(app: typer.Typer) -> None:
     release_app = typer.Typer(no_args_is_help=True, help="Release preflight checks.")
 
@@ -415,6 +445,36 @@ def register(app: typer.Typer) -> None:
         for path in changed:
             typer.echo(f"- {path.relative_to(root)}")
 
+    @release_app.command("trigger")
+    def trigger_release(
+        version: str | None = typer.Argument(
+            None,
+            help="Release version. Defaults to package.json#/version.",
+        ),
+        remote: str = typer.Option("origin", "--remote", help="Git remote to push the tag to."),
+        no_push: bool = typer.Option(False, "--no-push", help="Create the local tag without pushing it."),
+        force: bool = typer.Option(
+            False,
+            "--force",
+            help="Allow a dirty working tree and replace an existing local/remote tag.",
+        ),
+        repo_root: Path | None = typer.Option(None, "--repo-root", help="Repository root override."),
+        dry_run: bool = typer.Option(False, "--dry-run", help="Print commands without running them."),
+    ) -> None:
+        """Tag and push a release so GitHub Actions builds and publishes it."""
+
+        from auriora_dev.repo import resolve_repo_root
+
+        root = resolve_repo_root(repo_root)
+        _run_release_tag_command(
+            root,
+            version=version,
+            remote=remote,
+            no_push=no_push,
+            force=force,
+            dry_run=dry_run,
+        )
+
     @release_app.command("tag")
     def tag_release(
         version: str | None = typer.Argument(
@@ -431,27 +491,19 @@ def register(app: typer.Typer) -> None:
         repo_root: Path | None = typer.Option(None, "--repo-root", help="Repository root override."),
         dry_run: bool = typer.Option(False, "--dry-run", help="Print commands without running them."),
     ) -> None:
+        """Compatibility alias for `awb release trigger`."""
+
         from auriora_dev.repo import resolve_repo_root
 
         root = resolve_repo_root(repo_root)
-        normalized = normalize_version(version or current_package_version(root))
-        try:
-            notes_path = verify_release_artifacts(root, normalized)
-            _ensure_clean_worktree(root, allow_dirty=force, override_flag="--force")
-        except (RuntimeError, ValueError) as exc:
-            typer.secho(str(exc), fg=typer.colors.RED)
-            raise typer.Exit(code=1) from exc
-        typer.echo(f"release tag: {release_tag(normalized)}")
-        typer.echo(f"release notes: {notes_path.relative_to(root)}")
-        plan = build_release_tag_plan(
+        _run_release_tag_command(
             root,
-            version=normalized,
+            version=version,
             remote=remote,
-            push=not no_push,
+            no_push=no_push,
             force=force,
+            dry_run=dry_run,
         )
-        results = run_plan(plan, dry_run=dry_run)
-        summarize(results)
 
     @release_app.command("github")
     def github_release(
