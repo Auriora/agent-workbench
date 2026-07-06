@@ -84,6 +84,7 @@ export type TrustSurfaceKind =
   | "repository_status"
   | "docs_session_scope"
   | "integration_health"
+  | "integration_profile"
   | "generic_error";
 
 export type TrustSurfacePolicy = {
@@ -166,6 +167,15 @@ function baseTrustCalibration(policy: TrustSurfacePolicy): MutableTrustCalibrati
         "run_planned_validation"
       ]);
       return calibration;
+    case "integration_profile":
+      addAll(calibration.safe_to_use_for, ["navigation", "next_read_selection"]);
+      addAll(calibration.not_safe_to_use_for, [...proofLikeTrustUses, "runtime_availability"]);
+      addAll(calibration.must_verify_by, [
+        "direct_read_relevant_source",
+        "inspect_ranked_evidence",
+        "run_planned_validation"
+      ]);
+      return calibration;
     case "context_routing":
     case "docs_routing":
       addAll(calibration.safe_to_use_for, ["navigation", "next_read_selection"]);
@@ -191,7 +201,6 @@ function baseTrustCalibration(policy: TrustSurfacePolicy): MutableTrustCalibrati
       addAll(calibration.must_verify_by, ["direct_read_relevant_source", "run_planned_validation"]);
       return calibration;
     case "docs_direct_read":
-      addAll(calibration.safe_to_use_for, ["precise_direct_read_claim"]);
       addAll(calibration.not_safe_to_use_for, proofLikeTrustUses);
       addAll(calibration.must_verify_by, ["direct_read_relevant_source", "run_planned_validation"]);
       return calibration;

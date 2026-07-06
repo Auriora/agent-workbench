@@ -8,6 +8,7 @@ import type {
   ResponseEnvelope,
   ResponseMetadata
 } from "../../src/contracts/index.js";
+import { codexIntegrationProfileResource } from "../../src/interface-adapters/mcp/registries/resources/codex-integration-profile.js";
 import { repoStatusResource } from "../../src/interface-adapters/mcp/registries/resources/repo-status.js";
 import { integrationHealthResource } from "../../src/interface-adapters/mcp/registries/resources/integration-health.js";
 import { checkMarkdownDocumentTool } from "../../src/interface-adapters/mcp/registries/tools/check-markdown-document.js";
@@ -108,6 +109,26 @@ describe("public MCP trust golden responses", () => {
       {
         safe_to_use_for: ["navigation", "next_read_selection", "runtime_availability"],
         not_safe_to_use_for: proofLikeUnsafe,
+        must_verify_by: [
+          "direct_read_relevant_source",
+          "inspect_ranked_evidence",
+          "run_planned_validation"
+        ]
+      }
+    );
+  });
+
+  it("keeps static integration profiles distinct from live integration health", async () => {
+    const profile = registerMcpResource(codexIntegrationProfileResource, {});
+
+    expectTrust(
+      parseMcpResourceText<ResponseEnvelope<unknown>>(await profile.handler({})),
+      {
+        safe_to_use_for: ["navigation", "next_read_selection"],
+        not_safe_to_use_for: [
+          ...proofLikeUnsafe,
+          "runtime_availability"
+        ].sort(),
         must_verify_by: [
           "direct_read_relevant_source",
           "inspect_ranked_evidence",

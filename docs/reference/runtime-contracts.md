@@ -347,20 +347,24 @@ Routing-only evidence is safe for navigation and next-read selection, not for
 implementation, completion, closure, safe mutation, whole-program impact, passed
 validation, or security/vulnerability claims. Parser-backed or partial-semantic
 evidence may add `local_structure_reference`, but broad impact and mutation
-safety still require direct review and validation. Direct-read evidence may add
-`precise_direct_read_claim` only for the returned bounded section or file.
-Planned validation may add `validation_planning`; it is not executed validation.
-Executed validation may add `bounded_executed_validation_claim` only when the
-surface explicitly represents executed-command evidence.
+safety still require direct review and validation. Direct-read policy alone
+does not grant `precise_direct_read_claim`; returned metadata must include
+direct-read evidence, and the claim applies only to the returned bounded section
+or file. Static integration-profile configuration is safe for navigation and
+next-read selection, but not for `runtime_availability`; live integration health
+or session evidence must support runtime availability claims. Planned validation
+may add `validation_planning`; it is not executed validation. Executed
+validation may add `bounded_executed_validation_claim` only when the surface
+explicitly represents executed-command evidence.
 
 Failure-state responses keep proof-like uses unsafe. Invalid input, blocked
 validation, stale state, cold or refreshing evidence, partial evidence,
 environment failure, warnings, errors, and blocker caveats add the matching
 requirements such as `refresh_runtime_snapshot`,
 `resolve_blocked_environment`, `direct_read_relevant_source`, or
-`run_planned_validation`. Recoverable MCP handler failures still return normal
-JSON envelopes with `meta.trust` unless the failure prevents MCP response
-framing itself.
+`run_planned_validation`. Recoverable MCP handler failures, including missing or
+failing resource providers, still return normal JSON envelopes with `meta.trust`
+unless the failure prevents MCP response framing itself.
 
 ## Error Shape
 

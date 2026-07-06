@@ -148,7 +148,7 @@ The public surface policy coverage is:
 | --- | --- |
 | `repo:///status`, `repo:///scope`, `repo:///overview` | `repository_status` |
 | `repo:///docs/overview`, `repo:///docs/map`, `docs_search`, `docs_current_for_task`, `docs_outline` | `docs_routing` |
-| `docs_read_section` | `docs_direct_read` with direct-read evidence |
+| `docs_read_section` | `docs_direct_read`; `precise_direct_read_claim` is safe only when returned metadata includes direct-read evidence |
 | `docs_scope` | `docs_session_scope` |
 | `check_markdown_document`, `check_markdown_set` | `markdown_quality` with bounded direct-read evidence when present |
 | `context_for_task` | `context_routing` |
@@ -157,11 +157,13 @@ The public surface policy coverage is:
 | `verification_plan` | `validation_plan` |
 | `preview_workspace_edit` | `edit_preview` |
 | `apply_workspace_edit` | `edit_apply` when the use case reports an applied mutation |
-| `integration:///health/agent-workbench`, `integration:///profiles/codex` | `integration_health` |
+| `integration:///health/agent-workbench` | `integration_health` |
+| `integration:///profiles/codex` | `integration_profile` static configuration evidence |
 
-Recoverable public handler failures return structured envelopes that still carry
-trust calibration. Transport failures that prevent MCP response framing are the
-only expected public exclusion.
+Recoverable public handler failures, including missing or failing resource
+providers, return structured envelopes that still carry trust calibration.
+Transport failures that prevent MCP response framing are the only expected
+public exclusion.
 
 ## MVP Resources
 
@@ -721,6 +723,10 @@ Post-closure dogfood caveats from large mixed-language repositories:
   a given Codex client session. The profile now warns callers not to treat
   configured bindings as guaranteed client-exposed tools unless the active
   session exposes them.
+- Done: calibrate `integration:///profiles/codex` as static integration profile
+  configuration evidence rather than live integration health, and keep
+  `runtime_availability` unsafe until callers inspect live health or session
+  evidence.
 - Done: make the Codex plugin install path skill/hook-only for local
   development. Host-level Codex MCP configuration is the single executable
   runtime path; the plugin manifest must not register a copied or cache-relative

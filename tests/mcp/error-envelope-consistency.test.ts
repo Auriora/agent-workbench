@@ -9,6 +9,9 @@ import type {
   ResponseMetadata,
   RuntimeError
 } from "../../src/contracts/index.js";
+import { docsMapResource } from "../../src/interface-adapters/mcp/registries/resources/docs-map.js";
+import { docsOverviewResource } from "../../src/interface-adapters/mcp/registries/resources/docs-overview.js";
+import { integrationHealthResource } from "../../src/interface-adapters/mcp/registries/resources/integration-health.js";
 import { applyWorkspaceEditTool } from "../../src/interface-adapters/mcp/registries/tools/apply-workspace-edit.js";
 import { contextForTaskTool } from "../../src/interface-adapters/mcp/registries/tools/context-for-task.js";
 import { docsSearchTool } from "../../src/interface-adapters/mcp/registries/tools/docs-search.js";
@@ -16,7 +19,9 @@ import { previewWorkspaceEditTool } from "../../src/interface-adapters/mcp/regis
 import { symbolSearchTool } from "../../src/interface-adapters/mcp/registries/tools/symbol-search.js";
 import { verificationPlanTool } from "../../src/interface-adapters/mcp/registries/tools/verification-plan.js";
 import {
+  parseMcpResourceText,
   parseMcpTextContent,
+  registerMcpResource,
   registerMcpTool
 } from "../helpers/mcp-harness.js";
 
@@ -75,6 +80,52 @@ describe("MCP error envelope consistency", () => {
         retryable: false
       });
       expect(parsed.errors[0]?.message).toBe(`${item.tool.name} provider is not configured.`);
+    }
+  });
+
+  it("returns provider-unavailable envelopes when representative resource providers fail", async () => {
+    const cases = [
+      {
+        resource: docsOverviewResource,
+        args: {},
+        provider: {
+          getDocsOverview: () => {
+            throw new Error("docs index database is locked");
+          }
+        }
+      },
+      {
+        resource: docsMapResource,
+        args: {},
+        provider: {
+          getDocsMap: () => {
+            throw new Error("docs scanner crashed");
+          }
+        }
+      },
+      {
+        resource: integrationHealthResource,
+        args: { client: "codex" },
+        provider: {
+          getIntegrationHealth: () => {
+            throw new Error("registry unavailable");
+          }
+        }
+      }
+    ];
+
+    for (const item of cases) {
+      const registered = registerMcpResource(item.resource, item.provider);
+      const parsed = parseMcpResourceText<ResponseEnvelope<unknown>>(
+        await registered.handler(item.args)
+      );
+
+      expectError(parsed, {
+        code: "provider_unavailable",
+        analysis_validity: "invalid_due_to_environment",
+        verification_status: "blocked",
+        retryable: true
+      });
     }
   });
 

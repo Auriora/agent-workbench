@@ -90,9 +90,16 @@ Workbench Markdown tools when the MCP server is available.
   golden responses passed with 38 tests.
 - T014-T015: Complete on 2026-07-06. Durable trust behavior was promoted to
   runtime contracts, MCP surface design, the documentation map, and EB023.
-  Validation passed: `pnpm typecheck`, full `pnpm test` with 78 files and 562
-  tests, focused docs/contract/MCP validation with 5 files and 40 tests,
+  Validation passed: `pnpm typecheck`, full `pnpm test` with 78 files and 566
+  tests, focused docs/contract/MCP validation with 8 files and 79 tests,
   lifecycle lint with no diagnostics, and `git diff --check`.
+- Review remediation: Complete on 2026-07-06. Tightened direct-read trust so
+  `precise_direct_read_claim` requires returned direct-read evidence, split
+  static Codex profile trust from live integration health, and wrapped docs and
+  integration-health resource provider failures in structured
+  `provider_unavailable` envelopes. Focused regression validation passed with
+  8 files and 79 tests, and full `pnpm test` passed with 78 files and 566
+  tests.
 - T016: Routed to the close-spec workflow after the final Phase 5 spec commit
   records the completed package. Active package removal is intentionally not
   performed before that final spec commit exists.

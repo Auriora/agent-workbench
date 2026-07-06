@@ -28,6 +28,6 @@ export function buildCodexIntegrationProfileEnvelope(
       verification_status: "done",
       truncated: false
     },
-    trust_policy: { surface_kind: "integration_health" }
+    trust_policy: { surface_kind: "integration_profile" }
   });
 }

@@ -10,6 +10,7 @@ import {
 } from "../../../../contracts/index.js";
 import {
   buildDocsOverviewEnvelope,
+  buildDocsOverviewProviderFailureEnvelope,
   buildInvalidDocsOverviewInputEnvelope
 } from "../../../../presentation/docs-presenter.js";
 import {
@@ -19,6 +20,7 @@ import {
 import { requestWithSessionDocsScope } from "../docs-session-scope.js";
 import type { McpResourceDeclaration } from "../index.js";
 import { resolveMcpRequestRepoRoot } from "../root-authority.js";
+import { providerFailureMessage } from "./provider-failure.js";
 
 export const docsOverviewResource: McpResourceDeclaration = {
   kind: "resource",
@@ -64,7 +66,7 @@ export const docsOverviewResource: McpResourceDeclaration = {
       }
 
       if (context.getDocsOverview === undefined) {
-        const envelope = buildInvalidDocsOverviewInputEnvelope({
+        const envelope = buildDocsOverviewProviderFailureEnvelope({
           repoRoot: context.repoRoot,
           message: "repo:///docs/overview provider is not configured."
         });
@@ -75,10 +77,19 @@ export const docsOverviewResource: McpResourceDeclaration = {
         rootDecision.request,
         context.docsSessionScope
       );
-      const result = await context.getDocsOverview({
-        request: scopedRequest
-      });
-      return docsResourceResponse("repo:///docs/overview", buildDocsOverviewEnvelope(result));
+      let envelope;
+      try {
+        const result = await context.getDocsOverview({
+          request: scopedRequest
+        });
+        envelope = buildDocsOverviewEnvelope(result);
+      } catch (error) {
+        envelope = buildDocsOverviewProviderFailureEnvelope({
+          repoRoot: rootDecision.request.repo_root ?? context.repoRoot,
+          message: providerFailureMessage("repo:///docs/overview", error)
+        });
+      }
+      return docsResourceResponse("repo:///docs/overview", envelope);
     });
   }
 };

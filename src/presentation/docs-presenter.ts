@@ -160,6 +160,29 @@ export function buildInvalidDocsOverviewInputEnvelope(input: {
   });
 }
 
+export function buildDocsOverviewProviderFailureEnvelope(input: {
+  repoRoot: string;
+  message: string;
+}): ResponseEnvelope<DocsOverview> {
+  return makeTrustedEnvelope({
+    data: {
+      repo_root: input.repoRoot,
+      status: "blocked",
+      summary: input.message,
+      important_docs: [],
+      warnings: [],
+      truncated: false,
+      next_actions: []
+    },
+    meta: invalidResponseMeta({
+      repoRoot: input.repoRoot,
+      analysis_validity: "invalid_due_to_environment"
+    }),
+    trust_policy: { surface_kind: "docs_routing" },
+    errors: [providerUnavailableError(input.message)]
+  });
+}
+
 export function buildInvalidDocsMapInputEnvelope(input: {
   repoRoot: string;
   message: string;
@@ -176,6 +199,28 @@ export function buildInvalidDocsMapInputEnvelope(input: {
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
     trust_policy: { surface_kind: "docs_routing" },
     errors: [invalidInputError(input.message)]
+  });
+}
+
+export function buildDocsMapProviderFailureEnvelope(input: {
+  repoRoot: string;
+  message: string;
+}): ResponseEnvelope<DocsMap> {
+  return makeTrustedEnvelope({
+    data: {
+      repo_root: input.repoRoot,
+      status: "blocked",
+      docs: [],
+      warnings: [],
+      truncated: false,
+      next_actions: []
+    },
+    meta: invalidResponseMeta({
+      repoRoot: input.repoRoot,
+      analysis_validity: "invalid_due_to_environment"
+    }),
+    trust_policy: { surface_kind: "docs_routing" },
+    errors: [providerUnavailableError(input.message)]
   });
 }
 
@@ -478,6 +523,14 @@ function invalidInputError(message: string) {
     code: "invalid_input",
     message,
     retryable: false
+  };
+}
+
+function providerUnavailableError(message: string) {
+  return {
+    code: "provider_unavailable",
+    message,
+    retryable: true
   };
 }
 

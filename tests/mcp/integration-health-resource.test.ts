@@ -116,9 +116,9 @@ describe("integration health MCP resource", () => {
     });
     expect(parsed.errors).toEqual([
       expect.objectContaining({
-        code: "invalid_input",
+        code: "provider_unavailable",
         message: "integration:///health/agent-workbench provider is not configured.",
-        retryable: false
+        retryable: true
       })
     ]);
   });

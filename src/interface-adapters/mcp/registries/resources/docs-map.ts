@@ -10,6 +10,7 @@ import {
 } from "../../../../contracts/index.js";
 import {
   buildDocsMapEnvelope,
+  buildDocsMapProviderFailureEnvelope,
   buildInvalidDocsMapInputEnvelope
 } from "../../../../presentation/docs-presenter.js";
 import {
@@ -19,6 +20,7 @@ import {
 import { requestWithSessionDocsScope } from "../docs-session-scope.js";
 import type { McpResourceDeclaration } from "../index.js";
 import { resolveMcpRequestRepoRoot } from "../root-authority.js";
+import { providerFailureMessage } from "./provider-failure.js";
 
 export const docsMapResource: McpResourceDeclaration = {
   kind: "resource",
@@ -64,7 +66,7 @@ export const docsMapResource: McpResourceDeclaration = {
       }
 
       if (context.getDocsMap === undefined) {
-        const envelope = buildInvalidDocsMapInputEnvelope({
+        const envelope = buildDocsMapProviderFailureEnvelope({
           repoRoot: context.repoRoot,
           message: "repo:///docs/map provider is not configured."
         });
@@ -75,10 +77,19 @@ export const docsMapResource: McpResourceDeclaration = {
         rootDecision.request,
         context.docsSessionScope
       );
-      const result = await context.getDocsMap({
-        request: scopedRequest
-      });
-      return docsResourceResponse("repo:///docs/map", buildDocsMapEnvelope(result));
+      let envelope;
+      try {
+        const result = await context.getDocsMap({
+          request: scopedRequest
+        });
+        envelope = buildDocsMapEnvelope(result);
+      } catch (error) {
+        envelope = buildDocsMapProviderFailureEnvelope({
+          repoRoot: rootDecision.request.repo_root ?? context.repoRoot,
+          message: providerFailureMessage("repo:///docs/map", error)
+        });
+      }
+      return docsResourceResponse("repo:///docs/map", envelope);
     });
   }
 };

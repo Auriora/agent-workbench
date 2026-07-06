@@ -348,6 +348,36 @@ describe("docs MCP tools", () => {
     ]);
   });
 
+  it("does not advertise precise direct-read claims for invalid docs_read_section input", async () => {
+    let providerCalled = false;
+    const registered = registerTool(docsReadSectionTool, {
+      readDocsSection: () => {
+        providerCalled = true;
+        throw new Error("provider should not run");
+      }
+    });
+
+    const response = await registered.handler({ path: "", heading_id: "setup" });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: DocsReadSectionUseCaseResult["read"];
+      meta: { trust?: { safe_to_use_for: string[]; not_safe_to_use_for: string[] } };
+      errors: Array<{ code: string; retryable: boolean }>;
+    };
+
+    expect(providerCalled).toBe(false);
+    expect(parsed.data.status).toBe("blocked");
+    expect(parsed.meta.trust?.safe_to_use_for).not.toContain("precise_direct_read_claim");
+    expect(parsed.meta.trust?.not_safe_to_use_for).toEqual(
+      expect.arrayContaining(["task_completion_claim", "closure_claim"])
+    );
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "invalid_input",
+        retryable: false
+      })
+    ]);
+  });
+
   it("uses the injected check_markdown_document provider with default repo root", async () => {
     let parsedRequest: CheckMarkdownDocumentRequest | undefined;
     const registered = registerTool(checkMarkdownDocumentTool, {
@@ -624,7 +654,7 @@ function readSectionResult(
       warnings: [],
       next_actions: []
     },
-    meta: meta(repoRoot)
+    meta: meta(repoRoot, ["docs", "direct_read"])
   };
 }
 
@@ -701,7 +731,10 @@ function guideDoc() {
   };
 }
 
-function meta(repoRoot: string): ResponseMetadata {
+function meta(
+  repoRoot: string,
+  evidenceKinds: ResponseMetadata["evidence_kinds"] = ["docs"]
+): ResponseMetadata {
   return {
     analysis_validity: "valid",
     freshness: "fresh",
@@ -712,7 +745,7 @@ function meta(repoRoot: string): ResponseMetadata {
       languages: ["markdown"]
     },
     capability_level: "resource_backed",
-    evidence_kinds: ["docs"],
+    evidence_kinds: evidenceKinds,
     verification_status: "done",
     truncated: false
   };

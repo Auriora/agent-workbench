@@ -101,7 +101,7 @@ T015 -> T016
     `repo:///status` -> `repository_status`; `repo:///scope` ->
     `repository_status`; `repo:///overview` -> `repository_status`;
     `repo:///docs/overview` -> `docs_routing`; `repo:///docs/map` ->
-    `docs_routing`; `integration:///profiles/codex` -> `integration_health`;
+    `docs_routing`; `integration:///profiles/codex` -> `integration_profile`;
     `integration:///health/agent-workbench` -> `integration_health`.
     Tool inventory:
     `context_for_task` -> `context_routing`; `diagnostics_for_files` ->
@@ -114,7 +114,9 @@ T015 -> T016
     `graph_symbol_routing`; `find_references` -> `graph_reference_routing`;
     `impact` -> `graph_impact_routing`; `preview_workspace_edit` ->
     `edit_preview`; `apply_workspace_edit` -> `edit_apply`;
-    `verification_plan` -> `validation_plan`.
+    `verification_plan` -> `validation_plan`. Updated on 2026-07-06 after
+    implementation review: static Codex profile metadata is not live health
+    evidence, so it uses `integration_profile`.
   - [x] T002.1 Enumerated `mcpResources` and `mcpTools` from
     `src/interface-adapters/mcp/registries/index.ts`.
   - [x] T002.2 Mapped each resource/tool to one `TrustSurfaceKind`.
@@ -451,10 +453,12 @@ after implementation.
     `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts`, spec lint,
     Markdown quality checks for changed docs, and `git diff --check`.
   - Evidence mode: validation
-  - Evidence: Complete on 2026-07-06. `pnpm typecheck` passed; full
-    `pnpm test` passed with 78 files and 562 tests; focused docs/contract/MCP
-    validation passed with 5 files and 40 tests, including
-    `tests/docs/docs-links-metadata.test.ts` and `tests/mcp/trust-golden.test.ts`.
+  - Evidence: Complete on 2026-07-06. `pnpm typecheck` passed; post-review
+    full `pnpm test` passed with 78 files and 566 tests; focused
+    docs/contract/MCP validation passed with 8 files and 79 tests, including
+    `tests/docs/docs-links-metadata.test.ts`, `tests/mcp/trust-golden.test.ts`,
+    invalid direct-read regression coverage, static profile trust coverage, and
+    resource provider-failure envelope coverage.
     Spec lifecycle lint passed with 0 errors, 0 warnings, and 0 info findings;
     `git diff --check` passed. Workbench Markdown quality checked the changed
     durable/spec docs; findings were limited to pre-existing backlog table

@@ -159,6 +159,7 @@ type TrustSurfaceKind =
   | "repository_status"
   | "docs_session_scope"
   | "integration_health"
+  | "integration_profile"
   | "generic_error";
 
 type TrustSurfacePolicy = {
@@ -209,7 +210,8 @@ overview, repository status, integration health, and docs session scope.
 
 #### Direct Docs Or Source Read
 
-- `safe_to_use_for`: `precise_direct_read_claim`.
+- `safe_to_use_for`: `precise_direct_read_claim` only when returned metadata
+  includes direct-read evidence for the bounded section or file.
 - `not_safe_to_use_for`: `implementation_claim`, `closure_claim`,
   `whole_program_impact_claim`, `safe_mutation_claim`,
   `passed_validation_claim`, `task_completion_claim`,
@@ -297,7 +299,8 @@ errors, or blocker caveats, the helper removes proof-like uses from
   - Search and inventory results remain routing evidence.
 - `docs_read_section`
   - Uses `docs_direct_read` with `includes_direct_read: true`.
-  - Safe for precise claims about the returned bounded section only.
+  - Safe for precise claims about the returned bounded section only when the
+    returned metadata includes direct-read evidence.
 - `symbol_search`
   - Uses `graph_symbol_routing`.
   - Parser evidence may support local structure references; heuristic and text
@@ -340,11 +343,17 @@ errors, or blocker caveats, the helper removes proof-like uses from
 - `repo:///status`, `repo:///scope`, `repo:///overview`,
   `repo:///docs/overview`, and `repo:///docs/map`
   - Use `repository_status` or `docs_routing`.
-  - Safe for runtime availability, inventory, and navigation, not task proof.
-- `integration:///health/agent-workbench` and integration profiles
+  - Repository status surfaces are safe for runtime availability; docs
+    inventory surfaces are safe for inventory and navigation. Neither family is
+    task proof.
+- `integration:///health/agent-workbench`
   - Use `integration_health`.
-  - Safe for configured/callable surface routing. Not proof that a user task is
-    complete.
+- Safe for configured/callable surface routing and runtime availability. Not
+  proof that a user task is complete.
+- Static integration profiles such as `integration:///profiles/codex`
+  - Use `integration_profile`.
+  - Safe for configuration navigation and next-read selection. Runtime
+    availability requires live health or session evidence.
 
 ## Low-Level Design
 

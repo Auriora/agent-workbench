@@ -135,8 +135,8 @@ describe("Codex integration profile", () => {
       capability_level: "resource_backed",
       verification_status: "done",
       trust: {
-        safe_to_use_for: expect.arrayContaining(["runtime_availability"]),
-        not_safe_to_use_for: expect.arrayContaining(["task_completion_claim"])
+        safe_to_use_for: expect.arrayContaining(["navigation", "next_read_selection"]),
+        not_safe_to_use_for: expect.arrayContaining(["runtime_availability", "task_completion_claim"])
       }
     });
   });

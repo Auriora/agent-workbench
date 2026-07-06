@@ -460,6 +460,17 @@ describe("response metadata helpers", () => {
   });
 
   it("bounds direct-read and parser-backed trust to their represented evidence", () => {
+    const directReadWithoutEvidence = buildTrustCalibration({
+      policy: {
+        surface_kind: "docs_direct_read",
+        includes_direct_read: true
+      },
+      meta: baseMeta({
+        analysis_validity: "invalid",
+        evidence_kinds: ["docs"],
+        verification_status: "blocked"
+      })
+    });
     const directRead = buildTrustCalibration({
       policy: {
         surface_kind: "docs_direct_read",
@@ -479,6 +490,10 @@ describe("response metadata helpers", () => {
       })
     });
 
+    expect(directReadWithoutEvidence.safe_to_use_for).not.toContain("precise_direct_read_claim");
+    expect(directReadWithoutEvidence.not_safe_to_use_for).toEqual(
+      expect.arrayContaining(["task_completion_claim", "closure_claim"])
+    );
     expect(directRead.safe_to_use_for).toContain("precise_direct_read_claim");
     expect(directRead.not_safe_to_use_for).toEqual(
       expect.arrayContaining(["whole_program_impact_claim", "safe_mutation_claim"])

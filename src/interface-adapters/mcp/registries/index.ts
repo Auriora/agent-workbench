@@ -152,7 +152,7 @@ export const publicSurfaceTrustPolicies = {
   "resource:overview": { surface_kind: "repository_status" },
   "resource:docs-overview": { surface_kind: "docs_routing" },
   "resource:docs-map": { surface_kind: "docs_routing" },
-  "resource:codex-integration-profile": { surface_kind: "integration_health" },
+  "resource:codex-integration-profile": { surface_kind: "integration_profile" },
   "resource:integration-health": { surface_kind: "integration_health" },
   "tool:context_for_task": { surface_kind: "context_routing" },
   "tool:diagnostics_for_files": { surface_kind: "diagnostics_static" },

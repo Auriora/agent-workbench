@@ -57,3 +57,43 @@ export function buildInvalidIntegrationHealthInputEnvelope(input: {
     ]
   });
 }
+
+export function buildIntegrationHealthProviderFailureEnvelope(input: {
+  repoRoot: string;
+  message: string;
+}): ResponseEnvelope<IntegrationHealth> {
+  return makeTrustedEnvelope({
+    data: {
+      repo_root: input.repoRoot,
+      runtime_version: "unknown",
+      profile: "unknown",
+      session: {
+        discovery_state: "unknown",
+        discovered_tools: [],
+        discovered_resources: [],
+        discovered_prompts: []
+      },
+      surfaces: [],
+      counts: {
+        available: 0,
+        unavailable: 0,
+        blocked: 0,
+        hidden: 0,
+        unknown: 0
+      },
+      next_actions: []
+    },
+    meta: invalidResponseMeta({
+      repoRoot: input.repoRoot,
+      analysis_validity: "invalid_due_to_environment"
+    }),
+    trust_policy: { surface_kind: "integration_health" },
+    errors: [
+      {
+        code: "provider_unavailable",
+        message: input.message,
+        retryable: true
+      }
+    ]
+  });
+}

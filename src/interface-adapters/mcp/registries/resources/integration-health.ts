@@ -10,6 +10,7 @@ import {
 } from "../../../../contracts/index.js";
 import {
   buildIntegrationHealthEnvelope,
+  buildIntegrationHealthProviderFailureEnvelope,
   buildInvalidIntegrationHealthInputEnvelope
 } from "../../../../presentation/integration-health-presenter.js";
 import {
@@ -20,6 +21,7 @@ import type { McpResourceDeclaration } from "../index.js";
 import {
   resolveMcpRequestRepoRoot
 } from "../root-authority.js";
+import { providerFailureMessage } from "./provider-failure.js";
 
 export const integrationHealthResource: McpResourceDeclaration = {
   kind: "resource",
@@ -66,17 +68,26 @@ export const integrationHealthResource: McpResourceDeclaration = {
       }
 
       if (context.getIntegrationHealth === undefined) {
-        const envelope = buildInvalidIntegrationHealthInputEnvelope({
+        const envelope = buildIntegrationHealthProviderFailureEnvelope({
           repoRoot: context.repoRoot,
           message: "integration:///health/agent-workbench provider is not configured."
         });
         return integrationHealthResourceResponse(envelope);
       }
 
-      const result = await context.getIntegrationHealth({
-        request: rootDecision.request
-      });
-      return integrationHealthResourceResponse(buildIntegrationHealthEnvelope(result));
+      let envelope;
+      try {
+        const result = await context.getIntegrationHealth({
+          request: rootDecision.request
+        });
+        envelope = buildIntegrationHealthEnvelope(result);
+      } catch (error) {
+        envelope = buildIntegrationHealthProviderFailureEnvelope({
+          repoRoot: rootDecision.request.repo_root ?? context.repoRoot,
+          message: providerFailureMessage("integration:///health/agent-workbench", error)
+        });
+      }
+      return integrationHealthResourceResponse(envelope);
     });
   }
 };
