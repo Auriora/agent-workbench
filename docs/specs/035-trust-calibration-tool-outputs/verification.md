@@ -84,7 +84,10 @@ Workbench Markdown tools when the MCP server is available.
   registry tool now use `makeTrustedEnvelope`; focused Phase 3 tests passed
   with 150 tests and static search found no public presenter/registry
   `makeEnvelope` calls.
-- T012-T013: Pending.
+- T012-T013: Complete on 2026-07-06. Added exact golden trust semantics in
+  `tests/mcp/trust-golden.test.ts`; the Phase 4 checkpoint command covering
+  shared policy, registry metadata, structured error envelopes, and trust
+  golden responses passed with 38 tests.
 - T014-T016: Pending.
 
 Record command output summaries, waivers, and review findings in `tasks.md`

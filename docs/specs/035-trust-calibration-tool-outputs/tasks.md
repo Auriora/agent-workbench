@@ -354,7 +354,7 @@ shared policy inputs.
 **Purpose**: Prevent presenter changes from weakening trust semantics after
 coverage is enforced.
 
-- [ ] T012 Add or update golden response tests for trust semantics.
+- [x] T012 Add or update golden response tests for trust semantics.
   - Depends on: T010
   - Requirements: R3, R4, R5, CP001, CP002, CP003, CP006
   - Files: `tests/mcp/context-for-task-tool.test.ts`,
@@ -371,19 +371,26 @@ coverage is enforced.
     applied edit, runtime health, integration health, and structured error
     states.
   - Evidence mode: implementation
-  - Evidence: Pending.
-  - [ ] T012.1 Add golden assertions for routing-only resource and context
+  - Evidence: Complete on 2026-07-06. Added
+    `tests/mcp/trust-golden.test.ts` with exact `safe_to_use_for`,
+    `not_safe_to_use_for`, and `must_verify_by` assertions for repository
+    status, integration health, context routing, graph parser/reference routing,
+    impact confidence, docs direct-read, Markdown quality, diagnostics, planned
+    validation, edit preview, applied edit, invalid input, stale state, and
+    environment-failure envelopes. `pnpm exec vitest run
+    tests/mcp/trust-golden.test.ts` passed with 7 tests.
+  - [x] T012.1 Add golden assertions for routing-only resource and context
     responses.
-  - [ ] T012.2 Add golden assertions for docs direct-read and Markdown quality
+  - [x] T012.2 Add golden assertions for docs direct-read and Markdown quality
     responses.
-  - [ ] T012.3 Add golden assertions for graph parser/heuristic evidence and
+  - [x] T012.3 Add golden assertions for graph parser/heuristic evidence and
     impact confidence.
-  - [ ] T012.4 Add golden assertions for planned validation, edit preview, and
+  - [x] T012.4 Add golden assertions for planned validation, edit preview, and
     applied edit responses.
-  - [ ] T012.5 Add golden assertions for structured invalid, blocked, stale,
+  - [x] T012.5 Add golden assertions for structured invalid, blocked, stale,
     degraded, warning, and error responses.
 
-- [ ] T013 Checkpoint - registry and golden validation.
+- [x] T013 Checkpoint - registry and golden validation.
   - Depends on: T011, T012
   - Requirements: R5, CP001, CP002, CP003, CP005, CP006
   - Files: `tests/mcp/`, `tests/contracts/`
@@ -393,7 +400,13 @@ coverage is enforced.
     tests/mcp/registry-metadata.test.ts tests/mcp/error-envelope-consistency.test.ts`
     plus focused golden tests touched by T012.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Complete on 2026-07-06. `pnpm typecheck` passed. `pnpm exec
+    vitest run tests/contracts/response-metadata.test.ts
+    tests/mcp/registry-metadata.test.ts
+    tests/mcp/error-envelope-consistency.test.ts
+    tests/mcp/trust-golden.test.ts` passed with 38 tests, covering shared
+    policy, registry coverage, structured error envelopes, and exact golden
+    trust semantics.
 
 ## Phase 5: Durable Promotion And Closure Readiness
 
