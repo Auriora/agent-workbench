@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import subprocess
 import sys
@@ -18,6 +19,7 @@ from typer.testing import CliRunner
 ROOT = Path(__file__).resolve().parents[3]
 SRC = ROOT / "tools" / "devcli" / "src"
 sys.path.insert(0, str(SRC))
+ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 
 from auriora_dev.cli import app  # noqa: E402
 from auriora_dev.commands.cache import inspect_database  # noqa: E402
@@ -462,6 +464,7 @@ class CliTests(unittest.TestCase):
 
     def test_release_notes_help_lists_evidence_and_review_options(self) -> None:
         result = CliRunner().invoke(app, ["release", "notes", "--help"])
+        output = ANSI_ESCAPE_RE.sub("", result.output)
 
         self.assertEqual(result.exit_code, 0, result.output)
         for expected in [
@@ -478,7 +481,7 @@ class CliTests(unittest.TestCase):
             "--dry-run",
             "--agent-instructions",
         ]:
-            self.assertIn(expected, result.output)
+            self.assertIn(expected, output)
 
     def test_cache_inspect_missing_database(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
