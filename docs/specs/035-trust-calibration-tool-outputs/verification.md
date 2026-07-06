@@ -78,8 +78,12 @@ Workbench Markdown tools when the MCP server is available.
   `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts
   tests/contracts/response-metadata.test.ts` passed with 35 tests; `pnpm
   typecheck` passed.
-- T011: Pending.
-- T007-T010: Pending.
+- T011: Complete on 2026-07-06. Registry metadata now carries explicit trust
+  policy for every public resource/tool and fails unmapped surfaces.
+- T007-T010: Complete on 2026-07-06. Public presenters and the `docs_scope`
+  registry tool now use `makeTrustedEnvelope`; focused Phase 3 tests passed
+  with 150 tests and static search found no public presenter/registry
+  `makeEnvelope` calls.
 - T012-T013: Pending.
 - T014-T016: Pending.
 

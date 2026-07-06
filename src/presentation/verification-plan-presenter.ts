@@ -4,7 +4,6 @@
  */
 
 import {
-  makeEnvelope,
   contextRiskSchema,
   nextActionSchema,
   plannedValidationCommandSchema,
@@ -19,6 +18,7 @@ import {
 import type { PlanVerificationResult } from "../application/use-cases/plan-verification.js";
 import {
   invalidResponseMeta,
+  makeTrustedEnvelope,
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
@@ -29,9 +29,10 @@ export function buildVerificationPlanEnvelope(
 ): ResponseEnvelope<VerificationPlan> {
   const data = sanitizeVerificationPlan(result.plan, context);
   const meta = responseMetadataSchema.strip().parse(result.meta);
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data,
-    meta
+    meta,
+    trust_policy: { surface_kind: "validation_plan" }
   });
 }
 
@@ -39,7 +40,7 @@ export function buildInvalidVerificationPlanInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<VerificationPlan> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       status: "blocked",
@@ -49,6 +50,7 @@ export function buildInvalidVerificationPlanInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "validation_plan" },
     errors: [
       {
         code: "invalid_input",

@@ -9,7 +9,9 @@ import { describe, expect, it } from "vitest";
 import {
   mcpPrompts,
   mcpResources,
-  mcpTools
+  mcpTools,
+  publicSurfaceTrustPolicies,
+  trustPolicyForPublicSurface
 } from "../../src/interface-adapters/mcp/registries/index.js";
 
 describe("MCP registry metadata", () => {
@@ -50,6 +52,7 @@ describe("MCP registry metadata", () => {
         /^(read_only|planning|workspace_write|process_execute|generated_write)$/
       );
       expect(surface.metadata.mutation_class).toMatch(/^(none|planning|workspace_write)$/);
+      expect(surface.metadata.trust_policy?.surface_kind).toMatch(/^[a-z][a-z0-9_]*$/);
 
       for (const parameter of surface.metadata.parameters) {
         expect(parameter.name).toMatch(/^[a-z][a-z0-9_]*$/);
@@ -57,6 +60,28 @@ describe("MCP registry metadata", () => {
         expect(typeof parameter.required).toBe("boolean");
       }
     }
+  });
+
+  it("covers every public standard-envelope surface with an explicit trust policy", () => {
+    const surfaces = [...mcpResources, ...mcpTools, ...mcpPrompts];
+    const surfaceKeys = surfaces.map((surface) => `${surface.kind}:${surface.name}`).sort();
+    const policyBySurface: Record<string, unknown> = publicSurfaceTrustPolicies;
+
+    expect(Object.keys(publicSurfaceTrustPolicies).sort()).toEqual(surfaceKeys);
+    for (const surface of surfaces) {
+      expect(surface.metadata.trust_policy, `${surface.kind}:${surface.name}`).toEqual(
+        policyBySurface[`${surface.kind}:${surface.name}`]
+      );
+    }
+  });
+
+  it("rejects an unmapped public standard-envelope surface instead of using fallback trust", () => {
+    expect(() =>
+      trustPolicyForPublicSurface({
+        kind: "tool",
+        name: "new_unmapped_surface"
+      })
+    ).toThrow(/Missing trust policy/);
   });
 
   it("keeps capability and mutation metadata aligned with public behavior", () => {

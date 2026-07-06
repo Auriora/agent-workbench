@@ -5,19 +5,19 @@
 
 import {
   integrationHealthSchema,
-  makeEnvelope,
   type IntegrationHealth,
   type ResponseEnvelope
 } from "../contracts/index.js";
 import type { GetIntegrationHealthResult } from "../application/use-cases/get-integration-health.js";
-import { invalidResponseMeta } from "../application/use-cases/response-metadata.js";
+import { invalidResponseMeta, makeTrustedEnvelope } from "../application/use-cases/response-metadata.js";
 
 export function buildIntegrationHealthEnvelope(
   result: GetIntegrationHealthResult
 ): ResponseEnvelope<IntegrationHealth> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: integrationHealthSchema.parse(result.health),
-    meta: result.meta
+    meta: result.meta,
+    trust_policy: { surface_kind: "integration_health" }
   });
 }
 
@@ -25,7 +25,7 @@ export function buildInvalidIntegrationHealthInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<IntegrationHealth> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       runtime_version: "unknown",
@@ -47,6 +47,7 @@ export function buildInvalidIntegrationHealthInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "integration_health" },
     errors: [
       {
         code: "invalid_input",

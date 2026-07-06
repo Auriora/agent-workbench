@@ -5,7 +5,8 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { makeEnvelope, type ResponseEnvelope, type ResponseMetadata } from "../../../../contracts/index.js";
+import type { ResponseEnvelope, ResponseMetadata } from "../../../../contracts/index.js";
+import { makeTrustedEnvelope } from "../../../../application/use-cases/response-metadata.js";
 import {
   normalizeDocsSessionScopePath,
   type DocsSessionScopeState
@@ -92,9 +93,10 @@ function applyDocsScopeArgs(args: unknown, state: DocsSessionScopeState = {}): D
 }
 
 function envelopeForDocsScope(repoRoot: string, data: DocsScopeResponse): ResponseEnvelope<DocsScopeResponse> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data,
-    meta: docsScopeMeta(repoRoot, data.status)
+    meta: docsScopeMeta(repoRoot, data.status),
+    trust_policy: { surface_kind: "docs_session_scope" }
   });
 }
 

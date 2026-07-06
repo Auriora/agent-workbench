@@ -94,7 +94,11 @@ describe("workspace edit MCP tools", () => {
     };
     expect(invalidParsed.meta).toMatchObject({
       analysis_validity: "invalid",
-      verification_status: "blocked"
+      verification_status: "blocked",
+      trust: {
+        safe_to_use_for: expect.arrayContaining(["edit_preview_review"]),
+        not_safe_to_use_for: expect.arrayContaining(["applied_edit_observation"])
+      }
     });
     expect(invalidParsed.errors).toEqual([expect.objectContaining({ code: "invalid_input" })]);
 
@@ -197,7 +201,10 @@ describe("workspace edit MCP tools", () => {
 
       expect(parsed.meta).toMatchObject({
         analysis_validity: "invalid",
-        verification_status: "blocked"
+        verification_status: "blocked",
+        trust: {
+          not_safe_to_use_for: expect.arrayContaining(["safe_mutation_claim"])
+        }
       });
       expect(parsed.errors).toEqual([
         expect.objectContaining({
@@ -262,6 +269,7 @@ describe("workspace edit MCP tools", () => {
             evidence_kinds: string[];
           }>;
         };
+        meta: { trust?: { safe_to_use_for: string[]; not_safe_to_use_for: string[] } };
       };
 
       expect(parsed.data.changed_files).toEqual([
@@ -272,6 +280,10 @@ describe("workspace edit MCP tools", () => {
           evidence_kinds: ["heuristic"]
         })
       ]);
+      expect(parsed.meta.trust).toMatchObject({
+        safe_to_use_for: expect.arrayContaining(["edit_preview_review"]),
+        not_safe_to_use_for: expect.arrayContaining(["safe_mutation_claim"])
+      });
     } finally {
       fixture.dispose();
     }

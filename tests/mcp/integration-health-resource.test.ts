@@ -85,7 +85,11 @@ describe("integration health MCP resource", () => {
     expect(parsed.data.surfaces).toEqual([]);
     expect(parsed.meta).toMatchObject({
       analysis_validity: "invalid",
-      verification_status: "blocked"
+      verification_status: "blocked",
+      trust: {
+        safe_to_use_for: expect.arrayContaining(["runtime_availability"]),
+        not_safe_to_use_for: expect.arrayContaining(["task_completion_claim"])
+      }
     });
     expect(parsed.errors).toEqual([
       expect.objectContaining({

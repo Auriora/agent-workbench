@@ -8,13 +8,13 @@ import {
   diagnosticFindingSchema,
   diagnosticsForFilesResultSchema,
   diagnosticsProviderStatusSchema,
-  makeEnvelope,
   responseMetadataSchema,
   type DiagnosticsForFilesResult,
   type ResponseEnvelope
 } from "../contracts/index.js";
 import {
   invalidResponseMeta,
+  makeTrustedEnvelope,
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
@@ -23,9 +23,10 @@ export function buildDiagnosticsForFilesEnvelope(
   result: DiagnoseChangedFilesResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<DiagnosticsForFilesResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: sanitizeDiagnosticsResult(result.diagnostics, context),
-    meta: responseMetadataSchema.strip().parse(result.meta)
+    meta: responseMetadataSchema.strip().parse(result.meta),
+    trust_policy: { surface_kind: "diagnostics_static" }
   });
 }
 
@@ -33,7 +34,7 @@ export function buildInvalidDiagnosticsForFilesInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<DiagnosticsForFilesResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       status: "blocked",
@@ -52,6 +53,7 @@ export function buildInvalidDiagnosticsForFilesInputEnvelope(input: {
       ]
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "diagnostics_static" },
     errors: [
       {
         code: "invalid_input",

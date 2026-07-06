@@ -5,20 +5,21 @@
 
 import type { BuildPostEditFeedbackResult } from "../application/use-cases/build-post-edit-feedback.js";
 import {
-  makeEnvelope,
   postEditFeedbackFindingSchema,
   postEditFeedbackResultSchema,
   responseMetadataSchema,
   type PostEditFeedbackResult,
   type ResponseEnvelope
 } from "../contracts/index.js";
+import { makeTrustedEnvelope } from "../application/use-cases/response-metadata.js";
 
 export function buildPostEditFeedbackEnvelope(
   result: BuildPostEditFeedbackResult
 ): ResponseEnvelope<PostEditFeedbackResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: sanitizePostEditFeedback(result.feedback),
-    meta: responseMetadataSchema.strip().parse(result.meta)
+    meta: responseMetadataSchema.strip().parse(result.meta),
+    trust_policy: { surface_kind: "diagnostics_static" }
   });
 }
 

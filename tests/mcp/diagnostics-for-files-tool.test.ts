@@ -94,7 +94,11 @@ describe("diagnostics_for_files MCP tool", () => {
     expect(providerCalled).toBe(false);
     expect(parsed.meta).toMatchObject({
       analysis_validity: "invalid",
-      verification_status: "blocked"
+      verification_status: "blocked",
+      trust: {
+        safe_to_use_for: expect.arrayContaining(["navigation"]),
+        not_safe_to_use_for: expect.arrayContaining(["passed_validation_claim"])
+      }
     });
     expect(parsed.errors).toEqual([
       expect.objectContaining({

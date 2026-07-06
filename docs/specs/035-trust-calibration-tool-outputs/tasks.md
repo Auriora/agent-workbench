@@ -215,7 +215,7 @@ surface presenters.
     tests/contracts/response-metadata.test.ts` passed with 35 tests, and
     `pnpm typecheck` passed.
 
-- [ ] T011 Add public surface policy coverage tests.
+- [x] T011 Add public surface policy coverage tests.
   - Depends on: T006
   - Requirements: R1, R2, R5, CP005
   - Files: `src/interface-adapters/mcp/registries/index.ts`,
@@ -224,13 +224,17 @@ surface presenters.
     standard envelope lacks a trust policy or explicit documented exclusion
     before presenter wiring begins.
   - Evidence mode: implementation
-  - Evidence: Pending.
-  - [ ] T011.1 Add trust policy metadata or a test-owned policy map for every
+  - Evidence: Complete on 2026-07-06. Added explicit
+    `publicSurfaceTrustPolicies` registry metadata in
+    `src/interface-adapters/mcp/registries/index.ts`, attached policies during
+    public metadata normalization, and added coverage plus negative unmapped
+    surface assertions in `tests/mcp/registry-metadata.test.ts`.
+  - [x] T011.1 Added trust policy metadata or a test-owned policy map for every
     current public surface.
-  - [ ] T011.2 Assert registry resources and tools are fully represented.
-  - [ ] T011.3 Assert no public standard-envelope surface uses an implicit
+  - [x] T011.2 Asserted registry resources and tools are fully represented.
+  - [x] T011.3 Asserted no public standard-envelope surface uses an implicit
     fallback trust policy.
-  - [ ] T011.4 Add a negative fixture or temporary test case proving an
+  - [x] T011.4 Added a negative fixture or temporary test case proving an
     unmapped public surface fails.
 
 ## Phase 3: Presenter Wiring
@@ -238,7 +242,7 @@ surface presenters.
 **Purpose**: Add `meta.trust` to every public standard-envelope surface through
 shared policy inputs.
 
-- [ ] T007 Wire trust into repository and integration resource presenters.
+- [x] T007 Wire trust into repository and integration resource presenters.
   - Depends on: T011
   - Requirements: R1, R2, R4, R5, CP001, CP005, CP006
   - Files: `src/presentation/status-presenter.ts`,
@@ -254,16 +258,20 @@ shared policy inputs.
     profile envelopes include routing/runtime trust and never claim task
     completion proof.
   - Evidence mode: implementation
-  - Evidence: Pending.
-  - [ ] T007.1 Wire `repository_status` trust into status, scope, and overview
+  - Evidence: Complete on 2026-07-06. Status, scope, overview, integration
+    health, and Codex integration profile presenters now use
+    `makeTrustedEnvelope` with `repository_status` or `integration_health`
+    policy. Focused tests assert runtime/routing trust on normal, invalid,
+    stale/degraded, and provider-unavailable paths.
+  - [x] T007.1 Wired `repository_status` trust into status, scope, and overview
     presenters.
-  - [ ] T007.2 Wire `integration_health` trust into integration health and
+  - [x] T007.2 Wired `integration_health` trust into integration health and
     integration profile presenters.
-  - [ ] T007.3 Cover invalid, stale, degraded, and provider-unavailable
+  - [x] T007.3 Covered invalid, stale, degraded, and provider-unavailable
     resource responses.
-  - [ ] T007.4 Run the focused resource and integration presenter tests.
+  - [x] T007.4 Ran the focused resource and integration presenter tests.
 
-- [ ] T008 Wire trust into docs and Markdown quality presenters.
+- [x] T008 Wire trust into docs and Markdown quality presenters.
   - Depends on: T011
   - Requirements: R1, R2, R3, R4, R5, CP001, CP003, CP005, CP006
   - Files: `src/presentation/docs-presenter.ts`,
@@ -276,17 +284,22 @@ shared policy inputs.
     scope, and Markdown quality responses distinguish routing, session state,
     static quality findings, and bounded direct section reads.
   - Evidence mode: implementation
-  - Evidence: Pending.
-  - [ ] T008.1 Use `docs_routing` for docs search/current/overview/map/outline.
-  - [ ] T008.2 Use `docs_direct_read` with direct-read evidence for
+  - Evidence: Complete on 2026-07-06. Docs overview, map, search,
+    current-for-task, outline, docs session scope, docs direct-read, and
+    Markdown quality surfaces now use `makeTrustedEnvelope` with the accepted
+    docs, direct-read, session-scope, or Markdown policy. Focused docs tests
+    assert session-state trust, direct-read trust, invalid-input trust, and
+    Markdown quality trust boundaries.
+  - [x] T008.1 Used `docs_routing` for docs search/current/overview/map/outline.
+  - [x] T008.2 Used `docs_direct_read` with direct-read evidence for
     `docs_read_section`.
-  - [ ] T008.3 Use `docs_session_scope` for `docs_scope`.
-  - [ ] T008.4 Use `markdown_quality` for `check_markdown_document` and
+  - [x] T008.3 Used `docs_session_scope` for `docs_scope`.
+  - [x] T008.4 Used `markdown_quality` for `check_markdown_document` and
     `check_markdown_set`.
-  - [ ] T008.5 Cover invalid-input, warning, blocked, stale, and degraded docs
+  - [x] T008.5 Covered invalid-input, warning, blocked, stale, and degraded docs
     paths where fixtures already exist.
 
-- [ ] T009 Wire trust into graph, diagnostics, validation, and edit presenters.
+- [x] T009 Wire trust into graph, diagnostics, validation, and edit presenters.
   - Depends on: T011
   - Requirements: R1, R2, R3, R4, R5, CP001, CP002, CP003, CP005, CP006
   - Files: `src/presentation/task-context-presenter.ts`,
@@ -306,14 +319,19 @@ shared policy inputs.
     feedback, verification planning, preview edit, and apply edit responses
     expose the correct trust policy and residual verification needs.
   - Evidence mode: implementation
-  - Evidence: Pending.
-  - [ ] T009.1 Ensure `verification_plan` remains planned evidence unless
+  - Evidence: Complete on 2026-07-06. Context, symbol search, find references,
+    impact, diagnostics, post-edit feedback, verification planning, preview edit,
+    and apply edit presenters now use `makeTrustedEnvelope` with their accepted
+    policies. Focused tests assert routing/navigation trust, planned-validation
+    trust, diagnostics trust, preview-edit trust, and applied-edit policy
+    separation.
+  - [x] T009.1 Ensured `verification_plan` remains planned evidence unless
     explicit executed-validation evidence is added by a future approved surface.
-  - [ ] T009.2 Ensure preview edit and applied edit trust differ.
-  - [ ] T009.3 Ensure parser, heuristic, text-fallback, and confidence evidence
+  - [x] T009.2 Ensured preview edit and applied edit trust differ.
+  - [x] T009.3 Ensured parser, heuristic, text-fallback, and confidence evidence
     do not imply whole-program impact or safe mutation.
 
-- [ ] T010 Checkpoint - presenter validation.
+- [x] T010 Checkpoint - presenter validation.
   - Depends on: T007, T008, T009
   - Requirements: R1, R2, R3, R4, R5, CP001, CP002, CP003, CP005, CP006
   - Files: `tests/docs/`, `tests/mcp/`, `tests/feedback/`,
@@ -324,7 +342,12 @@ shared policy inputs.
     including docs, MCP query, diagnostics, verification, workspace edit, and
     integration-health tests.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Complete on 2026-07-06. `pnpm typecheck` passed. Focused Phase 3
+    Vitest command covering registry metadata, repo resources, integration
+    resources, Codex profile, docs, context, graph query, diagnostics,
+    verification plan, and workspace edit tests passed with 150 tests. Static
+    search found no remaining `makeEnvelope` calls in `src/presentation` or
+    `src/interface-adapters/mcp/registries`.
 
 ## Phase 4: Golden Coverage
 

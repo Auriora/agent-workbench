@@ -4,7 +4,6 @@
  */
 
 import {
-  makeEnvelope,
   sourceSectionSchema,
   symbolReferenceSchema,
   symbolSearchResultSchema,
@@ -15,6 +14,7 @@ import {
 import type { SearchSymbolsResult } from "../application/use-cases/search-symbols.js";
 import {
   invalidResponseMeta,
+  makeTrustedEnvelope,
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
@@ -24,13 +24,14 @@ export function buildSymbolSearchEnvelope(
   result: SearchSymbolsResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<SymbolSearchResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: symbolSearchResultSchema.parse({
       ...result.symbols,
       symbols: result.symbols.symbols.map(sanitizeSymbolReference),
       next_actions: presentNextActions(result.symbols.next_actions, context)
     }),
-    meta: result.meta
+    meta: result.meta,
+    trust_policy: { surface_kind: "graph_symbol_routing" }
   });
 }
 
@@ -38,7 +39,7 @@ export function buildInvalidSymbolSearchInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<SymbolSearchResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       query: "",
       repo_root: input.repoRoot,
@@ -47,6 +48,7 @@ export function buildInvalidSymbolSearchInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidMeta(input.repoRoot),
+    trust_policy: { surface_kind: "graph_symbol_routing" },
     errors: [{ code: "invalid_input", message: input.message, retryable: false }]
   });
 }

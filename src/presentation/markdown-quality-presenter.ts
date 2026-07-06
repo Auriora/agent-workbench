@@ -11,7 +11,6 @@ import type {
 import {
   checkMarkdownDocumentResultSchema,
   checkMarkdownSetResultSchema,
-  makeEnvelope,
   markdownQualityFindingSchema,
   nextActionSchema,
   responseMetadataSchema
@@ -22,6 +21,7 @@ import type {
 } from "../application/use-cases/check-markdown-quality.js";
 import {
   invalidResponseMeta,
+  makeTrustedEnvelope,
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
@@ -31,9 +31,10 @@ export function buildCheckMarkdownDocumentEnvelope(
   result: CheckMarkdownDocumentUseCaseResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<CheckMarkdownDocumentResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: sanitizeCheckMarkdownDocument(result.check, context),
-    meta: responseMetadataSchema.strip().parse(result.meta)
+    meta: responseMetadataSchema.strip().parse(result.meta),
+    trust_policy: { surface_kind: "markdown_quality", includes_direct_read: true }
   });
 }
 
@@ -41,9 +42,10 @@ export function buildCheckMarkdownSetEnvelope(
   result: CheckMarkdownSetUseCaseResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<CheckMarkdownSetResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: sanitizeCheckMarkdownSet(result.check, context),
-    meta: responseMetadataSchema.strip().parse(result.meta)
+    meta: responseMetadataSchema.strip().parse(result.meta),
+    trust_policy: { surface_kind: "markdown_quality", includes_direct_read: true }
   });
 }
 
@@ -52,7 +54,7 @@ export function buildInvalidCheckMarkdownDocumentInputEnvelope(input: {
   path?: string;
   message: string;
 }): ResponseEnvelope<CheckMarkdownDocumentResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       path: input.path ?? "",
@@ -64,6 +66,7 @@ export function buildInvalidCheckMarkdownDocumentInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "markdown_quality", includes_direct_read: true },
     errors: [
       {
         code: "invalid_input",
@@ -78,7 +81,7 @@ export function buildInvalidCheckMarkdownSetInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<CheckMarkdownSetResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       status: "blocked",
@@ -91,6 +94,7 @@ export function buildInvalidCheckMarkdownSetInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "markdown_quality", includes_direct_read: true },
     errors: [
       {
         code: "invalid_input",

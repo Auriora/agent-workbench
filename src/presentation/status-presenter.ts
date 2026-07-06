@@ -3,12 +3,12 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { makeEnvelope, type ResponseEnvelope } from "../contracts/index.js";
+import type { ResponseEnvelope } from "../contracts/index.js";
 import {
   type RuntimeStatus,
   type RuntimeStatusResult
 } from "../application/use-cases/get-repo-status.js";
-import { invalidResponseMeta } from "../application/use-cases/response-metadata.js";
+import { invalidResponseMeta, makeTrustedEnvelope } from "../application/use-cases/response-metadata.js";
 
 export type StatusPresentationPayload = {
   status: RuntimeStatus;
@@ -28,9 +28,10 @@ export function buildStatusEnvelope(
   result: RuntimeStatusResult
 ): ResponseEnvelope<RuntimeStatus> {
   const payload = toStatusPresentationPayload(result);
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: payload.status,
-    meta: payload.meta
+    meta: payload.meta,
+    trust_policy: { surface_kind: "repository_status" }
   });
 }
 
@@ -38,7 +39,7 @@ export function buildInvalidStatusInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<RuntimeStatus> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       runtime_state: "invalid",
@@ -48,6 +49,7 @@ export function buildInvalidStatusInputEnvelope(input: {
       adapter_coverage: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "repository_status" },
     errors: [
       {
         code: "invalid_input",
@@ -62,7 +64,7 @@ export function buildStatusProviderFailureEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<RuntimeStatus> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       runtime_state: "invalid_due_to_environment",
@@ -76,6 +78,7 @@ export function buildStatusProviderFailureEnvelope(input: {
       repoRoot: input.repoRoot,
       analysis_validity: "invalid_due_to_environment"
     }),
+    trust_policy: { surface_kind: "repository_status" },
     errors: [
       {
         code: "provider_unavailable",

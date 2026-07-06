@@ -231,6 +231,12 @@ describe("docs MCP tools", () => {
       data: {
         status: "set",
         scope_path: "docs/specs/032-example"
+      },
+      meta: {
+        trust: {
+          safe_to_use_for: expect.arrayContaining(["runtime_availability"]),
+          not_safe_to_use_for: expect.arrayContaining(["task_completion_claim"])
+        }
       }
     });
 
@@ -285,6 +291,7 @@ describe("docs MCP tools", () => {
     };
     const parsedRead = JSON.parse(readResponse.content[0]?.text ?? "{}") as {
       data: DocsReadSectionUseCaseResult["read"];
+      meta: { trust?: { safe_to_use_for: string[]; not_safe_to_use_for: string[] } };
     };
 
     expect(outlineRequest).toMatchObject({
@@ -301,6 +308,10 @@ describe("docs MCP tools", () => {
     expect(parsedRead.data.section).toMatchObject({
       path: "docs/guide.md",
       caveat: expect.stringContaining("Direct-read")
+    });
+    expect(parsedRead.meta.trust).toMatchObject({
+      safe_to_use_for: expect.arrayContaining(["precise_direct_read_claim"]),
+      not_safe_to_use_for: expect.arrayContaining(["whole_program_impact_claim"])
     });
   });
 
@@ -324,7 +335,10 @@ describe("docs MCP tools", () => {
     expect(parsed.data.status).toBe("blocked");
     expect(parsed.meta).toMatchObject({
       analysis_validity: "invalid",
-      verification_status: "blocked"
+      verification_status: "blocked",
+      trust: {
+        not_safe_to_use_for: expect.arrayContaining(["task_completion_claim"])
+      }
     });
     expect(parsed.errors).toEqual([
       expect.objectContaining({
@@ -388,7 +402,11 @@ describe("docs MCP tools", () => {
     expect(parsed.data.status).toBe("blocked");
     expect(parsed.meta).toMatchObject({
       analysis_validity: "invalid",
-      verification_status: "blocked"
+      verification_status: "blocked",
+      trust: {
+        safe_to_use_for: expect.arrayContaining(["navigation"]),
+        not_safe_to_use_for: expect.arrayContaining(["task_completion_claim"])
+      }
     });
     expect(parsed.errors).toEqual([
       expect.objectContaining({

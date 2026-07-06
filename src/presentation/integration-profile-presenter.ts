@@ -4,15 +4,15 @@
  */
 
 import {
-  makeEnvelope,
   type CodexIntegrationProfile,
   type ResponseEnvelope
 } from "../contracts/index.js";
+import { makeTrustedEnvelope } from "../application/use-cases/response-metadata.js";
 
 export function buildCodexIntegrationProfileEnvelope(
   profile: CodexIntegrationProfile
 ): ResponseEnvelope<CodexIntegrationProfile> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: profile,
     meta: {
       analysis_validity: "valid",
@@ -27,6 +27,7 @@ export function buildCodexIntegrationProfileEnvelope(
       evidence_kinds: ["config", "docs"],
       verification_status: "done",
       truncated: false
-    }
+    },
+    trust_policy: { surface_kind: "integration_health" }
   });
 }

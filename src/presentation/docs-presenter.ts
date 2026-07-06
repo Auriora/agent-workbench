@@ -31,7 +31,6 @@ import {
   docsSearchHitSchema,
   docsSearchResultSchema,
   docsWarningSchema,
-  makeEnvelope,
   nextActionSchema,
   responseMetadataSchema,
   sourceSectionSchema
@@ -46,6 +45,7 @@ import type {
 import type { CurrentDocsForTaskUseCaseResult } from "../application/use-cases/current-docs-for-task.js";
 import {
   invalidResponseMeta,
+  makeTrustedEnvelope,
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
@@ -55,9 +55,10 @@ export function buildDocsOverviewEnvelope(
   result: DocsOverviewUseCaseResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<DocsOverview> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: sanitizeDocsOverview(result.overview, context),
-    meta: responseMetadataSchema.strip().parse(result.meta)
+    meta: responseMetadataSchema.strip().parse(result.meta),
+    trust_policy: { surface_kind: "docs_routing" }
   });
 }
 
@@ -65,9 +66,10 @@ export function buildDocsMapEnvelope(
   result: DocsMapUseCaseResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<DocsMap> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: sanitizeDocsMap(result.map, context),
-    meta: responseMetadataSchema.strip().parse(result.meta)
+    meta: responseMetadataSchema.strip().parse(result.meta),
+    trust_policy: { surface_kind: "docs_routing" }
   });
 }
 
@@ -75,9 +77,10 @@ export function buildDocsSearchEnvelope(
   result: DocsSearchUseCaseResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<DocsSearchResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: sanitizeDocsSearch(result.search, context),
-    meta: responseMetadataSchema.strip().parse(result.meta)
+    meta: responseMetadataSchema.strip().parse(result.meta),
+    trust_policy: { surface_kind: "docs_routing" }
   });
 }
 
@@ -85,9 +88,10 @@ export function buildDocsCurrentForTaskEnvelope(
   result: CurrentDocsForTaskUseCaseResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<DocsCurrentForTaskResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: sanitizeDocsCurrentForTask(result.current_docs, context),
-    meta: responseMetadataSchema.strip().parse(result.meta)
+    meta: responseMetadataSchema.strip().parse(result.meta),
+    trust_policy: { surface_kind: "docs_routing" }
   });
 }
 
@@ -96,7 +100,7 @@ export function buildInvalidDocsCurrentForTaskInputEnvelope(input: {
   task?: string;
   message: string;
 }): ResponseEnvelope<DocsCurrentForTaskResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       task: input.task ?? "",
@@ -109,6 +113,7 @@ export function buildInvalidDocsCurrentForTaskInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "docs_routing" },
     errors: [invalidInputError(input.message)]
   });
 }
@@ -117,9 +122,10 @@ export function buildDocsOutlineEnvelope(
   result: DocsOutlineUseCaseResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<DocsOutlineResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: sanitizeDocsOutline(result.outline, context),
-    meta: responseMetadataSchema.strip().parse(result.meta)
+    meta: responseMetadataSchema.strip().parse(result.meta),
+    trust_policy: { surface_kind: "docs_routing" }
   });
 }
 
@@ -127,9 +133,10 @@ export function buildDocsReadSectionEnvelope(
   result: DocsReadSectionUseCaseResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<DocsReadSectionResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: sanitizeDocsReadSection(result.read, context),
-    meta: responseMetadataSchema.strip().parse(result.meta)
+    meta: responseMetadataSchema.strip().parse(result.meta),
+    trust_policy: { surface_kind: "docs_direct_read", includes_direct_read: true }
   });
 }
 
@@ -137,7 +144,7 @@ export function buildInvalidDocsOverviewInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<DocsOverview> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       status: "blocked",
@@ -148,6 +155,7 @@ export function buildInvalidDocsOverviewInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "docs_routing" },
     errors: [invalidInputError(input.message)]
   });
 }
@@ -156,7 +164,7 @@ export function buildInvalidDocsMapInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<DocsMap> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       status: "blocked",
@@ -166,6 +174,7 @@ export function buildInvalidDocsMapInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "docs_routing" },
     errors: [invalidInputError(input.message)]
   });
 }
@@ -175,7 +184,7 @@ export function buildInvalidDocsSearchInputEnvelope(input: {
   query?: string;
   message: string;
 }): ResponseEnvelope<DocsSearchResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       query: input.query ?? "",
@@ -186,6 +195,7 @@ export function buildInvalidDocsSearchInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "docs_routing" },
     errors: [invalidInputError(input.message)]
   });
 }
@@ -195,7 +205,7 @@ export function buildInvalidDocsOutlineInputEnvelope(input: {
   path?: string;
   message: string;
 }): ResponseEnvelope<DocsOutlineResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       path: input.path ?? "",
@@ -206,6 +216,7 @@ export function buildInvalidDocsOutlineInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "docs_routing" },
     errors: [invalidInputError(input.message)]
   });
 }
@@ -216,7 +227,7 @@ export function buildInvalidDocsReadSectionInputEnvelope(input: {
   headingId?: string;
   message: string;
 }): ResponseEnvelope<DocsReadSectionResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       path: input.path ?? "",
@@ -226,6 +237,7 @@ export function buildInvalidDocsReadSectionInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "docs_direct_read", includes_direct_read: true },
     errors: [invalidInputError(input.message)]
   });
 }

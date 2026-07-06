@@ -4,7 +4,6 @@
  */
 
 import {
-  makeEnvelope,
   type ApplyWorkspaceEditResult,
   type PreviewWorkspaceEditResult,
   type ResponseEnvelope
@@ -13,6 +12,7 @@ import type { ApplyWorkspaceEditUseCaseResult } from "../application/use-cases/a
 import type { PreviewWorkspaceEditUseCaseResult } from "../application/use-cases/preview-workspace-edit.js";
 import {
   invalidResponseMeta,
+  makeTrustedEnvelope,
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
@@ -21,12 +21,13 @@ export function buildPreviewWorkspaceEditEnvelope(
   result: PreviewWorkspaceEditUseCaseResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<PreviewWorkspaceEditResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       ...result.preview,
       next_actions: presentNextActions(result.preview.next_actions, context)
     },
-    meta: result.meta
+    meta: result.meta,
+    trust_policy: { surface_kind: "edit_preview" }
   });
 }
 
@@ -34,12 +35,16 @@ export function buildApplyWorkspaceEditEnvelope(
   result: ApplyWorkspaceEditUseCaseResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<ApplyWorkspaceEditResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       ...result.result,
       next_actions: presentNextActions(result.result.next_actions, context)
     },
-    meta: result.meta
+    meta: result.meta,
+    trust_policy: {
+      surface_kind: "edit_apply",
+      mutation_applied: result.result.status === "applied"
+    }
   });
 }
 
@@ -47,7 +52,7 @@ export function buildInvalidPreviewWorkspaceEditInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<PreviewWorkspaceEditResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       preview: {
@@ -62,6 +67,7 @@ export function buildInvalidPreviewWorkspaceEditInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidMeta(input.repoRoot),
+    trust_policy: { surface_kind: "edit_preview" },
     errors: [{ code: "invalid_input", message: input.message, retryable: false }]
   });
 }
@@ -70,7 +76,7 @@ export function buildInvalidApplyWorkspaceEditInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<ApplyWorkspaceEditResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       preview_token: "",
@@ -79,6 +85,7 @@ export function buildInvalidApplyWorkspaceEditInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidMeta(input.repoRoot),
+    trust_policy: { surface_kind: "edit_apply", mutation_applied: false },
     errors: [{ code: "invalid_input", message: input.message, retryable: false }]
   });
 }

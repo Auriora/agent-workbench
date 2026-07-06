@@ -100,7 +100,11 @@ describe("repo status MCP resource", () => {
     expect(providerCalled).toBe(false);
     expect(parsed.meta).toMatchObject({
       analysis_validity: "invalid",
-      verification_status: "blocked"
+      verification_status: "blocked",
+      trust: {
+        safe_to_use_for: expect.arrayContaining(["runtime_availability"]),
+        not_safe_to_use_for: expect.arrayContaining(["task_completion_claim"])
+      }
     });
     expect(parsed.errors).toEqual([
       expect.objectContaining({
@@ -160,7 +164,11 @@ describe("repo status MCP resource", () => {
     expect(parsed.data.reason).not.toMatch(/database is locked/i);
     expect(parsed.meta).toMatchObject({
       analysis_validity: "invalid_due_to_environment",
-      verification_status: "blocked"
+      verification_status: "blocked",
+      trust: {
+        not_safe_to_use_for: expect.arrayContaining(["task_completion_claim"]),
+        must_verify_by: expect.arrayContaining(["resolve_blocked_environment"])
+      }
     });
     expect(parsed.errors).toEqual([
       expect.objectContaining({

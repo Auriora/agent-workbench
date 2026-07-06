@@ -1345,7 +1345,7 @@ describe("context_for_task MCP tool", () => {
     });
     const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
       data: unknown;
-      meta: { analysis_validity: string };
+      meta: { analysis_validity: string; trust?: { safe_to_use_for: string[]; not_safe_to_use_for: string[] } };
       contract_version: string;
     };
 
@@ -1353,7 +1353,13 @@ describe("context_for_task MCP tool", () => {
     expect(taskContextSchema.parse(parsed.data as never)).toMatchObject({
       task: "Inspect parser-backed task"
     });
-    expect(parsed.meta).toMatchObject({ analysis_validity: "valid" });
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "valid",
+      trust: {
+        safe_to_use_for: expect.arrayContaining(["navigation", "next_read_selection"]),
+        not_safe_to_use_for: expect.arrayContaining(["task_completion_claim"])
+      }
+    });
     expect(JSON.stringify(parsed)).toContain("/api/orders");
     expect(JSON.stringify(parsed)).toContain("TOKEN=[REDACTED]");
     expect(JSON.stringify(parsed)).toContain("[REDACTED_ABSOLUTE_PATH]");

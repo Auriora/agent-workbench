@@ -26,6 +26,7 @@ import type {
   VerificationPlanRequest
 } from "../../../contracts/index.js";
 import type { ApplyWorkspaceEditUseCaseResult } from "../../../application/use-cases/apply-workspace-edit.js";
+import type { TrustSurfacePolicy } from "../../../application/use-cases/response-metadata.js";
 import type {
   CheckMarkdownDocumentUseCaseResult,
   CheckMarkdownSetUseCaseResult
@@ -138,11 +139,37 @@ export type McpSurfaceParameterMetadata = {
 export type McpSurfaceMetadata = {
   capability_class: ToolCapabilityClass;
   mutation_class: McpMutationClass;
+  trust_policy?: TrustSurfacePolicy;
   budget_policy: string;
   description: string;
   parameters: readonly McpSurfaceParameterMetadata[];
   returns: string;
 };
+
+export const publicSurfaceTrustPolicies = {
+  "resource:status": { surface_kind: "repository_status" },
+  "resource:scope": { surface_kind: "repository_status" },
+  "resource:overview": { surface_kind: "repository_status" },
+  "resource:docs-overview": { surface_kind: "docs_routing" },
+  "resource:docs-map": { surface_kind: "docs_routing" },
+  "resource:codex-integration-profile": { surface_kind: "integration_health" },
+  "resource:integration-health": { surface_kind: "integration_health" },
+  "tool:context_for_task": { surface_kind: "context_routing" },
+  "tool:diagnostics_for_files": { surface_kind: "diagnostics_static" },
+  "tool:docs_scope": { surface_kind: "docs_session_scope" },
+  "tool:docs_search": { surface_kind: "docs_routing" },
+  "tool:docs_current_for_task": { surface_kind: "docs_routing" },
+  "tool:docs_outline": { surface_kind: "docs_routing" },
+  "tool:docs_read_section": { surface_kind: "docs_direct_read", includes_direct_read: true },
+  "tool:check_markdown_document": { surface_kind: "markdown_quality", includes_direct_read: true },
+  "tool:check_markdown_set": { surface_kind: "markdown_quality", includes_direct_read: true },
+  "tool:symbol_search": { surface_kind: "graph_symbol_routing" },
+  "tool:find_references": { surface_kind: "graph_reference_routing" },
+  "tool:impact": { surface_kind: "graph_impact_routing" },
+  "tool:preview_workspace_edit": { surface_kind: "edit_preview" },
+  "tool:apply_workspace_edit": { surface_kind: "edit_apply", mutation_applied: true },
+  "tool:verification_plan": { surface_kind: "validation_plan" }
+} as const satisfies Record<string, TrustSurfacePolicy>;
 
 export const mcpResources: McpResourceDeclaration[] = normalizePublicMetadata([
   repoStatusResource,
@@ -181,9 +208,22 @@ function normalizePublicMetadata<T extends McpResourceDeclaration | McpToolDecla
     ...surface,
     metadata: {
       ...surface.metadata,
+      trust_policy: trustPolicyForPublicSurface(surface),
       parameters: normalMcpParameters(surface.metadata.parameters)
     }
   }));
+}
+
+export function trustPolicyForPublicSurface(input: {
+  kind: McpResourceDeclaration["kind"] | McpToolDeclaration["kind"] | McpPromptDeclaration["kind"];
+  name: string;
+}): TrustSurfacePolicy {
+  const policies: Record<string, TrustSurfacePolicy> = publicSurfaceTrustPolicies;
+  const policy = policies[`${input.kind}:${input.name}`];
+  if (policy === undefined) {
+    throw new Error(`Missing trust policy for public MCP surface ${input.kind}:${input.name}.`);
+  }
+  return policy;
 }
 
 export function registerAllMcpSurfaces(

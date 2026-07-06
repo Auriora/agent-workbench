@@ -133,7 +133,11 @@ describe("Codex integration profile", () => {
     expect(envelope.meta).toMatchObject({
       analysis_validity: "valid",
       capability_level: "resource_backed",
-      verification_status: "done"
+      verification_status: "done",
+      trust: {
+        safe_to_use_for: expect.arrayContaining(["runtime_availability"]),
+        not_safe_to_use_for: expect.arrayContaining(["task_completion_claim"])
+      }
     });
   });
 

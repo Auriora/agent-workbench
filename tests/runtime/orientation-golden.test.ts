@@ -214,6 +214,7 @@ describe("repo orientation golden responses", () => {
       )
     );
 
+    const hasParserEvidence = fixture.statusCoverage.some((item) => item.evidence_kinds.includes("parser"));
     const baseMeta = {
       analysis_validity: "valid",
       freshness: "unknown",
@@ -226,13 +227,36 @@ describe("repo orientation golden responses", () => {
       capability_level: fixture.statusCoverage.some((item) => item.capability_level === "partial_semantic")
         ? "partial_semantic"
         : "resource_backed",
-      evidence_kinds: fixture.statusCoverage.some((item) => item.evidence_kinds.includes("parser"))
-        ? ["config", "parser"]
-        : ["config", "docs"],
+      evidence_kinds: hasParserEvidence ? ["config", "parser"] : ["config", "docs"],
       verification_status: "needed",
       truncated: false,
       budget: {
         row_limit: 15000
+      },
+      trust: {
+        safe_to_use_for: [
+          ...(hasParserEvidence ? ["local_structure_reference"] : []),
+          "navigation",
+          "next_read_selection",
+          "runtime_availability"
+        ],
+        not_safe_to_use_for: [
+          "bounded_executed_validation_claim",
+          "closure_claim",
+          "implementation_claim",
+          "passed_validation_claim",
+          "safe_mutation_claim",
+          "security_or_vulnerability_claim",
+          "task_completion_claim",
+          "whole_program_impact_claim"
+        ],
+        must_verify_by: [
+          "direct_read_relevant_source",
+          "inspect_ranked_evidence",
+          "refresh_runtime_snapshot",
+          "resolve_blocked_environment",
+          "run_planned_validation"
+        ]
       }
     };
 

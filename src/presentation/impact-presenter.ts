@@ -5,7 +5,6 @@
 
 import {
   impactResultSchema,
-  makeEnvelope,
   sourceSectionSchema,
   symbolReferenceSchema,
   type ImpactResult,
@@ -15,6 +14,7 @@ import {
 import type { ComputeImpactResult } from "../application/use-cases/compute-impact.js";
 import {
   invalidResponseMeta,
+  makeTrustedEnvelope,
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
@@ -24,13 +24,14 @@ export function buildImpactEnvelope(
   result: ComputeImpactResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<ImpactResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: impactResultSchema.parse({
       ...result.impact,
       affected_symbols: result.impact.affected_symbols.map(sanitizeSymbolReference),
       next_actions: presentNextActions(result.impact.next_actions, context)
     }),
-    meta: result.meta
+    meta: result.meta,
+    trust_policy: { surface_kind: "graph_impact_routing" }
   });
 }
 
@@ -38,7 +39,7 @@ export function buildInvalidImpactInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<ImpactResult> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       snapshot_id: "",
@@ -57,6 +58,7 @@ export function buildInvalidImpactInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "graph_impact_routing" },
     errors: [{ code: "invalid_input", message: input.message, retryable: false }]
   });
 }

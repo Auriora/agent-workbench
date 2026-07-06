@@ -3,16 +3,17 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { makeEnvelope, type RepoScope, type ResponseEnvelope } from "../contracts/index.js";
+import type { RepoScope, ResponseEnvelope } from "../contracts/index.js";
 import type { GetRepoScopeResult } from "../application/use-cases/get-repo-scope.js";
-import { invalidResponseMeta } from "../application/use-cases/response-metadata.js";
+import { invalidResponseMeta, makeTrustedEnvelope } from "../application/use-cases/response-metadata.js";
 
 export function buildRepoScopeEnvelope(
   result: GetRepoScopeResult
 ): ResponseEnvelope<RepoScope> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: result.scope,
-    meta: result.meta
+    meta: result.meta,
+    trust_policy: { surface_kind: "repository_status" }
   });
 }
 
@@ -20,7 +21,7 @@ export function buildInvalidRepoScopeInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<RepoScope> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       indexed_roots: [],
@@ -36,6 +37,7 @@ export function buildInvalidRepoScopeInputEnvelope(input: {
       generated_or_vendor_roots: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "repository_status" },
     errors: [
       {
         code: "invalid_input",
@@ -50,7 +52,7 @@ export function buildRepoScopeProviderFailureEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<RepoScope> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       indexed_roots: [],
@@ -69,6 +71,7 @@ export function buildRepoScopeProviderFailureEnvelope(input: {
       repoRoot: input.repoRoot,
       analysis_validity: "invalid_due_to_environment"
     }),
+    trust_policy: { surface_kind: "repository_status" },
     errors: [
       {
         code: "provider_unavailable",

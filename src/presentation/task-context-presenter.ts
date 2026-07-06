@@ -4,7 +4,6 @@
  */
 
 import {
-  makeEnvelope,
   contextRiskSchema,
   contextCompletenessSchema,
   fileReferenceSchema,
@@ -24,6 +23,7 @@ import {
 import type { GetTaskContextResult } from "../application/use-cases/get-task-context.js";
 import {
   invalidResponseMeta,
+  makeTrustedEnvelope,
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
@@ -35,9 +35,10 @@ export function buildTaskContextEnvelope(
 ): ResponseEnvelope<TaskContext> {
   const data = sanitizeTaskContext(result.context, context);
   const meta = responseMetadataSchema.strip().parse(result.meta);
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data,
-    meta
+    meta,
+    trust_policy: { surface_kind: "context_routing" }
   });
 }
 
@@ -45,7 +46,7 @@ export function buildInvalidTaskContextInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<TaskContext> {
-  return makeEnvelope({
+  return makeTrustedEnvelope({
     data: {
       task: "",
       repo_root: input.repoRoot,
@@ -66,6 +67,7 @@ export function buildInvalidTaskContextInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
+    trust_policy: { surface_kind: "context_routing" },
     errors: [
       {
         code: "invalid_input",

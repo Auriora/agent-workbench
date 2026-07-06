@@ -125,8 +125,13 @@ describe("graph query MCP tools", () => {
     const response = await registered.handler({ symbol: "Runner" });
     const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
       data: FindReferencesUseCaseResult["references"];
+      meta: { trust?: { safe_to_use_for: string[]; not_safe_to_use_for: string[] } };
     };
     expect(parsed.data.references[0]).toMatchObject({ status: "resolved" });
+    expect(parsed.meta.trust).toMatchObject({
+      safe_to_use_for: expect.arrayContaining(["navigation", "next_read_selection"]),
+      not_safe_to_use_for: expect.arrayContaining(["whole_program_impact_claim"])
+    });
   });
 
   it("uses the injected impact provider", async () => {
@@ -179,7 +184,11 @@ describe("graph query MCP tools", () => {
     expect(providerCalled).toBe(false);
     expect(parsed.meta).toMatchObject({
       analysis_validity: "invalid",
-      verification_status: "blocked"
+      verification_status: "blocked",
+      trust: {
+        safe_to_use_for: expect.arrayContaining(["navigation"]),
+        not_safe_to_use_for: expect.arrayContaining(["whole_program_impact_claim"])
+      }
     });
     expect(parsed.errors).toEqual([
       expect.objectContaining({
