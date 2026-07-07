@@ -718,6 +718,12 @@ describe("Codex plugin artifacts", () => {
       { cwd: "/repo" },
       { AGENT_WORKBENCH_HOOK_FEEDBACK: "silent" }
     )).toBeUndefined();
+    for (const source of ["resume", "clear", "compact"]) {
+      expect(sessionStart.buildSessionStartContext(
+        { cwd: "/repo", hook_event_name: "SessionStart", source },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )).toBeUndefined();
+    }
     expect(sessionContext).toContain("Agent Workbench MCP is available.\nRepo orientation:");
     expect(sessionContext).toContain("- root: /repo");
     expect(sessionContext).toContain("dirty state not inspected");

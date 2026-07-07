@@ -100,8 +100,21 @@ function describeSpecs(root) {
   }
 }
 
+export function shouldEmitSessionStartContext(payload) {
+  const eventName = typeof payload?.hook_event_name === "string" ? payload.hook_event_name : "";
+  if (eventName && eventName !== "SessionStart") {
+    return true;
+  }
+
+  const source = typeof payload?.source === "string" ? payload.source.trim().toLowerCase() : "";
+  return source === "" || source === "startup";
+}
+
 export function buildSessionStartContext(payload, env = process.env) {
   if (feedbackMode(env) !== "basic") {
+    return undefined;
+  }
+  if (!shouldEmitSessionStartContext(payload)) {
     return undefined;
   }
 

@@ -76,7 +76,7 @@ describe("Codex hook installation", () => {
     }
 
     const installed = JSON.parse(fs.readFileSync(hooksPath, "utf8")) as {
-      hooks: Record<string, Array<{ hooks: Array<{ command: string; cwd?: string; args?: string[] }> }>>;
+      hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ command: string; cwd?: string; args?: string[] }> }>>;
     };
     const sessionHook = installed.hooks.SessionStart[0].hooks[0];
     const postEditHook = installed.hooks.PostToolUse[0].hooks[0];
@@ -84,6 +84,7 @@ describe("Codex hook installation", () => {
     const postEditHookScript = path.join(packageRoot, "plugins/agent-workbench/hooks/post-edit-feedback.js");
 
     expect(installed.hooks.SessionStart).toHaveLength(1);
+    expect(installed.hooks.SessionStart[0].matcher).toBe("startup");
     expect(installed.hooks.PostToolUse).toHaveLength(1);
     expect(sessionHook.command).toContain(process.execPath);
     expect(sessionHook.command).toContain(sessionHookScript);
@@ -107,5 +108,18 @@ describe("Codex hook installation", () => {
     expect(result.stdout).toContain(`- root: ${repoRoot}`);
     expect(result.stdout).toContain("tool_search");
     expect(result.stdout).toContain("context_for_task verification_plan diagnostics_for_files docs_search");
+
+    for (const source of ["resume", "clear", "compact"]) {
+      const suppressed = spawnSync(sessionHook.command, {
+        shell: true,
+        cwd: repoRoot,
+        input: JSON.stringify({ hook_event_name: "SessionStart", source, cwd: repoRoot }),
+        encoding: "utf8"
+      });
+
+      expect(suppressed.status).toBe(0);
+      expect(suppressed.stderr).toBe("");
+      expect(suppressed.stdout).toBe("");
+    }
   });
 });

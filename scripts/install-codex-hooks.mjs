@@ -99,7 +99,7 @@ function installHooks(config, packageRoot) {
   hooks.PostToolUse = withoutAgentWorkbenchHooks(hooks.PostToolUse);
 
   hooks.SessionStart.push({
-    matcher: "startup|resume|clear|compact",
+    matcher: "startup",
     hooks: [
       {
         type: "command",

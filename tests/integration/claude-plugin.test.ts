@@ -53,6 +53,7 @@ describe("Claude Code plugin artifacts", () => {
     expect(claudeMcpArgs).not.toContain("-lc");
     expect(claudeMcpArgs).not.toContain("${VAR:-");
     expect(Object.keys(hooksConfig.hooks).sort()).toEqual(["PostToolUse", "SessionStart"]);
+    expect((hooksConfig.hooks.SessionStart as Array<{ matcher?: string }>)[0].matcher).toBe("startup");
     expect(skill).toContain("description: Use Agent Workbench as the MCP-backed IDE runtime");
     expect(skill).toContain("Claude Code Integration");
   });

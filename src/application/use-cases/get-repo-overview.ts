@@ -54,6 +54,7 @@ export async function getRepoOverview(input: {
     input.warmups?.getState({ repo_root: input.repo_root }) ?? Promise.resolve(undefined)
   ]);
   const languages = uniqueSorted(scanned.files.map((file) => file.file_identity.language));
+  const overviewFiles = scanned.files.filter((file) => !isEmbeddedFixturePath(file.path));
   const status = getCatalogRepoStatus({
     repo_root: scanned.repo_root,
     indexed_roots: scanned.indexed_roots,
@@ -69,10 +70,10 @@ export async function getRepoOverview(input: {
       repo_root: scanned.repo_root,
       summary: `Repository has ${scanned.files.length} indexed file(s) across ${languages.length} language/category value(s).`,
       languages,
-      platforms: detectPlatforms(scanned.files),
-      key_files: selectKeyFiles(scanned.files),
-      key_docs: selectKeyDocs(scanned.files),
-      validation_hints: inferValidationHints(scanned.files),
+      platforms: detectPlatforms(overviewFiles),
+      key_files: selectKeyFiles(overviewFiles),
+      key_docs: selectKeyDocs(overviewFiles),
+      validation_hints: inferValidationHints(overviewFiles),
       skipped_paths: mapSkippedPaths(scanned.skipped_paths ?? []),
       recommended_first_calls: [
         { tool: "read_resource", args: { uri: "repo:///status" } },
@@ -142,8 +143,7 @@ function isOverviewDocCandidate(filePath: string): boolean {
     lower === "readme.md" ||
     lower === "agents.md" ||
     lower.startsWith("docs/") ||
-    lower.startsWith("skills/") ||
-    lower.includes("/skills/")
+    lower.startsWith("skills/")
   );
 }
 
@@ -157,7 +157,7 @@ function docRank(filePath: string): number {
   if (lower.includes("architecture") || lower.includes("design")) score += 70;
   if (lower.includes("runbook") || lower.includes("operations") || lower.includes("developer")) score += 60;
   if (lower.startsWith("docs/reference/")) score += 50;
-  if (lower.startsWith("skills/") || lower.includes("/skills/")) score += 85;
+  if (lower.startsWith("skills/")) score += 85;
   if (lower.endsWith("/skill.md")) score += 45;
   if (lower.includes("template")) score -= 80;
   if (lower.includes("/fixtures/") || lower.startsWith("tests/fixtures/")) score -= 140;
@@ -175,8 +175,13 @@ function reasonForDoc(filePath: string): string {
   if (lower.startsWith("docs/guides/")) return "Durable guide document.";
   if (lower.includes("architecture") || lower.includes("design")) return "Durable architecture or design document.";
   if (lower.startsWith("docs/reference/")) return "Durable reference document.";
-  if (lower.startsWith("skills/") || lower.includes("/skills/")) return "Canonical skill guidance document.";
+  if (lower.startsWith("skills/")) return "Canonical skill guidance document.";
   return "Repository documentation file.";
+}
+
+function isEmbeddedFixturePath(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return lower.startsWith("tests/fixtures/") || lower.includes("/tests/fixtures/");
 }
 
 function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHint[] {

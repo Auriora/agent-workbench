@@ -40,10 +40,11 @@ describe("agent CLI hook compatibility", () => {
     const hooksConfig = JSON.parse(
       fs.readFileSync(path.join(codexHome, "hooks.json"), "utf8")
     ) as {
-      hooks: Record<string, Array<{ hooks: Array<{ command: string; args?: string[] }> }>>;
+      hooks: Record<string, Array<{ matcher?: string; hooks: Array<{ command: string; args?: string[] }> }>>;
     };
     const hook = hooksConfig.hooks.SessionStart[0].hooks[0];
 
+    expect(hooksConfig.hooks.SessionStart[0].matcher).toBe("startup");
     expect(hook.command).toContain(process.execPath);
     expect(hook.command).toContain("plugins/agent-workbench/hooks/session-start.js");
     expect(hook.args).toBeUndefined();

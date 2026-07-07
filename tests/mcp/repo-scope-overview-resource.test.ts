@@ -458,7 +458,7 @@ describe("repo overview MCP resource", () => {
       );
       expect(firstWorkflowIndex).toBeGreaterThan(paths.indexOf("tests/orders.test.ts"));
       expect(paths.indexOf("src/generated/client.ts")).toBeGreaterThan(paths.indexOf("tests/orders.test.ts"));
-      expect(paths.indexOf("tests/fixtures/sample/fixture.ts")).toBeGreaterThan(paths.indexOf("tests/orders.test.ts"));
+      expect(paths).not.toContain("tests/fixtures/sample/fixture.ts");
       expect(keyFiles.find((file) => file.path === "src/main.ts")?.reason).toContain("application entrypoint");
       expect(keyFiles.find((file) => file.path === "package.json")?.reason).toContain("package configuration");
       expect(keyFiles.find((file) => file.path === "tests/orders.test.ts")?.reason).toContain("test");

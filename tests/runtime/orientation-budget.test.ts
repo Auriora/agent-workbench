@@ -8,6 +8,7 @@ import { getRepoOverview } from "../../src/application/use-cases/get-repo-overvi
 import { getRepoScope } from "../../src/application/use-cases/get-repo-scope.js";
 import { getScannedRepoStatus } from "../../src/application/use-cases/get-repo-status.js";
 import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
+import type { FileCatalogEntry } from "../../src/domain/models/index.js";
 import type { FileCatalogScanPort } from "../../src/ports/index.js";
 import { buildRepoOverviewEnvelope } from "../../src/presentation/repo-overview-presenter.js";
 import { buildRepoScopeEnvelope } from "../../src/presentation/repo-scope-presenter.js";
@@ -76,6 +77,80 @@ describe("repo orientation budgets", () => {
     expect(scopeKeys).not.toEqual(expect.arrayContaining(["content", "source", "source_text"]));
     expect(overviewKeys).not.toEqual(expect.arrayContaining(["content", "source", "source_text"]));
   });
+
+  it("keeps embedded fixture projects out of overview routing signals", async () => {
+    const overviewEnvelope = buildRepoOverviewEnvelope(
+      await getRepoOverview({
+        repo_root: "/repo",
+        scanner: fixedScanner([
+          buildFileCatalogEntry({
+            file_identity: {
+              path: "package.json",
+              language: "json",
+              content_hash: "sha256:package",
+              size_bytes: 10,
+              mtime_ms: 1
+            }
+          }),
+          buildFileCatalogEntry({
+            file_identity: {
+              path: "src/index.ts",
+              language: "typescript",
+              content_hash: "sha256:index",
+              size_bytes: 10,
+              mtime_ms: 1
+            }
+          }),
+          buildFileCatalogEntry({
+            file_identity: {
+              path: "docs/architecture.md",
+              language: "markdown",
+              content_hash: "sha256:architecture",
+              size_bytes: 10,
+              mtime_ms: 1
+            }
+          }),
+          buildFileCatalogEntry({
+            file_identity: {
+              path: "plugins/agent-workbench/skills/agent-workbench/SKILL.md",
+              language: "markdown",
+              content_hash: "sha256:plugin-skill",
+              size_bytes: 10,
+              mtime_ms: 1
+            }
+          }),
+          buildFileCatalogEntry({
+            file_identity: {
+              path: "tests/fixtures/fixture-dotnet-web-repo/Fixture.sln",
+              language: "config",
+              content_hash: "sha256:sln",
+              size_bytes: 10,
+              mtime_ms: 1
+            }
+          }),
+          buildFileCatalogEntry({
+            file_identity: {
+              path: "tests/fixtures/fixture-sam-lambda-repo/infra/sam/orders/template.yaml",
+              language: "yaml",
+              content_hash: "sha256:sam",
+              size_bytes: 10,
+              mtime_ms: 1
+            }
+          })
+        ])
+      })
+    );
+
+    expect(overviewEnvelope.data.platforms).toEqual(["node", "typescript"]);
+    expect(overviewEnvelope.data.key_files.map((file) => file.path)).not.toEqual(
+      expect.arrayContaining([
+        "tests/fixtures/fixture-dotnet-web-repo/Fixture.sln",
+        "tests/fixtures/fixture-sam-lambda-repo/infra/sam/orders/template.yaml"
+      ])
+    );
+    expect(overviewEnvelope.data.key_docs.map((doc) => doc.path)).toEqual(["docs/architecture.md"]);
+    expect(overviewEnvelope.data.validation_hints.map((hint) => hint.reason).join("\n")).not.toContain("tests/fixtures");
+  });
 });
 
 function recordingScanner(): FileCatalogScanPort & {
@@ -112,6 +187,20 @@ function recordingScanner(): FileCatalogScanPort & {
             }
           })
         ]
+      };
+    }
+  };
+}
+
+function fixedScanner(files: FileCatalogEntry[]): FileCatalogScanPort {
+  return {
+    async scan(input) {
+      return {
+        repo_root: input.repo_root,
+        indexed_roots: input.indexed_roots,
+        skipped_roots: input.skipped_roots,
+        truncated: false,
+        files
       };
     }
   };
