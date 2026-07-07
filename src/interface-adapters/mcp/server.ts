@@ -13,7 +13,7 @@ import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../../runtime/version.js";
 
 export const AGENT_WORKBENCH_MCP_INSTRUCTIONS = [
   "Use Agent Workbench before broad repository inspection: read repo:///status, repo:///scope, and repo:///overview, then call context_for_task for task routing.",
-  "If Agent Workbench tools are not visible in the current Codex tool list, discover them first with tool_search for agent-workbench context_for_task verification_plan diagnostics_for_files docs_search.",
+  "If Agent Workbench tool schemas are deferred or not visible in the current client, discover them first with tool_search for agent-workbench context_for_task verification_plan diagnostics_for_files docs_search.",
   "Use verification_plan before validation commands and prefer symbol_search, find_references, impact, and docs tools for targeted follow-up evidence."
 ].join(" ");
 

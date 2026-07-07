@@ -11,6 +11,8 @@ It includes:
 
 - `.claude-plugin/plugin.json` for Claude Code plugin metadata
 - `.mcp.json` for the Agent Workbench MCP server binding
+- `CLAUDE.md` for Claude Code project-memory guidance when the plugin root is
+  the active workspace
 - `skills/agent-workbench/SKILL.md` for Claude Code skill guidance
 - `hooks/hooks.json` for Claude Code lifecycle hook configuration
 - `hooks/` scripts that adapt Agent Workbench quiet hook behavior to Claude
@@ -38,3 +40,7 @@ claude --plugin-dir plugins/agent-workbench/claude-plugin
 
 After edits, run `/reload-plugins` in Claude Code to reload plugin skills,
 hooks, MCP servers, and agents.
+
+SessionStart hook output is intentionally orientation only. For behavior Claude
+Code should treat as project guidance, keep `CLAUDE.md` aligned with the shared
+workflow and avoid relying on hook prose alone.

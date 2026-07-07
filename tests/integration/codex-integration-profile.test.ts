@@ -728,8 +728,9 @@ describe("Codex plugin artifacts", () => {
     expect(sessionContext).toContain("Agent Workbench MCP is available.\nRepo orientation:");
     expect(sessionContext).toContain("- root: /repo");
     expect(sessionContext).toContain("dirty state not inspected");
-    expect(sessionContext).toContain("tool_search");
+    expect(sessionContext).toContain("tool discovery/search");
     expect(sessionContext).toContain("context_for_task verification_plan diagnostics_for_files docs_search");
+    expect(sessionContext).not.toContain("mcp__");
 
     const sessionFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-session-"));
     fs.mkdirSync(path.join(sessionFixtureRoot, "src"), { recursive: true });
@@ -892,7 +893,8 @@ describe("Codex plugin artifacts", () => {
         "package.json",
         "pnpm-lock.yaml",
         "tsconfig.json",
-        "AGENTS.md"
+        "AGENTS.md",
+        "CLAUDE.md"
       ])
     );
     expect(manifest.excluded_components).toEqual(
@@ -922,6 +924,7 @@ describe("Codex plugin artifacts", () => {
     );
     expect(pluginValidator).toContain("Agent Workbench plugin/package validation passed.");
     expect(pluginValidator).toContain("plugins/agent-workbench/.codex-plugin/plugin.json");
+    expect(pluginValidator).toContain("plugins/agent-workbench/claude-plugin/CLAUDE.md");
     expect(pluginValidator).toContain(".well-known/mcp/server-card.json");
     expect(pluginValidator).toContain(".agents/plugins/marketplace.json");
     expect(pluginValidator).toContain("manifest.dependency_install.runtime_dependencies");

@@ -106,8 +106,9 @@ describe("Codex hook installation", () => {
     expect(result.stderr).toBe("");
     expect(result.stdout).toContain("Agent Workbench MCP is available.");
     expect(result.stdout).toContain(`- root: ${repoRoot}`);
-    expect(result.stdout).toContain("tool_search");
+    expect(result.stdout).toContain("tool discovery/search");
     expect(result.stdout).toContain("context_for_task verification_plan diagnostics_for_files docs_search");
+    expect(result.stdout).not.toContain("mcp__");
 
     for (const source of ["resume", "clear", "compact"]) {
       const suppressed = spawnSync(sessionHook.command, {

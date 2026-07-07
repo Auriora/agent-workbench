@@ -134,8 +134,8 @@ export function buildSessionStartContext(payload, env = process.env) {
     `- docs: ${docs.length ? compactList(docs) : "none detected by hook"}`,
     `- specs: ${specSummary}`,
     `- git: ${branch ? `branch ${branch}` : "not detected"}; dirty state not inspected`,
-    "- first calls: repo:///status, repo:///scope, repo:///overview; use context_for_task once task is known; run git status --short before edits.",
-    "- if mcp__agent_workbench tools are not visible, call tool_search for: agent-workbench context_for_task verification_plan diagnostics_for_files docs_search."
+    "- first calls: read Agent Workbench resources repo:///status, repo:///scope, and repo:///overview; use the Agent Workbench context_for_task tool once task is known; run git status --short before edits.",
+    "- if Agent Workbench tool schemas are deferred or not visible, use tool discovery/search for: agent-workbench context_for_task verification_plan diagnostics_for_files docs_search. Do not guess client-specific wrapper prefixes."
   ].join("\n");
 }
 

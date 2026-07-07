@@ -14,7 +14,7 @@ import { VENDORED_HOOK_FILES, VENDORED_PLUGIN_FILES } from "../../scripts/sync-c
 describe("Claude Code plugin artifacts", () => {
   const pluginRoot = path.resolve("plugins/agent-workbench/claude-plugin");
 
-  it("ships plugin manifest, MCP, skill, and hook config files", () => {
+  it("ships plugin manifest, MCP, Claude guidance, skill, and hook config files", () => {
     const manifest = JSON.parse(
       fs.readFileSync(path.join(pluginRoot, ".claude-plugin/plugin.json"), "utf8")
     ) as {
@@ -35,6 +35,7 @@ describe("Claude Code plugin artifacts", () => {
       path.join(pluginRoot, "skills/agent-workbench/SKILL.md"),
       "utf8"
     );
+    const claudeGuidance = fs.readFileSync(path.join(pluginRoot, "CLAUDE.md"), "utf8");
 
     expect(manifest).toMatchObject({
       name: "agent-workbench",
@@ -54,8 +55,11 @@ describe("Claude Code plugin artifacts", () => {
     expect(claudeMcpArgs).not.toContain("${VAR:-");
     expect(Object.keys(hooksConfig.hooks).sort()).toEqual(["PostToolUse", "SessionStart"]);
     expect((hooksConfig.hooks.SessionStart as Array<{ matcher?: string }>)[0].matcher).toBe("startup");
+    expect(claudeGuidance).toContain("Call `context_for_task` before broad reads");
+    expect(claudeGuidance).not.toContain("mcp__");
     expect(skill).toContain("description: Use Agent Workbench as the MCP-backed IDE runtime");
     expect(skill).toContain("Claude Code Integration");
+    expect(skill).not.toContain("mcp__");
   });
 
   it("adapts Claude Code hook payloads to quiet Agent Workbench feedback", async () => {
@@ -145,6 +149,7 @@ describe("Claude Code plugin artifacts", () => {
       plugin_root: "plugins/agent-workbench/claude-plugin",
       plugin_manifest: "plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json",
       plugin_mcp_config: "plugins/agent-workbench/claude-plugin/.mcp.json",
+      plugin_project_guidance: "plugins/agent-workbench/claude-plugin/CLAUDE.md",
       plugin_hooks: "plugins/agent-workbench/claude-plugin/hooks/hooks.json"
     });
     expect(manifest.claude_code.plugin_hook_scripts).toEqual([

@@ -1,6 +1,6 @@
 {
   "name": "agent-workbench",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "registry": "ghcr.io",
   "distribution": {
     "npm_contract": "packaging/agent-workbench/npm-package.json",
@@ -9,7 +9,7 @@
   },
   "image": "ghcr.io/bcherrington/agent-workbench",
   "containerfile": "packaging/agent-workbench/Containerfile",
-  "install_command": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.0/auriora-agent-workbench-0.5.0.tgz",
+  "install_command": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.1/auriora-agent-workbench-0.5.1.tgz",
   "npm_bin": "packaging/agent-workbench/mcp-bin.mjs",
   "entrypoint": "node --import tsx /opt/agent-workbench/src/mcp/stdio.ts",
   "dependency_install": {
@@ -69,7 +69,8 @@
     "LICENSE",
     "pnpm-lock.yaml",
     "tsconfig.json",
-    "AGENTS.md"
+    "AGENTS.md",
+    "CLAUDE.md"
   ],
   "excluded_components": [
     "docs/specs",
@@ -81,7 +82,7 @@
     "plugin_manifest": "plugins/agent-workbench/.codex-plugin/plugin.json",
     "plugin_mcp_config": "plugins/agent-workbench/.mcp.json",
     "hook_installer": "scripts/install-codex-hooks.mjs",
-    "plugin_install_model": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.0/auriora-agent-workbench-0.5.0.tgz"
+    "plugin_install_model": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.1/auriora-agent-workbench-0.5.1.tgz"
   },
   "kiro": {
     "power_root": "plugins/agent-workbench/kiro-power",
@@ -101,6 +102,7 @@
     "plugin_root": "plugins/agent-workbench/claude-plugin",
     "plugin_manifest": "plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json",
     "plugin_mcp_config": "plugins/agent-workbench/claude-plugin/.mcp.json",
+    "plugin_project_guidance": "plugins/agent-workbench/claude-plugin/CLAUDE.md",
     "plugin_skill": "plugins/agent-workbench/claude-plugin/skills/agent-workbench/SKILL.md",
     "plugin_hooks": "plugins/agent-workbench/claude-plugin/hooks/hooks.json",
     "plugin_hook_scripts": [

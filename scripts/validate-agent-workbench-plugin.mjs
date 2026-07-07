@@ -45,6 +45,7 @@ const expectedInstallCommand =
   `auriora-agent-workbench-${packageJson.version}.tgz`;
 
 const requiredPaths = [
+  "CLAUDE.md",
   "plugins/agent-workbench/.codex-plugin/plugin.json",
   "plugins/agent-workbench/.agents/plugins/marketplace.json",
   "plugins/agent-workbench/.mcp.json",
@@ -53,6 +54,7 @@ const requiredPaths = [
   "plugins/agent-workbench/hooks/post-edit-feedback.js",
   "plugins/agent-workbench/skills/agent-workbench/SKILL.md",
   "plugins/agent-workbench/skills/release-notes/SKILL.md",
+  "plugins/agent-workbench/claude-plugin/CLAUDE.md",
   "plugins/agent-workbench/README.md",
   ".agents/plugins/marketplace.json",
   ".well-known/mcp/server-card.json",

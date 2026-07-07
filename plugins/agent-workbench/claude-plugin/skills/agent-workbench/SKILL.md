@@ -17,9 +17,10 @@ local scripts.
 ## Default Workflow
 
 1. Read `repo:///status`, `repo:///scope`, and `repo:///overview` before relying on runtime output.
-2. If `mcp__agent_workbench` tools are not visible in the current Codex tool
-   list, call tool discovery for `agent-workbench context_for_task
-   verification_plan diagnostics_for_files docs_search`.
+2. If Agent Workbench tool schemas are deferred or not visible in the current
+   client, call tool discovery for `agent-workbench context_for_task
+   verification_plan diagnostics_for_files docs_search`. Do not hardcode
+   client-specific wrapper names.
 3. Use `context_for_task` before broad file reads.
 4. Use targeted symbol, reference, and impact surfaces for implementation work.
 5. Use preview/apply surfaces for workspace writes when available.

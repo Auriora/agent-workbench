@@ -139,10 +139,12 @@ For task work, call `context_for_task` before broad file reads and
 and MCP binding model. Read `integration:///health/agent-workbench` when
 checking configured, registered, discovered, and callable MCP states.
 
-In some Codex sessions, plugin MCP tools may be deferred until tool discovery
-runs. If `mcp__agent_workbench` tools are not visible, discover them with a
-query such as `agent-workbench context_for_task verification_plan
-diagnostics_for_files docs_search`, then call `context_for_task`.
+In some sessions, plugin MCP tools may be deferred until tool discovery runs.
+If Agent Workbench tool schemas are not visible, discover them with a query
+such as `agent-workbench context_for_task verification_plan diagnostics_for_files
+docs_search`, then call `context_for_task`. Do not hardcode client-specific
+wrapper names in docs or hooks because Codex, Claude Code, and other clients
+may expose different prefixes for the same Agent Workbench surfaces.
 
 The plugin should not create a host-level Agent Workbench MCP block in
 `~/.codex/config.toml`. The supported Codex path is the plugin-bundled
