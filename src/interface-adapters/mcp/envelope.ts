@@ -131,9 +131,6 @@ export function registerMcpToolWithEnvelope<
 
 export function classifyWorkspaceEditError(error: unknown): McpFailureClass {
   const message = errorMessage(error, "").toLowerCase();
-  if (message.includes("workspace edit target was not found")) {
-    return "invalid_input";
-  }
   if (message.includes("preview") && (
     message.includes("stale") ||
     message.includes("expired") ||

@@ -730,6 +730,7 @@ describe("runtime contracts", () => {
           files: [
             {
               path: "src/app.ts",
+              base_exists: true,
               base_hash: "base",
               after_hash: "after",
               change_count: 1

@@ -53,7 +53,7 @@ export async function applyWorkspaceEdit(input: {
     if (!edit) {
       throw new Error("Apply edits do not match the preview token.");
     }
-    const current = await readPreviewTarget(input.workspace, file.path);
+    const current = await readPreviewTarget(input.workspace, file.path, file.base_exists);
     if (sha256Text(current) !== file.base_hash) {
       throw new Error("Preview is stale because the current file hash changed.");
     }
@@ -66,6 +66,10 @@ export async function applyWorkspaceEdit(input: {
     const edit = editsByPath.get(file.path);
     if (!edit) {
       throw new Error("Apply edits do not match the preview token.");
+    }
+    const directory = path.posix.dirname(file.path);
+    if (directory !== ".") {
+      await input.workspace.ensureDirectory({ path: directory });
     }
     await input.workspace.writeText({
       path: file.path,
@@ -97,10 +101,17 @@ function normalizeRepoPath(value: string): string {
   return value.replaceAll("\\", "/").replace(/^\.\/+/, "");
 }
 
-async function readPreviewTarget(workspace: WorkspaceFilePort, filePath: string): Promise<string> {
+async function readPreviewTarget(
+  workspace: WorkspaceFilePort,
+  filePath: string,
+  baseExists: boolean
+): Promise<string> {
   try {
     return await workspace.readText({ path: filePath });
   } catch (error) {
+    if (isMissingFileError(error) && !baseExists) {
+      return "";
+    }
     if (isMissingFileError(error)) {
       throw new Error("Preview is stale because the target file is missing.");
     }

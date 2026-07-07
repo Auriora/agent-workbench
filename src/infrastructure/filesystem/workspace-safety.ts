@@ -54,8 +54,11 @@ export function resolveWorkspacePath(
   try {
     realCandidate = fs.realpathSync(candidate);
   } catch {
-    realCandidate = fs.realpathSync(path.dirname(candidate));
-    realCandidate = path.join(realCandidate, path.basename(candidate));
+    const existingAncestor = nearestExistingAncestor(candidate);
+    realCandidate = path.join(
+      fs.realpathSync(existingAncestor),
+      path.relative(existingAncestor, candidate)
+    );
   }
 
   if (!isInside(repoRoot, realCandidate)) {
@@ -96,6 +99,18 @@ export function resolveWorkspacePath(
     relativePath,
     readOnly
   };
+}
+
+function nearestExistingAncestor(absolutePath: string): string {
+  let current = path.dirname(absolutePath);
+  while (!fs.existsSync(current)) {
+    const parent = path.dirname(current);
+    if (parent === current) {
+      return current;
+    }
+    current = parent;
+  }
+  return current;
 }
 
 function directoryExists(absolutePath: string): boolean {

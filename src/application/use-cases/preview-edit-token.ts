@@ -14,7 +14,7 @@ export function createPreviewToken(input: {
   path?: string;
   before?: string;
   after?: string;
-  files?: Array<{ path: string; before: string; after: string }>;
+  files?: Array<{ path: string; before: string; after: string; baseExists?: boolean }>;
   now?: Date;
   expiresInMs?: number;
 }): EditToken {
@@ -35,6 +35,7 @@ export function createPreviewToken(input: {
     expires_at: expiresAt.toISOString(),
     files: files.map((file) => ({
       path: file.path,
+      base_exists: file.baseExists ?? true,
       base_hash: sha256Text(file.before),
       after_hash: sha256Text(file.after),
       change_count: file.before === file.after ? 0 : 1

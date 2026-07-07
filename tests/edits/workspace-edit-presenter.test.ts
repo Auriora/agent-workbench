@@ -43,6 +43,7 @@ describe("workspace edit presenter golden responses", () => {
           files: [
             {
               path: "src/app.ts",
+              base_exists: true,
               base_hash: "base",
               after_hash: "after",
               change_count: 1
@@ -138,6 +139,11 @@ describe("workspace edit presenter golden responses", () => {
       next_actions: [{ tool: "verification_plan" }]
     });
     expect(invalidPreview).toMatchObject({
+      data: {
+        preview: null,
+        changed_files: [],
+        next_actions: []
+      },
       meta: { analysis_validity: "invalid", verification_status: "blocked" },
       errors: [{ code: "invalid_input", retryable: false }]
     });

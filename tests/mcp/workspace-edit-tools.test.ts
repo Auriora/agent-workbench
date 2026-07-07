@@ -185,7 +185,7 @@ describe("workspace edit MCP tools", () => {
     expect(parsed.errors).toEqual([expect.objectContaining({ code: "invalid_input", retryable: false })]);
   });
 
-  it("returns stable MCP envelopes for missing preview targets without filesystem details", async () => {
+  it("previews missing targets as new files without leaking filesystem details", async () => {
     const fixture = createEditFixture();
     try {
       const registered = register(previewWorkspaceEditTool, fixture.context);
@@ -195,24 +195,35 @@ describe("workspace edit MCP tools", () => {
       });
 
       const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+        data: {
+          preview: {
+            files: Array<{ path: string; base_exists: boolean }>;
+          };
+          changed_files: Array<{ path: string; exists: boolean }>;
+          next_actions: Array<{ tool: string }>;
+        };
         meta: { analysis_validity: string; verification_status: string };
         errors: Array<{ code: string; message: string }>;
       };
 
       expect(parsed.meta).toMatchObject({
-        analysis_validity: "invalid",
-        verification_status: "blocked",
+        analysis_validity: "valid",
+        verification_status: "planned",
         trust: {
           not_safe_to_use_for: expect.arrayContaining(["safe_mutation_claim"])
         }
       });
-      expect(parsed.errors).toEqual([
-        expect.objectContaining({
-          code: "invalid_input",
-          message: "Workspace edit target was not found: src/missing.py"
-        })
+      expect(parsed.data.preview.files).toEqual([
+        expect.objectContaining({ path: "src/missing.py", base_exists: false })
       ]);
-      expect(JSON.stringify(parsed.errors)).not.toContain("ENOENT");
+      expect(parsed.data.changed_files).toEqual([
+        expect.objectContaining({ path: "src/missing.py", exists: false })
+      ]);
+      expect(parsed.data.next_actions).toEqual([
+        expect.objectContaining({ tool: "apply_workspace_edit" })
+      ]);
+      expect(parsed.errors).toEqual([]);
+      expect(JSON.stringify(parsed)).not.toContain("ENOENT");
       expect(JSON.stringify(parsed.errors)).not.toContain(fixture.repoRoot);
     } finally {
       fixture.dispose();

@@ -106,6 +106,51 @@ describe("workspace edit preview and apply", () => {
     ).rejects.toThrow("Preview token was not found or was already consumed.");
   });
 
+  it("previews and applies a new file without mutating before apply", async () => {
+    const newFilePath = "docs/new/AGENTS.md";
+    const preview = await previewWorkspaceEdit({
+      request: {
+        edits: [{ path: newFilePath, replacement_text: "# Repository Guidelines\n" }],
+        expires_in_ms: 600_000
+      },
+      workspace,
+      safety,
+      previews,
+      clock,
+      default_repo_root: repoRoot
+    });
+
+    expect(fs.existsSync(path.join(repoRoot, "docs", "new", "AGENTS.md"))).toBe(false);
+    expect(preview.preview.preview.files).toEqual([
+      expect.objectContaining({
+        path: newFilePath,
+        base_exists: false,
+        change_count: 1
+      })
+    ]);
+    expect(preview.preview.changed_files).toEqual([
+      expect.objectContaining({
+        path: newFilePath,
+        exists: false
+      })
+    ]);
+
+    const applied = await applyWorkspaceEdit({
+      request: {
+        preview_token: preview.preview.preview.preview_token,
+        edits: [{ path: newFilePath, replacement_text: "# Repository Guidelines\n" }]
+      },
+      workspace,
+      safety,
+      previews,
+      clock,
+      default_repo_root: repoRoot
+    });
+
+    expect(applied.result.status).toBe("applied");
+    expect(fs.readFileSync(path.join(repoRoot, "docs", "new", "AGENTS.md"), "utf8")).toBe("# Repository Guidelines\n");
+  });
+
   it("rejects stale previews before writing", async () => {
     const preview = await previewWorkspaceEdit({
       request: {
@@ -134,6 +179,37 @@ describe("workspace edit preview and apply", () => {
       })
     ).rejects.toThrow("Preview is stale because the current file hash changed.");
     expect(fs.readFileSync(path.join(repoRoot, "src", "service.py"), "utf8")).toBe("changed elsewhere\n");
+  });
+
+  it("rejects a new-file preview when the target appears before apply", async () => {
+    const newFilePath = "src/new.py";
+    const preview = await previewWorkspaceEdit({
+      request: {
+        edits: [{ path: newFilePath, replacement_text: "created = True\n" }],
+        expires_in_ms: 600_000
+      },
+      workspace,
+      safety,
+      previews,
+      clock,
+      default_repo_root: repoRoot
+    });
+    fs.writeFileSync(path.join(repoRoot, "src", "new.py"), "created elsewhere\n");
+
+    await expect(
+      applyWorkspaceEdit({
+        request: {
+          preview_token: preview.preview.preview.preview_token,
+          edits: [{ path: newFilePath, replacement_text: "created = True\n" }]
+        },
+        workspace,
+        safety,
+        previews,
+        clock,
+        default_repo_root: repoRoot
+      })
+    ).rejects.toThrow("Preview is stale because the current file hash changed.");
+    expect(fs.readFileSync(path.join(repoRoot, "src", "new.py"), "utf8")).toBe("created elsewhere\n");
   });
 
   it("rejects generated paths, .env files, and secret-like replacement text", async () => {

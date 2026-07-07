@@ -1446,6 +1446,7 @@ async function buildExpectedApplyEnvelope(input: ApplyGoldenInput): Promise<Retu
       const before = await workspace.readText({ path: edit.path });
       return {
         path: edit.path,
+        base_exists: true,
         base_hash: sha256Text(before),
         after_hash: sha256Text(edit.replacement_text),
         change_count: before === edit.replacement_text ? 0 : 1

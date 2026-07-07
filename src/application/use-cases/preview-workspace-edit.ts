@@ -6,6 +6,7 @@
 import path from "node:path";
 import type {
   FileReference,
+  EditToken,
   PreviewWorkspaceEditRequest,
   PreviewWorkspaceEditResult,
   ResponseMetadata
@@ -21,7 +22,7 @@ import { inferLanguageFromPath } from "./file-catalog-entry.js";
 import { createPreviewToken } from "./preview-edit-token.js";
 
 export type PreviewWorkspaceEditUseCaseResult = {
-  preview: PreviewWorkspaceEditResult;
+  preview: Omit<PreviewWorkspaceEditResult, "preview"> & { preview: EditToken };
   meta: ResponseMetadata;
 };
 
@@ -40,7 +41,7 @@ export async function previewWorkspaceEdit(input: {
     files: await Promise.all(
       input.request.edits.map(async (edit) => ({
         path: normalizeRepoPath(edit.path),
-        before: await readWorkspaceEditTarget(input.workspace, edit.path),
+        ...(await readWorkspaceEditBase(input.workspace, edit.path)),
         after: edit.replacement_text
       }))
     ),
@@ -53,7 +54,7 @@ export async function previewWorkspaceEdit(input: {
     preview: {
       repo_root: repoRoot,
       preview: token,
-      changed_files: token.files.map((file) => fileReference(file.path)),
+      changed_files: token.files.map((file) => fileReference(file.path, { exists: file.base_exists })),
       next_actions: [
         {
           tool: "apply_workspace_edit",
@@ -88,7 +89,7 @@ export function validateEdits(
   }
 }
 
-export function fileReference(filePath: string): FileReference {
+export function fileReference(filePath: string, options: { exists?: boolean } = {}): FileReference {
   const normalizedPath = normalizeRepoPath(filePath);
   const language = inferLanguageFromPath(normalizedPath);
   const capability = describeFileCapability({
@@ -99,7 +100,7 @@ export function fileReference(filePath: string): FileReference {
   return {
     path: normalizedPath,
     language,
-    exists: true,
+    exists: options.exists ?? true,
     capability_level: capability.capability_level,
     evidence_kinds: [...capability.evidence_kinds],
     reason: "Workspace edit preview target."
@@ -131,12 +132,21 @@ function normalizeRepoPath(value: string): string {
   return value.replaceAll("\\", "/").replace(/^\.\/+/, "");
 }
 
-async function readWorkspaceEditTarget(workspace: WorkspaceFilePort, filePath: string): Promise<string> {
+async function readWorkspaceEditBase(
+  workspace: WorkspaceFilePort,
+  filePath: string
+): Promise<{ before: string; baseExists: boolean }> {
   try {
-    return await workspace.readText({ path: filePath });
+    return {
+      before: await workspace.readText({ path: filePath }),
+      baseExists: true
+    };
   } catch (error) {
     if (isMissingFileError(error)) {
-      throw new Error(`Workspace edit target was not found: ${normalizeRepoPath(filePath)}`);
+      return {
+        before: "",
+        baseExists: false
+      };
     }
     throw error;
   }

@@ -55,14 +55,7 @@ export function buildInvalidPreviewWorkspaceEditInputEnvelope(input: {
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
-      preview: {
-        preview_token: "",
-        created_at: "",
-        expires_at: "",
-        files: [],
-        operation: "bounded_text_edit",
-        mutation_class: "workspace_write"
-      },
+      preview: null,
       changed_files: [],
       next_actions: []
     },

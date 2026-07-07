@@ -224,6 +224,7 @@ export const editTokenSchema = z.object({
   files: z.array(
     z.object({
       path: z.string(),
+      base_exists: z.boolean(),
       base_hash: z.string(),
       after_hash: z.string(),
       change_count: z.number().int().nonnegative()
@@ -254,7 +255,7 @@ export type PreviewWorkspaceEditRequest = z.infer<typeof previewWorkspaceEditReq
 export const previewWorkspaceEditResultSchema = z
   .object({
     repo_root: z.string(),
-    preview: editTokenSchema,
+    preview: editTokenSchema.nullable(),
     changed_files: z.array(fileReferenceSchema),
     next_actions: z.array(nextActionSchema)
   })

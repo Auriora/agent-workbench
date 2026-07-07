@@ -23,6 +23,7 @@ describe("edit preview tokens", () => {
       files: [
         {
           path: "src/example.py",
+          base_exists: true,
           base_hash: sha256Text("old\n"),
           after_hash: sha256Text("new\n"),
           change_count: 1
