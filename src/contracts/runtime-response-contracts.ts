@@ -12,6 +12,7 @@ import {
   capabilityLevelSchema,
   CONTRACT_VERSION,
   evidenceKindSchema,
+  evidenceCoverageStateSchema,
   freshnessSchema,
   nextActionSchema,
   type RuntimeError,
@@ -51,6 +52,20 @@ export const budgetMetadataSchema = z
   })
   .strict();
 export type BudgetMetadata = z.infer<typeof budgetMetadataSchema>;
+
+export const indexCoverageSchema = z
+  .object({
+    evidence_class: z.enum(["docs", "graph"]),
+    state: evidenceCoverageStateSchema,
+    indexed_files: z.number().int().nonnegative().optional(),
+    eligible_files_seen: z.number().int().nonnegative().optional(),
+    scan_truncated: z.boolean().optional(),
+    indexed_roots: z.array(z.string()).optional(),
+    missing_priority_roots: z.array(z.string()).optional(),
+    reason: z.string().optional()
+  })
+  .strict();
+export type IndexCoverage = z.infer<typeof indexCoverageSchema>;
 
 export const trustUseSchema = z.enum([
   "navigation",
@@ -114,6 +129,7 @@ export const responseMetadataSchema = z.object({
   verification_status: verificationStatusSchema,
   truncated: z.boolean(),
   budget: budgetMetadataSchema.optional(),
+  index_coverage: z.array(indexCoverageSchema).optional(),
   caveats: z.array(runtimeStatusCaveatSchema).optional(),
   trust: trustCalibrationSchema.optional()
 });

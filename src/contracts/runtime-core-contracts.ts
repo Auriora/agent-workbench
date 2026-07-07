@@ -53,6 +53,16 @@ export const freshnessSchema = z.enum([
 ]);
 export type Freshness = z.infer<typeof freshnessSchema>;
 
+export const evidenceCoverageStateSchema = z.enum([
+  "complete",
+  "partial",
+  "refreshing",
+  "stale",
+  "blocked",
+  "unknown"
+]);
+export type EvidenceCoverageState = z.infer<typeof evidenceCoverageStateSchema>;
+
 export const analysisValiditySchema = z.enum([
   "valid",
   "partial",

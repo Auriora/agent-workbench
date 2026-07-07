@@ -639,8 +639,8 @@ describe("stdio MCP entrypoint", () => {
       const status = await waitForWarmupStatus(session, "complete");
       expect(status.data).toMatchObject({
         repo_root: fixtureRoot,
-        runtime_state: "fresh",
-        freshness: "fresh",
+        runtime_state: "refreshing",
+        freshness: "refreshing",
         warmup_state: "complete"
       });
 

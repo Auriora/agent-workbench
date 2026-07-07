@@ -182,14 +182,28 @@ export async function searchDocs(input: {
       truncated: result.truncated,
       cursor: result.cursor,
       result_count: result.result_count,
-      next_actions: hits.length > 0 ? docsNextActions(result.repo_root, hits[0]?.path, hits[0]?.heading_id) : []
+      result_count_basis: result.result_count_basis ?? "page",
+      docs_index_state: result.docs_index_state,
+      indexed_docs_count: result.indexed_docs_count,
+      docs_scan_truncated: result.docs_scan_truncated,
+      coverage_note: result.coverage_note,
+      next_actions: docsSearchNextActions({
+        repoRoot: result.repo_root,
+        filePath: hits[0]?.path,
+        headingId: hits[0]?.heading_id,
+        partial: result.docs_index_state === "partial" || result.freshness === "refreshing"
+      })
     },
     meta: docsSearchMeta({
       repoRoot: result.repo_root,
       freshness: result.freshness,
       status: result.status === "blocked" ? "blocked" : hits.length > 0 ? "done" : "not_applicable",
       truncated: result.truncated,
-      blocked: result.status === "blocked"
+      blocked: result.status === "blocked",
+      docsIndexState: result.docs_index_state,
+      indexedDocsCount: result.indexed_docs_count,
+      docsScanTruncated: result.docs_scan_truncated,
+      coverageNote: result.coverage_note
     })
   };
 }
@@ -427,9 +441,14 @@ function docsSearchMeta(input: {
   status: ResponseMetadata["verification_status"];
   truncated: boolean;
   blocked: boolean;
+  docsIndexState?: "complete" | "partial" | "refreshing" | "stale" | "blocked" | "unknown";
+  indexedDocsCount?: number;
+  docsScanTruncated?: boolean;
+  coverageNote?: string;
 }): ResponseMetadata {
+  const coverageState = input.docsIndexState ?? (input.blocked ? "blocked" : "unknown");
   return {
-    analysis_validity: "valid",
+    analysis_validity: coverageState === "partial" || input.freshness === "refreshing" ? "partial" : "valid",
     freshness: input.freshness,
     scope: {
       repo_root: input.repoRoot,
@@ -443,7 +462,17 @@ function docsSearchMeta(input: {
     truncated: input.truncated,
     budget: {
       row_limit: DOC_ROW_LIMIT
-    }
+    },
+    index_coverage: [
+      {
+        evidence_class: "docs",
+        state: coverageState,
+        indexed_files: input.indexedDocsCount,
+        scan_truncated: input.docsScanTruncated,
+        indexed_roots: ["docs", "doc", "documentation"],
+        reason: input.coverageNote
+      }
+    ]
   };
 }
 
@@ -469,6 +498,28 @@ function docsNextActions(repoRoot: string, filePath?: string, headingId?: string
             }
           }
         ])
+  ]);
+}
+
+function docsSearchNextActions(input: {
+  repoRoot: string;
+  filePath?: string;
+  headingId?: string;
+  partial: boolean;
+}) {
+  return capNextActions([
+    ...(input.partial
+      ? [
+          {
+            tool: "docs_map",
+            args: {
+              repo_root: input.repoRoot,
+              max_docs: 50
+            }
+          }
+        ]
+      : []),
+    ...docsNextActions(input.repoRoot, input.filePath, input.headingId)
   ]);
 }
 

@@ -333,6 +333,11 @@ function sanitizeDocsSearch(
     truncated: input.truncated,
     cursor: input.cursor,
     result_count: input.result_count,
+    result_count_basis: input.result_count_basis,
+    docs_index_state: input.docs_index_state,
+    indexed_docs_count: input.indexed_docs_count,
+    docs_scan_truncated: input.docs_scan_truncated,
+    coverage_note: input.coverage_note,
     next_actions: presentNextActions(input.next_actions, context).map((action) => nextActionSchema.parse(action))
   });
 }

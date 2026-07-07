@@ -26,6 +26,7 @@ import type {
   CachePort,
   WarmupCoordinatorPort
 } from "../../ports/index.js";
+import type { EvidenceCoverageState, IndexCoverage } from "../../contracts/index.js";
 import {
   markdownTitleFromPath,
   parseMarkdownHeadings,
@@ -35,6 +36,7 @@ import {
 const MAX_TEXT_EXTRACTION_BYTES = 2_000_000;
 const MAX_DOCS_INDEX_BYTES = 120_000;
 const INDEXING_YIELD_INTERVAL = 25;
+const DOCS_INDEX_ROOTS = ["docs", "doc", "documentation"] as const;
 
 export type IndexRepositoryGraphResult = {
   snapshot_id: string;
@@ -47,6 +49,7 @@ export type IndexRepositoryGraphResult = {
   edge_count: number;
   unresolved_reference_count: number;
   truncated: boolean;
+  coverage: readonly IndexCoverage[];
 };
 
 export type WarmupRepositoryGraphResult = IndexRepositoryGraphResult & {
@@ -171,11 +174,22 @@ export async function indexRepositoryGraph(input: {
     });
   }
 
+  const docsScan = input.docs_index === undefined
+    ? undefined
+    : await input.scanner.scan({
+        repo_root: input.repo_root,
+        indexed_roots: DOCS_INDEX_ROOTS,
+        skipped_roots: [],
+        max_files: input.max_files ?? 2000
+      });
+
   if (input.docs_index !== undefined) {
     const documents = [];
-    for (const [index, file] of scanned.files
-      .filter((candidate) => candidate.file_identity.language === "markdown")
-      .entries()) {
+    const docsFiles = mergeDocsIndexFiles({
+      graphFiles: scanned.files,
+      docsFiles: docsScan?.files ?? []
+    });
+    for (const [index, file] of docsFiles.entries()) {
       await yieldToEventLoop(index);
       const content = await input.workspace.readText({ path: file.path });
       const headings = parseMarkdownHeadings(content);
@@ -223,9 +237,17 @@ export async function indexRepositoryGraph(input: {
     });
   }
 
+  const coverage = buildIndexCoverage({
+    graphScan: scanned,
+    docsScan
+  });
+  const freshness = coverage.some((item) => item.state === "partial" || item.state === "refreshing")
+    ? "refreshing"
+    : "fresh";
+
   await input.snapshots.markSnapshotFreshness({
     snapshot_id: snapshotId,
-    freshness: "fresh"
+    freshness
   });
 
   return {
@@ -241,8 +263,81 @@ export async function indexRepositoryGraph(input: {
       (total, batch) => total + batch.unresolved_references.length,
       0
     ),
-    truncated: scanned.truncated
+    truncated: scanned.truncated,
+    coverage
   };
+}
+
+function mergeDocsIndexFiles(input: {
+  graphFiles: readonly FileCatalogEntry[];
+  docsFiles: readonly FileCatalogEntry[];
+}): FileCatalogEntry[] {
+  const byPath = new Map<string, FileCatalogEntry>();
+  for (const file of [...input.graphFiles, ...input.docsFiles]) {
+    if (file.file_identity.language === "markdown") {
+      byPath.set(file.path, file);
+    }
+  }
+  return [...byPath.values()].sort(compareDocsIndexFiles);
+}
+
+function compareDocsIndexFiles(left: FileCatalogEntry, right: FileCatalogEntry): number {
+  return docsIndexRank(right.path) - docsIndexRank(left.path) || left.path.localeCompare(right.path);
+}
+
+function docsIndexRank(filePath: string): number {
+  const lower = filePath.toLowerCase();
+  if (lower === "agents.md") return 100;
+  if (lower === "readme.md") return 95;
+  if (lower.startsWith("docs/")) return 90;
+  if (lower.startsWith("doc/") || lower.startsWith("documentation/")) return 85;
+  return 10;
+}
+
+function buildIndexCoverage(input: {
+  graphScan: {
+    files: readonly FileCatalogEntry[];
+    indexed_roots: readonly string[];
+    truncated: boolean;
+  };
+  docsScan?: {
+    files: readonly FileCatalogEntry[];
+    indexed_roots: readonly string[];
+    truncated: boolean;
+  };
+}): readonly IndexCoverage[] {
+  const graphCoverage = {
+    evidence_class: "graph" as const,
+    state: coverageState(input.graphScan.truncated),
+    indexed_files: input.graphScan.files.length,
+    eligible_files_seen: input.graphScan.files.length,
+    scan_truncated: input.graphScan.truncated,
+    indexed_roots: [...input.graphScan.indexed_roots],
+    reason: input.graphScan.truncated
+      ? "Graph seed scan reached its file budget before covering the full repository."
+      : "Graph seed scan covered the requested roots."
+  };
+  const docsCoverage = input.docsScan === undefined
+    ? undefined
+    : {
+        evidence_class: "docs" as const,
+        state: coverageState(input.docsScan.truncated),
+        indexed_files: input.docsScan.files.filter((file) => file.file_identity.language === "markdown").length,
+        eligible_files_seen: input.docsScan.files.length,
+        scan_truncated: input.docsScan.truncated,
+        indexed_roots: [...input.docsScan.indexed_roots],
+        missing_priority_roots: DOCS_INDEX_ROOTS.filter((root) =>
+          !input.docsScan?.files.some((file) => file.path === root || file.path.startsWith(`${root}/`))
+        ),
+        reason: input.docsScan.truncated
+          ? "Docs index scan reached its file budget before covering all docs priority roots."
+          : "Docs index scan covered docs priority roots independently from graph seed order."
+      };
+  return docsCoverage === undefined ? [graphCoverage] : [docsCoverage, graphCoverage];
+}
+
+function coverageState(truncated: boolean): EvidenceCoverageState {
+  return truncated ? "partial" : "complete";
 }
 
 function augmentTemplateHandlerRouting(input: {

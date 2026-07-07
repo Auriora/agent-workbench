@@ -247,7 +247,7 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
-  it("characterizes docs omitted when startup scan truncates before the docs root", async () => {
+  it("indexes docs when startup graph scan truncates before the docs root", async () => {
     const repoRoot = path.join(dir, "docs-after-startup-cap");
     fs.mkdirSync(path.join(repoRoot, "src"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "docs", "data-flow", "processed"), { recursive: true });
@@ -299,24 +299,46 @@ describe("repository graph extraction pipeline", () => {
 
       expect(result).toMatchObject({
         scanned_files: 3,
-        truncated: true
+        truncated: true,
+        coverage: [
+          expect.objectContaining({
+            evidence_class: "docs",
+            state: "complete",
+            indexed_files: 1,
+            scan_truncated: false
+          }),
+          expect.objectContaining({
+            evidence_class: "graph",
+            state: "partial",
+            indexed_files: 3,
+            scan_truncated: true
+          })
+        ]
       });
       expect(snapshot).toMatchObject({
         id: "103",
-        freshness: "fresh"
+        freshness: "refreshing"
       });
       expect(files.map((file) => file.path)).not.toContain("docs/data-flow/processed/analytics-serving-boundary.md");
       expect(docsState).toMatchObject({
-        status: "cold",
-        freshness: "cold",
-        document_count: 0,
-        reason: expect.stringContaining("No Markdown documents were indexed")
+        status: "usable",
+        freshness: "refreshing",
+        coverage_state: "partial",
+        document_count: 1,
+        reason: expect.stringContaining("refreshing graph snapshot")
       });
       expect(docsSearch).toMatchObject({
-        status: "blocked",
-        hits: [],
-        result_count: 0,
-        message: expect.stringContaining("No Markdown documents were indexed")
+        status: "done",
+        freshness: "refreshing",
+        docs_index_state: "partial",
+        indexed_docs_count: 1,
+        result_count_basis: "page",
+        hits: [
+          expect.objectContaining({
+            path: "docs/data-flow/processed/analytics-serving-boundary.md"
+          })
+        ],
+        result_count: 1
       });
     } finally {
       store.close();

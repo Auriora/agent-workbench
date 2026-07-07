@@ -22,8 +22,8 @@ deferral behavior.
 | Gate | Required? | Status | Evidence |
 | --- | --- | --- | --- |
 | Requirements acceptance criteria reviewed | yes | pending | Requirements drafted. |
-| Task evidence complete | yes | partial | T001, T002, and T003 complete for Phase 1; implementation tasks pending. |
-| Automated tests pass or alternate verification recorded | yes | partial | Phase 1 validation ran successfully; implementation validation remains pending. |
+| Task evidence complete | yes | partial | T001 through T006 complete; T007 through T010 remain pending. |
+| Automated tests pass or alternate verification recorded | yes | partial | Phase 2 focused validation ran successfully; completion, promotion, and closure validation remain pending. |
 | Durable documentation updates identified | yes | pending | `change-impact.md` lists targets. |
 | Durable documentation promoted or explicitly deferred | yes | pending | Pending implementation. |
 | Spec cleanup decision recorded | yes | pending | Pending implementation and promotion. |
@@ -33,39 +33,39 @@ deferral behavior.
 
 | Command | Purpose | Result | Evidence |
 | --- | --- | --- | --- |
-| `pnpm typecheck` | TypeScript contract and compile validation. | pending | |
-| `pnpm test -- tests/docs/query-docs.test.ts tests/docs/fts-docs-search-fixtures.test.ts` | Docs search and FTS behavior. | pending | |
-| `pnpm test -- tests/graph/extraction-pipeline.test.ts` | Graph/docs indexing pipeline behavior. | passed | Ran full Vitest suite in this repo setup: 78 files, 569 tests passed. |
+| `pnpm typecheck` | TypeScript contract and compile validation. | passed | `tsc --noEmit` passed after Phase 2 contract and presenter changes. |
+| `pnpm test -- tests/docs/query-docs.test.ts tests/docs/fts-docs-search-fixtures.test.ts` | Docs search and FTS behavior. | passed | Covered by focused Phase 2 Vitest run; command ran 78 files and 570 tests in this repo setup. |
+| `pnpm test -- tests/graph/extraction-pipeline.test.ts` | Graph/docs indexing pipeline behavior. | passed | Phase 2 run updated the large-repo fixture to pass with docs indexed and graph coverage reported non-complete; command ran 78 files and 570 tests in this repo setup. |
 | `pnpm test -- tests/runtime/process-workspace-change-queue.test.ts tests/runtime/status.test.ts` | Warmup, watcher, and freshness states. | pending | |
-| `pnpm test -- tests/mcp/docs-surfaces.test.ts tests/mcp/repo-status-resource.test.ts tests/mcp/trust-golden.test.ts` | Public MCP and trust metadata behavior. | pending | |
+| `pnpm test -- tests/mcp/docs-surfaces.test.ts tests/mcp/repo-status-resource.test.ts tests/mcp/trust-golden.test.ts` | Public MCP and trust metadata behavior. | partial | `tests/mcp/stdio-entrypoint.test.ts` was covered by the focused Phase 2 run; remaining listed MCP surfaces are pending T008. |
 | `pnpm test` | Full regression suite. | pending | Run before closure unless explicitly waived. |
 
 ## Requirement Coverage
 
 | Requirement | Acceptance criteria covered | Evidence | Residual risk |
 | --- | --- | --- | --- |
-| Requirement 1 | characterization | Phase 1 test records truncated warmup reporting fresh. | Truncated snapshot may still overclaim until fixed. |
-| Requirement 2 | characterization | Phase 1 test records docs search blocked when durable docs are outside graph seed scan. | Docs search may stay sparse in large repos until fixed. |
-| Requirement 3 | pending | Pending completion or durable deferral decision. | Tail files may remain unindexed unless completion is implemented. |
-| Requirement 4 | characterization | Phase 1 test records blocked docs search with zero hits and no useful partial coverage metadata. | Agents may misread result counts or sparse hits. |
-| Requirement 5 | partial | Large-repo truncation fixture exists in `tests/graph/extraction-pipeline.test.ts`; additional Phase 2 passing behavior remains pending. | Regression risk remains until implementation fixes the behavior. |
+| Requirement 1 | implemented-not-promoted | Truncated graph seed snapshots now report `refreshing` and index coverage metadata instead of complete freshness. | Durable docs still need promotion. |
+| Requirement 2 | implemented-not-promoted | Large-repo fixture now finds durable `docs/**` content from docs-priority indexing while graph seed coverage is non-complete. | Durable docs still need promotion. |
+| Requirement 3 | partially-implemented | Non-complete graph seed coverage is now reported; T007 still owns completion executor or durable deferral. | Tail files remain unindexed until completion is implemented or routed. |
+| Requirement 4 | implemented-not-promoted | `docs_search` reports count basis, docs-index state, indexed docs count, coverage notes, and partial-coverage next actions. | Remaining MCP golden/docs-surface validation is deferred to T008. |
+| Requirement 5 | implemented-not-promoted | Large-repo fixture now proves the fixed docs-search behavior and coverage metadata. | T007 still owns completion/deferral proof. |
 
 ## Correctness Property Coverage
 
 | Property | Covered by | Evidence | Residual risk |
 | --- | --- | --- | --- |
-| CP-001 | Characterization test covers current unsafe state. | `tests/graph/extraction-pipeline.test.ts` | High until implemented. |
-| CP-002 | Characterization test covers graph fresh vs docs cold mismatch. | `tests/graph/extraction-pipeline.test.ts` | High until implemented. |
-| CP-003 | Characterization test covers docs omitted outside source graph seed scan. | `tests/graph/extraction-pipeline.test.ts` | High until implemented. |
+| CP-001 | Phase 2 graph extraction and stdio tests. | `tests/graph/extraction-pipeline.test.ts`; `tests/mcp/stdio-entrypoint.test.ts` | Durable promotion remains. |
+| CP-002 | Phase 2 docs-search and graph extraction tests. | `tests/docs/query-docs.test.ts`; `tests/graph/extraction-pipeline.test.ts` | T007 still owns completion/deferral. |
+| CP-003 | Phase 2 large-repo docs-priority fixture. | `tests/graph/extraction-pipeline.test.ts` | Durable promotion remains. |
 | CP-004 | Pending completion-state tests or durable deferral. | | Medium to high depending implementation scope. |
 
 ## Scope Reconciliation Before Closure
 
 | Broad requirement, design target, or review finding | Implemented in this spec | Coverage state | Deferred or rejected work | Destination | Blocks closure? | Evidence |
 | --- | --- | --- | --- | --- | --- | --- |
-| Docs-first searchable index | none yet | not-covered | None accepted yet. | none | yes | Pending. |
-| Partial/truncated freshness semantics | none yet | not-covered | None accepted yet. | none | yes | Pending. |
-| Resumable completion over remaining files | none yet | partial-blocking | May be routed only if partial state is correct and durable follow-up exists. | pending | yes | Pending. |
+| Docs-first searchable index | T004 | implemented-not-promoted | None accepted yet. | T009 durable docs | yes | Focused Phase 2 Vitest run passed. |
+| Partial/truncated freshness semantics | T005, T006 | implemented-not-promoted | None accepted yet. | T009 durable docs | yes | Focused Phase 2 Vitest run passed. |
+| Resumable completion over remaining files | T005 reporting only | partial-blocking | Completion executor remains undecided. | T007 | yes | Non-complete graph coverage is explicit. |
 | Query ranking/tokenization improvements beyond coverage semantics | none | out-of-scope | Synonyms, stemming, and domain dictionaries are not required. | none | no | Requirements non-goals. |
 
 ## Agent Readiness Evidence
@@ -87,9 +87,9 @@ deferral behavior.
 | T001 | complete | Spec package created. | No code implementation yet. |
 | T002 | complete | Dynamic large-repo fixture added in `tests/graph/extraction-pipeline.test.ts`. | Fixture is generated at test runtime to avoid large checked-in files. |
 | T003 | complete | Characterization assertions added for truncated fresh snapshot, missing durable docs catalog entry, cold docs index, and blocked docs search. | Phase 2 must invert the unsafe behavior. |
-| T004 | pending | | |
-| T005 | pending | | |
-| T006 | pending | | |
+| T004 | complete | Docs-priority indexing added in `index-repository-graph.ts`; large-repo fixture finds durable docs outside graph seed scan. | Durable promotion remains. |
+| T005 | complete | Additive coverage contracts, graph result coverage, refreshing freshness for truncated graph seed, and docs-search metadata added. | T007 still owns completion/deferral. |
+| T006 | complete | `docs_search` count basis, docs-index state, indexed docs count, coverage notes, and partial-coverage next action covered by tests. | Broader MCP golden validation remains in T008. |
 | T007 | pending | | |
 | T008 | pending | | |
 | T009 | pending | | |
@@ -105,6 +105,10 @@ deferral behavior.
 | 2026-07-07 | Added Phase 1 characterization test in `tests/graph/extraction-pipeline.test.ts`. | passed | Reproduces docs omission when startup scan truncates before `docs/`. |
 | 2026-07-07 | `pnpm test -- tests/graph/extraction-pipeline.test.ts` | passed | Vitest ran 78 files and 569 tests successfully in this repo setup. |
 | 2026-07-07 | `pnpm test -- tests/docs/docs-links-metadata.test.ts` | passed | Vitest ran 78 files and 569 tests successfully in this repo setup after spec evidence updates. |
+| 2026-07-07 | Implemented Phase 2 docs-priority indexing and additive coverage metadata. | passed | T004 through T006 complete in code/tests. |
+| 2026-07-07 | `pnpm typecheck` | passed | TypeScript compile validation passed. |
+| 2026-07-07 | `pnpm test -- tests/graph/extraction-pipeline.test.ts tests/docs/query-docs.test.ts tests/docs/fts-docs-search-fixtures.test.ts tests/mcp/stdio-entrypoint.test.ts` | passed | Vitest ran 78 files and 570 tests successfully in this repo setup. |
+| 2026-07-07 | `pnpm test -- tests/docs/docs-links-metadata.test.ts` | failed | Command expanded into a broad 319s Vitest run; 65 files passed, 6 files failed from timeout/worker issues in architecture, graph store, hook, and Kiro integration tests unrelated to Phase 2 docs-first indexing. |
 
 ## Manual Or External Verification
 

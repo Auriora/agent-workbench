@@ -407,6 +407,7 @@ export const PUBLIC_NEXT_ACTION_TOOLS = [
   "context_for_task",
   "diagnostics_for_files",
   "docs_current_for_task",
+  "docs_map",
   "docs_outline",
   "docs_read_section",
   "docs_search",

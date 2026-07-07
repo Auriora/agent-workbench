@@ -300,6 +300,61 @@ describe("docs query application contracts", () => {
       expect(search.truncated).toBe(true);
       expect(search.cursor).toEqual(expect.any(String));
       expect(search.result_count).toBe(1);
+      expect(search.result_count_basis).toBe("page");
+      expect(search.docs_index_state).toBe("complete");
+      expect(search.indexed_docs_count).toBeGreaterThan(0);
+    } finally {
+      store.close();
+      fixture.dispose();
+    }
+  });
+
+  it("keeps docs search usable with partial coverage metadata during graph refresh", async () => {
+    const fixture = copyFixture();
+    const store = await indexFixtureDocs(fixture.root);
+    try {
+      await store.markSnapshotFreshness({
+        snapshot_id: "9001",
+        freshness: "refreshing",
+        reason: "Graph seed scan is still completing."
+      });
+
+      const result = await searchDocs({
+        request: {
+          repo_root: fixture.root,
+          query: "rollback",
+          max_results: 2,
+          include_snippets: false
+        },
+        docs_index: store,
+        default_repo_root: "."
+      });
+      const search = docsSearchResultSchema.parse(result.search);
+
+      expect(search.status).toBe("done");
+      expect(search.hits.map((hit) => hit.path)).toContain("docs/operations/runbook.md");
+      expect(search).toMatchObject({
+        result_count_basis: "page",
+        docs_index_state: "partial",
+        docs_scan_truncated: false,
+        coverage_note: expect.stringContaining("refreshing graph snapshot")
+      });
+      expect(result.meta).toMatchObject({
+        analysis_validity: "partial",
+        freshness: "refreshing",
+        index_coverage: [
+          expect.objectContaining({
+            evidence_class: "docs",
+            state: "partial",
+            indexed_files: expect.any(Number)
+          })
+        ]
+      });
+      expect(search.next_actions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ tool: "docs_map" })
+        ])
+      );
     } finally {
       store.close();
       fixture.dispose();

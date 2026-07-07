@@ -12,6 +12,7 @@ import {
   documentReferenceSchema,
   documentStatusSchema,
   evidenceKindSchema,
+  evidenceCoverageStateSchema,
   nextActionSchema,
   skippedPathReasonSchema,
   verificationStatusSchema
@@ -251,6 +252,11 @@ export const docsSearchResultSchema = z
     truncated: z.boolean(),
     cursor: z.string().optional(),
     result_count: z.number().int().nonnegative().optional(),
+    result_count_basis: z.enum(["page", "indexed_matches"]).optional(),
+    docs_index_state: evidenceCoverageStateSchema.optional(),
+    indexed_docs_count: z.number().int().nonnegative().optional(),
+    docs_scan_truncated: z.boolean().optional(),
+    coverage_note: z.string().optional(),
     next_actions: z.array(nextActionSchema)
   })
   .strict();

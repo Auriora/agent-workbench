@@ -43,6 +43,7 @@ import type {
   DocsDocument,
   DocsHeading,
   DocsSearchHit,
+  EvidenceCoverageState,
   EditToken,
   Freshness,
   IntegrationArtifact,
@@ -377,6 +378,7 @@ export type DocsIndexState = {
   snapshot_id?: string;
   freshness: Freshness;
   status: "usable" | "cold" | "stale" | "invalid" | "unavailable";
+  coverage_state?: EvidenceCoverageState;
   reason?: string;
   document_count: number;
 };
@@ -400,6 +402,11 @@ export type DocsIndexSearchResult =
       truncated: boolean;
       cursor?: string;
       result_count: number;
+      result_count_basis?: "page" | "indexed_matches";
+      docs_index_state?: EvidenceCoverageState;
+      indexed_docs_count?: number;
+      docs_scan_truncated?: boolean;
+      coverage_note?: string;
     }
   | {
       status: "blocked";
@@ -412,6 +419,11 @@ export type DocsIndexSearchResult =
       truncated: false;
       cursor?: undefined;
       result_count: 0;
+      result_count_basis?: "page" | "indexed_matches";
+      docs_index_state?: EvidenceCoverageState;
+      indexed_docs_count?: number;
+      docs_scan_truncated?: boolean;
+      coverage_note?: string;
     };
 
 export type GitFileHistoryResult =

@@ -1387,6 +1387,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         repo_root: input.repo_root,
         freshness: "cold",
         status: "cold",
+        coverage_state: "blocked",
         reason: "No graph snapshot is available, so docs FTS evidence is cold.",
         document_count: 0
       };
@@ -1399,6 +1400,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         snapshot_id: snapshot.id,
         freshness: snapshot.freshness,
         status: "invalid",
+        coverage_state: "blocked",
         reason: "Snapshot id could not be resolved for docs FTS evidence.",
         document_count: 0
       };
@@ -1408,6 +1410,17 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       .prepare("SELECT COUNT(*) AS count FROM docs_documents WHERE snapshot_id = @snapshotId")
       .get({ snapshotId }) as { count: number } | undefined;
     const documentCount = row?.count ?? 0;
+    if (snapshot.freshness === "refreshing" && documentCount > 0) {
+      return {
+        repo_root: snapshot.repo_root,
+        snapshot_id: snapshot.id,
+        freshness: "refreshing",
+        status: "usable",
+        coverage_state: "partial",
+        reason: "Docs FTS evidence is usable from a refreshing graph snapshot; graph coverage may still be partial.",
+        document_count: documentCount
+      };
+    }
     if (snapshot.freshness !== "fresh" && input.snapshot_id === undefined) {
       const usable = this.getLatestUsableDocsSnapshotByRepo(input.repo_root);
       if (usable !== undefined) {
@@ -1416,6 +1429,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           snapshot_id: String(usable.id),
           freshness: "fresh",
           status: "usable",
+          coverage_state: "complete",
           document_count: usable.document_count
         };
       }
@@ -1427,6 +1441,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         snapshot_id: snapshot.id,
         freshness: snapshot.freshness,
         status: "stale",
+        coverage_state: "stale",
         reason: `Docs FTS evidence depends on a ${snapshot.freshness} graph snapshot.`,
         document_count: documentCount
       };
@@ -1437,6 +1452,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         snapshot_id: snapshot.id,
         freshness: "cold",
         status: "cold",
+        coverage_state: "blocked",
         reason: "No Markdown documents were indexed into docs FTS for this snapshot.",
         document_count: 0
       };
@@ -1446,6 +1462,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       snapshot_id: snapshot.id,
       freshness: "fresh",
       status: "usable",
+      coverage_state: "complete",
       document_count: documentCount
     };
   }
@@ -1462,7 +1479,12 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         message: state.reason ?? "Docs FTS evidence is not usable.",
         hits: [],
         truncated: false,
-        result_count: 0
+        result_count: 0,
+        result_count_basis: "page",
+        docs_index_state: state.coverage_state,
+        indexed_docs_count: state.document_count,
+        docs_scan_truncated: false,
+        coverage_note: state.reason
       };
     }
 
@@ -1477,7 +1499,12 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         message: "Snapshot id could not be resolved for docs FTS search.",
         hits: [],
         truncated: false,
-        result_count: 0
+        result_count: 0,
+        result_count_basis: "page",
+        docs_index_state: "blocked",
+        indexed_docs_count: state.document_count,
+        docs_scan_truncated: false,
+        coverage_note: "Snapshot id could not be resolved for docs FTS search."
       };
     }
 
@@ -1493,7 +1520,12 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         message: "Docs search cursor belongs to a different snapshot.",
         hits: [],
         truncated: false,
-        result_count: 0
+        result_count: 0,
+        result_count_basis: "page",
+        docs_index_state: state.coverage_state,
+        indexed_docs_count: state.document_count,
+        docs_scan_truncated: false,
+        coverage_note: "Docs search cursor belongs to a different snapshot."
       };
     }
     if (cursor !== undefined && cursor.scope_path !== scopePath) {
@@ -1506,7 +1538,12 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         message: "Docs search cursor belongs to a different scope_path.",
         hits: [],
         truncated: false,
-        result_count: 0
+        result_count: 0,
+        result_count_basis: "page",
+        docs_index_state: state.coverage_state,
+        indexed_docs_count: state.document_count,
+        docs_scan_truncated: false,
+        coverage_note: "Docs search cursor belongs to a different scope_path."
       };
     }
 
@@ -1520,7 +1557,12 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         freshness: state.freshness,
         hits: [],
         truncated: false,
-        result_count: 0
+        result_count: 0,
+        result_count_basis: "page",
+        docs_index_state: state.coverage_state,
+        indexed_docs_count: state.document_count,
+        docs_scan_truncated: false,
+        coverage_note: state.reason
       };
     }
 
@@ -1576,7 +1618,12 @@ export class SqliteGraphStoreAdapter implements GraphStore {
             offset: offset + input.max_results
           })
         : undefined,
-      result_count: hits.length
+      result_count: hits.length,
+      result_count_basis: "page",
+      docs_index_state: state.coverage_state,
+      indexed_docs_count: state.document_count,
+      docs_scan_truncated: false,
+      coverage_note: state.reason
     };
   }
 
