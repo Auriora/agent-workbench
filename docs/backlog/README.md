@@ -3,7 +3,7 @@ title: Agent Workbench backlog
 doc_type: backlog
 status: draft
 owner: platform
-last_reviewed: 2026-07-05
+last_reviewed: 2026-07-07
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -480,7 +480,10 @@ or runtime telemetry.
   traversal fixes, but full graph warmup remained CPU-bound for more than four
   minutes while the snapshot stayed
   `refreshing`; the run had already written roughly 159k nodes and 247k edges
-  before it was stopped.
+  before it was stopped. Spec 036 fixed docs-first searchability and explicit
+  non-complete graph coverage for bounded first-pass warmup, but deliberately
+  deferred a persisted completion executor for files beyond the first-pass graph
+  budget to this backlog item.
 - Runtime surface: MCP startup warmup, `repo:///status`, graph extraction,
   graph write batching, docs indexing, runtime telemetry, and cache/snapshot
   state.
@@ -496,6 +499,10 @@ or runtime telemetry.
   - Re-running warmup after an interrupted large-repo run should either resume
     safely or replace the incomplete snapshot atomically with clear ownership
     and freshness state.
+  - A bounded first-pass graph warmup that stops before all eligible files are
+    indexed should have one production completion path with durable cursor,
+    owner, cancellation, retry, and stale-repository semantics; until that path
+    exists, public metadata must continue to report non-complete graph coverage.
   - Performance fixes must not add parser, semantic, or command-execution
     fallbacks; they should address the actual indexing/write bottleneck.
 - Validation:

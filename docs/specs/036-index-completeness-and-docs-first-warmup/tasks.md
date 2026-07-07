@@ -206,7 +206,7 @@ T009 -> T010
 **Purpose**: Decide whether bounded warmup is a first phase or an explicit
 partial state.
 
-- [ ] T007 Implement resumable completion or record a durable partial-state
+- [x] T007 Implement resumable completion or record a durable partial-state
   deferral.
   - Depends on: T006
   - Requirement: Requirement 3
@@ -217,20 +217,31 @@ partial state.
   - Acceptance: Files beyond the first-pass graph budget are either completed
     by a production execution path or the public state remains explicitly
     partial with one durable follow-up destination.
-  - Evidence: Pending.
-  - [ ] T007.1 Decide and record whether this spec implements completion or
+  - Evidence: Completion executor is deferred to `docs/backlog/README.md`
+    EB014. Phase 2 public metadata keeps bounded graph seed evidence explicitly
+    non-complete via `refreshing` freshness and coverage state, so files beyond
+    the first-pass graph budget are not presented as indexed.
+  - Destination: `docs/backlog/README.md` EB014
+  - [x] T007.1 Decide and record whether this spec implements completion or
     durable deferral.
     - Decision owner: platform
     - Evidence mode: planner
-    - Evidence: Pending.
-  - [ ] T007.2 If implementing completion, add the production execution path and
+    - Evidence: `docs/backlog/README.md` EB014 is the durable destination for
+      the persisted graph completion executor; this spec keeps public graph
+      state non-complete via `refreshing` freshness until that EB014 work is
+      implemented.
+  - [-] T007.2 If implementing completion, add the production execution path and
     tests proving planned work runs.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T007.3 If deferring completion, update durable backlog and ensure public
+    - Evidence: No-op for this phase because completion executor work is routed
+      to EB014 rather than implemented here.
+  - [x] T007.3 If deferring completion, update durable backlog and ensure public
     metadata remains explicitly partial.
     - Evidence mode: routing
-    - Evidence: Pending.
+    - Evidence: EB014 now names the Spec 036 deferral and requires a production
+      completion path with durable cursor, owner, cancellation, retry, and
+      stale-repository semantics; Phase 2 tests verify `refreshing` state for
+      truncated graph warmup.
 
 ## Phase 4: Validation And Durable Promotion
 
