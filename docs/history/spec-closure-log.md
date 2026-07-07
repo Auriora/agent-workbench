@@ -391,7 +391,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/036-index-completeness-and-docs-first-warmup
 - **Title:** Index completeness and docs-first warmup
 - **Final spec commit:** 6240281
-- **Closure cleanup commit:** pending-cleanup-commit
+- **Closure cleanup commit:** 2c0f59be1ba5
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/runtime-operations-design.md`
