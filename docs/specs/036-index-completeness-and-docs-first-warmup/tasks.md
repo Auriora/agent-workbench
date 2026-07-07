@@ -40,50 +40,69 @@ T009 -> T010
     and verification artifacts.
   - Evidence: Created in this slice.
 
-- [ ] T002 Add a large-repo fixture that reproduces docs omission under the
+- [x] T002 Add a large-repo fixture that reproduces docs omission under the
   current warmup cap.
   - Depends on: T001
   - Requirement: Requirement 5
   - Files: `tests/fixtures/...`, `tests/docs/...` or `tests/graph/...`
   - Acceptance: Test fixture places enough source/config files before `docs/`
     that current source-graph warmup omits durable docs.
-  - Evidence: Pending.
-  - [ ] T002.1 Create fixture files that exceed the graph seed budget before
+  - Evidence: `tests/graph/extraction-pipeline.test.ts` creates a temporary
+    `src/`-first repository with five Python files, a `max_files: 3` warmup
+    cap, and a durable Markdown document under `docs/data-flow/processed/`.
+  - [x] T002.1 Create fixture files that exceed the graph seed budget before
     `docs/` is reached.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T002.2 Add a durable Markdown document containing a unique search term
+    - Evidence: Dynamic fixture creates `src/file_0.py` through
+      `src/file_4.py` and runs warmup with `max_files: 3`.
+  - [x] T002.2 Add a durable Markdown document containing a unique search term
     under `docs/`.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T002.3 Document fixture intent in the test name or helper comments so
+    - Evidence: Dynamic fixture writes
+      `docs/data-flow/processed/analytics-serving-boundary.md` with
+      `unique-docs-first-warmup-needle`.
+  - [x] T002.3 Document fixture intent in the test name or helper comments so
     future maintainers understand the warmup-cap regression.
     - Evidence mode: validation
-    - Evidence: Pending.
+    - Evidence: Test name is
+      `characterizes docs omitted when startup scan truncates before the docs root`.
 
-- [ ] T003 Add failing or characterization tests for current unsafe semantics.
+- [x] T003 Add failing or characterization tests for current unsafe semantics.
   - Depends on: T002
   - Requirement: Requirements 1, 2, 4, 5
   - Files: `tests/docs`, `tests/graph`, `tests/runtime`, `tests/mcp`
   - Acceptance: Tests prove either docs are found despite graph budget or
     partial coverage is reported. Current behavior should fail or be explicitly
     characterized before implementation.
-  - Evidence: Pending.
-  - [ ] T003.1 Cover `docs_search` behavior when durable docs exist outside the
+  - Evidence: `tests/graph/extraction-pipeline.test.ts` now characterizes the
+    current unsafe behavior: truncated warmup reports `fresh`, the durable docs
+    file is absent from catalog evidence, docs index state is `cold`, and
+    `docs_search` blocks with zero hits for the unique durable-doc term.
+    Existing `tests/runtime/process-workspace-change-queue.test.ts` covers
+    bounded rescan scheduling without executing completion work.
+  - [x] T003.1 Cover `docs_search` behavior when durable docs exist outside the
     graph seed scan.
     - Evidence mode: validation
-    - Evidence: Pending.
-  - [ ] T003.2 Cover truncated warmup metadata and ensure it cannot be reported
+    - Evidence: Characterization test records current `docs_search` behavior
+      for `unique-docs-first-warmup-needle`: the search returns no hits and
+      names that no Markdown documents were indexed.
+  - [x] T003.2 Cover truncated warmup metadata and ensure it cannot be reported
     as complete freshness.
     - Evidence mode: validation
-    - Evidence: Pending.
-  - [ ] T003.3 Cover separate docs-index and graph-index coverage states.
+    - Evidence: Characterization test asserts `result.truncated === true` while
+      the snapshot still reports `fresh`, documenting the unsafe current
+      semantic that Phase 2 must change.
+  - [x] T003.3 Cover separate docs-index and graph-index coverage states.
     - Evidence mode: validation
-    - Evidence: Pending.
-  - [ ] T003.4 Cover watcher/completion planning behavior or prove explicit
+    - Evidence: Characterization test records the current mismatch: the graph
+      snapshot is `fresh` while docs-index state is `cold` with
+      `document_count: 0`.
+  - [x] T003.4 Cover watcher/completion planning behavior or prove explicit
     partial state remains when no executor exists.
     - Evidence mode: validation
-    - Evidence: Pending.
+    - Evidence: Existing `tests/runtime/process-workspace-change-queue.test.ts`
+      covers `stale_rescan_scheduled` and planned warmup reuse; no production
+      completion executor is added in Phase 1.
 
 ## Phase 2: Docs-First And Partial Coverage Foundation
 

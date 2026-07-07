@@ -247,6 +247,82 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
+  it("characterizes docs omitted when startup scan truncates before the docs root", async () => {
+    const repoRoot = path.join(dir, "docs-after-startup-cap");
+    fs.mkdirSync(path.join(repoRoot, "src"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "docs", "data-flow", "processed"), { recursive: true });
+    for (let index = 0; index < 5; index += 1) {
+      fs.writeFileSync(
+        path.join(repoRoot, "src", `file_${index}.py`),
+        `def file_${index}() -> str:\n    return "file_${index}"\n`
+      );
+    }
+    fs.writeFileSync(
+      path.join(repoRoot, "docs", "data-flow", "processed", "analytics-serving-boundary.md"),
+      [
+        "# Analytics Serving Boundary",
+        "",
+        "unique-docs-first-warmup-needle",
+        ""
+      ].join("\n")
+    );
+    const store = openGraphStore(path.join(dir, "docs-after-startup-cap.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new PythonTreeSitterExtractorAdapter());
+
+    try {
+      const result = await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        docs_index: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "103",
+        max_files: 3
+      });
+
+      const snapshot = await store.getSnapshot({ repo_root: repoRoot });
+      const files = await store.listFiles({ snapshot_id: "103", max_rows: 20 });
+      const docsState = await store.getState({ repo_root: repoRoot });
+      const docsSearch = await store.search({
+        repo_root: repoRoot,
+        query: "unique-docs-first-warmup-needle",
+        max_results: 5,
+        include_snippets: false
+      });
+
+      expect(result).toMatchObject({
+        scanned_files: 3,
+        truncated: true
+      });
+      expect(snapshot).toMatchObject({
+        id: "103",
+        freshness: "fresh"
+      });
+      expect(files.map((file) => file.path)).not.toContain("docs/data-flow/processed/analytics-serving-boundary.md");
+      expect(docsState).toMatchObject({
+        status: "cold",
+        freshness: "cold",
+        document_count: 0,
+        reason: expect.stringContaining("No Markdown documents were indexed")
+      });
+      expect(docsSearch).toMatchObject({
+        status: "blocked",
+        hits: [],
+        result_count: 0,
+        message: expect.stringContaining("No Markdown documents were indexed")
+      });
+    } finally {
+      store.close();
+    }
+  });
+
   it("yields to the event loop while indexing large repositories", async () => {
     const repoRoot = path.join(dir, "yield-repo");
     const store = openGraphStore(path.join(dir, "yield.sqlite"));

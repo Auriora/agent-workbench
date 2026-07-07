@@ -22,8 +22,8 @@ deferral behavior.
 | Gate | Required? | Status | Evidence |
 | --- | --- | --- | --- |
 | Requirements acceptance criteria reviewed | yes | pending | Requirements drafted. |
-| Task evidence complete | yes | pending | T001 complete; implementation tasks pending. |
-| Automated tests pass or alternate verification recorded | yes | pending | No implementation validation yet. |
+| Task evidence complete | yes | partial | T001, T002, and T003 complete for Phase 1; implementation tasks pending. |
+| Automated tests pass or alternate verification recorded | yes | partial | Phase 1 validation ran successfully; implementation validation remains pending. |
 | Durable documentation updates identified | yes | pending | `change-impact.md` lists targets. |
 | Durable documentation promoted or explicitly deferred | yes | pending | Pending implementation. |
 | Spec cleanup decision recorded | yes | pending | Pending implementation and promotion. |
@@ -35,7 +35,7 @@ deferral behavior.
 | --- | --- | --- | --- |
 | `pnpm typecheck` | TypeScript contract and compile validation. | pending | |
 | `pnpm test -- tests/docs/query-docs.test.ts tests/docs/fts-docs-search-fixtures.test.ts` | Docs search and FTS behavior. | pending | |
-| `pnpm test -- tests/graph/extraction-pipeline.test.ts` | Graph/docs indexing pipeline behavior. | pending | |
+| `pnpm test -- tests/graph/extraction-pipeline.test.ts` | Graph/docs indexing pipeline behavior. | passed | Ran full Vitest suite in this repo setup: 78 files, 569 tests passed. |
 | `pnpm test -- tests/runtime/process-workspace-change-queue.test.ts tests/runtime/status.test.ts` | Warmup, watcher, and freshness states. | pending | |
 | `pnpm test -- tests/mcp/docs-surfaces.test.ts tests/mcp/repo-status-resource.test.ts tests/mcp/trust-golden.test.ts` | Public MCP and trust metadata behavior. | pending | |
 | `pnpm test` | Full regression suite. | pending | Run before closure unless explicitly waived. |
@@ -44,19 +44,19 @@ deferral behavior.
 
 | Requirement | Acceptance criteria covered | Evidence | Residual risk |
 | --- | --- | --- | --- |
-| Requirement 1 | pending | Pending tests and implementation. | Truncated snapshot may still overclaim until fixed. |
-| Requirement 2 | pending | Pending large-repo docs fixture. | Docs search may stay sparse in large repos until fixed. |
+| Requirement 1 | characterization | Phase 1 test records truncated warmup reporting fresh. | Truncated snapshot may still overclaim until fixed. |
+| Requirement 2 | characterization | Phase 1 test records docs search blocked when durable docs are outside graph seed scan. | Docs search may stay sparse in large repos until fixed. |
 | Requirement 3 | pending | Pending completion or durable deferral decision. | Tail files may remain unindexed unless completion is implemented. |
-| Requirement 4 | pending | Pending contract/presenter changes. | Agents may misread result counts or sparse hits. |
-| Requirement 5 | pending | Pending fixture-backed tests. | Regression risk remains until fixture exists. |
+| Requirement 4 | characterization | Phase 1 test records blocked docs search with zero hits and no useful partial coverage metadata. | Agents may misread result counts or sparse hits. |
+| Requirement 5 | partial | Large-repo truncation fixture exists in `tests/graph/extraction-pipeline.test.ts`; additional Phase 2 passing behavior remains pending. | Regression risk remains until implementation fixes the behavior. |
 
 ## Correctness Property Coverage
 
 | Property | Covered by | Evidence | Residual risk |
 | --- | --- | --- | --- |
-| CP-001 | Pending truncated warmup metadata tests. | | High until implemented. |
-| CP-002 | Pending separate docs/graph coverage tests. | | High until implemented. |
-| CP-003 | Pending large-repo docs fixture. | | High until implemented. |
+| CP-001 | Characterization test covers current unsafe state. | `tests/graph/extraction-pipeline.test.ts` | High until implemented. |
+| CP-002 | Characterization test covers graph fresh vs docs cold mismatch. | `tests/graph/extraction-pipeline.test.ts` | High until implemented. |
+| CP-003 | Characterization test covers docs omitted outside source graph seed scan. | `tests/graph/extraction-pipeline.test.ts` | High until implemented. |
 | CP-004 | Pending completion-state tests or durable deferral. | | Medium to high depending implementation scope. |
 
 ## Scope Reconciliation Before Closure
@@ -85,8 +85,8 @@ deferral behavior.
 | Task ID | Status | Evidence | Notes |
 | --- | --- | --- | --- |
 | T001 | complete | Spec package created. | No code implementation yet. |
-| T002 | pending | | |
-| T003 | pending | | |
+| T002 | complete | Dynamic large-repo fixture added in `tests/graph/extraction-pipeline.test.ts`. | Fixture is generated at test runtime to avoid large checked-in files. |
+| T003 | complete | Characterization assertions added for truncated fresh snapshot, missing durable docs catalog entry, cold docs index, and blocked docs search. | Phase 2 must invert the unsafe behavior. |
 | T004 | pending | | |
 | T005 | pending | | |
 | T006 | pending | | |
@@ -102,6 +102,9 @@ deferral behavior.
 | 2026-07-07 | User-reported aws-datalake Workbench docs_search sparsity and follow-up discussion. | accepted input | Root cause: bounded warmup/docs FTS coverage. |
 | 2026-07-07 | Read-only senior reviewer architecture assessment. | accepted input | Reviewer concluded hard `2000` cap is only defensible as phase budget, not correctness boundary. |
 | 2026-07-07 | Local cache inspection of aws-datalake `.cache/agent-workbench/graph.sqlite`. | observed | Docs FTS contained only front-door/config docs and no `docs/**` rows. |
+| 2026-07-07 | Added Phase 1 characterization test in `tests/graph/extraction-pipeline.test.ts`. | passed | Reproduces docs omission when startup scan truncates before `docs/`. |
+| 2026-07-07 | `pnpm test -- tests/graph/extraction-pipeline.test.ts` | passed | Vitest ran 78 files and 569 tests successfully in this repo setup. |
+| 2026-07-07 | `pnpm test -- tests/docs/docs-links-metadata.test.ts` | passed | Vitest ran 78 files and 569 tests successfully in this repo setup after spec evidence updates. |
 
 ## Manual Or External Verification
 
