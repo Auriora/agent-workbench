@@ -266,6 +266,36 @@ describe("response metadata helpers", () => {
     ]);
   });
 
+  it("allows docs map resource reads while hiding nonexistent docs_map tools", () => {
+    expect(
+      presentNextActions([
+        {
+          tool: "read_resource",
+          args: {
+            repo_root: "/repo",
+            uri: "repo:///docs/map",
+            max_docs: 50
+          }
+        },
+        {
+          tool: "docs_map",
+          args: {
+            repo_root: "/repo",
+            max_docs: 50
+          }
+        }
+      ])
+    ).toEqual([
+      {
+        tool: "read_resource",
+        args: {
+          uri: "repo:///docs/map",
+          max_docs: 50
+        }
+      }
+    ]);
+  });
+
   it("filters session-aware next actions to callable tools when discovery is provided", () => {
     const result = sessionAwareNextActions(
       [

@@ -18,6 +18,7 @@ import type {
   DocsSearchRequest,
   DocsSearchResult,
   DocsWarning,
+  IndexCoverage,
   ResponseMetadata,
   SourceSection
 } from "../../contracts/index.js";
@@ -203,6 +204,7 @@ export async function searchDocs(input: {
       docsIndexState: result.docs_index_state,
       indexedDocsCount: result.indexed_docs_count,
       docsScanTruncated: result.docs_scan_truncated,
+      coverage: result.coverage,
       coverageNote: result.coverage_note
     })
   };
@@ -444,11 +446,16 @@ function docsSearchMeta(input: {
   docsIndexState?: "complete" | "partial" | "refreshing" | "stale" | "blocked" | "unknown";
   indexedDocsCount?: number;
   docsScanTruncated?: boolean;
+  coverage?: readonly IndexCoverage[];
   coverageNote?: string;
 }): ResponseMetadata {
   const coverageState = input.docsIndexState ?? (input.blocked ? "blocked" : "unknown");
   return {
-    analysis_validity: coverageState === "partial" || input.freshness === "refreshing" ? "partial" : "valid",
+    analysis_validity: docsAnalysisValidity({
+      coverageState,
+      freshness: input.freshness,
+      blocked: input.blocked
+    }),
     freshness: input.freshness,
     scope: {
       repo_root: input.repoRoot,
@@ -463,17 +470,37 @@ function docsSearchMeta(input: {
     budget: {
       row_limit: DOC_ROW_LIMIT
     },
-    index_coverage: [
+    index_coverage: input.coverage === undefined || input.coverage.length === 0 ? [
       {
         evidence_class: "docs",
         state: coverageState,
         indexed_files: input.indexedDocsCount,
         scan_truncated: input.docsScanTruncated,
-        indexed_roots: ["docs", "doc", "documentation"],
+        indexed_roots: ["AGENTS.md", "README.md", "docs", "doc", "documentation"],
         reason: input.coverageNote
       }
-    ]
+    ] : [...input.coverage]
   };
+}
+
+function docsAnalysisValidity(input: {
+  coverageState: "complete" | "partial" | "refreshing" | "stale" | "blocked" | "unknown";
+  freshness: ResponseMetadata["freshness"];
+  blocked: boolean;
+}): ResponseMetadata["analysis_validity"] {
+  if (input.blocked || input.coverageState === "blocked") {
+    return "invalid";
+  }
+  if (
+    input.coverageState === "complete" &&
+    input.freshness !== "refreshing" &&
+    input.freshness !== "stale" &&
+    input.freshness !== "unknown" &&
+    input.freshness !== "cold"
+  ) {
+    return "valid";
+  }
+  return "partial";
 }
 
 function docsNextActions(repoRoot: string, filePath?: string, headingId?: string) {
@@ -511,9 +538,10 @@ function docsSearchNextActions(input: {
     ...(input.partial
       ? [
           {
-            tool: "docs_map",
+            tool: "read_resource",
             args: {
               repo_root: input.repoRoot,
+              uri: "repo:///docs/map",
               max_docs: 50
             }
           }

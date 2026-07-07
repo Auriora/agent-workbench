@@ -46,6 +46,7 @@ import type {
   EvidenceCoverageState,
   EditToken,
   Freshness,
+  IndexCoverage,
   IntegrationArtifact,
   IntegrationProfile,
   MarkdownQualityFinding
@@ -357,6 +358,7 @@ export interface DocsIndexPort {
     snapshot_id: string;
     repo_root: string;
     documents: readonly DocsIndexDocumentWrite[];
+    coverage?: readonly IndexCoverage[];
   }): Promise<void>;
   search(input: DocsIndexSearchRequest): Promise<DocsIndexSearchResult>;
   getState(input: { repo_root: string; snapshot_id?: string }): Promise<DocsIndexState>;
@@ -379,6 +381,8 @@ export type DocsIndexState = {
   freshness: Freshness;
   status: "usable" | "cold" | "stale" | "invalid" | "unavailable";
   coverage_state?: EvidenceCoverageState;
+  coverage?: readonly IndexCoverage[];
+  docs_scan_truncated?: boolean;
   reason?: string;
   document_count: number;
 };
@@ -406,6 +410,7 @@ export type DocsIndexSearchResult =
       docs_index_state?: EvidenceCoverageState;
       indexed_docs_count?: number;
       docs_scan_truncated?: boolean;
+      coverage?: readonly IndexCoverage[];
       coverage_note?: string;
     }
   | {
@@ -423,6 +428,7 @@ export type DocsIndexSearchResult =
       docs_index_state?: EvidenceCoverageState;
       indexed_docs_count?: number;
       docs_scan_truncated?: boolean;
+      coverage?: readonly IndexCoverage[];
       coverage_note?: string;
     };
 

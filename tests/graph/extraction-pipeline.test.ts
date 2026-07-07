@@ -251,6 +251,8 @@ describe("repository graph extraction pipeline", () => {
     const repoRoot = path.join(dir, "docs-after-startup-cap");
     fs.mkdirSync(path.join(repoRoot, "src"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "docs", "data-flow", "processed"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "AGENTS.md"), "# Agent Instructions\n\nfront-door-agent-needle\n");
+    fs.writeFileSync(path.join(repoRoot, "README.md"), "# Project Readme\n\nfront-door-readme-needle\n");
     for (let index = 0; index < 5; index += 1) {
       fs.writeFileSync(
         path.join(repoRoot, "src", `file_${index}.py`),
@@ -296,6 +298,18 @@ describe("repository graph extraction pipeline", () => {
         max_results: 5,
         include_snippets: false
       });
+      const agentDocsSearch = await store.search({
+        repo_root: repoRoot,
+        query: "front-door-agent-needle",
+        max_results: 5,
+        include_snippets: false
+      });
+      const readmeDocsSearch = await store.search({
+        repo_root: repoRoot,
+        query: "front-door-readme-needle",
+        max_results: 5,
+        include_snippets: false
+      });
 
       expect(result).toMatchObject({
         scanned_files: 3,
@@ -304,7 +318,7 @@ describe("repository graph extraction pipeline", () => {
           expect.objectContaining({
             evidence_class: "docs",
             state: "complete",
-            indexed_files: 1,
+            indexed_files: 3,
             scan_truncated: false
           }),
           expect.objectContaining({
@@ -323,15 +337,37 @@ describe("repository graph extraction pipeline", () => {
       expect(docsState).toMatchObject({
         status: "usable",
         freshness: "refreshing",
-        coverage_state: "partial",
-        document_count: 1,
+        coverage_state: "complete",
+        document_count: 3,
         reason: expect.stringContaining("refreshing graph snapshot")
       });
+      expect(docsState.coverage).toEqual([
+        expect.objectContaining({
+          evidence_class: "docs",
+          state: "complete"
+        }),
+        expect.objectContaining({
+          evidence_class: "graph",
+          state: "partial"
+        })
+      ]);
       expect(docsSearch).toMatchObject({
         status: "done",
         freshness: "refreshing",
-        docs_index_state: "partial",
-        indexed_docs_count: 1,
+        docs_index_state: "complete",
+        indexed_docs_count: 3,
+        coverage: [
+          expect.objectContaining({
+            evidence_class: "docs",
+            state: "complete",
+            scan_truncated: false
+          }),
+          expect.objectContaining({
+            evidence_class: "graph",
+            state: "partial",
+            scan_truncated: true
+          })
+        ],
         result_count_basis: "page",
         hits: [
           expect.objectContaining({
@@ -339,6 +375,14 @@ describe("repository graph extraction pipeline", () => {
           })
         ],
         result_count: 1
+      });
+      expect(agentDocsSearch).toMatchObject({
+        status: "done",
+        hits: [expect.objectContaining({ path: "AGENTS.md" })]
+      });
+      expect(readmeDocsSearch).toMatchObject({
+        status: "done",
+        hits: [expect.objectContaining({ path: "README.md" })]
       });
     } finally {
       store.close();

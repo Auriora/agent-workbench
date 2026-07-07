@@ -188,7 +188,8 @@ T009 -> T010
     is available when coverage is partial.
   - Evidence: `docs_search` now returns `result_count_basis: page`,
     docs-index coverage fields, indexed docs count, coverage notes, and a
-    `docs_map` next action for non-complete docs coverage.
+    `read_resource` next action for `repo:///docs/map` when docs or graph
+    coverage is non-complete.
   - [x] T006.1 Clarify whether `result_count` means page count, indexed match
     count, or total available match count.
     - Evidence mode: contract
@@ -196,8 +197,9 @@ T009 -> T010
       `page` for docs FTS search results.
   - [x] T006.2 Add docs-search next actions for partial docs coverage.
     - Evidence mode: implementation
-    - Evidence: Added non-complete docs coverage next action to `docs_map` and
-      allowlisted `docs_map` as a public next-action tool.
+    - Evidence: Replaced the non-callable `docs_map` next action with
+      `read_resource` for `repo:///docs/map` and allowlisted `read_resource` as
+      a public next-action action.
   - [x] T006.3 Update docs-search tests for count and coverage semantics.
     - Evidence mode: validation
     - Evidence: `tests/docs/query-docs.test.ts` covers page-count semantics,

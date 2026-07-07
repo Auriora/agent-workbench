@@ -36,7 +36,7 @@ import {
 const MAX_TEXT_EXTRACTION_BYTES = 2_000_000;
 const MAX_DOCS_INDEX_BYTES = 120_000;
 const INDEXING_YIELD_INTERVAL = 25;
-const DOCS_INDEX_ROOTS = ["docs", "doc", "documentation"] as const;
+const DOCS_INDEX_ROOTS = ["AGENTS.md", "README.md", "docs", "doc", "documentation"] as const;
 
 export type IndexRepositoryGraphResult = {
   snapshot_id: string;
@@ -184,6 +184,10 @@ export async function indexRepositoryGraph(input: {
       });
 
   if (input.docs_index !== undefined) {
+    const coverage = buildIndexCoverage({
+      graphScan: scanned,
+      docsScan
+    });
     const documents = [];
     const docsFiles = mergeDocsIndexFiles({
       graphFiles: scanned.files,
@@ -211,7 +215,8 @@ export async function indexRepositoryGraph(input: {
     await input.docs_index.replaceSnapshotDocs({
       snapshot_id: snapshotId,
       repo_root: scanned.repo_root,
-      documents
+      documents,
+      coverage
     });
   }
 

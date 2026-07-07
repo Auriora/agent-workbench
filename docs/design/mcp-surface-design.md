@@ -339,9 +339,9 @@ intentional so warm-up, schema, or storage issues are fixed rather than hidden.
 If the docs FTS index is usable but partial or refreshing, `docs_search` may
 return hits with `analysis_validity: partial`, `freshness: refreshing`, and
 index coverage metadata. Those responses must include a next action that routes
-the agent toward direct documentation inventory or reads, such as `docs_map` or
-`docs_read_section`, instead of implying that sparse search results prove
-absence.
+the agent toward direct documentation inventory or reads, such as a
+`read_resource` action for `repo:///docs/map` or `docs_read_section`, instead
+of implying that sparse search results prove absence.
 
 `docs_outline` reads a bounded heading outline for one repo-relative Markdown
 document and returns stable heading identifiers. `docs_read_section` reads one

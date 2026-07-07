@@ -24,11 +24,6 @@ import { readRootIgnoreRules } from "./ignore-file-policy.js";
 
 const MAX_SKIPPED_PATHS = 100;
 
-function isInsideRoot(relativePath: string, root: string): boolean {
-  const normalizedRoot = normalizeCatalogPath(root).replace(/^\/+|\/+$/g, "");
-  return normalizedRoot === "." || relativePath === normalizedRoot || relativePath.startsWith(`${normalizedRoot}/`);
-}
-
 export class FileCatalogScannerAdapter implements FileCatalogScanPort {
   private readonly fileIdentity: FileIdentityPort;
 
@@ -56,6 +51,27 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       }
       const absoluteRoot = path.resolve(repoRoot, indexedRoot);
       if (!isInsideRepo(repoRoot, absoluteRoot) || fs.existsSync(absoluteRoot) === false) {
+        continue;
+      }
+
+      const rootStats = fs.statSync(absoluteRoot);
+      if (rootStats.isFile()) {
+        await this.scanFile({
+          repoRoot,
+          absolutePath: absoluteRoot,
+          indexedRoots,
+          skippedRoots: input.skipped_roots,
+          gitignoreRules,
+          recordSkippedRoot: (root) => {
+            skippedRoots.add(root);
+          },
+          recordSkippedPath: skippedPathRecorder(skippedPaths),
+          maxFiles: input.max_files,
+          entries,
+          setTruncated: () => {
+            truncated = true;
+          }
+        });
         continue;
       }
 
@@ -150,28 +166,65 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
         continue;
       }
 
-      const stats = statFileOrSkip({
-        repoRoot: input.repoRoot,
-        absolutePath,
-        recordSkippedRoot: input.recordSkippedRoot,
-        recordSkippedPath: input.recordSkippedPath
-      });
-      if (stats === null) {
-        continue;
-      }
-      const language = await this.fileIdentity.inferLanguage({ path: absolutePath });
-      input.entries.push(
-        buildFileCatalogEntry({
-          file_identity: {
-            path: relativePath,
-            language,
-            content_hash: `stat:${stats.size}:${Math.trunc(stats.mtimeMs)}`,
-            size_bytes: stats.size,
-            mtime_ms: stats.mtimeMs
-          }
-        })
-      );
+      await this.scanFile({ ...input, absolutePath });
     }
+  }
+
+  private async scanFile(input: {
+    repoRoot: string;
+    absolutePath: string;
+    indexedRoots: readonly string[];
+    skippedRoots: readonly string[];
+    gitignoreRules: readonly GitignoreRule[];
+    recordSkippedRoot: (root: string) => void;
+    recordSkippedPath: (skipped: FileCatalogSkippedPath) => void;
+    maxFiles: number;
+    entries: FileCatalogEntry[];
+    setTruncated: () => void;
+  }): Promise<void> {
+    if (input.entries.length >= input.maxFiles) {
+      input.setTruncated();
+      return;
+    }
+
+    const relativePath = normalizeCatalogPath(path.relative(input.repoRoot, input.absolutePath));
+    const skipReason = catalogSkipReason({
+      relativePath,
+      isDirectory: false,
+      skippedRoots: input.skippedRoots,
+      gitignoreRules: input.gitignoreRules,
+      hasNestedGitRepository: false
+    });
+    if (skipReason !== null) {
+      input.recordSkippedPath({
+        path: relativePath,
+        reason: skipReason,
+        detail: catalogSkipDetail(skipReason)
+      });
+      return;
+    }
+
+    const stats = statFileOrSkip({
+      repoRoot: input.repoRoot,
+      absolutePath: input.absolutePath,
+      recordSkippedRoot: input.recordSkippedRoot,
+      recordSkippedPath: input.recordSkippedPath
+    });
+    if (stats === null) {
+      return;
+    }
+    const language = await this.fileIdentity.inferLanguage({ path: input.absolutePath });
+    input.entries.push(
+      buildFileCatalogEntry({
+        file_identity: {
+          path: relativePath,
+          language,
+          content_hash: `stat:${stats.size}:${Math.trunc(stats.mtimeMs)}`,
+          size_bytes: stats.size,
+          mtime_ms: stats.mtimeMs
+        }
+      })
+    );
   }
 }
 

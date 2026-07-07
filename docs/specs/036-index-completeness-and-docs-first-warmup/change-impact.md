@@ -52,7 +52,7 @@ not infer current behavior from the temporary spec package.
 | --- | --- | --- | --- |
 | Phased warmup and completion model | `docs/design/runtime-operations-design.md` | promoted | Runtime operations now describes docs/config seed, bounded graph seed, separate coverage classes, and EB014 completion deferral. |
 | Docs/graph index coverage and FTS completeness | `docs/design/graph-store-design.md` | promoted | Graph store design now records docs-priority FTS input and separate docs/graph coverage semantics. |
-| `docs_search` partial/degraded behavior and next actions | `docs/design/mcp-surface-design.md` | promoted | MCP surface design now documents result-count basis, docs-index coverage metadata, partial/refreshing hits, and direct-read/docs-map routing. |
+| `docs_search` partial/degraded behavior and next actions | `docs/design/mcp-surface-design.md` | promoted | MCP surface design now documents result-count basis, docs-index coverage metadata, partial/refreshing hits, and direct-read/docs-map-resource routing. |
 | Freshness/trust metadata vocabulary | `docs/reference/runtime-contracts.md` | promoted | Runtime contracts now document additive `index_coverage` entries and coverage-state semantics. |
 | Follow-up work if completion is deferred | `docs/backlog/README.md` | promoted | EB014 owns persisted graph completion executor follow-up. |
 | Agent-visible tool behavior change | `docs/reference/agent-readable-changelog.md` | promoted | Changelog records the docs-first warmup and coverage metadata behavior. |

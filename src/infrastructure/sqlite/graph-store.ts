@@ -19,7 +19,8 @@ import type { SnapshotState } from "../../domain/models/runtime.js";
 import type {
   DocsHeading,
   DocsSearchHit,
-  Freshness
+  Freshness,
+  IndexCoverage
 } from "../../contracts/index.js";
 import {
   classifyMarkdownDocCurrency,
@@ -138,6 +139,17 @@ type DocsSearchRow = {
   selected_text: string;
   mtime_ms: number | null;
   rank_score: number;
+};
+
+type IndexCoverageRow = {
+  evidence_class: "docs" | "graph";
+  state: IndexCoverage["state"];
+  indexed_files: number | null;
+  eligible_files_seen: number | null;
+  scan_truncated: number | null;
+  indexed_roots_json: string | null;
+  missing_priority_roots_json: string | null;
+  reason: string | null;
 };
 
 export type GraphStoreOptions = {
@@ -1285,6 +1297,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     snapshot_id: string;
     repo_root: string;
     documents: readonly DocsIndexDocumentWrite[];
+    coverage?: readonly IndexCoverage[];
   }): Promise<void> {
     const snapshotId = this.resolveSnapshotId(input.snapshot_id, "replaceSnapshotDocs");
     if (snapshotId == null) {
@@ -1296,6 +1309,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         snapshotId
       });
       this.db.prepare("DELETE FROM docs_documents WHERE snapshot_id = @snapshotId").run({ snapshotId });
+      if (input.coverage !== undefined) {
+        this.db.prepare("DELETE FROM snapshot_index_coverage WHERE snapshot_id = @snapshotId").run({ snapshotId });
+      }
 
       const insertDoc = this.db.prepare(`
         INSERT INTO docs_documents (
@@ -1346,6 +1362,29 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           @selectedText
         )
       `);
+      const insertCoverage = this.db.prepare(`
+        INSERT INTO snapshot_index_coverage (
+          snapshot_id,
+          evidence_class,
+          state,
+          indexed_files,
+          eligible_files_seen,
+          scan_truncated,
+          indexed_roots_json,
+          missing_priority_roots_json,
+          reason
+        ) VALUES (
+          @snapshotId,
+          @evidenceClass,
+          @state,
+          @indexedFiles,
+          @eligibleFilesSeen,
+          @scanTruncated,
+          @indexedRootsJson,
+          @missingPriorityRootsJson,
+          @reason
+        )
+      `);
 
       for (const doc of input.documents) {
         const result = insertDoc.run({
@@ -1373,6 +1412,20 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           title: doc.title,
           headingsText: doc.headings.map((heading) => heading.text).join("\n"),
           selectedText: doc.selected_text
+        });
+      }
+
+      for (const item of input.coverage ?? []) {
+        insertCoverage.run({
+          snapshotId,
+          evidenceClass: item.evidence_class,
+          state: item.state,
+          indexedFiles: item.indexed_files ?? null,
+          eligibleFilesSeen: item.eligible_files_seen ?? null,
+          scanTruncated: item.scan_truncated === undefined ? null : item.scan_truncated ? 1 : 0,
+          indexedRootsJson: item.indexed_roots === undefined ? null : JSON.stringify(item.indexed_roots),
+          missingPriorityRootsJson: item.missing_priority_roots === undefined ? null : JSON.stringify(item.missing_priority_roots),
+          reason: item.reason ?? null
         });
       }
     });
@@ -1410,27 +1463,39 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       .prepare("SELECT COUNT(*) AS count FROM docs_documents WHERE snapshot_id = @snapshotId")
       .get({ snapshotId }) as { count: number } | undefined;
     const documentCount = row?.count ?? 0;
+    const coverage = this.getSnapshotIndexCoverage(snapshotId);
+    const docsCoverage = coverage.find((item) => item.evidence_class === "docs");
+    const graphCoverage = coverage.find((item) => item.evidence_class === "graph");
     if (snapshot.freshness === "refreshing" && documentCount > 0) {
       return {
         repo_root: snapshot.repo_root,
         snapshot_id: snapshot.id,
         freshness: "refreshing",
         status: "usable",
-        coverage_state: "partial",
-        reason: "Docs FTS evidence is usable from a refreshing graph snapshot; graph coverage may still be partial.",
+        coverage_state: docsCoverage?.state ?? "partial",
+        coverage,
+        docs_scan_truncated: docsCoverage?.scan_truncated,
+        reason: graphCoverage?.state === "partial" || graphCoverage?.state === "refreshing"
+          ? "Docs FTS evidence is usable from a refreshing graph snapshot; graph coverage may still be partial."
+          : docsCoverage?.reason ?? "Docs FTS evidence is usable from a refreshing graph snapshot; graph coverage may still be partial.",
         document_count: documentCount
       };
     }
     if (snapshot.freshness !== "fresh" && input.snapshot_id === undefined) {
       const usable = this.getLatestUsableDocsSnapshotByRepo(input.repo_root);
       if (usable !== undefined) {
+        const usableCoverage = this.getSnapshotIndexCoverage(usable.id);
+        const usableDocsCoverage = usableCoverage.find((item) => item.evidence_class === "docs");
         return {
           repo_root: usable.repo_identity,
           snapshot_id: String(usable.id),
           freshness: "fresh",
           status: "usable",
-          coverage_state: "complete",
-          document_count: usable.document_count
+          coverage_state: usableDocsCoverage?.state ?? "complete",
+          coverage: usableCoverage,
+          docs_scan_truncated: usableDocsCoverage?.scan_truncated,
+          document_count: usable.document_count,
+          reason: usableDocsCoverage?.reason
         };
       }
     }
@@ -1441,7 +1506,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         snapshot_id: snapshot.id,
         freshness: snapshot.freshness,
         status: "stale",
-        coverage_state: "stale",
+        coverage_state: docsCoverage?.state ?? "stale",
+        coverage,
+        docs_scan_truncated: docsCoverage?.scan_truncated,
         reason: `Docs FTS evidence depends on a ${snapshot.freshness} graph snapshot.`,
         document_count: documentCount
       };
@@ -1462,7 +1529,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       snapshot_id: snapshot.id,
       freshness: "fresh",
       status: "usable",
-      coverage_state: "complete",
+      coverage_state: docsCoverage?.state ?? "complete",
+      coverage,
+      docs_scan_truncated: docsCoverage?.scan_truncated,
       document_count: documentCount
     };
   }
@@ -1483,7 +1552,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         result_count_basis: "page",
         docs_index_state: state.coverage_state,
         indexed_docs_count: state.document_count,
-        docs_scan_truncated: false,
+        docs_scan_truncated: state.docs_scan_truncated ?? false,
+        coverage: state.coverage,
         coverage_note: state.reason
       };
     }
@@ -1503,7 +1573,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         result_count_basis: "page",
         docs_index_state: "blocked",
         indexed_docs_count: state.document_count,
-        docs_scan_truncated: false,
+        docs_scan_truncated: state.docs_scan_truncated ?? false,
+        coverage: state.coverage,
         coverage_note: "Snapshot id could not be resolved for docs FTS search."
       };
     }
@@ -1524,7 +1595,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         result_count_basis: "page",
         docs_index_state: state.coverage_state,
         indexed_docs_count: state.document_count,
-        docs_scan_truncated: false,
+        docs_scan_truncated: state.docs_scan_truncated ?? false,
+        coverage: state.coverage,
         coverage_note: "Docs search cursor belongs to a different snapshot."
       };
     }
@@ -1542,7 +1614,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         result_count_basis: "page",
         docs_index_state: state.coverage_state,
         indexed_docs_count: state.document_count,
-        docs_scan_truncated: false,
+        docs_scan_truncated: state.docs_scan_truncated ?? false,
+        coverage: state.coverage,
         coverage_note: "Docs search cursor belongs to a different scope_path."
       };
     }
@@ -1561,7 +1634,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         result_count_basis: "page",
         docs_index_state: state.coverage_state,
         indexed_docs_count: state.document_count,
-        docs_scan_truncated: false,
+        docs_scan_truncated: state.docs_scan_truncated ?? false,
+        coverage: state.coverage,
         coverage_note: state.reason
       };
     }
@@ -1622,7 +1696,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       result_count_basis: "page",
       docs_index_state: state.coverage_state,
       indexed_docs_count: state.document_count,
-      docs_scan_truncated: false,
+      docs_scan_truncated: state.docs_scan_truncated ?? false,
+      coverage: state.coverage,
       coverage_note: state.reason
     };
   }
@@ -1718,6 +1793,38 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       .get({ snapshotId }) as SnapshotRow | undefined;
   }
 
+  private getSnapshotIndexCoverage(snapshotId: number): IndexCoverage[] {
+    const rows = this.db
+      .prepare(
+        `
+        SELECT
+          evidence_class,
+          state,
+          indexed_files,
+          eligible_files_seen,
+          scan_truncated,
+          indexed_roots_json,
+          missing_priority_roots_json,
+          reason
+        FROM snapshot_index_coverage
+        WHERE snapshot_id = @snapshotId
+        ORDER BY CASE evidence_class WHEN 'docs' THEN 0 ELSE 1 END, evidence_class ASC
+      `
+      )
+      .all({ snapshotId }) as IndexCoverageRow[];
+
+    return rows.map((row) => ({
+      evidence_class: row.evidence_class,
+      state: row.state,
+      indexed_files: row.indexed_files ?? undefined,
+      eligible_files_seen: row.eligible_files_seen ?? undefined,
+      scan_truncated: row.scan_truncated === null ? undefined : row.scan_truncated === 1,
+      indexed_roots: parseStringArrayJson(row.indexed_roots_json),
+      missing_priority_roots: parseStringArrayJson(row.missing_priority_roots_json),
+      reason: row.reason ?? undefined
+    }));
+  }
+
   private getFileRow(snapshotId: number, filePath: string): FileRow | null {
     const row = this.db
       .prepare(
@@ -1775,6 +1882,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       .prepare(`DELETE FROM docs_headings WHERE document_id IN (SELECT id FROM docs_documents WHERE snapshot_id IN (${placeholders}))`)
       .run(...snapshotIds);
     this.db.prepare(`DELETE FROM docs_documents WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
+    this.db.prepare(`DELETE FROM snapshot_index_coverage WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
     this.db
       .prepare(`DELETE FROM edges WHERE file_id IN (SELECT id FROM files WHERE snapshot_id IN (${placeholders}))`)
       .run(...snapshotIds);
@@ -2208,6 +2316,20 @@ function migrate(db: Database.Database): void {
       UNIQUE(snapshot_id, path)
     );
 
+    CREATE TABLE IF NOT EXISTS snapshot_index_coverage (
+      id INTEGER PRIMARY KEY,
+      snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
+      evidence_class TEXT NOT NULL,
+      state TEXT NOT NULL,
+      indexed_files INTEGER,
+      eligible_files_seen INTEGER,
+      scan_truncated INTEGER,
+      indexed_roots_json TEXT,
+      missing_priority_roots_json TEXT,
+      reason TEXT,
+      UNIQUE(snapshot_id, evidence_class)
+    );
+
     CREATE TABLE IF NOT EXISTS docs_headings (
       id INTEGER PRIMARY KEY,
       document_id INTEGER NOT NULL REFERENCES docs_documents(id) ON DELETE CASCADE,
@@ -2238,6 +2360,7 @@ function migrate(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_files_snapshot_path ON files(snapshot_id, path);
     CREATE INDEX IF NOT EXISTS idx_docs_documents_snapshot_path ON docs_documents(snapshot_id, path);
     CREATE INDEX IF NOT EXISTS idx_docs_headings_document ON docs_headings(document_id, line);
+    CREATE INDEX IF NOT EXISTS idx_snapshot_index_coverage_snapshot ON snapshot_index_coverage(snapshot_id);
 
     INSERT OR IGNORE INTO schema_migrations(version) VALUES (${SCHEMA_VERSION});
   `);
@@ -2253,7 +2376,8 @@ function validateSchema(db: Database.Database): boolean {
     "node_fts",
     "docs_documents",
     "docs_headings",
-    "docs_fts"
+    "docs_fts",
+    "snapshot_index_coverage"
   ];
   const rows = db
     .prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'virtual table')")
@@ -2272,4 +2396,18 @@ function parseMetadataJson(text: string): Record<string, unknown> {
     return {};
   }
   return {};
+}
+
+function parseStringArrayJson(text: string | null): string[] | undefined {
+  if (text === null) {
+    return undefined;
+  }
+  try {
+    const value = JSON.parse(text) as unknown;
+    return Array.isArray(value) && value.every((item) => typeof item === "string")
+      ? value
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }

@@ -352,7 +352,12 @@ describe("docs query application contracts", () => {
       });
       expect(search.next_actions).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ tool: "docs_map" })
+          expect.objectContaining({
+            tool: "read_resource",
+            args: expect.objectContaining({
+              uri: "repo:///docs/map"
+            })
+          })
         ])
       );
     } finally {
@@ -488,7 +493,7 @@ describe("docs query application contracts", () => {
       truncated: false
     });
     expect(result.meta).toMatchObject({
-      analysis_validity: "valid",
+      analysis_validity: "invalid",
       capability_level: "unsupported",
       evidence_kinds: [],
       verification_status: "blocked"
