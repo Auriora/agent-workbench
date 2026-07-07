@@ -10,10 +10,10 @@ import net, { type Server, type Socket } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import packageJson from "../../package.json" with { type: "json" };
 import { createRootAuthorityPolicy } from "../interface-adapters/mcp/registries/root-authority.js";
 import type { IntegrationDaemonHealth } from "../contracts/index.js";
 import { SCHEMA_VERSION } from "../infrastructure/sqlite/index.js";
+import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../runtime/version.js";
 import {
   createAgentWorkbenchServer,
   createAsyncGraphStore,
@@ -93,7 +93,7 @@ type DaemonHandshake = {
 
 export function createDaemonIdentity(repoRoot: string): AgentWorkbenchDaemonIdentity {
   const absoluteRepoRoot = path.resolve(repoRoot);
-  const runtimeVersion = packageJson.version;
+  const runtimeVersion = AGENT_WORKBENCH_RUNTIME_VERSION;
   const schemaVersion = SCHEMA_VERSION;
   const protocolVersion = DAEMON_PROTOCOL_VERSION;
   return {
@@ -180,11 +180,11 @@ export async function connectOrStartDaemon(
       socketPath: paths.socketPath
     });
 
-    if (state.state === "mismatched" || state.state === "blocked") {
+    if (state.state === "blocked") {
       throw new Error(`Agent Workbench daemon is ${state.state}: ${state.reason}.`);
     }
 
-    if (state.state === "absent" || state.state === "stale") {
+    if (state.state === "absent" || state.state === "stale" || state.state === "mismatched") {
       startupLock = acquireDaemonStartupLock(paths.startupLockPath);
       if (startupLock !== null) {
         state = normalizeLaunchState(classifyDaemonState({
@@ -192,7 +192,7 @@ export async function connectOrStartDaemon(
           expectedIdentity: identity,
           socketPath: paths.socketPath
         }), paths);
-        if (state.state === "mismatched" || state.state === "blocked") {
+        if (state.state === "blocked") {
           throw new Error(`Agent Workbench daemon is ${state.state}: ${state.reason}.`);
         }
         if (state.state === "absent") {
@@ -530,7 +530,7 @@ function cleanupStaleDaemonState(metadata: AgentWorkbenchDaemonMetadata | undefi
 }
 
 function normalizeLaunchState(state: DaemonState, paths: DaemonPaths): DaemonState {
-  if (state.state !== "stale") {
+  if (state.state !== "stale" && state.state !== "mismatched") {
     return state;
   }
   cleanupStaleDaemonState(state.metadata, paths);

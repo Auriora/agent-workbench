@@ -9,6 +9,7 @@ import { instrumentMcpServer } from "./instrumentation.js";
 import { registerAllMcpSurfaces } from "./registries/index.js";
 import type { McpRegistryContext } from "./registries/index.js";
 import { createRootAuthorityPolicy } from "./registries/root-authority.js";
+import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../../runtime/version.js";
 
 export const AGENT_WORKBENCH_MCP_INSTRUCTIONS = [
   "Use Agent Workbench before broad repository inspection: read repo:///status, repo:///scope, and repo:///overview, then call context_for_task for task routing.",
@@ -26,7 +27,7 @@ export function createAgentWorkbenchServer(
   }).launchRoot;
   const server = new McpServer({
     name: "agent-workbench",
-    version: "0.1.0"
+    version: AGENT_WORKBENCH_RUNTIME_VERSION
   }, {
     instructions: AGENT_WORKBENCH_MCP_INSTRUCTIONS
   });

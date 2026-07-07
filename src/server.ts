@@ -58,6 +58,7 @@ import {
 } from "./infrastructure/telemetry/index.js";
 import { SystemClockAdapter } from "./infrastructure/time/index.js";
 import { createAgentWorkbenchServer as createAgentWorkbenchMcpServer } from "./interface-adapters/mcp/server.js";
+import { AGENT_WORKBENCH_RUNTIME_VERSION } from "./runtime/version.js";
 import {
   mcpPrompts,
   mcpResources,
@@ -343,7 +344,7 @@ export function createAgentWorkbenchServer(
       getIntegrationHealth({
         request,
         default_repo_root: absoluteRepoRoot,
-        runtime_version: "0.1.0",
+        runtime_version: AGENT_WORKBENCH_RUNTIME_VERSION,
         profile: "codex",
         surfaces: registeredIntegrationSurfaces(),
         root_policy: {

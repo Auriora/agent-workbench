@@ -20,6 +20,7 @@ import {
   mcpResources,
   mcpTools
 } from "../../src/interface-adapters/mcp/registries/index.js";
+import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../../src/runtime/version.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
 import {
   parseMcpResourceText,
@@ -191,7 +192,7 @@ describe("Codex integration profile", () => {
         "The GHCR package must include runtime source, docs, plugin manifest, plugin MCP config, skills, hooks, installer, and release metadata."
       ])
     );
-    expect(profile.runtime_version).toBe("0.1.0");
+    expect(profile.runtime_version).toBe(AGENT_WORKBENCH_RUNTIME_VERSION);
     expect(mcpSurface?.constraints).toEqual(
       expect.arrayContaining([
         "Plugin cache cwd must not be used as the default workspace root.",

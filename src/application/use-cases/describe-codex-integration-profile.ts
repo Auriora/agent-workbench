@@ -4,12 +4,13 @@
  */
 
 import type { CodexIntegrationProfile } from "../../contracts/index.js";
+import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../../runtime/version.js";
 
 export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
   return {
     target_agent: "codex",
     profile_name: "Agent Workbench Codex Integration",
-    runtime_version: "0.1.0",
+    runtime_version: AGENT_WORKBENCH_RUNTIME_VERSION,
     mcp_server_id: "agent-workbench",
     runtime_source: "repository_checkout",
     active_surfaces: [

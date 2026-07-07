@@ -193,6 +193,64 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
+  it("replaces live daemon metadata with a mismatched identity", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-mismatch-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    const daemons: StartedAgentWorkbenchDaemon[] = [];
+    let starts = 0;
+    const mismatchedIdentity = {
+      ...identity,
+      runtimeVersion: "0.0.0-old",
+      id: "mismatched-live-daemon"
+    };
+
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+    fs.writeFileSync(
+      paths.metadataPath,
+      `${JSON.stringify({
+        identity: mismatchedIdentity,
+        pid: process.pid,
+        socketPath: paths.socketPath,
+        createdAt: "2026-07-05T00:00:00.000Z"
+      })}\n`
+    );
+    if (process.platform !== "win32") {
+      fs.mkdirSync(paths.ipcDir, { recursive: true });
+      fs.writeFileSync(paths.socketPath, "");
+    }
+
+    try {
+      const socket = await connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 2000,
+        spawnDaemon: () => {
+          starts += 1;
+          void startAgentWorkbenchDaemon({
+            repoRoot,
+            idleGraceMs: 100,
+            serverOptions: { startGraphWarmup: false }
+          }).then((daemon) => daemons.push(daemon));
+          return fakeChildProcess();
+        }
+      });
+      socket.destroy();
+
+      expect(starts).toBe(1);
+      const metadata = JSON.parse(fs.readFileSync(paths.metadataPath, "utf8")) as {
+        identity: { id: string; runtimeVersion: string };
+      };
+      expect(metadata.identity).toMatchObject({
+        id: identity.id,
+        runtimeVersion: identity.runtimeVersion
+      });
+    } finally {
+      await closeDaemons(daemons);
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("serializes stale-owner cleanup across parallel clients", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-parallel-stale-");
     const identity = createDaemonIdentity(repoRoot);

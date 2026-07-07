@@ -4,6 +4,7 @@
  */
 
 import type { IntegrationProfile } from "../../contracts/index.js";
+import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../../runtime/version.js";
 
 const TARGET_AGENTS = [
   "codex",
@@ -31,7 +32,7 @@ const MCP_BINDINGS: IntegrationProfile["mcp_bindings"] = [
 
 export function buildCommonIntegrationProfile(): IntegrationProfile {
   return {
-    runtime_version: "0.1.0",
+    runtime_version: AGENT_WORKBENCH_RUNTIME_VERSION,
     target_agents: [...TARGET_AGENTS],
     mcp_bindings: MCP_BINDINGS,
     artifacts: [
