@@ -50,12 +50,12 @@ not infer current behavior from the temporary spec package.
 
 | Spec content | Durable destination | Promotion status | Notes |
 | --- | --- | --- | --- |
-| Phased warmup and completion model | `docs/design/runtime-operations-design.md` | pending | Required before closure. |
-| Docs/graph index coverage and FTS completeness | `docs/design/graph-store-design.md` | pending | Required before closure. |
-| `docs_search` partial/degraded behavior and next actions | `docs/design/mcp-surface-design.md` | pending | Required before closure. |
-| Freshness/trust metadata vocabulary | `docs/reference/runtime-contracts.md` | pending | Required if contracts change. |
-| Follow-up work if completion is deferred | `docs/backlog/README.md` | pending | Required if any accepted target is deferred. |
-| Agent-visible tool behavior change | `docs/reference/agent-readable-changelog.md` | pending | Required if public usage guidance changes. |
+| Phased warmup and completion model | `docs/design/runtime-operations-design.md` | promoted | Runtime operations now describes docs/config seed, bounded graph seed, separate coverage classes, and EB014 completion deferral. |
+| Docs/graph index coverage and FTS completeness | `docs/design/graph-store-design.md` | promoted | Graph store design now records docs-priority FTS input and separate docs/graph coverage semantics. |
+| `docs_search` partial/degraded behavior and next actions | `docs/design/mcp-surface-design.md` | promoted | MCP surface design now documents result-count basis, docs-index coverage metadata, partial/refreshing hits, and direct-read/docs-map routing. |
+| Freshness/trust metadata vocabulary | `docs/reference/runtime-contracts.md` | promoted | Runtime contracts now document additive `index_coverage` entries and coverage-state semantics. |
+| Follow-up work if completion is deferred | `docs/backlog/README.md` | promoted | EB014 owns persisted graph completion executor follow-up. |
+| Agent-visible tool behavior change | `docs/reference/agent-readable-changelog.md` | promoted | Changelog records the docs-first warmup and coverage metadata behavior. |
 
 ## Unchanged Durable Areas
 
@@ -82,11 +82,11 @@ not infer current behavior from the temporary spec package.
 
 ## Open Questions
 
-- Should the first implementation slice include a resumable completion executor,
-  or is docs-first indexing plus partial coverage metadata sufficient for the
-  first fix?
-- Should coverage metadata be persisted in SQLite or derived from warmup result
-  and scan state?
+- The first implementation slice ships docs-first indexing plus explicit
+  non-complete graph coverage. A resumable graph completion executor is routed
+  to EB014.
+- Coverage metadata is additive response metadata for this slice. Persisted
+  completion state and any durable cursor model are owned by EB014.
 
 ## Related Artifacts
 

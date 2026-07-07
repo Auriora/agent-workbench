@@ -26,6 +26,42 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
+## 2026-07-07: Docs-First Warmup And Coverage Metadata
+
+### Agent-Visible Changes
+
+- `docs_search` can route to durable documentation indexed by a docs/config
+  priority warm-up phase even when broad graph indexing is still non-complete.
+- Truncated graph seed warm-up remains visible as non-complete evidence instead
+  of being collapsed into complete freshness.
+- Docs-search responses may include docs-index state, indexed-doc counts,
+  scan-truncation flags, result-count basis, coverage notes, and direct-read or
+  docs-map next actions.
+
+### Contract Changes
+
+- Response metadata may include additive `index_coverage` entries for docs and
+  graph evidence classes.
+- Coverage states are separate from watcher freshness. A fresh or usable docs
+  search result does not imply complete graph coverage.
+- `result_count` for docs search is a page count unless `result_count_basis`
+  states a different basis.
+
+### Required Agent Behavior Changes
+
+- Treat partial or refreshing docs-search output as routing evidence. Use
+  `docs_read_section`, `repo:///docs/map`, or another direct evidence surface
+  before making precise claims or absence claims.
+- Do not infer that missing symbols or docs are absent when graph or docs
+  coverage metadata is partial, refreshing, stale, blocked, or unknown.
+
+### Migration Notes
+
+- Existing caches may need warm-up or rebuild before new coverage metadata is
+  populated.
+- Persisted graph completion beyond the startup seed is tracked as EB014 in
+  `docs/backlog/README.md`.
+
 ## 2026-07-05: Tag-Driven Release Packaging
 
 ### Agent-Visible Changes

@@ -57,16 +57,24 @@ bind repo
 -> load runtime config and scope
 -> open or migrate SQLite graph store
 -> validate latest snapshot
--> scan scoped files and compute identities
+-> scan docs/config priority set and compute document identities
+-> refresh docs FTS for Markdown path/title/headings/selected text
+-> scan scoped graph seed files and compute identities
 -> enqueue changed files for extraction
 -> run tree-sitter extraction workers
 -> ingest extraction batches through graph ports
 -> resolve references
 -> refresh FTS
--> refresh docs FTS for Markdown path/title/headings/selected text
 -> publish watcher-clean snapshot
 -> expose fresh status
 ```
+
+The docs/config seed is separate from the graph seed. It must use normal scope,
+ignore, and workspace-safety policy, but it is not limited to the first page of
+source files selected for parser extraction. The graph seed may remain bounded
+for startup responsiveness; when that seed truncates before covering the
+eligible graph scope, public graph evidence remains non-complete and reports
+`refreshing` freshness or coverage metadata until completion work exists.
 
 Warm-up states:
 
@@ -80,6 +88,11 @@ MVP warm-up should be explicit and observable. `repo:///status` must report
 warm-up phase, snapshot freshness, queued work counts, extraction errors, and
 degraded blockers.
 
+Spec 036 accepted the docs-first seed plus explicit non-complete graph coverage
+as the current behavior. A persisted graph completion executor is deferred to
+EB014 in `docs/backlog/README.md`; until that follow-up ships, truncated graph
+seed coverage must not be presented as complete freshness.
+
 ## Prewarm Entry Points
 
 The MCP runtime starts a graph warm-up automatically when it binds to a repo.
@@ -89,11 +102,14 @@ Internal operations such as graph prewarm are not public MCP `next_action`
 values unless they are exposed through a documented public tool.
 
 Docs search depends on this warm-up path. `docs_search` reads the warm docs FTS
-index and reports cold, stale, invalid, or unavailable index state when that
-evidence is not usable; it does not trigger a broad Markdown scan on the hot
-path. Direct docs overview, map, outline, and read-section surfaces may still
-perform bounded scanner/read work because those surfaces provide direct
-documentation evidence rather than search acceleration.
+index and reports cold, stale, refreshing, invalid, partial, or unavailable
+index state when that evidence is not fully usable; it does not trigger a broad
+Markdown scan on the hot path. Docs hits from a completed docs/config seed may
+be usable while graph seed coverage remains non-complete, but response metadata
+must keep those coverage classes separate. Direct docs overview, map, outline,
+and read-section surfaces may still perform bounded scanner/read work because
+those surfaces provide direct documentation evidence rather than search
+acceleration.
 
 A future CLI may expose an explicit prewarm entry point so clients can prepare
 repo caches before interactive agent work starts.

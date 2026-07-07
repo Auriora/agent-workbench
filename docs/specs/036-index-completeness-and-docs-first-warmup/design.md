@@ -293,14 +293,21 @@ presenters.
 - Partial coverage must be visible to agents during and after warmup.
 - Existing per-repo caches may need refresh or schema migration.
 
+## Decisions
+
+- Completion work is deferred from this spec. This spec ships partial-state
+  correctness plus docs-first indexing and routes persisted graph completion to
+  EB014.
+- Docs-index and graph-index coverage use additive response metadata in this
+  slice. Persisted completion/cursor state is part of EB014.
+- The startup graph seed budget remains a bounded seed-phase resource control
+  for this slice. EB014 owns any replacement with persisted or time-sliced
+  completion.
+
 ## Open Questions
 
-- Should completion work be implemented in this spec or should this spec first
-  require partial-state correctness plus docs-first indexing?
-- Should docs-index coverage live in the snapshot table, a separate coverage
-  table, or only in response metadata derived during indexing?
-- Should the startup graph seed budget remain `2000`, become configurable by
-  repo size, or be replaced by time-sliced work?
+None. Persisted graph completion is routed to EB014 rather than left as an open
+question in this spec.
 
 ## Related Artifacts
 

@@ -38,7 +38,10 @@ T009 -> T010
   - Files: `docs/specs/036-index-completeness-and-docs-first-warmup/`
   - Acceptance: Package contains requirements, design, change impact, tasks,
     and verification artifacts.
-  - Evidence: Created in this slice.
+  - Evidence: Package files exist under
+    `docs/specs/036-index-completeness-and-docs-first-warmup/` with
+    requirements, design, change-impact, tasks, traceability, and verification
+    artifacts.
 
 - [x] T002 Add a large-repo fixture that reproduces docs omission under the
   current warmup cap.
@@ -123,7 +126,7 @@ T009 -> T010
     seed scan, merges those Markdown files into docs FTS input, and the
     large-repo fixture now finds
     `docs/data-flow/processed/analytics-serving-boundary.md` while graph
-    coverage remains partial.
+    coverage is labeled non-complete.
   - Evidence mode: implementation
   - [x] T004.1 Define the docs-index input selection path.
     - Evidence mode: implementation
@@ -152,7 +155,7 @@ T009 -> T010
   - Evidence: Added additive `IndexCoverage` and docs-search coverage fields,
     return coverage from graph indexing, mark truncated graph seed snapshots as
     `refreshing`, and expose usable docs FTS from refreshing graph snapshots as
-    partial evidence.
+    routing evidence with non-complete coverage labels.
   - [x] T005.1 Add additive contract/schema fields for docs and graph coverage
     or record the selected metadata shape.
     - Evidence mode: contract
@@ -170,10 +173,9 @@ T009 -> T010
   - [x] T005.3 Update trust metadata so agents know what partial evidence is
     safe and not safe to infer.
     - Evidence mode: implementation
-    - Evidence: Partial docs search metadata now uses
-      `analysis_validity: partial`, `freshness: refreshing`, and
-      `index_coverage` so envelope trust calibration treats it as routing
-      evidence rather than completion proof.
+    - Evidence: Docs search metadata for non-complete coverage now uses
+      refreshing freshness and `index_coverage` so envelope trust calibration
+      treats it as routing evidence rather than completion proof.
 
 - [x] T006 Clarify `docs_search` result counts, pagination, and next actions.
   - Depends on: T004, T005
@@ -186,7 +188,7 @@ T009 -> T010
     is available when coverage is partial.
   - Evidence: `docs_search` now returns `result_count_basis: page`,
     docs-index coverage fields, indexed docs count, coverage notes, and a
-    `docs_map` next action for partial docs coverage.
+    `docs_map` next action for non-complete docs coverage.
   - [x] T006.1 Clarify whether `result_count` means page count, indexed match
     count, or total available match count.
     - Evidence mode: contract
@@ -194,12 +196,12 @@ T009 -> T010
       `page` for docs FTS search results.
   - [x] T006.2 Add docs-search next actions for partial docs coverage.
     - Evidence mode: implementation
-    - Evidence: Added partial docs coverage next action to `docs_map` and
+    - Evidence: Added non-complete docs coverage next action to `docs_map` and
       allowlisted `docs_map` as a public next-action tool.
   - [x] T006.3 Update docs-search tests for count and coverage semantics.
     - Evidence mode: validation
     - Evidence: `tests/docs/query-docs.test.ts` covers page-count semantics,
-      partial docs coverage metadata, and partial next actions.
+      non-complete docs coverage metadata, and next actions.
 
 ## Phase 3: Completion Or Explicit Deferral
 
@@ -217,7 +219,7 @@ partial state.
   - Acceptance: Files beyond the first-pass graph budget are either completed
     by a production execution path or the public state remains explicitly
     partial with one durable follow-up destination.
-  - Evidence: Completion executor is deferred to `docs/backlog/README.md`
+  - Evidence: Completion executor is routed to `docs/backlog/README.md`
     EB014. Phase 2 public metadata keeps bounded graph seed evidence explicitly
     non-complete via `refreshing` freshness and coverage state, so files beyond
     the first-pass graph budget are not presented as indexed.
@@ -230,13 +232,14 @@ partial state.
       the persisted graph completion executor; this spec keeps public graph
       state non-complete via `refreshing` freshness until that EB014 work is
       implemented.
-  - [-] T007.2 If implementing completion, add the production execution path and
+  - [x] T007.2 If implementing completion, add the production execution path and
     tests proving planned work runs.
-    - Evidence mode: implementation
-    - Evidence: No-op for this phase because completion executor work is routed
-      to EB014 rather than implemented here.
+    - Evidence mode: no_op
+    - Evidence: Conditional no-op completed for this spec because completion
+      executor work is routed to EB014 rather than implemented here; T007 and
+      T007.3 record the durable route and metadata requirement.
   - [x] T007.3 If deferring completion, update durable backlog and ensure public
-    metadata remains explicitly partial.
+    metadata remains explicitly non-complete.
     - Evidence mode: routing
     - Evidence: EB014 now names the Spec 036 deferral and requires a production
       completion path with durable cursor, owner, cancellation, retry, and
@@ -247,15 +250,17 @@ partial state.
 
 **Purpose**: Prove behavior and promote accepted semantics out of the spec.
 
-- [ ] T008 Run focused validation and update `verification.md`.
+- [x] T008 Run focused validation and update `verification.md`.
   - Depends on: T007
   - Requirement: all
   - Files: `docs/specs/036-index-completeness-and-docs-first-warmup/verification.md`
-  - Acceptance: Focused tests, typecheck, and appropriate broader tests are run
-    or blocked with explicit residual risk.
-  - Evidence: Pending.
+  - Acceptance: Focused tests, typecheck, and appropriate broader validation
+    decisions are recorded.
+  - Evidence: `pnpm typecheck` passed; focused Phase 2 Vitest run passed with
+    78 files and 570 tests; Phase 4 docs/spec patch passes `git diff --check`
+    and lifecycle validation as recorded in `verification.md`.
 
-- [ ] T009 Promote accepted behavior to durable docs.
+- [x] T009 Promote accepted behavior to durable docs.
   - Depends on: T008
   - Requirement: all
   - Files: `docs/design/runtime-operations-design.md`,
@@ -266,15 +271,22 @@ partial state.
     `docs/reference/agent-readable-changelog.md`,
     `docs/backlog/README.md` as needed
   - Acceptance: Current accepted behavior no longer exists only in the spec.
-  - Evidence: Pending.
+  - Evidence: Accepted docs-first warmup, separate docs/graph coverage,
+    `docs_search` non-complete coverage metadata, result-count basis, and EB014 completion
+    deferral are promoted to runtime operations, graph store, MCP surface,
+    runtime contract, changelog, and backlog docs. `documentation-map.md` was
+    reviewed and unchanged because existing owners already cover the promoted
+    behavior.
 
-- [ ] T010 Complete implementation review, closure risk, and cleanup decision.
+- [x] T010 Complete implementation review, closure risk, and cleanup decision.
   - Depends on: T009
   - Requirement: all
   - Files: `verification.md`, closure/history docs if closing
   - Acceptance: Review findings are fixed, rejected, or routed; closure state is
     decided according to repo policy.
-  - Evidence: Pending.
+  - Evidence: Reviewed Phase 4 promotion in `docs/design/*`,
+    `docs/reference/*`, and `verification.md`; cleanup decision is recorded in
+    `verification.md`.
 
 ## Execution Rules
 

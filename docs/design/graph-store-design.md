@@ -128,6 +128,20 @@ caches should be added only when a concrete query requires relational storage.
 - Metadata fields must be typed JSON with schema-versioned interpretation.
 - FTS rows are refreshed in the same transaction as node writes when possible.
 
+Docs FTS input is not limited to the bounded graph seed scan. Repository warm-up
+must populate docs rows from a docs/config priority scan, including front-door
+Markdown and durable documentation roots such as `docs/`, `doc/`, and
+`documentation/`, before or independently of broad parser extraction. This lets
+`docs_search` route to durable docs even when graph seed coverage is still
+non-complete.
+
+Docs-index coverage and graph-index coverage are separate evidence classes.
+When graph seed scanning truncates, graph freshness or coverage metadata remains
+non-complete even if docs FTS rows for the docs/config seed are usable. When
+docs scanning itself truncates or lacks usable rows, `docs_search` must expose
+that docs-index state rather than allowing a global snapshot freshness label to
+imply full documentation coverage.
+
 ## Indexes
 
 The initial schema must support:
@@ -196,6 +210,11 @@ docs rows to file identity rows when available so search hits can expose
 document currency labels, caveats, and `mtime_ms`-derived `modified_at`
 metadata. Missing file identity or Git history evidence is optional enrichment
 loss, not a docs-search failure.
+
+Search result counts describe the returned page unless a response explicitly
+states a stronger basis. Sparse FTS results are routing evidence over the
+indexed docs subset, not proof that unreturned repository documentation does not
+exist.
 
 The graph store must not persist or infer documentation creation time from
 filesystem `ctime`. Local Git first/last touch evidence may be collected by a

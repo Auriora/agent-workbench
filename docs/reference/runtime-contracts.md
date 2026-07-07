@@ -147,6 +147,38 @@ watcher startup or processing failure maps to degraded evidence with a caveat.
 - `invalid_due_to_environment`: missing tools, permissions, command failures, or
   environment mismatch prevent the operation.
 
+## Index Coverage
+
+Graph-backed and docs-backed evidence may have different coverage states for
+the same repository snapshot. Response metadata may include additive
+`index_coverage` entries:
+
+```json
+{
+  "index_coverage": [
+    {
+      "evidence_class": "docs",
+      "state": "complete",
+      "indexed_files": 42,
+      "scan_truncated": false
+    },
+    {
+      "evidence_class": "graph",
+      "state": "partial",
+      "indexed_files": 2000,
+      "scan_truncated": true,
+      "reason": "startup graph seed budget reached"
+    }
+  ]
+}
+```
+
+Coverage states use `complete`, `partial`, `refreshing`, `stale`, `blocked`,
+and `unknown`. `freshness: fresh` must not be used to imply full coverage for an
+evidence class whose coverage entry is partial, refreshing, stale, blocked, or
+unknown. A docs index can be complete enough for `docs_search` routing while the
+graph index remains non-complete.
+
 ## Verification Status
 
 - `done`: validation has executed or equivalent evidence is available.
@@ -258,6 +290,13 @@ Every non-trivial MCP response should include:
     "capability_level": "partial_semantic",
     "evidence_kinds": ["parser", "sqlite"],
     "verification_status": "planned",
+    "index_coverage": [
+      {
+        "evidence_class": "graph",
+        "state": "complete",
+        "scan_truncated": false
+      }
+    ],
     "truncated": false,
     "budget": {
       "time_ms": 100,

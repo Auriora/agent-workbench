@@ -316,10 +316,12 @@ index populated during repository warm-up. It searches repo-relative path,
 title, headings, and bounded selected body text, then applies deterministic
 phrase, title, path, heading, body, and generic path/category scoring. It
 returns ranked hits with `docs` and `fts` evidence labels, scores, optional
-bounded snippets, optional heading evidence, `result_count`, truncation
-metadata, an opaque continuation cursor when more results exist, and a
-direct-read caveat. Search results are routing evidence only; agents must use
-`docs_read_section` before making precise documentation claims.
+bounded snippets, optional heading evidence, `result_count`, `result_count_basis`,
+docs-index coverage metadata, truncation metadata, an opaque continuation
+cursor when more results exist, and a direct-read caveat. `result_count` is a
+page count unless `result_count_basis` states otherwise. Search results are
+routing evidence only; agents must use `docs_read_section` before making precise
+documentation claims.
 Callers may pass `scope_path` to constrain results to one repo-relative
 documentation subtree. For spec implementation work, pass the active spec
 package path, such as `docs/specs/NNN-short-name`, so `docs_search` only
@@ -334,6 +336,12 @@ If the docs FTS index is cold, stale, invalid, or unavailable, `docs_search`
 returns a compact structured blocked response naming the missing evidence. It
 must not silently fall back to broad Markdown scanning. This visible failure is
 intentional so warm-up, schema, or storage issues are fixed rather than hidden.
+If the docs FTS index is usable but partial or refreshing, `docs_search` may
+return hits with `analysis_validity: partial`, `freshness: refreshing`, and
+index coverage metadata. Those responses must include a next action that routes
+the agent toward direct documentation inventory or reads, such as `docs_map` or
+`docs_read_section`, instead of implying that sparse search results prove
+absence.
 
 `docs_outline` reads a bounded heading outline for one repo-relative Markdown
 document and returns stable heading identifiers. `docs_read_section` reads one
