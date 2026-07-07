@@ -58,6 +58,7 @@ name their own final pre-removal tree commits.
 | Spec 034: Doc currency routing | Removed from `docs/specs/` on 2026-07-02 after final pre-removal tree commit `8657e9e` completed document currency classification, docs search/inventory metadata, `context_for_task` ranking, `docs_current_for_task`, durable docs promotion, and spec-lifecycle-manager handoff. | MCP surface design, graph store design, runtime contracts, documentation map, spec-lifecycle-manager doc currency handoff, MCP server card, Codex integration profile, docs/context/MCP tests, lifecycle lint, closure check, and closure-risk review. |
 | Spec 034: Release notes generation | Removed from `docs/specs/` on 2026-07-05 after final pre-removal tree commit `5b40e6d` completed `awb release notes`, Git range/tag evidence collection, per-commit file evidence, candidate grouping, validation inputs, Markdown/JSON/agent outputs, draft/final boundaries, release-note skill guidance, and durable release-process documentation. | Agent Workbench Dev CLI README, Codex Agent Workbench plugin runbook, agent-readable changelog, backlog EB035, documentation map, dev CLI tests, package/plugin validation, typecheck, full Vitest validation, archive index, and closure log. |
 | Spec 035: Trust calibration in tool outputs | Removed from `docs/specs/` on 2026-07-06 after final pre-removal tree commit `86e4a81` completed additive `meta.trust` response metadata, shared trust policy derivation, public presenter and registry coverage, direct-read and integration-profile remediation, golden MCP trust tests, durable docs promotion, and post-reload smoke verification. | Runtime contracts, MCP surface design, documentation map, backlog EB023, response metadata contracts, shared response metadata helpers, public MCP presenter and registry tests, trust golden tests, lifecycle lint, full Vitest validation, live MCP smoke, cross-repo local smoke, archive index, and closure log. |
+| Spec 036: Index completeness and docs-first warmup | Removed from `docs/specs/` on 2026-07-07 after final pre-removal tree commit `6240281` completed docs-first and docs-dedicated indexing, partial/truncated warmup coverage metadata, `docs_search` coverage-state exposure, and route-graph warmup completion routed to EB014. | Runtime operations design, graph store design, MCP surface design, runtime contracts, agent-readable changelog, and executable backlog EB014. |
 
 ### 2026-06-13 - 022-mcp-server-repository-support
 
@@ -384,6 +385,32 @@ name their own final pre-removal tree commits.
   until richer live graph freshness plumbing is added. The debug surface is MCP
   integration health only; no dev CLI doctor command shipped. Installer cleanup
   for stale daemon metadata remains deferred until future evidence requires it.
+
+### 2026-07-07 - 036-index-completeness-and-docs-first-warmup
+
+- **Spec:** docs/specs/036-index-completeness-and-docs-first-warmup
+- **Title:** Index completeness and docs-first warmup
+- **Final spec commit:** 6240281
+- **Closure cleanup commit:** pending-cleanup-commit
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/runtime-operations-design.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/reference/agent-readable-changelog.md`
+  - `docs/backlog/README.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Spec implementation validation recorded focused
+  Vitest runs over `tests/contracts/response-metadata.test.ts`,
+  `tests/docs/query-docs.test.ts`, `tests/graph/extraction-pipeline.test.ts`,
+  and `tests/mcp/stdio-entrypoint.test.ts`. Docs-first and docs-dedicated
+  indexing, partial/truncated warmup coverage metadata, and `docs_search`
+  coverage-state exposure were promoted to durable docs.
+- **Residual risks:** Persisted graph warmup completion executor remains future
+  work under EB014 (`docs/backlog/README.md`); non-complete graph coverage is
+  reported explicitly rather than as complete.
 
 ## Closure Notes
 
