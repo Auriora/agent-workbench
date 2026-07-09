@@ -1152,6 +1152,58 @@ describe("verification_plan use case", () => {
     );
   });
 
+  it("does not plan SAM or CloudFormation commands for unrelated docs and tests", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-sam-unrelated-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "docs", "checklists"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "tests", "analytics_migrations"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "infra", "cloudformation", "analytics-ui"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, "docs", "checklists", "source-to-journal-accepted-validation.matrix.json"),
+        JSON.stringify({ checks: [] })
+      );
+      fs.writeFileSync(
+        path.join(repoRoot, "tests", "analytics_migrations", "test_source_to_journal_contract_trace_runtime.py"),
+        "def test_contract_trace_runtime():\n    assert True\n"
+      );
+      fs.writeFileSync(
+        path.join(repoRoot, "infra", "cloudformation", "analytics-ui", "template.yaml"),
+        "AWSTemplateFormatVersion: '2010-09-09'\nResources: {}\n"
+      );
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: [
+            "docs/checklists/source-to-journal-accepted-validation.matrix.json",
+            "tests/analytics_migrations/test_source_to_journal_contract_trace_runtime.py"
+          ],
+          changed_files: [
+            "docs/checklists/source-to-journal-accepted-validation.matrix.json",
+            "tests/analytics_migrations/test_source_to_journal_contract_trace_runtime.py"
+          ],
+          include_static_feedback: true,
+          max_commands: 4
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.planned_commands.map((command) => command.display)).not.toEqual(
+        expect.arrayContaining([
+          "cfn-lint infra/cloudformation/analytics-ui/template.yaml",
+          "sam validate --template-file infra/cloudformation/analytics-ui/template.yaml"
+        ])
+      );
+      expect(result.plan.planned_commands.map((command) => command.command)).not.toEqual(
+        expect.arrayContaining(["cfn-lint", "sam"])
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("blocks unsafe, too-broad, and low-confidence validation targets with quiet feedback", async () => {
     const files = Array.from({ length: 51 }, (_, index) => `src/file-${index}.ts`);
     const result = await planVerification({

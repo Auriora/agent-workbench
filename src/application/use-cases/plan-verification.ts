@@ -418,7 +418,7 @@ function planValidationCommands(input: {
     (includeAll || selectedLanguages.has("csharp") || input.selectedEntries.some((file) => isDotnetProjectPath(file.path)));
   const samShapeSelected =
     hasSamTemplate &&
-    (includeAll || input.selectedEntries.some((file) => isSamRelatedPath(file.path)) || hasAny(selectedLanguages, ["yaml", "json", "python"]));
+    (includeAll || input.selectedEntries.some((file) => isSamRelatedPath(file.path)));
   const mcpShapeSelected =
     input.discovery.mcpShape.detected &&
     (includeAll ||
