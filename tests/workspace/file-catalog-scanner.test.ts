@@ -445,6 +445,50 @@ describe("file catalog scanner", () => {
     );
   });
 
+  it("covers first-read fixture modes for unsupported, skipped, and budget-truncated evidence", async () => {
+    const fixtureRoot = path.resolve("tests/fixtures/fixture-first-read-failure-modes");
+    const scanner = new FileCatalogScannerAdapter();
+    const full = await scanner.scan({
+      repo_root: fixtureRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      max_files: 100
+    });
+    const budgeted = await scanner.scan({
+      repo_root: fixtureRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      max_files: 1
+    });
+
+    expect(full.files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "src/Main.java",
+          file_identity: expect.objectContaining({ language: "java" }),
+          adapter_evidence: expect.objectContaining({
+            domain: "language",
+            capability_level: "unsupported"
+          })
+        })
+      ])
+    );
+    expect(full.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "dist",
+          reason: "generated_or_vendor"
+        }),
+        expect.objectContaining({
+          path: "vendor",
+          reason: "generated_or_vendor"
+        })
+      ])
+    );
+    expect(budgeted.truncated).toBe(true);
+    expect(budgeted.files).toHaveLength(1);
+  });
+
   it("does not read file contents while building status catalog evidence", async () => {
     const scanner = new FileCatalogScannerAdapter({
       fileIdentity: {

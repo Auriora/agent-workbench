@@ -79,7 +79,7 @@ T008 -> T009 -> T010
 
 **Purpose**: Establish shared behavior before changing individual surfaces.
 
-- [ ] T004 Add or confirm shared first-read state and trust classification.
+- [x] T004 Add or confirm shared first-read state and trust classification.
   - Depends on: T003
   - Requirement: Requirement 1; Requirement 3
   - Files: `src/contracts/`, `src/application/use-cases/response-metadata.ts`,
@@ -87,21 +87,35 @@ T008 -> T009 -> T010
   - Acceptance: Contract/helper behavior maps first-read stale, degraded, and
     blocked states onto existing response metadata fields through additive
     helper semantics; any proven field-level gap is routed to EB024.
-  - Evidence: Pending.
-  - [ ] T004.1 Add focused contract/helper tests for CP-001 and CP-002.
-  - [ ] T004.2 Implement or document the shared application-level
+  - Evidence: Completed on 2026-07-10. Added focused
+    `response-metadata.test.ts` coverage that proves stale, degraded, cold, and
+    unavailable first-read states use existing metadata fields and trust
+    boundaries. No public enum migration was selected.
+  - [x] T004.1 Add focused contract/helper tests for CP-001 and CP-002.
+    - Evidence: `tests/contracts/response-metadata.test.ts` covers state
+      metadata mapping and proof-like trust restrictions.
+  - [x] T004.2 Implement or document the shared application-level
     classification helper with per-use-case evidence inputs.
-  - [ ] T004.3 Route any proven field-level enum migration to EB024 before
+    - Evidence: Existing `response-metadata.ts` helper ownership is confirmed by
+      direct tests for `buildRuntimeResponseMeta`, `classifyRuntimeTrust`, and
+      `buildTrustCalibration`.
+  - [x] T004.3 Route any proven field-level enum migration to EB024 before
     broad changes.
+    - Evidence: No public enum migration was selected for Phase 2.
 
-- [ ] T005 Add first-read failure fixtures.
+- [x] T005 Add first-read failure fixtures.
   - Depends on: T004
   - Requirement: Requirement 4
   - Files: `tests/fixtures/`, focused test helpers
   - Acceptance: Hybrid filesystem fixtures and adapter fakes can reproduce cold,
     stale, degraded, blocked, permission-limited, unsupported, and
     budget-truncated states without relying on flaky wall-clock behavior.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-07-10. Added
+    `tests/fixtures/fixture-first-read-failure-modes/` and scanner coverage for
+    unsupported language, skipped generated/vendor content, and budget-truncated
+    catalog evidence. Existing scanner coverage already reproduces
+    permission-limited paths, while adapter-fake contract tests reproduce cold,
+    stale, degraded, and unavailable runtime states without wall-clock behavior.
 
 ## Phase 3: First-Read Surface Hardening
 

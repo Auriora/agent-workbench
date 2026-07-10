@@ -157,6 +157,164 @@ describe("response metadata helpers", () => {
     });
   });
 
+  it("maps first-read stale, degraded, and blocked states onto existing metadata fields", () => {
+    const stale = buildRuntimeResponseMeta({
+      repoRoot: "/repo",
+      indexedRoots: ["."],
+      skippedRoots: [],
+      languages: ["python"],
+      coverage: [pythonCoverage()],
+      snapshot: snapshot({ freshness: "stale" })
+    });
+    const degraded = buildRuntimeResponseMeta({
+      repoRoot: "/repo",
+      indexedRoots: ["."],
+      skippedRoots: [],
+      languages: ["python"],
+      coverage: [pythonCoverage()],
+      snapshot: snapshot({ freshness: "fresh" }),
+      watcher: watcherFreshness({
+        status: "degraded",
+        queue_state: "failed",
+        scope_status: "unknown",
+        ignore_rules_status: "unknown",
+        reason: "watcher adapter failed"
+      })
+    });
+    const blocked = buildRuntimeResponseMeta({
+      repoRoot: "/repo",
+      indexedRoots: ["."],
+      skippedRoots: [],
+      languages: ["python"],
+      coverage: [pythonCoverage()],
+      snapshot: snapshot({
+        freshness: "fresh",
+        analysis_validity: "invalid_due_to_environment",
+        reason: "parser timeout"
+      }),
+      verification_status: "blocked"
+    });
+
+    expect(stale.classification).toEqual({
+      runtime_state: "stale",
+      freshness: "stale",
+      analysis_validity: "valid"
+    });
+    expect(stale.meta).toMatchObject({
+      freshness: "stale",
+      analysis_validity: "valid",
+      verification_status: "needed"
+    });
+
+    expect(degraded.classification).toEqual({
+      runtime_state: "degraded",
+      freshness: "stale",
+      analysis_validity: "partial"
+    });
+    expect(degraded.meta.caveats).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "degraded_watcher_freshness",
+          severity: "blocker",
+          message: "watcher adapter failed"
+        })
+      ])
+    );
+
+    expect(blocked.classification).toEqual({
+      runtime_state: "invalid_due_to_environment",
+      freshness: "fresh",
+      analysis_validity: "invalid_due_to_environment"
+    });
+    expect(blocked.meta).toMatchObject({
+      analysis_validity: "invalid_due_to_environment",
+      verification_status: "blocked"
+    });
+    expect(blocked.meta.caveats).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "parser_timeout",
+          severity: "blocker"
+        })
+      ])
+    );
+  });
+
+  it("keeps first-read failure states unsafe for proof-like trust claims", () => {
+    const states = [
+      buildRuntimeResponseMeta({
+        repoRoot: "/repo",
+        indexedRoots: ["."],
+        skippedRoots: [],
+        languages: ["python"],
+        coverage: [pythonCoverage()],
+        snapshot: snapshot({ freshness: "stale" })
+      }).meta,
+      buildRuntimeResponseMeta({
+        repoRoot: "/repo",
+        indexedRoots: ["."],
+        skippedRoots: [],
+        languages: ["python"],
+        coverage: [pythonCoverage()],
+        snapshot: snapshot({ freshness: "fresh" }),
+        watcher: watcherFreshness({
+          status: "degraded",
+          queue_state: "unavailable",
+          scope_status: "unknown",
+          ignore_rules_status: "unknown"
+        })
+      }).meta,
+      buildRuntimeResponseMeta({
+        repoRoot: "/repo",
+        indexedRoots: ["."],
+        skippedRoots: [],
+        languages: [],
+        coverage: [],
+        snapshot: null,
+        freshness: "cold",
+        hasEvidence: false
+      }).meta,
+      buildRuntimeResponseMeta({
+        repoRoot: "/repo",
+        indexedRoots: ["."],
+        skippedRoots: [],
+        languages: ["python"],
+        coverage: [pythonCoverage()],
+        snapshot: snapshot({
+          freshness: "fresh",
+          analysis_validity: "invalid_due_to_environment"
+        }),
+        verification_status: "blocked"
+      }).meta
+    ];
+
+    for (const meta of states) {
+      const trust = buildTrustCalibration({
+        policy: { surface_kind: "repository_status" },
+        meta
+      });
+
+      expect(trust.safe_to_use_for).not.toContain("task_completion_claim");
+      expect(trust.safe_to_use_for).not.toContain("passed_validation_claim");
+      expect(trust.not_safe_to_use_for).toEqual(
+        expect.arrayContaining([
+          "implementation_claim",
+          "passed_validation_claim",
+          "task_completion_claim",
+          "whole_program_impact_claim"
+        ])
+      );
+      expect(trust.must_verify_by).toEqual(
+        expect.arrayContaining([
+          "direct_read_relevant_source",
+          "refresh_runtime_snapshot",
+          "resolve_blocked_environment",
+          "run_planned_validation"
+        ])
+      );
+    }
+  });
+
   it("adds shared caveats for unsupported language coverage", () => {
     const caveats = deriveRuntimeStatusCaveats({
       coverage: [
