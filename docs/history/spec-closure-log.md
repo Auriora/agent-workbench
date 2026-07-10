@@ -417,7 +417,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/037-first-read-reliability-bounded-tools
 - **Title:** First-read reliability and bounded tools requirements
 - **Final spec commit:** 9557470
-- **Closure cleanup commit:** pending-cleanup-commit
+- **Closure cleanup commit:** f4d8d60
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/reference/runtime-contracts.md`
