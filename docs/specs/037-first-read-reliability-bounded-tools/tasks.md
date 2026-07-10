@@ -121,7 +121,7 @@ T008 -> T009 -> T010
 
 **Purpose**: Apply the shared behavior to bounded runtime surfaces.
 
-- [ ] T006 Harden repo status, scope, and overview first reads.
+- [x] T006 Harden repo status, scope, and overview first reads.
   - Depends on: T004, T005
   - Requirement: Requirement 1; Requirement 2; Requirement 3; Requirement 4
   - Files: `src/application/use-cases/get-repo-status.ts`,
@@ -130,9 +130,13 @@ T008 -> T009 -> T010
     `tests/runtime/`, `tests/mcp/`
   - Acceptance: Resource tests prove current, stale, degraded, blocked, and
     skipped-work behavior for representative fixtures.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-07-10. `getScannedRepoStatus` now feeds scan
+    truncation and row budget through shared status metadata classification.
+    Focused resource tests cover stale scope evidence, unavailable overview
+    evidence, skipped generated/vendor paths, unsupported language coverage,
+    provider failure envelopes, watcher caveats, and bounded status metadata.
 
-- [ ] T007 Harden context, docs, diagnostics, and verification planning.
+- [x] T007 Harden context, docs, diagnostics, and verification planning.
   - Depends on: T004, T005
   - Requirement: Requirement 1; Requirement 2; Requirement 3; Requirement 4
   - Files: `src/application/use-cases/get-task-context.ts`,
@@ -142,9 +146,13 @@ T008 -> T009 -> T010
     `tests/mcp/`, `tests/docs/`
   - Acceptance: Tool tests prove skipped, missing, provider-limited, planned,
     and unsafe-claim boundaries without reporting partial success as complete.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-07-10. Diagnostics provider failure now returns
+    top-level needed status with reduced analysis validity. Focused tool tests
+    cover bounded context skipped work, docs cold/refreshing/unsafe paths,
+    diagnostics missing/provider-limited states, and non-executed
+    validation-plan trust boundaries.
 
-- [ ] T008 Checkpoint - Focused first-read validation.
+- [x] T008 Checkpoint - Focused first-read validation.
   - Depends on: T006, T007
   - Requirement: Requirement 1; Requirement 2; Requirement 3; Requirement 4
   - Files: `docs/specs/037-first-read-reliability-bounded-tools/verification.md`
@@ -152,7 +160,8 @@ T008 -> T009 -> T010
     remaining broad surface work is routed before durable promotion.
   - Validation: Run selected `pnpm exec vitest run ...` slices and
     `pnpm typecheck`.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-07-10. Phase 3 focused Vitest slices passed
+    with 8 files and 130 tests; `pnpm run typecheck` passed.
 
 ## Phase 4: Durable Promotion And Closure Readiness
 

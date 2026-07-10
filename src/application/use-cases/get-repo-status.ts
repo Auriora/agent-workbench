@@ -183,18 +183,14 @@ export async function getScannedRepoStatus(input: {
     skipped_roots: scanned.skipped_roots,
     files: scanned.files,
     freshness: "unknown",
-    watcher: input.watcher
+    watcher: input.watcher,
+    row_limit: input.max_files ?? 15000,
+    truncated: scanned.truncated
   });
 
   return {
     status: result.status,
-    meta: {
-      ...result.meta,
-      truncated: scanned.truncated,
-      budget: {
-        row_limit: input.max_files ?? 15000
-      }
-    }
+    meta: result.meta
   };
 }
 

@@ -15,6 +15,8 @@ import { getRepoScope, type GetRepoScopeResult } from "../../src/application/use
 import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { repoOverviewResource } from "../../src/interface-adapters/mcp/registries/resources/repo-overview.js";
 import { repoScopeResource } from "../../src/interface-adapters/mcp/registries/resources/repo-scope.js";
+import { buildRepoOverviewEnvelope } from "../../src/presentation/repo-overview-presenter.js";
+import { buildRepoScopeEnvelope } from "../../src/presentation/repo-scope-presenter.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
 import type { SnapshotState } from "../../src/domain/models/runtime.js";
 import type { SnapshotPort } from "../../src/ports/index.js";
@@ -666,6 +668,47 @@ describe("repo scope and overview composed server resources", () => {
     expect(result.meta.scope.languages).toEqual(expect.arrayContaining(["cpp", "python"]));
   });
 
+  it("carries stale scope evidence and unsafe trust boundaries", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-cmake-cpp-repo");
+    const result = await getRepoScope({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter(),
+      snapshots: snapshotPort(snapshot({ repoRoot, freshness: "stale" }))
+    });
+
+    expect(result.meta).toMatchObject({
+      freshness: "stale"
+    });
+    expect(buildRepoScopeEnvelope(result).meta.trust).toMatchObject({
+      not_safe_to_use_for: expect.arrayContaining(["task_completion_claim", "whole_program_impact_claim"]),
+      must_verify_by: expect.arrayContaining(["refresh_runtime_snapshot", "direct_read_relevant_source"])
+    });
+  });
+
+  it("summarizes first-read fixture skipped and unsupported scope evidence", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-first-read-failure-modes");
+    const result = await getRepoScope({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter()
+    });
+
+    expect(result.scope.languages).toEqual(expect.arrayContaining(["java", "markdown"]));
+    expect(result.scope.capability_counts.unsupported).toBeGreaterThanOrEqual(1);
+    expect(result.scope.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: "dist", reason: "generated_or_vendor" }),
+        expect.objectContaining({ path: "vendor", reason: "generated_or_vendor" })
+      ])
+    );
+    expect(result.meta.caveats).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "unsupported_language_or_platform"
+        })
+      ])
+    );
+  });
+
   it("aligns overview freshness with an available fresh snapshot", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-go-service-repo");
     const result = await getRepoOverview({
@@ -676,6 +719,36 @@ describe("repo scope and overview composed server resources", () => {
 
     expect(result.meta.freshness).toBe("fresh");
     expect(result.meta.scope.languages).toEqual(expect.arrayContaining(["go"]));
+  });
+
+  it("carries unavailable overview evidence as an unsafe first-read state", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-go-service-repo");
+    const result = await getRepoOverview({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter(),
+      snapshots: snapshotPort({
+        ...snapshot({ repoRoot, freshness: "cold" }),
+        analysis_validity: "invalid_due_to_environment",
+        reason: "tree-sitter grammar unavailable"
+      })
+    });
+
+    expect(result.meta).toMatchObject({
+      analysis_validity: "invalid_due_to_environment",
+      freshness: "cold",
+      verification_status: "needed"
+    });
+    expect(buildRepoOverviewEnvelope(result).meta.trust).toMatchObject({
+      not_safe_to_use_for: expect.arrayContaining(["task_completion_claim", "passed_validation_claim"]),
+      must_verify_by: expect.arrayContaining(["resolve_blocked_environment"])
+    });
+    expect(result.meta.caveats).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "missing_parser_grammar"
+        })
+      ])
+    );
   });
 });
 

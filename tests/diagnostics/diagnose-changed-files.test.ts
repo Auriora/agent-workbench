@@ -179,6 +179,12 @@ describe("diagnoseChangedFiles", () => {
 
     const envelope = buildDiagnosticsForFilesEnvelope(result);
 
+    expect(result.diagnostics.status).toBe("needed");
+    expect(result.diagnostics.summary).toBe("Diagnostics provider evidence was limited for 1 file(s).");
+    expect(result.meta).toMatchObject({
+      analysis_validity: "partial",
+      verification_status: "needed"
+    });
     expect(envelope.data.findings).toEqual([]);
     expect(envelope.data.provider_statuses).toEqual([
       expect.objectContaining({
@@ -187,6 +193,10 @@ describe("diagnoseChangedFiles", () => {
         status: "failed"
       })
     ]);
+    expect(envelope.meta.trust).toMatchObject({
+      not_safe_to_use_for: expect.arrayContaining(["passed_validation_claim", "task_completion_claim"]),
+      must_verify_by: expect.arrayContaining(["review_diagnostics_output", "run_planned_validation"])
+    });
     expect(envelope.warnings).toEqual([]);
     expect(envelope.errors).toEqual([]);
   });

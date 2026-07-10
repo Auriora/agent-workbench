@@ -14,17 +14,18 @@ license: GPL-3.0-or-later
 ## Scope
 
 This verification record covers Spec 037 from backlog promotion through
-implementation, durable promotion, and closure readiness. Phase 1 is complete:
-the package is created, the current runtime response behavior is reconciled, and
-the first implementation slice is selected. Implementation evidence is pending.
+implementation, durable promotion, and closure readiness. Phases 1-3 are
+complete: the package is created, current runtime response behavior is
+reconciled, shared contract/fixture foundations are in place, and first-read
+resource/tool hardening is validated. Durable promotion remains pending.
 
 ## Quality Gates
 
 | Gate | Required? | Status | Evidence |
 |------|-----------|--------|----------|
-| Requirements acceptance criteria reviewed | yes | partial | Requirements reviewed through Phase 2 scope; durable promotion pending. |
-| Task evidence complete | yes | partial | T001-T005 complete; T006-T010 pending. |
-| Automated tests pass or alternate verification recorded | yes | passed | Phase 2 focused tests, typecheck, and second full suite passed. |
+| Requirements acceptance criteria reviewed | yes | partial | Requirements reviewed through Phase 3 scope; durable promotion pending. |
+| Task evidence complete | yes | partial | T001-T008 complete; T009-T010 pending. |
+| Automated tests pass or alternate verification recorded | yes | passed | Phase 3 focused tests, typecheck, and full suite passed. |
 | Durable documentation updates identified | yes | pending | `change-impact.md` identifies targets. |
 | Durable documentation promoted or explicitly deferred | yes | pending | Not started. |
 | Spec cleanup decision recorded | yes | pending | Not ready for closure. |
@@ -37,35 +38,36 @@ the first implementation slice is selected. Implementation evidence is pending.
 | `git diff --check -- docs/specs/037-first-read-reliability-bounded-tools` | Markdown and whitespace sanity for spec artifacts. | passed | 2026-07-10: no whitespace errors. |
 | `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts` | Documentation metadata/link regression after spec creation. | passed | 2026-07-10: 1 file, 2 tests passed. |
 | `pnpm run typecheck` | TypeScript contract/use-case validation after implementation. | passed | 2026-07-10: `tsc --noEmit` passed. |
-| `pnpm run test` | Full regression before closure. | passed | 2026-07-10: second full run passed, 78 files and 577 tests. |
+| `pnpm run test` | Full regression before closure. | passed | 2026-07-10: Phase 3 full run passed, 78 files and 581 tests. |
 | `pnpm exec vitest run tests/contracts/response-metadata.test.ts tests/workspace/file-catalog-scanner.test.ts` | Phase 2 focused contract and fixture validation. | passed | 2026-07-10: 2 files and 33 tests passed. |
+| `pnpm exec vitest run tests/runtime/status.test.ts tests/mcp/repo-status-resource.test.ts tests/mcp/repo-scope-overview-resource.test.ts tests/mcp/context-for-task-tool.test.ts tests/docs/query-docs.test.ts tests/diagnostics/diagnose-changed-files.test.ts tests/mcp/diagnostics-for-files-tool.test.ts tests/mcp/verification-plan-tool.test.ts` | Phase 3 focused resource/tool validation. | passed | 2026-07-10: 8 files and 130 tests passed. |
 
 ## Requirement Coverage
 
 | Requirement | Acceptance criteria covered | Evidence | Residual risk |
 |-------------|-----------------------------|----------|---------------|
-| Requirement 1 | helper foundation | T004 covers state metadata mapping through existing fields. | Surface-specific hardening remains in T006/T007. |
-| Requirement 2 | planning only | T003 selects T004 before surface work. | Skipped-work shape may vary by surface until T006/T007. |
-| Requirement 3 | helper foundation | T004 covers proof-like trust restrictions for unsafe evidence states. | Existing tools may still differ until hardening tasks run. |
-| Requirement 4 | fixture foundation | T005 adds hybrid filesystem fixture plus adapter-fake coverage. | Surface-specific fixture assertions remain in T006/T007. |
+| Requirement 1 | resource/tool hardening | T004, T006, and T007 cover state metadata mapping through existing fields and first-read surface behavior. | Durable promotion remains in T009. |
+| Requirement 2 | resource/tool hardening | T005, T006, and T007 cover skipped, provider-limited, and budgeted evidence across representative surfaces. | Durable promotion remains in T009. |
+| Requirement 3 | resource/tool hardening | T004, T006, and T007 cover proof-like trust restrictions, provider-limited diagnostics, and non-executed validation planning. | Durable promotion remains in T009. |
+| Requirement 4 | fixture and focused tests | T005, T006, T007, and T008 cover fixtures, adapter fakes, resource tests, and tool tests. | Full closure validation remains in T010. |
 | Requirement 5 | package scaffold only | Spec package created. | Durable promotion pending. |
 
 ## Correctness Property Coverage
 
 | Property | Covered by | Evidence | Residual risk |
 |----------|------------|----------|---------------|
-| CP-001 | Contract/helper tests. | `response-metadata.test.ts` covers metadata/trust alignment. | MCP golden coverage remains in T006/T007. |
-| CP-002 | Contract/helper and fixture tests. | Adapter-fake tests cover unsafe evidence states. | Surface minimum-evidence tests remain in T006/T007. |
-| CP-003 | Scanner fixture test. | `file-catalog-scanner.test.ts` covers skipped and budget-truncated evidence. | Tool-level skipped-work summaries remain in T006/T007. |
-| CP-004 | Pending verification-plan tests. | Pending. | None accepted yet. |
+| CP-001 | Contract/helper and resource/tool tests. | `response-metadata.test.ts`, resource envelopes, diagnostics envelopes, and verification-plan envelopes cover metadata/trust alignment. | Durable docs still need promotion. |
+| CP-002 | Contract/helper, fixture, resource, and tool tests. | Adapter-fake tests plus Phase 3 resource/tool tests cover unsafe evidence states and named reasons. | Durable docs still need promotion. |
+| CP-003 | Scanner fixture and first-read surface tests. | Scanner, scope/overview, context, docs, and verification-plan tests cover bounded skipped-work and budget evidence. | Durable docs still need promotion. |
+| CP-004 | Verification-plan tests. | Verification-plan tests cover non-executed command planning and passed-validation trust restrictions. | Full closure validation remains in T010. |
 
 ## Scope Reconciliation Before Closure
 
 | Broad requirement, design target, or review finding | Implemented in this spec | Coverage state | Deferred or rejected work | Destination | Blocks closure? | Evidence |
 |-----------------------------------------------------|--------------------------|----------------|---------------------------|-------------|-----------------|----------|
-| First-read valid/stale/degraded/blocked behavior | helper foundation | partial | none | active spec | yes | T004 proves shared metadata/trust behavior. |
-| Bounded skipped-work reporting | fixture foundation | partial | none | active spec | yes | T005 scanner fixture covers skipped and budget-truncated evidence. |
-| Cold/stale/degraded/blocked fixtures | fixture/fake foundation | partial | none | active spec | yes | T005 combines filesystem fixture and adapter-fake state tests. |
+| First-read valid/stale/degraded/blocked behavior | helper foundation plus resource/tool surfaces | partial | durable promotion pending | active spec | yes | T004, T006, and T007 prove shared and surface behavior. |
+| Bounded skipped-work reporting | fixture foundation plus resource/tool surfaces | partial | durable promotion pending | active spec | yes | T005, T006, and T007 cover skipped, provider-limited, and budgeted evidence. |
+| Cold/stale/degraded/blocked fixtures | fixture/fake foundation plus resource/tool surfaces | partial | durable promotion pending | active spec | yes | T005, T006, and T007 combine filesystem fixtures, adapter fakes, and surface tests. |
 | Durable docs promotion | package only | partial-blocking | implementation docs pending | active spec | yes | Pending. |
 
 ## Agent Readiness Evidence
@@ -89,9 +91,9 @@ the first implementation slice is selected. Implementation evidence is pending.
 | T003 | complete | 2026-07-10: selected T004 as the first implementation slice and recorded the minimum evidence contract in `design.md`. | Phase 2 now complete. |
 | T004 | complete | 2026-07-10: added focused `response-metadata.test.ts` coverage for state metadata mapping and proof-like trust restrictions. | Existing helper ownership confirmed; no public enum migration selected. |
 | T005 | complete | 2026-07-10: added `fixture-first-read-failure-modes` plus scanner coverage for unsupported, skipped, and budget-truncated evidence. | Adapter-fake tests cover runtime state cases; existing scanner test covers permission-limited paths. |
-| T006 | pending | | |
-| T007 | pending | | |
-| T008 | pending | | |
+| T006 | complete | 2026-07-10: scan truncation and row budgets now flow through shared status metadata; resource tests cover stale scope, unavailable overview, skipped paths, unsupported coverage, provider failure envelopes, watcher caveats, and bounded status metadata. | Durable promotion remains in T009. |
+| T007 | complete | 2026-07-10: diagnostics provider failure now returns a top-level needed status with reduced analysis validity; focused tool tests cover context skipped work, docs cold/refreshing/unsafe paths, diagnostics missing/provider-limited states, and non-executed validation-plan trust boundaries. | Durable promotion remains in T009. |
+| T008 | complete | 2026-07-10: Phase 3 focused Vitest slices passed with 8 files and 130 tests; `pnpm run typecheck` and `pnpm run test` passed. | Durable promotion remains in T009. |
 | T009 | pending | | |
 | T010 | pending | | |
 
@@ -110,6 +112,12 @@ the first implementation slice is selected. Implementation evidence is pending.
 | 2026-07-10 | T005 first-read failure fixture foundation. | complete | Hybrid filesystem fixture and adapter-fake coverage are in place for Phase 2. |
 | 2026-07-10 | `pnpm run typecheck`. | passed | `tsc --noEmit` passed. |
 | 2026-07-10 | `pnpm run test`. | passed | First full run hit a daemon entrypoint timeout; isolated daemon test passed, then second full run passed with 78 files and 577 tests. |
+| 2026-07-10 | `pnpm exec vitest run tests/runtime/status.test.ts tests/mcp/repo-status-resource.test.ts tests/mcp/repo-scope-overview-resource.test.ts tests/mcp/context-for-task-tool.test.ts tests/docs/query-docs.test.ts tests/diagnostics/diagnose-changed-files.test.ts tests/mcp/diagnostics-for-files-tool.test.ts tests/mcp/verification-plan-tool.test.ts`. | passed | Phase 3 focused resource/tool validation passed with 8 files and 130 tests. |
+| 2026-07-10 | T006 repo status, scope, and overview hardening. | complete | Resource and runtime tests cover stale, unavailable, skipped, unsupported, provider failure, watcher, and budgeted evidence states. |
+| 2026-07-10 | T007 context, docs, diagnostics, and verification planning hardening. | complete | Tool tests cover skipped, missing, provider-limited, non-executed validation, and unsafe-claim boundaries. |
+| 2026-07-10 | `pnpm run typecheck`. | passed | Phase 3 `tsc --noEmit` passed. |
+| 2026-07-10 | T008 focused first-read validation checkpoint. | complete | Focused tests and typecheck passed; durable promotion remains in T009. |
+| 2026-07-10 | `pnpm run test`. | passed | Phase 3 full suite passed with 78 files and 581 tests. |
 
 ## Manual Or External Verification
 

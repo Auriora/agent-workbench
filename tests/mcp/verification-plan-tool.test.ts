@@ -17,6 +17,7 @@ import {
 import type { FileCatalogScanPort } from "../../src/ports/index.js";
 import { verificationPlanTool } from "../../src/interface-adapters/mcp/registries/tools/verification-plan.js";
 import { verificationPlanSchema } from "../../src/contracts/index.js";
+import { buildVerificationPlanEnvelope } from "../../src/presentation/verification-plan-presenter.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
 import {
   getRegisteredTool,
@@ -42,6 +43,14 @@ describe("verification_plan use case", () => {
     });
 
     expect(result.plan.status).toBe("planned");
+    expect(result.meta).toMatchObject({
+      verification_status: "planned"
+    });
+    expect(buildVerificationPlanEnvelope(result).meta.trust).toMatchObject({
+      safe_to_use_for: expect.arrayContaining(["validation_planning"]),
+      not_safe_to_use_for: expect.arrayContaining(["passed_validation_claim", "task_completion_claim"]),
+      must_verify_by: expect.arrayContaining(["run_planned_validation", "obtain_executed_validation_evidence"])
+    });
     expect(result.plan.static_feedback).toBeUndefined();
     expect(result.plan.planned_commands).toEqual(
       expect.arrayContaining([

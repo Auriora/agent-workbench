@@ -82,6 +82,7 @@ export async function diagnoseChangedFiles(input: {
     }));
   const findings = [...providerResults.findings, ...missingFindings, ...unsafeFindings].sort(compareFindings);
   const blocked = findings.some((finding) => finding.blocking);
+  const providerLimited = providerResults.statuses.some((status) => status.status === "failed");
   const status = getCatalogRepoStatus({
     repo_root: scanned.repo_root,
     indexed_roots: scanned.indexed_roots,
@@ -93,8 +94,8 @@ export async function diagnoseChangedFiles(input: {
   });
   const diagnostics: DiagnosticsForFilesResult = {
     repo_root: scanned.repo_root,
-    status: blocked ? "blocked" : findings.length > 0 ? "needed" : "not_applicable",
-    summary: summarizeDiagnostics({ checkedFiles: requestedFiles, findings }),
+    status: blocked ? "blocked" : providerLimited || findings.length > 0 ? "needed" : "not_applicable",
+    summary: summarizeDiagnostics({ checkedFiles: requestedFiles, findings, providerLimited }),
     checked_files: requestedFiles,
     findings,
     provider_statuses: providerResults.statuses,
@@ -113,6 +114,8 @@ export async function diagnoseChangedFiles(input: {
     diagnostics,
     meta: {
       ...status.meta,
+      analysis_validity:
+        providerLimited && status.meta.analysis_validity === "valid" ? "partial" : status.meta.analysis_validity,
       verification_status: diagnostics.status,
       truncated: scanned.truncated || requestedFiles.length > input.request.max_files,
       budget: {
@@ -233,11 +236,15 @@ function severityRank(severity: DiagnosticFinding["severity"]): number {
 function summarizeDiagnostics(input: {
   checkedFiles: readonly string[];
   findings: readonly DiagnosticFinding[];
+  providerLimited: boolean;
 }): string {
   if (input.checkedFiles.length === 0) {
     return "No diagnostics files were supplied.";
   }
   if (input.findings.length === 0) {
+    if (input.providerLimited) {
+      return `Diagnostics provider evidence was limited for ${input.checkedFiles.length} file(s).`;
+    }
     return "Diagnostics completed with no actionable findings.";
   }
   return `${input.findings.length} diagnostics finding(s) need attention across ${input.checkedFiles.length} checked file(s).`;

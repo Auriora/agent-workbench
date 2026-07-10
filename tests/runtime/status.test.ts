@@ -586,6 +586,10 @@ describe("runtime status", () => {
     expect(result.status.freshness).toBe("unknown");
     expect(result.meta.truncated).toBe(true);
     expect(result.meta.budget).toEqual({ row_limit: 1 });
+    expect(buildStatusEnvelope(result).meta.trust).toMatchObject({
+      not_safe_to_use_for: expect.arrayContaining(["task_completion_claim", "whole_program_impact_claim"]),
+      must_verify_by: expect.arrayContaining(["direct_read_relevant_source", "refresh_runtime_snapshot"])
+    });
     expect(result.status.adapter_coverage).toEqual([
       expect.objectContaining({
         domain: "language",
@@ -662,6 +666,57 @@ describe("runtime status", () => {
         capability_level: "unsupported"
       })
     ]);
+    expect(result.meta.caveats).toEqual([
+      expect.objectContaining({
+        kind: "unsupported_language_or_platform"
+      })
+    ]);
+  });
+
+  it("maps first-read fixture scan limits through shared status metadata", async () => {
+    const result = await getScannedRepoStatus({
+      repo_root: path.resolve("tests/fixtures/fixture-first-read-failure-modes"),
+      scanner: {
+        async scan(input) {
+          return {
+            repo_root: input.repo_root,
+            indexed_roots: input.indexed_roots,
+            skipped_roots: ["dist", "vendor"],
+            truncated: true,
+            files: [
+              buildFileCatalogEntry({
+                file_identity: {
+                  path: "src/Main.java",
+                  language: "java",
+                  content_hash: "sha256:java",
+                  size_bytes: 10,
+                  mtime_ms: 1
+                }
+              })
+            ]
+          };
+        }
+      },
+      max_files: 1
+    });
+
+    expect(result.status.freshness).toBe("unknown");
+    expect(result.status.skipped_roots).toEqual(["dist", "vendor"]);
+    expect(result.meta).toMatchObject({
+      analysis_validity: "valid",
+      truncated: true,
+      budget: {
+        row_limit: 1
+      },
+      scope: {
+        skipped_roots: ["dist", "vendor"],
+        languages: ["java"]
+      }
+    });
+    expect(buildStatusEnvelope(result).meta.trust).toMatchObject({
+      not_safe_to_use_for: expect.arrayContaining(["task_completion_claim"]),
+      must_verify_by: expect.arrayContaining(["direct_read_relevant_source"])
+    });
     expect(result.meta.caveats).toEqual([
       expect.objectContaining({
         kind: "unsupported_language_or_platform"
