@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: tasks
 status: draft
 owner: platform
-last_reviewed: 2026-07-09
+last_reviewed: 2026-07-10
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -41,7 +41,7 @@ T008 -> T009 -> T010
 
 - [ ] T002 Reconcile current runtime-contract and first-read behavior.
   - Depends on: T001
-  - Requirement: Requirements 1, 2, 3
+  - Requirement: Requirement 1; Requirement 2; Requirement 3
   - Files: `src/contracts/`, `src/application/use-cases/response-metadata.ts`,
     `src/application/use-cases/get-repo-status.ts`,
     `src/application/use-cases/get-repo-scope.ts`,
@@ -56,11 +56,13 @@ T008 -> T009 -> T010
 
 - [ ] T003 Define the first implementation slice and minimum-evidence contract.
   - Depends on: T002
-  - Requirement: Requirements 1, 2, 3
+  - Requirement: Requirement 1; Requirement 2; Requirement 3
   - Files: `docs/specs/037-first-read-reliability-bounded-tools/design.md`,
-    `docs/specs/037-first-read-reliability-bounded-tools/traceability.md`
+    `docs/specs/037-first-read-reliability-bounded-tools/traceability.md`,
+    `docs/specs/037-first-read-reliability-bounded-tools/open-decisions.md`
   - Acceptance: One coherent first slice is selected with affected files,
-    minimum evidence, validation commands, and residual risks recorded.
+    minimum evidence, validation commands, and residual risks. The selected
+    slice must apply approved D001-D003 decisions from `open-decisions.md`.
   - Evidence: Pending.
 
 ## Phase 2: Contract And Fixture Foundation
@@ -69,23 +71,26 @@ T008 -> T009 -> T010
 
 - [ ] T004 Add or confirm shared first-read state and trust classification.
   - Depends on: T003
-  - Requirement: Requirements 1, 3
+  - Requirement: Requirement 1; Requirement 3
   - Files: `src/contracts/`, `src/application/use-cases/response-metadata.ts`,
     `tests/contracts/`
-  - Acceptance: Contract/helper behavior distinguishes valid, stale, degraded,
-    and blocked states or records why existing vocabulary is sufficient.
+  - Acceptance: Contract/helper behavior maps first-read stale, degraded, and
+    blocked states onto existing response metadata fields through additive
+    helper semantics; any proven field-level gap is routed to EB024.
   - Evidence: Pending.
   - [ ] T004.1 Add focused contract/helper tests for CP-001 and CP-002.
-  - [ ] T004.2 Implement or document the shared classification helper.
-  - [ ] T004.3 Route any required enum migration to EB024 before broad changes.
+  - [ ] T004.2 Implement or document the shared application-level
+    classification helper with per-use-case evidence inputs.
+  - [ ] T004.3 Route any proven field-level enum migration to EB024 before
+    broad changes.
 
 - [ ] T005 Add first-read failure fixtures.
   - Depends on: T004
   - Requirement: Requirement 4
   - Files: `tests/fixtures/`, focused test helpers
-  - Acceptance: Fixtures or adapter fakes can reproduce cold, stale,
-    degraded, blocked, permission-limited, unsupported, and budget-truncated
-    states without relying on flaky wall-clock behavior.
+  - Acceptance: Hybrid filesystem fixtures and adapter fakes can reproduce cold,
+    stale, degraded, blocked, permission-limited, unsupported, and
+    budget-truncated states without relying on flaky wall-clock behavior.
   - Evidence: Pending.
 
 ## Phase 3: First-Read Surface Hardening
@@ -94,7 +99,7 @@ T008 -> T009 -> T010
 
 - [ ] T006 Harden repo status, scope, and overview first reads.
   - Depends on: T004, T005
-  - Requirement: Requirements 1, 2, 3, 4
+  - Requirement: Requirement 1; Requirement 2; Requirement 3; Requirement 4
   - Files: `src/application/use-cases/get-repo-status.ts`,
     `src/application/use-cases/get-repo-scope.ts`,
     `src/application/use-cases/get-repo-overview.ts`,
@@ -105,7 +110,7 @@ T008 -> T009 -> T010
 
 - [ ] T007 Harden context, docs, diagnostics, and verification planning.
   - Depends on: T004, T005
-  - Requirement: Requirements 1, 2, 3, 4
+  - Requirement: Requirement 1; Requirement 2; Requirement 3; Requirement 4
   - Files: `src/application/use-cases/get-task-context.ts`,
     `src/application/use-cases/query-docs.ts`,
     `src/application/use-cases/diagnose-changed-files.ts`,
@@ -117,7 +122,7 @@ T008 -> T009 -> T010
 
 - [ ] T008 Checkpoint - Focused first-read validation.
   - Depends on: T006, T007
-  - Requirement: Requirements 1-4
+  - Requirement: Requirement 1; Requirement 2; Requirement 3; Requirement 4
   - Files: `docs/specs/037-first-read-reliability-bounded-tools/verification.md`
   - Acceptance: Focused tests pass, validation evidence is recorded, and any
     remaining broad surface work is routed before durable promotion.

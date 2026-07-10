@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: traceability
 status: draft
 owner: platform
-last_reviewed: 2026-07-09
+last_reviewed: 2026-07-10
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -22,13 +22,13 @@ the linked source artifacts.
 | Task ID | Requirements | Acceptance Criteria | Design Sections | Change Impact | Verification | Durable Targets | Open Decisions |
 |---------|--------------|---------------------|-----------------|---------------|--------------|-----------------|----------------|
 | T001 | Requirement 5 | AC1-AC3 | `design.md#overview` | `change-impact.md#promotion-targets` | `verification.md#quality-gates` | `docs/backlog/README.md` | none |
-| T002 | Requirements 1, 2, 3 | R1 AC1-AC3; R2 AC1-AC3; R3 AC1-AC3 | `design.md#components-and-changes` | `change-impact.md#durable-source-mapping` | `verification.md#agent-readiness-evidence` | runtime contracts and design docs | D001, D002, D003 |
-| T003 | Requirements 1, 2, 3 | R1 AC1-AC3; R2 AC1-AC3; R3 AC1-AC3 | `design.md#slice-boundary-and-residual-architecture` | `change-impact.md#proposed-changes` | `verification.md#scope-reconciliation-before-closure` | TBD by selected slice | D001, D002, D003 |
-| T004 | Requirements 1, 3 | R1 AC1-AC3; R3 AC1-AC3 | `design.md#data-models`, `design.md#function-signatures-and-interfaces` | `change-impact.md#proposed-changes` | `verification.md#validation-commands` | `docs/reference/runtime-contracts.md` | D001, D003 |
+| T002 | Requirement 1; Requirement 2; Requirement 3 | R1 AC1-AC3; R2 AC1-AC3; R3 AC1-AC3 | `design.md#components-and-changes` | `change-impact.md#durable-source-mapping` | `verification.md#agent-readiness-evidence` | runtime contracts and design docs | `open-decisions.md#d001-response-state-vocabulary`, `open-decisions.md#d002-failure-mode-fixture-strategy`, `open-decisions.md#d003-shared-classifier-ownership` |
+| T003 | Requirement 1; Requirement 2; Requirement 3 | R1 AC1-AC3; R2 AC1-AC3; R3 AC1-AC3 | `design.md#slice-boundary-and-residual-architecture` | `change-impact.md#proposed-changes` | `verification.md#scope-reconciliation-before-closure` | TBD by selected slice | `open-decisions.md#d001-response-state-vocabulary`, `open-decisions.md#d002-failure-mode-fixture-strategy`, `open-decisions.md#d003-shared-classifier-ownership` |
+| T004 | Requirement 1; Requirement 3 | R1 AC1-AC3; R3 AC1-AC3 | `design.md#data-models`, `design.md#function-signatures-and-interfaces` | `change-impact.md#proposed-changes` | `verification.md#validation-commands` | `docs/reference/runtime-contracts.md` | `open-decisions.md#d001-response-state-vocabulary`, `open-decisions.md#d003-shared-classifier-ownership` |
 | T005 | Requirement 4 | AC1-AC3 | `design.md#validation-strategy` | none | `verification.md#validation-commands` | none | D002 |
-| T006 | Requirements 1, 2, 3, 4 | R1 AC1-AC3; R2 AC1-AC3; R3 AC1-AC3; R4 AC1-AC3 | `design.md#components-and-changes`, `design.md#error-handling` | `change-impact.md#proposed-changes` | `verification.md#requirement-coverage` | runtime operations, MCP surface, runtime contracts | D001 |
-| T007 | Requirements 1, 2, 3, 4 | R1 AC1-AC3; R2 AC1-AC3; R3 AC1-AC3; R4 AC1-AC3 | `design.md#components-and-changes`, `design.md#error-handling` | `change-impact.md#proposed-changes` | `verification.md#requirement-coverage` | MCP surface, graph store, runtime contracts | D001 |
-| T008 | Requirements 1-4 | All AC for R1-R4 | `design.md#validation-strategy` | none | `verification.md#evidence-log` | none | D001-D003 if unresolved |
+| T006 | Requirement 1; Requirement 2; Requirement 3; Requirement 4 | R1 AC1-AC3; R2 AC1-AC3; R3 AC1-AC3; R4 AC1-AC3 | `design.md#components-and-changes`, `design.md#error-handling` | `change-impact.md#proposed-changes` | `verification.md#requirement-coverage` | runtime operations, MCP surface, runtime contracts | `open-decisions.md#d001-response-state-vocabulary` |
+| T007 | Requirement 1; Requirement 2; Requirement 3; Requirement 4 | R1 AC1-AC3; R2 AC1-AC3; R3 AC1-AC3; R4 AC1-AC3 | `design.md#components-and-changes`, `design.md#error-handling` | `change-impact.md#proposed-changes` | `verification.md#requirement-coverage` | MCP surface, graph store, runtime contracts | `open-decisions.md#d001-response-state-vocabulary` |
+| T008 | Requirement 1; Requirement 2; Requirement 3; Requirement 4 | All AC for R1-R4 | `design.md#validation-strategy` | none | `verification.md#evidence-log` | none | `open-decisions.md` if unresolved |
 | T009 | Requirement 5 | AC1-AC3 | `design.md#operational-considerations` | `change-impact.md#promotion-targets` | `verification.md#durable-promotion-and-cleanup` | runtime contracts, MCP surface, runtime operations, graph store, backlog | none |
 | T010 | Requirement 5 | AC1-AC3 | `design.md#validation-strategy` | `change-impact.md#promotion-targets` | `verification.md#ship-or-closure-risk` | closure log and archive index during closure | none |
 
@@ -55,7 +55,7 @@ the linked source artifacts.
 
 | Design Section | Requirements | Tasks | Interfaces Or Files | Verification | Coverage State | Residual Destination |
 |----------------|--------------|-------|---------------------|--------------|----------------|----------------------|
-| `design.md#components-and-changes` | Requirements 1-4 | T002, T006, T007 | `src/application/use-cases/*`, `tests/*` | Focused Vitest suites | not-covered | active spec |
+| `design.md#components-and-changes` | Requirement 1; Requirement 2; Requirement 3; Requirement 4 | T002, T006, T007 | `src/application/use-cases/*`, `tests/*` | Focused Vitest suites | not-covered | active spec |
 | `design.md#data-models` | Requirements 1, 3 | T004 | `src/contracts/*`, response metadata helpers | Contract tests | not-covered | active spec |
 | `design.md#error-handling` | Requirements 1-3 | T004, T006, T007 | use cases and presenters | MCP/resource tests | not-covered | active spec |
 | `design.md#validation-strategy` | Requirements 4, 5 | T005, T008, T010 | `tests/`, `verification.md` | Focused and full validation | not-covered | active spec |
@@ -65,9 +65,9 @@ the linked source artifacts.
 
 | Decision ID | Blocks | Affected Requirements | Affected Tasks | Resolution Needed |
 |-------------|--------|-----------------------|----------------|-------------------|
-| D001 | Design and implementation | Requirements 1, 3 | T003, T004, T006, T007 | Confirm existing response vocabulary is enough or route migration to EB024. |
-| D002 | Fixture design | Requirement 4 | T003, T005 | Decide whether to use filesystem fixtures, adapter fakes, or both for failure modes. |
-| D003 | Shared helper ownership | Requirements 1-3 | T003, T004 | Decide whether first-read classification belongs in response metadata helpers or per-use-case helpers. |
+| D001 | Design and implementation | Requirements 1, 3 | T003, T004, T006, T007 | Approved: existing public response fields with additive helper semantics; EB024 only for a proven field-level gap. |
+| D002 | Fixture design | Requirement 4 | T003, T005 | Approved: hybrid filesystem fixtures plus adapter fakes. |
+| D003 | Shared helper ownership | Requirements 1-3 | T003, T004 | Approved: shared application-level helper with per-use-case evidence inputs. |
 
 ## Maintenance Notes
 
@@ -76,3 +76,4 @@ the linked source artifacts.
   `partial-blocking`, or without a residual destination.
 - If EB024 becomes a prerequisite, mark affected implementation tasks
   attention-needed rather than forcing status vocabulary into this spec.
+- Apply approved `open-decisions.md` entries before marking T003 complete.

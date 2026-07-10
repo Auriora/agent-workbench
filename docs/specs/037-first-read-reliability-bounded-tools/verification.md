@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: verification
 status: draft
 owner: platform
-last_reviewed: 2026-07-09
+last_reviewed: 2026-07-10
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -33,8 +33,8 @@ spec creation only; implementation evidence is pending.
 
 | Command | Purpose | Result | Evidence |
 |---------|---------|--------|----------|
-| `git diff --check` | Markdown and whitespace sanity for spec artifacts. | pending | Run after package creation. |
-| `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts` | Documentation metadata/link regression after spec creation. | pending | Run after package creation or docs promotion. |
+| `git diff --check -- docs/specs/037-first-read-reliability-bounded-tools` | Markdown and whitespace sanity for spec artifacts. | passed | 2026-07-10: no whitespace errors. |
+| `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts` | Documentation metadata/link regression after spec creation. | passed | 2026-07-10: 1 file, 2 tests passed. |
 | `pnpm typecheck` | TypeScript contract/use-case validation after implementation. | pending | Required after code changes. |
 | `pnpm test` | Full regression before closure. | pending | Required before closure unless waived with residual risk. |
 
@@ -42,10 +42,10 @@ spec creation only; implementation evidence is pending.
 
 | Requirement | Acceptance criteria covered | Evidence | Residual risk |
 |-------------|-----------------------------|----------|---------------|
-| Requirement 1 | none yet | Pending implementation. | First-read vocabulary may need EB024. |
+| Requirement 1 | none yet | Pending implementation. | D001 approves existing response fields plus additive helper semantics; EB024 only for a proven field-level gap. |
 | Requirement 2 | none yet | Pending implementation. | Skipped-work shape may vary by surface. |
 | Requirement 3 | none yet | Pending implementation. | Existing tools may already return partial data differently. |
-| Requirement 4 | none yet | Pending fixture design. | Some blocked states may require adapter fakes. |
+| Requirement 4 | none yet | Pending fixture design. | D002 approves hybrid filesystem fixtures and adapter fakes. |
 | Requirement 5 | package scaffold only | Spec package created. | Durable promotion pending. |
 
 ## Correctness Property Coverage
@@ -82,7 +82,7 @@ spec creation only; implementation evidence is pending.
 
 | Task ID | Status | Evidence | Notes |
 |---------|--------|----------|-------|
-| T001 | complete | Spec package scaffolded on 2026-07-09. | Validation pending. |
+| T001 | complete | Spec package scaffolded on 2026-07-09; package lint and docs validation recorded on 2026-07-10. | Implementation pending. |
 | T002 | pending | | |
 | T003 | pending | | |
 | T004 | pending | | |
@@ -98,6 +98,9 @@ spec creation only; implementation evidence is pending.
 | Date | Evidence | Result | Notes |
 |------|----------|--------|-------|
 | 2026-07-09 | Created active Spec 037 package from EB003. | pending validation | Scaffold only. |
+| 2026-07-10 | `git diff --check -- docs/specs/037-first-read-reliability-bounded-tools`. | passed | No whitespace errors. |
+| 2026-07-10 | `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts`. | passed | 1 file and 2 tests passed. |
+| 2026-07-10 | Approved D001-D003 recommendations in `open-decisions.md`. | approved | Use existing response fields with additive helper semantics, hybrid fixture/fake tests, and shared helper ownership with per-use-case evidence inputs. |
 
 ## Manual Or External Verification
 
@@ -105,10 +108,11 @@ None yet.
 
 ## Residual Risks
 
-- The existing response-state vocabulary may be sufficient but must be
-  confirmed before introducing new enum values.
-- Fixture design may need adapter fakes to avoid flaky timing or daemon-state
-  tests.
+- D001 approves existing response fields plus additive helper semantics; T002
+  must still prove whether any concrete field-level gap requires EB024.
+- D002 approves adapter fakes for nondeterministic runtime, watcher, provider,
+  stale, or blocked states; filesystem fixtures should still cover
+  repository-shape behavior.
 - Golden MCP responses may churn; keep output changes additive where possible.
 
 ## Durable Promotion And Cleanup
@@ -167,6 +171,7 @@ medium until the first implementation slice is narrowed and fixture-backed.
 - Requirements: `requirements.md`
 - Canonical Context: `canonical-context.md`
 - Change Impact: `change-impact.md`
+- Open Decisions: `open-decisions.md`
 - Design: `design.md`
 - Tasks: `tasks.md`
 - Traceability: `traceability.md`

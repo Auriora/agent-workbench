@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: requirements
 status: draft
 owner: platform
-last_reviewed: 2026-07-09
+last_reviewed: 2026-07-10
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -244,3 +244,4 @@ after the spec is closed and removed.
 - Tasks: `tasks.md`
 - Traceability: `traceability.md`
 - Verification: `verification.md`
+- Open Decisions: `open-decisions.md`

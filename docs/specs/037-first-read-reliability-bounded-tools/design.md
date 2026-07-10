@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-09
+last_reviewed: 2026-07-10
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -82,19 +82,26 @@ should call use cases and shared presenters.
 
 ### Data Models
 
-Prefer additive fields only when existing contracts cannot express the needed
-state. Candidate structures:
+Approved decision D001 keeps the first slice on existing public response fields
+with additive helper semantics. Do not add new public enum values unless T002
+proves a concrete field-level contract gap and routes that gap to EB024.
 
-- `meta.analysis_validity`: valid, stale, degraded, blocked, or existing
-  equivalent vocabulary if already available.
-- `meta.freshness`: current state of graph/docs/runtime evidence.
+Use this mapping for the first implementation slice:
+
+- stale first-read evidence primarily maps to `meta.freshness`;
+- degraded first-read evidence maps to `meta.analysis_validity: partial`,
+  bounded caveats, warnings, skipped-work evidence, and trust restrictions;
+- blocked first-read evidence maps to `verification_status: blocked`,
+  `analysis_validity: invalid_due_to_environment`, errors/warnings, or
+  safe-use restrictions according to the root condition;
 - `meta.trust.safe_to_use_for`, `meta.trust.not_safe_to_use_for`,
-  `meta.trust.must_verify_by`: existing trust boundaries.
+  `meta.trust.must_verify_by`: existing trust boundaries;
 - `skipped_paths`, `skipped_work`, `provider_statuses`, `warnings`, and
   `errors`: bounded evidence surfaces.
 
-If the current vocabulary is insufficient, route the contract migration through
-EB024 rather than silently adding incompatible statuses.
+If T002 proves this mapping cannot express a required public contract, route the
+contract migration through EB024 rather than silently adding incompatible
+statuses.
 
 ### Data Flow
 
@@ -129,14 +136,21 @@ return valid with trust metadata and bounded skipped-work summaries
 
 ### Function Signatures and Interfaces
 
+Approved decision D003 uses a shared application-level helper with per-use-case
+evidence inputs. Shared vocabulary, trust calibration, and common
+stale/degraded/blocked derivation belong in response metadata helpers. Minimum
+evidence rules stay close to each use case, then flow into the shared helper for
+consistent metadata and presentation. MCP registries remain thin.
+
 Implementation should first look for existing helper seams before adding new
-interfaces. If new helpers are needed, keep them application-level and
-contract-backed:
+interfaces. If new helpers are needed, keep them application-level,
+contract-backed, and shaped around current response metadata vocabulary:
 
 ```typescript
 type FirstReadEvidenceState = {
-  analysisValidity: "valid" | "stale" | "degraded" | "blocked";
-  freshness: string;
+  analysisValidity: ResponseMetadata["analysis_validity"];
+  freshness: ResponseMetadata["freshness"];
+  verificationStatus: ResponseMetadata["verification_status"];
   safeToUseFor: string[];
   notSafeToUseFor: string[];
   mustVerifyBy: string[];
@@ -187,9 +201,9 @@ pause for EB024-style contract migration planning before implementation.
 
 | Validation | Covers | Evidence Location | Residual Risk |
 |------------|--------|-------------------|---------------|
-| Contract tests for metadata/trust/status vocabulary | Requirements 1, 3; CP-001, CP-002 | `verification.md`, `tests/contracts/` | Status migration may require EB024. |
+| Contract tests for metadata/trust/status vocabulary | Requirements 1, 3; CP-001, CP-002 | `verification.md`, `tests/contracts/` | EB024 only if T002 proves a concrete field-level gap. |
 | MCP/resource golden tests | Requirements 1-4 | `tests/mcp/`, `tests/docs/`, `tests/runtime/` | Golden brittleness managed by focused fixtures. |
-| Fixture tests for cold/stale/degraded/blocked repos | Requirements 2-4 | `tests/fixtures/`, focused test suites | Some environment failures may need adapter fakes. |
+| Hybrid fixture and adapter-fake tests for cold/stale/degraded/blocked modes | Requirements 2-4 | `tests/fixtures/`, focused test suites | Filesystem fixtures cover repository shape; adapter fakes cover nondeterministic runtime/provider state. |
 | `pnpm typecheck` and `pnpm test` | Full regression | `verification.md` | Native/sandbox constraints must be recorded if present. |
 | Docs metadata/link checks | Requirement 5 | `tests/docs/docs-links-metadata.test.ts` | Closure docs must be updated after implementation. |
 
@@ -198,6 +212,9 @@ pause for EB024-style contract migration planning before implementation.
 - First implementation slice should be small: define current response-state
   behavior and add one focused fixture that proves a degraded or blocked first
   read.
+- Use the D001-D003 approved decisions from `open-decisions.md`: existing
+  response fields plus additive helper semantics, hybrid fixture/fake tests, and
+  a shared helper with per-use-case evidence inputs.
 - Do not change all first-read tools in one task unless the shared helper is
   already proven and the write set remains coherent.
 - Before implementing each task, run `verification_plan` for the files in that
@@ -211,15 +228,22 @@ should include a fresh MCP resource read after implementation, not only unit
 tests. If a local environment blocks daemon/socket tests, rerun validation in
 an unrestricted environment and record both outcomes.
 
+## Approved Decisions
+
+- D001: use existing public response fields with additive helper semantics for
+  the first slice. EB024 is not a prerequisite unless T002 proves a concrete
+  field-level contract gap.
+- D002: use hybrid filesystem fixtures and adapter fakes. Filesystem fixtures
+  prove repository-shape behavior; adapter fakes prove nondeterministic runtime,
+  watcher, provider, stale, or blocked states.
+- D003: use a shared application-level helper with per-use-case evidence inputs.
+  Shared vocabulary and trust derivation stay in response metadata helpers;
+  minimum-evidence rules stay near the relevant use case.
+
 ## Open Questions
 
-- Does the existing `analysis_validity` vocabulary fully cover stale,
-  degraded, and blocked first-read distinctions, or does EB024 need to be
-  promoted first?
 - Which first-read surface should be hardened first: repo resources, task
   context, docs search, diagnostics, or verification planning?
-- Should a shared first-read evidence classifier live in application use cases
-  or response metadata helpers?
 
 ## Related Artifacts
 
@@ -229,3 +253,4 @@ an unrestricted environment and record both outcomes.
 - Tasks: `tasks.md`
 - Traceability: `traceability.md`
 - Verification: `verification.md`
+- Open Decisions: `open-decisions.md`
