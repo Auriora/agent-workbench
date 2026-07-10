@@ -51,11 +51,11 @@ docs before closure.
 
 | Spec content | Durable destination | Promotion status | Notes |
 |--------------|---------------------|------------------|-------|
-| First-read contract semantics | `docs/reference/runtime-contracts.md` | pending | Promote after implementation proves exact behavior. |
-| Runtime operation and warmup behavior | `docs/design/runtime-operations-design.md` | pending | Include hidden work and refresh/queue semantics. |
-| MCP resource/tool behavior | `docs/design/mcp-surface-design.md` | pending | Include response trust/caveat expectations. |
-| Graph/docs budgets and skipped evidence | `docs/design/graph-store-design.md` | pending | Include bounded skipped-work details. |
-| Backlog status and residual routing | `docs/backlog/README.md` | in progress | EB003 status should point to active Spec 037. |
+| First-read contract semantics | `docs/reference/runtime-contracts.md` | complete | Existing metadata fields and trust boundaries promoted. |
+| Runtime operation and warmup behavior | `docs/design/runtime-operations-design.md` | complete | Hidden work, refresh, queue, and unavailable-state behavior promoted. |
+| MCP resource/tool behavior | `docs/design/mcp-surface-design.md` | complete | Response trust/caveat expectations promoted. |
+| Graph/docs budgets and skipped evidence | `docs/design/graph-store-design.md` | complete | Bounded skipped-work and coverage behavior promoted. |
+| Backlog status and residual routing | `docs/backlog/README.md` | complete | EB003 status now points to Spec 037 delivery and residual EB014/EB009 routing. |
 | Closure history | `docs/history/spec-closure-log.md`, `docs/history/spec-archive-index.md` | pending | Closure-only after accepted behavior is promoted. |
 
 ## Unchanged Durable Areas

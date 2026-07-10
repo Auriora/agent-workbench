@@ -3,7 +3,7 @@ title: Agent Workbench backlog
 doc_type: backlog
 status: draft
 owner: platform
-last_reviewed: 2026-07-07
+last_reviewed: 2026-07-10
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -172,7 +172,7 @@ or runtime telemetry.
 ### EB003: First-Read Reliability And Bounded Tool Behavior
 
 - Priority: P0
-- Status: promoted to active Spec 037
+- Status: delivered by active Spec 037
 - Friction signal: smoke tests exposed status timeouts, verification-plan
   timeouts, resource timeouts, and a need for tools to be callable only when
   timely evidence exists.
@@ -190,8 +190,11 @@ or runtime telemetry.
   - Local trace spans for latency, degraded state, and skipped evidence.
 - Promotion target: active
   [Spec 037](../specs/037-first-read-reliability-bounded-tools/requirements.md)
-  for first-read reliability, bounded hidden work, and explicit valid, stale,
-  degraded, or blocked response states.
+  delivered current-state first-read metadata, bounded hidden-work evidence,
+  provider-limited diagnostics handling, non-executed validation-plan trust
+  boundaries, and durable documentation promotion.
+- Residual routing: persisted graph completion beyond the first-pass graph
+  budget remains in EB014. Telemetry/reporting evidence remains in EB009.
 
 ### EB004: Policy-Aware Validation Planning
 

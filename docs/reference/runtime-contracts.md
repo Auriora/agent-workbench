@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-05
+last_reviewed: 2026-07-10
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -219,6 +219,28 @@ Direct source reads remain necessary when confidence is partial, degraded,
 stale, heuristic, or based on text fallback. Planned validation is not completed
 validation. Executed tests/checks or equivalent evidence are required before a
 response or final report claims proof.
+
+First-read resources and tools use existing metadata fields for reliability
+states rather than a separate status vocabulary:
+
+- current, sufficient evidence uses `analysis_validity: valid` with the
+  surface-specific freshness and capability metadata;
+- stale, cold, refreshing, or unknown evidence is represented through
+  `freshness`, caveats, and `meta.trust.must_verify_by` requirements;
+- optional provider, adapter, docs-index, or budget limitations use
+  `analysis_validity: partial`, bounded warnings or provider status, and
+  trust restrictions;
+- required environment, provider, cache, permission, or daemon failures use
+  `analysis_validity: invalid_due_to_environment` or `invalid` with
+  `verification_status: blocked`;
+- planned validation remains `verification_status: planned` and never grants a
+  passed-validation or completion claim.
+
+Scanned first-read status, scope, overview, context, docs, diagnostics, and
+verification-planning surfaces must name skipped or missing evidence with
+bounded samples or counts. Provider-limited diagnostics must not report as a
+clean no-op; they remain actionable routing evidence until the missing provider
+evidence is reviewed or validation is run.
 
 Do not introduce synonyms for the core capability levels. Use
 `evidence_kinds`, provenance, confidence, caveats, and verification status to

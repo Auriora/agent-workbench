@@ -3,7 +3,7 @@ title: MCP surface design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-05
+last_reviewed: 2026-07-10
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -164,6 +164,16 @@ Recoverable public handler failures, including missing or failing resource
 providers, return structured envelopes that still carry trust calibration.
 Transport failures that prevent MCP response framing are the only expected
 public exclusion.
+
+First-read resource and planning surfaces must keep this boundary explicit.
+`repo:///status`, `repo:///scope`, and `repo:///overview` report freshness,
+adapter coverage, scanner budget, watcher caveats, skipped paths, and provider
+failure envelopes through the shared response metadata and repository-status
+trust policy. `context_for_task`, docs routing, diagnostics, and
+`verification_plan` must preserve skipped, missing, provider-limited, and
+planned-only evidence as agent-facing caveats or status fields. Planned
+validation commands remain non-executed evidence; diagnostics provider
+failures remain needed routing evidence rather than a clean no-op.
 
 ## MVP Resources
 

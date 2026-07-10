@@ -14,22 +14,23 @@ license: GPL-3.0-or-later
 ## Scope
 
 This verification record covers Spec 037 from backlog promotion through
-implementation, durable promotion, and closure readiness. Phases 1-3 are
+implementation, durable promotion, and closure readiness. Phases 1-4 are
 complete: the package is created, current runtime response behavior is
-reconciled, shared contract/fixture foundations are in place, and first-read
-resource/tool hardening is validated. Durable promotion remains pending.
+reconciled, shared contract/fixture foundations are in place, first-read
+resource/tool hardening is validated, and accepted behavior is promoted to
+durable docs.
 
 ## Quality Gates
 
 | Gate | Required? | Status | Evidence |
 |------|-----------|--------|----------|
-| Requirements acceptance criteria reviewed | yes | partial | Requirements reviewed through Phase 3 scope; durable promotion pending. |
-| Task evidence complete | yes | partial | T001-T008 complete; T009-T010 pending. |
-| Automated tests pass or alternate verification recorded | yes | passed | Phase 3 focused tests, typecheck, and full suite passed. |
-| Durable documentation updates identified | yes | pending | `change-impact.md` identifies targets. |
-| Durable documentation promoted or explicitly deferred | yes | pending | Not started. |
-| Spec cleanup decision recorded | yes | pending | Not ready for closure. |
-| Governance or policy conflicts resolved | yes | partial | D001-D003 approved; no Phase 2 blockers remain. |
+| Requirements acceptance criteria reviewed | yes | passed | Requirements reviewed through Phase 4 scope. |
+| Task evidence complete | yes | passed | T001-T010 complete. |
+| Automated tests pass or alternate verification recorded | yes | passed | Phase 4 docs validation, typecheck, and full suite passed. |
+| Durable documentation updates identified | yes | passed | `change-impact.md` identifies targets. |
+| Durable documentation promoted or explicitly deferred | yes | passed | Accepted behavior promoted; residual graph completion and telemetry evidence are routed. |
+| Spec cleanup decision recorded | yes | passed | Ready for explicit closure cleanup. |
+| Governance or policy conflicts resolved | yes | passed | D001-D003 approved; no open decisions remain. |
 
 ## Validation Commands
 
@@ -41,34 +42,41 @@ resource/tool hardening is validated. Durable promotion remains pending.
 | `pnpm run test` | Full regression before closure. | passed | 2026-07-10: Phase 3 full run passed, 78 files and 581 tests. |
 | `pnpm exec vitest run tests/contracts/response-metadata.test.ts tests/workspace/file-catalog-scanner.test.ts` | Phase 2 focused contract and fixture validation. | passed | 2026-07-10: 2 files and 33 tests passed. |
 | `pnpm exec vitest run tests/runtime/status.test.ts tests/mcp/repo-status-resource.test.ts tests/mcp/repo-scope-overview-resource.test.ts tests/mcp/context-for-task-tool.test.ts tests/docs/query-docs.test.ts tests/diagnostics/diagnose-changed-files.test.ts tests/mcp/diagnostics-for-files-tool.test.ts tests/mcp/verification-plan-tool.test.ts` | Phase 3 focused resource/tool validation. | passed | 2026-07-10: 8 files and 130 tests passed. |
+| `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts` | Phase 4 durable-doc metadata/link validation. | passed | 2026-07-10: 1 file and 2 tests passed. |
+| `pnpm run typecheck` | Phase 4 TypeScript validation after durable promotion. | passed | 2026-07-10: `tsc --noEmit` passed. |
+| `pnpm run test` | Phase 4 full regression after durable promotion. | passed | 2026-07-10: full suite passed, 78 files and 581 tests. |
+| `git diff --check` | Workspace whitespace validation. | passed | 2026-07-10: no whitespace errors. |
+| `lint_spec_package` | Lifecycle package validation. | passed | 2026-07-10: 0 errors, 0 warnings, 0 info. |
+| `task_state_audit` | Lifecycle task evidence audit. | passed | 2026-07-10: no findings. |
+| `closure_check` | Lifecycle closure-readiness check. | passed | 2026-07-10: ready with no blockers. |
 
 ## Requirement Coverage
 
 | Requirement | Acceptance criteria covered | Evidence | Residual risk |
 |-------------|-----------------------------|----------|---------------|
-| Requirement 1 | resource/tool hardening | T004, T006, and T007 cover state metadata mapping through existing fields and first-read surface behavior. | Durable promotion remains in T009. |
-| Requirement 2 | resource/tool hardening | T005, T006, and T007 cover skipped, provider-limited, and budgeted evidence across representative surfaces. | Durable promotion remains in T009. |
-| Requirement 3 | resource/tool hardening | T004, T006, and T007 cover proof-like trust restrictions, provider-limited diagnostics, and non-executed validation planning. | Durable promotion remains in T009. |
-| Requirement 4 | fixture and focused tests | T005, T006, T007, and T008 cover fixtures, adapter fakes, resource tests, and tool tests. | Full closure validation remains in T010. |
-| Requirement 5 | package scaffold only | Spec package created. | Durable promotion pending. |
+| Requirement 1 | resource/tool hardening | T004, T006, T007, and T009 cover state metadata mapping through existing fields, first-read surface behavior, and durable docs. | No residual risk accepted in this spec. |
+| Requirement 2 | resource/tool hardening | T005, T006, T007, and T009 cover skipped, provider-limited, and budgeted evidence across representative surfaces and durable docs. | Graph completion remains routed to EB014. |
+| Requirement 3 | resource/tool hardening | T004, T006, T007, and T009 cover proof-like trust restrictions, provider-limited diagnostics, non-executed validation planning, and durable docs. | No residual risk accepted in this spec. |
+| Requirement 4 | fixture and focused tests | T005, T006, T007, T008, and T010 cover fixtures, adapter fakes, resource tests, tool tests, and full validation. | No residual risk accepted in this spec. |
+| Requirement 5 | durable promotion | T009 promotes accepted behavior; T010 records validation and closure readiness. | Closure cleanup remains an explicit final step. |
 
 ## Correctness Property Coverage
 
 | Property | Covered by | Evidence | Residual risk |
 |----------|------------|----------|---------------|
-| CP-001 | Contract/helper and resource/tool tests. | `response-metadata.test.ts`, resource envelopes, diagnostics envelopes, and verification-plan envelopes cover metadata/trust alignment. | Durable docs still need promotion. |
-| CP-002 | Contract/helper, fixture, resource, and tool tests. | Adapter-fake tests plus Phase 3 resource/tool tests cover unsafe evidence states and named reasons. | Durable docs still need promotion. |
-| CP-003 | Scanner fixture and first-read surface tests. | Scanner, scope/overview, context, docs, and verification-plan tests cover bounded skipped-work and budget evidence. | Durable docs still need promotion. |
-| CP-004 | Verification-plan tests. | Verification-plan tests cover non-executed command planning and passed-validation trust restrictions. | Full closure validation remains in T010. |
+| CP-001 | Contract/helper, resource/tool tests, and durable docs. | `response-metadata.test.ts`, resource envelopes, diagnostics envelopes, verification-plan envelopes, and runtime contracts cover metadata/trust alignment. | No residual risk accepted in this spec. |
+| CP-002 | Contract/helper, fixture, resource/tool tests, and durable docs. | Adapter-fake tests plus Phase 3 resource/tool tests cover unsafe evidence states and named reasons. | No residual risk accepted in this spec. |
+| CP-003 | Scanner fixture, first-read surface tests, and durable docs. | Scanner, scope/overview, context, docs, verification-plan, graph-store, and MCP docs cover bounded skipped-work and budget evidence. | Graph completion remains routed to EB014. |
+| CP-004 | Verification-plan tests and durable docs. | Verification-plan tests and runtime/MCP docs cover non-executed command planning and passed-validation trust restrictions. | No residual risk accepted in this spec. |
 
 ## Scope Reconciliation Before Closure
 
 | Broad requirement, design target, or review finding | Implemented in this spec | Coverage state | Deferred or rejected work | Destination | Blocks closure? | Evidence |
 |-----------------------------------------------------|--------------------------|----------------|---------------------------|-------------|-----------------|----------|
-| First-read valid/stale/degraded/blocked behavior | helper foundation plus resource/tool surfaces | partial | durable promotion pending | active spec | yes | T004, T006, and T007 prove shared and surface behavior. |
-| Bounded skipped-work reporting | fixture foundation plus resource/tool surfaces | partial | durable promotion pending | active spec | yes | T005, T006, and T007 cover skipped, provider-limited, and budgeted evidence. |
-| Cold/stale/degraded/blocked fixtures | fixture/fake foundation plus resource/tool surfaces | partial | durable promotion pending | active spec | yes | T005, T006, and T007 combine filesystem fixtures, adapter fakes, and surface tests. |
-| Durable docs promotion | package only | partial-blocking | implementation docs pending | active spec | yes | Pending. |
+| First-read valid/stale/degraded/blocked behavior | helper foundation plus resource/tool surfaces | complete | none | n/a | no | T004, T006, T007, T009, and durable docs prove shared and surface behavior. |
+| Bounded skipped-work reporting | fixture foundation plus resource/tool surfaces | complete | graph completion executor | EB014 | no | T005, T006, T007, T009, and durable docs cover skipped, provider-limited, and budgeted evidence. |
+| Cold/stale/degraded/blocked fixtures | fixture/fake foundation plus resource/tool surfaces | complete | none | n/a | no | T005, T006, and T007 combine filesystem fixtures, adapter fakes, and surface tests. |
+| Durable docs promotion | runtime contracts, operations, MCP surface, graph store, backlog | complete | closure history only | closure step | no | T009 promotion is complete. |
 
 ## Agent Readiness Evidence
 
@@ -94,8 +102,8 @@ resource/tool hardening is validated. Durable promotion remains pending.
 | T006 | complete | 2026-07-10: scan truncation and row budgets now flow through shared status metadata; resource tests cover stale scope, unavailable overview, skipped paths, unsupported coverage, provider failure envelopes, watcher caveats, and bounded status metadata. | Durable promotion remains in T009. |
 | T007 | complete | 2026-07-10: diagnostics provider failure now returns a top-level needed status with reduced analysis validity; focused tool tests cover context skipped work, docs cold/refreshing/unsafe paths, diagnostics missing/provider-limited states, and non-executed validation-plan trust boundaries. | Durable promotion remains in T009. |
 | T008 | complete | 2026-07-10: Phase 3 focused Vitest slices passed with 8 files and 130 tests; `pnpm run typecheck` and `pnpm run test` passed. | Durable promotion remains in T009. |
-| T009 | pending | | |
-| T010 | pending | | |
+| T009 | complete | 2026-07-10: promoted accepted first-read metadata, trust, hidden-work, skipped-evidence, graph/docs coverage, diagnostics, and validation-plan behavior to durable docs. | Residual graph completion is routed to EB014; telemetry evidence is routed to EB009. |
+| T010 | complete | 2026-07-10: docs metadata/link test, typecheck, full suite, lifecycle lint, task audit, closure check, and diff whitespace checks were recorded. | Ready for explicit closure cleanup. |
 
 ## Evidence Log
 
@@ -118,6 +126,15 @@ resource/tool hardening is validated. Durable promotion remains pending.
 | 2026-07-10 | `pnpm run typecheck`. | passed | Phase 3 `tsc --noEmit` passed. |
 | 2026-07-10 | T008 focused first-read validation checkpoint. | complete | Focused tests and typecheck passed; durable promotion remains in T009. |
 | 2026-07-10 | `pnpm run test`. | passed | Phase 3 full suite passed with 78 files and 581 tests. |
+| 2026-07-10 | T009 durable documentation promotion. | complete | Runtime contracts, runtime operations, MCP surface, graph-store, and backlog docs now carry accepted first-read reliability behavior. |
+| 2026-07-10 | `pnpm exec vitest run tests/docs/docs-links-metadata.test.ts`. | passed | Phase 4 docs metadata/link validation passed with 1 file and 2 tests. |
+| 2026-07-10 | `pnpm run typecheck`. | passed | Phase 4 `tsc --noEmit` passed. |
+| 2026-07-10 | `pnpm run test`. | passed | Phase 4 full suite passed with 78 files and 581 tests. |
+| 2026-07-10 | T010 closure-readiness checkpoint. | complete | Full validation and durable promotion evidence recorded; closure cleanup remains explicit. |
+| 2026-07-10 | `git diff --check`. | passed | No whitespace errors. |
+| 2026-07-10 | `lint_spec_package`. | passed | Lifecycle lint reported 0 errors, 0 warnings, and 0 info. |
+| 2026-07-10 | `task_state_audit`. | passed | Lifecycle task audit reported no findings. |
+| 2026-07-10 | `closure_check`. | passed | Lifecycle closure check reported ready with no blockers. |
 
 ## Manual Or External Verification
 
@@ -137,54 +154,54 @@ None yet.
 
 | Spec content | Durable destination or deferral | Status | Evidence |
 |--------------|---------------------------------|--------|----------|
-| Requirements and accepted behavior | `docs/reference/runtime-contracts.md`, `docs/design/mcp-surface-design.md` | pending | |
-| Technical design or architecture | `docs/design/runtime-operations-design.md`, `docs/design/graph-store-design.md` | pending | |
-| Contracts, schemas, data flow, or integration behavior | `docs/reference/runtime-contracts.md` | pending | |
-| Operational steps, rollout, validation, or recovery | `docs/design/runtime-operations-design.md`, optional runbook update if needed | pending | |
-| Decisions and rationale | `docs/history/spec-closure-log.md` during closure | pending | |
-| Follow-up work | `docs/backlog/README.md` or follow-up spec | pending | |
+| Requirements and accepted behavior | `docs/reference/runtime-contracts.md`, `docs/design/mcp-surface-design.md` | promoted | First-read state, trust, and public surface behavior promoted. |
+| Technical design or architecture | `docs/design/runtime-operations-design.md`, `docs/design/graph-store-design.md` | promoted | Bounded first-read operation, graph/docs coverage, and skipped evidence promoted. |
+| Contracts, schemas, data flow, or integration behavior | `docs/reference/runtime-contracts.md` | promoted | Existing metadata vocabulary retained; no public enum migration needed. |
+| Operational steps, rollout, validation, or recovery | `docs/design/runtime-operations-design.md` | promoted | Hidden work, refresh, queue, and unavailable-state behavior promoted. |
+| Decisions and rationale | `docs/history/spec-closure-log.md` during closure | deferred to closure | Closure history should be written during the explicit cleanup step. |
+| Follow-up work | `docs/backlog/README.md` | promoted | Graph completion routed to EB014; telemetry evidence routed to EB009. |
 
 ### Spec Cleanup Decision
 
-- **Cleanup action:** keep active
-- **Reason:** Implementation and durable promotion are pending.
-- **Final spec commit:** pending
+- **Cleanup action:** ready for closure cleanup
+- **Reason:** Implementation, validation, and durable promotion are complete.
+- **Final spec commit:** Phase 4 commit recorded in commit history
 - **Closure log path:** `docs/history/spec-closure-log.md`
 - **Closure log entry updated:** no
 - **Closure cleanup commit:** pending
 - **Active indexes updated:** no
-- **Durable docs linked back to evidence where useful:** no
+- **Durable docs linked back to evidence where useful:** yes
 - **Residual spec-only content:** listed below
 
 Residual spec-only content:
 
-- All implementation decisions and validation evidence remain active-spec-only
-  until tasks complete.
+- Detailed task execution history remains active-spec-only until closure
+  history is written.
 
 ## Ship Or Closure Risk
 
-- **Risk level:** medium
+- **Risk level:** low
 - **Breaking change:** no
-- **Blast radius checked:** no
+- **Blast radius checked:** yes
 - **Rollback path:** not required yet
-- **Requires human review:** yes
+- **Requires human review:** no
 - **Release notes needed:** no
-- **Follow-up issue or spec needed:** unknown
+- **Follow-up issue or spec needed:** yes, existing EB014 and EB009 routing only
 
 ### Risk Rationale
 
-This spec affects first-call trust across multiple public MCP surfaces. The
-intended behavior is additive and clarifying, but careless implementation could
-change response envelopes or agent decision-making broadly. The first
-implementation slice is now narrowed to T004 helper/contract behavior; risk
-remains medium until that behavior is fixture-backed and consumed by the
-individual surfaces.
+This spec affects first-call trust across multiple public MCP surfaces, but the
+accepted implementation is additive and uses existing response metadata fields.
+Focused tests, full regression, lifecycle checks, and durable promotion are
+complete. Remaining work is outside this spec: graph completion beyond the
+first-pass budget is routed to EB014, and telemetry/reporting evidence is
+routed to EB009.
 
 ## Readiness Decision
 
-- **Ready for promotion:** no
-- **Ready for release:** no
-- **Ready for closure:** no
+- **Ready for promotion:** yes
+- **Ready for release:** yes
+- **Ready for closure:** yes
 
 ## Related Artifacts
 

@@ -167,7 +167,7 @@ T008 -> T009 -> T010
 
 **Purpose**: Promote accepted behavior and make closure possible.
 
-- [ ] T009 Promote accepted behavior to durable docs.
+- [x] T009 Promote accepted behavior to durable docs.
   - Depends on: T008
   - Requirement: Requirement 5
   - Files: `docs/reference/runtime-contracts.md`,
@@ -178,9 +178,14 @@ T008 -> T009 -> T010
     `docs/reference/documentation-map.md`
   - Acceptance: Durable docs describe accepted current behavior and route
     residual work to one explicit destination.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-07-10. Accepted first-read metadata, trust,
+    bounded hidden-work, skipped evidence, graph/docs coverage, provider-limited
+    diagnostics, and non-executed validation-plan behavior were promoted to
+    durable runtime contracts, runtime operations, MCP surface, graph-store, and
+    backlog docs. Residual graph completion remains routed to EB014; telemetry
+    evidence remains routed to EB009.
 
-- [ ] T010 Checkpoint - Full validation and closure risk.
+- [x] T010 Checkpoint - Full validation and closure risk.
   - Depends on: T009
   - Requirement: Requirement 5
   - Files: `docs/specs/037-first-read-reliability-bounded-tools/verification.md`
@@ -188,7 +193,9 @@ T008 -> T009 -> T010
     decision are recorded.
   - Validation: `pnpm typecheck`; `pnpm test`; docs metadata/link tests;
     lifecycle/package checks if available.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-07-10. Full validation and lifecycle checks
+    were recorded in `verification.md`; closure risk is low, with cleanup left
+    for an explicit closure step.
 
 ## Execution Rules
 

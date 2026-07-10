@@ -36,30 +36,30 @@ the linked source artifacts.
 
 | Requirement | Priority | Acceptance Criteria | Design Sections | Tasks | Verification | Durable Targets | Coverage State | Residual Destination |
 |-------------|----------|---------------------|-----------------|-------|--------------|-----------------|----------------|----------------------|
-| Requirement 1 | must-have | AC1-AC3 | `design.md#data-models`, `design.md#error-handling` | T002, T003, T004, T006, T007, T008 | `verification.md#requirement-coverage` | `docs/reference/runtime-contracts.md`, `docs/design/mcp-surface-design.md` | not-covered | active spec |
-| Requirement 2 | must-have | AC1-AC3 | `design.md#algorithms-and-logic`, `design.md#components-and-changes` | T002, T003, T005, T006, T007, T008 | `verification.md#requirement-coverage` | `docs/design/runtime-operations-design.md`, `docs/design/graph-store-design.md` | not-covered | active spec |
-| Requirement 3 | must-have | AC1-AC3 | `design.md#error-handling`, `design.md#security-trust-and-access` | T002, T003, T004, T006, T007, T008 | `verification.md#requirement-coverage` | `docs/reference/runtime-contracts.md`, `docs/design/mcp-surface-design.md` | not-covered | active spec |
-| Requirement 4 | must-have | AC1-AC3 | `design.md#validation-strategy` | T005, T006, T007, T008, T010 | `verification.md#validation-commands` | none | not-covered | active spec |
-| Requirement 5 | must-have | AC1-AC3 | `design.md#operational-considerations` | T001, T009, T010 | `verification.md#durable-promotion-and-cleanup` | durable docs and history indexes | partial-blocking | active spec |
+| Requirement 1 | must-have | AC1-AC3 | `design.md#data-models`, `design.md#error-handling` | T002, T003, T004, T006, T007, T008, T009 | `verification.md#requirement-coverage` | `docs/reference/runtime-contracts.md`, `docs/design/mcp-surface-design.md` | complete | none |
+| Requirement 2 | must-have | AC1-AC3 | `design.md#algorithms-and-logic`, `design.md#components-and-changes` | T002, T003, T005, T006, T007, T008, T009 | `verification.md#requirement-coverage` | `docs/design/runtime-operations-design.md`, `docs/design/graph-store-design.md` | complete | EB014 for graph completion beyond first-pass budget |
+| Requirement 3 | must-have | AC1-AC3 | `design.md#error-handling`, `design.md#security-trust-and-access` | T002, T003, T004, T006, T007, T008, T009 | `verification.md#requirement-coverage` | `docs/reference/runtime-contracts.md`, `docs/design/mcp-surface-design.md` | complete | none |
+| Requirement 4 | must-have | AC1-AC3 | `design.md#validation-strategy` | T005, T006, T007, T008, T010 | `verification.md#validation-commands` | none | complete | none |
+| Requirement 5 | must-have | AC1-AC3 | `design.md#operational-considerations` | T001, T009, T010 | `verification.md#durable-promotion-and-cleanup` | durable docs and history indexes | complete | closure cleanup step |
 
 ## Correctness Property Coverage
 
 | Property | Requirements | Design Sections | Tasks | Tests Or Verification | Residual Risk |
 |----------|--------------|-----------------|-------|-----------------------|---------------|
-| CP-001 | Requirement 1 | `design.md#data-models` | T004, T006, T007 | Contract and MCP golden tests | Pending. |
-| CP-002 | Requirements 1, 3 | `design.md#error-handling` | T004, T005, T006, T007 | Failure-mode fixture tests | Pending. |
-| CP-003 | Requirement 2 | `design.md#algorithms-and-logic` | T005, T006, T007 | Skipped-work/truncation tests | Pending. |
-| CP-004 | Requirement 3 | `design.md#data-models` | T007, T008 | Verification-plan tests | Pending. |
+| CP-001 | Requirement 1 | `design.md#data-models` | T004, T006, T007, T009 | Contract tests, resource/tool envelope tests, and durable docs | None. |
+| CP-002 | Requirements 1, 3 | `design.md#error-handling` | T004, T005, T006, T007, T009 | Failure-mode fixture tests, resource/tool tests, and durable docs | None. |
+| CP-003 | Requirement 2 | `design.md#algorithms-and-logic` | T005, T006, T007, T009 | Skipped-work/truncation tests and durable docs | Graph completion remains in EB014. |
+| CP-004 | Requirement 3 | `design.md#data-models` | T007, T008, T009, T010 | Verification-plan tests, durable docs, and full validation | None. |
 
 ## Design To Implementation Matrix
 
 | Design Section | Requirements | Tasks | Interfaces Or Files | Verification | Coverage State | Residual Destination |
 |----------------|--------------|-------|---------------------|--------------|----------------|----------------------|
-| `design.md#components-and-changes` | Requirement 1; Requirement 2; Requirement 3; Requirement 4 | T002, T006, T007 | `src/application/use-cases/*`, `tests/*` | Focused Vitest suites | not-covered | active spec |
-| `design.md#data-models` | Requirements 1, 3 | T004 | `src/contracts/*`, response metadata helpers | Contract tests | not-covered | active spec |
-| `design.md#error-handling` | Requirements 1-3 | T004, T006, T007 | use cases and presenters | MCP/resource tests | not-covered | active spec |
-| `design.md#validation-strategy` | Requirements 4, 5 | T005, T008, T010 | `tests/`, `verification.md` | Focused and full validation | not-covered | active spec |
-| `design.md#operational-considerations` | Requirement 5 | T009, T010 | durable docs | Docs validation and closure checks | not-covered | active spec |
+| `design.md#components-and-changes` | Requirement 1; Requirement 2; Requirement 3; Requirement 4 | T002, T006, T007, T009 | `src/application/use-cases/*`, `tests/*`, durable docs | Focused Vitest suites and docs promotion | complete | none |
+| `design.md#data-models` | Requirements 1, 3 | T004, T009 | `src/contracts/*`, response metadata helpers, runtime contracts | Contract tests and docs promotion | complete | none |
+| `design.md#error-handling` | Requirements 1-3 | T004, T006, T007, T009 | use cases, presenters, runtime contracts, MCP surface docs | MCP/resource tests and docs promotion | complete | none |
+| `design.md#validation-strategy` | Requirements 4, 5 | T005, T008, T010 | `tests/`, `verification.md` | Focused and full validation | complete | none |
+| `design.md#operational-considerations` | Requirement 5 | T009, T010 | durable docs | Docs validation and closure checks | complete | closure cleanup step |
 
 ## Open Decision Impact
 

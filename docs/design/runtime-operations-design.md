@@ -3,7 +3,7 @@ title: Runtime operations design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-05-08
+last_reviewed: 2026-07-10
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -92,6 +92,16 @@ Spec 036 accepted the docs-first seed plus explicit non-complete graph coverage
 as the current behavior. A persisted graph completion executor is deferred to
 EB014 in `docs/backlog/README.md`; until that follow-up ships, truncated graph
 seed coverage must not be presented as complete freshness.
+
+First-read resources and planning tools must return bounded current-state
+evidence instead of waiting for broad hidden work. Status, scope, overview,
+context, docs, diagnostics, and verification planning may use the latest
+available snapshot, docs index, scanner result, provider status, or validation
+discovery evidence, but they must expose stale, cold, refreshing, unavailable,
+provider-limited, skipped, and budget-truncated states through response
+metadata. If minimum evidence for the requested claim is unavailable, the
+surface returns a structured unavailable or blocked state rather than
+success-shaped data with hidden omissions.
 
 ## Prewarm Entry Points
 

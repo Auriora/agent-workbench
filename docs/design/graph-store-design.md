@@ -3,7 +3,7 @@ title: Graph store design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-05
+last_reviewed: 2026-07-10
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -141,6 +141,13 @@ non-complete even if docs FTS rows for the docs/config seed are usable. When
 docs scanning itself truncates or lacks usable rows, `docs_search` must expose
 that docs-index state rather than allowing a global snapshot freshness label to
 imply full documentation coverage.
+
+First-read surfaces that consume graph, docs, or scanner evidence must carry
+budget and skipped-evidence state forward to response metadata. A truncated
+catalog scan, generated/vendor skip, unsupported language, provider failure, or
+stale snapshot is still useful routing evidence, but it must not be presented
+as complete graph or docs coverage. Public responses should summarize skipped
+paths by reason and bounded sample instead of dumping unbounded file lists.
 
 ## Indexes
 
