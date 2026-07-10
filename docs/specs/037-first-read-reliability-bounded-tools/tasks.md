@@ -39,7 +39,7 @@ T008 -> T009 -> T010
     verification, change-impact, and canonical-context artifacts.
   - Evidence: Package scaffolded from EB003 on 2026-07-09.
 
-- [ ] T002 Reconcile current runtime-contract and first-read behavior.
+- [x] T002 Reconcile current runtime-contract and first-read behavior.
   - Depends on: T001
   - Requirement: Requirement 1; Requirement 2; Requirement 3
   - Files: `src/contracts/`, `src/application/use-cases/response-metadata.ts`,
@@ -52,9 +52,14 @@ T008 -> T009 -> T010
     `src/application/use-cases/plan-verification.ts`
   - Acceptance: `design.md` and `traceability.md` are updated if current code
     proves a narrower or different first slice is safer.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-07-10. Current contracts expose
+    `freshness`, `analysis_validity`, `verification_status`, caveats, trust
+    calibration, skipped/budget metadata, and bounded evidence surfaces.
+    `response-metadata.ts` centralizes runtime trust classification across
+    first-read evidence states. Phase 1 selected the existing public response
+    fields plus additive helper semantics for the first slice.
 
-- [ ] T003 Define the first implementation slice and minimum-evidence contract.
+- [x] T003 Define the first implementation slice and minimum-evidence contract.
   - Depends on: T002
   - Requirement: Requirement 1; Requirement 2; Requirement 3
   - Files: `docs/specs/037-first-read-reliability-bounded-tools/design.md`,
@@ -63,7 +68,12 @@ T008 -> T009 -> T010
   - Acceptance: One coherent first slice is selected with affected files,
     minimum evidence, validation commands, and residual risks. The selected
     slice must apply approved D001-D003 decisions from `open-decisions.md`.
-  - Evidence: Pending.
+  - Evidence: Completed on 2026-07-10. Phase 2 starts with T004 as the first
+    implementation slice: shared response metadata/helper behavior in
+    `src/application/use-cases/response-metadata.ts` and
+    `tests/contracts/response-metadata.test.ts`. Minimum evidence uses existing
+    response fields and trust metadata. The detailed stale, degraded, and
+    unavailable-state mapping is recorded in `design.md`.
 
 ## Phase 2: Contract And Fixture Foundation
 

@@ -23,7 +23,7 @@ the linked source artifacts.
 |---------|--------------|---------------------|-----------------|---------------|--------------|-----------------|----------------|
 | T001 | Requirement 5 | AC1-AC3 | `design.md#overview` | `change-impact.md#promotion-targets` | `verification.md#quality-gates` | `docs/backlog/README.md` | none |
 | T002 | Requirement 1; Requirement 2; Requirement 3 | R1 AC1-AC3; R2 AC1-AC3; R3 AC1-AC3 | `design.md#components-and-changes` | `change-impact.md#durable-source-mapping` | `verification.md#agent-readiness-evidence` | runtime contracts and design docs | `open-decisions.md#d001-response-state-vocabulary`, `open-decisions.md#d002-failure-mode-fixture-strategy`, `open-decisions.md#d003-shared-classifier-ownership` |
-| T003 | Requirement 1; Requirement 2; Requirement 3 | R1 AC1-AC3; R2 AC1-AC3; R3 AC1-AC3 | `design.md#slice-boundary-and-residual-architecture` | `change-impact.md#proposed-changes` | `verification.md#scope-reconciliation-before-closure` | TBD by selected slice | `open-decisions.md#d001-response-state-vocabulary`, `open-decisions.md#d002-failure-mode-fixture-strategy`, `open-decisions.md#d003-shared-classifier-ownership` |
+| T003 | Requirement 1; Requirement 2; Requirement 3 | R1 AC1-AC3; R2 AC1-AC3; R3 AC1-AC3 | `design.md#first-implementation-slice`, `design.md#minimum-evidence-contract-for-t004` | `change-impact.md#proposed-changes` | `verification.md#scope-reconciliation-before-closure` | T004 helper/contract slice; later durable runtime contracts | `open-decisions.md#d001-response-state-vocabulary`, `open-decisions.md#d002-failure-mode-fixture-strategy`, `open-decisions.md#d003-shared-classifier-ownership` |
 | T004 | Requirement 1; Requirement 3 | R1 AC1-AC3; R3 AC1-AC3 | `design.md#data-models`, `design.md#function-signatures-and-interfaces` | `change-impact.md#proposed-changes` | `verification.md#validation-commands` | `docs/reference/runtime-contracts.md` | `open-decisions.md#d001-response-state-vocabulary`, `open-decisions.md#d003-shared-classifier-ownership` |
 | T005 | Requirement 4 | AC1-AC3 | `design.md#validation-strategy` | none | `verification.md#validation-commands` | none | D002 |
 | T006 | Requirement 1; Requirement 2; Requirement 3; Requirement 4 | R1 AC1-AC3; R2 AC1-AC3; R3 AC1-AC3; R4 AC1-AC3 | `design.md#components-and-changes`, `design.md#error-handling` | `change-impact.md#proposed-changes` | `verification.md#requirement-coverage` | runtime operations, MCP surface, runtime contracts | `open-decisions.md#d001-response-state-vocabulary` |
@@ -68,6 +68,19 @@ the linked source artifacts.
 | D001 | Design and implementation | Requirements 1, 3 | T003, T004, T006, T007 | Approved: existing public response fields with additive helper semantics; EB024 only for a proven field-level gap. |
 | D002 | Fixture design | Requirement 4 | T003, T005 | Approved: hybrid filesystem fixtures plus adapter fakes. |
 | D003 | Shared helper ownership | Requirements 1-3 | T003, T004 | Approved: shared application-level helper with per-use-case evidence inputs. |
+
+## Phase 1 Reconciliation
+
+T002 result:
+Current response vocabulary is sufficient for the first slice. EB024 is not a
+prerequisite; continue with additive helper semantics. Evidence:
+`response-metadata.ts` already maps runtime trust classification, watcher
+freshness, caveats, and trust restrictions onto existing response fields.
+
+T003 result:
+T004 is selected as the first implementation slice. Start with helper/contract
+tests before broad first-read surface hardening. Evidence is recorded in
+`design.md#first-implementation-slice` and `verification.md#task-evidence`.
 
 ## Maintenance Notes
 

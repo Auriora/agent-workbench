@@ -103,6 +103,68 @@ If T002 proves this mapping cannot express a required public contract, route the
 contract migration through EB024 rather than silently adding incompatible
 statuses.
 
+T002 reconciliation found no concrete field-level contract gap. The current
+contract already separates stale/cold/refreshing evidence through `freshness`,
+degraded evidence through `analysis_validity: partial`, blocked validation or
+environment state through `verification_status`, `invalid`, and
+`invalid_due_to_environment`, and unsafe claims through `meta.trust`. EB024 is
+therefore not a prerequisite for T004. It remains the destination for any later
+public vocabulary migration that a focused test proves necessary.
+
+### Phase 1 Reconciliation Result
+
+The current implementation already has a shared application-level ownership
+point for first-read state:
+
+- `src/application/use-cases/response-metadata.ts` classifies runtime trust for
+  cold, refreshing, stale, degraded, partial, invalid, and
+  environment-invalid states.
+- `buildRuntimeResponseMeta` builds shared `ResponseMetadata` from bounded
+  runtime evidence, adapter coverage, watcher freshness, snapshot state,
+  truncation, and budget inputs.
+- `buildTrustCalibration` removes proof-like safe uses and adds required
+  verification steps when metadata is stale, cold, refreshing, partial, invalid,
+  blocked, warning-bearing, or error-bearing.
+- `get-repo-status.ts`, `get-repo-scope.ts`, and `get-repo-overview.ts` already
+  route first-read resource metadata through this helper.
+- `get-task-context.ts`, `query-docs.ts`, `diagnose-changed-files.ts`, and
+  `plan-verification.ts` reuse shared status metadata but add local skipped-work,
+  docs coverage, provider-status, diagnostics, or validation-plan status.
+
+This supports a narrow first implementation slice before broad surface changes:
+T004 should add or confirm focused helper/contract tests for the shared response
+metadata behavior. T006 and T007 should consume that proven behavior later for
+resource/tool-specific hardening.
+
+### Minimum Evidence Contract For T004
+
+Stale, cold, refreshing, or unknown evidence:
+`meta.freshness` is not `fresh`, and `analysis_validity` remains `valid` only
+when bounded evidence is still present. Snapshot, warmup, watcher, docs-index,
+or scan evidence must name the stale, refreshing, or unknown source. Trust
+metadata must require refresh, direct read, ranked-evidence inspection, or
+validation before proof-like claims.
+
+Degraded evidence:
+`analysis_validity: partial` is paired with bounded caveats, warnings, skipped
+work, provider status, or coverage state. Missing optional enrichment,
+unsupported language/platform, degraded watcher, provider gap, truncated scan,
+or skipped paths are summarized with bounded samples or counts. Proof-like
+claims remain unsafe.
+
+Blocked evidence:
+`verification_status: blocked`, `analysis_validity: invalid`, or
+`analysis_validity: invalid_due_to_environment` describes the root condition.
+Errors, warnings, caveats, provider status, skipped work, or validation-plan
+blockers make the reason visible. Trust metadata must include
+`resolve_blocked_environment` when the environment blocks the requested claim.
+
+Valid bounded evidence:
+`analysis_validity: valid`, current `freshness`, bounded `scope`,
+`evidence_kinds`, `capability_level`, `truncated`, and `budget` show that the
+required evidence for the surface is present and bounded. Trust remains limited
+to the surface policy; planned validation is not executed validation.
+
 ### Data Flow
 
 ```text
@@ -207,11 +269,25 @@ pause for EB024-style contract migration planning before implementation.
 | `pnpm typecheck` and `pnpm test` | Full regression | `verification.md` | Native/sandbox constraints must be recorded if present. |
 | Docs metadata/link checks | Requirement 5 | `tests/docs/docs-links-metadata.test.ts` | Closure docs must be updated after implementation. |
 
+## First Implementation Slice
+
+T004 is the first implementation slice. Its write set should stay focused on
+`src/application/use-cases/response-metadata.ts`,
+`tests/contracts/response-metadata.test.ts`, and contract-barrel tests only if
+the existing schemas need explicit coverage. The slice should prove the mapping
+above for stale, degraded, and blocked states using current public fields and
+trust metadata. It should not harden every first-read MCP surface at once.
+
+The first fixture-backed slice is T005 after T004. Use D002's hybrid strategy:
+one filesystem fixture for repository-shape evidence such as unsupported,
+skipped, or budget-truncated files, and one adapter fake for nondeterministic
+runtime, watcher, provider, stale, or blocked state. Do not introduce wall-clock
+sleep or daemon race tests.
+
 ## Downstream Task Guidance
 
-- First implementation slice should be small: define current response-state
-  behavior and add one focused fixture that proves a degraded or blocked first
-  read.
+- First implementation slice should be small: T004 defines and proves current
+  response-state behavior before T005 adds the first fixture/fake pair.
 - Use the D001-D003 approved decisions from `open-decisions.md`: existing
   response fields plus additive helper semantics, hybrid fixture/fake tests, and
   a shared helper with per-use-case evidence inputs.
@@ -242,8 +318,8 @@ an unrestricted environment and record both outcomes.
 
 ## Open Questions
 
-- Which first-read surface should be hardened first: repo resources, task
-  context, docs search, diagnostics, or verification planning?
+None for Phase 1. D001-D003 are approved, and T004 is selected as the first
+implementation slice.
 
 ## Related Artifacts
 
