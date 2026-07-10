@@ -188,11 +188,11 @@ or runtime telemetry.
     permission-limited repos.
   - Cross-repo smoke summaries for representative repo shapes.
   - Local trace spans for latency, degraded state, and skipped evidence.
-- Promotion target: active
-  [Spec 037](../specs/037-first-read-reliability-bounded-tools/requirements.md)
-  delivered current-state first-read metadata, bounded hidden-work evidence,
+- Promotion target: closed Spec 037 delivered current-state first-read
+  metadata, bounded hidden-work evidence,
   provider-limited diagnostics handling, non-executed validation-plan trust
-  boundaries, and durable documentation promotion.
+  boundaries, and durable documentation promotion. The closure record is in
+  `docs/history/spec-closure-log.md`.
 - Residual routing: persisted graph completion beyond the first-pass graph
   budget remains in EB014. Telemetry/reporting evidence remains in EB009.
 

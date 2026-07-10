@@ -412,6 +412,30 @@ name their own final pre-removal tree commits.
   work under EB014 (`docs/backlog/README.md`); non-complete graph coverage is
   reported explicitly rather than as complete.
 
+### 2026-07-10 - 037-first-read-reliability-bounded-tools
+
+- **Spec:** docs/specs/037-first-read-reliability-bounded-tools
+- **Title:** First-read reliability and bounded tools requirements
+- **Final spec commit:** 9557470
+- **Closure cleanup commit:** pending-cleanup-commit
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/reference/runtime-contracts.md`
+  - `docs/design/runtime-operations-design.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/backlog/README.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Spec implementation validation recorded focused
+  Vitest runs over first-read status, scope, overview, context, docs,
+  diagnostics, verification-plan, and response-metadata behavior; docs metadata
+  validation; `pnpm run typecheck`; full `pnpm run test`; `git diff --check`;
+  lifecycle lint; task-state audit; and closure check with no blockers.
+- **Residual risks:** Persisted graph completion beyond the first-pass graph
+  budget remains future work under EB014 (`docs/backlog/README.md`).
+  Telemetry and reporting evidence remains future work under EB009.
+
 ## Closure Notes
 
 The packages remain available through Git history at the final pre-removal tree
