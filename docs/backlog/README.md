@@ -172,7 +172,7 @@ or runtime telemetry.
 ### EB003: First-Read Reliability And Bounded Tool Behavior
 
 - Priority: P0
-- Status: active principle, ongoing implementation
+- Status: promoted to active Spec 037
 - Friction signal: smoke tests exposed status timeouts, verification-plan
   timeouts, resource timeouts, and a need for tools to be callable only when
   timely evidence exists.
@@ -188,8 +188,10 @@ or runtime telemetry.
     permission-limited repos.
   - Cross-repo smoke summaries for representative repo shapes.
   - Local trace spans for latency, degraded state, and skipped evidence.
-- Promotion target: continue through runtime operations and MCP surface work;
-  create targeted specs for repeated failure classes.
+- Promotion target: active
+  [Spec 037](../specs/037-first-read-reliability-bounded-tools/requirements.md)
+  for first-read reliability, bounded hidden work, and explicit valid, stale,
+  degraded, or blocked response states.
 
 ### EB004: Policy-Aware Validation Planning
 
