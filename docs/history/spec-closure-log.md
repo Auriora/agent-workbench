@@ -436,6 +436,28 @@ name their own final pre-removal tree commits.
   budget remains future work under EB014 (`docs/backlog/README.md`).
   Telemetry and reporting evidence remains future work under EB009.
 
+### 2026-07-12 - 038-agent-workbench-adoption-flow
+
+- **Spec:** docs/specs/038-agent-workbench-adoption-flow
+- **Title:** Agent Workbench adoption flow requirements
+- **Final spec commit:** c19ad81
+- **Closure cleanup commit:** pending-cleanup-commit
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/coding-agent-integration-design.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/design/edit-and-validation-loop-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/backlog/README.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Plugin validation, typecheck, 75 focused tests, 33
+  intent/context tests, the full 597-test suite, lifecycle lint, task-state
+  audit, Markdown checks, and closure check passed.
+- **Residual risks:** Provider-history samples remain observational and small;
+  a later bounded history replay should report coverage limits rather than infer
+  effectiveness from invocation counts.
+
 ## Closure Notes
 
 The packages remain available through Git history at the final pre-removal tree
