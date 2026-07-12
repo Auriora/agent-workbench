@@ -172,7 +172,7 @@ or runtime telemetry.
 ### EB003: First-Read Reliability And Bounded Tool Behavior
 
 - Priority: P0
-- Status: delivered by active Spec 037
+- Status: delivered by closed Spec 037
 - Friction signal: smoke tests exposed status timeouts, verification-plan
   timeouts, resource timeouts, and a need for tools to be callable only when
   timely evidence exists.
@@ -188,11 +188,11 @@ or runtime telemetry.
     permission-limited repos.
   - Cross-repo smoke summaries for representative repo shapes.
   - Local trace spans for latency, degraded state, and skipped evidence.
-- Promotion target: closed Spec 037 delivered current-state first-read
+- Promotion target: closed
+  [Spec 037](../history/spec-closure-log.md) delivered current-state first-read
   metadata, bounded hidden-work evidence,
   provider-limited diagnostics handling, non-executed validation-plan trust
-  boundaries, and durable documentation promotion. The closure record is in
-  `docs/history/spec-closure-log.md`.
+  boundaries, and durable documentation promotion.
 - Residual routing: persisted graph completion beyond the first-pass graph
   budget remains in EB014. Telemetry/reporting evidence remains in EB009.
 
@@ -339,7 +339,7 @@ or runtime telemetry.
 ### EB010: Language And Ecosystem Semantic Promotion
 
 - Priority: P2
-- Status: active multi-spec stream
+- Status: ongoing backlog stream
 - Friction signal: broad routing and impact analysis are weak when language or
   project-shape evidence is shallow.
 - Runtime surface: language adapters, graph extraction, symbol search,
@@ -357,13 +357,15 @@ or runtime telemetry.
   - Treat local project scans as advisory evidence until a candidate ecosystem
     has representative fixture repositories and validation expectations.
 - Validation:
-  - Active and archived specs for current language and ecosystem adapters.
+  - Closed delivery records and future specs for language and ecosystem
+    adapters.
   - Local project scans should record broad ecosystem signals without naming
     external repositories or people.
   - Recency review should count distinct recently touched project shapes per
     ecosystem and promote only those with representative fixtures and tester
     availability.
-- Promotion target: continue active language and ecosystem specs.
+- Promotion target: create focused language or ecosystem specs when fixture
+  gates, recent project evidence, and tester availability justify promotion.
 
 ### EB011: Contextual Tool Exposure And Dynamic Router
 
@@ -665,7 +667,7 @@ or runtime telemetry.
 ### EB018: Stale Documentation Filtering
 
 - Priority: P1
-- Status: promoted to active Spec 034
+- Status: delivered by closed Spec 034
 - Friction signal: agents can over-trust archived specs, superseded design
   notes, removed-spec references, stale open decisions, and closure breadcrumbs
   when docs search or first-read context surfaces them without lifecycle state.
@@ -1150,7 +1152,7 @@ Do not promote an item when:
 ### EB036: Per-Repo Runtime Daemon And Session Sharing
 
 - Priority: P0
-- Status: promoted by Spec 032 on 2026-07-05
+- Status: delivered by closed Spec 032
 - Friction signal: multiple Codex sessions in the same large repository can
   start separate Agent Workbench MCP processes that share one repo cache
   database and contend during startup graph warmup, surfacing
