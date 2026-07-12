@@ -3,7 +3,7 @@ title: Agent Workbench backlog
 doc_type: backlog
 status: draft
 owner: platform
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-12
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -1304,24 +1304,35 @@ Do not promote an item when:
 
 ### EB041: Claude Code Quick Guidance
 
-- Priority: P2
-- Status: proposed spec
-- Friction signal: Claude Code packaging exists, but review found that
-  Claude needs a concise usage artifact instead of broad architecture docs.
+- Priority: P1
+- Status: active Spec 038
+- Friction signal: Claude Code packaging and Agent Workbench instructions were
+  exposed in recent histories, but none of the six analyser-supported Claude
+  Code 2.1.206 files invoked an Agent Workbench tool or loaded its skill. Three
+  files were conformance or smoke sessions, so this is a discoverability signal
+  rather than a general adoption-rate claim.
 - Runtime surface: Claude Code plugin package, generated skills/instructions,
   common integration profile, plugin README, and MCP call sequence guidance.
 - Acceptance:
   - Provide a concise Claude-facing guide with the expected call sequence:
     status/scope/overview, `context_for_task`, targeted reads, preview/apply,
     and `verification_plan`.
+  - Make the first action executable and verify that the packaged skill name
+    and invocation wording resolve naturally in Claude Code.
+  - Keep activation conditional, deduplicated, and non-automatic so trivial
+    tasks do not acquire a startup ritual.
   - Preserve MCP as the runtime contract and avoid Claude-specific runtime
     logic.
   - Omit normal `repo_root` override guidance.
 - Validation:
   - Plugin package validation includes the Claude guide artifact.
+  - Claude fixtures prove that the activation instruction routes to the skill
+    and MCP surface without adding Claude-specific runtime logic.
   - Documentation review confirms guidance is concise and current.
-- Promotion target: create a docs-only integration guidance spec or fold into a
-  Claude packaging refresh slice.
+- Promotion target: active
+  [Spec 038](../specs/038-agent-workbench-adoption-flow/requirements.md), with
+  accepted behavior promoted to the coding-agent integration design and
+  packaged Claude guidance before closure.
 
 ### EB042: Operator Path Documentation
 
@@ -1508,6 +1519,100 @@ Do not promote an item when:
 - Promotion target: fold into EB026 doctor work or EB043 release-readiness work
   when package install reliability is scheduled.
 
+### EB048: Snapshot-Aware Orientation Entry Point
+
+- Priority: P1
+- Status: active Spec 038
+- Friction signal: in 100 supported Codex sessions from 2026-07-10 through
+  2026-07-12, 305 reads targeted `repo:///status`, `repo:///scope`, and
+  `repo:///overview`; 22 sessions read Agent Workbench resources without
+  invoking an Agent Workbench tool. This indicates repeated ceremony and
+  orientation-only drop-off, not proof that the resources are ineffective.
+- Runtime surface: first-read resources, resource presenters, repository
+  snapshot identity, `context_for_task`, skills, and integration guidance.
+- Acceptance:
+  - Provide one compact orientation receipt with snapshot identity,
+    freshness/trust summary, material blockers, and paths to detailed evidence.
+  - Let agents reuse orientation for an unchanged repository snapshot and make
+    refresh conditions explicit.
+  - Do not force refresh after ordinary content edits that leave root, scope,
+    policy, runtime, and index-validity evidence materially unchanged.
+  - Avoid hidden reads, partial-success fallbacks, or provider-specific runtime
+    behavior.
+- Validation:
+  - Contract and golden tests cover fresh, changed-snapshot, stale, degraded,
+    and blocked orientation.
+  - Codex, Claude Code, and Kiro packaging tests agree on the entry path.
+  - History replay can measure repeated resource calls without making an
+    uncontrolled adoption improvement a closure gate.
+- Promotion target: active
+  [Spec 038](../specs/038-agent-workbench-adoption-flow/requirements.md), then
+  promote accepted contracts to MCP surface design and runtime contracts.
+
+### EB049: Executable Context Continuation And Bounded Navigation
+
+- Priority: P1
+- Status: active Spec 038
+- Friction signal: the same supported Codex corpus contained 70
+  `context_for_task` calls but only three `symbol_search` calls, four
+  `find_references` calls, and no `impact` calls. The evidence demonstrates
+  low continuation usage but does not identify one cause.
+- Runtime surface: `context_for_task` ranking and presentation, symbol search,
+  reference lookup, impact analysis, query budgets, and tool metadata.
+- Acceptance:
+  - Return prominent, ranked, callable continuation actions with usable
+    arguments and node IDs only when they resolve a named task uncertainty;
+    default to one primary and at most two secondary actions.
+  - Improve progressive use of the existing symbol, reference, and impact tools
+    and omit generic or already-satisfied recommendations.
+  - Keep a combined navigation surface outside this slice unless a separate
+    controlled comparison proves fewer decisions and lower total interaction
+    cost without weaker evidence or failure attribution.
+  - Report unsupported or incomplete semantic evidence explicitly rather than
+    switching to an alternate parser or hidden query route.
+- Validation:
+  - Golden responses prove exact continuation arguments for supported,
+    partial, and unsupported repositories.
+  - Fixture tests cover symbol-to-reference-to-impact flow and any accepted
+    combined surface within query budgets.
+  - Cross-client metadata and skill tests keep the recommended workflow
+    discoverable.
+- Promotion target: active
+  [Spec 038](../specs/038-agent-workbench-adoption-flow/requirements.md), then
+  promote accepted behavior to MCP surface design, runtime contracts, and the
+  language adapter design where semantic gates change.
+
+### EB050: Intent-Aware Validation Guidance
+
+- Priority: P1
+- Status: active Spec 038
+- Friction signal: 30 of 57 supported Codex sessions with direct Agent
+  Workbench tool use invoked `verification_plan`. The corpus mixes read-only,
+  edit, review, and documentation work, so the gap should be treated as a
+  routing signal rather than a compliance failure.
+- Runtime surface: `verification_plan`, `context_for_task`, changed-file and
+  edit-intent evidence, tool descriptions, skills, and validation presenters.
+- Acceptance:
+  - Make validation planning prominent when changed files, edit intent, or
+    closure evidence requires it.
+  - Prefer explicit caller intent and task-owned edits over lifecycle evidence
+    and bounded text inference; unrelated dirty files and conflicting intent
+    remain neutral.
+  - Keep validation guidance concise for read-only investigation and avoid
+    implying that commands were executed.
+  - Do not repeat unchanged guidance within one task phase.
+  - Preserve repository-policy-first command selection and structured blocked
+    or degraded outcomes.
+- Validation:
+  - Fixtures distinguish read-only, review, edit, docs-only, and closure tasks.
+  - Golden responses prove recommendation prominence and trust wording without
+    adding an execution fallback.
+  - Plugin guidance remains consistent across Codex, Claude Code, and Kiro.
+- Promotion target: active
+  [Spec 038](../specs/038-agent-workbench-adoption-flow/requirements.md), then
+  promote accepted behavior to MCP surface design, edit-and-validation-loop
+  design, and coding-agent integration guidance.
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |
@@ -1559,8 +1664,12 @@ Do not promote an item when:
 | Native installer deprecation debt | EB045, with EB026 and EB043 packaging gates. |
 | Kiro shell-free launcher | EB046, with EB043 packaging gates. |
 | Turnkey native parser install | EB047, with EB026 and EB043 packaging gates. |
+| Snapshot-aware orientation entry point | EB048, with EB003 first-read trust and EB001 integration health boundaries. |
+| Executable context continuation and bounded navigation | EB049, with EB002, EB010, and EB011 routing boundaries. |
+| Intent-aware validation guidance | EB050, with EB004 and EB024 validation trust boundaries. |
 
 ## Immediate Next Specs
 
-None currently queued. Select the next implementation slice from the priority
-queue above.
+- [Spec 038: Agent Workbench adoption flow](../specs/038-agent-workbench-adoption-flow/requirements.md)
+  covers EB041 and EB048-EB050 as one evidence-backed cross-client activation,
+  orientation, continuation, navigation, and validation-guidance slice.
