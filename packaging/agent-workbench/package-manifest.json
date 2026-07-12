@@ -1,6 +1,6 @@
 {
   "name": "agent-workbench",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "registry": "ghcr.io",
   "distribution": {
     "npm_contract": "packaging/agent-workbench/npm-package.json",
@@ -9,7 +9,7 @@
   },
   "image": "ghcr.io/bcherrington/agent-workbench",
   "containerfile": "packaging/agent-workbench/Containerfile",
-  "install_command": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.1/auriora-agent-workbench-0.5.1.tgz",
+  "install_command": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz",
   "npm_bin": "packaging/agent-workbench/mcp-bin.mjs",
   "entrypoint": "node --import tsx /opt/agent-workbench/src/mcp/stdio.ts",
   "dependency_install": {
@@ -82,7 +82,7 @@
     "plugin_manifest": "plugins/agent-workbench/.codex-plugin/plugin.json",
     "plugin_mcp_config": "plugins/agent-workbench/.mcp.json",
     "hook_installer": "scripts/install-codex-hooks.mjs",
-    "plugin_install_model": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.1/auriora-agent-workbench-0.5.1.tgz"
+    "plugin_install_model": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz"
   },
   "kiro": {
     "power_root": "plugins/agent-workbench/kiro-power",
