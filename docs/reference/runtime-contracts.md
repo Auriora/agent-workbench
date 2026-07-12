@@ -80,11 +80,15 @@ Top-level executable `next_actions` remain Agent Workbench MCP actions; nested
 lifecycle next actions are companion-routing hints.
 
 `context_for_task` accepts optional `intent` (`read_only`, `edit`, `review`,
-`closure`, or `unknown`) and optional task-owned `changed_files`. Its
+`closure`, or `unknown`), optional task-owned `changed_files`, and optional
+`satisfied_actions` tool/argument pairs representing calls already completed in
+the current task phase. Its
 `next_actions` remain the existing additive action shape, with optional
 `reason` and `expected_evidence` strings. Responses contain no more than one
 primary and two secondary actions; an empty list is valid when another call
-would not materially improve the current task decision.
+would not materially improve the current task decision. Returned actions omit
+server-owned `repo_root` arguments and unchanged actions whose canonical
+tool/argument fingerprint appears in `satisfied_actions`.
 
 ## Orientation Receipt
 
@@ -94,7 +98,9 @@ capability summary, whether the orientation decision is reusable, material
 blockers, detailed-resource links, and enumerated material refresh triggers.
 `ordinary_content_edit_requires_refresh` is always false: content freshness
 still calibrates analysis claims, but does not by itself force agents to repeat
-repository orientation.
+repository orientation. Synchronized pending content changes remain reusable;
+degraded, overflowed, failed, or unavailable watcher state and changed or
+unknown scope/ignore-rule synchronisation block orientation reuse.
 
 ## Capability Levels
 

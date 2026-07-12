@@ -46,6 +46,7 @@ function materialOrientationBlockers(
   meta: ResponseMetadata
 ): string[] {
   const blockers: string[] = [];
+  const watcher = status.watcher_freshness;
   if (status.snapshot_id === undefined) {
     blockers.push("No repository snapshot is available.");
   }
@@ -53,10 +54,17 @@ function materialOrientationBlockers(
     blockers.push("Repository index evidence is invalid.");
   }
   if (
-    status.watcher_freshness?.scope_status === "changed" ||
-    status.watcher_freshness?.ignore_rules_status === "changed"
+    watcher?.status === "degraded" ||
+    watcher?.queue_state === "overflowed" ||
+    watcher?.queue_state === "failed" ||
+    watcher?.queue_state === "unavailable"
   ) {
+    blockers.push("Workspace watcher freshness is degraded or unavailable.");
+  }
+  if (watcher?.scope_status === "changed" || watcher?.ignore_rules_status === "changed") {
     blockers.push("Repository scope or ignore rules changed.");
+  } else if (watcher?.scope_status === "unknown" || watcher?.ignore_rules_status === "unknown") {
+    blockers.push("Repository scope or ignore-rule synchronization is unknown.");
   }
   if (status.owner_state === "stale_owner" || status.owner_state === "dead_owner") {
     blockers.push("Repository runtime ownership is not current.");

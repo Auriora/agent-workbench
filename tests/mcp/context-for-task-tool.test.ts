@@ -17,7 +17,12 @@ import { WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/worksp
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
 import { PythonTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
 import { contextForTaskTool } from "../../src/interface-adapters/mcp/registries/tools/context-for-task.js";
-import { taskContextSchema } from "../../src/contracts/index.js";
+import {
+  docsSearchRequestSchema,
+  symbolSearchRequestSchema,
+  taskContextSchema,
+  verificationPlanRequestSchema
+} from "../../src/contracts/index.js";
 import type { ClockPort, FileCatalogScanPort } from "../../src/ports/index.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
 import {
@@ -584,6 +589,171 @@ describe("context_for_task use case", () => {
     ]);
   });
 
+  it("keeps explicit unknown and negated edit intent neutral", async () => {
+    for (const request of [
+      {
+        task: "Implement Runner changes",
+        intent: "unknown" as const,
+        changed_files: ["src/sample_pkg/service.py"]
+      },
+      {
+        task: "Review Runner and do not implement changes",
+        changed_files: ["src/sample_pkg/service.py"]
+      },
+      {
+        task: "Do not fix Runner",
+        changed_files: ["src/sample_pkg/service.py"]
+      },
+      {
+        task: "Inspect Runner without changing Runner",
+        changed_files: ["src/sample_pkg/service.py"]
+      },
+      {
+        task: "Do not make changes",
+        changed_files: ["src/sample_pkg/service.py"]
+      },
+      {
+        task: "No changes",
+        changed_files: ["src/sample_pkg/service.py"]
+      }
+    ]) {
+      const result = await getTaskContext({
+        request: {
+          ...request,
+          repo_root: "tests/fixtures/fixture-basic-python",
+          files: ["src/sample_pkg/service.py"],
+          symbols: [],
+          max_files: 5,
+          max_docs: 5
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        default_repo_root: "."
+      });
+
+      expect(result.context.next_actions).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ tool: "verification_plan" })])
+      );
+    }
+  });
+
+  it("omits unchanged satisfied guidance using tool and arguments", async () => {
+    const baseRequest = {
+      task: "Implement Runner behavior",
+      intent: "edit" as const,
+      repo_root: "tests/fixtures/fixture-basic-python",
+      files: ["src/sample_pkg/service.py"],
+      changed_files: ["src/sample_pkg/service.py"],
+      symbols: [],
+      max_files: 5,
+      max_docs: 5
+    };
+    const first = await getTaskContext({
+      request: baseRequest,
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+    const completed = first.context.next_actions[0];
+    expect(completed?.tool).toBe("verification_plan");
+
+    const repeated = await getTaskContext({
+      request: {
+        ...baseRequest,
+        satisfied_actions: completed === undefined ? [] : [{ tool: completed.tool, args: completed.args }]
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+
+    expect(repeated.context.next_actions).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ tool: "verification_plan" })])
+    );
+  });
+
+  it("returns only normal-client arguments and protects explicit edit validation from the action cap", async () => {
+    const result = await getTaskContext({
+      request: {
+        task: "Implement Runner behavior for T004",
+        intent: "edit",
+        repo_root: "tests/fixtures/fixture-basic-python",
+        files: ["src/sample_pkg/service.py"],
+        changed_files: ["src/sample_pkg/service.py"],
+        symbols: ["Runner"],
+        lifecycle_context: {
+          source: "spec-lifecycle-manager",
+          state: "provided",
+          outputs: [{
+            kind: "task_context",
+            status: "provided",
+            summary: "Task evidence is ready.",
+            files: [],
+            validation_hints: [],
+            next_actions: [
+              {
+                tool: "execute_arbitrary_command",
+                args: { command: "rm -rf /", repo_root: "/hidden-root" }
+              },
+              {
+                tool: "docs_search",
+                args: { query: "T004", repo_root: "/hidden-root" }
+              }
+            ]
+          }]
+        },
+        max_files: 5,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+
+    expect(result.context.next_actions).toHaveLength(3);
+    expect(result.context.next_actions[0]?.tool).toBe("verification_plan");
+    expect(result.context.next_actions.every((action) => !("repo_root" in action.args))).toBe(true);
+    expect(result.context.next_actions.map((action) => action.tool)).not.toContain("execute_arbitrary_command");
+    for (const action of result.context.next_actions) {
+      if (action.tool === "verification_plan") {
+        expect(() => verificationPlanRequestSchema.omit({ repo_root: true }).parse(action.args)).not.toThrow();
+      } else if (action.tool === "docs_search") {
+        expect(() => docsSearchRequestSchema.omit({ repo_root: true }).parse(action.args)).not.toThrow();
+      } else if (action.tool === "symbol_search") {
+        expect(() => symbolSearchRequestSchema.omit({ repo_root: true }).parse(action.args)).not.toThrow();
+      } else {
+        throw new Error(`Unexpected continuation tool: ${action.tool}`);
+      }
+    }
+  });
+
+  it("does not treat unavailable lifecycle validation evidence as material edit intent", async () => {
+    const result = await getTaskContext({
+      request: {
+        task: "Inspect Runner behavior",
+        repo_root: "tests/fixtures/fixture-basic-python",
+        files: ["src/sample_pkg/service.py"],
+        symbols: [],
+        lifecycle_context: {
+          source: "spec-lifecycle-manager",
+          state: "unavailable",
+          outputs: [{
+            kind: "validation_plan",
+            status: "unavailable",
+            summary: "Validation evidence is unavailable.",
+            files: [],
+            validation_hints: [],
+            next_actions: []
+          }]
+        },
+        max_files: 5,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+
+    expect(result.context.next_actions).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ tool: "verification_plan" })])
+    );
+  });
+
   it("downranks third-party and fixture path matches for broad implementation tasks", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-context-ranking-"));
     try {
@@ -690,6 +860,32 @@ describe("context_for_task use case", () => {
               symbol: "Runner"
             })
           })
+        ])
+      );
+
+      const definitionOnly = await getTaskContext({
+        request: {
+          task: "Find the definition of Runner without making changes",
+          intent: "read_only",
+          repo_root: repoRoot,
+          files: ["src/sample_pkg/service.py"],
+          symbols: ["Runner"],
+          max_files: 5,
+          max_docs: 5
+        },
+        scanner,
+        graph: store,
+        snapshots: store,
+        catalog: store,
+        workspace,
+        default_repo_root: repoRoot
+      });
+
+      expect(definitionOnly.context.ranked_symbols[0]?.symbol.name).toBe("Runner");
+      expect(definitionOnly.context.next_actions).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ tool: "find_references" }),
+          expect.objectContaining({ tool: "impact" })
         ])
       );
     } finally {
@@ -1364,8 +1560,11 @@ describe("context_for_task MCP tool", () => {
               {
                 tool: "verification_plan",
                 args: {
-                  files: ["src/service.py"]
-                }
+                  files: ["src/service.py"],
+                  repo_root: "/repo"
+                },
+                reason: "Task-owned changes need validation planning.",
+                expected_evidence: "A bounded validation command plan."
               }
             ],
             __backend_worker_trace: {
@@ -1404,9 +1603,27 @@ describe("context_for_task MCP tool", () => {
     };
 
     expect(parsed.contract_version).toBe("0.1");
-    expect(taskContextSchema.parse(parsed.data as never)).toMatchObject({
-      task: "Inspect parser-backed task"
+    const publicData = taskContextSchema.parse(parsed.data as never);
+    expect(publicData).toMatchObject({
+      task: "Inspect parser-backed task",
+      next_actions: [{
+        tool: "verification_plan",
+        args: { files: ["src/service.py"] },
+        reason: "Task-owned changes need validation planning.",
+        expected_evidence: "A bounded validation command plan."
+      }]
     });
+    const withoutActionExplanations = {
+      ...parsed,
+      data: {
+        ...publicData,
+        next_actions: publicData.next_actions.map(({ reason: _reason, expected_evidence: _expected, ...action }) => action)
+      }
+    };
+    const explanationByteCost = Buffer.byteLength(JSON.stringify(parsed), "utf8") -
+      Buffer.byteLength(JSON.stringify(withoutActionExplanations), "utf8");
+    expect(explanationByteCost).toBeGreaterThan(0);
+    expect(explanationByteCost).toBeLessThanOrEqual(512);
     expect(parsed.meta).toMatchObject({
       analysis_validity: "valid",
       trust: {

@@ -177,8 +177,15 @@ function sanitizeRisk(input: GetTaskContextResult["context"]["risks"][number]) {
 function sanitizeNextAction(input: GetTaskContextResult["context"]["next_actions"][number]) {
   return nextActionSchema.parse({
     tool: input.tool,
-    args: input.args
+    args: withoutServerOwnedArguments(input.args),
+    reason: input.reason,
+    expected_evidence: input.expected_evidence
   });
+}
+
+function withoutServerOwnedArguments(args: Record<string, unknown>): Record<string, unknown> {
+  const { repo_root: _repoRoot, ...publicArgs } = args;
+  return publicArgs;
 }
 
 function sanitizeSourceSection(

@@ -51,11 +51,12 @@ repo:///orientation, then detailed status/scope only when needed
 -> manual or future allowlisted command execution
 ```
 
-`context_for_task` recommends `verification_plan` only when validation is
-decision-relevant. Explicit read-only intent suppresses the recommendation;
-explicit edit or closure intent and caller-supplied task-owned changed files
-take precedence over lifecycle evidence and bounded task-text inference.
-Ambient working-tree changes are not task intent.
+`context_for_task` accepts explicit intent and caller-supplied task-owned
+changed files when selecting `verification_plan`. Explicit read-only intent
+suppresses the recommendation; explicit unknown, conflicting, and negated task
+language remains neutral. Explicit edit or closure validation is placed before
+other continuation candidates so it survives the three-action cap. Ambient
+working-tree changes are not task intent.
 
 ## Branch Gates
 

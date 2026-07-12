@@ -278,19 +278,20 @@ tool.
 `context_for_task` is a bounded router over indexed evidence. It must not run
 full topology, diagnostics execution, broad docs reports, or high-cardinality
 cache validation as hidden work. It should return complete-enough markers,
-skipped-work metadata, and at most three exact next actions. Actions are ordered
-by unresolved information value, include a short reason and expected evidence,
-reuse resolved node identifiers, and are omitted when the current response is
-already sufficient. Navigation is progressive: unresolved symbols route to
-`symbol_search`; resolved nodes may route to `find_references`; `impact` is
-prominent only when downstream scope can change the task decision. This slice
-does not add a combined navigation tool.
+skipped-work metadata, and at most three next actions with a short reason and
+expected evidence. Returned actions use normal-client public schemas and omit
+server-owned root arguments. The implementation reuses exact caller-requested
+symbol nodes, omits graph follow-up for definition-only or unrelated candidates,
+and keeps explicit edit/closure validation ahead of the three-action cap.
+Callers pass completed action tool/argument pairs in `satisfied_actions` to
+omit unchanged guidance without session-global state. This slice does not add a
+combined navigation tool.
 
-Validation guidance follows explicit caller intent first, then task-owned
-changed files, lifecycle evidence, and finally bounded task-text inference.
-Read-only intent overrides unrelated dirty files. Unknown or conflicting intent
-stays neutral, and unchanged advice is not repeated merely to keep an action
-list populated.
+Validation guidance accepts explicit caller intent and task-owned changed files.
+Explicit read-only, review, unknown, conflicting, or negated intent suppresses
+prominent validation. Explicit edit/closure intent takes precedence, followed
+by task-owned changed files, material provided/callable lifecycle evidence, and
+bounded task-text inference.
 
 When a task mentions MCP server work, `context_for_task` should rank
 MCP-server entrypoints, tool registries, protocol docs, and transport evidence

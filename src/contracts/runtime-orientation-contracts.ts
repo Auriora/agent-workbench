@@ -38,6 +38,16 @@ export const taskContextRequestSchema = z
     changed_files: z.array(z.string()).optional(),
     symbols: z.array(z.string()).default([]),
     intent: z.enum(["read_only", "edit", "review", "closure", "unknown"]).optional(),
+    satisfied_actions: z
+      .array(
+        z
+          .object({
+            tool: z.string().min(1),
+            args: z.record(z.string(), z.unknown()).default({})
+          })
+          .strict()
+      )
+      .optional(),
     lifecycle_context: z
       .object({
         source: z.string().default("caller"),

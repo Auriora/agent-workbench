@@ -41,6 +41,27 @@ describe("repo orientation receipt", () => {
     });
   });
 
+  it("keeps orientation reusable while ordinary content changes are pending", () => {
+    const orientation = getRepoOrientation(statusResult({
+      runtime_state: "refreshing",
+      freshness: "refreshing",
+      watcher_freshness: {
+        status: "refreshing",
+        queue_state: "pending",
+        scope_status: "synchronized",
+        ignore_rules_status: "synchronized"
+      }
+    })).orientation;
+
+    expect(orientation).toMatchObject({
+      freshness: "refreshing",
+      refresh_required: false,
+      ordinary_content_edit_requires_refresh: false,
+      trust_summary: { orientation_reusable: true },
+      material_blockers: []
+    });
+  });
+
   it("requires refresh only when orientation-relevant evidence is blocked", () => {
     const result = statusResult();
     result.status.watcher_freshness = {
@@ -56,6 +77,57 @@ describe("repo orientation receipt", () => {
     expect(orientation.material_blockers).toEqual([
       "Repository scope or ignore rules changed."
     ]);
+  });
+
+  it.each([
+    {
+      label: "degraded watcher",
+      watcher: {
+        status: "degraded" as const,
+        queue_state: "drained" as const,
+        scope_status: "synchronized" as const,
+        ignore_rules_status: "synchronized" as const
+      },
+      blocker: "Workspace watcher freshness is degraded or unavailable."
+    },
+    {
+      label: "failed watcher queue",
+      watcher: {
+        status: "stale" as const,
+        queue_state: "failed" as const,
+        scope_status: "synchronized" as const,
+        ignore_rules_status: "synchronized" as const
+      },
+      blocker: "Workspace watcher freshness is degraded or unavailable."
+    },
+    {
+      label: "unavailable watcher queue",
+      watcher: {
+        status: "stale" as const,
+        queue_state: "unavailable" as const,
+        scope_status: "synchronized" as const,
+        ignore_rules_status: "synchronized" as const
+      },
+      blocker: "Workspace watcher freshness is degraded or unavailable."
+    },
+    {
+      label: "refreshing orientation state",
+      watcher: {
+        status: "refreshing" as const,
+        queue_state: "pending" as const,
+        scope_status: "unknown" as const,
+        ignore_rules_status: "synchronized" as const
+      },
+      blocker: "Repository scope or ignore-rule synchronization is unknown."
+    }
+  ])("does not reuse orientation for $label", ({ watcher, blocker }) => {
+    const orientation = getRepoOrientation(statusResult({ watcher_freshness: watcher })).orientation;
+
+    expect(orientation).toMatchObject({
+      refresh_required: true,
+      trust_summary: { orientation_reusable: false }
+    });
+    expect(orientation.material_blockers).toContain(blocker);
   });
 
   it("exposes repo:///orientation through a thin MCP resource", async () => {
