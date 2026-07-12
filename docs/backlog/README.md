@@ -1305,7 +1305,7 @@ Do not promote an item when:
 ### EB041: Claude Code Quick Guidance
 
 - Priority: P1
-- Status: active Spec 038
+- Status: delivered by closed Spec 038
 - Friction signal: Claude Code packaging and Agent Workbench instructions were
   exposed in recent histories, but none of the six analyser-supported Claude
   Code 2.1.206 files invoked an Agent Workbench tool or loaded its skill. Three
@@ -1329,10 +1329,11 @@ Do not promote an item when:
   - Claude fixtures prove that the activation instruction routes to the skill
     and MCP surface without adding Claude-specific runtime logic.
   - Documentation review confirms guidance is concise and current.
-- Promotion target: active
-  [Spec 038](../specs/038-agent-workbench-adoption-flow/requirements.md), with
-  accepted behavior promoted to the coding-agent integration design and
-  packaged Claude guidance before closure.
+- Promotion target: closed
+  [Spec 038](../history/spec-closure-log.md). Current behavior lives in
+  [Coding agent integration design](../design/coding-agent-integration-design.md)
+  and the packaged
+  [Claude Code plugin guidance](../../plugins/agent-workbench/claude-plugin/README.md).
 
 ### EB042: Operator Path Documentation
 
@@ -1522,7 +1523,7 @@ Do not promote an item when:
 ### EB048: Snapshot-Aware Orientation Entry Point
 
 - Priority: P1
-- Status: active Spec 038
+- Status: delivered by closed Spec 038
 - Friction signal: in 100 supported Codex sessions from 2026-07-10 through
   2026-07-12, 305 reads targeted `repo:///status`, `repo:///scope`, and
   `repo:///overview`; 22 sessions read Agent Workbench resources without
@@ -1545,14 +1546,16 @@ Do not promote an item when:
   - Codex, Claude Code, and Kiro packaging tests agree on the entry path.
   - History replay can measure repeated resource calls without making an
     uncontrolled adoption improvement a closure gate.
-- Promotion target: active
-  [Spec 038](../specs/038-agent-workbench-adoption-flow/requirements.md), then
-  promote accepted contracts to MCP surface design and runtime contracts.
+- Promotion target: closed
+  [Spec 038](../history/spec-closure-log.md). Current behavior lives in
+  [MCP surface design](../design/mcp-surface-design.md) and
+  [Runtime contracts](../reference/runtime-contracts.md).
 
 ### EB049: Executable Context Continuation And Bounded Navigation
 
 - Priority: P1
-- Status: active Spec 038
+- Status: delivered by closed Spec 038; combined-surface comparison remains
+  evidence-gated and unscheduled
 - Friction signal: the same supported Codex corpus contained 70
   `context_for_task` calls but only three `symbol_search` calls, four
   `find_references` calls, and no `impact` calls. The evidence demonstrates
@@ -1577,15 +1580,19 @@ Do not promote an item when:
     combined surface within query budgets.
   - Cross-client metadata and skill tests keep the recommended workflow
     discoverable.
-- Promotion target: active
-  [Spec 038](../specs/038-agent-workbench-adoption-flow/requirements.md), then
-  promote accepted behavior to MCP surface design, runtime contracts, and the
-  language adapter design where semantic gates change.
+- Promotion target: closed
+  [Spec 038](../history/spec-closure-log.md). Current continuation behavior
+  lives in [MCP surface design](../design/mcp-surface-design.md),
+  [Runtime contracts](../reference/runtime-contracts.md), and
+  [Language adapter design](../design/language-adapter-design.md). The combined
+  navigation surface remains residual backlog work only if a controlled
+  comparison demonstrates lower interaction cost without weaker evidence or
+  failure attribution.
 
 ### EB050: Intent-Aware Validation Guidance
 
 - Priority: P1
-- Status: active Spec 038
+- Status: delivered by closed Spec 038
 - Friction signal: 30 of 57 supported Codex sessions with direct Agent
   Workbench tool use invoked `verification_plan`. The corpus mixes read-only,
   edit, review, and documentation work, so the gap should be treated as a
@@ -1608,10 +1615,12 @@ Do not promote an item when:
   - Golden responses prove recommendation prominence and trust wording without
     adding an execution fallback.
   - Plugin guidance remains consistent across Codex, Claude Code, and Kiro.
-- Promotion target: active
-  [Spec 038](../specs/038-agent-workbench-adoption-flow/requirements.md), then
-  promote accepted behavior to MCP surface design, edit-and-validation-loop
-  design, and coding-agent integration guidance.
+- Promotion target: closed
+  [Spec 038](../history/spec-closure-log.md). Current behavior lives in
+  [MCP surface design](../design/mcp-surface-design.md),
+  [Edit and validation loop design](../design/edit-and-validation-loop-design.md),
+  and
+  [Coding agent integration design](../design/coding-agent-integration-design.md).
 
 ## Extension Idea Coverage
 
@@ -1670,6 +1679,4 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-- [Spec 038: Agent Workbench adoption flow](../specs/038-agent-workbench-adoption-flow/requirements.md)
-  covers EB041 and EB048-EB050 as one evidence-backed cross-client activation,
-  orientation, continuation, navigation, and validation-guidance slice.
+- No backlog item is currently promoted here as an immediate next spec.
