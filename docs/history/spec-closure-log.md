@@ -441,7 +441,7 @@ name their own final pre-removal tree commits.
 - **Spec:** docs/specs/038-agent-workbench-adoption-flow
 - **Title:** Agent Workbench adoption flow requirements
 - **Final spec commit:** c19ad81
-- **Closure cleanup commit:** pending-cleanup-commit
+- **Closure cleanup commit:** 7401e9b
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/coding-agent-integration-design.md`
