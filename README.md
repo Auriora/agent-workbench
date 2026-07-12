@@ -5,156 +5,35 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 # Agent Workbench
 
-Agent Workbench is a local-first IDE/runtime for coding agents. It exposes
-repo-scoped code intelligence, documentation routing, bounded edit support,
-diagnostics, validation planning, workspace safety, and capability/freshness
-metadata through MCP, so agents can rely on mature software-engineering
-evidence instead of broad file reads, ad hoc shell scans, and unsupported
-inference.
+Agent Workbench gives coding agents a local, repository-aware evidence layer.
+Through MCP, an agent can orient itself, find relevant code and documentation,
+trace symbols and references, assess likely impact, plan verification, and make
+bounded workspace edits without repeatedly scanning the whole repository.
 
-Agent Workbench does not replace coding agents. It gives coding agents an
-IDE-grade evidence layer.
+It is designed for two participants:
 
-## What It Solves
+- **You** install and operate one local runtime for the repositories where you
+  want stronger coding-agent support.
+- **Your coding agent** uses the runtime's evidence to navigate and change a
+  repository with explicit freshness, capability, provenance, and safety
+  signals.
 
-Coding agents are strongest when they can spend context on design decisions and
-edits instead of rediscovering repository structure. Agent Workbench provides
-bounded, repo-scoped evidence for common questions:
-
-| Agent problem | Mature tool class | Workbench role |
-| --- | --- | --- |
-| Where is this defined? | Parser/index/symbol graph | Symbol search and context routing |
-| What uses this? | Reference engine | References with confidence and provenance |
-| What might break? | Impact graph/test mapping | Bounded impact and validation planning |
-| Is this file valid? | Parser/linter/type checker | Diagnostics and planned checks |
-| What should I test? | Test discovery/dependency graph | Verification plan |
-| Can I safely edit this? | Workspace safety/edit preview | Preview/apply with drift checks |
-| Is this generated/vendor/secret? | Scope/catalog policy | Refusal, caveats, and redaction |
-| Where are the docs? | Markdown index/outline/FTS | Docs routing and section reads |
-
-Agents should not spend context and time rediscovering what mature coding
-support tools can already answer deterministically or semi-deterministically.
-
-## What It Exposes
-
-The public runtime surface is MCP-first:
-
-- `repo:///status`, `repo:///scope`, and `repo:///overview` for first-read repo
-  state, scope, freshness, and capability coverage.
-- Documentation resources and tools for bounded docs overview, map, search,
-  outline, and section reads.
-- `context_for_task` for bounded task routing before broad file reads.
-- `symbol_search`, `find_references`, and `impact` for targeted code evidence.
-- `diagnostics_for_files` and `verification_plan` for read-only diagnostics and
-  planned validation.
-- `preview_workspace_edit` and `apply_workspace_edit` for bounded writes with
-  preview tokens, path containment, and drift checks.
-- Integration health/profile resources for configured, discovered, callable,
-  unavailable, blocked, hidden, and unknown agent surfaces.
-
-## Evidence You Can Rely On
-
-Workbench responses carry metadata so agents can calibrate claims:
-
-- Capability levels are `semantic`, `partial_semantic`, `resource_backed`, or
-  `unsupported`.
-- Freshness is `fresh`, `stale`, `cold`, `refreshing`, or `unknown`.
-- Evidence kinds include parser, docs, FTS, config, direct reads, heuristics,
-  text fallback, and executed commands.
-- Verification status distinguishes `done`, `planned`, `needed`, `blocked`,
-  and `not_applicable`.
-
-Routing evidence helps an agent decide where to look. Parser-backed evidence
-supports stronger claims about declarations and syntax. Semantic evidence
-supports stronger claims only when fixture-proven for that language and
-operation. Direct source reads remain necessary when confidence is partial,
-degraded, stale, or heuristic. Planned validation is not completed validation;
-executed tests/checks or equivalent evidence are required before claiming proof.
-
-## Not A Lifecycle Engine
-
-Agent Workbench does not decide whether work is approved, complete, promoted,
-released, or closed. It provides repository evidence, coding support,
-validation planning, diagnostics, and workspace-safety contracts. Lifecycle
-tools, issue trackers, maintainers, or project governance remain responsible
-for intent, acceptance, and closure.
-
-Workbench may consume active task or spec context when a lifecycle system
-provides it. It may rank files/docs using active spec links and expose evidence
-useful to lifecycle tasks. It must not require `ai-spec-lifecycle` or any
-specific lifecycle tool, decide whether a spec is complete, promote durable
-docs automatically, or close specs.
-
-See [Lifecycle bridge contract](docs/reference/lifecycle-bridge-contract.md)
-for the generic boundary.
-
-## Proven Use
-
-Agent Workbench has been dogfooded on multiple repositories where coding agents
-used it to support feature development. Dogfood evidence should be recorded in
-project docs, proof matrices, or review notes rather than treated as an
-implicit guarantee.
-
-Current evidence starts in:
-
-- [Dogfood evidence ledger](docs/reference/dogfood-evidence-ledger.md)
-- [MVP proof matrix](docs/reference/mvp-proof-matrix.md)
-- [Spec closure log](docs/history/spec-closure-log.md)
-- [Cross-repo smoke feedback](docs/reference/agent-workbench-cross-repo-smoke-2026-06-06.md)
-- [Agent Workbench smoke feedback](docs/reference/agent-workbench-smoke-feedback-2026-06-06.md)
-
-Maintainers should add new dogfood entries to durable reference docs or proof
-matrices with dates, repositories, validated surfaces, limitations, and
-follow-up work.
-
-## Coding-Agent Workflows
-
-### Ad Hoc Direct Patch
-
-```text
-repo status -> context_for_task -> source read -> preview edit
--> diagnostics -> validation plan -> report evidence
-```
-
-Check freshness before editing. Treat `resource_backed`, `heuristic`, or
-`text_fallback` evidence as routing, not proof. Report validation as planned
-unless checks actually ran.
-
-### Spec Or Lifecycle Task
-
-```text
-lifecycle readiness packet -> lifecycle bridge context
--> bounded implementation -> diagnostics -> validation plan
--> lifecycle evidence update by the owning lifecycle system
-```
-
-Workbench consumes task context and returns repo evidence. The lifecycle system
-or maintainer remains responsible for acceptance, promotion, and closure.
-
-### Review-Only Task
-
-```text
-changed files -> impact evidence -> diagnostics
--> validation adequacy -> residual risk report
-```
-
-Do not mutate files. Use impact and diagnostics as evidence, then call out
-stale indexes, partial semantic coverage, missing checks, and residual risk.
+Agent Workbench supports an agent; it does not replace one.
 
 ## Install
 
-Agent Workbench installs from the npm package tarball attached to a GitHub
-release. Do not clone the repository, copy files with `rsync`, or install from a
-checkout for normal use. The npm package builds native modules in place, records
-the installed runtime root during `postinstall`, and the Codex and Claude
-plugins launch that installed runtime through the bundled portable launcher.
+Agent Workbench is distributed as an npm package attached to each
+[GitHub release](https://github.com/Auriora/agent-workbench/releases). Normal
+installations should use that package rather than a source checkout.
 
-Use Node.js 22 when possible, because Node 24 requires C++20 flags when
-compiling the native `tree-sitter` core.
+You need macOS, Linux, or Windows, plus Node.js, npm, Python 3, and a C/C++
+build toolchain for the native parser dependencies. Node.js 22 is recommended.
+Node.js 24 requires C++20 compiler flags; on macOS, install Xcode Command Line
+Tools with `xcode-select --install` if no compiler is available. Windows
+PowerShell installation commands and MSVC flags are in the installation
+runbook.
 
-### 1. Install The Runtime Package
-
-On macOS or Linux with `nvm`, install the release tarball globally:
+Install the v0.5.2 runtime:
 
 ```bash
 nvm install 22
@@ -162,30 +41,19 @@ nvm use 22
 npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz
 ```
 
-For an offline install, download the `.tgz` from the matching GitHub release and
-install that local file:
-
-```bash
-npm install -g ./auriora-agent-workbench-0.5.2.tgz
-```
-
-If you must install under Node 24, pass C++20 flags to the native build:
+For Node.js 24:
 
 ```bash
 CXXFLAGS="-std=c++20" npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz
 ```
 
-Install Xcode Command Line Tools first if `node-gyp` cannot find a compiler:
-`xcode-select --install`.
+For an offline installation, download the release asset and install it locally:
 
-Then install the plugin for each coding agent that should use Agent Workbench.
-The package includes the Codex and Claude Code plugin definitions, so each
-plugin is registered from the installed package directory.
+```bash
+npm install -g ./auriora-agent-workbench-0.5.2.tgz
+```
 
-### 2a. Install The Codex Plugin
-
-Register the package-scoped Codex marketplace, install the plugin, and verify
-that Codex sees it:
+### Codex
 
 ```bash
 PKG="$(npm root -g)/@auriora/agent-workbench"
@@ -194,14 +62,7 @@ codex plugin add agent-workbench@agent-workbench-local
 codex plugin list
 ```
 
-The expected plugin entry is `agent-workbench@agent-workbench-local`, installed
-and enabled. Start a new Codex session after installing so Codex discovers the
-skill, hooks, and MCP server configuration.
-
-### 2b. Install The Claude Code Plugin
-
-Register the package-scoped Claude Code marketplace, install the plugin for the
-current user, and verify that Claude Code sees it:
+### Claude Code
 
 ```bash
 PKG="$(npm root -g)/@auriora/agent-workbench"
@@ -210,57 +71,143 @@ claude plugin install agent-workbench@agent-workbench-local --scope user
 claude plugin list
 ```
 
-The expected plugin entry is `agent-workbench@agent-workbench-local`, enabled
-for the user scope. Start a new Claude Code session after installing so Claude
-Code discovers the skill, hooks, and MCP server configuration.
+The plugin list should show `agent-workbench@agent-workbench-local` as enabled.
+Start a new coding-agent session after installation so it discovers the skill,
+hooks, and MCP server.
 
-The first useful MCP resources in either agent are `repo:///status`,
+See [Install Agent Workbench](docs/runbooks/install-agent-workbench.md) for
+updates, uninstallation, platform details, and native-build troubleshooting.
+
+## Update
+
+The installed runtime contains a package-scoped marketplace named
+`agent-workbench-local`. This makes updates clone-free: install the newer
+release tarball, refresh the plugin from the same marketplace, then restart the
+coding-agent session.
+
+```bash
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
+```
+
+Refresh Codex:
+
+```bash
+codex plugin add agent-workbench@agent-workbench-local
+```
+
+Refresh Claude Code:
+
+```bash
+claude plugin marketplace update agent-workbench-local
+```
+
+The marketplace source lives inside the installed package, so it follows the
+runtime version. It is not a remote automatic-update channel: selecting and
+installing a newer release remains an explicit user action.
+
+## Verify Your First Session
+
+Open a supported coding agent in a repository and ask it to read
+`repo:///orientation`. This public resource is the compact starting receipt for
+repository identity, scope, freshness, and available capabilities. A healthy
+response links to more detailed resources such as `repo:///status`,
 `repo:///scope`, and `repo:///overview`.
 
-Native dependencies need Python 3 and a C/C++ toolchain. For full
-cross-platform setup, update, uninstall, and troubleshooting steps, see
-[Install Agent Workbench](docs/runbooks/install-agent-workbench.md).
+If tool schemas are deferred in the client, ask the agent to discover these
+Agent Workbench tools:
 
-## Development
-
-Use pnpm for local development:
-
-```bash
-pnpm install
-pnpm rebuild:native
-pnpm typecheck
-pnpm test
-pnpm dev -- <repo-root>
+```text
+context_for_task
+verification_plan
+diagnostics_for_files
+docs_search
 ```
 
-Native tree-sitter bindings may require `pnpm rebuild:native` under newer Node
-versions. Do not add parser fallbacks to mask install/build issues.
+If orientation cannot be read, first confirm that the plugin is enabled, then
+restart the agent session. The [installation runbook](docs/runbooks/install-agent-workbench.md)
+covers runtime-path and native-module failures.
 
-For package and plugin changes, also use:
+## How An Agent Should Use It
 
-```bash
-pnpm validate:plugin
-pnpm pack:dry-run
+A productive default workflow is:
+
+```text
+repo:///orientation
+  -> context_for_task
+  -> targeted source, symbol, reference, or documentation evidence
+  -> preview/apply a bounded edit when requested
+  -> diagnostics_for_files
+  -> verification_plan
+  -> run the relevant checks and report the evidence
 ```
 
-`plugins/agent-workbench/` owns the packaged Codex, Claude Code, and Kiro
-integration files. `packaging/agent-workbench/` owns the npm package metadata,
-portable MCP entrypoint, and distribution manifest. Keep plugin hooks and MCP
-launchers as thin wrappers over the installed runtime; behavior belongs in
-`src/` and the durable contracts/docs listed below.
+The main capabilities are:
 
-Active implementation work is tracked under `docs/specs/`. Closed MVP behavior
-from Spec 001 has been promoted into durable design, reference, runbook,
-requirements, ADR, and history docs; do not add new implementation evidence to
-the closed MVP package.
+- repository orientation, scope, status, and capability discovery
+- task-focused code and documentation routing
+- symbol search, reference finding, and bounded impact analysis
+- documentation search, outlines, maps, and section reads
+- read-only file diagnostics and verification planning
+- workspace edit preview/apply with containment, token, and drift checks
+- integration profiles and health evidence for configured agent surfaces
 
-## Documentation Map
+Use `context_for_task` before broad file reads. Prefer targeted symbol,
+reference, impact, and documentation tools when they answer the question. For
+writes, preview before applying when the surface is available, then use the
+verification plan to select checks; the agent must still execute those checks
+before claiming validation is complete.
 
-Start with [Documentation map](docs/reference/documentation-map.md) for the
-canonical owner of each design, contract, proof, integration, and safety topic.
+## Reading The Evidence
 
-Agent-visible behavior changes are tracked in
-[Agent-readable changelog](docs/reference/agent-readable-changelog.md).
+Every result should be interpreted according to its capability, freshness,
+confidence, and provenance metadata. Parser- or fixture-proven semantic results
+can support stronger claims than routing heuristics or text matches. Cold,
+stale, partial, degraded, heuristic, or unsupported evidence is a prompt to
+inspect the source directly or name what remains unknown.
+
+In particular:
+
+- routing evidence tells an agent where to look; it is not proof of behavior
+- planned validation is not completed validation
+- partial or failed output must not be presented as success
+- direct source reads and executed checks remain necessary when the available
+  evidence is insufficient
+
+The durable public contracts are indexed by the
+[documentation map](docs/reference/documentation-map.md). User-visible behavior
+changes are recorded in the
+[agent-readable changelog](docs/reference/agent-readable-changelog.md).
+
+## Safety And Lifecycle Boundary
+
+Agent Workbench keeps repository operations bounded: it reports scope and
+freshness, identifies excluded or sensitive paths, constrains edits to the
+workspace, and checks preview tokens and file drift before applying supported
+edits. These controls reduce risk; they do not authorize a change or replace
+review.
+
+It also does not decide whether a task or specification is approved, complete,
+promoted, released, or closed. Use the project's lifecycle system, issue
+tracker, and maintainers for those decisions. When a lifecycle system supplies
+task context, Agent Workbench can join it to repository evidence without taking
+ownership of lifecycle state. See the
+[lifecycle bridge contract](docs/reference/lifecycle-bridge-contract.md).
+
+## Troubleshooting And Support
+
+- Installation, update, uninstall, and native builds:
+  [installation runbook](docs/runbooks/install-agent-workbench.md)
+- Product contracts, architecture, safety, and proof:
+  [documentation map](docs/reference/documentation-map.md)
+- Known behavior changes:
+  [agent-readable changelog](docs/reference/agent-readable-changelog.md)
+- Bugs and feature requests:
+  [GitHub Issues](https://github.com/Auriora/agent-workbench/issues)
+- Repository development and contribution guidance: [AGENTS.md](AGENTS.md)
+
+When reporting a problem, include the Agent Workbench version, Node.js version,
+operating system, coding-agent client, the orientation/status evidence, and the
+exact error. Do not include secrets or private repository contents.
 
 ## License
 
