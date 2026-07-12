@@ -82,7 +82,8 @@ The package ships a package-scoped marketplace
 never collide.)
 
 In a new Codex session, use Agent Workbench through MCP. The first useful
-resources are `repo:///status`, `repo:///scope`, and `repo:///overview`.
+default resource is the compact `repo:///orientation` receipt; follow its links
+to `repo:///status`, `repo:///scope`, and `repo:///overview` only as needed.
 For task work, use `context_for_task` before broad reads and
 `verification_plan` before running validation. Use
 `integration:///profiles/codex` for the Codex integration profile and

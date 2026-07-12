@@ -241,6 +241,7 @@ describe("Codex integration profile", () => {
       "integration:///profiles/codex",
       "repo:///docs/map",
       "repo:///docs/overview",
+      "repo:///orientation",
       "repo:///overview",
       "repo:///scope",
       "repo:///status"

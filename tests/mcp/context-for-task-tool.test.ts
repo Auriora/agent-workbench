@@ -495,7 +495,7 @@ describe("context_for_task use case", () => {
     );
   });
 
-  it("routes symbol-oriented work to graph query tools through next actions", async () => {
+  it("resolves a symbol before recommending graph actions that require a node id", async () => {
     const result = await getTaskContext({
       request: {
         task: "Change Runner behavior",
@@ -518,16 +518,70 @@ describe("context_for_task use case", () => {
           })
         }),
         expect.objectContaining({
-          tool: "find_references",
-          args: expect.objectContaining({
-            symbol: "Runner"
-          })
-        }),
-        expect.objectContaining({
           tool: "verification_plan"
         })
       ])
     );
+    expect(result.context.next_actions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tool: "find_references" }),
+        expect.objectContaining({ tool: "impact" })
+      ])
+    );
+    expect(result.context.next_actions).toHaveLength(2);
+    expect(result.context.next_actions[0]).toMatchObject({
+      reason: expect.any(String),
+      expected_evidence: expect.any(String)
+    });
+  });
+
+  it("keeps read-only intent neutral and omits irrelevant validation advice", async () => {
+    const result = await getTaskContext({
+      request: {
+        task: "Review the Runner implementation without making changes",
+        intent: "read_only",
+        repo_root: "tests/fixtures/fixture-basic-python",
+        files: ["src/sample_pkg/service.py"],
+        changed_files: ["unrelated-user-change.ts"],
+        symbols: [],
+        max_files: 5,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+
+    expect(result.context.next_actions).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ tool: "verification_plan" })])
+    );
+  });
+
+  it("uses explicit task-owned edit evidence to recommend one scoped validation action", async () => {
+    const result = await getTaskContext({
+      request: {
+        task: "Review Runner behavior",
+        intent: "edit",
+        repo_root: "tests/fixtures/fixture-basic-python",
+        files: ["src/sample_pkg/service.py"],
+        changed_files: ["src/sample_pkg/service.py"],
+        symbols: [],
+        max_files: 5,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      default_repo_root: "."
+    });
+
+    expect(result.context.next_actions).toEqual([
+      expect.objectContaining({
+        tool: "verification_plan",
+        args: expect.objectContaining({
+          changed_files: ["src/sample_pkg/service.py"]
+        }),
+        reason: expect.any(String),
+        expected_evidence: expect.any(String)
+      })
+    ]);
   });
 
   it("downranks third-party and fixture path matches for broad implementation tasks", async () => {

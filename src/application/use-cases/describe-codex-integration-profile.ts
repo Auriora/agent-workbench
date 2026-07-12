@@ -108,6 +108,13 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
     ],
     mcp_bindings: [
       {
+        name: "orientation",
+        uri: "repo:///orientation",
+        kind: "resource",
+        capability_class: "read_only",
+        description: "Compact snapshot, freshness, trust, blocker, reuse, and detailed-resource orientation receipt."
+      },
+      {
         name: "status",
         uri: "repo:///status",
         kind: "resource",

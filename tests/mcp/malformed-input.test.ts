@@ -42,6 +42,7 @@ describe("MCP malformed input handling", () => {
   });
 
   it.each([
+    ["repo:///orientation", { repo_root: 42 }],
     ["repo:///status", { repo_root: 42 }],
     ["repo:///scope", { repo_root: 42 }],
     ["repo:///overview", { repo_root: 42 }]
@@ -72,6 +73,7 @@ function providerContextThatThrows() {
     throw new Error("provider should not run for malformed input");
   };
   return {
+    getRepoOrientation: fail,
     getRepoStatus: fail,
     getRepoScope: fail,
     getRepoOverview: fail,

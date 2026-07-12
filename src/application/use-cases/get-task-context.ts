@@ -187,46 +187,15 @@ export async function getTaskContext(input: {
       skipped_work: skippedWork,
       completeness,
       risks,
-      next_actions: capNextActions([
-        ...input.request.symbols.map((symbol) => ({
-          tool: "symbol_search",
-          args: {
-            query: symbol,
-            repo_root: scanned.repo_root
-          }
-        })),
-        ...rankedSymbolResult.ranked_symbols.flatMap((candidate) => [
-          {
-            tool: "find_references",
-            args: {
-              node_id: candidate.symbol.node_id,
-              symbol: candidate.symbol.name,
-              repo_root: scanned.repo_root
-            }
-          },
-          {
-            tool: "impact",
-            args: {
-              node_id: candidate.symbol.node_id,
-              repo_root: scanned.repo_root
-            }
-          }
-        ]),
-        ...input.request.symbols.map((symbol) => ({
-          tool: "find_references",
-          args: {
-            symbol,
-            repo_root: scanned.repo_root
-          }
-        })),
-        ...specRouting.next_actions,
-        {
-          tool: "verification_plan",
-          args: {
-            files: [...requestedFiles, ...relatedFiles].filter((file) => file.exists).map((file) => file.path)
-          }
-        }
-      ])
+      next_actions: buildTaskNextActions({
+        request: input.request,
+        repoRoot: scanned.repo_root,
+        requestedFiles,
+        relatedFiles,
+        rankedSymbols: rankedSymbolResult.ranked_symbols,
+        lifecycleActions: specRouting.next_actions,
+        lifecycleEvidence: specRouting.lifecycle_evidence
+      })
     },
     meta: {
       ...status.meta,
@@ -237,6 +206,114 @@ export async function getTaskContext(input: {
       }
     }
   };
+}
+
+function buildTaskNextActions(input: {
+  request: TaskContextRequest;
+  repoRoot: string;
+  requestedFiles: FileReference[];
+  relatedFiles: FileReference[];
+  rankedSymbols: RankedSymbolCandidate[];
+  lifecycleActions: NextAction[];
+  lifecycleEvidence: TaskContext["lifecycle_evidence"];
+}): NextAction[] {
+  const actions: NextAction[] = [];
+  const primaryCandidate = input.rankedSymbols[0];
+  const requestedSymbol = input.request.symbols[0];
+
+  const lifecycleAction = input.lifecycleActions[0];
+  if (lifecycleAction !== undefined) {
+    actions.push({
+      ...lifecycleAction,
+      reason: "Resolve the outstanding lifecycle evidence before widening repository work.",
+      expected_evidence: "Authoritative task or spec state needed by the current task."
+    });
+  }
+
+  if (primaryCandidate !== undefined) {
+    actions.push({
+      tool: "find_references",
+      args: {
+        node_id: primaryCandidate.symbol.node_id,
+        symbol: primaryCandidate.symbol.name,
+        repo_root: input.repoRoot
+      },
+      reason: "The top-ranked symbol is resolved; its direct callers are the next unresolved edit-scope evidence.",
+      expected_evidence: "Bounded references to the resolved symbol node."
+    });
+    if (taskMayChangeCode(input.request)) {
+      actions.push({
+        tool: "impact",
+        args: {
+          node_id: primaryCandidate.symbol.node_id,
+          repo_root: input.repoRoot
+        },
+        reason: "The task may change a resolved symbol, so downstream impact can alter the safe edit scope.",
+        expected_evidence: "Bounded downstream dependency and test impact for the resolved node."
+      });
+    }
+  } else if (requestedSymbol !== undefined) {
+    actions.push({
+      tool: "symbol_search",
+      args: {
+        query: requestedSymbol,
+        repo_root: input.repoRoot
+      },
+      reason: "The requested symbol is not yet resolved to a stable node identifier.",
+      expected_evidence: "Ranked symbol candidates with node identifiers for precise follow-up."
+    });
+  }
+
+  if (shouldRecommendVerification(input.request, input.lifecycleEvidence)) {
+    const files = uniqueStrings([
+      ...(input.request.changed_files ?? []),
+      ...input.requestedFiles.filter((file) => file.exists).map((file) => file.path),
+      ...input.relatedFiles.filter((file) => file.exists).map((file) => file.path)
+    ]);
+    if (files.length > 0) {
+      actions.push({
+        tool: "verification_plan",
+        args: {
+          task: input.request.task,
+          repo_root: input.repoRoot,
+          files,
+          changed_files: input.request.changed_files ?? []
+        },
+        reason: "Task-owned edit or closure evidence makes a proportionate validation plan decision-relevant.",
+        expected_evidence: "Repository-backed validation commands scoped to the task-owned files."
+      });
+    }
+  }
+
+  return capNextActions(actions, 3);
+}
+
+function shouldRecommendVerification(
+  request: TaskContextRequest,
+  lifecycleEvidence: TaskContext["lifecycle_evidence"]
+): boolean {
+  if (request.intent !== undefined && request.intent !== "unknown") {
+    return request.intent === "edit" || request.intent === "closure";
+  }
+  if ((request.changed_files?.length ?? 0) > 0) {
+    return true;
+  }
+  if (
+    lifecycleEvidence.some((evidence) =>
+      evidence.kind === "validation_plan" || evidence.kind === "closure_risk"
+    )
+  ) {
+    return true;
+  }
+  return /\b(add|change|edit|fix|implement|modify|remove|replace|update)\b/iu.test(request.task);
+}
+
+function taskMayChangeCode(request: TaskContextRequest): boolean {
+  if (request.intent !== undefined && request.intent !== "unknown") {
+    return request.intent === "edit" || request.intent === "closure";
+  }
+  return (request.changed_files?.length ?? 0) > 0 ||
+    /\b(add|change|edit|fix|implement|modify|remove|replace|update)\b/iu.test(request.task);
 }
 
 function buildSummary(input: {

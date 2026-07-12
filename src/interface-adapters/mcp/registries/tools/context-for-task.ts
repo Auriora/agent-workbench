@@ -23,7 +23,9 @@ const contextForTaskRawShape = {
   task: z.string().min(1).describe("Describe the implementation, review, debugging, or planning task that needs repository context."),
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
   files: z.array(z.string()).default([]).describe("Known repo-relative files to seed routing; omit when the task starts from only a description."),
+  changed_files: z.array(z.string()).default([]).describe("Task-owned repo-relative edits, when known. Unrelated working-tree changes must not be included."),
   symbols: z.array(z.string()).default([]).describe("Known symbols, types, functions, commands, or identifiers to seed graph and docs routing."),
+  intent: taskContextRequestSchema.shape.intent.describe("Explicit task intent. This takes precedence over task-text inference for validation guidance."),
   lifecycle_context: taskContextRequestSchema.shape.lifecycle_context.describe(
     "Optional caller-supplied spec-lifecycle-manager context to consume before broad repository search."
   ),
@@ -45,7 +47,9 @@ export const contextForTaskTool: McpToolDeclaration = {
       { name: "task", description: "Implementation, review, debugging, or planning task that needs repository context.", required: true },
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
       { name: "files", description: "Known repo-relative files to seed routing when available.", required: false },
+      { name: "changed_files", description: "Task-owned changed files; exclude unrelated working-tree changes.", required: false },
       { name: "symbols", description: "Known symbols, types, functions, commands, or identifiers to seed routing.", required: false },
+      { name: "intent", description: "Explicit read-only, edit, review, closure, or unknown task intent.", required: false },
       { name: "lifecycle_context", description: "Optional caller-supplied spec-lifecycle-manager context.", required: false },
       { name: "max_files", description: "Maximum related file candidates to return before broader local file reads.", required: false },
       { name: "max_docs", description: "Maximum governing documentation files to return for the task.", required: false }

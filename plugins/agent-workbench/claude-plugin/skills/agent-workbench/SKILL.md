@@ -1,6 +1,6 @@
 ---
 name: agent-workbench
-description: Use Agent Workbench as the MCP-backed IDE runtime for repository status, task context, targeted navigation, edit planning, and validation planning.
+description: Use Agent Workbench for non-trivial repository investigation, change evidence, and validation planning when its MCP server is available.
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -16,7 +16,9 @@ local scripts.
 
 ## Default Workflow
 
-1. Read `repo:///status`, `repo:///scope`, and `repo:///overview` before relying on runtime output.
+1. Read `repo:///orientation` for a compact trust and freshness receipt. Follow
+   its links to `repo:///status`, `repo:///scope`, or `repo:///overview` only
+   when the task needs that detailed evidence.
 2. If Agent Workbench tool schemas are deferred or not visible in the current
    client, call tool discovery for `agent-workbench context_for_task
    verification_plan diagnostics_for_files docs_search`. Do not hardcode
@@ -54,7 +56,8 @@ from Claude Code's plugin cache.
 
 - `CLAUDE.md` and repository instructions give project guidance.
 - The MCP server is the only executable runtime surface.
-- The plugin packages this skill, quiet hooks, and MCP server configuration.
+- The plugin packages this skill, quiet post-edit hooks, and MCP server
+  configuration. It does not run an Agent Workbench action at session start.
 - Hooks are wrappers and must stay quiet and action-gated unless explicitly silenced.
 
 ## Failure Discipline

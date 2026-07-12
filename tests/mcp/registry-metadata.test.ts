@@ -23,6 +23,7 @@ describe("MCP registry metadata", () => {
       "resource:docs-map",
       "resource:docs-overview",
       "resource:integration-health",
+      "resource:orientation",
       "resource:overview",
       "resource:scope",
       "resource:status",
@@ -139,6 +140,7 @@ describe("MCP registry metadata", () => {
     });
     for (const name of [
       "status",
+      "orientation",
       "scope",
       "overview",
       "docs-overview",

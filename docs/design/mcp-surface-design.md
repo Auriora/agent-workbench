@@ -146,7 +146,7 @@ The public surface policy coverage is:
 
 | Surface family | Trust policy |
 | --- | --- |
-| `repo:///status`, `repo:///scope`, `repo:///overview` | `repository_status` |
+| `repo:///orientation`, `repo:///status`, `repo:///scope`, `repo:///overview` | `repository_status` |
 | `repo:///docs/overview`, `repo:///docs/map`, `docs_search`, `docs_current_for_task`, `docs_outline` | `docs_routing` |
 | `docs_read_section` | `docs_direct_read`; `precise_direct_read_claim` is safe only when returned metadata includes direct-read evidence |
 | `docs_scope` | `docs_session_scope` |
@@ -166,7 +166,7 @@ Transport failures that prevent MCP response framing are the only expected
 public exclusion.
 
 First-read resource and planning surfaces must keep this boundary explicit.
-`repo:///status`, `repo:///scope`, and `repo:///overview` report freshness,
+`repo:///orientation`, `repo:///status`, `repo:///scope`, and `repo:///overview` report freshness,
 adapter coverage, scanner budget, watcher caveats, skipped paths, and provider
 failure envelopes through the shared response metadata and repository-status
 trust policy. `context_for_task`, docs routing, diagnostics, and
@@ -177,6 +177,7 @@ failures remain needed routing evidence rather than a clean no-op.
 
 ## MVP Resources
 
+- `repo:///orientation`
 - `repo:///overview`
 - `repo:///status`
 - `repo:///scope`
@@ -187,6 +188,12 @@ failures remain needed routing evidence rather than a clean no-op.
 
 These resources must be cheap, bounded, and backed by current snapshot metadata.
 They must not trigger broad graph analysis.
+`repo:///orientation` is the default compact entry receipt. It contains only
+snapshot identity, freshness, a trust summary, material blockers, explicit
+refresh triggers, and links to the detailed status, scope, and overview
+resources. Ordinary content edits can make analysis stale without invalidating
+the orientation decision; root, scope, ignore-policy, runtime-identity, policy,
+or index-validity changes require a new orientation decision.
 `repo:///status` must expose cold, refreshing, fresh, stale, and degraded
 warm-up state, including queued work counts and indexing blockers where
 available.
@@ -271,7 +278,19 @@ tool.
 `context_for_task` is a bounded router over indexed evidence. It must not run
 full topology, diagnostics execution, broad docs reports, or high-cardinality
 cache validation as hidden work. It should return complete-enough markers,
-skipped-work metadata, and exact next actions.
+skipped-work metadata, and at most three exact next actions. Actions are ordered
+by unresolved information value, include a short reason and expected evidence,
+reuse resolved node identifiers, and are omitted when the current response is
+already sufficient. Navigation is progressive: unresolved symbols route to
+`symbol_search`; resolved nodes may route to `find_references`; `impact` is
+prominent only when downstream scope can change the task decision. This slice
+does not add a combined navigation tool.
+
+Validation guidance follows explicit caller intent first, then task-owned
+changed files, lifecycle evidence, and finally bounded task-text inference.
+Read-only intent overrides unrelated dirty files. Unknown or conflicting intent
+stays neutral, and unchanged advice is not repeated merely to keep an action
+list populated.
 
 When a task mentions MCP server work, `context_for_task` should rank
 MCP-server entrypoints, tool registries, protocol docs, and transport evidence

@@ -44,6 +44,7 @@ import type { CurrentDocsForTaskUseCaseResult } from "../../../application/use-c
 import type { FindReferencesUseCaseResult } from "../../../application/use-cases/find-references.js";
 import type { GetIntegrationHealthResult } from "../../../application/use-cases/get-integration-health.js";
 import type { GetRepoOverviewResult } from "../../../application/use-cases/get-repo-overview.js";
+import type { GetRepoOrientationResult } from "../../../application/use-cases/get-repo-orientation.js";
 import type { GetRepoScopeResult } from "../../../application/use-cases/get-repo-scope.js";
 import type { GetTaskContextResult } from "../../../application/use-cases/get-task-context.js";
 import type { GetRepoStatusResult } from "../../../application/use-cases/get-repo-status.js";
@@ -57,6 +58,7 @@ import { checkMarkdownSetTool } from "./tools/check-markdown-set.js";
 import { docsMapResource } from "./resources/docs-map.js";
 import { docsOverviewResource } from "./resources/docs-overview.js";
 import { repoOverviewResource } from "./resources/repo-overview.js";
+import { repoOrientationResource } from "./resources/repo-orientation.js";
 import { repoScopeResource } from "./resources/repo-scope.js";
 import { repoStatusResource } from "./resources/repo-status.js";
 import { contextForTaskTool } from "./tools/context-for-task.js";
@@ -84,6 +86,7 @@ export type McpRegistryContext = {
   rootAuthorityPolicy?: RootAuthorityPolicy;
   docsSessionScope?: DocsSessionScopeState;
   getRepoStatus?: (input: { repo_root: string }) => Promise<GetRepoStatusResult> | GetRepoStatusResult;
+  getRepoOrientation?: (input: { repo_root: string }) => Promise<GetRepoOrientationResult> | GetRepoOrientationResult;
   getRepoScope?: (input: { repo_root: string }) => Promise<GetRepoScopeResult> | GetRepoScopeResult;
   getRepoOverview?: (input: { repo_root: string }) => Promise<GetRepoOverviewResult> | GetRepoOverviewResult;
   getDocsOverview?: (input: { request: DocsOverviewRequest }) => Promise<DocsOverviewUseCaseResult> | DocsOverviewUseCaseResult;
@@ -147,6 +150,7 @@ export type McpSurfaceMetadata = {
 };
 
 export const publicSurfaceTrustPolicies = {
+  "resource:orientation": { surface_kind: "repository_status" },
   "resource:status": { surface_kind: "repository_status" },
   "resource:scope": { surface_kind: "repository_status" },
   "resource:overview": { surface_kind: "repository_status" },
@@ -172,6 +176,7 @@ export const publicSurfaceTrustPolicies = {
 } as const satisfies Record<string, TrustSurfacePolicy>;
 
 export const mcpResources: McpResourceDeclaration[] = normalizePublicMetadata([
+  repoOrientationResource,
   repoStatusResource,
   repoScopeResource,
   repoOverviewResource,

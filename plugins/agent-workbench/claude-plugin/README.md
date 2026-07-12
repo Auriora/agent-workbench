@@ -41,6 +41,6 @@ claude --plugin-dir plugins/agent-workbench/claude-plugin
 After edits, run `/reload-plugins` in Claude Code to reload plugin skills,
 hooks, MCP servers, and agents.
 
-SessionStart hook output is intentionally orientation only. For behavior Claude
-Code should treat as project guidance, keep `CLAUDE.md` aligned with the shared
-workflow and avoid relying on hook prose alone.
+Activation guidance lives in the packaged skill and the compact conditional
+pointer in `CLAUDE.md`; the plugin does not run Agent Workbench at session
+start. Post-edit hooks remain quiet unless task-owned edit feedback is needed.

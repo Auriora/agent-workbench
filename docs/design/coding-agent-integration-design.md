@@ -43,12 +43,20 @@ The runtime should expose:
 
 - tools for context, symbol search, references, impact, preview/apply, and
   validation planning
-- resources for status, scope, overview, integration health, and integration
+- a compact orientation receipt plus detailed status, scope, overview,
+  integration health, and integration
   metadata
 - prompts for reusable high-level workflows when client support is available
 
 MCP remains an interface adapter. Application, domain, graph, extraction,
 cache, and validation code must not know which agent is connected.
+
+Packaged integrations use one conditional skill entry for non-trivial
+repository investigation, change evidence, or validation planning. They do not
+invoke Agent Workbench automatically at session start. The skill reads
+`repo:///orientation` first and follows detailed resource links only when the
+task needs them. Provider instruction files may point to that skill but must
+not duplicate the full workflow or introduce provider-specific runtime policy.
 
 `integration:///health/agent-workbench` is the runtime health surface for
 coding agents. It reports configured, registered, advertised,
@@ -189,6 +197,10 @@ Example hook intents:
 - `on_session_start_context_hint`
 - `on_turn_stop_validation_summary`
 - `on_prompt_submit_secret_check`
+
+Session-start activation is not a current Agent Workbench hook intent. Startup
+hooks must not inject repeated workflow guidance when the packaged skill and
+repository instructions already provide a conditional entry point.
 
 Future hook and session-stop support may expose a read-only handoff packet with
 selected task, loaded context, changed files, validation status, stale-doc

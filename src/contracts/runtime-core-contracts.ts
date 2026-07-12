@@ -111,7 +111,9 @@ export type ToolCapabilityClass = z.infer<typeof toolCapabilityClassSchema>;
 
 export const nextActionSchema = z.object({
   tool: z.string(),
-  args: z.record(z.string(), z.unknown())
+  args: z.record(z.string(), z.unknown()),
+  reason: z.string().optional(),
+  expected_evidence: z.string().optional()
 });
 export type NextAction = z.infer<typeof nextActionSchema>;
 

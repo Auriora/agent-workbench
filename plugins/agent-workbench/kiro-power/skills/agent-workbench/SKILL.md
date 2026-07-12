@@ -16,7 +16,9 @@ local scripts.
 
 ## Default Workflow
 
-1. Read `repo:///status`, `repo:///scope`, and `repo:///overview` before relying on runtime output.
+1. Read `repo:///orientation` for a compact trust and freshness receipt. Follow
+   its links to `repo:///status`, `repo:///scope`, or `repo:///overview` only
+   when the task needs that detailed evidence.
 2. If Agent Workbench tool schemas are deferred or not visible in the current
    client, call tool discovery for `agent-workbench context_for_task
    verification_plan diagnostics_for_files docs_search`. Do not hardcode

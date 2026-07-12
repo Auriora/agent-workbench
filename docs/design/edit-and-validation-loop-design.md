@@ -43,13 +43,19 @@ ports; presenters convert their results into MCP envelopes.
 ## Coding Workflow
 
 ```text
-repo:///status and repo:///scope
+repo:///orientation, then detailed status/scope only when needed
 -> context_for_task
 -> direct source read only for selected edit targets or low-confidence context
 -> preview/apply edits
 -> verification_plan
 -> manual or future allowlisted command execution
 ```
+
+`context_for_task` recommends `verification_plan` only when validation is
+decision-relevant. Explicit read-only intent suppresses the recommendation;
+explicit edit or closure intent and caller-supplied task-owned changed files
+take precedence over lifecycle evidence and bounded task-text inference.
+Ambient working-tree changes are not task intent.
 
 ## Branch Gates
 

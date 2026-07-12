@@ -5,12 +5,14 @@
 
 import { z } from "zod";
 import {
+  analysisValiditySchema,
   capabilityLevelSchema,
   contextCompletenessSchema,
   contextRiskSchema,
   documentReferenceSchema,
   evidenceKindSchema,
   fileReferenceSchema,
+  freshnessSchema,
   nextActionSchema,
   skippedPathSchema,
   skippedWorkSchema,
@@ -33,7 +35,9 @@ export const taskContextRequestSchema = z
     task: z.string().min(1),
     repo_root: z.string().optional(),
     files: z.array(z.string()).default([]),
+    changed_files: z.array(z.string()).optional(),
     symbols: z.array(z.string()).default([]),
+    intent: z.enum(["read_only", "edit", "review", "closure", "unknown"]).optional(),
     lifecycle_context: z
       .object({
         source: z.string().default("caller"),
@@ -142,3 +146,37 @@ export const repoOverviewSchema = z
   })
   .strict();
 export type RepoOverview = z.infer<typeof repoOverviewSchema>;
+
+export const orientationRefreshTriggerSchema = z.enum([
+  "repository_root_changes",
+  "scope_or_ignore_rules_change",
+  "runtime_identity_changes",
+  "policy_changes",
+  "index_becomes_invalid"
+]);
+export type OrientationRefreshTrigger = z.infer<typeof orientationRefreshTriggerSchema>;
+
+export const orientationReceiptSchema = z
+  .object({
+    repo_root: z.string(),
+    snapshot_id: z.string().optional(),
+    freshness: freshnessSchema,
+    trust_summary: z
+      .object({
+        analysis_validity: analysisValiditySchema,
+        capability_level: capabilityLevelSchema,
+        orientation_reusable: z.boolean()
+      })
+      .strict(),
+    material_blockers: z.array(z.string()),
+    detail_resources: z.tuple([
+      z.literal("repo:///status"),
+      z.literal("repo:///scope"),
+      z.literal("repo:///overview")
+    ]),
+    refresh_required: z.boolean(),
+    refresh_when: z.array(orientationRefreshTriggerSchema),
+    ordinary_content_edit_requires_refresh: z.literal(false)
+  })
+  .strict();
+export type OrientationReceipt = z.infer<typeof orientationReceiptSchema>;

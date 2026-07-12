@@ -108,43 +108,36 @@ describe("agent CLI hook compatibility", () => {
     ]);
   });
 
-  it("runs Claude plugin hooks as command plus args with Claude-shaped JSON output", () => {
+  it("runs the quiet Claude post-edit hook as command plus args without session activation", () => {
     const pluginRoot = path.resolve("plugins/agent-workbench/claude-plugin");
     const hooksConfig = JSON.parse(
       fs.readFileSync(path.join(pluginRoot, "hooks/hooks.json"), "utf8")
     ) as {
       hooks: Record<string, Array<{ hooks: Array<{ command: string; args: string[] }> }>>;
     };
-    const hook = hooksConfig.hooks.SessionStart[0].hooks[0];
+    expect(hooksConfig.hooks.SessionStart).toBeUndefined();
+    const hook = hooksConfig.hooks.PostToolUse[0].hooks[0];
     const args = hook.args.map((arg) => arg.replace("${CLAUDE_PLUGIN_ROOT}", pluginRoot));
 
     expect(hook.command).toBe("node");
-    expect(args).toEqual([path.join(pluginRoot, "hooks/session-start.js")]);
+    expect(args).toEqual([path.join(pluginRoot, "hooks/post-edit-feedback.js")]);
 
     const result = spawnSync(hook.command, args, {
       cwd: repoRoot,
-      input: JSON.stringify({ hook_event_name: "SessionStart", cwd: repoRoot }),
+      input: JSON.stringify({
+        hook_event_name: "PostToolUse",
+        cwd: repoRoot,
+        tool_name: "Edit",
+        tool_input: { file_path: "README.md" },
+        tool_response: { code: 0 }
+      }),
       encoding: "utf8"
     });
 
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
 
-    const parsed = JSON.parse(result.stdout) as {
-      hookSpecificOutput?: {
-        hookEventName?: string;
-        additionalContext?: string;
-      };
-    };
-    expect(parsed.hookSpecificOutput).toMatchObject({
-      hookEventName: "SessionStart",
-      additionalContext: expect.stringContaining("Agent Workbench MCP is available.")
-    });
-    expect(parsed.hookSpecificOutput?.additionalContext).toContain("tool discovery/search");
-    expect(parsed.hookSpecificOutput?.additionalContext).toContain(
-      "context_for_task verification_plan diagnostics_for_files docs_search"
-    );
-    expect(parsed.hookSpecificOutput?.additionalContext).not.toContain("mcp__");
+    expect(result.stdout).toBe("");
   });
 
   it("runs Kiro custom-agent hooks as shell command strings with plain text output", () => {

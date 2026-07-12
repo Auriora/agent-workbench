@@ -21,6 +21,7 @@ import {
 } from "./application/use-cases/get-integration-health.js";
 import { getTaskContext } from "./application/use-cases/get-task-context.js";
 import { getRepoOverview } from "./application/use-cases/get-repo-overview.js";
+import { getRepoOrientation } from "./application/use-cases/get-repo-orientation.js";
 import { getRepoScope } from "./application/use-cases/get-repo-scope.js";
 import { getSnapshotRepoStatus } from "./application/use-cases/get-repo-status.js";
 import type { IndexRepositoryGraphResult } from "./application/use-cases/index-repository-graph.js";
@@ -183,6 +184,17 @@ export function createAgentWorkbenchServer(
         warmups: runtime,
         watcher
       });
+    },
+    getRepoOrientation: async ({ repo_root }) => {
+      const store = await graphStore();
+      const watcher = await updateWorkspaceWatcherFreshness(repo_root, store);
+      return getRepoOrientation(await getSnapshotRepoStatus({
+        repo_root,
+        snapshots: store,
+        catalog: store,
+        warmups: runtime,
+        watcher
+      }));
     },
     getRepoScope: async ({ repo_root }) => {
       const store = await graphStore();

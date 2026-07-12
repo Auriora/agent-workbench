@@ -31,21 +31,21 @@ license: GPL-3.0-or-later
 
 | Requirement | Priority | Tasks | Properties | Coverage state | Residual destination |
 | --- | --- | --- | --- | --- | --- |
-| Requirement 1: Executable Claude Activation | must-have | T004, T006, T007 | CP-004, CP-005 | not-covered | EB041 / Spec 038 |
-| Requirement 2: Snapshot-Aware Orientation | must-have | T001, T003, T006, T007 | CP-001, CP-002, CP-005 | not-covered | EB048 / Spec 038 |
-| Requirement 3: Executable Task Continuation | must-have | T002, T003, T006, T007 | CP-002, CP-005 | not-covered | EB049 / Spec 038 |
-| Requirement 4: Bounded Navigation Flow | should-have | T002, T003, T006, T007 | CP-002, CP-005 | not-covered | EB049 / Spec 038 |
-| Requirement 5: Intent-Aware Validation Guidance | must-have | T005, T006, T007 | CP-003, CP-005 | not-covered | EB050 / Spec 038 |
+| Requirement 1 | must-have | T004, T006, T007 | CP-004, CP-005 | covered | none |
+| Requirement 2 | must-have | T001, T003, T006, T007 | CP-001, CP-002, CP-005 | covered | none |
+| Requirement 3 | must-have | T002, T003, T006, T007 | CP-002, CP-005 | covered | none |
+| Requirement 4 | should-have | T002, T003, T006, T007 | CP-002, CP-005 | covered | Combined navigation remains out of scope; EB049 owns any future evidence-led proposal. |
+| Requirement 5 | must-have | T005, T006, T007 | CP-003, CP-005 | covered | none |
 
 ## Correctness Property Coverage
 
 | Property | Requirements | Tasks | Planned evidence | Residual risk |
 | --- | --- | --- | --- | --- |
-| CP-001 | R2 | T001, T003, T006 | Snapshot determinism fixtures | Pending. |
-| CP-002 | R2-R4 | T001-T003, T006 | Capability/schema golden tests | Pending. |
-| CP-003 | R5 | T005, T006 | Validation trust golden tests | Pending. |
-| CP-004 | R1 | T004, T006 | Architecture and plugin validation | Pending. |
-| CP-005 | R1-R5 | T001, T002, T004-T006 | Controlled decision-quality, action, round-trip, byte, and latency comparison | Pending. |
+| CP-001 | R2 | T001, T003, T006 | Snapshot determinism fixtures | Passed. |
+| CP-002 | R2-R4 | T001-T003, T006 | Capability/schema golden tests | Passed. |
+| CP-003 | R5 | T005, T006 | Validation trust golden tests | Passed. |
+| CP-004 | R1 | T004, T006 | Architecture and plugin validation | Passed. |
+| CP-005 | R1-R5 | T001, T002, T004-T006 | Controlled decision-quality, action, round-trip, byte, and latency comparison | Passed for the controlled fixture set; observational adoption is not a success gate. |
 
 ## Open Decision Impact
 
@@ -58,11 +58,11 @@ license: GPL-3.0-or-later
 
 | Design section | Requirements | Tasks | Interfaces or files | Verification | Coverage state |
 | --- | --- | --- | --- | --- | --- |
-| Claude Activation | R1 | T004 | Claude plugin skill, hook, docs, integration tests | Plugin validation | not-covered |
-| Orientation Entry Path | R2 | T001, T003 | Orientation use case, contracts, MCP resource/presenter | Contract and budget tests | not-covered |
-| Context Continuation | R3 | T003 | Task-context use case and presenter | Golden/schema tests | not-covered |
-| Navigation Flow | R4 | T002, T003 | Existing graph query tools and selective continuations | Query, decision, and budget tests | not-covered |
-| Intent-Aware Validation | R5 | T005 | Task-context and verification policy/presentation | Intent/trust fixtures | not-covered |
+| Claude Activation | R1 | T004 | Claude plugin skill, hook, docs, integration tests | Plugin validation | covered |
+| Orientation Entry Path | R2 | T001, T003 | Orientation use case, contracts, MCP resource/presenter | Contract and budget tests | covered |
+| Context Continuation | R3 | T003 | Task-context use case and presenter | Golden/schema tests | covered |
+| Navigation Flow | R4 | T002, T003 | Existing graph query tools and selective continuations | Query, decision, and budget tests | covered |
+| Intent-Aware Validation | R5 | T005 | Task-context and verification policy/presentation | Intent/trust fixtures | covered |
 
 ## Maintenance Notes
 

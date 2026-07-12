@@ -23,6 +23,14 @@
   },
   "resources": [
     {
+      "name": "orientation",
+      "uri": "repo:///orientation",
+      "description": "Compact snapshot, freshness, trust, blocker, reuse, and detailed-resource orientation receipt.",
+      "capability_class": "read_only",
+      "mutation_class": "none",
+      "budget_policy": "Uses bounded status evidence and returns no file inventory or source content."
+    },
+    {
       "name": "status",
       "uri": "repo:///status",
       "description": "Compact repository status, freshness, scope, and adapter coverage.",

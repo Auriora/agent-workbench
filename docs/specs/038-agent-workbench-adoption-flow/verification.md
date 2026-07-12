@@ -22,22 +22,22 @@ adoption outcome.
 | Gate | Required? | Status | Evidence |
 | --- | --- | --- | --- |
 | Contract decisions D001 and D002 recorded | yes | complete | `design.md#decisions` |
-| Requirement and property coverage complete | yes | pending | Traceability and tests |
-| Cross-client plugin guidance validated | yes | pending | Plugin integration tests |
-| Focused and full automated tests pass | yes | pending | Commands below |
-| Controlled workflow quality does not regress | yes | pending | Adjudicated fixture comparison |
-| Default startup, orientation, and task-context budgets do not regress | yes | pending | Baseline and proposed byte/latency evidence |
-| Durable documentation promoted | yes | pending | T007 |
+| Requirement and property coverage complete | yes | complete | Traceability plus orientation, context, graph, plugin, and validation fixtures |
+| Cross-client plugin guidance validated | yes | complete | Claude, shared skill, Kiro skill, server-card, and registry tests |
+| Focused and full automated tests pass | yes | complete | Commands below; 588 full-suite tests passed |
+| Controlled workflow quality does not regress | yes | complete | Progressive navigation and explicit-intent negative fixtures |
+| Default startup, orientation, and task-context budgets do not regress | yes | complete | Startup injection removed; receipt and envelope budget tests |
+| Durable documentation promoted | yes | complete | T007 canonical design and runtime-contract updates |
 | Residual work has one destination | yes | pending | Closure reconciliation |
 
 ## Validation Commands
 
 | Command | Purpose | Result |
 | --- | --- | --- |
-| `pnpm validate:plugin` | Validate packaged Codex, Claude Code, and Kiro surfaces. | pending |
-| `pnpm typecheck` | Validate TypeScript contracts and implementation. | pending |
-| `pnpm exec vitest run tests/mcp tests/integration` | Focused MCP and provider integration coverage. | pending |
-| `pnpm test` | Full regression suite. | pending |
+| `pnpm validate:plugin` | Validate packaged Codex, Claude Code, and Kiro surfaces. | passed |
+| `pnpm typecheck` | Validate TypeScript contracts and implementation. | passed |
+| `pnpm exec vitest run tests/mcp tests/integration` | Focused MCP and provider integration coverage. | passed through focused slices and full suite |
+| `pnpm test` | Full regression suite. | passed: 79 files, 588 tests |
 | Spec Lifecycle Manager `lint_spec_package` for Spec 038 | Validate package structure and traceability. | pending |
 | Agent Workbench Markdown check for the changed set | Validate frontmatter, links, lists, and tables. | pending |
 
@@ -90,6 +90,10 @@ controlled fixture or adjudicated comparison is introduced.
 | 2026-07-12 | Codex and Claude history baseline recorded in `requirements.md` | accepted planning evidence | Observational only; effectiveness attribution remains out of scope. |
 | 2026-07-12 | Spec package authoring lint | passed with one advisory | No errors; canonical-context recommendation remains non-blocking. |
 | 2026-07-12 | Three-role expert review | accepted revisions | Coding-agent, platform-developer, and LLM-optimisation findings tightened usefulness, no-noise, intent, compatibility, and output-quality gates. |
+| 2026-07-12 | Claude startup and packaged guidance byte comparison | passed | `CLAUDE.md` decreased from 865 to 483 bytes; automatic 747-byte SessionStart injection was removed; the conditional skill grew from 2746 to 2912 bytes to describe the compact receipt. |
+| 2026-07-12 | Orientation resource budget fixtures | passed | Receipt is capped at 2048 bytes and its MCP envelope at 4096 bytes; fixtures exclude file inventories and distinguish ordinary stale content from material invalidation. |
+| 2026-07-12 | Controlled continuation fixtures | passed | Explicit read-only intent suppresses validation; task-owned edit intent emits one scoped validation action; unresolved symbols do not trigger node-dependent calls; resolved nodes reuse exact IDs; output stays capped at three actions. |
+| 2026-07-12 | Full implementation validation | passed | Typecheck, plugin validation, focused tests, and full 588-test suite passed. |
 
 ## Agent Readiness Evidence
 
@@ -115,8 +119,8 @@ controlled fixture or adjudicated comparison is introduced.
 
 - **Ready for implementation:** yes - D001 and D002 are resolved, with baseline
   budgets and controlled no-noise fixtures required before behavior changes.
-- **Ready for promotion:** no
-- **Ready for closure:** no
+- **Ready for promotion:** yes
+- **Ready for closure:** pending lifecycle closure review
 
 ## Related Artifacts
 

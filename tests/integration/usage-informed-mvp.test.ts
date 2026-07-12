@@ -143,10 +143,6 @@ describe("usage-informed MVP validation", () => {
       expect(result.context.next_actions).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            tool: "symbol_search",
-            args: expect.objectContaining({ query: "Runner" })
-          }),
-          expect.objectContaining({
             tool: "find_references",
             args: expect.objectContaining({ node_id: expect.any(String) })
           }),

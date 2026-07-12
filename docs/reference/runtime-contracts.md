@@ -79,6 +79,23 @@ Workbench can join lifecycle files and planned validation to repository routing.
 Top-level executable `next_actions` remain Agent Workbench MCP actions; nested
 lifecycle next actions are companion-routing hints.
 
+`context_for_task` accepts optional `intent` (`read_only`, `edit`, `review`,
+`closure`, or `unknown`) and optional task-owned `changed_files`. Its
+`next_actions` remain the existing additive action shape, with optional
+`reason` and `expected_evidence` strings. Responses contain no more than one
+primary and two secondary actions; an empty list is valid when another call
+would not materially improve the current task decision.
+
+## Orientation Receipt
+
+`repo:///orientation` is a compact additive resource. Its receipt contains the
+repository root, optional snapshot ID, freshness, analysis validity and
+capability summary, whether the orientation decision is reusable, material
+blockers, detailed-resource links, and enumerated material refresh triggers.
+`ordinary_content_edit_requires_refresh` is always false: content freshness
+still calibrates analysis claims, but does not by itself force agents to repeat
+repository orientation.
+
 ## Capability Levels
 
 Use these values only:
@@ -749,6 +766,7 @@ keeps future formatter work previewable and presentation-compatible.
 
 | Surface | Class | MVP |
 | --- | --- | --- |
+| `repo:///orientation` | `read_only` | yes |
 | `repo:///status` | `read_only` | yes |
 | `repo:///scope` | `read_only` | yes |
 | `repo:///overview` | `read_only` | yes |

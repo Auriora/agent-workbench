@@ -14,6 +14,7 @@ import { computeImpact } from "../application/use-cases/compute-impact.js";
 import { diagnoseChangedFiles } from "../application/use-cases/diagnose-changed-files.js";
 import { findReferences } from "../application/use-cases/find-references.js";
 import { getIntegrationHealth, type IntegrationSurfaceInput } from "../application/use-cases/get-integration-health.js";
+import { getRepoOrientation } from "../application/use-cases/get-repo-orientation.js";
 import { getRepoOverview } from "../application/use-cases/get-repo-overview.js";
 import { getRepoScope } from "../application/use-cases/get-repo-scope.js";
 import { getScannedRepoStatus } from "../application/use-cases/get-repo-status.js";
@@ -60,6 +61,7 @@ import { buildIntegrationHealthEnvelope } from "../presentation/integration-heal
 import { buildCheckMarkdownDocumentEnvelope, buildCheckMarkdownSetEnvelope } from "../presentation/markdown-quality-presenter.js";
 import { buildDiagnosticsForFilesEnvelope } from "../presentation/diagnostics-presenter.js";
 import { buildRepoOverviewEnvelope } from "../presentation/repo-overview-presenter.js";
+import { buildRepoOrientationEnvelope } from "../presentation/repo-orientation-presenter.js";
 import { buildRepoScopeEnvelope } from "../presentation/repo-scope-presenter.js";
 import { buildStatusEnvelope } from "../presentation/status-presenter.js";
 import { buildSymbolSearchEnvelope } from "../presentation/symbol-search-presenter.js";
@@ -450,6 +452,11 @@ async function callResource(input: {
   resourceName: string;
   runtime: RepoRuntime;
 }): Promise<ResponseEnvelope<unknown>> {
+  if (input.resourceName === "orientation") {
+    return buildRepoOrientationEnvelope(getRepoOrientation(
+      await getScannedRepoStatus({ repo_root: input.repoRoot, scanner: input.runtime.scanner })
+    ));
+  }
   if (input.resourceName === "status") {
     return buildStatusEnvelope(await getScannedRepoStatus({ repo_root: input.repoRoot, scanner: input.runtime.scanner }));
   }
