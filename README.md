@@ -29,11 +29,14 @@ installations should use that package rather than a source checkout.
 You need macOS, Linux, or Windows, plus Node.js, npm, Python 3, and a C/C++
 build toolchain for the native parser dependencies. Node.js 22 is recommended.
 Node.js 24 requires C++20 compiler flags; on macOS, install Xcode Command Line
-Tools with `xcode-select --install` if no compiler is available. Windows
-PowerShell installation commands and MSVC flags are in the installation
-runbook.
+Tools with `xcode-select --install` if no compiler is available. On Windows,
+install Visual Studio Build Tools with the C++ workload. The commands below use
+`npm.cmd` in PowerShell so they do not depend on PowerShell script-execution
+policy allowing the `npm.ps1` shim.
 
-Install the v0.5.2 runtime:
+### macOS And Linux
+
+With `nvm` installed, install Node.js 22 and the v0.5.2 runtime:
 
 ```bash
 nvm install 22
@@ -47,13 +50,46 @@ For Node.js 24:
 CXXFLAGS="-std=c++20" npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz
 ```
 
-For an offline installation, download the release asset and install it locally:
+For an offline installation, download the release asset and install it from the
+directory containing the file:
 
 ```bash
 npm install -g ./auriora-agent-workbench-0.5.2.tgz
 ```
 
+### Windows PowerShell
+
+Install Node.js 22, Python 3, and Visual Studio Build Tools with the C++
+workload, then open a new PowerShell window and install the runtime:
+
+```powershell
+node --version
+npm.cmd --version
+npm.cmd install --global "https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz"
+```
+
+For Node.js 24, append the MSVC C++20 flag after package-supplied compiler
+options, then remove it from the current PowerShell session. Use `_CL_`, not
+`CL`: MSVC appends `_CL_` after command-line options, so it overrides the
+`/std:c++17` option supplied by tree-sitter's build project.
+
+```powershell
+Remove-Item Env:CL -ErrorAction SilentlyContinue
+$env:_CL_ = "/std:c++20"
+npm.cmd install --global "https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz"
+Remove-Item Env:_CL_ -ErrorAction SilentlyContinue
+```
+
+For an offline installation, download the release asset and install it from the
+directory containing the file:
+
+```powershell
+npm.cmd install --global ".\auriora-agent-workbench-0.5.2.tgz"
+```
+
 ### Codex
+
+On macOS or Linux:
 
 ```bash
 PKG="$(npm root -g)/@auriora/agent-workbench"
@@ -62,11 +98,33 @@ codex plugin add agent-workbench@agent-workbench-local
 codex plugin list
 ```
 
+On Windows PowerShell:
+
+```powershell
+$packageRoot = Join-Path (npm.cmd root --global) "@auriora\agent-workbench"
+$pluginRoot = Join-Path $packageRoot "plugins\agent-workbench"
+codex plugin marketplace add "$pluginRoot"
+codex plugin add agent-workbench@agent-workbench-local
+codex plugin list
+```
+
 ### Claude Code
+
+On macOS or Linux:
 
 ```bash
 PKG="$(npm root -g)/@auriora/agent-workbench"
 claude plugin marketplace add "$PKG/plugins/agent-workbench"
+claude plugin install agent-workbench@agent-workbench-local --scope user
+claude plugin list
+```
+
+On Windows PowerShell:
+
+```powershell
+$packageRoot = Join-Path (npm.cmd root --global) "@auriora\agent-workbench"
+$pluginRoot = Join-Path $packageRoot "plugins\agent-workbench"
+claude plugin marketplace add "$pluginRoot"
 claude plugin install agent-workbench@agent-workbench-local --scope user
 claude plugin list
 ```
@@ -87,6 +145,12 @@ coding-agent session.
 
 ```bash
 npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
+```
+
+On Windows PowerShell, use the command shim explicitly:
+
+```powershell
+npm.cmd install --global "https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz"
 ```
 
 Refresh Codex:
