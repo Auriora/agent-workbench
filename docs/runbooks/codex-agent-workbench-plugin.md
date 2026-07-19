@@ -135,9 +135,12 @@ the Agent Workbench MCP resources first:
 
 For task work, call `context_for_task` before broad file reads and
 `verification_plan` before running validation commands. Read
-`integration:///profiles/codex` when checking the Codex plugin, skill, hook,
-and MCP binding model. Read `integration:///health/agent-workbench` when
-checking configured, registered, discovered, and callable MCP states.
+`integration:///profiles/current` to confirm the effective provider for this
+connection and `integration:///profiles/codex` when checking the legacy Codex
+plugin, skill, hook, and MCP binding model. Read the static
+`integration:///health/agent-workbench` resource for server-known state; call
+the read-only `integration_health` tool when supplying caller-discovery
+evidence.
 
 In some sessions, plugin MCP tools may be deferred until tool discovery runs.
 If Agent Workbench tool schemas are not visible, discover them with a query
@@ -164,8 +167,9 @@ change. The card must not claim remote hosting, network requirements, or
 surfaces that Agent Workbench does not register.
 
 The server card is the durable metadata owner for public resource/tool names.
-The core Codex-facing resources are `repo:///status`, `repo:///scope`,
-`repo:///overview`, `integration:///profiles/codex`, and
+The core integration resources are `repo:///status`, `repo:///scope`,
+`repo:///overview`, `integration:///profiles/current`,
+`integration:///profiles/codex`, and
 `integration:///health/agent-workbench`; the matching public resource names
 include `codex-integration-profile` and `integration-health`.
 
@@ -554,6 +558,20 @@ Then add `plugins/agent-workbench/kiro-power/` as a local Power in Kiro. If Kiro
 does not automatically import the bundled skill, import
 `plugins/agent-workbench/kiro-power/skills/agent-workbench/` from the Agent
 Steering & Skills panel or copy it to `~/.kiro/skills/agent-workbench`.
+
+If a custom npm prefix is used, resolve the actual installed package root before
+Kiro loads the Power:
+
+```bash
+agent_workbench_prefix="$HOME/.local/share/agent-workbench"
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz --prefix "$agent_workbench_prefix"
+export AGENT_WORKBENCH_INSTALL_ROOT="$(npm root -g --prefix "$agent_workbench_prefix")/@auriora/agent-workbench"
+```
+
+The environment variable names the package root containing `src/`, not the npm
+global prefix. The MCP binding launches
+`plugins/agent-workbench/mcp-launch.mjs` directly with `node`; it has no shell
+or implicit home-directory fallback.
 
 Kiro hooks are configured through Kiro agent configuration, not Codex
 `CODEX_HOME/hooks.json`. Use `kiro-power/agents/agent-workbench.json` as the

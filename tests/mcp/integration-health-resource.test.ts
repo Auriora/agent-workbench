@@ -14,14 +14,17 @@ import type {
 } from "../../src/contracts/index.js";
 import type { GetIntegrationHealthResult } from "../../src/application/use-cases/get-integration-health.js";
 import { integrationHealthResource } from "../../src/interface-adapters/mcp/registries/resources/integration-health.js";
+import { integrationHealthTool } from "../../src/interface-adapters/mcp/registries/tools/integration-health.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
 import {
   getRegisteredResource,
-  registerMcpResource
+  parseMcpTextContent,
+  registerMcpResource,
+  registerMcpTool
 } from "../helpers/mcp-harness.js";
 
 describe("integration health MCP resource", () => {
-  it("uses the injected health provider with parsed session evidence", async () => {
+  it("keeps static health free of caller-supplied pseudo-arguments", async () => {
     let parsedRequest: IntegrationHealthRequest | undefined;
 
     const registered = registerMcpResource(integrationHealthResource, {
@@ -36,9 +39,11 @@ describe("integration health MCP resource", () => {
       name: "integration-health",
       uri: "integration:///health/agent-workbench"
     });
+    expect(integrationHealthResource.metadata.parameters).toEqual([]);
 
     const response = await registered.handler({
-      client: "codex",
+      uri: "integration:///health/agent-workbench",
+      client: "untrusted-resource-argument",
       discovery_state: "provided",
       discovered_tools: ["context_for_task"],
       discovered_resources: ["repo:///status"]
@@ -49,54 +54,18 @@ describe("integration health MCP resource", () => {
 
     expect(parsedRequest).toMatchObject({
       repo_root: "/repo",
-      client: "codex",
-      discovery_state: "provided",
-      discovered_tools: ["context_for_task"],
-      discovered_resources: ["repo:///status"],
+      discovery_state: "unknown",
+      discovered_tools: [],
+      discovered_resources: [],
       discovered_prompts: []
     });
+    expect(parsedRequest).not.toHaveProperty("client");
     expect(parsed.data.repo_root).toBe("/repo");
     expect(parsed.data.surfaces[0]).toMatchObject({
       name: "context_for_task",
-      status: "available",
-      callable: "callable"
+      status: "unknown",
+      callable: "unknown"
     });
-  });
-
-  it("returns structured invalid input before provider execution", async () => {
-    let providerCalled = false;
-
-    const registered = registerMcpResource(integrationHealthResource, {
-      repoRoot: "/repo",
-      getIntegrationHealth: () => {
-        providerCalled = true;
-        throw new Error("provider should not run");
-      }
-    });
-
-    const response = await registered.handler({ discovered_tools: "context_for_task" });
-    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
-      data: { surfaces: unknown[] };
-      meta: { analysis_validity: string; verification_status: string };
-      errors: Array<{ code: string; retryable: boolean }>;
-    };
-
-    expect(providerCalled).toBe(false);
-    expect(parsed.data.surfaces).toEqual([]);
-    expect(parsed.meta).toMatchObject({
-      analysis_validity: "invalid",
-      verification_status: "blocked",
-      trust: {
-        safe_to_use_for: expect.arrayContaining(["runtime_availability"]),
-        not_safe_to_use_for: expect.arrayContaining(["task_completion_claim"])
-      }
-    });
-    expect(parsed.errors).toEqual([
-      expect.objectContaining({
-        code: "invalid_input",
-        retryable: false
-      })
-    ]);
   });
 
   it("returns structured provider-not-configured state", async () => {
@@ -143,6 +112,23 @@ describe("integration health MCP resource", () => {
         authority: "launch_root",
         debug_repo_root_override: false
       });
+      expect(parsed.data).toMatchObject({
+        profile: "unknown",
+        provider: "unknown",
+        provider_identity: {
+          provider: "unknown",
+          state: "unknown",
+          provenance: "unknown"
+        }
+      });
+      expect(parsed.data.identities).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ artifact: "runtime", provenance: "package" }),
+          expect.objectContaining({ artifact: "mcp_client", state: "unknown" }),
+          expect.objectContaining({ artifact: "provider_plugin", state: "unknown" }),
+          expect.objectContaining({ artifact: "client_cache", state: "unknown" })
+        ])
+      );
       expect(parsed.data.session.discovery_state).toBe("unknown");
       expect(parsed.data.counts.unknown).toBeGreaterThan(0);
       expect(parsed.data.surfaces).toEqual(
@@ -168,6 +154,86 @@ describe("integration health MCP resource", () => {
   });
 });
 
+describe("integration_health MCP tool", () => {
+  it("validates caller evidence and passes connection identity to the shared health use case", async () => {
+    const connectionIdentity = {
+      provider_identity: {
+        provider: "claude_code" as const,
+        state: "configured" as const,
+        provenance: "launcher" as const
+      },
+      identities: [
+        {
+          artifact: "runtime" as const,
+          name: "@auriora/agent-workbench",
+          version: "0.1.0",
+          state: "observed" as const,
+          provenance: "package" as const
+        }
+      ]
+    };
+    let captured: Parameters<NonNullable<Parameters<typeof registerMcpTool>[1]["getIntegrationHealth"]>>[0] | undefined;
+    const registered = registerMcpTool(integrationHealthTool, {
+      repoRoot: "/repo",
+      getConnectionIdentity: () => connectionIdentity,
+      getIntegrationHealth: (input) => {
+        captured = input;
+        return healthResult(input.request.repo_root ?? "/missing", input.request);
+      }
+    });
+
+    const response = await registered.handler({
+      client: "claude-code",
+      discovery_state: "provided",
+      discovered_tools: ["context_for_task"],
+      discovered_resources: [],
+      discovered_prompts: []
+    });
+    const parsed = parseMcpTextContent<{ data: IntegrationHealth }>(response);
+
+    expect(captured).toMatchObject({
+      request: {
+        repo_root: "/repo",
+        client: "claude-code",
+        discovery_state: "provided",
+        discovered_tools: ["context_for_task"]
+      },
+      connection_identity: connectionIdentity
+    });
+    expect(parsed.data.surfaces[0]).toMatchObject({
+      name: "context_for_task",
+      caller_discovery: "discovered",
+      callable: "callable"
+    });
+  });
+
+  it("publishes and enforces the canonical discovery-input bounds", async () => {
+    let providerCalled = false;
+    const registered = registerMcpTool(integrationHealthTool, {
+      repoRoot: "/repo",
+      getIntegrationHealth: ({ request }) => {
+        providerCalled = true;
+        return healthResult("/repo", request);
+      }
+    });
+    const inputSchema = registered.inputSchema as Record<string, { safeParse(value: unknown): { success: boolean } }>;
+
+    expect(inputSchema.client?.safeParse("x".repeat(201)).success).toBe(false);
+    expect(inputSchema.discovered_tools?.safeParse(Array.from({ length: 201 }, () => "tool")).success).toBe(false);
+
+    const response = await registered.handler({
+      discovery_state: "provided",
+      discovered_tools: ["x".repeat(301)]
+    });
+    const parsed = parseMcpTextContent<{ errors: Array<{ code: string; retryable: boolean }> }>(response);
+
+    expect(providerCalled).toBe(false);
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({ code: "invalid_input", retryable: false })
+    ]);
+  });
+});
+
 function healthResult(
   repoRoot: string,
   request: IntegrationHealthRequest
@@ -179,11 +245,44 @@ function healthResult(
     discovered_resources,
     discovered_prompts
   } = request;
+  const contextDiscovered = discovery_state === "provided"
+    && discovered_tools.includes("context_for_task");
   return {
     health: {
       repo_root: repoRoot,
       runtime_version: "0.1.0",
       profile: "codex",
+      provider: "codex",
+      provider_identity: {
+        provider: "codex",
+        state: "configured",
+        provenance: "launcher"
+      },
+      identities: [
+        {
+          artifact: "runtime",
+          name: "@auriora/agent-workbench",
+          version: "0.1.0",
+          state: "observed",
+          provenance: "package"
+        },
+        {
+          artifact: "mcp_client",
+          name: client,
+          state: client === undefined ? "unknown" : "observed",
+          provenance: client === undefined ? "unknown" : "initialize"
+        },
+        {
+          artifact: "provider_plugin",
+          state: "unknown",
+          provenance: "unknown"
+        },
+        {
+          artifact: "client_cache",
+          state: "unknown",
+          provenance: "unknown"
+        }
+      ],
       session: {
         client,
         discovery_state,
@@ -198,27 +297,31 @@ function healthResult(
           configured: true,
           registered: true,
           advertised: true,
-          caller_discovery: "discovered",
-          callable: "callable",
-          status: "available",
-          reason: "The active client session discovered this registered MCP surface.",
+          caller_discovery: contextDiscovered ? "discovered" : "unknown",
+          callable: contextDiscovered ? "callable" : "unknown",
+          status: contextDiscovered ? "available" : "unknown",
+          reason: contextDiscovered
+            ? "The active client session discovered this registered MCP surface."
+            : "Caller-discovered MCP surface evidence was not provided.",
           evidence_kinds: ["config"],
           capability_class: "read_only"
         }
       ],
       counts: {
-        available: 1,
+        available: contextDiscovered ? 1 : 0,
         unavailable: 0,
         blocked: 0,
         hidden: 0,
-        unknown: 0
+        unknown: contextDiscovered ? 0 : 1
       },
-      next_actions: [
-        {
-          tool: "context_for_task",
-          args: { task: "Use integration health" }
-        }
-      ]
+      next_actions: contextDiscovered
+        ? [
+            {
+              tool: "context_for_task",
+              args: { task: "Use integration health" }
+            }
+          ]
+        : []
     },
     meta: meta(repoRoot)
   };

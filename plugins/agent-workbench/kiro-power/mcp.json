@@ -1,11 +1,14 @@
 {
   "mcpServers": {
     "agent-workbench": {
-      "command": "bash",
+      "command": "node",
       "args": [
-        "-lc",
-        "exec \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp\""
+        "${AGENT_WORKBENCH_INSTALL_ROOT}/plugins/agent-workbench/mcp-launch.mjs"
       ],
+      "env": {
+        "AGENT_WORKBENCH_PROVIDER": "kiro",
+        "AGENT_WORKBENCH_PROVIDER_PLUGIN_NAME": "agent-workbench"
+      },
       "timeout": 120000
     }
   }

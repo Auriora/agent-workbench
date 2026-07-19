@@ -145,13 +145,11 @@ or runtime telemetry.
 - Promotion target: closed
   [Spec 019](../history/spec-closure-log.md),
   combined with EB002 and EB011.
-- Residual follow-up (2026-07-19): Claude-launched health still derives the
-  Codex integration profile, and an ordinary static resource read cannot carry
-  caller-discovery evidence. Active
-  [Spec 040](../specs/040-provider-aware-integration-health/requirements.md)
-  owns a provider-aware health slice that reports configured, registered,
-  caller-proven, and unknown state without inferring a client from the server
-  process.
+- Residual follow-up (2026-07-19): delivered by closed
+  [Spec 040](../history/spec-closure-log.md). Provider-aware health now reports
+  configured, registered, caller-proven, and unknown state without inferring a
+  client from the server process; caller discovery is accepted only by the
+  argument-bearing health tool.
 
 ### EB002: Session-Aware Next Actions
 
@@ -1293,7 +1291,7 @@ Do not promote an item when:
 ### EB040: Runtime Version Single Source
 
 - Priority: P1
-- Status: active Spec 040
+- Status: delivered by closed Spec 040
 - Friction signal: package version, MCP server metadata, integration health,
   integration profile, and client plugin cache can drift independently. A live
   client can therefore expose an older plugin/runtime than the current package
@@ -1312,10 +1310,11 @@ Do not promote an item when:
 - Validation:
   - Unit and integration tests for version propagation.
   - Package dry-run or installer dry-run evidence that emitted metadata agrees.
-- Promotion target: active
-  [Spec 040](../specs/040-provider-aware-integration-health/requirements.md),
-  combined with the EB001 provider-health residual while keeping broader
-  release-readiness work in EB043.
+- Promotion target: closed
+  [Spec 040](../history/spec-closure-log.md), combined with the EB001
+  provider-health residual while keeping broader release-readiness work in
+  EB043. Current behavior lives in the coding-agent integration design, MCP
+  surface design, runtime contracts, plugin runbook, and package validator.
 
 ### EB041: Claude Code Quick Guidance
 
@@ -1354,7 +1353,7 @@ Do not promote an item when:
 ### EB042: Operator Path Documentation
 
 - Priority: P2
-- Status: proposed spec
+- Status: delivered by closed Spec 040
 - Friction signal: review found rich design docs but no small operator
   path for install, first run, normal task, edit task, review task, and
   troubleshooting.
@@ -1510,8 +1509,10 @@ Do not promote an item when:
   - Plugin validation covers Kiro metadata and packaged paths.
   - Manual or scripted launch smoke evidence proves the MCP server starts from
     an installed package.
-- Promotion target: create a focused integration packaging spec or fold into
-  EB043 release-readiness gates if the fix remains packaging-only.
+- Promotion target: closed
+  [Spec 040](../history/spec-closure-log.md). Kiro now launches the portable
+  Node entrypoint directly from the explicit install root; broader packaging
+  release gates remain in EB043.
 
 ### EB047: Turnkey Native Parser Install
 
@@ -1749,7 +1750,6 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-- Implement
-  [Spec 040](../specs/040-provider-aware-integration-health/requirements.md)
-  as the provider/profile/identity contract slice now that Spec 039 has closed
-  the higher runtime evidence-integrity risk.
+- No active implementation spec is selected after Specs 039 and 040. Choose
+  the next package from the remaining prioritized backlog through normal intake
+  and lifecycle preflight rather than extending either closed package.

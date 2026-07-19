@@ -41,6 +41,7 @@ const codexHooks = readJson("plugins/agent-workbench/hooks/hooks.json");
 const claudePlugin = readJson("plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json");
 const claudeMcp = readJson("plugins/agent-workbench/claude-plugin/.mcp.json");
 const claudeHooks = readJson("plugins/agent-workbench/claude-plugin/hooks/hooks.json");
+const kiroMcp = readJson("plugins/agent-workbench/kiro-power/mcp.json");
 const marketplace = readJson(".agents/plugins/marketplace.json");
 const serverCard = readJson(".well-known/mcp/server-card.json");
 const expectedInstallCommand =
@@ -62,6 +63,7 @@ const requiredPaths = [
   "plugins/agent-workbench/claude-plugin/.mcp.json",
   "plugins/agent-workbench/claude-plugin/CLAUDE.md",
   "plugins/agent-workbench/claude-plugin/hooks/hooks.json",
+  "plugins/agent-workbench/kiro-power/mcp.json",
   "plugins/agent-workbench/claude-plugin/hooks/session-start.js",
   "plugins/agent-workbench/claude-plugin/skills/agent-workbench/SKILL.md",
   "plugins/agent-workbench/claude-plugin/skills/release-notes/SKILL.md",
@@ -78,15 +80,21 @@ for (const relativePath of requiredPaths) {
   assertPath(relativePath);
 }
 
-assert(codexPlugin.name === "agent-workbench", "Codex plugin name must be agent-workbench.");
-assert(codexPlugin.skills === "./skills/", "Codex plugin must reference ./skills/.");
-assert(codexPlugin.mcpServers === "./.mcp.json", "Codex plugin must reference ./.mcp.json.");
+export function validateCodexPlugin(packageJson, plugin, mcpConfig, hooksConfig) {
+assert(plugin.name === "agent-workbench", "Codex plugin name must be agent-workbench.");
+assert(plugin.version === packageJson.version, "Codex plugin version must match package.json.");
 assert(
-  codexPlugin.interface?.category === "Developer Tools",
+  plugin.license === "GPL-3.0-or-later" && plugin.license === packageJson.license,
+  "Codex plugin license must match package.json GPL-3.0-or-later licensing."
+);
+assert(plugin.skills === "./skills/", "Codex plugin must reference ./skills/.");
+assert(plugin.mcpServers === "./.mcp.json", "Codex plugin must reference ./.mcp.json.");
+assert(
+  plugin.interface?.category === "Developer Tools",
   "Codex plugin category must remain Developer Tools."
 );
 
-const mcpServer = codexMcp.mcpServers?.["agent-workbench"];
+const mcpServer = mcpConfig.mcpServers?.["agent-workbench"];
 assert(mcpServer, "Codex .mcp.json must define mcpServers.agent-workbench.");
 // Spec 033: the MCP server launches shell-free via the portable shim. The shim
 // resolves the install prefix itself and spawns the server from there, so the
@@ -112,15 +120,22 @@ assert(
   !codexMcpArgs.includes("plugins/cache"),
   "Codex MCP args must not launch runtime code from plugin cache."
 );
+assertProviderIdentity(mcpServer.env, {
+  provider: "codex",
+  pluginVersion: plugin.version
+});
 
 assert(
-  Object.keys(codexHooks.hooks ?? {}).length === 0,
+  Object.keys(hooksConfig.hooks ?? {}).length === 0,
   "Codex plugin-bundled hooks must remain empty; installer writes absolute-path hooks into CODEX_HOME/hooks.json."
 );
 assert(
-  !JSON.stringify(codexHooks).includes("${PLUGIN_ROOT}"),
+  !JSON.stringify(hooksConfig).includes("${PLUGIN_ROOT}"),
   "Codex hooks must not rely on ${PLUGIN_ROOT} expansion."
 );
+}
+
+validateCodexPlugin(packageJson, codexPlugin, codexMcp, codexHooks);
 
 export function validateClaudePlugin(packageJson, plugin, mcpConfig, hooksConfig) {
   assert(plugin.name === "agent-workbench", "Claude plugin name must be agent-workbench.");
@@ -164,9 +179,42 @@ export function validateClaudePlugin(packageJson, plugin, mcpConfig, hooksConfig
       !claudeMcpArgs.includes("plugins/cache"),
     "Claude MCP launch must remain shell-free and must not use plugin-cache runtime code."
   );
+  assertProviderIdentity(claudeMcpServer.env, {
+    provider: "claude_code",
+    pluginVersion: plugin.version
+  });
 }
 
 validateClaudePlugin(packageJson, claudePlugin, claudeMcp, claudeHooks);
+
+const kiroMcpServer = kiroMcp.mcpServers?.["agent-workbench"];
+assert(kiroMcpServer, "Kiro mcp.json must define mcpServers.agent-workbench.");
+assert(kiroMcpServer.command === "node", "Kiro MCP command must be a direct node invocation.");
+assert(
+  Array.isArray(kiroMcpServer.args) &&
+    kiroMcpServer.args.length === 1 &&
+    kiroMcpServer.args[0] === "${AGENT_WORKBENCH_INSTALL_ROOT}/plugins/agent-workbench/mcp-launch.mjs",
+  "Kiro MCP args must invoke the installed portable shim."
+);
+assertProviderIdentity(kiroMcpServer.env, { provider: "kiro" });
+assert(
+  kiroMcpServer.env.AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION === undefined,
+  "Kiro must not fabricate a plugin version without an authoritative Power manifest version."
+);
+
+function assertProviderIdentity(env, expected) {
+  assert(env?.AGENT_WORKBENCH_PROVIDER === expected.provider, `${expected.provider} provider identity drifted.`);
+  assert(
+    env?.AGENT_WORKBENCH_PROVIDER_PLUGIN_NAME === "agent-workbench",
+    `${expected.provider} plugin identity must be agent-workbench.`
+  );
+  if (expected.pluginVersion !== undefined) {
+    assert(
+      env?.AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION === expected.pluginVersion,
+      `${expected.provider} plugin identity version must match its manifest.`
+    );
+  }
+}
 
 const marketplaceEntry = marketplace.plugins?.find((plugin) => plugin.name === "agent-workbench");
 assert(marketplaceEntry, "Marketplace must expose agent-workbench.");

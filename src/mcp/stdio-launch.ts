@@ -5,6 +5,7 @@
 
 import path from "node:path";
 import type { Readable, Writable } from "node:stream";
+import type { IntegrationLauncherIdentity } from "../contracts/index.js";
 import {
   DEBUG_REPO_ROOT_OVERRIDE_ENV,
 } from "../interface-adapters/mcp/registries/root-authority.js";
@@ -13,7 +14,16 @@ import { connectOrStartDaemon } from "./daemon.js";
 export type StdioLaunchConfig = {
   repoRoot: string;
   debugRepoRootOverride: boolean;
+  integrationIdentity?: IntegrationLauncherIdentity;
 };
+
+const PROVIDER_ENV = "AGENT_WORKBENCH_PROVIDER";
+const PROVIDER_PLUGIN_NAME_ENV = "AGENT_WORKBENCH_PROVIDER_PLUGIN_NAME";
+const PROVIDER_PLUGIN_VERSION_ENV = "AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION";
+const CLIENT_CACHE_NAME_ENV = "AGENT_WORKBENCH_CLIENT_CACHE_NAME";
+const CLIENT_CACHE_VERSION_ENV = "AGENT_WORKBENCH_CLIENT_CACHE_VERSION";
+const MAX_IDENTITY_NAME_LENGTH = 200;
+const MAX_IDENTITY_VERSION_LENGTH = 100;
 
 export function resolveStdioLaunchConfig(input: {
   argv?: string[];
@@ -28,7 +38,8 @@ export function resolveStdioLaunchConfig(input: {
 
   return {
     repoRoot: path.resolve(cwd, repoRoot),
-    debugRepoRootOverride: env[DEBUG_REPO_ROOT_OVERRIDE_ENV] === "1"
+    debugRepoRootOverride: env[DEBUG_REPO_ROOT_OVERRIDE_ENV] === "1",
+    integrationIdentity: resolveLauncherIdentity(env)
   };
 }
 
@@ -42,7 +53,8 @@ export async function connectAgentWorkbenchStdio(
 ): Promise<void> {
   const socket = await connectOrStartDaemon({
     repoRoot: config.repoRoot,
-    debugRepoRootOverride: config.debugRepoRootOverride
+    debugRepoRootOverride: config.debugRepoRootOverride,
+    integrationIdentity: config.integrationIdentity
   });
   const stdin = io.stdin ?? process.stdin;
   const stdout = io.stdout ?? process.stdout;
@@ -52,6 +64,36 @@ export async function connectAgentWorkbenchStdio(
   });
   stdin.pipe(socket);
   socket.pipe(stdout);
+}
+
+export function resolveLauncherIdentity(
+  env: NodeJS.ProcessEnv
+): IntegrationLauncherIdentity | undefined {
+  const provider = env[PROVIDER_ENV];
+  if (!isIntegrationProvider(provider)) {
+    return undefined;
+  }
+
+  return {
+    provider,
+    plugin_name: boundedIdentityField(env[PROVIDER_PLUGIN_NAME_ENV], MAX_IDENTITY_NAME_LENGTH),
+    plugin_version: boundedIdentityField(env[PROVIDER_PLUGIN_VERSION_ENV], MAX_IDENTITY_VERSION_LENGTH),
+    cache_name: boundedIdentityField(env[CLIENT_CACHE_NAME_ENV], MAX_IDENTITY_NAME_LENGTH),
+    cache_version: boundedIdentityField(env[CLIENT_CACHE_VERSION_ENV], MAX_IDENTITY_VERSION_LENGTH)
+  };
+}
+
+function isIntegrationProvider(
+  value: string | undefined
+): value is IntegrationLauncherIdentity["provider"] {
+  return value === "codex" || value === "claude_code" || value === "kiro" || value === "unknown";
+}
+
+function boundedIdentityField(value: string | undefined, maxLength: number): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed !== undefined && trimmed.length > 0 && trimmed.length <= maxLength
+    ? trimmed
+    : undefined;
 }
 
 function findRepoRootArg(argv: string[]): string | undefined {

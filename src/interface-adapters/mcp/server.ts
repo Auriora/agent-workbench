@@ -6,10 +6,15 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TelemetryRecorderPort } from "../../ports/index.js";
 import { instrumentMcpServer } from "./instrumentation.js";
-import { registerAllMcpSurfaces } from "./registries/index.js";
+import {
+  registerAllMcpSurfaces,
+  registeredIntegrationBindings
+} from "./registries/index.js";
 import type { McpRegistryContext } from "./registries/index.js";
 import { createRootAuthorityPolicy } from "./registries/root-authority.js";
 import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../../runtime/version.js";
+import { describeCurrentIntegrationProfile } from "../../application/use-cases/describe-current-integration-profile.js";
+import { resolveIntegrationIdentity } from "../../application/use-cases/resolve-integration-identity.js";
 
 export const AGENT_WORKBENCH_MCP_INSTRUCTIONS = [
   "Use Agent Workbench before broad repository inspection: read repo:///orientation, follow its detailed resource links only as needed, then call context_for_task for task routing.",
@@ -36,9 +41,19 @@ export function createAgentWorkbenchServer(
     launchRoot: absoluteRepoRoot
   });
 
+  const getConnectionIdentity = () => resolveIntegrationIdentity({
+    launcher: context.launcherIdentity,
+    client: server.server.getClientVersion()
+  });
+
   registerAllMcpSurfaces(instrumentMcpServer({ server, telemetry: context.telemetry }), {
     repoRoot: absoluteRepoRoot,
     rootAuthorityPolicy,
+    getConnectionIdentity,
+    describeCurrentIntegrationProfile: () => describeCurrentIntegrationProfile({
+      provider_identity: getConnectionIdentity().provider_identity,
+      mcp_bindings: registeredIntegrationBindings()
+    }),
     ...context
   });
 

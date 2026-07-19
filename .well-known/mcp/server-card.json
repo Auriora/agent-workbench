@@ -79,6 +79,14 @@
       "budget_policy": "Bounded static integration profile metadata; no repository scan."
     },
     {
+      "name": "current-integration-profile",
+      "uri": "integration:///profiles/current",
+      "description": "Effective Agent Workbench provider profile for this MCP connection.",
+      "capability_class": "read_only",
+      "mutation_class": "none",
+      "budget_policy": "Bounded connection identity and registered MCP metadata only."
+    },
+    {
       "name": "integration-health",
       "uri": "integration:///health/agent-workbench",
       "description": "Compact Agent Workbench MCP integration health with configured, registered, discovered, and callable states.",
@@ -150,6 +158,13 @@
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded by explicit paths or scope_path plus max_documents, max_findings, file-size, and evidence limits."
+    },
+    {
+      "name": "integration_health",
+      "description": "Use this to inspect integration health with optional caller-observed MCP discovery evidence; it reads registered and connection evidence and does not mutate files.",
+      "capability_class": "read_only",
+      "mutation_class": "none",
+      "budget_policy": "Bounded caller-supplied discovery lists and registered MCP metadata only."
     },
     {
       "name": "symbol_search",

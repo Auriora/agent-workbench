@@ -27,6 +27,7 @@ export type RegisteredMcpResourceResponse = {
 export type RegisteredMcpTool = {
   name: string;
   description: string;
+  inputSchema: unknown;
   handler: (args: unknown) => Promise<RegisteredMcpContentResponse>;
 };
 
@@ -52,10 +53,10 @@ export function registerMcpTool(
     tool(
       name: string,
       description: string,
-      _shape: unknown,
+      inputSchema: unknown,
       handler: RegisteredMcpTool["handler"]
     ) {
-      registered = { name, description, handler };
+      registered = { name, description, inputSchema, handler };
     }
   };
 

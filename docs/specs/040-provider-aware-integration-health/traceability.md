@@ -37,27 +37,27 @@ license: GPL-3.0-or-later
 
 | Property | Requirements | Tasks | Planned evidence | Residual risk |
 | --- | --- | --- | --- | --- |
-| CP-001 | Requirement 1, Requirement 2 | T001-T003 | Unknown/Claude/Codex mapping fixtures | pending |
-| CP-002 | Requirement 2 | T001, T003 | Concurrent mixed-client daemon fixture | pending |
-| CP-003 | Requirement 3 | T001, T004 | Static resource versus tool golden tests | pending |
-| CP-004 | Requirement 4 | T001, T005 | Artifact identity/provenance schemas | pending |
-| CP-005 | Requirement 4, Requirement 5 | T001, T005-T006 | Mismatch/no-side-effect tests | pending |
+| CP-001 | Requirement 1, Requirement 2 | T001-T003 | Unknown/Claude/Codex mapping fixtures | verified |
+| CP-002 | Requirement 2 | T001, T003 | Concurrent mixed-client daemon fixture | verified |
+| CP-003 | Requirement 3 | T001, T004 | Static resource versus tool golden tests | verified |
+| CP-004 | Requirement 4 | T001, T005 | Artifact identity/provenance schemas | verified |
+| CP-005 | Requirement 4, Requirement 5 | T001, T005-T006 | Mismatch/no-side-effect tests | verified |
 
 ## Design To Implementation Matrix
 
 | Design section | Requirements | Tasks | Likely interfaces/files | Coverage state |
 | --- | --- | --- | --- | --- |
-| Common Profile Model | Requirement 1 | T001-T002 | integration contracts/use cases/presenters/resources | not-covered |
-| Per-Connection Identity Context | Requirement 2 | T001, T003 | launchers, stdio, daemon, server factory | not-covered |
-| Registered Surface Authority | Requirement 1 | T002 | registry/common binding catalog | not-covered |
-| Health Surfaces | Requirement 3 | T001, T004 | health use case/presenter/resource/tool | not-covered |
-| Artifact Identity And Mismatch Policy | Requirement 4, Requirement 5 | T001, T005 | version/metadata/validator paths | not-covered |
+| Common Profile Model | Requirement 1 | T001-T002 | integration contracts/use cases/presenters/resources | covered |
+| Per-Connection Identity Context | Requirement 2 | T001, T003 | launchers, stdio, daemon, server factory | covered |
+| Registered Surface Authority | Requirement 1 | T002 | registry/common binding catalog | covered |
+| Health Surfaces | Requirement 3 | T001, T004 | health use case/presenter/resource/tool | covered |
+| Artifact Identity And Mismatch Policy | Requirement 4, Requirement 5 | T001, T005 | version/metadata/validator paths | covered |
 
 ## Open Decision Impact
 
 | Decision ID | Blocks | Requirements | Tasks | Resolution needed |
 | --- | --- | --- | --- | --- |
-| D004 handshake identity field | T003 implementation | Requirement 2, Requirement 4 | T001, T003 | Select a narrow explicit field/provenance shape that is provider-neutral and cache-layout-independent. |
+| D004 handshake identity field | none | Requirement 2, Requirement 4 | T001, T003 | Resolved by bounded per-socket `integrationIdentity`; no paths or shared daemon identity. |
 
 ## Maintenance Notes
 

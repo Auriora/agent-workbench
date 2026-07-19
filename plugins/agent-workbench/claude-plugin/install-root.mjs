@@ -117,33 +117,3 @@ export function resolveRuntimeRoot(env = process.env, platform = process.platfor
     return null;
   }
 }
-
-/**
- * Materialize the Codex plugin MCP config for an installed npm package.
- *
- * Source checkouts keep `${PLUGIN_ROOT}/mcp-launch.mjs` as a development-time
- * placeholder, but current package-backed Codex MCP launches do not expand that
- * token. The installed package therefore rewrites its own plugin config to an
- * absolute shim path during postinstall, while deliberately leaving `cwd`
- * unset so Codex's session cwd remains the default repo root.
- *
- * @param {string} packageRoot Absolute package root containing plugins/.
- * @returns {string} Path to the rewritten MCP config.
- */
-export function materializeCodexMcpConfig(packageRoot) {
-  const pluginRoot = path.join(packageRoot, "plugins", "agent-workbench");
-  const configPath = path.join(pluginRoot, ".mcp.json");
-  const launchPath = path.join(pluginRoot, "mcp-launch.mjs");
-  const config = {
-    mcpServers: {
-      "agent-workbench": {
-        command: "node",
-        args: [launchPath],
-        startup_timeout_sec: 30.0
-      }
-    }
-  };
-
-  fs.writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`);
-  return configPath;
-}

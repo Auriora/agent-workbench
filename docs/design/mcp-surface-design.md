@@ -157,8 +157,8 @@ The public surface policy coverage is:
 | `verification_plan` | `validation_plan` |
 | `preview_workspace_edit` | `edit_preview` |
 | `apply_workspace_edit` | `edit_apply` when the use case reports an applied mutation |
-| `integration:///health/agent-workbench` | `integration_health` |
-| `integration:///profiles/codex` | `integration_profile` static configuration evidence |
+| `integration:///health/agent-workbench`, `integration_health` | `integration_health`; the resource is static and the tool accepts bounded caller evidence |
+| `integration:///profiles/codex`, `integration:///profiles/current` | `integration_profile`; legacy Codex configuration and connection-effective evidence respectively |
 
 Recoverable public handler failures, including missing or failing resource
 providers, return structured envelopes that still carry trust calibration.
@@ -185,6 +185,7 @@ failures remain needed routing evidence rather than a clean no-op.
 - `repo:///docs/map`
 - `integration:///health/agent-workbench`
 - `integration:///profiles/codex`
+- `integration:///profiles/current`
 
 These resources must be cheap, bounded, and backed by current snapshot metadata.
 They must not trigger broad graph analysis.
@@ -244,13 +245,13 @@ headings. Both resources preserve skipped-path evidence for unreadable,
 generated, vendor, hidden, gitignored, missing, or permission-denied docs
 without failing the whole resource.
 
-`integration:///health/agent-workbench` is the stable read-only MCP health
-surface. It reports configured, registered, advertised, caller-discovered,
-callable, unavailable, blocked, hidden, and unknown state for public resources,
-tools, and prompts. It accepts optional caller discovery evidence; absent
-evidence remains `unknown` and must not be treated as callable proof. The
-health resource does not execute tools, inspect client internals, or mutate the
-workspace.
+`integration:///health/agent-workbench` is the stable static read-only MCP
+health resource. MCP resource reads carry no pseudo-arguments, so it reports
+server-known configuration, registration, connection identity, and unknown
+caller discovery. The read-only `integration_health` tool accepts validated,
+bounded caller discovery lists and calls the same application health use case.
+Neither surface executes tools, persists caller claims, or mutates the
+workspace, and reading the resource itself never proves discovery.
 
 When the runtime is hosted by the per-repo daemon, integration health also
 includes a compact `daemon` block with PID, socket path, repo root, connected
@@ -263,9 +264,16 @@ plugin, skill, hook, packaging, and MCP binding model. It is documentation and
 configuration evidence, not proof that a specific Codex session exposed every
 configured binding.
 
+`integration:///profiles/current` is the compact effective profile for one MCP
+connection. Its provider is `codex`, `claude_code`, `kiro`, or `unknown` based
+only on explicit connection-scoped launcher evidence. Registered bindings come
+from the MCP registry rather than the Codex descriptor. Initialize client name
+and version remain a separate observed artifact identity.
+
 ## MVP Tools
 
 - `context_for_task`
+- `integration_health`
 - `symbol_search`
 - `find_references`
 - `impact` with explicit traversal and result caps

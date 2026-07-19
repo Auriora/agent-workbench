@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRootAuthorityPolicy } from "../interface-adapters/mcp/registries/root-authority.js";
-import type { IntegrationDaemonHealth } from "../contracts/index.js";
+import type { IntegrationDaemonHealth, IntegrationLauncherIdentity } from "../contracts/index.js";
 import { SCHEMA_VERSION } from "../infrastructure/sqlite/index.js";
 import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../runtime/version.js";
 import {
@@ -64,6 +64,7 @@ export type DaemonPaths = {
 export type ConnectOrStartDaemonOptions = {
   repoRoot: string;
   debugRepoRootOverride: boolean;
+  integrationIdentity?: IntegrationLauncherIdentity;
   startTimeoutMs?: number;
   handshakeTimeoutMs?: number;
   env?: NodeJS.ProcessEnv;
@@ -89,6 +90,7 @@ type DaemonHandshake = {
   protocol: "agent-workbench-daemon";
   protocolVersion: number;
   identity: AgentWorkbenchDaemonIdentity;
+  integrationIdentity?: IntegrationLauncherIdentity;
 };
 
 export function createDaemonIdentity(repoRoot: string): AgentWorkbenchDaemonIdentity {
@@ -209,6 +211,7 @@ export async function connectOrStartDaemon(
 
     return await waitForDaemonConnection({
       identity,
+      integrationIdentity: options.integrationIdentity,
       socketPath: paths.socketPath,
       timeoutMs: options.startTimeoutMs ?? DEFAULT_DAEMON_START_TIMEOUT_MS,
       handshakeTimeoutMs: options.handshakeTimeoutMs ?? DEFAULT_DAEMON_HANDSHAKE_TIMEOUT_MS
@@ -382,6 +385,7 @@ async function acceptDaemonClient(input: {
     }
     const mcpServer = createAgentWorkbenchServer(input.repoRoot, {
       ...input.serverOptions,
+      integrationIdentity: handshake.integrationIdentity,
       graphStore: input.graphStore,
       daemonDiagnostics: input.daemonDiagnostics,
       startGraphWarmup:
@@ -453,6 +457,7 @@ function readHandshake(socket: Socket): Promise<{ handshake: unknown; remainder:
 
 async function waitForDaemonConnection(input: {
   identity: AgentWorkbenchDaemonIdentity;
+  integrationIdentity?: IntegrationLauncherIdentity;
   socketPath: string;
   timeoutMs: number;
   handshakeTimeoutMs: number;
@@ -465,7 +470,8 @@ async function waitForDaemonConnection(input: {
       socket.write(`${JSON.stringify({
         protocol: "agent-workbench-daemon",
         protocolVersion: DAEMON_PROTOCOL_VERSION,
-        identity: input.identity
+        identity: input.identity,
+        integrationIdentity: input.integrationIdentity
       } satisfies DaemonHandshake)}\n`);
       return socket;
     } catch (error) {
@@ -668,7 +674,49 @@ function validHandshake(
     "identity" in handshake &&
     typeof (handshake as { identity?: unknown }).identity === "object" &&
     (handshake as { identity: AgentWorkbenchDaemonIdentity }).identity !== null &&
-    daemonIdentityMatches((handshake as { identity: AgentWorkbenchDaemonIdentity }).identity, identity)
+    daemonIdentityMatches((handshake as { identity: AgentWorkbenchDaemonIdentity }).identity, identity) &&
+    validIntegrationIdentity((handshake as { integrationIdentity?: unknown }).integrationIdentity)
+  );
+}
+
+function validIntegrationIdentity(value: unknown): value is IntegrationLauncherIdentity | undefined {
+  if (value === undefined) {
+    return true;
+  }
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const identity = value as Record<string, unknown>;
+  const keys = Object.keys(identity);
+  if (keys.some((key) => ![
+    "provider",
+    "plugin_name",
+    "plugin_version",
+    "cache_name",
+    "cache_version"
+  ].includes(key))) {
+    return false;
+  }
+  if (![
+    "codex",
+    "claude_code",
+    "kiro",
+    "unknown"
+  ].includes(String(identity.provider))) {
+    return false;
+  }
+  return validOptionalIdentityField(identity.plugin_name, 200) &&
+    validOptionalIdentityField(identity.plugin_version, 100) &&
+    validOptionalIdentityField(identity.cache_name, 200) &&
+    validOptionalIdentityField(identity.cache_version, 100);
+}
+
+function validOptionalIdentityField(field: unknown, maxLength: number): boolean {
+  return field === undefined || (
+    typeof field === "string" &&
+    field.trim() === field &&
+    field.length > 0 &&
+    field.length <= maxLength
   );
 }
 

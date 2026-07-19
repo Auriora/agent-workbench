@@ -9,6 +9,7 @@ import os from "node:os";
 import path from "node:path";
 import type { ChildProcess } from "node:child_process";
 import {
+  DAEMON_PROTOCOL_VERSION,
   classifyDaemonState,
   connectOrStartDaemon,
   createDaemonIdentity,
@@ -142,6 +143,62 @@ describe("Agent Workbench daemon launcher", () => {
       await closeDaemons(daemons);
       fs.rmSync(firstRepo, { recursive: true, force: true });
       fs.rmSync(secondRepo, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps launcher identity isolated for mixed clients on one daemon", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-mixed-identity-");
+    const daemons: StartedAgentWorkbenchDaemon[] = [];
+
+    try {
+      const codexSocket = await connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        integrationIdentity: {
+          provider: "codex",
+          plugin_name: "agent-workbench",
+          plugin_version: "0.5.2"
+        },
+        startTimeoutMs: 2000,
+        spawnDaemon: () => {
+          void startAgentWorkbenchDaemon({
+            repoRoot,
+            idleGraceMs: 100,
+            serverOptions: { startGraphWarmup: false }
+          }).then((daemon) => daemons.push(daemon));
+          return fakeChildProcess();
+        }
+      });
+      const claudeSocket = await connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        integrationIdentity: {
+          provider: "claude_code",
+          plugin_name: "agent-workbench",
+          plugin_version: "0.5.2"
+        },
+        startTimeoutMs: 2000,
+        spawnDaemon: () => fakeChildProcess()
+      });
+      const codex = createSocketSession(codexSocket);
+      const claude = createSocketSession(claudeSocket);
+
+      await Promise.all([
+        initializeSocketSession(codex, 1, "codex-cli"),
+        initializeSocketSession(claude, 10, "codex-cli")
+      ]);
+      const [codexHealth, claudeHealth] = await Promise.all([
+        readIntegrationProvider(codex, 2),
+        readIntegrationProvider(claude, 11)
+      ]);
+
+      expect(codexHealth).toBe("codex");
+      expect(claudeHealth).toBe("claude_code");
+      codexSocket.destroy();
+      claudeSocket.destroy();
+    } finally {
+      await closeDaemons(daemons);
+      fs.rmSync(repoRoot, { recursive: true, force: true });
     }
   });
 
@@ -417,6 +474,39 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
+  it("rejects unrecognized or unbounded launcher identity in the daemon handshake", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-identity-handshake-");
+    const daemon = await startAgentWorkbenchDaemon({
+      repoRoot,
+      idleGraceMs: 100,
+      serverOptions: { startGraphWarmup: false }
+    });
+
+    try {
+      for (const integrationIdentity of [
+        { provider: "claude" },
+        { provider: "codex", plugin_version: "x".repeat(101) }
+      ]) {
+        const socket = net.createConnection(daemon.metadata.socketPath);
+        await new Promise<void>((resolve, reject) => {
+          socket.once("connect", resolve);
+          socket.once("error", reject);
+        });
+        socket.write(`${JSON.stringify({
+          protocol: "agent-workbench-daemon",
+          protocolVersion: DAEMON_PROTOCOL_VERSION,
+          identity: daemon.metadata.identity,
+          integrationIdentity
+        })}\n`);
+        await new Promise<void>((resolve) => socket.once("close", () => resolve()));
+      }
+      expect(daemon.connectedClients()).toBe(0);
+    } finally {
+      await daemon.close();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("reports daemon diagnostics through integration health", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-health-");
     const daemons: StartedAgentWorkbenchDaemon[] = [];
@@ -558,4 +648,42 @@ function createSocketSession(socket: net.Socket): {
       socket.write(`${JSON.stringify(message)}\n`);
     }
   };
+}
+
+async function initializeSocketSession(
+  session: ReturnType<typeof createSocketSession>,
+  id: number,
+  clientName: string
+): Promise<void> {
+  await session.call({
+    jsonrpc: "2.0",
+    id,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: clientName, version: "1.0.0" }
+    }
+  });
+  session.notify({
+    jsonrpc: "2.0",
+    method: "notifications/initialized",
+    params: {}
+  });
+}
+
+async function readIntegrationProvider(
+  session: ReturnType<typeof createSocketSession>,
+  id: number
+): Promise<string> {
+  const response = await session.call({
+    jsonrpc: "2.0",
+    id,
+    method: "resources/read",
+    params: { uri: "integration:///health/agent-workbench" }
+  });
+  const envelope = JSON.parse(response.result.contents[0].text) as {
+    data: { provider: string };
+  };
+  return envelope.data.provider;
 }

@@ -6,6 +6,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type {
   CodexIntegrationProfile,
+  CurrentIntegrationProfile,
+  IntegrationConnectionIdentity,
+  IntegrationLauncherIdentity,
   ApplyWorkspaceEditRequest,
   CheckMarkdownDocumentRequest,
   CheckMarkdownSetRequest,
@@ -52,6 +55,7 @@ import type { PlanVerificationResult } from "../../../application/use-cases/plan
 import type { PreviewWorkspaceEditUseCaseResult } from "../../../application/use-cases/preview-workspace-edit.js";
 import type { SearchSymbolsResult } from "../../../application/use-cases/search-symbols.js";
 import { codexIntegrationProfileResource } from "./resources/codex-integration-profile.js";
+import { currentIntegrationProfileResource } from "./resources/current-integration-profile.js";
 import { integrationHealthResource } from "./resources/integration-health.js";
 import { checkMarkdownDocumentTool } from "./tools/check-markdown-document.js";
 import { checkMarkdownSetTool } from "./tools/check-markdown-set.js";
@@ -71,6 +75,7 @@ import { docsCurrentForTaskTool } from "./tools/docs-current-for-task.js";
 import { applyWorkspaceEditTool } from "./tools/apply-workspace-edit.js";
 import { findReferencesTool } from "./tools/find-references.js";
 import { impactTool } from "./tools/impact.js";
+import { integrationHealthTool } from "./tools/integration-health.js";
 import { previewWorkspaceEditTool } from "./tools/preview-workspace-edit.js";
 import { symbolSearchTool } from "./tools/symbol-search.js";
 import { verificationPlanTool } from "./tools/verification-plan.js";
@@ -106,7 +111,13 @@ export type McpRegistryContext = {
   applyWorkspaceEdit?: (input: { request: ApplyWorkspaceEditRequest }) => Promise<ApplyWorkspaceEditUseCaseResult> | ApplyWorkspaceEditUseCaseResult;
   planVerification?: (input: { request: VerificationPlanRequest }) => Promise<PlanVerificationResult> | PlanVerificationResult;
   describeCodexIntegrationProfile?: () => CodexIntegrationProfile;
-  getIntegrationHealth?: (input: { request: IntegrationHealthRequest }) => Promise<GetIntegrationHealthResult> | GetIntegrationHealthResult;
+  describeCurrentIntegrationProfile?: () => CurrentIntegrationProfile;
+  launcherIdentity?: IntegrationLauncherIdentity;
+  getConnectionIdentity?: () => IntegrationConnectionIdentity;
+  getIntegrationHealth?: (input: {
+    request: IntegrationHealthRequest;
+    connection_identity?: IntegrationConnectionIdentity;
+  }) => Promise<GetIntegrationHealthResult> | GetIntegrationHealthResult;
 };
 
 export type McpResourceDeclaration = {
@@ -157,8 +168,10 @@ export const publicSurfaceTrustPolicies = {
   "resource:docs-overview": { surface_kind: "docs_routing" },
   "resource:docs-map": { surface_kind: "docs_routing" },
   "resource:codex-integration-profile": { surface_kind: "integration_profile" },
+  "resource:current-integration-profile": { surface_kind: "integration_profile" },
   "resource:integration-health": { surface_kind: "integration_health" },
   "tool:context_for_task": { surface_kind: "context_routing" },
+  "tool:integration_health": { surface_kind: "integration_health" },
   "tool:diagnostics_for_files": { surface_kind: "diagnostics_static" },
   "tool:docs_scope": { surface_kind: "docs_session_scope" },
   "tool:docs_search": { surface_kind: "docs_routing" },
@@ -183,6 +196,7 @@ export const mcpResources: McpResourceDeclaration[] = normalizePublicMetadata([
   docsOverviewResource,
   docsMapResource,
   codexIntegrationProfileResource,
+  currentIntegrationProfileResource,
   integrationHealthResource
 ]);
 
@@ -196,6 +210,7 @@ export const mcpTools: McpToolDeclaration[] = normalizePublicMetadata([
   docsReadSectionTool,
   checkMarkdownDocumentTool,
   checkMarkdownSetTool,
+  integrationHealthTool,
   symbolSearchTool,
   findReferencesTool,
   impactTool,
@@ -205,6 +220,16 @@ export const mcpTools: McpToolDeclaration[] = normalizePublicMetadata([
 ]);
 
 export const mcpPrompts: McpPromptDeclaration[] = [];
+
+export function registeredIntegrationBindings(): CurrentIntegrationProfile["mcp_bindings"] {
+  return [...mcpResources, ...mcpTools, ...mcpPrompts].map((surface) => ({
+    name: surface.name,
+    kind: surface.kind,
+    ...(surface.kind === "resource" ? { uri: surface.uri } : {}),
+    capability_class: surface.metadata.capability_class,
+    description: surface.metadata.description
+  }));
+}
 
 function normalizePublicMetadata<T extends McpResourceDeclaration | McpToolDeclaration | McpPromptDeclaration>(
   surfaces: T[]

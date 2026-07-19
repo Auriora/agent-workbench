@@ -87,6 +87,47 @@ describe("daemon-backed stdio entrypoint integration", () => {
     )).toBeGreaterThanOrEqual(2);
   }, 15_000);
 
+  it("keeps explicit Codex and Claude launcher identity isolated on one daemon", async () => {
+    const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-mixed-provider-");
+    const codex = trackSession(await startEntryPointSession(repoRoot, {
+      env: {
+        AGENT_WORKBENCH_PROVIDER: "codex",
+        AGENT_WORKBENCH_PROVIDER_PLUGIN_NAME: "agent-workbench",
+        AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION: "0.5.2"
+      }
+    }));
+    const claude = trackSession(await startEntryPointSession(repoRoot, {
+      env: {
+        AGENT_WORKBENCH_PROVIDER: "claude_code",
+        AGENT_WORKBENCH_PROVIDER_PLUGIN_NAME: "agent-workbench",
+        AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION: "0.5.2"
+      }
+    }));
+    await Promise.all([initializeSession(codex), initializeSession(claude)]);
+
+    const [codexHealth, claudeHealth] = await Promise.all([
+      codex.call("resources/read", { uri: "integration:///health/agent-workbench" }),
+      claude.call("resources/read", { uri: "integration:///health/agent-workbench" })
+    ]);
+    const codexEnvelope = parseEnvelope(codexHealth) as {
+      data: { provider: string; identities: Array<{ artifact: string; version?: string }> };
+    };
+    const claudeEnvelope = parseEnvelope(claudeHealth) as {
+      data: { provider: string; identities: Array<{ artifact: string; version?: string }> };
+    };
+
+    expect(codexEnvelope.data.provider).toBe("codex");
+    expect(claudeEnvelope.data.provider).toBe("claude_code");
+    expect(codexEnvelope.data.identities).toContainEqual(expect.objectContaining({
+      artifact: "provider_plugin",
+      version: "0.5.2"
+    }));
+    expect(claudeEnvelope.data.identities).toContainEqual(expect.objectContaining({
+      artifact: "provider_plugin",
+      version: "0.5.2"
+    }));
+  }, 15_000);
+
   it("returns graph-backed results for concurrent package clients without raw lock output", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-concurrent-");
     const first = trackSession(await startEntryPointSession(repoRoot));

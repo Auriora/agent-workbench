@@ -637,6 +637,28 @@ normal launch-root authority from maintainer debug override mode.
   "repo_root": "/repo",
   "runtime_version": "0.1.0",
   "profile": "codex",
+  "provider": "codex",
+  "provider_identity": {
+    "provider": "codex",
+    "state": "configured",
+    "provenance": "launcher"
+  },
+  "identities": [
+    {
+      "artifact": "runtime",
+      "name": "@auriora/agent-workbench",
+      "version": "0.1.0",
+      "state": "observed",
+      "provenance": "package"
+    },
+    {
+      "artifact": "mcp_client",
+      "name": "codex-mcp-client",
+      "version": "1.0.0",
+      "state": "observed",
+      "provenance": "initialize"
+    }
+  ],
   "root_policy": {
     "authority": "launch_root",
     "debug_repo_root_override": false
@@ -652,6 +674,15 @@ normal launch-root authority from maintainer debug override mode.
   "next_actions": []
 }
 ```
+
+The authoritative identity array uses artifact values `runtime`, `mcp_client`,
+`provider_plugin`, and `client_cache`; evidence state is `observed`,
+`configured`, `inferred_not_allowed`, or `unknown`, with provenance from
+`initialize`, `launcher`, `manifest`, `cache`, `package`, or `unknown`.
+Compatibility fields `runtime_version` and `profile` remain additive views.
+MCP client application versions are never compared with Agent Workbench
+runtime/plugin versions. Static health leaves caller discovery unknown; the
+`integration_health` tool is the argument-bearing surface for caller evidence.
 
 ## Integration Profile Shape
 

@@ -11,13 +11,21 @@ import { PassThrough } from "node:stream";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
+// @ts-expect-error -- ESM .mjs shim imported into the TS test via esbuild.
+import { planLaunch } from "../../plugins/agent-workbench/mcp-launch.mjs";
+
 describe("Kiro Power artifacts", () => {
   const powerRoot = path.resolve("plugins/agent-workbench/kiro-power");
 
   it("ships Power, MCP, skill, agent, IDE hooks, and hook adapter files", () => {
     const power = fs.readFileSync(path.join(powerRoot, "POWER.md"), "utf8");
     const mcpConfig = JSON.parse(fs.readFileSync(path.join(powerRoot, "mcp.json"), "utf8")) as {
-      mcpServers: Record<string, { command: string; args: string[]; timeout: number }>;
+      mcpServers: Record<string, {
+        command: string;
+        args: string[];
+        env: Record<string, string>;
+        timeout: number;
+      }>;
     };
     const agentConfig = JSON.parse(
       fs.readFileSync(path.join(powerRoot, "agents/agent-workbench.json"), "utf8")
@@ -59,12 +67,15 @@ describe("Kiro Power artifacts", () => {
     expect(power).toContain("Do not run runtime code from this Power directory.");
     expect(power).toContain("IDE hooks must be workspace files under `.kiro/hooks/`");
     expect(mcpConfig.mcpServers["agent-workbench"]).toMatchObject({
-      command: "bash",
+      command: "node",
       timeout: 120000,
-      args: expect.arrayContaining([
-        "exec \"${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp\""
-      ])
+      args: ["${AGENT_WORKBENCH_INSTALL_ROOT}/plugins/agent-workbench/mcp-launch.mjs"],
+      env: {
+        AGENT_WORKBENCH_PROVIDER: "kiro",
+        AGENT_WORKBENCH_PROVIDER_PLUGIN_NAME: "agent-workbench"
+      }
     });
+    expect(mcpConfig.mcpServers["agent-workbench"].args.join(" ")).not.toMatch(/bash|-lc|\$\{[^}]+:-/);
     expect(agentConfig.includeMcpJson).toBe(true);
     expect(agentConfig.resources).toEqual([
       "skill://.kiro/skills/**/SKILL.md",
@@ -92,6 +103,35 @@ describe("Kiro Power artifacts", () => {
       shortName: "agent-workbench-post-write-feedback"
     });
     expect(postWriteHook.then.prompt).toContain("diagnostics_for_files");
+  });
+
+  it("documents and resolves a custom npm prefix to the installed package root", () => {
+    const packageReadme = fs.readFileSync(path.join(powerRoot, "README.md"), "utf8");
+    const power = fs.readFileSync(path.join(powerRoot, "POWER.md"), "utf8");
+    const mcpConfig = JSON.parse(fs.readFileSync(path.join(powerRoot, "mcp.json"), "utf8")) as {
+      mcpServers: Record<string, { args: string[] }>;
+    };
+    const prefix = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-kiro-prefix-"));
+    const packageRoot = path.join(prefix, "lib", "node_modules", "@auriora", "agent-workbench");
+    const launcher = path.join(packageRoot, "plugins", "agent-workbench", "mcp-launch.mjs");
+    const entrypoint = path.join(packageRoot, "src", "mcp", "stdio-entrypoint.mjs");
+    try {
+      fs.mkdirSync(path.dirname(launcher), { recursive: true });
+      fs.mkdirSync(path.dirname(entrypoint), { recursive: true });
+      fs.writeFileSync(launcher, "// fixture launcher\n");
+      fs.writeFileSync(entrypoint, "// fixture entrypoint\n");
+
+      const configuredLauncher = mcpConfig.mcpServers["agent-workbench"].args[0]
+        ?.replace("${AGENT_WORKBENCH_INSTALL_ROOT}", packageRoot);
+      expect(configuredLauncher).toBe(launcher);
+      expect(fs.existsSync(configuredLauncher ?? "")).toBe(true);
+      expect(planLaunch({ AGENT_WORKBENCH_INSTALL_ROOT: packageRoot }, [], "/repo").args[0]).toBe(entrypoint);
+      expect(power).toContain('npm root -g --prefix "$agent_workbench_prefix"');
+      expect(packageReadme).toContain('npm root -g --prefix "$agent_workbench_prefix"');
+      expect(`${power}\n${packageReadme}`).not.toContain("npx @auriora/agent-workbench install");
+    } finally {
+      fs.rmSync(prefix, { recursive: true, force: true });
+    }
   });
 
   it("adapts Kiro hook payloads to quiet Agent Workbench feedback", async () => {

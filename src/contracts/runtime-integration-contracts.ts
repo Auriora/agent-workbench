@@ -32,6 +32,58 @@ export type CallerDiscoveryState = z.infer<typeof callerDiscoveryStateSchema>;
 export const callableStateSchema = z.enum(["callable", "not_callable", "unknown"]);
 export type CallableState = z.infer<typeof callableStateSchema>;
 
+export const integrationProviderSchema = z.enum(["codex", "claude_code", "kiro", "unknown"]);
+export type IntegrationProvider = z.infer<typeof integrationProviderSchema>;
+
+export const integrationEvidenceStateSchema = z.enum([
+  "observed",
+  "configured",
+  "inferred_not_allowed",
+  "unknown"
+]);
+export type IntegrationEvidenceState = z.infer<typeof integrationEvidenceStateSchema>;
+
+export const integrationIdentityProvenanceSchema = z.enum([
+  "initialize",
+  "launcher",
+  "manifest",
+  "cache",
+  "package",
+  "unknown"
+]);
+export type IntegrationIdentityProvenance = z.infer<typeof integrationIdentityProvenanceSchema>;
+
+export const integrationProviderIdentitySchema = z.object({
+  provider: integrationProviderSchema,
+  state: integrationEvidenceStateSchema,
+  provenance: integrationIdentityProvenanceSchema
+}).strict();
+export type IntegrationProviderIdentity = z.infer<typeof integrationProviderIdentitySchema>;
+
+export const integrationArtifactIdentitySchema = z.object({
+  artifact: z.enum(["runtime", "mcp_client", "provider_plugin", "client_cache"]),
+  name: z.string().optional(),
+  version: z.string().optional(),
+  state: integrationEvidenceStateSchema,
+  provenance: integrationIdentityProvenanceSchema
+}).strict();
+export type IntegrationArtifactIdentity = z.infer<typeof integrationArtifactIdentitySchema>;
+
+export const integrationLauncherIdentitySchema = z.object({
+  provider: integrationProviderSchema,
+  plugin_name: z.string().min(1).max(200).optional(),
+  plugin_version: z.string().min(1).max(100).optional(),
+  cache_name: z.string().min(1).max(200).optional(),
+  cache_version: z.string().min(1).max(100).optional()
+}).strict();
+export type IntegrationLauncherIdentity = z.infer<typeof integrationLauncherIdentitySchema>;
+
+export const integrationConnectionIdentitySchema = z.object({
+  provider_identity: integrationProviderIdentitySchema,
+  identities: z.array(integrationArtifactIdentitySchema)
+}).strict();
+export type IntegrationConnectionIdentity = z.infer<typeof integrationConnectionIdentitySchema>;
+
 export const integrationSurfaceHealthSchema = z
   .object({
     name: z.string(),
@@ -54,11 +106,11 @@ export type IntegrationSurfaceHealth = z.infer<typeof integrationSurfaceHealthSc
 
 export const integrationSessionEvidenceSchema = z
   .object({
-    client: z.string().optional(),
+    client: z.string().max(200).optional(),
     discovery_state: z.enum(["provided", "unknown"]),
-    discovered_tools: z.array(z.string()).default([]),
-    discovered_resources: z.array(z.string()).default([]),
-    discovered_prompts: z.array(z.string()).default([])
+    discovered_tools: z.array(z.string().max(300)).max(200).default([]),
+    discovered_resources: z.array(z.string().max(500)).max(200).default([]),
+    discovered_prompts: z.array(z.string().max(300)).max(200).default([])
   })
   .strict();
 export type IntegrationSessionEvidence = z.infer<typeof integrationSessionEvidenceSchema>;
@@ -81,6 +133,9 @@ export const integrationHealthSchema = z
     repo_root: z.string(),
     runtime_version: z.string(),
     profile: z.string(),
+    provider: integrationProviderSchema.optional(),
+    provider_identity: integrationProviderIdentitySchema.optional(),
+    identities: z.array(integrationArtifactIdentitySchema).optional(),
     session: integrationSessionEvidenceSchema,
     surfaces: z.array(integrationSurfaceHealthSchema),
     counts: z
@@ -108,11 +163,11 @@ export type IntegrationHealth = z.infer<typeof integrationHealthSchema>;
 export const integrationHealthRequestSchema = z
   .object({
     repo_root: z.string().optional(),
-    client: z.string().optional(),
+    client: z.string().max(200).optional(),
     discovery_state: z.enum(["provided", "unknown"]).default("unknown"),
-    discovered_tools: z.array(z.string()).default([]),
-    discovered_resources: z.array(z.string()).default([]),
-    discovered_prompts: z.array(z.string()).default([])
+    discovered_tools: z.array(z.string().max(300)).max(200).default([]),
+    discovered_resources: z.array(z.string().max(500)).max(200).default([]),
+    discovered_prompts: z.array(z.string().max(300)).max(200).default([])
   })
   .strict();
 export type IntegrationHealthRequest = z.infer<typeof integrationHealthRequestSchema>;
@@ -257,6 +312,16 @@ export const codexIntegrationProfileSchema = z
   })
   .strict();
 export type CodexIntegrationProfile = z.infer<typeof codexIntegrationProfileSchema>;
+
+export const currentIntegrationProfileSchema = z.object({
+  provider: integrationProviderSchema,
+  provider_identity: integrationProviderIdentitySchema,
+  profile_name: z.string(),
+  runtime_version: z.string(),
+  mcp_server_id: z.literal("agent-workbench"),
+  mcp_bindings: codexIntegrationProfileSchema.shape.mcp_bindings
+}).strict();
+export type CurrentIntegrationProfile = z.infer<typeof currentIntegrationProfileSchema>;
 
 export const integrationProfileSchema = z.object({
   runtime_version: z.string(),

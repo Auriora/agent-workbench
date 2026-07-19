@@ -15,34 +15,31 @@ work. This Power packages Kiro guidance, MCP configuration, a portable skill,
 workspace hook templates, and quiet hook adapters around the installed Agent
 Workbench runtime.
 
-Do not run runtime code from this Power directory. The MCP server must launch
-the stable package prefix:
+Do not run runtime code from this Power directory. Install the runtime package,
+then set its actual npm package root before Kiro loads the Power:
 
 ```bash
-${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp
+agent_workbench_prefix="$HOME/.local/share/agent-workbench"
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz --prefix "$agent_workbench_prefix"
+export AGENT_WORKBENCH_INSTALL_ROOT="$(npm root -g --prefix "$agent_workbench_prefix")/@auriora/agent-workbench"
 ```
+
+`AGENT_WORKBENCH_INSTALL_ROOT` is the package root containing `src/`, not the
+npm global prefix.
 
 ## Onboarding
 
-1. Verify the package-backed runtime is installed (the launcher is now
-   `bin/agent-workbench-mcp.mjs`):
+1. Verify the package-backed portable launcher is installed:
 
    ```bash
-   test -f "${AGENT_WORKBENCH_INSTALL_ROOT:-$HOME/.local/share/agent-workbench}/bin/agent-workbench-mcp.mjs"
+   test -f "$AGENT_WORKBENCH_INSTALL_ROOT/plugins/agent-workbench/mcp-launch.mjs"
    ```
 
-   > **Pending (spec 033):** this Power's `mcp.json` still launches the old
-   > `bin/agent-workbench-mcp`, which the installer no longer generates, so Kiro
-   > MCP launch is broken until the Kiro entry point is converted to the `.mjs`
-   > launcher (tracked follow-up).
+   The bundled `mcp.json` invokes this file through a direct `node` command and
+   supplies connection-scoped Kiro provider identity.
 
-2. If the launcher is missing, install Agent Workbench:
-
-   ```bash
-   npx @auriora/agent-workbench install -- \
-     --prefix "$HOME/.local/share/agent-workbench" \
-     --skip-codex-config
-   ```
+2. If the launcher is missing, repeat the release-tarball installation and
+   package-root export above with the intended released version.
 
 3. Import the bundled skill if Kiro did not install it automatically:
 

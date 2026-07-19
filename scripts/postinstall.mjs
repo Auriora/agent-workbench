@@ -22,8 +22,8 @@ import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { materializeCodexMcpConfig } from "../plugins/agent-workbench/codex-mcp-config.mjs";
 import {
-  materializeCodexMcpConfig,
   runtimePointerPath,
   writeRuntimeRoot
 } from "../plugins/agent-workbench/install-root.mjs";

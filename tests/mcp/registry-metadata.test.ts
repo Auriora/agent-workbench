@@ -20,6 +20,7 @@ describe("MCP registry metadata", () => {
 
     expect(surfaces.map((surface) => `${surface.kind}:${surface.name}`).sort()).toEqual([
       "resource:codex-integration-profile",
+      "resource:current-integration-profile",
       "resource:docs-map",
       "resource:docs-overview",
       "resource:integration-health",
@@ -39,6 +40,7 @@ describe("MCP registry metadata", () => {
       "tool:docs_search",
       "tool:find_references",
       "tool:impact",
+      "tool:integration_health",
       "tool:preview_workspace_edit",
       "tool:symbol_search",
       "tool:verification_plan"
@@ -77,6 +79,7 @@ describe("MCP registry metadata", () => {
       docs_search: ["Use this to find canonical docs", "Prefer docs_scope or scope_path"],
       find_references: ["Use this after symbol_search", "cursor pagination"],
       impact: ["Use this after selecting a graph node_id", "does not mutate files"],
+      integration_health: ["Use this to inspect integration health", "does not mutate files"],
       preview_workspace_edit: ["Use this before apply_workspace_edit", "does not mutate files"],
       symbol_search: ["Use this before broad grep", "node_id values"],
       verification_plan: ["Use this before running validation commands", "never executes commands"]

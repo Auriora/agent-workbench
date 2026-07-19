@@ -9,7 +9,7 @@
   },
   "homepage": "https://github.com/bcherrington/agent-workbench/tree/main/plugins/agent-workbench",
   "repository": "https://github.com/bcherrington/agent-workbench",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "keywords": [
     "agents",
     "ide",
@@ -29,8 +29,8 @@
       "Interactive"
     ],
     "websiteURL": "https://github.com/bcherrington/agent-workbench/tree/main/plugins/agent-workbench",
-    "privacyPolicyURL": "https://opensource.org/licenses/MIT",
-    "termsOfServiceURL": "https://opensource.org/licenses/MIT",
+    "privacyPolicyURL": "https://www.gnu.org/licenses/gpl-3.0.html",
+    "termsOfServiceURL": "https://www.gnu.org/licenses/gpl-3.0.html",
     "defaultPrompt": [
       "Check Agent Workbench status for this repo.",
       "Plan context and validation with Agent Workbench.",

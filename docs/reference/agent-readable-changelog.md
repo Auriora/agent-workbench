@@ -26,6 +26,36 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
+## 2026-07-19: Provider-Aware Integration Health
+
+### Agent-Visible Changes
+
+- `integration:///profiles/current` reports `codex`, `claude_code`, `kiro`, or
+  `unknown` for the active MCP connection without deriving Claude from Codex.
+- Static integration health reports only server-known state. Use the read-only
+  `integration_health` tool to add caller-discovery evidence.
+- Health separates runtime, MCP client, provider plugin, and client-cache
+  identities and may recommend a provider refresh/reload/new-session sequence
+  when comparable observed Agent Workbench versions differ.
+
+### Contract Changes
+
+- Provider identity and each artifact identity include evidence state and
+  provenance. Unknown manifest/cache evidence stays unknown.
+- The legacy `integration:///profiles/codex`, `runtime_version`, and `profile`
+  compatibility views remain available.
+
+### Required Agent Behavior Changes
+
+- Do not interpret an MCP client application version as the Agent Workbench
+  plugin version, and do not treat a static health read as discovery proof.
+
+### Migration Notes
+
+- Codex, Claude Code, and Kiro launchers now pass explicit per-connection
+  provider evidence. Kiro launch is shell-free and requires
+  `AGENT_WORKBENCH_INSTALL_ROOT` to name the installed package prefix.
+
 ## 2026-07-19: Snapshot Path Validity
 
 ### Agent-Visible Changes

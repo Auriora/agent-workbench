@@ -7,6 +7,7 @@ import type {
   IntegrationHealth,
   IntegrationDaemonHealth,
   IntegrationHealthRequest,
+  IntegrationConnectionIdentity,
   IntegrationSessionEvidence,
   IntegrationSurfaceHealth,
   IntegrationSurfaceStatus,
@@ -35,6 +36,7 @@ export type GetIntegrationHealthInput = {
   default_repo_root: string;
   runtime_version: string;
   profile: string;
+  connection_identity?: IntegrationConnectionIdentity;
   surfaces: readonly IntegrationSurfaceInput[];
   root_policy?: {
     authority: "launch_root";
@@ -61,17 +63,26 @@ export function getIntegrationHealth(input: GetIntegrationHealthInput): GetInteg
     .map((surface) => classifySurface(surface, session))
     .sort(compareSurfaces);
 
+  const providerIdentity = input.connection_identity?.provider_identity;
+  const identities = input.connection_identity?.identities;
+
   return {
     health: {
       repo_root: repoRoot,
       runtime_version: input.runtime_version,
       profile: input.profile,
+      provider: providerIdentity?.provider,
+      provider_identity: providerIdentity,
+      identities,
       session,
       surfaces,
       counts: countSurfaces(surfaces),
       root_policy: input.root_policy,
       daemon: input.daemon,
-      next_actions: buildNextActions(surfaces)
+      next_actions: [
+        ...buildIdentityRecoveryActions(providerIdentity?.provider, identities),
+        ...buildNextActions(surfaces)
+      ]
     },
     meta: {
       analysis_validity: "valid",
@@ -88,6 +99,46 @@ export function getIntegrationHealth(input: GetIntegrationHealthInput): GetInteg
       truncated: false
     }
   };
+}
+
+function buildIdentityRecoveryActions(
+  provider: IntegrationConnectionIdentity["provider_identity"]["provider"] | undefined,
+  identities: IntegrationConnectionIdentity["identities"] | undefined
+): NextAction[] {
+  const runtime = identities?.find((identity) => identity.artifact === "runtime");
+  if (!isComparableAgentWorkbenchIdentity(runtime)) {
+    return [];
+  }
+  const mismatches = identities
+    ?.filter((identity) => identity.artifact === "provider_plugin" || identity.artifact === "client_cache")
+    .filter(isComparableAgentWorkbenchIdentity)
+    .filter((identity) => identity.version !== runtime.version) ?? [];
+  if (mismatches.length === 0) return [];
+
+  const providerLabel = provider === "claude_code"
+    ? "Claude Code"
+    : provider === "kiro"
+      ? "Kiro"
+      : provider === "codex"
+        ? "Codex"
+        : "the active client";
+  const mismatchSummary = mismatches
+    .map((identity) => `${identity.artifact} ${identity.version}`)
+    .join(" and ");
+  return [{
+    tool: "context_for_task",
+    args: {
+      task: `Reinstall the Agent Workbench runtime, refresh or reinstall the Agent Workbench plugin/cache for ${providerLabel}, reload the client, and start a new session; runtime ${runtime.version} differs from ${mismatchSummary}.`
+    }
+  }];
+}
+
+function isComparableAgentWorkbenchIdentity(
+  identity: IntegrationConnectionIdentity["identities"][number] | undefined
+): identity is IntegrationConnectionIdentity["identities"][number] & { version: string } {
+  return identity?.state === "observed" &&
+    identity.version !== undefined &&
+    (identity.name === "agent-workbench" || identity.name === "@auriora/agent-workbench");
 }
 
 function classifySurface(

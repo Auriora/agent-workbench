@@ -5,12 +5,16 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  integrationArtifactIdentitySchema,
   integrationHealthSchema,
+  integrationProviderSchema,
+  type IntegrationArtifactIdentity,
   type IntegrationHealth,
   type IntegrationSessionEvidence,
   type IntegrationSurfaceHealth
 } from "../../src/contracts/index.js";
 import { describeCodexIntegrationProfile } from "../../src/application/use-cases/describe-codex-integration-profile.js";
+import { getIntegrationHealth } from "../../src/application/use-cases/get-integration-health.js";
 import {
   mcpPrompts,
   mcpResources,
@@ -26,6 +30,53 @@ type IntegrationSessionFixtureInput = {
 };
 
 describe("integration health contract fixtures", () => {
+  it("keeps provider and artifact identities typed and explicit", () => {
+    expect(integrationProviderSchema.options).toEqual([
+      "codex",
+      "claude_code",
+      "kiro",
+      "unknown"
+    ]);
+
+    const identities: IntegrationArtifactIdentity[] = [
+      {
+        artifact: "runtime",
+        name: "@auriora/agent-workbench",
+        version: "0.1.0",
+        state: "observed",
+        provenance: "package"
+      },
+      {
+        artifact: "mcp_client",
+        name: "claude-code",
+        version: "1.2.3",
+        state: "observed",
+        provenance: "initialize"
+      },
+      {
+        artifact: "provider_plugin",
+        name: "agent-workbench",
+        version: "0.1.0",
+        state: "configured",
+        provenance: "manifest"
+      },
+      {
+        artifact: "client_cache",
+        state: "unknown",
+        provenance: "unknown"
+      }
+    ];
+
+    expect(identities.map((identity) => integrationArtifactIdentitySchema.parse(identity))).toEqual(
+      identities
+    );
+    expect(integrationArtifactIdentitySchema.safeParse({
+      artifact: "plugin",
+      state: "observed",
+      provenance: "manifest"
+    }).success).toBe(false);
+  });
+
   it("can represent configured, registered, advertised, discovered, and callable surfaces", () => {
     const fixture = buildIntegrationHealthFixture({
       discovery_state: "provided",
@@ -72,12 +123,109 @@ describe("integration health contract fixtures", () => {
     ).toBe(true);
   });
 
-  it("keeps the Codex profile advertised bindings aligned with registered MCP surfaces", () => {
+  it("keeps the pre-provider health fixture valid as an additive compatibility shape", () => {
+    const fixture = buildIntegrationHealthFixture({ discovery_state: "unknown" });
+    const {
+      provider: _provider,
+      provider_identity: _providerIdentity,
+      identities: _identities,
+      ...legacyFixture
+    } = fixture;
+
+    expect(integrationHealthSchema.parse(legacyFixture)).toEqual(legacyFixture);
+    expect(legacyFixture).toMatchObject({
+      runtime_version: "0.1.0",
+      profile: "codex"
+    });
+  });
+
+  it("keeps the legacy Codex profile as a compatible subset of registered MCP surfaces", () => {
     const profile = describeCodexIntegrationProfile();
     const advertised = profile.mcp_bindings.map((binding) => `${binding.kind}:${binding.name}`).sort();
     const registered = registeredSurfaceKeys();
 
-    expect(advertised).toEqual(registered);
+    expect(registered).toEqual(expect.arrayContaining(advertised));
+    expect(advertised).not.toContain("resource:current-integration-profile");
+    expect(advertised).not.toContain("tool:integration_health");
+  });
+
+  it("emits guidance only for comparable Agent Workbench artifact drift", () => {
+    const identity = {
+      provider_identity: {
+        provider: "claude_code" as const,
+        state: "configured" as const,
+        provenance: "launcher" as const
+      },
+      identities: [
+        { artifact: "runtime" as const, name: "@auriora/agent-workbench", version: "2.0.0", state: "observed" as const, provenance: "package" as const },
+        { artifact: "mcp_client" as const, version: "99.0.0", state: "observed" as const, provenance: "initialize" as const },
+        { artifact: "provider_plugin" as const, name: "agent-workbench", version: "1.0.0", state: "observed" as const, provenance: "manifest" as const },
+        { artifact: "client_cache" as const, name: "agent-workbench", version: "1.5.0", state: "observed" as const, provenance: "cache" as const }
+      ]
+    };
+    const mismatched = getIntegrationHealth({
+      request: { discovery_state: "unknown", discovered_tools: [], discovered_resources: [], discovered_prompts: [] },
+      default_repo_root: "/repo",
+      runtime_version: "2.0.0",
+      profile: "claude_code",
+      connection_identity: identity,
+      surfaces: []
+    });
+
+    expect(mismatched.health.next_actions).toEqual([
+      expect.objectContaining({
+        tool: "context_for_task",
+        args: expect.objectContaining({ task: expect.stringMatching(/Claude Code.*new session/i) })
+      })
+    ]);
+
+    identity.identities[2] = {
+      artifact: "provider_plugin",
+      name: "agent-workbench",
+      version: "2.0.0",
+      state: "observed",
+      provenance: "manifest"
+    };
+    expect(getIntegrationHealth({
+      request: { discovery_state: "unknown", discovered_tools: [], discovered_resources: [], discovered_prompts: [] },
+      default_repo_root: "/repo",
+      runtime_version: "2.0.0",
+      profile: "claude_code",
+      connection_identity: identity,
+      surfaces: []
+    }).health.next_actions[0]?.args.task).toMatch(/client_cache 1\.5\.0/);
+
+    identity.identities[3] = {
+      artifact: "client_cache",
+      name: "agent-workbench",
+      version: "2.0.0",
+      state: "observed",
+      provenance: "cache"
+    };
+    expect(getIntegrationHealth({
+      request: { discovery_state: "unknown", discovered_tools: [], discovered_resources: [], discovered_prompts: [] },
+      default_repo_root: "/repo",
+      runtime_version: "2.0.0",
+      profile: "claude_code",
+      connection_identity: identity,
+      surfaces: []
+    }).health.next_actions).toEqual([]);
+
+    identity.identities[2] = {
+      artifact: "provider_plugin",
+      name: "unrelated-plugin",
+      version: "1.0.0",
+      state: "observed",
+      provenance: "manifest"
+    };
+    expect(getIntegrationHealth({
+      request: { discovery_state: "unknown", discovered_tools: [], discovered_resources: [], discovered_prompts: [] },
+      default_repo_root: "/repo",
+      runtime_version: "2.0.0",
+      profile: "claude_code",
+      connection_identity: identity,
+      surfaces: []
+    }).health.next_actions).toEqual([]);
   });
 });
 
@@ -93,6 +241,39 @@ function buildIntegrationHealthFixture(input: IntegrationSessionFixtureInput): I
     repo_root: "/repo",
     runtime_version: "0.1.0",
     profile: "codex",
+    provider: "codex",
+    provider_identity: {
+      provider: "codex",
+      state: "configured",
+      provenance: "launcher"
+    },
+    identities: [
+      {
+        artifact: "runtime",
+        name: "@auriora/agent-workbench",
+        version: "0.1.0",
+        state: "observed",
+        provenance: "package"
+      },
+      {
+        artifact: "mcp_client",
+        name: session.client,
+        state: session.client === undefined ? "unknown" : "observed",
+        provenance: session.client === undefined ? "unknown" : "initialize"
+      },
+      {
+        artifact: "provider_plugin",
+        name: "agent-workbench",
+        version: "0.1.0",
+        state: "configured",
+        provenance: "manifest"
+      },
+      {
+        artifact: "client_cache",
+        state: "unknown",
+        provenance: "unknown"
+      }
+    ],
     session,
     surfaces,
     counts: countSurfaces(surfaces),

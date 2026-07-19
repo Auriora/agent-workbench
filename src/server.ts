@@ -76,8 +76,10 @@ import {
   rootAuthorityPolicyFromEnv,
   type RootAuthorityPolicy
 } from "./interface-adapters/mcp/registries/root-authority.js";
-import { describeCodexIntegrationProfile } from "./application/use-cases/describe-codex-integration-profile.js";
-import type { IntegrationDaemonHealth } from "./contracts/index.js";
+import type {
+  IntegrationDaemonHealth,
+  IntegrationLauncherIdentity
+} from "./contracts/index.js";
 
 export type AgentWorkbenchServerOptions = {
   startGraphWarmup?: boolean;
@@ -87,6 +89,7 @@ export type AgentWorkbenchServerOptions = {
   rootAuthorityPolicy?: RootAuthorityPolicy;
   graphStore?: () => Promise<GraphStore>;
   daemonDiagnostics?: () => IntegrationDaemonHealth;
+  integrationIdentity?: IntegrationLauncherIdentity;
   workspaceWatcher?: Partial<WorkspaceWatcherConfig>;
   workspaceWatcherIndexedRoots?: readonly string[];
   workspaceWatcherSkippedRoots?: readonly string[];
@@ -206,6 +209,7 @@ export function createAgentWorkbenchServer(
       debugRepoRootOverride: rootAuthorityPolicy.debugRepoRootOverride
     }),
     telemetry,
+    launcherIdentity: options.integrationIdentity,
     getRepoStatus: async ({ repo_root }) => {
       const store = await graphStore();
       const watcher = await updateWorkspaceWatcherFreshness(repo_root, store);
@@ -416,12 +420,13 @@ export function createAgentWorkbenchServer(
         workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
       }),
-    getIntegrationHealth: ({ request }) =>
+    getIntegrationHealth: ({ request, connection_identity }) =>
       getIntegrationHealth({
         request,
         default_repo_root: absoluteRepoRoot,
         runtime_version: AGENT_WORKBENCH_RUNTIME_VERSION,
-        profile: "codex",
+        profile: connection_identity?.provider_identity.provider ?? "unknown",
+        connection_identity,
         surfaces: registeredIntegrationSurfaces(),
         root_policy: {
           authority: "launch_root",
@@ -720,20 +725,14 @@ function isFileExistsError(error: unknown): boolean {
 }
 
 function registeredIntegrationSurfaces(): IntegrationSurfaceInput[] {
-  const profile = describeCodexIntegrationProfile();
-  const advertised = new Set(
-    profile.mcp_bindings.map((binding) => `${binding.kind}:${binding.name}`)
-  );
-
   return [...mcpResources, ...mcpTools, ...mcpPrompts].map((surface) => {
-    const key = `${surface.kind}:${surface.name}`;
     return {
       name: surface.name,
       kind: surface.kind,
       uri: "uri" in surface ? surface.uri : undefined,
-      configured: advertised.has(key),
+      configured: true,
       registered: true,
-      advertised: advertised.has(key),
+      advertised: true,
       capability_class: surface.metadata.capability_class
     };
   });

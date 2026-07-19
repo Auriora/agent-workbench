@@ -31,9 +31,8 @@ export const VENDORED_HOOK_FILES = {
 };
 
 // Plugin-root modules vendored alongside the shim so claude-plugin/ stays
-// self-contained: the MCP launch shim and the install-root resolver it imports
-// (spec 033). Vendored byte-identical, same basename, so the shim's
-// `import "./install-root.mjs"` resolves inside the copied subtree.
+// self-contained. Provider-specific config materialization lives elsewhere, so
+// these runtime resolution modules remain byte-identical for every provider.
 export const VENDORED_PLUGIN_FILES = {
   "mcp-launch.mjs": "mcp-launch.mjs",
   "install-root.mjs": "install-root.mjs"

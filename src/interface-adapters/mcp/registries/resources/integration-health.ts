@@ -4,19 +4,12 @@
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  integrationHealthRequestSchema,
-  type IntegrationHealthRequest
-} from "../../../../contracts/index.js";
+import { integrationHealthRequestSchema } from "../../../../contracts/index.js";
 import {
   buildIntegrationHealthEnvelope,
   buildIntegrationHealthProviderFailureEnvelope,
   buildInvalidIntegrationHealthInputEnvelope
 } from "../../../../presentation/integration-health-presenter.js";
-import {
-  formatMcpArgumentError,
-  parseMcpArguments
-} from "../../arguments/index.js";
 import type { McpResourceDeclaration } from "../index.js";
 import {
   resolveMcpRequestRepoRoot
@@ -32,33 +25,12 @@ export const integrationHealthResource: McpResourceDeclaration = {
     mutation_class: "none",
     budget_policy: "Bounded registry/profile/session metadata; no tool execution and no source mutation.",
     description: "Compact Agent Workbench MCP integration health with configured, registered, discovered, and callable states.",
-    parameters: [
-      { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
-      { name: "client", description: "Optional client name that supplied discovery evidence.", required: false },
-      { name: "discovery_state", description: "Whether caller discovery evidence was provided or is unknown.", required: false },
-      { name: "discovered_tools", description: "Tool names discovered by the active client session.", required: false },
-      { name: "discovered_resources", description: "Resource URIs discovered by the active client session.", required: false },
-      { name: "discovered_prompts", description: "Prompt names discovered by the active client session.", required: false }
-    ],
+    parameters: [],
     returns: "ResponseEnvelope<IntegrationHealth>"
   },
   register(server: McpServer, context) {
-    server.resource("integration-health", "integration:///health/agent-workbench", async (request: unknown) => {
-      let parsedRequest: IntegrationHealthRequest;
-      try {
-        parsedRequest = parseMcpArguments(
-          integrationHealthRequestSchema,
-          getIntegrationHealthArgumentInput(request)
-        );
-      } catch (error) {
-        const envelope = buildInvalidIntegrationHealthInputEnvelope({
-          repoRoot: context.repoRoot,
-          message: formatMcpArgumentError(error, "Invalid integration health resource arguments.")
-        });
-        return integrationHealthResourceResponse(envelope);
-      }
-
-      const rootDecision = resolveMcpRequestRepoRoot(parsedRequest, context);
+    server.resource("integration-health", "integration:///health/agent-workbench", async () => {
+      const rootDecision = resolveMcpRequestRepoRoot(integrationHealthRequestSchema.parse({}), context);
       if (!rootDecision.ok) {
         const envelope = buildInvalidIntegrationHealthInputEnvelope({
           repoRoot: rootDecision.repoRoot,
@@ -78,7 +50,8 @@ export const integrationHealthResource: McpResourceDeclaration = {
       let envelope;
       try {
         const result = await context.getIntegrationHealth({
-          request: rootDecision.request
+          request: rootDecision.request,
+          connection_identity: context.getConnectionIdentity?.()
         });
         envelope = buildIntegrationHealthEnvelope(result);
       } catch (error) {
@@ -91,22 +64,6 @@ export const integrationHealthResource: McpResourceDeclaration = {
     });
   }
 };
-
-function getIntegrationHealthArgumentInput(request: unknown): unknown {
-  if (typeof request !== "object" || request === null) {
-    return undefined;
-  }
-
-  const input = request as Record<string, unknown>;
-  return {
-    repo_root: input.repo_root,
-    client: input.client,
-    discovery_state: input.discovery_state,
-    discovered_tools: input.discovered_tools,
-    discovered_resources: input.discovered_resources,
-    discovered_prompts: input.discovered_prompts
-  };
-}
 
 function integrationHealthResourceResponse(envelope: unknown) {
   return {

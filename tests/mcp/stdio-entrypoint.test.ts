@@ -178,6 +178,39 @@ describe("stdio MCP entrypoint", () => {
     });
   });
 
+  it("accepts only bounded explicit launcher identity from the environment", () => {
+    expect(
+      resolveStdioLaunchConfig({
+        argv: [],
+        cwd: "/workspace/project",
+        env: {
+          AGENT_WORKBENCH_PROVIDER: "claude_code",
+          AGENT_WORKBENCH_PROVIDER_PLUGIN_NAME: " agent-workbench ",
+          AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION: "0.5.2",
+          AGENT_WORKBENCH_CLIENT_CACHE_NAME: "claude-plugin-cache",
+          AGENT_WORKBENCH_CLIENT_CACHE_VERSION: "cache-17"
+        }
+      }).integrationIdentity
+    ).toEqual({
+      provider: "claude_code",
+      plugin_name: "agent-workbench",
+      plugin_version: "0.5.2",
+      cache_name: "claude-plugin-cache",
+      cache_version: "cache-17"
+    });
+
+    expect(
+      resolveStdioLaunchConfig({
+        argv: [],
+        cwd: "/workspace/project",
+        env: {
+          AGENT_WORKBENCH_PROVIDER: "untrusted-client-name",
+          AGENT_WORKBENCH_PROVIDER_PLUGIN_NAME: "x".repeat(201)
+        }
+      }).integrationIdentity
+    ).toBeUndefined();
+  });
+
   it("is exposed through the package mcp script", () => {
     expect(packageJson.scripts.mcp).toBe("node src/mcp/stdio-entrypoint.mjs");
     expect(fs.existsSync(path.resolve("src/mcp/stdio.ts"))).toBe(true);

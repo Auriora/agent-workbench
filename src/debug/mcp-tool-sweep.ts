@@ -33,6 +33,8 @@ import { searchSymbols } from "../application/use-cases/search-symbols.js";
 import { applyWorkspaceEdit } from "../application/use-cases/apply-workspace-edit.js";
 import { previewWorkspaceEdit } from "../application/use-cases/preview-workspace-edit.js";
 import { describeCodexIntegrationProfile } from "../application/use-cases/describe-codex-integration-profile.js";
+import { describeCurrentIntegrationProfile } from "../application/use-cases/describe-current-integration-profile.js";
+import { resolveIntegrationIdentity } from "../application/use-cases/resolve-integration-identity.js";
 import { JsonSyntaxDiagnosticsProviderAdapter } from "../infrastructure/diagnostics/index.js";
 import { InMemoryEditPreviewStoreAdapter } from "../infrastructure/edit-preview-store/index.js";
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../infrastructure/extraction/index.js";
@@ -51,9 +53,13 @@ import {
 import { SystemClockAdapter } from "../infrastructure/time/index.js";
 import {
   mcpResources,
-  mcpTools
+  mcpTools,
+  registeredIntegrationBindings
 } from "../interface-adapters/mcp/registries/index.js";
-import { buildCodexIntegrationProfileEnvelope } from "../presentation/integration-profile-presenter.js";
+import {
+  buildCodexIntegrationProfileEnvelope,
+  buildCurrentIntegrationProfileEnvelope
+} from "../presentation/integration-profile-presenter.js";
 import { buildDocsCurrentForTaskEnvelope, buildDocsMapEnvelope, buildDocsOutlineEnvelope, buildDocsOverviewEnvelope, buildDocsReadSectionEnvelope, buildDocsSearchEnvelope } from "../presentation/docs-presenter.js";
 import { buildFindReferencesEnvelope } from "../presentation/find-references-presenter.js";
 import { buildImpactEnvelope } from "../presentation/impact-presenter.js";
@@ -485,7 +491,15 @@ async function callResource(input: {
   if (input.resourceName === "codex-integration-profile") {
     return buildCodexIntegrationProfileEnvelope(describeCodexIntegrationProfile());
   }
+  if (input.resourceName === "current-integration-profile") {
+    const identity = resolveIntegrationIdentity({});
+    return buildCurrentIntegrationProfileEnvelope(describeCurrentIntegrationProfile({
+      provider_identity: identity.provider_identity,
+      mcp_bindings: registeredIntegrationBindings()
+    }));
+  }
   if (input.resourceName === "integration-health") {
+    const identity = resolveIntegrationIdentity({});
     return buildIntegrationHealthEnvelope(getIntegrationHealth({
       request: {
         repo_root: input.repoRoot,
@@ -496,7 +510,8 @@ async function callResource(input: {
       },
       default_repo_root: input.repoRoot,
       runtime_version: packageJson.version,
-      profile: "codex",
+      profile: identity.provider_identity.provider,
+      connection_identity: identity,
       surfaces: integrationSurfaces()
     }));
   }
@@ -554,6 +569,23 @@ async function callTool(input: {
         truncated: false
       }
     });
+  }
+  if (input.toolName === "integration_health") {
+    const identity = resolveIntegrationIdentity({});
+    return buildIntegrationHealthEnvelope(getIntegrationHealth({
+      request: {
+        repo_root: input.repoRoot,
+        discovery_state: "provided",
+        discovered_tools: mcpTools.map((tool) => tool.name),
+        discovered_resources: mcpResources.map((resource) => resource.uri),
+        discovered_prompts: []
+      },
+      default_repo_root: input.repoRoot,
+      runtime_version: packageJson.version,
+      profile: identity.provider_identity.provider,
+      connection_identity: identity,
+      surfaces: integrationSurfaces()
+    }));
   }
   if (input.toolName === "docs_search") {
     return buildDocsSearchEnvelope(await searchDocs({

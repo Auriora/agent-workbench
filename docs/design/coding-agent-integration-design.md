@@ -60,15 +60,30 @@ detailed resource links only when the task needs them. Provider instruction
 files may point to that skill but must not duplicate the full workflow or
 introduce provider-specific runtime policy.
 
-`integration:///health/agent-workbench` is the runtime health surface for
-coding agents. It reports configured, registered, advertised,
-caller-discovered, callable, unavailable, blocked, hidden, and unknown state
-for MCP resources, tools, and prompts. Agents should treat configured bindings
-as documentation until caller-discovered evidence proves a surface is callable
-in the active session. Public presenters use the same session-aware
+`integration:///profiles/current` reports the effective provider for the MCP
+connection from explicit launcher evidence, or `unknown` when that evidence is
+absent. MCP initialize metadata is retained separately as client-application
+identity and never overrides trusted launcher evidence. The shared daemon keeps
+repository state common while creating an isolated identity context for every
+accepted connection.
+
+`integration:///health/agent-workbench` is the static runtime health surface.
+It reports only server-known configured, registered, advertised, unavailable,
+blocked, hidden, and unknown state for MCP resources, tools, and prompts. The
+read-only `integration_health` tool accepts bounded caller-discovery evidence
+and invokes the same health use case; reading the resource does not prove that
+the caller listed it. Agents should treat configured bindings as documentation
+until caller-discovered evidence proves a surface is callable in the active
+session. Public presenters use the same session-aware
 next-action rules: known unavailable actions are not emitted as executable
 `next_actions`, while unknown caller discovery preserves conservative guidance
 with explicit assumptions inside the integration-health result.
+
+Health keeps runtime package, MCP client application, provider plugin, and
+client-cache identities separate, with evidence state and provenance for each.
+Only observed Agent Workbench runtime/plugin/cache versions are comparable;
+mismatch guidance may recommend reinstall, reload, and a new session but never
+performs updates or network checks.
 
 For MCP-server repositories, coding agents should treat Agent Workbench
 MCP-server labels as routing evidence. Overview and task-context output can

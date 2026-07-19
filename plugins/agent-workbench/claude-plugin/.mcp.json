@@ -4,7 +4,12 @@
       "command": "node",
       "args": [
         "${CLAUDE_PLUGIN_ROOT}/mcp-launch.mjs"
-      ]
+      ],
+      "env": {
+        "AGENT_WORKBENCH_PROVIDER": "claude_code",
+        "AGENT_WORKBENCH_PROVIDER_PLUGIN_NAME": "agent-workbench",
+        "AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION": "0.5.2"
+      }
     }
   }
 }

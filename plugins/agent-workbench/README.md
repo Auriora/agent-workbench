@@ -86,8 +86,10 @@ default resource is the compact `repo:///orientation` receipt; follow its links
 to `repo:///status`, `repo:///scope`, and `repo:///overview` only as needed.
 For task work, use `context_for_task` before broad reads and
 `verification_plan` before running validation. Use
-`integration:///profiles/codex` for the Codex integration profile and
-`integration:///health/agent-workbench` for integration health.
+`integration:///profiles/current` for the connection's effective provider,
+`integration:///profiles/codex` for the legacy Codex integration profile, and
+`integration:///health/agent-workbench` for static integration health. Use the
+read-only `integration_health` tool when supplying caller-discovery evidence.
 
 To update after source, dependency, skill, hook, or MCP config changes, reinstall
 the runtime from the new release tarball (see
@@ -190,12 +192,10 @@ Install the runtime first (from the GitHub release tarball — see
 [the install guide](../../docs/runbooks/install-agent-workbench.md)), then add
 `kiro-power/` as a local Power in Kiro.
 
-> **Pending (spec 033):** the Kiro `mcp.json` still references the retired
-> `bin/agent-workbench-mcp` shell launcher and is **not** yet wired to the
-> portable `node` shim / npm runtime, so Kiro MCP launch is broken until the
-> Kiro entry point is converted. The follow-up is tracked in the Agent Workbench
-> backlog as `EB046`. Codex and Claude already launch via `mcp-launch.mjs`
-> against the npm-installed runtime.
+Kiro now launches the same installed portable `mcp-launch.mjs` runtime through
+a direct `node` command. Set `AGENT_WORKBENCH_INSTALL_ROOT` to the installed
+package prefix before Kiro loads the Power; no shell wrapper or default-path
+fallback is used.
 
 ## Claude Code Plugin
 

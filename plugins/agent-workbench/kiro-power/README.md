@@ -16,23 +16,21 @@ It includes:
 - `agents/agent-workbench.json` for Kiro CLI custom-agent hooks
 - `hooks/` scripts that adapt Agent Workbench quiet hooks to Kiro hook payloads
 
-The Power does not contain or launch a second runtime implementation. MCP
-configuration launches the installed package prefix under
-`~/.local/share/agent-workbench/bin/` (or `AGENT_WORKBENCH_INSTALL_ROOT`).
-
-> **Pending (spec 033):** `mcp.json` still launches `bin/agent-workbench-mcp`,
-> but the installer now generates `bin/agent-workbench-mcp.mjs`. Kiro MCP launch
-> will fail until the Kiro entry point is converted to the `.mjs` launcher — a
-> tracked follow-up. Codex and Claude already launch shell-free via
-> `mcp-launch.mjs`.
+The Power does not contain or launch a second runtime implementation. Set
+`AGENT_WORKBENCH_INSTALL_ROOT` to the installed npm package root; `mcp.json`
+invokes that package's portable `mcp-launch.mjs` directly with `node`. There is
+no shell or default-path fallback.
 
 Install or refresh the runtime package before adding the Power:
 
 ```bash
-npx @auriora/agent-workbench install -- \
-  --prefix "$HOME/.local/share/agent-workbench" \
-  --skip-codex-config
+agent_workbench_prefix="$HOME/.local/share/agent-workbench"
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz --prefix "$agent_workbench_prefix"
+export AGENT_WORKBENCH_INSTALL_ROOT="$(npm root -g --prefix "$agent_workbench_prefix")/@auriora/agent-workbench"
 ```
+
+The export deliberately resolves npm's global module directory; the prefix
+itself is not the package root.
 
 Then open Kiro, choose Powers, add a local Power, and select this directory.
 

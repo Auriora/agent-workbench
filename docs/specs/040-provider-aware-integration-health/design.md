@@ -163,6 +163,11 @@ release metadata authorities.
   preserve the legacy Codex resource.
 - **D003 resolved:** provider identity is per connection; daemon identity stays
   provider-neutral.
+- **D004 resolved:** the stdio launcher validates a narrow optional
+  `integrationIdentity` payload (`provider` plus bounded plugin/cache name and
+  version evidence) from provider-owned MCP configuration and carries it in the
+  per-socket daemon handshake. It contains no cache paths and is never part of
+  shared daemon identity.
 
 ## Validation Strategy
 
@@ -182,8 +187,8 @@ normalization.
 
 ## Open Questions
 
-- Which launcher/daemon handshake field can carry plugin manifest identity
-  without coupling the installed runtime to one provider's cache layout?
+None. Kiro intentionally leaves plugin/cache version unknown because its Power
+metadata currently has no authoritative version field.
 
 ## Related Artifacts
 

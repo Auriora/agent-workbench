@@ -10,8 +10,9 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 // @ts-expect-error -- ESM .mjs shim imported into the TS test via esbuild.
 import { canUseExecve, planLaunch } from "../../plugins/agent-workbench/mcp-launch.mjs";
+// @ts-expect-error -- ESM .mjs materializer imported into the TS test via esbuild.
+import { materializeCodexMcpConfig } from "../../plugins/agent-workbench/codex-mcp-config.mjs";
 import {
-  materializeCodexMcpConfig,
   resolveRuntimeRoot,
   runtimePointerPath,
   writeRuntimeRoot
@@ -62,6 +63,21 @@ describe("mcp-launch shim planLaunch (spec 033)", () => {
     const env = { ...baseEnv, AGENT_WORKBENCH_DEFAULT_REPO_ROOT: "/explicit/repo" };
     const plan = planLaunch(env, [], "/repo");
     expect(plan.options.env.AGENT_WORKBENCH_DEFAULT_REPO_ROOT).toBe("/explicit/repo");
+  });
+
+  it("preserves explicit provider plugin identity for the stdio handoff", () => {
+    const plan = planLaunch({
+      ...baseEnv,
+      AGENT_WORKBENCH_PROVIDER: "codex",
+      AGENT_WORKBENCH_PROVIDER_PLUGIN_NAME: "agent-workbench",
+      AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION: "0.5.2"
+    }, [], "/repo");
+
+    expect(plan.options.env).toMatchObject({
+      AGENT_WORKBENCH_PROVIDER: "codex",
+      AGENT_WORKBENCH_PROVIDER_PLUGIN_NAME: "agent-workbench",
+      AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION: "0.5.2"
+    });
   });
 
   it("passes through extra argv after the entry script", () => {
@@ -125,6 +141,7 @@ describe("installed Codex MCP config materialization", () => {
   beforeEach(() => {
     packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-package-root-"));
     fs.mkdirSync(path.join(packageRoot, "plugins", "agent-workbench"), { recursive: true });
+    fs.writeFileSync(path.join(packageRoot, "package.json"), '{"version":"9.8.7"}\n');
   });
 
   afterEach(() => {
@@ -134,13 +151,24 @@ describe("installed Codex MCP config materialization", () => {
   it("rewrites installed Codex MCP config to an absolute shim path without binding cwd", () => {
     const configPath = materializeCodexMcpConfig(packageRoot);
     const mcpConfig = JSON.parse(fs.readFileSync(configPath, "utf8")) as {
-      mcpServers: Record<string, { command: string; cwd?: string; args: string[]; startup_timeout_sec: number }>;
+      mcpServers: Record<string, {
+        command: string;
+        cwd?: string;
+        args: string[];
+        env?: Record<string, string>;
+        startup_timeout_sec: number;
+      }>;
     };
     const server = mcpConfig.mcpServers["agent-workbench"];
 
     expect(server.command).toBe("node");
     expect(server.cwd).toBeUndefined();
     expect(server.args).toEqual([path.join(packageRoot, "plugins", "agent-workbench", "mcp-launch.mjs")]);
+    expect(server.env).toMatchObject({
+      AGENT_WORKBENCH_PROVIDER: "codex",
+      AGENT_WORKBENCH_PROVIDER_PLUGIN_NAME: "agent-workbench",
+      AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION: "9.8.7"
+    });
     expect(path.isAbsolute(server.args[0])).toBe(true);
     expect(server.startup_timeout_sec).toBe(30.0);
   });

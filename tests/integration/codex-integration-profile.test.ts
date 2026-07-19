@@ -10,11 +10,14 @@ import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   codexIntegrationProfileSchema,
+  currentIntegrationProfileSchema,
   responseEnvelopeSchema
 } from "../../src/contracts/index.js";
 import { describeCodexIntegrationProfile } from "../../src/application/use-cases/describe-codex-integration-profile.js";
+import { describeCurrentIntegrationProfile } from "../../src/application/use-cases/describe-current-integration-profile.js";
 import { buildCodexIntegrationProfileEnvelope } from "../../src/presentation/integration-profile-presenter.js";
 import { codexIntegrationProfileResource } from "../../src/interface-adapters/mcp/registries/resources/codex-integration-profile.js";
+import { currentIntegrationProfileResource } from "../../src/interface-adapters/mcp/registries/resources/current-integration-profile.js";
 import {
   mcpPrompts,
   mcpResources,
@@ -23,12 +26,55 @@ import {
 import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../../src/runtime/version.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
 import {
+  getRegisteredResource,
   parseMcpResourceText,
   registeredResourceUris,
   registerMcpResource
 } from "../helpers/mcp-harness.js";
 
 describe("Codex integration profile", () => {
+  it("projects unknown and Claude Code identities without inheriting a Codex label", () => {
+    const bindings = registeredProfileBindings();
+    const unknown = currentIntegrationProfileSchema.parse(describeCurrentIntegrationProfile({
+      provider_identity: {
+        provider: "unknown",
+        state: "unknown",
+        provenance: "unknown"
+      },
+      mcp_bindings: bindings
+    }));
+    const claude = currentIntegrationProfileSchema.parse(describeCurrentIntegrationProfile({
+      provider_identity: {
+        provider: "claude_code",
+        state: "configured",
+        provenance: "launcher"
+      },
+      mcp_bindings: bindings
+    }));
+
+    expect(unknown).toMatchObject({
+      provider: "unknown",
+      provider_identity: {
+        provider: "unknown",
+        state: "unknown",
+        provenance: "unknown"
+      },
+      mcp_server_id: "agent-workbench"
+    });
+    expect(unknown.profile_name).not.toMatch(/codex|claude|kiro/i);
+    expect(claude).toMatchObject({
+      provider: "claude_code",
+      provider_identity: {
+        provider: "claude_code",
+        state: "configured",
+        provenance: "launcher"
+      },
+      profile_name: "Agent Workbench Claude Code Integration"
+    });
+    expect(claude.profile_name).not.toMatch(/codex/i);
+    expect(claude.mcp_bindings).toEqual(bindings);
+  });
+
   it("describes active MCP, plugin, skill, and hook surfaces without copied runtime behavior", () => {
     const profile = codexIntegrationProfileSchema.parse(describeCodexIntegrationProfile());
 
@@ -233,12 +279,40 @@ describe("Codex integration profile", () => {
     expect(parsed.data.plugin.update_model.copied_runtime_allowed).toBe(false);
   });
 
-  it("is exposed by the composed server alongside repo resources", () => {
+  it("registers integration:///profiles/current with connection-scoped identity", async () => {
+    const profile = describeCurrentIntegrationProfile({
+      provider_identity: {
+        provider: "claude_code",
+        state: "configured",
+        provenance: "launcher"
+      },
+      mcp_bindings: registeredProfileBindings()
+    });
+    const registered = registerMcpResource(currentIntegrationProfileResource, {
+      repoRoot: "/repo",
+      describeCurrentIntegrationProfile: () => profile
+    });
+
+    expect(registered).toMatchObject({
+      name: "current-integration-profile",
+      uri: "integration:///profiles/current"
+    });
+
+    const response = await registered.readCallback({});
+    const parsed = parseMcpResourceText<{ data: typeof profile }>(response);
+
+    expect(currentIntegrationProfileSchema.parse(parsed.data)).toEqual(profile);
+    expect(parsed.data.provider).toBe("claude_code");
+    expect(parsed.data.profile_name).not.toMatch(/codex/i);
+  });
+
+  it("is exposed by the composed server alongside repo resources", async () => {
     const server = createAgentWorkbenchServer(".", { startGraphWarmup: false });
 
     expect(registeredResourceUris(server)).toEqual([
       "integration:///health/agent-workbench",
       "integration:///profiles/codex",
+      "integration:///profiles/current",
       "repo:///docs/map",
       "repo:///docs/overview",
       "repo:///orientation",
@@ -246,8 +320,33 @@ describe("Codex integration profile", () => {
       "repo:///scope",
       "repo:///status"
     ]);
+
+    const response = await getRegisteredResource(
+      server,
+      "integration:///profiles/current"
+    ).readCallback({});
+    const parsed = parseMcpResourceText<{
+      data: { provider: string; provider_identity: { state: string; provenance: string } };
+    }>(response);
+    expect(parsed.data).toMatchObject({
+      provider: "unknown",
+      provider_identity: {
+        state: "unknown",
+        provenance: "unknown"
+      }
+    });
   });
 });
+
+function registeredProfileBindings() {
+  return [...mcpResources, ...mcpTools, ...mcpPrompts].map((surface) => ({
+    name: surface.name,
+    uri: "uri" in surface ? surface.uri : undefined,
+    kind: surface.kind,
+    capability_class: surface.metadata.capability_class,
+    description: surface.metadata.description
+  }));
+}
 
 describe("Codex plugin artifacts", () => {
   const pluginRoot = path.resolve("plugins/agent-workbench");
@@ -295,6 +394,45 @@ describe("Codex plugin artifacts", () => {
     expect(JSON.stringify(hooksConfig)).not.toContain("${PLUGIN_ROOT}");
     expect(skill).toContain("Agent Workbench is the executable runtime.");
     expect(skill).toContain("Do not add primary-plus-fallback routes");
+  });
+
+  it("rejects Codex manifest and provider identity drift", async () => {
+    const validator = await import(
+      pathToFileURL(path.resolve("scripts/validate-agent-workbench-plugin.mjs")).href
+    );
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8"));
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(pluginRoot, ".codex-plugin/plugin.json"), "utf8")
+    );
+    const mcpConfig = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8"));
+    const hooksConfig = JSON.parse(
+      fs.readFileSync(path.join(pluginRoot, "hooks/hooks.json"), "utf8")
+    );
+
+    expect(() => validator.validateCodexPlugin(
+      packageJson,
+      structuredClone(manifest),
+      structuredClone(mcpConfig),
+      structuredClone(hooksConfig)
+    )).not.toThrow();
+
+    const wrongLicense = structuredClone(manifest);
+    wrongLicense.license = "MIT";
+    expect(() => validator.validateCodexPlugin(
+      packageJson,
+      wrongLicense,
+      mcpConfig,
+      hooksConfig
+    )).toThrow(/license must match/u);
+
+    const wrongProvider = structuredClone(mcpConfig);
+    wrongProvider.mcpServers["agent-workbench"].env.AGENT_WORKBENCH_PROVIDER = "claude_code";
+    expect(() => validator.validateCodexPlugin(
+      packageJson,
+      manifest,
+      wrongProvider,
+      hooksConfig
+    )).toThrow(/codex provider identity drifted/u);
   });
 
   it("ships repo-level marketplace metadata for the checked-in Codex plugin", () => {
@@ -442,9 +580,9 @@ describe("Codex plugin artifacts", () => {
     );
   });
 
-  it("keeps the Codex integration profile bound to registered MCP resources and tools", () => {
+  it("keeps the legacy Codex profile as a registered compatibility subset", () => {
     const profile = codexIntegrationProfileSchema.parse(describeCodexIntegrationProfile());
-    const expectedBindings = [
+    const registeredBindings = [
       ...mcpResources.map((resource) => ({
         name: resource.name,
         uri: resource.uri,
@@ -467,7 +605,13 @@ describe("Codex plugin artifacts", () => {
       }))
       .sort(compareBindings);
 
-    expect(actualBindings).toEqual(expectedBindings);
+    expect(registeredBindings).toEqual(expect.arrayContaining(actualBindings));
+    expect(actualBindings).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "current-integration-profile" }),
+        expect.objectContaining({ name: "integration_health" })
+      ])
+    );
   });
 
   it("maps plugin default prompts to registered MCP surfaces or documented workflows", () => {

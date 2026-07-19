@@ -380,6 +380,7 @@ describe("workspace edit MCP tools", () => {
       "docs_search",
       "find_references",
       "impact",
+      "integration_health",
       "preview_workspace_edit",
       "symbol_search",
       "verification_plan"
