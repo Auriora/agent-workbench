@@ -147,9 +147,11 @@ or runtime telemetry.
   combined with EB002 and EB011.
 - Residual follow-up (2026-07-19): Claude-launched health still derives the
   Codex integration profile, and an ordinary static resource read cannot carry
-  caller-discovery evidence. Create a provider-aware health slice that reports
-  configured, registered, caller-proven, and unknown state without inferring a
-  client from the server process.
+  caller-discovery evidence. Active
+  [Spec 040](../specs/040-provider-aware-integration-health/requirements.md)
+  owns a provider-aware health slice that reports configured, registered,
+  caller-proven, and unknown state without inferring a client from the server
+  process.
 
 ### EB002: Session-Aware Next Actions
 
@@ -1291,7 +1293,7 @@ Do not promote an item when:
 ### EB040: Runtime Version Single Source
 
 - Priority: P1
-- Status: proposed spec
+- Status: active Spec 040
 - Friction signal: package version, MCP server metadata, integration health,
   integration profile, and client plugin cache can drift independently. A live
   client can therefore expose an older plugin/runtime than the current package
@@ -1310,8 +1312,10 @@ Do not promote an item when:
 - Validation:
   - Unit and integration tests for version propagation.
   - Package dry-run or installer dry-run evidence that emitted metadata agrees.
-- Promotion target: create a focused metadata/version spec or include in the
-  release-readiness spec if scope stays small.
+- Promotion target: active
+  [Spec 040](../specs/040-provider-aware-integration-health/requirements.md),
+  combined with the EB001 provider-health residual while keeping broader
+  release-readiness work in EB043.
 
 ### EB041: Claude Code Quick Guidance
 
@@ -1634,6 +1638,55 @@ Do not promote an item when:
   and
   [Coding agent integration design](../design/coding-agent-integration-design.md).
 
+### EB051: Snapshot Freshness Versus Deleted Indexed Paths
+
+- Priority: P0
+- Status: active Spec 039
+- Friction signal: on 2026-07-19, dogfooding against this repository showed
+  `repo:///orientation` reporting `freshness: fresh`,
+  `analysis_validity: valid`, and `refresh_required: false` while snapshot
+  `1783312125057` still listed all seven
+  `docs/specs/035-trust-calibration-tool-outputs/*.md` paths as indexed
+  Markdown. That directory was deleted at commit `c90769b`. A
+  `find_references` call on a `session-start.core.js` node then failed with a
+  raw `ENOENT` naming
+  `docs/specs/035-trust-calibration-tool-outputs/canonical-context.md`, instead
+  of returning a bounded degraded or stale envelope. In the same session
+  `context_for_task` reported `freshness: unknown` for that identical
+  `snapshot_id`, so first-read surfaces did not agree with each other.
+- Runtime surface: snapshot identity and freshness derivation, orientation and
+  status presenters, docs inventory counts, graph node/path validity, and
+  `find_references`, `impact`, and `symbol_search` traversal over indexed paths.
+- Acceptance:
+  - Deleting an indexed directory or file must invalidate freshness or set
+    `refresh_required: true`; path removal is not an ordinary content edit under
+    the EB048 reuse rule.
+  - Orientation, status, and `context_for_task` must report the same freshness
+    for the same `snapshot_id`, or explain why they differ.
+  - Graph traversal over an indexed path that no longer exists must return a
+    structured stale or degraded envelope naming the missing evidence, not an
+    unhandled filesystem error.
+  - Docs inventory counts such as `indexed_docs_count` must not include paths
+    that no longer exist on disk.
+  - Resolution must fix freshness derivation and path validity rather than
+    wrapping traversal in catch-and-continue error suppression.
+- Validation:
+  - Fixtures that index a docs directory, delete it, and then re-read
+    orientation, status, and `context_for_task` for freshness agreement.
+  - Golden `find_references` and `impact` responses for a node whose file was
+    deleted after indexing, proving a bounded envelope rather than `ENOENT`.
+  - Regression proving `indexed_docs_count` and docs search results exclude
+    deleted paths.
+  - Contract tests proving deletion-triggered refresh conditions appear in
+    `refresh_when` and are honored by `refresh_required`.
+- Promotion target: active
+  [Spec 039](../specs/039-snapshot-path-validity/requirements.md) under EB003
+  first-read reliability, as a residual defect against
+  [EB048](#eb048-snapshot-aware-orientation-entry-point) orientation reuse and
+  [EB023](#eb023-trust-calibration-in-tool-outputs) trust calibration, with
+  error-envelope consistency routed through
+  [EB038](#eb038-mcp-error-envelope-consistency).
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |
@@ -1688,7 +1741,15 @@ Do not promote an item when:
 | Snapshot-aware orientation entry point | EB048, with EB003 first-read trust and EB001 integration health boundaries. |
 | Executable context continuation and bounded navigation | EB049, with EB002, EB010, and EB011 routing boundaries. |
 | Intent-aware validation guidance | EB050, with EB004 and EB024 validation trust boundaries. |
+| Snapshot freshness versus deleted indexed paths | EB051, under EB003 first-read reliability, with EB048 orientation reuse, EB023 trust calibration, and EB038 error-envelope boundaries. |
 
 ## Immediate Next Specs
 
-- No backlog item is currently promoted here as an immediate next spec.
+- Implement [Spec 039](../specs/039-snapshot-path-validity/requirements.md)
+  first because stale snapshots currently produce contradictory trust evidence,
+  raw graph failures, and deleted-document search/count drift.
+- Then implement
+  [Spec 040](../specs/040-provider-aware-integration-health/requirements.md)
+  as the provider/profile/identity contract slice. Spec 040 is not technically
+  dependent on Spec 039, but this order addresses the higher runtime evidence
+  integrity risk first.
