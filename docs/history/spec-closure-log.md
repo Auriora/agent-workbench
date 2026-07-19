@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/040-provider-aware-integration-health/`
 - **Title:** Provider-aware integration health requirements
 - **Final spec commit:** `6430fda`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `5d460ac`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/coding-agent-integration-design.md`
