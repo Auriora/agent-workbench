@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/039-snapshot-path-validity/`
 - **Title:** Snapshot path validity requirements
 - **Final spec commit:** `9f620de`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `a6919da`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/graph-store-design.md`
