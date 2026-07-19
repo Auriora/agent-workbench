@@ -1641,7 +1641,7 @@ Do not promote an item when:
 ### EB051: Snapshot Freshness Versus Deleted Indexed Paths
 
 - Priority: P0
-- Status: active Spec 039
+- Status: closed Spec 039
 - Friction signal: on 2026-07-19, dogfooding against this repository showed
   `repo:///orientation` reporting `freshness: fresh`,
   `analysis_validity: valid`, and `refresh_required: false` while snapshot
@@ -1679,9 +1679,13 @@ Do not promote an item when:
     deleted paths.
   - Contract tests proving deletion-triggered refresh conditions appear in
     `refresh_when` and are honored by `refresh_required`.
-- Promotion target: active
-  [Spec 039](../specs/039-snapshot-path-validity/requirements.md) under EB003
-  first-read reliability, as a residual defect against
+- Promotion target: closed
+  [Spec 039](../history/spec-closure-log.md) under EB003 first-read
+  reliability. Current behavior lives in
+  [runtime operations design](../design/runtime-operations-design.md),
+  [graph store design](../design/graph-store-design.md),
+  [MCP surface design](../design/mcp-surface-design.md), and
+  [runtime contracts](../reference/runtime-contracts.md), resolving the defect against
   [EB048](#eb048-snapshot-aware-orientation-entry-point) orientation reuse and
   [EB023](#eb023-trust-calibration-in-tool-outputs) trust calibration, with
   error-envelope consistency routed through
@@ -1745,11 +1749,7 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-- Implement [Spec 039](../specs/039-snapshot-path-validity/requirements.md)
-  first because stale snapshots currently produce contradictory trust evidence,
-  raw graph failures, and deleted-document search/count drift.
-- Then implement
+- Implement
   [Spec 040](../specs/040-provider-aware-integration-health/requirements.md)
-  as the provider/profile/identity contract slice. Spec 040 is not technically
-  dependent on Spec 039, but this order addresses the higher runtime evidence
-  integrity risk first.
+  as the provider/profile/identity contract slice now that Spec 039 has closed
+  the higher runtime evidence-integrity risk.

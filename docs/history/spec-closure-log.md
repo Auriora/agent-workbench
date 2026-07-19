@@ -464,3 +464,29 @@ The packages remain available through Git history at the final pre-removal tree
 commit. New implementation work should use active packages under `docs/specs/`,
 durable docs, or backlog items instead of restoring removed packages unless a
 historical audit explicitly needs the original scaffolding.
+
+## Entries
+
+### 2026-07-19 - 039-snapshot-path-validity
+
+- **Spec:** `docs/specs/039-snapshot-path-validity/`
+- **Title:** Snapshot path validity requirements
+- **Final spec commit:** `9f620de`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/graph-store-design.md`
+  - `docs/design/runtime-operations-design.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/backlog/README.md`
+  - `docs/reference/agent-readable-changelog.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Typecheck, plugin validation, nine focused files / 109
+  tests, the full 80-file / 610-test suite, lifecycle lint, task-state audit,
+  archive-index validation, and diff hygiene passed.
+- **Residual risks:**
+  - Valid-receipt caching remains prohibited until a material generation can
+    detect deletions that predate watcher observation.
+- **Follow-up:** none
