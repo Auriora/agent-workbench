@@ -32,7 +32,7 @@ preserve dependency order and record overlap before parallel work.
 
 ## Phase 1: Contract And Reproduction
 
-- [ ] T001 Lock the failing lifecycle, publication, diagnostics, and recovery
+- [x] T001 Lock the failing lifecycle, publication, diagnostics, and recovery
   contracts before implementation.
   - Depends on: none
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
@@ -42,6 +42,7 @@ preserve dependency order and record overlap before parallel work.
   - Files: `tests/mcp/daemon-entrypoint-integration.test.ts`,
     `tests/mcp/daemon-launch.test.ts`, `tests/runtime/operations.test.ts`,
     `tests/runtime/workspace-change-queue.test.ts`, `tests/graph/store.test.ts`,
+    `tests/helpers/spec041-refresh-reproductions.ts`,
     `src/ports/index.ts`, `src/contracts/runtime-integration-contracts.ts`
   - Acceptance: Deterministic barrier-controlled tests reproduce the stranded
     non-startup request, lost invalidation generation, partial replacement
@@ -50,36 +51,42 @@ preserve dependency order and record overlap before parallel work.
     lock execution, publication, activity-lease, generation, diagnostics, and
     structured-failure shapes before production behavior changes.
   - Evidence mode: contract
-  - Evidence: Pending.
+  - Evidence: Phase 1 complete: typecheck passed; focused suites reported 58 ordinary passes and 16 intended expected failures; full suite reported 80 files, 640 passes, and 16 expected failures. Independent final review found no blockers or advisories. Detailed seams and mandatory factory replacement are recorded in `verification.md`.
   - Expected evidence: Record the focused failing commands and the intended
     failure seam for each fixture in `verification.md`.
-  - [ ] T001.1 Lock controller generation, deadline, and retry-admission
-    contracts in `tests/runtime/operations.test.ts` and `src/ports/index.ts`.
+  - Status: Phase 1 contract and reproduction gate complete. Phase 2 may begin with T002 and T003.
+  - [x] T001.1 Lock controller generation, deadline, and retry-admission
+    contracts in `tests/runtime/operations.test.ts`,
+    `tests/helpers/spec041-refresh-reproductions.ts`, and `src/ports/index.ts`.
     - Acceptance: State, generation, worker-result, and activity-lease shapes
       fail before implementation for the intended contract mismatch.
     - Evidence mode: contract
-    - Evidence: Pending.
-  - [ ] T001.2 Lock publication, migration, and reader-visibility contracts in
+    - Evidence: `pnpm typecheck` passed; operations and shared reproduction-factory fixtures lock canonical state, generation, finite deadline, one-result executor, activity lease, blocked ownership, retry admission, and deadline settlement. See `verification.md` Phase 1 Contract Receipt.
+    - Status: Contract/reproduction complete; T002 replaces the shared deadline factory with production.
+  - [x] T001.2 Lock publication, migration, and reader-visibility contracts in
     `tests/graph/store.test.ts` and `src/ports/index.ts`.
     - Acceptance: Building, published, superseded, failed, migrated, and
       explicit-id cases fail at the current non-atomic selection seam.
-    - Evidence mode: contract
-    - Evidence: Pending.
-  - [ ] T001.3 Lock diagnostics, trust, and redaction contracts in
+    - Evidence mode: command
+    - Evidence: `pnpm exec vitest run tests/graph/store.test.ts` passed with guarded expected failures at publication, migration, explicit-id, future-schema, and orphan seams; see `verification.md` Phase 1 Contract Receipt.
+    - Status: Contract/reproduction complete; T003 and T007 implement the locked behavior.
+  - [x] T001.3 Lock diagnostics, trust, and redaction contracts in
     `tests/mcp/integration-health-contract.test.ts` and
     `src/contracts/runtime-integration-contracts.ts`.
     - Acceptance: Invalid state pairs, missing identities, false-success trust,
       and sentinel leakage are rejected by failing fixtures.
-    - Evidence mode: contract
-    - Evidence: Pending.
-  - [ ] T001.4 Lock daemon ownership, idle, disconnect, and crash reproductions
+    - Evidence mode: command
+    - Evidence: `pnpm exec vitest run tests/mcp/integration-health-contract.test.ts` passed the legal/illegal diagnostics matrix, code-owned safe messages, sentinel rejection, and false-success expected failure; see `verification.md` Phase 1 Contract Receipt.
+    - Status: Contract/reproduction complete; T006 binds authoritative diagnostics to runtime presentation.
+  - [x] T001.4 Lock daemon ownership, idle, disconnect, and crash reproductions
     in `tests/mcp/daemon-launch.test.ts` and
     `tests/mcp/daemon-entrypoint-integration.test.ts`.
     - Acceptance: Each fixture fails at its intended ownership/lifetime seam,
       not from generic provider or timing failure.
-    - Evidence mode: contract
-    - Evidence: Pending.
+    - Evidence mode: command
+    - Evidence: The focused daemon/source-entrypoint command passed with 19 ordinary tests and 4 intended expected failures, including the ordered real non-startup deleted-path request and explicit idle-lease decision; see `verification.md` Phase 1 Contract Receipt.
 
+    - Status: Contract/reproduction complete; T004, T005, and T007 implement the locked behavior.
 ## Phase 2: Shared Execution And Publication
 
 - [ ] T002 Implement controller-owned invalidation generations and the sole
@@ -92,7 +99,8 @@ preserve dependency order and record overlap before parallel work.
   - Files: `src/ports/index.ts`,
     `src/application/use-cases/coordinate-snapshot-refresh.ts`,
     `src/infrastructure/runtime/refresh-controller.ts`,
-    `src/infrastructure/runtime/index.ts`, `tests/runtime/operations.test.ts`
+    `src/infrastructure/runtime/index.ts`, `tests/runtime/operations.test.ts`,
+    `tests/helpers/spec041-refresh-reproductions.ts`
   - Acceptance: One controller linearizes requests, advances or joins monotonic
     invalidation generations, reuses planned/running execution, retains one
     coalesced newer generation, invokes only the existing bounded worker path,
@@ -116,7 +124,10 @@ preserve dependency order and record overlap before parallel work.
     - Evidence mode: implementation
     - Evidence: Pending.
   - [ ] T002.3 Prove controller admission, catch-up, deadline, and deterministic
-    post-failure behavior in `tests/runtime/operations.test.ts`.
+    post-failure behavior in `tests/runtime/operations.test.ts`. Replace the
+    Phase 1 reproduction factory in
+    `tests/helpers/spec041-refresh-reproductions.ts` with the production
+    controller and convert its expected failures to ordinary passing tests.
     - Acceptance: Barrier-controlled tests record one writer and no callback,
       timer, or health-read retry.
     - Evidence mode: validation
@@ -176,7 +187,8 @@ preserve dependency order and record overlap before parallel work.
     AC6.1-AC6.5
   - Files: `src/mcp/daemon.ts`, `src/server.ts`, `src/ports/index.ts`,
     `tests/mcp/daemon-launch.test.ts`,
-    `tests/mcp/daemon-entrypoint-integration.test.ts`
+    `tests/mcp/daemon-entrypoint-integration.test.ts`,
+    `tests/helpers/spec041-refresh-reproductions.ts`
   - Acceptance: Every daemon connection receives the same controller while
     provider/session identity remains connection-local. Entering planned state
     acquires a daemon activity lease before admission returns; disconnect cannot
@@ -198,7 +210,9 @@ preserve dependency order and record overlap before parallel work.
   - [ ] T004.2 Integrate the activity lease, terminal notification, closing
     admission, and idle-timer recheck in `src/mcp/daemon.ts`.
     - Acceptance: Disconnect, reconnect, completion, failure, and timer-fire
-      races cannot close an active owner or start duplicate grace timers.
+      races cannot close an active owner or start duplicate grace timers. The
+      daemon lifetime test SHALL replace the Phase 1 reproduction factory with
+      the production lifetime policy and become an ordinary passing test.
     - Evidence mode: implementation
     - Evidence: Pending.
   - [ ] T004.3 Implement standalone repository-lease admission in
@@ -219,7 +233,8 @@ preserve dependency order and record overlap before parallel work.
     `src/application/use-cases/process-workspace-change-queue.ts`,
     `tests/runtime/workspace-change-queue.test.ts`,
     `tests/mcp/repo-status-resource.test.ts`,
-    `tests/mcp/daemon-entrypoint-integration.test.ts`
+    `tests/mcp/daemon-entrypoint-integration.test.ts`,
+    `tests/helpers/spec041-refresh-reproductions.ts`
   - Acceptance: The daemon owns one watcher and change queue for all clients;
     standalone owns one local equivalent. Startup, stale-path first reads, and
     watcher invalidations call the same generation request. Concurrent duplicate
@@ -246,7 +261,9 @@ preserve dependency order and record overlap before parallel work.
   - [ ] T005.3 Prove concurrent/sequential duplicate events and an invalidation
     arriving during a running pass in the queue/status fixtures.
     - Acceptance: Duplicate observations do not create successor work; a truly
-      newer generation causes exactly one sequential catch-up.
+      newer generation causes exactly one sequential catch-up. Replace the
+      Phase 1 catch-up reproduction factory with the production controller and
+      convert the expected failure to an ordinary passing test.
     - Evidence mode: validation
     - Evidence: Pending.
 

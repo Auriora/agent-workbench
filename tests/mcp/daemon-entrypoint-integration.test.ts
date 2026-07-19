@@ -32,7 +32,7 @@ afterEach(async () => {
 });
 
 describe("daemon-backed stdio entrypoint integration", () => {
-  it("starts through the package entrypoint and reports daemon health without expanding normal status", async () => {
+  it("starts through the checkout/source entrypoint and reports daemon health without expanding normal status", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-status-");
     const session = trackSession(await startEntryPointSession(repoRoot));
     await initializeSession(session);
@@ -67,7 +67,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
     expect(session.stderr()).toBe("");
   }, 15_000);
 
-  it("shares one daemon across concurrent package clients", async () => {
+  it("shares one daemon across concurrent checkout/source clients", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-shared-");
     const first = trackSession(await startEntryPointSession(repoRoot));
     const second = trackSession(await startEntryPointSession(repoRoot));
@@ -86,6 +86,69 @@ describe("daemon-backed stdio entrypoint integration", () => {
       secondHealth.data.daemon?.connected_clients ?? 0
     )).toBeGreaterThanOrEqual(2);
   }, 15_000);
+
+  it.fails("shares one authoritative refresh diagnostic identity across checkout/source clients", async () => {
+    const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-shared-refresh-");
+    const first = trackSession(await startEntryPointSession(repoRoot));
+    const second = trackSession(await startEntryPointSession(repoRoot));
+    await Promise.all([initializeSession(first), initializeSession(second)]);
+
+    const [firstHealth, secondHealth] = await Promise.all([
+      first.call("resources/read", { uri: "integration:///health/agent-workbench" }),
+      second.call("resources/read", { uri: "integration:///health/agent-workbench" })
+    ]);
+    const firstDiagnostics = refreshDiagnostics(firstHealth);
+    const secondDiagnostics = refreshDiagnostics(secondHealth);
+
+    // Undefined must not accidentally establish equality: both identities
+    // must be present before the shared-daemon assertion is meaningful.
+    expect(firstDiagnostics.controller_generation).toEqual(expect.any(Number));
+    expect(firstDiagnostics.diagnostic_revision).toEqual(expect.any(Number));
+    expect(secondDiagnostics).toMatchObject({
+      controller_generation: firstDiagnostics.controller_generation,
+      diagnostic_revision: firstDiagnostics.diagnostic_revision,
+      execution_state: firstDiagnostics.execution_state
+    });
+  }, 15_000);
+
+  it.fails("executes a refresh requested by a non-startup checkout/source client", async () => {
+    const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-non-startup-refresh-");
+    const startupClient = trackSession(await startEntryPointSession(repoRoot));
+    await initializeSession(startupClient);
+    await waitForSymbolSearch(startupClient, "Runner");
+    const before = repoStatus(await startupClient.call("resources/read", { uri: "repo:///status" }));
+    expect(before.data.snapshot_id).toEqual(expect.any(String));
+    expect(before.data.freshness).toBe("fresh");
+    const previousSnapshotId = before.data.snapshot_id as string;
+
+    // Starting only after the first client's graph is fresh proves this is a
+    // reused-daemon, non-startup connection rather than a startup race winner.
+    const laterClient = trackSession(await startEntryPointSession(repoRoot));
+    await initializeSession(laterClient);
+    fs.rmSync(path.join(repoRoot, "src/sample_pkg/service.py"));
+
+    // This second-client status read is the stale-request admission barrier.
+    const admitted = repoStatus(await laterClient.call("resources/read", { uri: "repo:///status" }));
+    expect(admitted.data).toMatchObject({
+      snapshot_id: previousSnapshotId,
+      freshness: "stale"
+    });
+
+    let observed = admitted;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      observed = repoStatus(await laterClient.call("resources/read", { uri: "repo:///status" }));
+      if (observed.data.snapshot_id !== previousSnapshotId && observed.data.freshness === "fresh") {
+        break;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, 25));
+    }
+
+    // The legacy later connection remains planned with no executor. Setup and
+    // stale admission pass; only this replacement/fresh assertion is expected
+    // to fail until the daemon owns the controller and executor.
+    expect(observed.data).toMatchObject({ freshness: "fresh" });
+    expect(observed.data.snapshot_id).not.toBe(previousSnapshotId);
+  }, 20_000);
 
   it("keeps explicit Codex and Claude launcher identity isolated on one daemon", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-mixed-provider-");
@@ -128,7 +191,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
     }));
   }, 15_000);
 
-  it("returns graph-backed results for concurrent package clients without raw lock output", async () => {
+  it("returns graph-backed results for concurrent checkout/source clients without raw lock output", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-concurrent-");
     const first = trackSession(await startEntryPointSession(repoRoot));
     const second = trackSession(await startEntryPointSession(repoRoot));
@@ -264,6 +327,34 @@ function daemonHealth(message: McpMessage): {
     throw new Error(`Missing daemon health: ${JSON.stringify(envelope)}`);
   }
   return envelope.data.daemon;
+}
+
+function refreshDiagnostics(message: McpMessage): {
+  controller_generation?: number;
+  diagnostic_revision?: number;
+  execution_state?: string;
+} {
+  const envelope = parseEnvelope(message) as {
+    data: {
+      daemon?: {
+        controller_generation?: number;
+        diagnostic_revision?: number;
+        execution_state?: string;
+      };
+    };
+  };
+  if (envelope.data.daemon === undefined) {
+    throw new Error(`Missing daemon health: ${JSON.stringify(envelope)}`);
+  }
+  return envelope.data.daemon;
+}
+
+function repoStatus(message: McpMessage): {
+  data: { snapshot_id?: string; freshness: string };
+} {
+  return parseEnvelope(message) as {
+    data: { snapshot_id?: string; freshness: string };
+  };
 }
 
 function createCleanFixtureCopy(prefix: string): string {

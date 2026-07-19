@@ -8,6 +8,12 @@ import {
   integrationArtifactIdentitySchema,
   integrationHealthSchema,
   integrationProviderSchema,
+  invalidationGenerationSchema,
+  refreshDeadlineSchema,
+  refreshExecutionStateSchema,
+  refreshFailureSchema,
+  snapshotPublicationStateSchema,
+  snapshotRefreshDiagnosticsReceiptSchema,
   type IntegrationArtifactIdentity,
   type IntegrationHealth,
   type IntegrationSessionEvidence,
@@ -30,6 +36,282 @@ type IntegrationSessionFixtureInput = {
 };
 
 describe("integration health contract fixtures", () => {
+  it("locks canonical refresh execution and publication vocabularies", () => {
+    expect(refreshExecutionStateSchema.options).toEqual([
+      "idle",
+      "planned",
+      "running",
+      "complete",
+      "failed"
+    ]);
+    expect(snapshotPublicationStateSchema.options).toEqual([
+      "building",
+      "published",
+      "superseded",
+      "failed"
+    ]);
+    expect(refreshExecutionStateSchema.safeParse("scheduled").success).toBe(false);
+    expect(refreshExecutionStateSchema.safeParse("cancelled").success).toBe(false);
+  });
+
+  it("requires monotonic generation values and a finite positive refresh deadline", () => {
+    expect(invalidationGenerationSchema.parse(0)).toBe(0);
+    expect(invalidationGenerationSchema.safeParse(-1).success).toBe(false);
+    expect(invalidationGenerationSchema.safeParse(1.5).success).toBe(false);
+
+    const deadline = {
+      timeout_ms: 30_000,
+      deadline_at: "2026-07-19T12:00:30.000Z"
+    };
+    expect(refreshDeadlineSchema.parse(deadline)).toEqual(deadline);
+    for (const timeout_ms of [0, -1, Number.POSITIVE_INFINITY]) {
+      expect(refreshDeadlineSchema.safeParse({ ...deadline, timeout_ms }).success).toBe(false);
+    }
+    expect(refreshDeadlineSchema.safeParse({
+      ...deadline,
+      deadline_at: "not-a-timestamp"
+    }).success).toBe(false);
+  });
+
+  it("accepts the complete authoritative diagnostics state matrix", () => {
+    const base = {
+      repo_identity: "repo-identity",
+      controller_generation: 7,
+      diagnostic_revision: 11,
+      graph_freshness: "stale" as const
+    };
+    const failure = {
+      code: "worker_timeout" as const,
+      category: "worker" as const,
+      message: "Refresh worker deadline expired.",
+      execution_id: "exec-failed",
+      target_snapshot_id: "snap-failed",
+      occurred_at: "2026-07-19T12:00:00.000Z"
+    };
+    const legalReceipts = [
+      {
+        ...base,
+        visible_snapshot_id: "snap-prior",
+        execution_state: "idle",
+        activity_lease_held: false
+      },
+      {
+        ...base,
+        execution_id: "exec-planned",
+        started_generation: 12,
+        requested_generation: 12,
+        target_snapshot_id: "snap-building",
+        visible_snapshot_id: "snap-prior",
+        execution_state: "planned",
+        publication_state: "building",
+        activity_lease_held: true
+      },
+      {
+        ...base,
+        execution_id: "exec-running",
+        started_generation: 12,
+        requested_generation: 13,
+        target_snapshot_id: "snap-building",
+        visible_snapshot_id: "snap-prior",
+        execution_state: "running",
+        publication_state: "superseded",
+        activity_lease_held: true
+      },
+      {
+        ...base,
+        graph_freshness: "fresh",
+        execution_id: "exec-complete",
+        started_generation: 13,
+        requested_generation: 13,
+        target_snapshot_id: "snap-current",
+        visible_snapshot_id: "snap-current",
+        execution_state: "complete",
+        publication_state: "published",
+        activity_lease_held: false
+      },
+      {
+        ...base,
+        execution_id: "exec-failed",
+        started_generation: 13,
+        requested_generation: 13,
+        target_snapshot_id: "snap-failed",
+        visible_snapshot_id: "snap-prior",
+        execution_state: "failed",
+        publication_state: "failed",
+        activity_lease_held: false,
+        last_failure: failure
+      }
+    ] as const;
+
+    expect(legalReceipts.map((receipt) =>
+      snapshotRefreshDiagnosticsReceiptSchema.parse(receipt)
+    )).toEqual(legalReceipts);
+  });
+
+  it("rejects invalid diagnostics pairs and missing correlation identities", () => {
+    const base = {
+      repo_identity: "repo-identity",
+      controller_generation: 7,
+      diagnostic_revision: 11,
+      graph_freshness: "stale",
+      visible_snapshot_id: "snap-prior"
+    };
+    const running = {
+      ...base,
+      execution_id: "exec-running",
+      started_generation: 2,
+      requested_generation: 2,
+      target_snapshot_id: "snap-target",
+      execution_state: "running",
+      publication_state: "building",
+      activity_lease_held: true
+    };
+    const complete = {
+      ...base,
+      graph_freshness: "fresh",
+      execution_id: "exec-complete",
+      started_generation: 2,
+      requested_generation: 2,
+      target_snapshot_id: "snap-target",
+      visible_snapshot_id: "snap-target",
+      execution_state: "complete",
+      publication_state: "published",
+      activity_lease_held: false
+    };
+    const failed = {
+      ...base,
+      execution_id: "exec-failed",
+      started_generation: 2,
+      requested_generation: 2,
+      target_snapshot_id: "snap-failed",
+      execution_state: "failed",
+      publication_state: "failed",
+      activity_lease_held: false,
+      last_failure: {
+        code: "worker_error",
+        category: "worker",
+        message: "Refresh worker failed.",
+        execution_id: "exec-failed",
+        target_snapshot_id: "snap-failed",
+        occurred_at: "2026-07-19T12:00:00.000Z"
+      }
+    };
+    const invalidReceipts: Array<[string, unknown]> = [
+      ["idle holds lease", { ...base, execution_state: "idle", activity_lease_held: true }],
+      ["idle has execution", { ...base, execution_id: "exec", execution_state: "idle", activity_lease_held: false }],
+      ["idle has generation", { ...base, started_generation: 1, execution_state: "idle", activity_lease_held: false }],
+      ["idle has target", { ...base, target_snapshot_id: "snap", publication_state: "building", execution_state: "idle", activity_lease_held: false }],
+      ["planned misses identities", { ...base, execution_state: "planned", activity_lease_held: true }],
+      ["planned drops lease", { ...running, execution_state: "planned", activity_lease_held: false }],
+      ["planned has invalid publication", { ...running, execution_state: "planned", publication_state: "superseded" }],
+      ["planned target is visible", { ...running, execution_state: "planned", visible_snapshot_id: "snap-target" }],
+      ["running misses target", { ...running, target_snapshot_id: undefined, publication_state: undefined }],
+      ["running drops lease", { ...running, activity_lease_held: false }],
+      ["running has published target", { ...running, publication_state: "published" }],
+      ["running target is visible", { ...running, visible_snapshot_id: "snap-target" }],
+      ["started exceeds requested", { ...running, started_generation: 3, requested_generation: 2 }],
+      ["complete holds lease", { ...complete, activity_lease_held: true }],
+      ["complete target differs from visible", { ...complete, visible_snapshot_id: "snap-other" }],
+      ["complete generations differ", { ...complete, requested_generation: 3 }],
+      ["complete has failure", { ...complete, last_failure: failed.last_failure }],
+      ["complete is not published", { ...complete, publication_state: "failed" }],
+      ["failed misses failure", { ...failed, last_failure: undefined }],
+      ["failed execution differs from failure", { ...failed, last_failure: { ...failed.last_failure, execution_id: "exec-other" } }],
+      ["failed target differs from failure", { ...failed, last_failure: { ...failed.last_failure, target_snapshot_id: "snap-other" } }],
+      ["failed target is visible", { ...failed, visible_snapshot_id: "snap-failed" }],
+      ["failed has building target", { ...failed, publication_state: "building" }],
+      ["failed holds lease", { ...failed, activity_lease_held: true }]
+    ];
+
+    const unexpectedlyAccepted = invalidReceipts
+      .filter(([, receipt]) => snapshotRefreshDiagnosticsReceiptSchema.safeParse(receipt).success)
+      .map(([label]) => label);
+    expect(unexpectedlyAccepted).toEqual([]);
+  });
+
+  it("bounds failure evidence and rejects sentinel leakage", () => {
+    const codeOwnedFailures = [
+      ["worker_timeout", "worker", "Refresh worker deadline expired."],
+      ["worker_error", "worker", "Refresh worker failed."],
+      ["worker_exit_without_result", "worker", "Refresh worker exited without a valid result."],
+      ["invalid_worker_result", "worker", "Refresh worker returned an invalid result."],
+      ["store_failure", "store", "Refresh store operation failed."],
+      ["permission_failure", "permission", "Refresh operation was not permitted."],
+      ["ownership_lost", "ownership", "Repository refresh ownership was lost."],
+      ["orphaned_build", "publication", "An orphaned snapshot build was recovered."],
+      ["orphaned_pre_publication", "publication", "An unpublished legacy snapshot was recovered."]
+    ] as const;
+    for (const [code, category, message] of codeOwnedFailures) {
+      const failure = {
+        code,
+        category,
+        message,
+        execution_id: "exec-1",
+        occurred_at: "2026-07-19T12:00:00.000Z"
+      };
+      expect(refreshFailureSchema.parse(failure)).toEqual(failure);
+      expect(new TextEncoder().encode(message).byteLength).toBeLessThanOrEqual(512);
+    }
+    const safeFailure = {
+      code: "worker_error" as const,
+      category: "worker" as const,
+      message: "Refresh worker failed." as const,
+      execution_id: "exec-1",
+      occurred_at: "2026-07-19T12:00:00.000Z"
+    };
+
+    const unsafeMessages = [
+      "/private/workspace/index.sqlite",
+      "'/private/workspace/index.sqlite'",
+      '"C:\\Users\\agent\\index.sqlite"',
+      "../../outside/workspace.sqlite",
+      "..\\..\\outside\\workspace.sqlite",
+      "API_TOKEN=secret-value",
+      "password: hunter2",
+      "Authorization: Bearer secret-token",
+      "postgres://user:password@localhost/database",
+      "SELECT * FROM snapshots",
+      "INSERT INTO snapshots VALUES (1)",
+      "UPDATE snapshots SET freshness='fresh'",
+      "DELETE FROM snapshots",
+      "PRAGMA journal_mode",
+      "stderr: database is locked at /private/index.sqlite",
+      "Error at worker (/private/worker.ts:10:2)",
+      "    at worker (/private/worker.ts:10:2)",
+      "line one\nline two",
+      "é".repeat(256),
+      "é".repeat(257)
+    ];
+    expect(unsafeMessages.every((message) => refreshFailureSchema.safeParse({
+      ...safeFailure,
+      message
+    }).success === false)).toBe(true);
+    expect(refreshFailureSchema.safeParse({
+      ...safeFailure,
+      code: "permission_failure",
+      category: "worker"
+    }).success).toBe(false);
+  });
+
+  it.fails("rejects synthetic daemon health before it can be presented as success", () => {
+    const fixture = buildIntegrationHealthFixture({ discovery_state: "unknown" });
+    const syntheticHealth = {
+      ...fixture,
+      daemon: {
+        pid: 1234,
+        socket_path: "/tmp/agent-workbench.sock",
+        repo_root: "/repo",
+        connected_clients: 1,
+        warmup_state: "scheduled",
+        graph_freshness: "unknown"
+      }
+    };
+
+    // The legacy additive health schema accepts this false-success shape.
+    // T006 must bind authoritative diagnostics and trust at this boundary.
+    expect(integrationHealthSchema.safeParse(syntheticHealth).success).toBe(false);
+  });
+
   it("keeps provider and artifact identities typed and explicit", () => {
     expect(integrationProviderSchema.options).toEqual([
       "codex",

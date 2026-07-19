@@ -7,9 +7,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
+import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ExtractionBatch } from "../../src/domain/models/index.js";
 import type { SnapshotState } from "../../src/domain/models/runtime.js";
+import type {
+  SnapshotPublicationPort,
+  SnapshotPublicationSelection,
+} from "../../src/ports/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/graph-store.js";
 
 describe("graph store", () => {
@@ -34,6 +39,276 @@ describe("graph store", () => {
     } finally {
       store.close();
     }
+  });
+
+  it.fails("persists publication state independently from snapshot freshness", () => {
+    const store = openGraphStore(path.join(dir, "publication-state.sqlite"));
+    try {
+      const snapshotColumns = store.db
+        .prepare("PRAGMA table_info(snapshots)")
+        .all() as Array<{ name: string }>;
+
+      expect(snapshotColumns.map((column) => column.name)).toContain("publication_state");
+    } finally {
+      store.close();
+    }
+  });
+
+  it.fails("classifies legacy snapshots transactionally during publication migration", async () => {
+    const databasePath = path.join(dir, "publication-migration.sqlite");
+    const legacy = new Database(databasePath);
+    try {
+      legacy.exec(`
+        CREATE TABLE schema_migrations (
+          version INTEGER PRIMARY KEY,
+          applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE snapshots (
+          id INTEGER PRIMARY KEY,
+          repo_identity TEXT NOT NULL,
+          config_identity TEXT NOT NULL,
+          freshness TEXT NOT NULL,
+          schema_version INTEGER NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO schema_migrations(version) VALUES (1);
+      `);
+      const insertLegacySnapshot = legacy.prepare(`
+        INSERT INTO snapshots(
+          id, repo_identity, config_identity, freshness, schema_version, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `);
+      for (const [id, freshness] of [
+        ["70", "fresh"],
+        ["71", "stale"],
+        ["72", "cold"],
+        ["73", "refreshing"]
+      ] as const) {
+        insertLegacySnapshot.run(
+          Number(id),
+          "/tmp/repo",
+          "default",
+          freshness,
+          1,
+          `2026-05-08T00:00:0${Number(id) - 70}.000Z`
+        );
+      }
+      expect(legacy.prepare("SELECT COUNT(*) AS count FROM snapshots").get()).toEqual({ count: 4 });
+      expect(legacy.prepare("PRAGMA table_info(snapshots)").all()).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ name: "publication_state" })])
+      );
+    } finally {
+      legacy.close();
+    }
+
+    const migrated = openGraphStore(databasePath);
+    try {
+      expect(migrated.validateSchema()).toBe(true);
+      const columns = migrated.db.prepare("PRAGMA table_info(snapshots)").all() as Array<{
+        name: string;
+      }>;
+      const rows = columns.some((column) => column.name === "publication_state")
+        ? migrated.db.prepare(`
+            SELECT id, publication_state FROM snapshots ORDER BY id
+          `).all()
+        : (migrated.db.prepare(`
+            SELECT id FROM snapshots ORDER BY id
+          `).all() as Array<{ id: number }>).map((row) => ({
+            ...row,
+            publication_state: undefined
+          }));
+
+      // Opening and preserving all four legacy rows are setup guards. Only
+      // this final classification assertion fails before the migration exists.
+      expect(rows).toEqual([
+        { id: 70, publication_state: "published" },
+        { id: 71, publication_state: "published" },
+        { id: 72, publication_state: "published" },
+        { id: 73, publication_state: "failed" }
+      ]);
+    } finally {
+      migrated.close();
+    }
+  });
+
+  it.fails("keeps the prior snapshot visible while a replacement is unpublished", async () => {
+    const store = openGraphStore(path.join(dir, "publication-visibility.sqlite"));
+    const prior = {
+      ...snapshotState("80"),
+      freshness: "stale" as const
+    };
+    const replacement = {
+      ...snapshotState("81"),
+      freshness: "refreshing" as const
+    };
+
+    try {
+      await store.upsertSnapshot({ snapshot: prior });
+      await store.upsertSnapshot({ snapshot: replacement });
+
+      // The pre-Spec-041 store selects the newest non-fresh row. The future
+      // publication boundary must keep the prior published row visible.
+      await expect(store.getSnapshot({ repo_root: prior.repo_root })).resolves.toMatchObject({
+        id: prior.id
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it.fails("returns discriminated explicit-id results for every publication state", async () => {
+    const store = openGraphStore(path.join(dir, "explicit-unpublished.sqlite"));
+
+    try {
+      ensureSqliteColumn(store.db, "snapshots", "publication_state", "TEXT");
+      for (const [id, publicationState] of [
+        ["82", "building"],
+        ["83", "superseded"],
+        ["84", "failed"],
+        ["85", "published"]
+      ] as const) {
+        await store.upsertSnapshot({
+          snapshot: {
+            ...snapshotState(id),
+            freshness: publicationState === "published" ? "fresh" : "refreshing"
+          }
+        });
+        store.db.prepare(`
+          UPDATE snapshots SET publication_state = ? WHERE id = ?
+        `).run(publicationState, Number(id));
+      }
+      expect(store.db.prepare(`
+        SELECT id, publication_state FROM snapshots ORDER BY id
+      `).all()).toEqual([
+        { id: 82, publication_state: "building" },
+        { id: 83, publication_state: "superseded" },
+        { id: 84, publication_state: "failed" },
+        { id: 85, publication_state: "published" }
+      ]);
+
+      const publicationPort = store as unknown as SnapshotPublicationPort;
+      expect(typeof publicationPort.readExplicit).toBe("function");
+      const results = await Promise.all(["82", "83", "84", "85"].map((snapshotId) =>
+        publicationPort.readExplicit({ repo_root: "/tmp/repo", snapshot_id: snapshotId })
+      ));
+      expect(results[3]).toMatchObject({
+        status: "selected",
+        snapshot: { id: "85" },
+        publication: { snapshot_id: "85", state: "published" }
+      });
+
+      // Setup and the published control pass. The legacy adapter then fails
+      // this final discriminated-result assertion because it selects all
+      // existing rows irrespective of publication state.
+      const expectedBlockedResults = [
+        {
+          status: "blocked",
+          snapshot_id: "82",
+          publication_state: "building",
+          reason: "snapshot_unpublished",
+          message: "Snapshot is not published."
+        },
+        {
+          status: "blocked",
+          snapshot_id: "83",
+          publication_state: "superseded",
+          reason: "snapshot_unpublished",
+          message: "Snapshot is not published."
+        },
+        {
+          status: "blocked",
+          snapshot_id: "84",
+          publication_state: "failed",
+          reason: "snapshot_unpublished",
+          message: "Snapshot is not published."
+        }
+      ] satisfies SnapshotPublicationSelection[];
+      expect(results.slice(0, 3)).toEqual(expectedBlockedResults);
+    } finally {
+      store.close();
+    }
+  });
+
+  it.fails("reconciles a positively orphaned building snapshot as failed on reopen", async () => {
+    const databasePath = path.join(dir, "orphaned-building.sqlite");
+    const store = openGraphStore(databasePath);
+    try {
+      await store.upsertSnapshot({ snapshot: snapshotState("83") });
+      ensureSqliteColumn(store.db, "snapshots", "publication_state", "TEXT");
+      ensureSqliteColumn(store.db, "snapshots", "owner_id", "TEXT");
+      ensureSqliteColumn(store.db, "snapshots", "owner_pid", "INTEGER");
+      ensureSqliteColumn(store.db, "snapshots", "owner_generation", "INTEGER");
+      ensureSqliteColumn(store.db, "snapshots", "heartbeat_at", "TEXT");
+      store.db.prepare(`
+        UPDATE snapshots
+        SET publication_state = 'building',
+            owner_id = 'dead-owner',
+            owner_pid = 999999999,
+            owner_generation = 4,
+            heartbeat_at = '2026-07-18T00:00:00.000Z'
+        WHERE id = ?
+      `).run(83);
+      expect(store.db.prepare(`
+        SELECT publication_state, owner_id, owner_pid
+        FROM snapshots
+        WHERE id = ?
+      `).get(83)).toEqual({
+        publication_state: "building",
+        owner_id: "dead-owner",
+        owner_pid: 999999999
+      });
+    } finally {
+      store.close();
+    }
+
+    const reopened = openGraphStore(databasePath);
+    try {
+      expect(reopened.validateSchema()).toBe(true);
+      const orphan = reopened.db.prepare(`
+        SELECT publication_state
+        FROM snapshots
+        WHERE id = ?
+      `).get(83) as { publication_state: string };
+      expect(orphan.publication_state).toBe("failed");
+      await expect(reopened.getSnapshot({
+        repo_root: "/tmp/repo",
+        snapshot_id: "83"
+      })).resolves.toBeNull();
+    } finally {
+      reopened.close();
+    }
+  });
+
+  it.fails("refuses a database marked with a newer schema version", () => {
+    const databasePath = path.join(dir, "future-schema.sqlite");
+    const store = openGraphStore(databasePath);
+    const futureVersion = SCHEMA_VERSION + 1;
+    try {
+      store.db.prepare(`
+        INSERT INTO schema_migrations(version) VALUES (?)
+      `).run(futureVersion);
+      expect(store.db.prepare(`
+        SELECT version FROM schema_migrations WHERE version = ?
+      `).get(futureVersion)).toEqual({ version: futureVersion });
+    } finally {
+      store.close();
+    }
+
+    let refusal: unknown;
+    try {
+      const reopened = openGraphStore(databasePath);
+      reopened.close();
+    } catch (error) {
+      refusal = error;
+    }
+
+    // The database and future marker setup pass. Only this exact compatibility
+    // refusal is expected to fail until the schema-version gate exists.
+    expect(refusal).toEqual(
+      new Error(
+        `Graph store schema version ${futureVersion} is newer than supported version ${SCHEMA_VERSION}.`
+      )
+    );
   });
 
   it("opens the graph database in WAL mode for concurrent readers and refresh writers", () => {
@@ -784,6 +1059,18 @@ function extractionBatch(input: {
 
 function countRows(db: import("better-sqlite3").Database, table: string): number {
   return (db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count;
+}
+
+function ensureSqliteColumn(
+  db: import("better-sqlite3").Database,
+  table: string,
+  column: string,
+  declaration: string
+): void {
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+  if (!columns.some((candidate) => candidate.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
+  }
 }
 
 async function holdExclusiveSqliteLock(

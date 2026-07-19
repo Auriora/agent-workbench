@@ -70,6 +70,14 @@ Each concurrency case SHALL assert an authoritative execution ID, snapshot ID,
 worker invocation count, and state history. Observing one final snapshot is not
 sufficient evidence that a duplicate writer did not start.
 
+Phase 1 centralizes the deliberately failing deadline, catch-up, and idle
+lifetime behavior in `tests/helpers/spec041-refresh-reproductions.ts`. This is a
+temporary contract factory, not an alternate runtime path. T002, T004, and T005
+must replace its returned reproductions with the corresponding production
+controller or lifetime policy and convert the associated `it.fails` cases to
+ordinary passing tests. Leaving the reproduction implementation in place is a
+blocking validation failure for those tasks.
+
 ### Publication And Crash Fixtures
 
 Pause replacement indexing after generation creation, catalog writes, graph
@@ -188,6 +196,23 @@ pnpm exec vitest run tests/mcp/integration-health-contract.test.ts tests/mcp/int
 | 2026-07-19 | Spec intake and repository architecture inspection | pending | Defines the plan; does not prove implementation. |
 | 2026-07-19 | Independent spec review and lifecycle readiness reconciliation | done | Made incomplete replacement publication explicit implementation work and separated complete planning traceability from pending implementation evidence. |
 | 2026-07-19 | MoE findings reconciliation | done | Resolved four blockers and sixteen additional findings, including D013 migration/rollback and parser-visible CP mapping, across requirements, design, bounded child tasks, verification, traceability, impact, and canonical context; this is planning/review evidence, not implementation proof. |
+| 2026-07-19 | Phase 1 T001 contract and reproduction receipt | done | `pnpm typecheck` passed; focused runtime/store/contracts reported 39 pass and 12 expected failures; focused daemon/source-entrypoint reported 19 pass and 4 expected failures; full `pnpm test` reported 80 files, 640 pass, and 16 expected failures. Independent re-review found no remaining blockers or advisories. |
+
+## Phase 1 Contract Receipt
+
+Phase 1 intentionally uses Vitest `it.fails` for production behavior that later
+phases must implement. The suite staying green proves that each guarded setup
+reaches its named missing-behavior assertion; it does not claim the behavior is
+implemented. T002, T003, T004, T005, T006, and T007 must convert the relevant
+expected failures to ordinary passing tests as their production seams land.
+
+| Command | Result | Contract evidence |
+| --- | --- | --- |
+| `pnpm typecheck` | passed | Provider-neutral publication, execution, deadline, generation, admission, ownership, activity, diagnostics, and structured-failure contracts compose without type errors. |
+| `pnpm exec vitest run tests/runtime/operations.test.ts tests/runtime/workspace-change-queue.test.ts tests/graph/store.test.ts tests/mcp/integration-health-contract.test.ts` | 39 passed; 12 expected failures | Locks deadline settlement, later-request retry admission, generation catch-up, publication selection, prior-schema migration, newer-schema refusal, orphan recovery, authoritative diagnostics, false-success trust, and safe failure messages. |
+| `pnpm exec vitest run tests/mcp/daemon-launch.test.ts tests/mcp/daemon-entrypoint-integration.test.ts` | 19 passed; 4 expected failures | Locks shared diagnostic identity, the real ordered non-startup deleted-path request, synthetic daemon health, and the disconnect/idle activity-lease decision. |
+| `pnpm test` | 80 files passed; 640 passed; 16 expected failures | Proves the contract-first fixtures introduce no unexpected repository regression while retaining all intended missing-production seams. |
+| Independent Phase 1 re-review | no blockers or advisories | Confirmed the true prior-schema fixture, supported-schema orphan seam, separate newer-schema refusal, closed safe-message vocabulary, production-backed second-client reproduction, and mandatory shared-factory replacement in T002/T004/T005. |
 
 ## Residual Risks
 

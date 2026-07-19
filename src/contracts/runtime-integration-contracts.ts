@@ -115,6 +115,240 @@ export const integrationSessionEvidenceSchema = z
   .strict();
 export type IntegrationSessionEvidence = z.infer<typeof integrationSessionEvidenceSchema>;
 
+export const refreshExecutionStateSchema = z.enum([
+  "idle",
+  "planned",
+  "running",
+  "complete",
+  "failed"
+]);
+export type RefreshExecutionState = z.infer<typeof refreshExecutionStateSchema>;
+
+export const snapshotPublicationStateSchema = z.enum([
+  "building",
+  "published",
+  "superseded",
+  "failed"
+]);
+export type SnapshotPublicationState = z.infer<typeof snapshotPublicationStateSchema>;
+
+export const authoritativeGraphFreshnessSchema = z.enum(["fresh", "stale", "cold"]);
+export type AuthoritativeGraphFreshness = z.infer<typeof authoritativeGraphFreshnessSchema>;
+
+export const invalidationGenerationSchema = z.number().int().nonnegative();
+export type InvalidationGeneration = z.infer<typeof invalidationGenerationSchema>;
+
+export const refreshDeadlineSchema = z
+  .object({
+    timeout_ms: z.number().finite().int().positive(),
+    deadline_at: z.string().datetime({ offset: true })
+  })
+  .strict();
+export type RefreshDeadline = z.infer<typeof refreshDeadlineSchema>;
+
+export const refreshFailureCodeSchema = z.enum([
+  "worker_timeout",
+  "worker_error",
+  "worker_exit_without_result",
+  "invalid_worker_result",
+  "store_failure",
+  "permission_failure",
+  "ownership_lost",
+  "orphaned_build",
+  "orphaned_pre_publication"
+]);
+export type RefreshFailureCode = z.infer<typeof refreshFailureCodeSchema>;
+
+export const refreshFailureCategorySchema = z.enum([
+  "worker",
+  "store",
+  "permission",
+  "ownership",
+  "publication"
+]);
+export type RefreshFailureCategory = z.infer<typeof refreshFailureCategorySchema>;
+
+export const refreshFailureMessageSchema = z.enum([
+  "Refresh worker deadline expired.",
+  "Refresh worker failed.",
+  "Refresh worker exited without a valid result.",
+  "Refresh worker returned an invalid result.",
+  "Refresh store operation failed.",
+  "Refresh operation was not permitted.",
+  "Repository refresh ownership was lost.",
+  "An orphaned snapshot build was recovered.",
+  "An unpublished legacy snapshot was recovered."
+]);
+export type RefreshFailureMessage = z.infer<typeof refreshFailureMessageSchema>;
+
+const refreshFailureCategoryByCode: Readonly<Record<RefreshFailureCode, RefreshFailureCategory>> = {
+  worker_timeout: "worker",
+  worker_error: "worker",
+  worker_exit_without_result: "worker",
+  invalid_worker_result: "worker",
+  store_failure: "store",
+  permission_failure: "permission",
+  ownership_lost: "ownership",
+  orphaned_build: "publication",
+  orphaned_pre_publication: "publication"
+};
+
+const refreshFailureMessageByCode: Readonly<Record<RefreshFailureCode, RefreshFailureMessage>> = {
+  worker_timeout: "Refresh worker deadline expired.",
+  worker_error: "Refresh worker failed.",
+  worker_exit_without_result: "Refresh worker exited without a valid result.",
+  invalid_worker_result: "Refresh worker returned an invalid result.",
+  store_failure: "Refresh store operation failed.",
+  permission_failure: "Refresh operation was not permitted.",
+  ownership_lost: "Repository refresh ownership was lost.",
+  orphaned_build: "An orphaned snapshot build was recovered.",
+  orphaned_pre_publication: "An unpublished legacy snapshot was recovered."
+};
+
+export const refreshFailureSchema = z
+  .object({
+    code: refreshFailureCodeSchema,
+    category: refreshFailureCategorySchema,
+    message: refreshFailureMessageSchema,
+    execution_id: z.string().min(1).max(200),
+    target_snapshot_id: z.string().min(1).max(200).optional(),
+    occurred_at: z.string().datetime({ offset: true })
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (refreshFailureCategoryByCode[value.code] !== value.category) {
+      context.addIssue({
+        code: "custom",
+        message: "Refresh failure category must match its stable failure code.",
+        path: ["category"]
+      });
+    }
+    if (refreshFailureMessageByCode[value.code] !== value.message) {
+      context.addIssue({
+        code: "custom",
+        message: "Refresh failure message must match its stable failure code.",
+        path: ["message"]
+      });
+    }
+  });
+export type RefreshFailure = z.infer<typeof refreshFailureSchema>;
+
+export const snapshotRefreshDiagnosticsReceiptSchema = z
+  .object({
+    repo_identity: z.string().min(1).max(512),
+    controller_generation: z.number().int().positive(),
+    diagnostic_revision: z.number().int().nonnegative(),
+    execution_id: z.string().min(1).max(200).optional(),
+    started_generation: invalidationGenerationSchema.optional(),
+    requested_generation: invalidationGenerationSchema.optional(),
+    target_snapshot_id: z.string().min(1).max(200).optional(),
+    visible_snapshot_id: z.string().min(1).max(200).optional(),
+    execution_state: refreshExecutionStateSchema,
+    publication_state: snapshotPublicationStateSchema.optional(),
+    graph_freshness: authoritativeGraphFreshnessSchema,
+    activity_lease_held: z.boolean(),
+    last_failure: refreshFailureSchema.optional()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    const issue = (message: string, path: string): void => {
+      context.addIssue({ code: "custom", message, path: [path] });
+    };
+    const hasExecutionIdentity = value.execution_id !== undefined;
+    const hasTargetIdentity = value.target_snapshot_id !== undefined;
+
+    if (value.started_generation !== undefined && value.requested_generation !== undefined &&
+        value.started_generation > value.requested_generation) {
+      issue("started_generation cannot exceed requested_generation.", "started_generation");
+    }
+    if (hasTargetIdentity !== (value.publication_state !== undefined)) {
+      issue(
+        "target_snapshot_id and publication_state must either both be present or both be absent.",
+        "publication_state"
+      );
+    }
+
+    if (value.execution_state === "idle") {
+      if (hasExecutionIdentity || value.started_generation !== undefined ||
+          value.requested_generation !== undefined || hasTargetIdentity || value.activity_lease_held) {
+        issue("Idle diagnostics cannot identify active execution state or hold an activity lease.", "execution_state");
+      }
+      return;
+    }
+
+    if (!hasExecutionIdentity || value.started_generation === undefined ||
+        value.requested_generation === undefined) {
+      issue(
+        "Non-idle diagnostics require execution_id, started_generation, and requested_generation.",
+        "execution_id"
+      );
+    }
+
+    if (value.execution_state === "planned") {
+      if (!value.activity_lease_held) {
+        issue("Planned diagnostics must hold the activity lease.", "activity_lease_held");
+      }
+      if (value.publication_state !== undefined && value.publication_state !== "building") {
+        issue("A planned target may only be building.", "publication_state");
+      }
+      if (hasTargetIdentity && value.target_snapshot_id === value.visible_snapshot_id) {
+        issue("A planned target cannot already be the visible snapshot.", "target_snapshot_id");
+      }
+      return;
+    }
+
+    if (value.execution_state === "running") {
+      if (!value.activity_lease_held) {
+        issue("Running diagnostics must hold the activity lease.", "activity_lease_held");
+      }
+      if (value.started_generation === undefined || !hasTargetIdentity ||
+          (value.publication_state !== "building" && value.publication_state !== "superseded")) {
+        issue(
+          "Running diagnostics require a started generation and a building or superseded target.",
+          "publication_state"
+        );
+      }
+      if (value.target_snapshot_id === value.visible_snapshot_id) {
+        issue("A running target cannot be the visible snapshot.", "target_snapshot_id");
+      }
+      return;
+    }
+
+    if (value.activity_lease_held) {
+      issue("Terminal diagnostics cannot hold the activity lease.", "activity_lease_held");
+    }
+
+    if (value.execution_state === "complete") {
+      if (value.started_generation === undefined || value.publication_state !== "published" ||
+          !hasTargetIdentity || value.visible_snapshot_id !== value.target_snapshot_id ||
+          value.started_generation !== value.requested_generation || value.last_failure !== undefined) {
+        issue(
+          "Complete diagnostics require matching published target/visible identities, a completed requested generation, and no failure.",
+          "execution_state"
+        );
+      }
+      return;
+    }
+
+    if (value.last_failure === undefined) {
+      issue("Failed diagnostics require last_failure.", "last_failure");
+    } else if (value.execution_id !== value.last_failure.execution_id) {
+      issue("Failed diagnostics and last_failure must identify the same execution.", "last_failure");
+    } else if (value.target_snapshot_id !== value.last_failure.target_snapshot_id) {
+      issue("Failed diagnostics and last_failure must identify the same target.", "last_failure");
+    }
+    if (value.publication_state !== undefined &&
+        value.publication_state !== "failed" && value.publication_state !== "superseded") {
+      issue("A failed target must be failed or superseded.", "publication_state");
+    }
+    if (hasTargetIdentity && value.target_snapshot_id === value.visible_snapshot_id) {
+      issue("A failed target cannot be the visible snapshot.", "target_snapshot_id");
+    }
+  });
+export type SnapshotRefreshDiagnosticsReceipt = z.infer<
+  typeof snapshotRefreshDiagnosticsReceiptSchema
+>;
+
 export const integrationDaemonHealthSchema = z
   .object({
     pid: z.number().int().positive(),

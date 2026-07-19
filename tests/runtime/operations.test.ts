@@ -3,13 +3,19 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { describe, expect, it } from "vitest";
-import type { ClockPort } from "../../src/ports/index.js";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type {
+  ClockPort,
+  DaemonRefreshActivityTransition,
+  RefreshActivityLease,
+  SnapshotRefreshAdmission
+} from "../../src/ports/index.js";
 import type { FileContentHashBinding } from "../../src/domain/models/runtime.js";
 import {
   InMemoryCancellationAdapter,
   InMemoryRuntimeOperationsAdapter
 } from "../../src/infrastructure/runtime/index.js";
+import { createPhase1DeadlineControllerReproduction } from "../helpers/spec041-refresh-reproductions.js";
 
 class MutableClock implements ClockPort {
   private timestamp: number;
@@ -36,6 +42,308 @@ class MutableClock implements ClockPort {
 }
 
 describe("runtime operation adapters", () => {
+  it("locks activity-lease settlement and blocked ownership admission shapes", () => {
+    const heldLease = {
+      execution_id: "exec-1",
+      controller_generation: 2,
+      acquired_at: "2026-07-19T12:00:00.000Z",
+      state: "held"
+    } satisfies RefreshActivityLease;
+    const releasedLease = {
+      ...heldLease,
+      state: "released",
+      released_at: "2026-07-19T12:00:01.000Z"
+    } satisfies RefreshActivityLease;
+    const activeOwner = {
+      repo_root: "/repo",
+      runtime_identity: "runtime-1",
+      schema_version: 8,
+      owner_id: "daemon-1",
+      owner_pid: 1234,
+      owner_generation: 2,
+      heartbeat_at: "2026-07-19T12:00:00.000Z",
+      state: "active"
+    } as const;
+    const admissions = [
+      {
+        outcome: "accepted",
+        reused: false,
+        execution_id: "exec-1",
+        target_snapshot_id: "snap-1",
+        state: "planned",
+        started_generation: 1,
+        requested_generation: 1
+      },
+      {
+        outcome: "reused",
+        reused: true,
+        execution_id: "exec-1",
+        target_snapshot_id: "snap-1",
+        state: "planned",
+        started_generation: 1,
+        requested_generation: 2
+      },
+      {
+        outcome: "reused",
+        reused: true,
+        execution_id: "exec-1",
+        target_snapshot_id: "snap-1",
+        state: "running",
+        started_generation: 1,
+        requested_generation: 2
+      },
+      {
+        outcome: "blocked",
+        reused: false,
+        state: "idle",
+        reason: "owner_active",
+        message: "A healthy daemon already owns repository refresh execution.",
+        owner: activeOwner
+      },
+      {
+        outcome: "blocked",
+        reused: false,
+        state: "idle",
+        reason: "ownership_ambiguous",
+        message: "Repository refresh ownership cannot be established safely.",
+        owner: { ...activeOwner, state: "ambiguous" }
+      }
+    ] satisfies SnapshotRefreshAdmission[];
+    const transitions = [
+      {
+        execution_id: "exec-1",
+        controller_generation: 2,
+        state: "active",
+        execution_state: "planned",
+        lease: heldLease
+      },
+      {
+        execution_id: "exec-1",
+        controller_generation: 2,
+        state: "active",
+        execution_state: "running",
+        lease: heldLease
+      },
+      {
+        execution_id: "exec-1",
+        controller_generation: 2,
+        state: "terminal",
+        execution_state: "complete",
+        lease: releasedLease
+      },
+      {
+        execution_id: "exec-1",
+        controller_generation: 2,
+        state: "terminal",
+        execution_state: "failed",
+        lease: releasedLease,
+        failure: {
+          code: "worker_error",
+          category: "worker",
+          message: "Refresh worker failed.",
+          execution_id: "exec-1",
+          target_snapshot_id: "snap-1",
+          occurred_at: "2026-07-19T12:00:01.000Z"
+        }
+      }
+    ] satisfies DaemonRefreshActivityTransition[];
+
+    expect(heldLease).not.toHaveProperty("released_at");
+    expect(releasedLease).toMatchObject({ state: "released" });
+    expect(admissions.map((admission) => admission.outcome)).toEqual([
+      "accepted",
+      "reused",
+      "reused",
+      "blocked",
+      "blocked"
+    ]);
+    expect(admissions[3]).toMatchObject({
+      outcome: "blocked",
+      reused: false,
+      state: "idle",
+      reason: "owner_active"
+    });
+    expect(admissions[3]).not.toHaveProperty("execution_id");
+    expect(transitions.map((transition) => [transition.state, transition.execution_state])).toEqual([
+      ["active", "planned"],
+      ["active", "running"],
+      ["terminal", "complete"],
+      ["terminal", "failed"]
+    ]);
+    expectTypeOf<{
+      outcome: "accepted";
+      reused: false;
+      execution_id: "exec";
+      state: "running";
+      started_generation: 1;
+      requested_generation: 1;
+    }>().not.toMatchTypeOf<SnapshotRefreshAdmission>();
+    expectTypeOf<{
+      outcome: "blocked";
+      reused: false;
+      state: "idle";
+      reason: "owner_active";
+      message: "blocked";
+      owner: {
+        repo_root: "/repo";
+        runtime_identity: "runtime-1";
+        schema_version: 8;
+        owner_id: "daemon-1";
+        owner_pid: 1234;
+        owner_generation: 2;
+        heartbeat_at: "2026-07-19T12:00:00.000Z";
+        state: "ambiguous";
+      };
+    }>().not.toMatchTypeOf<SnapshotRefreshAdmission>();
+    expectTypeOf<{
+      execution_id: "exec";
+      controller_generation: 1;
+      acquired_at: "2026-07-19T12:00:00.000Z";
+      state: "held";
+      released_at: "2026-07-19T12:00:01.000Z";
+    }>().not.toMatchTypeOf<RefreshActivityLease>();
+    expectTypeOf<{
+      execution_id: "exec";
+      controller_generation: 1;
+      state: "active";
+      execution_state: "running";
+      lease: typeof releasedLease;
+    }>().not.toMatchTypeOf<DaemonRefreshActivityTransition>();
+    expectTypeOf<{
+      execution_id: "exec";
+      controller_generation: 1;
+      state: "terminal";
+      execution_state: "complete";
+      lease: typeof heldLease;
+    }>().not.toMatchTypeOf<DaemonRefreshActivityTransition>();
+    expectTypeOf<{
+      execution_id: "exec";
+      controller_generation: 1;
+      state: "terminal";
+      execution_state: "complete";
+      lease: typeof releasedLease;
+      failure: (typeof transitions)[3]["failure"];
+    }>().not.toMatchTypeOf<DaemonRefreshActivityTransition>();
+    expectTypeOf<{
+      execution_id: "exec";
+      controller_generation: 1;
+      state: "terminal";
+      execution_state: "failed";
+      lease: typeof releasedLease;
+    }>().not.toMatchTypeOf<DaemonRefreshActivityTransition>();
+  });
+
+  it.fails("does not replace an admitted execution when a forced request races active work", async () => {
+    const clock = new MutableClock("2026-05-31T12:00:00.000Z");
+    const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
+
+    const [ordinaryRequest, legacyForcedRequest] = await Promise.all([
+      runtime.requestWarmup({ repo_root: "/repo", snapshot_id: "snap-2" }),
+      runtime.requestWarmup({ repo_root: "/repo", snapshot_id: "snap-3", force: true })
+    ]);
+
+    // Spec 041 removes force as a path around linearized controller admission.
+    // This expected failure reproduces the current second-execution seam.
+    expect(legacyForcedRequest).toBe(ordinaryRequest);
+    await expect(runtime.getState({ repo_root: "/repo" })).resolves.toMatchObject({
+      execution_id: ordinaryRequest,
+      state: "planned"
+    });
+  });
+
+  it.fails("fails active work when the finite controller deadline expires", async () => {
+    const clock = new MutableClock("2026-05-31T12:00:00.000Z");
+    const controller = createPhase1DeadlineControllerReproduction(clock);
+    controller.start();
+    await controller.workerStarted.promise;
+    expect(controller.receipt()).toMatchObject({
+      execution_id: "exec-deadline",
+      state: "running",
+      activity_lease_held: true,
+      worker_invocations: 1,
+      terminate_invocations: 0
+    });
+
+    clock.advance(30_001);
+    controller.fireDeadlineBarrier();
+
+    // Worker admission and deadline barriers pass. This final receipt alone
+    // fails because the local pre-controller harness ignores deadline expiry.
+    expect(controller.receipt()).toMatchObject({
+      execution_id: "exec-deadline",
+      state: "failed",
+      activity_lease_held: false,
+      worker_invocations: 1,
+      terminate_invocations: 1,
+      failure_code: "worker_timeout"
+    });
+  });
+
+  it("admits exactly one successor only after a later request observes failed work", async () => {
+    const clock = new MutableClock("2026-05-31T12:00:00.000Z");
+    const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
+    const failedExecution = await runtime.requestWarmup({
+      repo_root: "/repo",
+      snapshot_id: "snap-failed"
+    });
+    await runtime.completeWarmup({
+      execution_id: failedExecution,
+      success: false,
+      reason: "safe failure"
+    });
+
+    // Reads and clock progress are explicit non-admission barriers.
+    clock.advance(60_000);
+    await expect(runtime.getState({ repo_root: "/repo" })).resolves.toMatchObject({
+      execution_id: failedExecution,
+      state: "failed"
+    });
+
+    const [firstLaterRequest, concurrentLaterRequest] = await Promise.all([
+      runtime.requestWarmup({ repo_root: "/repo", snapshot_id: "snap-successor" }),
+      runtime.requestWarmup({ repo_root: "/repo", snapshot_id: "snap-successor" })
+    ]);
+    expect(firstLaterRequest).not.toBe(failedExecution);
+    expect(concurrentLaterRequest).toBe(firstLaterRequest);
+  });
+
+  it.fails("shares a non-startup request with the daemon owner instead of stranding it locally", async () => {
+    const clock = new MutableClock("2026-05-31T12:00:00.000Z");
+    const startupConnection = new InMemoryRuntimeOperationsAdapter({ clock });
+    const laterConnection = new InMemoryRuntimeOperationsAdapter({ clock });
+
+    const executionId = await laterConnection.requestWarmup({
+      repo_root: "/repo",
+      snapshot_id: "snap-stale"
+    });
+
+    // This models the confirmed root cause without timing: the later
+    // connection owns planned state that the startup executor cannot observe.
+    await expect(startupConnection.getState({ repo_root: "/repo" })).resolves.toMatchObject({
+      execution_id: executionId,
+      state: "planned"
+    });
+  });
+
+  it.fails("bounds and redacts retained warm-up failure evidence", async () => {
+    const clock = new MutableClock("2026-05-31T12:00:00.000Z");
+    const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
+    const executionId = await runtime.requestWarmup({
+      repo_root: "/repo",
+      snapshot_id: "snap-failure"
+    });
+    const sentinel = "/private/workspace/index.sqlite API_TOKEN=secret SELECT * FROM snapshots\n    at worker";
+    await runtime.completeWarmup({
+      execution_id: executionId,
+      success: false,
+      reason: sentinel.repeat(20)
+    });
+
+    const failure = await runtime.getState({ repo_root: "/repo" });
+    expect(Buffer.byteLength(failure?.reason ?? "", "utf8")).toBeLessThanOrEqual(512);
+    expect(failure?.reason).not.toMatch(/private\/workspace|API_TOKEN|SELECT \*|at worker/);
+  });
+
   it("stores cache entries with TTL and explicit snapshot/file invalidation", async () => {
     const clock = new MutableClock("2026-05-31T12:00:00.000Z");
     const runtime = new InMemoryRuntimeOperationsAdapter({ clock });

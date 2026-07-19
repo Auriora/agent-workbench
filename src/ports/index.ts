@@ -50,8 +50,16 @@ import type {
   IndexCoverage,
   IntegrationArtifact,
   IntegrationProfile,
-  MarkdownQualityFinding
+  InvalidationGeneration,
+  MarkdownQualityFinding,
+  RefreshDeadline,
+  RefreshExecutionState,
+  RefreshFailure,
+  SnapshotPublicationState,
+  SnapshotRefreshDiagnosticsReceipt
 } from "../contracts/index.js";
+
+export type { SnapshotPublicationState } from "../contracts/index.js";
 
 export interface GraphQueryPort {
   getNode(input: { snapshot_id: string; node_id: string }): Promise<GraphNode | null>;
@@ -545,6 +553,197 @@ export interface WarmupCoordinatorPort {
   requestWarmup(input: { repo_root: string; snapshot_id: string; force?: boolean }): Promise<string>;
   markOwner(input: { execution_id: string; owner_id: string }): Promise<void>;
   completeWarmup(input: { execution_id: string; success: boolean; reason?: string }): Promise<void>;
+}
+
+export type RefreshWorkerResult = {
+  outcome: "complete";
+  execution_id: string;
+  target_snapshot_id: string;
+  completed_generation: InvalidationGeneration;
+};
+
+export interface RefreshExecutorPort {
+  run(input: {
+    repo_root: string;
+    execution_id: string;
+    target_snapshot_id: string;
+    generation: InvalidationGeneration;
+    deadline: RefreshDeadline;
+  }): Promise<RefreshWorkerResult>;
+  terminate(input: {
+    execution_id: string;
+    reason: "deadline" | "controller_shutdown";
+  }): Promise<void>;
+}
+
+type RefreshActivityLeaseBase = {
+  execution_id: string;
+  controller_generation: number;
+  acquired_at: string;
+};
+
+export type RefreshActivityLease = RefreshActivityLeaseBase &
+  (
+    | {
+        state: "held";
+        released_at?: never;
+      }
+    | {
+        state: "released";
+        released_at: string;
+      }
+  );
+
+export type SnapshotPublicationRecord = {
+  repo_root: string;
+  snapshot_id: string;
+  controller_generation: number;
+  invalidation_generation: InvalidationGeneration;
+  state: SnapshotPublicationState;
+  updated_at: string;
+};
+
+export type PublishedSnapshotRecord = SnapshotPublicationRecord & {
+  state: "published";
+};
+
+export type SnapshotPublicationTransition = {
+  repo_root: string;
+  snapshot_id: string;
+  from: "building";
+  to: "published" | "superseded" | "failed";
+  updated_at: string;
+};
+
+export type SnapshotPublicationSelection =
+  | {
+      status: "selected";
+      snapshot: SnapshotState;
+      publication: PublishedSnapshotRecord;
+    }
+  | {
+      status: "blocked";
+      snapshot_id: string;
+      publication_state: Exclude<SnapshotPublicationState, "published">;
+      reason: "snapshot_unpublished";
+      message: "Snapshot is not published.";
+    }
+  | {
+      status: "missing";
+      snapshot_id?: string;
+      reason: "snapshot_not_found" | "no_published_snapshot";
+    };
+
+export interface SnapshotPublicationPort {
+  createBuild(input: {
+    repo_root: string;
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: InvalidationGeneration;
+    created_at: string;
+  }): Promise<SnapshotPublicationRecord & { state: "building" }>;
+  transitionBuild<TState extends SnapshotPublicationTransition["to"]>(
+    input: SnapshotPublicationTransition & { to: TState }
+  ): Promise<SnapshotPublicationRecord & { state: TState }>;
+  getLatestPublished(input: {
+    repo_root: string;
+  }): Promise<Exclude<SnapshotPublicationSelection, { status: "blocked" }>>;
+  readExplicit(input: {
+    repo_root: string;
+    snapshot_id: string;
+  }): Promise<SnapshotPublicationSelection>;
+}
+
+export type RepositoryOwnershipLease = {
+  repo_root: string;
+  runtime_identity: string;
+  schema_version: number;
+  owner_id: string;
+  owner_pid: number;
+  owner_generation: number;
+  heartbeat_at: string;
+  state: "active" | "dead" | "ambiguous";
+};
+
+export type SnapshotRefreshRequest = {
+  repo_root: string;
+  reason: "startup" | "stale_first_read" | "watcher_invalidation";
+  source: string;
+  invalidation_generation: InvalidationGeneration;
+};
+
+type SnapshotRefreshExecutionAdmission = {
+  execution_id: string;
+  target_snapshot_id?: string;
+  state: Extract<RefreshExecutionState, "planned" | "running">;
+  started_generation: InvalidationGeneration;
+  requested_generation: InvalidationGeneration;
+};
+
+export type SnapshotRefreshAdmission =
+  | (SnapshotRefreshExecutionAdmission & {
+      outcome: "accepted";
+      reused: false;
+      state: "planned";
+    })
+  | (SnapshotRefreshExecutionAdmission & {
+      outcome: "reused";
+      reused: true;
+    })
+  | {
+      outcome: "blocked";
+      reused: false;
+      state: "idle";
+      reason: "owner_active";
+      message: string;
+      owner: RepositoryOwnershipLease & { state: "active" };
+    }
+  | {
+      outcome: "blocked";
+      reused: false;
+      state: "idle";
+      reason: "ownership_ambiguous";
+      message: string;
+      owner: RepositoryOwnershipLease & { state: "ambiguous" };
+    };
+
+export interface SnapshotRefreshPort {
+  request(input: SnapshotRefreshRequest): Promise<SnapshotRefreshAdmission>;
+}
+
+export interface SnapshotRefreshDiagnosticsPort {
+  getDiagnostics(input: { repo_root: string }): Promise<SnapshotRefreshDiagnosticsReceipt>;
+}
+
+type DaemonRefreshActivityTransitionBase = {
+  execution_id: string;
+  controller_generation: number;
+};
+
+export type DaemonRefreshActivityTransition = DaemonRefreshActivityTransitionBase &
+  (
+    | {
+        state: "active";
+        execution_state: "planned" | "running";
+        lease: RefreshActivityLease & { state: "held" };
+        failure?: never;
+      }
+    | {
+        state: "terminal";
+        execution_state: "complete";
+        lease: RefreshActivityLease & { state: "released" };
+        failure?: never;
+      }
+    | {
+        state: "terminal";
+        execution_state: "failed";
+        lease: RefreshActivityLease & { state: "released" };
+        failure: RefreshFailure;
+      }
+  );
+
+export interface DaemonRefreshActivityPort {
+  onTransition(listener: (transition: DaemonRefreshActivityTransition) => void): () => void;
 }
 
 export interface WorkQueuePort {

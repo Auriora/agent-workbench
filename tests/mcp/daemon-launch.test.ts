@@ -18,6 +18,7 @@ import {
   type StartedAgentWorkbenchDaemon
 } from "../../src/mcp/daemon.js";
 import { describe, expect, it } from "vitest";
+import { createPhase1DaemonLifetimeReproduction } from "../helpers/spec041-refresh-reproductions.js";
 
 describe("Agent Workbench daemon launcher", () => {
   it("starts the daemon for the first client and reuses it for the same repo", async () => {
@@ -579,6 +580,88 @@ describe("Agent Workbench daemon launcher", () => {
       await closeDaemons(daemons);
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
+  });
+
+  it.fails("reports daemon-owned diagnostic identity instead of connection-local synthetic state", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-authoritative-health-");
+    const daemons: StartedAgentWorkbenchDaemon[] = [];
+
+    try {
+      const socket = await connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 2000,
+        spawnDaemon: () => {
+          void startAgentWorkbenchDaemon({
+            repoRoot,
+            idleGraceMs: 100,
+            serverOptions: { startGraphWarmup: false }
+          }).then((daemon) => daemons.push(daemon));
+          return fakeChildProcess();
+        }
+      });
+      const session = createSocketSession(socket);
+      await initializeSocketSession(session, 1, "agent-workbench-test");
+
+      const health = await session.call({
+        jsonrpc: "2.0",
+        id: 2,
+        method: "resources/read",
+        params: { uri: "integration:///health/agent-workbench" }
+      });
+      const envelope = JSON.parse(health.result.contents[0].text) as {
+        data: {
+          daemon?: {
+            controller_generation?: number;
+            diagnostic_revision?: number;
+            warmup_state?: string;
+          };
+        };
+      };
+
+      // This fails at the current synthetic daemon-health seam: neither
+      // controller generation nor diagnostic revision is published yet.
+      expect(envelope.data.daemon).toMatchObject({
+        controller_generation: expect.any(Number),
+        diagnostic_revision: expect.any(Number),
+        warmup_state: "idle"
+      });
+      socket.destroy();
+    } finally {
+      await closeDaemons(daemons);
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.fails("keeps the daemon alive when requester disconnect races the idle timer", async () => {
+    const lifetime = createPhase1DaemonLifetimeReproduction();
+    lifetime.connectRequester();
+    const worker = lifetime.startRefresh();
+    await lifetime.workerStarted.promise;
+    expect(lifetime.receipt()).toMatchObject({
+      connected_clients: 1,
+      closed: false,
+      activity_lease: { state: "held", execution_id: "exec-1" }
+    });
+
+    lifetime.disconnectRequester();
+    expect(lifetime.receipt()).toMatchObject({
+      connected_clients: 0,
+      closed: false,
+      activity_lease: { state: "held" }
+    });
+    lifetime.fireIdleDecision();
+
+    // All admission/disconnect barriers pass. The local harness reproduces the
+    // current daemon's client-count-only decision, so only this lifetime
+    // assertion fails until idle shutdown also checks the controller lease.
+    expect(lifetime.receipt()).toMatchObject({
+      connected_clients: 0,
+      closed: false,
+      activity_lease: { state: "held" }
+    });
+    lifetime.releaseWorker.resolve(undefined);
+    await worker;
   });
 });
 
