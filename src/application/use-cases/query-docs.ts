@@ -154,9 +154,32 @@ export async function searchDocs(input: {
   request: DocsSearchRequest;
   docs_index: DocsIndexPort;
   snapshot_validity?: SnapshotValidityReceipt;
+  selected_snapshot_id?: string | null;
   default_repo_root: string;
 }): Promise<DocsSearchUseCaseResult> {
   const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
+  if (input.selected_snapshot_id === null) {
+    return {
+      search: {
+        repo_root: repoRoot,
+        query: input.request.query,
+        status: "blocked",
+        hits: [],
+        warnings: [{ reason: "missing", message: "No docs index snapshot is available." }],
+        truncated: false,
+        result_count: 0,
+        result_count_basis: "page",
+        next_actions: capNextActions([])
+      },
+      meta: docsSearchMeta({
+        repoRoot,
+        freshness: "unknown",
+        status: "blocked",
+        truncated: false,
+        blocked: true
+      })
+    };
+  }
   if (input.snapshot_validity !== undefined && input.snapshot_validity.state !== "valid") {
     const stale = input.snapshot_validity.state === "stale";
     const message = input.snapshot_validity.reason ?? "Snapshot path validity is incomplete.";
@@ -187,7 +210,7 @@ export async function searchDocs(input: {
   }
   const result = await input.docs_index.search({
     repo_root: repoRoot,
-    snapshot_id: input.snapshot_validity?.snapshot_id,
+    snapshot_id: input.selected_snapshot_id ?? input.snapshot_validity?.snapshot_id,
     scope_path: input.request.scope_path,
     query: input.request.query,
     max_results: input.request.max_results,

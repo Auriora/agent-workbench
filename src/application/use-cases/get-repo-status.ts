@@ -131,14 +131,17 @@ export async function getSnapshotRepoStatus(input: {
   watcher?: WatcherFreshnessState;
   snapshot_validity?: SnapshotValidityReceipt;
   snapshot_id?: string;
+  selected_snapshot_id?: string | null;
   indexed_roots?: readonly string[];
   skipped_roots?: readonly string[];
   max_files?: number;
 }): Promise<GetRepoStatusResult> {
-  const snapshot = await input.snapshots.getSnapshot({
-    repo_root: input.repo_root,
-    snapshot_id: input.snapshot_id
-  });
+  const snapshot = input.selected_snapshot_id === null
+    ? null
+    : await input.snapshots.getSnapshot({
+      repo_root: input.repo_root,
+      snapshot_id: input.selected_snapshot_id ?? input.snapshot_id
+    });
   const warmup = input.warmups
     ? await input.warmups.getState({ repo_root: input.repo_root })
     : null;

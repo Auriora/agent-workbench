@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import type {
   CheckMarkdownDocumentRequest,
   CheckMarkdownSetRequest,
@@ -37,7 +40,12 @@ import { docsScopeTool } from "../../src/interface-adapters/mcp/registries/tools
 import { docsSearchTool } from "../../src/interface-adapters/mcp/registries/tools/docs-search.js";
 import { docsCurrentForTaskTool } from "../../src/interface-adapters/mcp/registries/tools/docs-current-for-task.js";
 import type { DocsSessionScopeState } from "../../src/interface-adapters/mcp/registries/docs-session-scope.js";
+import { FilesystemSnapshotPathValidatorAdapter } from "../../src/infrastructure/filesystem/index.js";
+import { openGraphStore, SCHEMA_VERSION, SqliteGraphStoreAdapter } from "../../src/infrastructure/sqlite/index.js";
+import { createAgentWorkbenchServer, graphStorePath } from "../../src/server.js";
 import {
+  getRegisteredTool,
+  parseMcpTextContent,
   registerMcpResource,
   registerMcpTool
 } from "../helpers/mcp-harness.js";
@@ -137,6 +145,91 @@ describe("docs MCP resources", () => {
 });
 
 describe("docs MCP tools", () => {
+  it("keeps docs_search cold when a first snapshot appears after selection", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-docs-cold-selection-"));
+    const store = openGraphStore(graphStorePath(repoRoot));
+    try {
+      await seedDocsSnapshot(store, repoRoot, "2000", "docs/guide.md", "Warm Guide", "warm searchable guide");
+    } finally {
+      store.close();
+    }
+
+    const originalGetSnapshot = SqliteGraphStoreAdapter.prototype.getSnapshot;
+    let selectionRead = true;
+    const snapshotSpy = vi
+      .spyOn(SqliteGraphStoreAdapter.prototype, "getSnapshot")
+      .mockImplementation(async function (this: SqliteGraphStoreAdapter, input) {
+        if (selectionRead && input.snapshot_id === undefined) {
+          selectionRead = false;
+          return null;
+        }
+        return originalGetSnapshot.call(this, input);
+      });
+
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const result = parseMcpTextContent<{
+        data: DocsSearchUseCaseResult["search"];
+        meta: DocsSearchUseCaseResult["meta"];
+      }>(await getRegisteredTool(server, "docs_search").handler({ query: "warm" }));
+
+      expect(result.data).toMatchObject({ status: "blocked", hits: [], result_count: 0 });
+      expect(result.meta).toMatchObject({ freshness: "unknown", verification_status: "blocked" });
+    } finally {
+      snapshotSpy.mockRestore();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("pins docs_search to the snapshot selected for validity", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-docs-snapshot-pin-"));
+    const docPath = path.join(repoRoot, "docs", "guide.md");
+    fs.mkdirSync(path.dirname(docPath), { recursive: true });
+    fs.writeFileSync(docPath, "# Alpha Guide\n\nalpha selection evidence\n");
+    const databasePath = graphStorePath(repoRoot);
+    const store = openGraphStore(databasePath);
+    try {
+      await seedDocsSnapshot(store, repoRoot, "1000", "docs/guide.md", "Alpha Guide", "alpha selection evidence");
+    } finally {
+      store.close();
+    }
+
+    const originalValidate = FilesystemSnapshotPathValidatorAdapter.prototype.validatePaths;
+    const validateSpy = vi
+      .spyOn(FilesystemSnapshotPathValidatorAdapter.prototype, "validatePaths")
+      .mockImplementation(async function (this: FilesystemSnapshotPathValidatorAdapter, input) {
+        const outcome = await originalValidate.call(this, input);
+        const concurrent = openGraphStore(databasePath);
+        try {
+          await seedDocsSnapshot(
+            concurrent,
+            repoRoot,
+            "2000",
+            "docs/new-guide.md",
+            "Beta Guide",
+            "beta replacement evidence"
+          );
+        } finally {
+          concurrent.close();
+        }
+        return outcome;
+      });
+
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const result = parseMcpTextContent<{
+        data: DocsSearchUseCaseResult["search"];
+      }>(await getRegisteredTool(server, "docs_search").handler({ query: "selection" }));
+
+      expect(result.data.hits).toEqual([
+        expect.objectContaining({ path: "docs/guide.md", title: "Alpha Guide" })
+      ]);
+    } finally {
+      validateSpy.mockRestore();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("uses the injected docs_search provider with default repo root", async () => {
     let parsedRequest: DocsSearchRequest | undefined;
     const registered = registerTool(docsSearchTool, {
@@ -729,6 +822,44 @@ function guideDoc() {
     evidence_kinds: ["docs" as const],
     direct_read_caveat: "Docs search is routing evidence; use docs_read_section for precise claims."
   };
+}
+
+async function seedDocsSnapshot(
+  store: ReturnType<typeof openGraphStore>,
+  repoRoot: string,
+  snapshotId: string,
+  docPath: string,
+  title: string,
+  selectedText: string
+): Promise<void> {
+  await store.upsertSnapshot({
+    snapshot: {
+      id: snapshotId,
+      repo_root: repoRoot,
+      workspace_root: repoRoot,
+      repo_identity: repoRoot,
+      config_identity: "default",
+      schema_version: SCHEMA_VERSION,
+      freshness: "fresh",
+      owner_state: "owner",
+      created_at: "2026-07-19T12:00:00.000Z",
+      updated_at: "2026-07-19T12:00:00.000Z"
+    }
+  });
+  await store.replaceSnapshotDocs({
+    snapshot_id: snapshotId,
+    repo_root: repoRoot,
+    documents: [{
+      path: docPath,
+      title,
+      headings: [],
+      selected_text: selectedText,
+      content_hash: `sha256:${snapshotId}`,
+      byte_count: Buffer.byteLength(selectedText, "utf8"),
+      indexed_at: "2026-07-19T12:00:00.000Z",
+      truncated: false
+    }]
+  });
 }
 
 function meta(

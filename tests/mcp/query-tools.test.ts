@@ -3,7 +3,10 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { describe, expect, it, vi } from "vitest";
 import type {
   SymbolSearchRequest
 } from "../../src/contracts/index.js";
@@ -14,13 +17,218 @@ import { findReferencesTool } from "../../src/interface-adapters/mcp/registries/
 import { impactTool } from "../../src/interface-adapters/mcp/registries/tools/impact.js";
 import { symbolSearchTool } from "../../src/interface-adapters/mcp/registries/tools/symbol-search.js";
 import { createRootAuthorityPolicy } from "../../src/interface-adapters/mcp/registries/root-authority.js";
-import { createAgentWorkbenchServer } from "../../src/server.js";
+import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
+import { FilesystemSnapshotPathValidatorAdapter } from "../../src/infrastructure/filesystem/index.js";
+import { InMemoryRuntimeOperationsAdapter } from "../../src/infrastructure/runtime/index.js";
+import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
+import { createAgentWorkbenchServer, graphStorePath } from "../../src/server.js";
 import {
+  getRegisteredTool,
+  parseMcpTextContent,
   registerMcpTool as registerTool,
   registeredToolNames
 } from "../helpers/mcp-harness.js";
 
 describe("graph query MCP tools", () => {
+  it.each([
+    { tool: "find_references", request: { symbol: "target" } },
+    { tool: "impact", request: { node_id: "missing-node" } }
+  ])("pins $tool validity and graph work to one snapshot per call", async ({ tool, request }) => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-graph-snapshot-pin-"));
+    const sourcePath = path.join(repoRoot, "target.ts");
+    fs.writeFileSync(sourcePath, "export const target = true;\n");
+    const databasePath = graphStorePath(repoRoot);
+    const store = openGraphStore(databasePath);
+    try {
+      await store.upsertSnapshot({ snapshot: testSnapshot("1000", repoRoot) });
+      await store.upsertEntry({
+        snapshot_id: "1000",
+        entry: buildFileCatalogEntry({
+          file_identity: {
+            path: "target.ts",
+            language: "typescript",
+            content_hash: "sha256:before",
+            size_bytes: fs.statSync(sourcePath).size,
+            mtime_ms: fs.statSync(sourcePath).mtimeMs
+          }
+        })
+      });
+    } finally {
+      store.close();
+    }
+    fs.rmSync(sourcePath);
+
+    const originalRequestWarmup = InMemoryRuntimeOperationsAdapter.prototype.requestWarmup;
+    const warmupSpy = vi
+      .spyOn(InMemoryRuntimeOperationsAdapter.prototype, "requestWarmup")
+      .mockImplementation(async function (this: InMemoryRuntimeOperationsAdapter, input) {
+        const executionId = await originalRequestWarmup.call(this, input);
+        const concurrent = openGraphStore(databasePath);
+        try {
+          await concurrent.upsertSnapshot({ snapshot: testSnapshot("2000", repoRoot) });
+        } finally {
+          concurrent.close();
+        }
+        return executionId;
+      });
+
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const result = parseMcpTextContent<{
+        data: { snapshot_id: string };
+        meta: { freshness: string; verification_status: string; caveats?: Array<{ kind: string }> };
+      }>(await getRegisteredTool(server, tool).handler(request));
+
+      expect(result.data.snapshot_id).toBe("1000");
+      expect(result.meta).toMatchObject({ freshness: "stale", verification_status: "blocked" });
+      expect(result.meta.caveats).toEqual(
+        expect.arrayContaining([expect.objectContaining({ kind: "stale_snapshot_paths" })])
+      );
+    } finally {
+      warmupSpy.mockRestore();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("pins symbol_search validity and graph work to one snapshot per call", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-symbol-snapshot-pin-"));
+    const sourcePath = path.join(repoRoot, "target.ts");
+    fs.writeFileSync(sourcePath, "export const target = true;\n");
+    const databasePath = graphStorePath(repoRoot);
+    const store = openGraphStore(databasePath);
+    try {
+      await store.upsertSnapshot({ snapshot: testSnapshot("1000", repoRoot) });
+      await store.upsertEntry({
+        snapshot_id: "1000",
+        entry: buildFileCatalogEntry({
+          file_identity: {
+            path: "target.ts",
+            language: "typescript",
+            content_hash: "sha256:before",
+            size_bytes: fs.statSync(sourcePath).size,
+            mtime_ms: fs.statSync(sourcePath).mtimeMs
+          }
+        })
+      });
+    } finally {
+      store.close();
+    }
+    fs.rmSync(sourcePath);
+
+    const originalRequestWarmup = InMemoryRuntimeOperationsAdapter.prototype.requestWarmup;
+    const warmupSpy = vi
+      .spyOn(InMemoryRuntimeOperationsAdapter.prototype, "requestWarmup")
+      .mockImplementation(async function (this: InMemoryRuntimeOperationsAdapter, input) {
+        const executionId = await originalRequestWarmup.call(this, input);
+        const concurrent = openGraphStore(databasePath);
+        try {
+          await concurrent.upsertSnapshot({ snapshot: testSnapshot("2000", repoRoot) });
+        } finally {
+          concurrent.close();
+        }
+        return executionId;
+      });
+
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const result = parseMcpTextContent<{
+        data: SearchSymbolsResult["symbols"];
+        meta: SearchSymbolsResult["meta"];
+      }>(await getRegisteredTool(server, "symbol_search").handler({ query: "target" }));
+
+      expect(result.data.snapshot_id).toBe("1000");
+      expect(result.data.symbols).toEqual([]);
+      expect(result.meta).toMatchObject({ freshness: "stale", verification_status: "blocked" });
+      expect(result.meta.caveats).toEqual([
+        expect.objectContaining({ kind: "stale_snapshot_paths" })
+      ]);
+    } finally {
+      warmupSpy.mockRestore();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves an explicit historical snapshot while latest advances", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-explicit-snapshot-pin-"));
+    const sourcePath = path.join(repoRoot, "target.ts");
+    fs.writeFileSync(sourcePath, "export const target = true;\n");
+    const databasePath = graphStorePath(repoRoot);
+    const store = openGraphStore(databasePath);
+    try {
+      await store.upsertSnapshot({ snapshot: testSnapshot("1000", repoRoot) });
+      await store.upsertEntry({
+        snapshot_id: "1000",
+        entry: buildFileCatalogEntry({
+          file_identity: {
+            path: "target.ts",
+            language: "typescript",
+            content_hash: "sha256:before",
+            size_bytes: fs.statSync(sourcePath).size,
+            mtime_ms: fs.statSync(sourcePath).mtimeMs
+          }
+        })
+      });
+    } finally {
+      store.close();
+    }
+
+    const originalValidate = FilesystemSnapshotPathValidatorAdapter.prototype.validatePaths;
+    const validateSpy = vi
+      .spyOn(FilesystemSnapshotPathValidatorAdapter.prototype, "validatePaths")
+      .mockImplementation(async function (this: FilesystemSnapshotPathValidatorAdapter, input) {
+        const outcome = await originalValidate.call(this, input);
+        const concurrent = openGraphStore(databasePath);
+        try {
+          await concurrent.upsertSnapshot({ snapshot: testSnapshot("2000", repoRoot) });
+        } finally {
+          concurrent.close();
+        }
+        return outcome;
+      });
+
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const result = parseMcpTextContent<{
+        data: SearchSymbolsResult["symbols"];
+      }>(await getRegisteredTool(server, "symbol_search").handler({
+        query: "target",
+        snapshot_id: "1000"
+      }));
+
+      expect(result.data.snapshot_id).toBe("1000");
+    } finally {
+      validateSpy.mockRestore();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves an explicit nonexistent snapshot instead of resolving latest", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-explicit-missing-snapshot-"));
+    const store = openGraphStore(graphStorePath(repoRoot));
+    try {
+      await store.upsertSnapshot({ snapshot: testSnapshot("2000", repoRoot) });
+    } finally {
+      store.close();
+    }
+
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const result = parseMcpTextContent<{
+        data: SearchSymbolsResult["symbols"];
+        meta: SearchSymbolsResult["meta"];
+      }>(await getRegisteredTool(server, "symbol_search").handler({
+        query: "target",
+        snapshot_id: "1000"
+      }));
+
+      expect(result.data.snapshot_id).toBe("1000");
+      expect(result.data.symbols).toEqual([]);
+      expect(result.meta).toMatchObject({ verification_status: "blocked" });
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("uses the injected symbol_search provider", async () => {
     const registered = registerTool(symbolSearchTool, {
       searchSymbols: ({ request }: { request: SymbolSearchRequest }) => ({
@@ -386,5 +594,20 @@ function meta() {
     evidence_kinds: ["parser" as const],
     verification_status: "needed" as const,
     truncated: false
+  };
+}
+
+function testSnapshot(id: string, repoRoot: string) {
+  return {
+    id,
+    repo_root: repoRoot,
+    workspace_root: repoRoot,
+    repo_identity: repoRoot,
+    config_identity: "default",
+    schema_version: SCHEMA_VERSION,
+    freshness: "fresh" as const,
+    owner_state: "owner" as const,
+    created_at: "2026-07-19T12:00:00.000Z",
+    updated_at: "2026-07-19T12:00:00.000Z"
   };
 }

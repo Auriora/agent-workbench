@@ -177,10 +177,10 @@ export function createAgentWorkbenchServer(
     return workspaceWatcherFreshness;
   }
 
-  async function validateCurrentSnapshot(repoRoot: string, store: GraphStore, snapshotId?: string) {
+  async function selectValidatedSnapshot(repoRoot: string, store: GraphStore, snapshotId?: string) {
     const snapshot = await store.getSnapshot({ repo_root: repoRoot, snapshot_id: snapshotId });
     if (snapshot === null) {
-      return undefined;
+      return { snapshot_id: null, validity: undefined };
     }
     const validity = await new SnapshotValidityService(
       store,
@@ -200,7 +200,7 @@ export function createAgentWorkbenchServer(
         refreshTimer.unref?.();
       }
     }
-    return validity;
+    return { snapshot_id: snapshot.id, validity };
   }
 
   const server = createAgentWorkbenchMcpServer(absoluteRepoRoot, {
@@ -213,27 +213,29 @@ export function createAgentWorkbenchServer(
     getRepoStatus: async ({ repo_root }) => {
       const store = await graphStore();
       const watcher = await updateWorkspaceWatcherFreshness(repo_root, store);
-      const snapshotValidity = await validateCurrentSnapshot(repo_root, store);
+      const selected = await selectValidatedSnapshot(repo_root, store);
       return getSnapshotRepoStatus({
         repo_root,
         snapshots: store,
         catalog: store,
         warmups: runtime,
         watcher,
-        snapshot_validity: snapshotValidity
+        selected_snapshot_id: selected.snapshot_id,
+        snapshot_validity: selected.validity
       });
     },
     getRepoOrientation: async ({ repo_root }) => {
       const store = await graphStore();
       const watcher = await updateWorkspaceWatcherFreshness(repo_root, store);
-      const snapshotValidity = await validateCurrentSnapshot(repo_root, store);
+      const selected = await selectValidatedSnapshot(repo_root, store);
       return getRepoOrientation(await getSnapshotRepoStatus({
         repo_root,
         snapshots: store,
         catalog: store,
         warmups: runtime,
         watcher,
-        snapshot_validity: snapshotValidity
+        selected_snapshot_id: selected.snapshot_id,
+        snapshot_validity: selected.validity
       }));
     },
     getRepoScope: async ({ repo_root }) => {
@@ -270,14 +272,15 @@ export function createAgentWorkbenchServer(
       }),
     searchDocs: async ({ request }) => {
       const store = await graphStore();
-      const snapshotValidity = await validateCurrentSnapshot(
+      const selected = await selectValidatedSnapshot(
         request.repo_root ?? absoluteRepoRoot,
         store
       );
       return searchDocs({
         request,
         docs_index: store,
-        snapshot_validity: snapshotValidity,
+        snapshot_validity: selected.validity,
+        selected_snapshot_id: selected.snapshot_id,
         default_repo_root: absoluteRepoRoot
       });
     },
@@ -322,7 +325,7 @@ export function createAgentWorkbenchServer(
       }),
     getTaskContext: async ({ request }) => {
       const store = await graphStore();
-      const snapshotValidity = await validateCurrentSnapshot(
+      const selected = await selectValidatedSnapshot(
         request.repo_root ?? absoluteRepoRoot,
         store
       );
@@ -332,7 +335,8 @@ export function createAgentWorkbenchServer(
         graph: store,
         snapshots: store,
         catalog: store,
-        snapshot_validity: snapshotValidity,
+        snapshot_validity: selected.validity,
+        selected_snapshot_id: selected.snapshot_id,
         workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
       });
@@ -346,7 +350,7 @@ export function createAgentWorkbenchServer(
       }),
     searchSymbols: async ({ request }) => {
       const store = await graphStore();
-      const snapshotValidity = await validateCurrentSnapshot(
+      const selected = await selectValidatedSnapshot(
         request.repo_root ?? absoluteRepoRoot,
         store,
         request.snapshot_id
@@ -357,13 +361,14 @@ export function createAgentWorkbenchServer(
         snapshots: store,
         catalog: store,
         workspace: workspaceForRepoRoot(request.repo_root),
-        snapshot_validity: snapshotValidity,
+        snapshot_validity: selected.validity,
+        selected_snapshot_id: selected.snapshot_id,
         default_repo_root: absoluteRepoRoot
       });
     },
     findReferences: async ({ request }) => {
       const store = await graphStore();
-      const snapshotValidity = await validateCurrentSnapshot(
+      const selected = await selectValidatedSnapshot(
         request.repo_root ?? absoluteRepoRoot,
         store,
         request.snapshot_id
@@ -374,13 +379,14 @@ export function createAgentWorkbenchServer(
         snapshots: store,
         catalog: store,
         workspace: workspaceForRepoRoot(request.repo_root),
-        snapshot_validity: snapshotValidity,
+        snapshot_validity: selected.validity,
+        selected_snapshot_id: selected.snapshot_id,
         default_repo_root: absoluteRepoRoot
       });
     },
     computeImpact: async ({ request }) => {
       const store = await graphStore();
-      const snapshotValidity = await validateCurrentSnapshot(
+      const selected = await selectValidatedSnapshot(
         request.repo_root ?? absoluteRepoRoot,
         store,
         request.snapshot_id
@@ -391,7 +397,8 @@ export function createAgentWorkbenchServer(
         snapshots: store,
         catalog: store,
         workspace: workspaceForRepoRoot(request.repo_root),
-        snapshot_validity: snapshotValidity,
+        snapshot_validity: selected.validity,
+        selected_snapshot_id: selected.snapshot_id,
         default_repo_root: absoluteRepoRoot
       });
     },

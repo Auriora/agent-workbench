@@ -6,10 +6,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { repoStatusResource } from "../../src/interface-adapters/mcp/registries/resources/repo-status.js";
 import type { GetRepoStatusResult } from "../../src/application/use-cases/get-repo-status.js";
 import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
+import { InMemoryRuntimeOperationsAdapter } from "../../src/infrastructure/runtime/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
 import {
@@ -284,6 +285,63 @@ describe("repo status MCP resource", () => {
       expect.soft(context.meta.freshness).toBe(status.meta.freshness);
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("pins status and orientation presentation to the snapshot selected for validity", async () => {
+    for (const uri of ["repo:///status", "repo:///orientation"] as const) {
+      const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-status-snapshot-pin-"));
+      const sourcePath = path.join(repoRoot, "app.ts");
+      fs.writeFileSync(sourcePath, "export const app = true;\n");
+      const databasePath = graphStorePath(repoRoot);
+      const store = openGraphStore(databasePath);
+      try {
+        await store.upsertSnapshot({ snapshot: testSnapshot("1000", repoRoot) });
+        await store.upsertEntry({
+          snapshot_id: "1000",
+          entry: buildFileCatalogEntry({
+            file_identity: {
+              path: "app.ts",
+              language: "typescript",
+              content_hash: "sha256:before",
+              size_bytes: fs.statSync(sourcePath).size,
+              mtime_ms: fs.statSync(sourcePath).mtimeMs
+            }
+          })
+        });
+      } finally {
+        store.close();
+      }
+      fs.rmSync(sourcePath);
+
+      const originalRequestWarmup = InMemoryRuntimeOperationsAdapter.prototype.requestWarmup;
+      const warmupSpy = vi
+        .spyOn(InMemoryRuntimeOperationsAdapter.prototype, "requestWarmup")
+        .mockImplementation(async function (this: InMemoryRuntimeOperationsAdapter, input) {
+          const executionId = await originalRequestWarmup.call(this, input);
+          const concurrent = openGraphStore(databasePath);
+          try {
+            await concurrent.upsertSnapshot({ snapshot: testSnapshot("2000", repoRoot) });
+          } finally {
+            concurrent.close();
+          }
+          return executionId;
+        });
+
+      try {
+        const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+        const result = parseMcpResourceText<{
+          data: { snapshot_id?: string; snapshot_validity?: { snapshot_id: string } };
+        }>(await getRegisteredResource(server, uri).readCallback({}));
+
+        expect(result.data.snapshot_id).toBe("1000");
+        if (uri === "repo:///status") {
+          expect(result.data.snapshot_validity?.snapshot_id).toBe("1000");
+        }
+      } finally {
+        warmupSpy.mockRestore();
+        fs.rmSync(repoRoot, { recursive: true, force: true });
+      }
     }
   });
 
@@ -567,6 +625,21 @@ function graphStorePath(repoRoot: string): string {
   const cacheDir = path.join(repoRoot, ".cache", "agent-workbench");
   fs.mkdirSync(cacheDir, { recursive: true });
   return path.join(cacheDir, "graph.sqlite");
+}
+
+function testSnapshot(id: string, repoRoot: string) {
+  return {
+    id,
+    repo_root: repoRoot,
+    workspace_root: repoRoot,
+    repo_identity: repoRoot,
+    config_identity: "default",
+    schema_version: SCHEMA_VERSION,
+    freshness: "fresh" as const,
+    owner_state: "owner" as const,
+    created_at: "2026-07-19T12:00:00.000Z",
+    updated_at: "2026-07-19T12:00:00.000Z"
+  };
 }
 
 async function waitForWatcherFreshness(

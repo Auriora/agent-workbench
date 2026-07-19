@@ -73,6 +73,7 @@ export async function getTaskContext(input: {
   catalog?: FileCatalogPort;
   workspace?: WorkspaceFilePort;
   snapshot_validity?: SnapshotValidityReceipt;
+  selected_snapshot_id?: string | null;
   default_repo_root: string;
 }): Promise<GetTaskContextResult> {
   const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
@@ -120,7 +121,12 @@ export async function getTaskContext(input: {
   const validationHints = inferValidationHints(catalogFiles);
   const snapshot = input.snapshots === undefined
     ? undefined
-    : await input.snapshots.getSnapshot({ repo_root: scanned.repo_root });
+    : input.selected_snapshot_id === null
+      ? null
+      : await input.snapshots.getSnapshot({
+        repo_root: scanned.repo_root,
+        snapshot_id: input.selected_snapshot_id
+      });
   const status = getCatalogRepoStatus({
     repo_root: scanned.repo_root,
     indexed_roots: scanned.indexed_roots,
@@ -139,6 +145,7 @@ export async function getTaskContext(input: {
     snapshots: input.snapshots,
     catalog: input.catalog,
     workspace: input.workspace,
+    snapshot_id: input.selected_snapshot_id,
     limit: Math.min(10, Math.max(1, input.request.max_files))
   });
   const skippedWork = [
@@ -741,6 +748,7 @@ async function selectRankedSymbols(input: {
   snapshots?: SnapshotPort;
   catalog?: FileCatalogPort;
   workspace?: WorkspaceFilePort;
+  snapshot_id?: string | null;
   limit: number;
 }): Promise<{
   ranked_symbols: RankedSymbolCandidate[];
@@ -765,8 +773,9 @@ async function selectRankedSymbols(input: {
     };
   }
 
-  const resolved = await resolveSnapshot({
+  const resolved = input.snapshot_id === null ? null : await resolveSnapshot({
     repo_root: input.repo_root,
+    snapshot_id: input.snapshot_id,
     snapshots: input.snapshots,
     catalog: input.catalog,
     row_limit: input.limit

@@ -39,12 +39,13 @@ export async function searchSymbols(input: {
   catalog: FileCatalogPort;
   workspace?: WorkspaceFilePort;
   snapshot_validity?: SnapshotValidityReceipt;
+  selected_snapshot_id?: string | null;
   default_repo_root: string;
 }): Promise<SearchSymbolsResult> {
   const repoRoot = input.request.repo_root ?? input.default_repo_root;
-  const resolved = await resolveSnapshot({
+  const resolved = input.selected_snapshot_id === null ? null : await resolveSnapshot({
     repo_root: repoRoot,
-    snapshot_id: input.request.snapshot_id,
+    snapshot_id: input.selected_snapshot_id ?? input.request.snapshot_id,
     snapshots: input.snapshots,
     catalog: input.catalog,
     row_limit: input.request.max_results,

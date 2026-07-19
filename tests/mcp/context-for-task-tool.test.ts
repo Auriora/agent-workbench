@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { GetTaskContextResult } from "../../src/application/use-cases/get-task-context.js";
 import { getTaskContext } from "../../src/application/use-cases/get-task-context.js";
 import { indexRepositoryGraph } from "../../src/application/use-cases/index-repository-graph.js";
@@ -15,6 +15,7 @@ import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../../src/in
 import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/workspace-file.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
+import { InMemoryRuntimeOperationsAdapter } from "../../src/infrastructure/runtime/index.js";
 import { PythonTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
 import { contextForTaskTool } from "../../src/interface-adapters/mcp/registries/tools/context-for-task.js";
 import {
@@ -24,8 +25,10 @@ import {
   verificationPlanRequestSchema
 } from "../../src/contracts/index.js";
 import type { ClockPort, FileCatalogScanPort } from "../../src/ports/index.js";
-import { createAgentWorkbenchServer } from "../../src/server.js";
+import { createAgentWorkbenchServer, graphStorePath } from "../../src/server.js";
 import {
+  getRegisteredTool,
+  parseMcpTextContent,
   registerMcpTool,
   registeredToolNames
 } from "../helpers/mcp-harness.js";
@@ -891,6 +894,87 @@ describe("context_for_task use case", () => {
     } finally {
       store.close();
       fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("pins task status and ranked symbols to the snapshot selected for validity", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-context-snapshot-pin-"));
+    const sourcePath = path.join(repoRoot, "service.py");
+    fs.writeFileSync(sourcePath, "class Runner:\n    pass\n");
+    const store = openGraphStore(graphStorePath(repoRoot));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new PythonTreeSitterExtractorAdapter());
+    const scanner = new FileCatalogScannerAdapter();
+    const workspace = new WorkspaceFileAdapter({ repoRoot });
+    try {
+      await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner,
+        workspace,
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "1000"
+      });
+    } finally {
+      store.close();
+    }
+    fs.rmSync(sourcePath);
+
+    const originalRequestWarmup = InMemoryRuntimeOperationsAdapter.prototype.requestWarmup;
+    const warmupSpy = vi
+      .spyOn(InMemoryRuntimeOperationsAdapter.prototype, "requestWarmup")
+      .mockImplementation(async function (this: InMemoryRuntimeOperationsAdapter, input) {
+        const executionId = await originalRequestWarmup.call(this, input);
+        const concurrent = openGraphStore(graphStorePath(repoRoot));
+        try {
+          await concurrent.upsertSnapshot({
+            snapshot: {
+              id: "2000",
+              repo_root: repoRoot,
+              workspace_root: repoRoot,
+              repo_identity: repoRoot,
+              config_identity: "default",
+              schema_version: SCHEMA_VERSION,
+              freshness: "fresh",
+              owner_state: "owner",
+              created_at: "2026-07-19T12:00:00.000Z",
+              updated_at: "2026-07-19T12:00:00.000Z"
+            }
+          });
+        } finally {
+          concurrent.close();
+        }
+        return executionId;
+      });
+
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const result = parseMcpTextContent<{
+        data: GetTaskContextResult["context"];
+        meta: GetTaskContextResult["meta"];
+      }>(await getRegisteredTool(server, "context_for_task").handler({
+        task: "Inspect Runner references",
+        symbols: ["Runner"],
+        max_files: 5,
+        max_docs: 2
+      }));
+
+      expect(result.data.ranked_symbols[0]?.symbol).toMatchObject({
+        name: "Runner",
+        node_id: expect.stringMatching(/^1000:/u)
+      });
+      expect(result.meta).toMatchObject({ freshness: "stale" });
+      expect(result.meta.caveats).toEqual(
+        expect.arrayContaining([expect.objectContaining({ kind: "stale_snapshot_paths" })])
+      );
+    } finally {
+      warmupSpy.mockRestore();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
     }
   });
 

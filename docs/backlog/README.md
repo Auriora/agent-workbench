@@ -1655,9 +1655,31 @@ Do not promote an item when:
   of returning a bounded degraded or stale envelope. In the same session
   `context_for_task` reported `freshness: unknown` for that identical
   `snapshot_id`, so first-read surfaces did not agree with each other.
+- Pre-fix reproduction (2026-07-19, runtime `0.5.1`, snapshot
+  `1783312125057`): the failure was
+  deterministic and isolated to `find_references`. Against the same snapshot and
+  the same `session-start.core.js` node id, `symbol_search` and `impact` both
+  returned valid bounded envelopes, while `find_references` failed with `ENOENT`
+  by node id and again by `symbol`. The error persisted unchanged across an
+  intervening Markdown edit that did not advance `snapshot_id`. Separately,
+  `symbol_search` emitted a `next_actions` entry recommending
+  `find_references` with that symbol and snapshot, so the runtime recommended a
+  call that then crashed.
+- Deployment validation (2026-07-19, runtime and Claude provider plugin
+  `0.5.2`): `find_references` returned a bounded blocked envelope with all seven
+  missing indexed paths represented by `stale_snapshot_paths`. Orientation and
+  status agreed on `freshness: stale`, `refresh_required: true`, and
+  `orientation_reusable: false`; no raw filesystem error escaped.
+- Post-deployment correction (2026-07-19): a refresh could advance the latest
+  snapshot between validity selection and a downstream first-read or graph
+  query. The application boundary now pins status, orientation,
+  `context_for_task`, docs search, `symbol_search`, `find_references`, and
+  `impact` to one selected snapshot per call while retaining the defensive
+  mismatched-receipt blocker.
 - Runtime surface: snapshot identity and freshness derivation, orientation and
-  status presenters, docs inventory counts, graph node/path validity, and
-  `find_references`, `impact`, and `symbol_search` traversal over indexed paths.
+  status presenters, docs inventory counts, graph node/path validity,
+  `find_references` reference resolution, and `next_actions` callability
+  guarantees.
 - Acceptance:
   - Deleting an indexed directory or file must invalidate freshness or set
     `refresh_required: true`; path removal is not an ordinary content edit under
@@ -1667,6 +1689,11 @@ Do not promote an item when:
   - Graph traversal over an indexed path that no longer exists must return a
     structured stale or degraded envelope naming the missing evidence, not an
     unhandled filesystem error.
+  - `find_references`, `symbol_search`, and `impact` must apply the same
+    snapshot-validity gate and return compatible structured stale behavior for
+    the same deleted-path snapshot state.
+  - A `next_actions` entry must not recommend a call that fails on the snapshot
+    that produced it, per EB002 callability guarantees.
   - Docs inventory counts such as `indexed_docs_count` must not include paths
     that no longer exist on disk.
   - Resolution must fix freshness derivation and path validity rather than
@@ -1691,6 +1718,49 @@ Do not promote an item when:
   [EB023](#eb023-trust-calibration-in-tool-outputs) trust calibration, with
   error-envelope consistency routed through
   [EB038](#eb038-mcp-error-envelope-consistency).
+
+### EB052: Daemon-Owned Refresh Convergence
+
+- Priority: P0
+- Status: proposed Spec 041
+- Friction signal: post-deployment Claude dogfooding on runtime `0.5.2`
+  confirmed that Spec 039 correctly detects deleted indexed paths, but the
+  coordinated refresh did not converge. Daemon PID `434059` remained
+  `warmup_state: scheduled` with `graph_freshness: unknown`, while the
+  per-client coordinator remained `planned` and repeated status reads continued
+  to report the same seven missing paths.
+- Root cause: the daemon shares the graph store but each connected MCP server
+  creates its own in-memory warm-up coordinator. Only the first connection may
+  run startup warm-up, so a later client can request a `planned` deletion
+  refresh that no daemon-owned executor consumes.
+- Runtime surface: daemon ownership, shared warm-up coordination and execution,
+  integration health diagnostics, and status-triggered refresh.
+- Acceptance:
+  - One daemon-owned coordinator and executor must own startup and subsequent
+    refresh work for every client connected to the repository daemon.
+  - A stale-path status read from any client must schedule exactly one
+    executable refresh, and repeated reads must reuse or observe that execution
+    rather than create stranded per-client `planned` state.
+  - Daemon health must report actual `planned`, `running`, `complete`, or
+    `failed` execution state plus current graph freshness and bounded last
+    failure evidence; it must not leave `scheduled/unknown` as permanent
+    synthetic diagnostics.
+  - The existing `repo:///status` next action must provide a convergent trigger
+    and completion signal; do not add a second manual refresh tool or retry
+    loop.
+  - Historical snapshot inventory may continue to describe what that snapshot
+    indexed, but stale coverage must not be presented as current or complete.
+- Validation:
+  - Package-entrypoint regression with two MCP clients sharing one daemon:
+    complete startup, delete an indexed file, trigger status from the
+    non-startup client, and prove exactly one refresh reaches completion.
+  - Prove the snapshot advances, excludes the deleted path, converges to fresh
+    for both clients, and makes integration health leave `scheduled/unknown`.
+  - Failure and disconnect regressions proving refresh ownership survives the
+    requesting client and reports structured failure without adding a fallback
+    execution path.
+- Promotion target: create Spec 041 under EB003 first-read reliability, with
+  EB036 daemon ownership and EB051 snapshot validity as accepted prerequisites.
 
 ## Extension Idea Coverage
 
@@ -1731,7 +1801,7 @@ Do not promote an item when:
 | Generated-file detection | EB033, under workspace hygiene and safety. |
 | Security-sensitive change detection | EB034, after threat-model reconciliation. |
 | Agent-readable changelog | EB035. |
-| Per-repo runtime daemon and shared sessions | EB036, under EB003 first-read reliability and EB014 large-repo graph warmup scale. |
+| Per-repo runtime daemon and shared sessions | EB036, with EB052 owning refresh convergence and EB014 owning large-repo graph warmup scale. |
 | Repo-root authority | EB037, under workspace safety and MCP surface hardening. |
 | MCP error envelope consistency | EB038, under runtime contracts and trust calibration. |
 | Shared path policy | EB039, with EB027 threat model and EB033 generated-file detection boundaries. |
@@ -1747,9 +1817,10 @@ Do not promote an item when:
 | Executable context continuation and bounded navigation | EB049, with EB002, EB010, and EB011 routing boundaries. |
 | Intent-aware validation guidance | EB050, with EB004 and EB024 validation trust boundaries. |
 | Snapshot freshness versus deleted indexed paths | EB051, under EB003 first-read reliability, with EB048 orientation reuse, EB023 trust calibration, and EB038 error-envelope boundaries. |
+| Daemon-owned refresh convergence | EB052, under EB003 first-read reliability, with EB036 daemon ownership and EB051 snapshot validity as prerequisites. |
 
 ## Immediate Next Specs
 
-- No active implementation spec is selected after Specs 039 and 040. Choose
-  the next package from the remaining prioritized backlog through normal intake
-  and lifecycle preflight rather than extending either closed package.
+- Select EB052 as the next P0 lifecycle intake and create Spec 041 after
+  preflight. Keep EB014 large-repository completion work separate from this
+  ordinary refresh-convergence defect.
