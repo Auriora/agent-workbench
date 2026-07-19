@@ -5,11 +5,10 @@
  */
 
 import {
-  shouldEmitSessionStartContext
+  buildSessionStartContext
 } from "./session-start.core.js";
 import {
   emitAdditionalContext,
-  feedbackMode,
   isMain,
   parsePayload,
   readStdin,
@@ -17,12 +16,9 @@ import {
 } from "./hook-common.js";
 
 export function buildClaudeSessionStartContext(payload, env = process.env) {
-  const effectiveEnv = withBasicDefault(env);
-  if (feedbackMode(effectiveEnv) !== "basic" || !shouldEmitSessionStartContext(payload)) {
-    return undefined;
-  }
-
-  return "For non-trivial repository investigation, change evidence, or validation planning, invoke `/agent-workbench:agent-workbench`; skip it for trivial tasks.";
+  return buildSessionStartContext(payload, withBasicDefault(env), {
+    skillReference: "`/agent-workbench:agent-workbench`"
+  });
 }
 
 function withBasicDefault(env) {

@@ -107,7 +107,9 @@ describe("Kiro Power artifacts", () => {
         { hook_event_name: "agentSpawn" },
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )
-    ).toContain("Agent Workbench MCP is available.");
+    ).toBe(
+      "For non-trivial repository investigation, change evidence, or validation planning, invoke the packaged Agent Workbench skill; skip it for trivial tasks."
+    );
     // Kiro adapters keep basic output as their local default, matching Codex's
     // quiet, action-gated default.
     expect(
@@ -115,7 +117,9 @@ describe("Kiro Power artifacts", () => {
         { hook_event_name: "agentSpawn" },
         {}
       )
-    ).toContain("Agent Workbench MCP is available.");
+    ).toBe(
+      "For non-trivial repository investigation, change evidence, or validation planning, invoke the packaged Agent Workbench skill; skip it for trivial tasks."
+    );
     expect(
       sessionStart.buildKiroSessionStartContext(
         { hook_event_name: "agentSpawn" },

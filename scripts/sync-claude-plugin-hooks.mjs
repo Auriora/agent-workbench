@@ -26,7 +26,7 @@ const pluginTargetDir = path.join(repoRoot, "plugins/agent-workbench/claude-plug
 // *.core.js so they never collide with the Claude entrypoint wrappers of the same name.
 export const VENDORED_HOOK_FILES = {
   "hook-common.js": "hook-common.js",
-  "session-start.js": "session-start.core.js",
+  "session-start.core.js": "session-start.core.js",
   "post-edit-feedback.js": "post-edit-feedback.core.js"
 };
 

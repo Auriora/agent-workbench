@@ -726,33 +726,12 @@ describe("Codex plugin artifacts", () => {
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )).toBeUndefined();
     }
-    expect(sessionContext).toContain("Agent Workbench MCP is available.\nRepo orientation:");
-    expect(sessionContext).toContain("- root: /repo");
-    expect(sessionContext).toContain("dirty state not inspected");
-    expect(sessionContext).toContain("tool discovery/search");
-    expect(sessionContext).toContain("context_for_task verification_plan diagnostics_for_files docs_search");
-    expect(sessionContext).not.toContain("mcp__");
-
-    const sessionFixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-session-"));
-    fs.mkdirSync(path.join(sessionFixtureRoot, "src"), { recursive: true });
-    fs.mkdirSync(path.join(sessionFixtureRoot, "tests"), { recursive: true });
-    fs.mkdirSync(path.join(sessionFixtureRoot, "docs/specs/034-session-context"), {
-      recursive: true
-    });
-    fs.mkdirSync(path.join(sessionFixtureRoot, ".git"), { recursive: true });
-    fs.writeFileSync(path.join(sessionFixtureRoot, "package.json"), "{\"type\":\"module\"}\n");
-    fs.writeFileSync(
-      path.join(sessionFixtureRoot, ".git/HEAD"),
-      "ref: refs/heads/feature/session-context\n"
+    expect(sessionContext).toBe(
+      "For non-trivial repository investigation, change evidence, or validation planning, invoke the packaged Agent Workbench skill; skip it for trivial tasks."
     );
-    const fixtureSessionContext = sessionStart.buildSessionStartContext(
-      { cwd: sessionFixtureRoot },
-      { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
-    );
-    expect(fixtureSessionContext).toContain("- roots: src, tests, docs");
-    expect(fixtureSessionContext).toContain("- config: package.json");
-    expect(fixtureSessionContext).toContain("- specs: 1 package(s): 034-session-context");
-    expect(fixtureSessionContext).toContain("- git: branch feature/session-context");
+    expect(sessionContext).not.toContain("repo:///");
+    expect(sessionContext).not.toContain("context_for_task");
+    expect(sessionContext).not.toContain("MCP");
     expect(common.buildAdditionalContextOutput("SessionStart", "hello")).toEqual({
       hookSpecificOutput: {
         hookEventName: "SessionStart",

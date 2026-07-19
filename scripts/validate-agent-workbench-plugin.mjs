@@ -53,6 +53,7 @@ const requiredPaths = [
   "plugins/agent-workbench/.agents/plugins/marketplace.json",
   "plugins/agent-workbench/.mcp.json",
   "plugins/agent-workbench/hooks/hooks.json",
+  "plugins/agent-workbench/hooks/session-start.core.js",
   "plugins/agent-workbench/hooks/session-start.js",
   "plugins/agent-workbench/hooks/post-edit-feedback.js",
   "plugins/agent-workbench/skills/agent-workbench/SKILL.md",

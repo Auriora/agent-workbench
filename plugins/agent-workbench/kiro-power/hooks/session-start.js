@@ -6,7 +6,7 @@
 
 import {
   buildSessionStartContext
-} from "../../hooks/session-start.js";
+} from "../../hooks/session-start.core.js";
 import {
   isMain,
   parsePayload,
@@ -15,7 +15,9 @@ import {
 } from "../../hooks/hook-common.js";
 
 export function buildKiroSessionStartContext(payload, env = process.env) {
-  return buildSessionStartContext(payload, withBasicDefault(env));
+  return buildSessionStartContext(payload, withBasicDefault(env), {
+    skillReference: "the packaged Agent Workbench skill"
+  });
 }
 
 function withBasicDefault(env) {

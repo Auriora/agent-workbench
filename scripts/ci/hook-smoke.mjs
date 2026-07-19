@@ -31,10 +31,10 @@ function runHook(name, payload) {
   return result.stdout || "";
 }
 
-// Codex hooks emit lifecycle context by default and must exit cleanly.
+// Codex hooks emit the shared conditional skill pointer and must exit cleanly.
 const sessionStart = runHook("session-start.js", { hook_event_name: "SessionStart" });
-if (!sessionStart.includes("Agent Workbench MCP is available.")) {
-  fail(`session-start.js did not emit expected lifecycle context; got: ${sessionStart.slice(0, 200)}`);
+if (!sessionStart.includes("invoke the packaged Agent Workbench skill")) {
+  fail(`session-start.js did not emit the expected conditional skill pointer; got: ${sessionStart.slice(0, 200)}`);
 }
 
 // PostToolUse runs diagnostics over a changed file; a clean exit with no shell
