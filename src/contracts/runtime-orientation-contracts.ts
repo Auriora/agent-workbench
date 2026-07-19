@@ -162,6 +162,7 @@ export const orientationRefreshTriggerSchema = z.enum([
   "scope_or_ignore_rules_change",
   "runtime_identity_changes",
   "policy_changes",
+  "indexed_path_is_deleted",
   "index_becomes_invalid"
 ]);
 export type OrientationRefreshTrigger = z.infer<typeof orientationRefreshTriggerSchema>;

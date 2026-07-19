@@ -21,6 +21,7 @@ import {
   verificationPlanRequestSchema
 } from "../../contracts/index.js";
 import type { FileCatalogEntry, GraphNode } from "../../domain/models/index.js";
+import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
 import {
   classifyMarkdownDoc,
   isExplicitHiddenCatalogPathAllowed
@@ -71,6 +72,7 @@ export async function getTaskContext(input: {
   snapshots?: SnapshotPort;
   catalog?: FileCatalogPort;
   workspace?: WorkspaceFilePort;
+  snapshot_validity?: SnapshotValidityReceipt;
   default_repo_root: string;
 }): Promise<GetTaskContextResult> {
   const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
@@ -116,12 +118,17 @@ export async function getTaskContext(input: {
     workspace: input.workspace
   });
   const validationHints = inferValidationHints(catalogFiles);
+  const snapshot = input.snapshots === undefined
+    ? undefined
+    : await input.snapshots.getSnapshot({ repo_root: scanned.repo_root });
   const status = getCatalogRepoStatus({
     repo_root: scanned.repo_root,
     indexed_roots: scanned.indexed_roots,
     skipped_roots: scanned.skipped_roots,
     files: catalogFiles,
-    freshness: "unknown"
+    snapshot,
+    snapshot_validity: input.snapshot_validity,
+    freshness: snapshot?.freshness ?? "unknown"
   });
   const rankedSymbolResult = await selectRankedSymbols({
     task: input.request.task,

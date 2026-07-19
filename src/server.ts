@@ -24,6 +24,11 @@ import { getRepoOverview } from "./application/use-cases/get-repo-overview.js";
 import { getRepoOrientation } from "./application/use-cases/get-repo-orientation.js";
 import { getRepoScope } from "./application/use-cases/get-repo-scope.js";
 import { getSnapshotRepoStatus } from "./application/use-cases/get-repo-status.js";
+import {
+  DEFAULT_SNAPSHOT_VALIDITY_MAX_PATHS,
+  SnapshotValidityService
+} from "./application/use-cases/validate-snapshot-paths.js";
+import { coordinateSnapshotRefresh } from "./application/use-cases/coordinate-snapshot-refresh.js";
 import type { IndexRepositoryGraphResult } from "./application/use-cases/index-repository-graph.js";
 import { planVerification } from "./application/use-cases/plan-verification.js";
 import { processWorkspaceChangeQueue, type WorkspaceChangeQueueProcessResult } from "./application/use-cases/process-workspace-change-queue.js";
@@ -43,6 +48,7 @@ import { InMemoryEditPreviewStoreAdapter } from "./infrastructure/edit-preview-s
 import { JsonSyntaxDiagnosticsProviderAdapter } from "./infrastructure/diagnostics/index.js";
 import {
   FileCatalogScannerAdapter,
+  FilesystemSnapshotPathValidatorAdapter,
   FilesystemWorkspaceWatcherAdapter,
   WorkspaceFileAdapter,
   WorkspaceSafetyAdapter
@@ -168,6 +174,32 @@ export function createAgentWorkbenchServer(
     return workspaceWatcherFreshness;
   }
 
+  async function validateCurrentSnapshot(repoRoot: string, store: GraphStore, snapshotId?: string) {
+    const snapshot = await store.getSnapshot({ repo_root: repoRoot, snapshot_id: snapshotId });
+    if (snapshot === null) {
+      return undefined;
+    }
+    const validity = await new SnapshotValidityService(
+      store,
+      new FilesystemSnapshotPathValidatorAdapter({ repoRoot }),
+      store
+    ).validate({ snapshot, max_paths: DEFAULT_SNAPSHOT_VALIDITY_MAX_PATHS });
+    if (validity.state === "stale" && snapshotId === undefined) {
+      const coordinated = await coordinateSnapshotRefresh({
+        repo_root: repoRoot,
+        snapshots: store,
+        warmups: runtime,
+        clock,
+        reason: validity.reason ?? "Indexed workspace paths are missing."
+      });
+      if (options.startGraphWarmup !== false) {
+        const refreshTimer = setTimeout(() => startGraphWarmup(coordinated), 0);
+        refreshTimer.unref?.();
+      }
+    }
+    return validity;
+  }
+
   const server = createAgentWorkbenchMcpServer(absoluteRepoRoot, {
     rootAuthorityPolicy: createRootAuthorityPolicy({
       launchRoot: absoluteRepoRoot,
@@ -177,23 +209,27 @@ export function createAgentWorkbenchServer(
     getRepoStatus: async ({ repo_root }) => {
       const store = await graphStore();
       const watcher = await updateWorkspaceWatcherFreshness(repo_root, store);
+      const snapshotValidity = await validateCurrentSnapshot(repo_root, store);
       return getSnapshotRepoStatus({
         repo_root,
         snapshots: store,
         catalog: store,
         warmups: runtime,
-        watcher
+        watcher,
+        snapshot_validity: snapshotValidity
       });
     },
     getRepoOrientation: async ({ repo_root }) => {
       const store = await graphStore();
       const watcher = await updateWorkspaceWatcherFreshness(repo_root, store);
+      const snapshotValidity = await validateCurrentSnapshot(repo_root, store);
       return getRepoOrientation(await getSnapshotRepoStatus({
         repo_root,
         snapshots: store,
         catalog: store,
         warmups: runtime,
-        watcher
+        watcher,
+        snapshot_validity: snapshotValidity
       }));
     },
     getRepoScope: async ({ repo_root }) => {
@@ -230,9 +266,14 @@ export function createAgentWorkbenchServer(
       }),
     searchDocs: async ({ request }) => {
       const store = await graphStore();
+      const snapshotValidity = await validateCurrentSnapshot(
+        request.repo_root ?? absoluteRepoRoot,
+        store
+      );
       return searchDocs({
         request,
         docs_index: store,
+        snapshot_validity: snapshotValidity,
         default_repo_root: absoluteRepoRoot
       });
     },
@@ -277,12 +318,17 @@ export function createAgentWorkbenchServer(
       }),
     getTaskContext: async ({ request }) => {
       const store = await graphStore();
+      const snapshotValidity = await validateCurrentSnapshot(
+        request.repo_root ?? absoluteRepoRoot,
+        store
+      );
       return getTaskContext({
         request,
         scanner,
         graph: store,
         snapshots: store,
         catalog: store,
+        snapshot_validity: snapshotValidity,
         workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
       });
@@ -296,34 +342,52 @@ export function createAgentWorkbenchServer(
       }),
     searchSymbols: async ({ request }) => {
       const store = await graphStore();
+      const snapshotValidity = await validateCurrentSnapshot(
+        request.repo_root ?? absoluteRepoRoot,
+        store,
+        request.snapshot_id
+      );
       return searchSymbols({
         request,
         graph: store,
         snapshots: store,
         catalog: store,
         workspace: workspaceForRepoRoot(request.repo_root),
+        snapshot_validity: snapshotValidity,
         default_repo_root: absoluteRepoRoot
       });
     },
     findReferences: async ({ request }) => {
       const store = await graphStore();
+      const snapshotValidity = await validateCurrentSnapshot(
+        request.repo_root ?? absoluteRepoRoot,
+        store,
+        request.snapshot_id
+      );
       return findReferences({
         request,
         graph: store,
         snapshots: store,
         catalog: store,
         workspace: workspaceForRepoRoot(request.repo_root),
+        snapshot_validity: snapshotValidity,
         default_repo_root: absoluteRepoRoot
       });
     },
     computeImpact: async ({ request }) => {
       const store = await graphStore();
+      const snapshotValidity = await validateCurrentSnapshot(
+        request.repo_root ?? absoluteRepoRoot,
+        store,
+        request.snapshot_id
+      );
       return computeImpact({
         request,
         graph: store,
         snapshots: store,
         catalog: store,
         workspace: workspaceForRepoRoot(request.repo_root),
+        snapshot_validity: snapshotValidity,
         default_repo_root: absoluteRepoRoot
       });
     },
@@ -369,7 +433,7 @@ export function createAgentWorkbenchServer(
 
   if (options.startGraphWarmup !== false) {
     const warmupTimer = setTimeout(
-      startInitialGraphWarmup,
+      startGraphWarmup,
       options.startupWarmupDelayMs ?? DEFAULT_STARTUP_WARMUP_DELAY_MS
     );
     warmupTimer.unref?.();
@@ -388,15 +452,15 @@ export function createAgentWorkbenchServer(
     return new WorkspaceSafetyAdapter({ repoRoot: repoRootForRequest(repoRoot) });
   }
 
-  function startInitialGraphWarmup(): void {
+  function startGraphWarmup(planned?: { snapshot_id: string; execution_id: string }): void {
     void (async () => {
       const warmupLock = acquireStartupWarmupLock(startupWarmupLockPath(databasePath));
       if (warmupLock === null) {
         return;
       }
       const store = await graphStore();
-      const snapshotId = String(clock.nowUnixMs());
-      const executionId = await runtime.requestWarmup({
+      const snapshotId = planned?.snapshot_id ?? String(clock.nowUnixMs());
+      const executionId = planned?.execution_id ?? await runtime.requestWarmup({
         repo_root: absoluteRepoRoot,
         snapshot_id: snapshotId
       });

@@ -52,9 +52,12 @@ public enums when existing contracts suffice.
 
 The service consumes graph/catalog snapshot evidence and a narrow workspace
 path-validation port. The port reports path existence and access outcomes; it
-does not classify runtime trust. Validation may be cached by snapshot identity
-plus the existing material change generation. A cache entry is reusable only
-when complete and no material deletion/catalog event has invalidated it.
+does not classify runtime trust. Validation remains bounded and uncached in
+this slice. Repository evidence did not expose a material workspace/catalog
+generation that can detect deletions which predate runtime observation;
+caching a `valid` receipt by snapshot ID would therefore be unsound. A future
+cache may reuse only complete receipts keyed by snapshot identity plus such a
+material generation.
 
 ### Coordinated Invalidation
 
@@ -155,14 +158,22 @@ the full test suite.
 
 Validity work must be observable and bounded. Record checked-path counts,
 completeness, and why refresh is required without exposing absolute paths or
-secret content. Repeated reads of the same complete valid snapshot should reuse
-the receipt; repeated reads of an invalid snapshot must not enqueue duplicate
-refresh work.
+secret content. Receipt reuse is deferred until a safe material-generation
+signal exists; repeated reads remain bounded and uncached in this slice.
+Repeated reads of an invalid snapshot must not enqueue duplicate refresh work.
+
+## Resolved Decisions
+
+- D001: no current catalog identity or change-generation signal is sufficient
+  to reuse a `valid` receipt after an unobserved deletion. This slice performs
+  bounded validation on first-read consumers and does not add unsafe
+  snapshot-ID-only caching. A future cache requires a fixture-proven material
+  generation and must invalidate on deletion/catalog events.
 
 ## Open Questions
 
-- Which existing catalog identity/change-generation signal is sufficient for
-  safe validity-receipt reuse without adding a new persisted schema field?
+None. Receipt caching is a deliberately deferred optimization, not an open
+requirement for this delivery slice.
 
 ## Related Artifacts
 

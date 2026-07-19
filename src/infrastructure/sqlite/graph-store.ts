@@ -36,6 +36,7 @@ import type {
   GraphMaintenancePort,
   GraphQueryPort,
   GraphWritePort,
+  SnapshotPathInventoryPort,
   SnapshotPort
 } from "../../ports/index.js";
 
@@ -163,6 +164,7 @@ export interface GraphStore
     GraphMaintenancePort,
     SnapshotPort,
     FileCatalogPort,
+    SnapshotPathInventoryPort,
     DocsIndexPort {
   db: Database.Database;
   close(): void;
@@ -1155,6 +1157,26 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     );
   }
 
+  public async listIndexedPaths(input: {
+    snapshot_id: string;
+    max_rows: number;
+  }): Promise<readonly string[]> {
+    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "listIndexedPaths");
+    if (snapshotId == null) {
+      return [];
+    }
+    const rows = this.db.prepare(`
+      SELECT path FROM (
+        SELECT path FROM files WHERE snapshot_id = @snapshotId
+        UNION
+        SELECT path FROM docs_documents WHERE snapshot_id = @snapshotId
+      )
+      ORDER BY path
+      LIMIT @maxRows
+    `).all({ snapshotId, maxRows: input.max_rows }) as Array<{ path: string }>;
+    return rows.map((row) => row.path);
+  }
+
   public async getFile(input: { snapshot_id: string; path: string }): Promise<FileCatalogEntry | null> {
     const snapshotId = this.resolveSnapshotId(input.snapshot_id, "getFile");
     if (snapshotId == null) {
@@ -1217,15 +1239,73 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       return;
     }
 
-    const fileRow = this.getFileRow(snapshotId, input.path);
-    if (fileRow) {
-      this.clearFileRecords({ snapshotId, filePath: input.path, fileId: fileRow.id });
-    }
-
-    this.db.prepare("DELETE FROM files WHERE snapshot_id = @snapshotId AND path = @path").run({
-      snapshotId,
-      path: input.path
+    const tx = this.db.transaction(() => {
+      const fileRow = this.getFileRow(snapshotId, input.path);
+      const docsRow = this.db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM docs_documents
+        WHERE snapshot_id = @snapshotId AND path = @path
+      `).get({ snapshotId, path: input.path }) as { count: number };
+      if (fileRow === null && docsRow.count === 0) {
+        return;
+      }
+      this.db.prepare(`
+        DELETE FROM docs_fts
+        WHERE rowid IN (
+          SELECT id FROM docs_documents
+          WHERE snapshot_id = @snapshotId AND path = @path
+        )
+      `).run({ snapshotId, path: input.path });
+      this.db.prepare(`
+        DELETE FROM docs_headings
+        WHERE document_id IN (
+          SELECT id FROM docs_documents
+          WHERE snapshot_id = @snapshotId AND path = @path
+        )
+      `).run({ snapshotId, path: input.path });
+      this.db.prepare(
+        "DELETE FROM docs_documents WHERE snapshot_id = @snapshotId AND path = @path"
+      ).run({ snapshotId, path: input.path });
+      if (fileRow) {
+        this.clearFileRecords({ snapshotId, filePath: input.path, fileId: fileRow.id });
+      }
+      this.db.prepare("DELETE FROM files WHERE snapshot_id = @snapshotId AND path = @path").run({
+        snapshotId,
+        path: input.path
+      });
+      if (fileRow !== null) {
+        this.db.prepare(`
+        UPDATE snapshot_index_coverage
+        SET state = 'stale',
+            indexed_files = CASE
+              WHEN indexed_files IS NULL THEN NULL
+              WHEN indexed_files > 0 THEN indexed_files - 1
+              ELSE 0
+            END,
+            reason = 'Indexed file removal invalidated snapshot coverage.'
+        WHERE snapshot_id = @snapshotId AND evidence_class = 'graph'
+      `).run({ snapshotId });
+      }
+      if (docsRow.count > 0) {
+        this.db.prepare(`
+          UPDATE snapshot_index_coverage
+          SET state = 'stale',
+              indexed_files = CASE
+                WHEN indexed_files IS NULL THEN NULL
+                WHEN indexed_files > 0 THEN indexed_files - 1
+                ELSE 0
+              END,
+              reason = 'Indexed document removal invalidated snapshot coverage.'
+          WHERE snapshot_id = @snapshotId AND evidence_class = 'docs'
+        `).run({ snapshotId });
+      }
+      this.db.prepare(`
+        UPDATE snapshots
+        SET freshness = 'stale'
+        WHERE id = @snapshotId
+      `).run({ snapshotId });
     });
+    tx();
   }
 
   public async pruneRepositorySnapshots(input: {
@@ -1537,7 +1617,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   }
 
   public async search(input: DocsIndexSearchRequest): Promise<DocsIndexSearchResult> {
-    const state = await this.getState({ repo_root: input.repo_root });
+    const state = await this.getState({ repo_root: input.repo_root, snapshot_id: input.snapshot_id });
     if (state.status !== "usable" || state.snapshot_id === undefined) {
       return {
         status: "blocked",

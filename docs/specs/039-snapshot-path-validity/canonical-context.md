@@ -66,3 +66,14 @@ package. The package is canonical only for the intended Spec 039 delivery slice.
 | graph/docs removal invariants | graph store design | yes |
 | public stale/degraded behavior | MCP surface design; changelog | yes |
 | delivery/residual status | backlog and history records | yes |
+
+## Resolved Implementation Decisions
+
+- D001 is resolved as bounded uncached validation for this slice. No current
+  material generation can make snapshot-ID-only reuse safe across deletions
+  that predate runtime observation.
+- Status, orientation, task context, docs search, and all three graph tools
+  consume the application-owned receipt. Query-specific path preflight remains
+  defense against deletion races after receipt creation.
+- First-read invalidity and watcher events use one coordinator which marks the
+  old snapshot stale and executes one background replacement-snapshot warm-up.

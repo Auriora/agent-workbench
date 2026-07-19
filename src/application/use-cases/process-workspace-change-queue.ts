@@ -11,6 +11,7 @@ import type {
   WarmupCoordinatorPort
 } from "../../ports/index.js";
 import type { WorkspaceChangeQueue } from "./workspace-change-queue.js";
+import { coordinateSnapshotRefresh } from "./coordinate-snapshot-refresh.js";
 
 export type WorkspaceChangeQueueProcessResult =
   | {
@@ -77,37 +78,21 @@ export async function processWorkspaceChangeQueue(input: {
     };
   }
 
-  const snapshotId = currentSnapshot?.id ?? String(input.clock.nowUnixMs());
   try {
-    if (currentSnapshot !== null) {
-      await input.snapshots.markSnapshotFreshness({
-        snapshot_id: currentSnapshot.id,
-        freshness: "stale",
-        reason: staleReason(drain.status)
-      });
-    }
-    const activeWarmup = await input.warmups.getState({ repo_root: input.repo_root });
-    if (activeWarmup?.state === "planned" || activeWarmup?.state === "running") {
-      return {
-        status: "stale_rescan_scheduled",
-        repo_root: input.repo_root,
-        events: drain.events,
-        bounded_rescan_required: true,
-        snapshot_id: activeWarmup.snapshot_id,
-        execution_id: activeWarmup.execution_id
-      };
-    }
-    const executionId = await input.warmups.requestWarmup({
+    const coordinated = await coordinateSnapshotRefresh({
       repo_root: input.repo_root,
-      snapshot_id: snapshotId
+      snapshots: input.snapshots,
+      warmups: input.warmups,
+      clock: input.clock,
+      reason: staleReason(drain.status)
     });
     return {
       status: "stale_rescan_scheduled",
       repo_root: input.repo_root,
       events: drain.events,
       bounded_rescan_required: true,
-      snapshot_id: snapshotId,
-      execution_id: executionId
+      snapshot_id: coordinated.snapshot_id,
+      execution_id: coordinated.execution_id
     };
   } catch (error) {
     return {

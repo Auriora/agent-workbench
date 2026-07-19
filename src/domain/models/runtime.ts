@@ -6,7 +6,8 @@
 import type {
   AnalysisValidity,
   CapabilityLevel,
-  Freshness
+  Freshness,
+  SnapshotValidityReceipt as SnapshotValidityReceiptContract
 } from "../../contracts/runtime-contracts.js";
 
 export type RepoRoot = string;
@@ -14,6 +15,10 @@ export type WorkspaceRoot = string;
 export type SnapshotId = string;
 
 export type SnapshotFreshness = Freshness;
+
+export type SnapshotPathValidityState = "valid" | "stale" | "degraded";
+
+export type SnapshotValidityReceipt = SnapshotValidityReceiptContract;
 
 export interface SnapshotState {
   id: SnapshotId;

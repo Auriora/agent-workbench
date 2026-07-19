@@ -84,6 +84,14 @@ Warm-up states:
 - `stale`: changes are known but not yet incorporated
 - `degraded`: required parser, database, or filesystem capability is missing
 
+Persisted `fresh` state is necessary but not sufficient for first-read reuse.
+The runtime performs bounded path validation against the indexed catalog. A
+complete all-present receipt may preserve freshness; a missing path marks the
+snapshot stale and idempotently requests the existing warm-up coordinator;
+inaccessible or budget-incomplete evidence is degraded and remains unknown.
+Snapshot-ID-only valid-receipt caching is intentionally not used because it
+cannot detect deletions that predate runtime observation.
+
 MVP warm-up should be explicit and observable. `repo:///status` must report
 warm-up phase, snapshot freshness, queued work counts, extraction errors, and
 degraded blockers.
@@ -355,6 +363,10 @@ The queue intentionally does not perform per-file graph/docs/FTS mutation in
 this slice. A future incremental indexer must define explicit port contracts and
 fixture-backed tests before changing graph, docs, node FTS, or docs FTS rows
 directly from file events.
+
+First-read path validation and watcher events call the same snapshot-refresh
+coordinator. It marks the current snapshot stale, reuses an already planned or
+running warm-up, and schedules at most one new warm-up for the transition.
 
 ## Related Docs
 

@@ -5,6 +5,7 @@
 
 import type { ImpactRequest, ImpactResult, ResponseMetadata } from "../../contracts/index.js";
 import type { GraphEdge } from "../../domain/models/index.js";
+import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
 import type {
   FileCatalogPort,
   GraphQueryPort,
@@ -14,8 +15,12 @@ import type {
 import {
   blockedMeta,
   fileReferencesForNodes,
+  findMissingWorkspacePaths,
   resolveSnapshot,
-  toSymbolReference
+  snapshotValidityMeta,
+  staleSnapshotMeta,
+  toSymbolReference,
+  validityForResolvedSnapshot
 } from "./query-helpers.js";
 import { capNextActions } from "./response-metadata.js";
 
@@ -30,6 +35,7 @@ export async function computeImpact(input: {
   snapshots: SnapshotPort;
   catalog: FileCatalogPort;
   workspace?: WorkspaceFilePort;
+  snapshot_validity?: SnapshotValidityReceipt;
   default_repo_root: string;
 }): Promise<ComputeImpactResult> {
   const repoRoot = input.request.repo_root ?? input.default_repo_root;
@@ -67,6 +73,33 @@ export async function computeImpact(input: {
       })
     };
   }
+  const snapshotValidity = validityForResolvedSnapshot(input.snapshot_validity, resolved.snapshot_id);
+  if (snapshotValidity !== undefined && snapshotValidity.state !== "valid") {
+    return {
+      impact: {
+        repo_root: resolved.repo_root,
+        snapshot_id: resolved.snapshot_id,
+        start_node_ids: [input.request.node_id],
+        affected_symbols: [],
+        affected_files: [],
+        edge_count: 0,
+        reached_depth: 0,
+        traversal_truncated: false,
+        confidence: {
+          level: "low",
+          scope: "empty",
+          reason: "Snapshot path validity is not sufficient for impact evidence.",
+          evidence_kinds: []
+        },
+        next_actions: capNextActions([{
+          tool: "read_resource",
+          args: { uri: "repo:///status" },
+          reason: "Refresh or revalidate the repository snapshot before impact analysis."
+        }])
+      },
+      meta: snapshotValidityMeta({ meta: resolved.meta, validity: snapshotValidity })
+    };
+  }
 
   const traversal = await input.graph.traverse({
     snapshot_id: resolved.snapshot_id,
@@ -77,6 +110,36 @@ export async function computeImpact(input: {
       direction: input.request.direction
     }
   });
+  const missingPaths = await findMissingWorkspacePaths({
+    workspace: input.workspace,
+    paths: traversal.nodes.map((node) => node.file_path)
+  });
+  if (missingPaths.length > 0) {
+    return {
+      impact: {
+        repo_root: resolved.repo_root,
+        snapshot_id: resolved.snapshot_id,
+        start_node_ids: [input.request.node_id],
+        affected_symbols: [],
+        affected_files: [],
+        edge_count: 0,
+        reached_depth: 0,
+        traversal_truncated: false,
+        confidence: {
+          level: "low",
+          scope: "empty",
+          reason: "Indexed paths required by this traversal are missing; no impact evidence was returned.",
+          evidence_kinds: []
+        },
+        next_actions: capNextActions([{
+          tool: "read_resource",
+          args: { uri: "repo:///status" },
+          reason: "Refresh the stale repository snapshot before impact analysis."
+        }])
+      },
+      meta: staleSnapshotMeta({ meta: resolved.meta, missing_paths: missingPaths })
+    };
+  }
   const confidence = impactConfidence({
     edgeCount: traversal.edges.length,
     fileCount: new Set(traversal.nodes.map((node) => node.file_path)).size,

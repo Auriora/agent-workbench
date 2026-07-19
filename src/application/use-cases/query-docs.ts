@@ -23,6 +23,7 @@ import type {
   SourceSection
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
+import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
 import {
   catalogSkipReason,
   type CatalogSkipReason
@@ -152,11 +153,41 @@ export async function getDocsMap(input: {
 export async function searchDocs(input: {
   request: DocsSearchRequest;
   docs_index: DocsIndexPort;
+  snapshot_validity?: SnapshotValidityReceipt;
   default_repo_root: string;
 }): Promise<DocsSearchUseCaseResult> {
   const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
+  if (input.snapshot_validity !== undefined && input.snapshot_validity.state !== "valid") {
+    const stale = input.snapshot_validity.state === "stale";
+    const message = input.snapshot_validity.reason ?? "Snapshot path validity is incomplete.";
+    return {
+      search: {
+        repo_root: repoRoot,
+        query: input.request.query,
+        status: "blocked",
+        hits: [],
+        warnings: [{ reason: "missing", message }],
+        truncated: false,
+        result_count: 0,
+        result_count_basis: "page",
+        next_actions: capNextActions([{
+          tool: "read_resource",
+          args: { uri: "repo:///status" },
+          reason: "Refresh or revalidate the repository snapshot before docs search."
+        }])
+      },
+      meta: docsSearchMeta({
+        repoRoot,
+        freshness: stale ? "stale" : "unknown",
+        status: "blocked",
+        truncated: false,
+        blocked: true
+      })
+    };
+  }
   const result = await input.docs_index.search({
     repo_root: repoRoot,
+    snapshot_id: input.snapshot_validity?.snapshot_id,
     scope_path: input.request.scope_path,
     query: input.request.query,
     max_results: input.request.max_results,

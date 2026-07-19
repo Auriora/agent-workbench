@@ -22,25 +22,25 @@ but is not sufficient implementation or closure proof.
 
 | Gate | Required? | Status | Evidence |
 | --- | --- | --- | --- |
-| Failing defect fixtures captured | yes | pending | T001 |
-| Shared validity/freshness contract reviewed | yes | pending | T001-T003 |
-| Graph tools return bounded stale/degraded envelopes | yes | pending | T004 |
-| Docs removal is transactionally consistent | yes | pending | T005 |
-| Budget and no-fallback boundaries pass | yes | pending | T002, T006 |
-| Focused and full automated tests pass | yes | pending | T006 |
-| Durable documentation promoted | yes | pending | T007 |
-| Lifecycle review and closure checks pass | yes | pending | T007 |
+| Failing defect fixtures captured | yes | passed | Four initial regressions failed at the intended seams before implementation. |
+| Shared validity/freshness contract reviewed | yes | passed | Contract, first-read, and independent reviewer evidence. |
+| Graph tools return bounded stale/degraded envelopes | yes | passed | Shared receipt gates plus query-specific race preflight and classifier coverage. |
+| Docs removal is transactionally consistent | yes | passed | File/graph/docs/headings/FTS/coverage, idempotence, and orphan tests. |
+| Budget and no-fallback boundaries pass | yes | passed | Valid/missing/inaccessible/budget fixtures; bounded concurrency; no retry/fallback. |
+| Focused and full automated tests pass | yes | passed | Nine focused files / 109 tests and final 80-file / 610-test run passed. |
+| Durable documentation promoted | yes | passed | Graph store, runtime operations, MCP surface, runtime contracts, changelog. |
+| Lifecycle review and closure checks pass | yes | passed | Task audit passed; lifecycle lint has no errors and one waived authoring warning was resolved. |
 
 ## Validation Commands
 
 | Command | Purpose | Result |
 | --- | --- | --- |
-| `pnpm exec vitest run tests/runtime tests/graph tests/docs tests/mcp/repo-status-resource.test.ts tests/mcp/repo-orientation-resource.test.ts tests/mcp/context-for-task-tool.test.ts tests/mcp/query-tools.test.ts` | Focused validity, persistence, docs, and public-surface coverage | pending |
-| `pnpm typecheck` | Contract and implementation types | pending |
-| `pnpm validate:plugin` | Packaged integration regression | pending |
-| `pnpm test` | Full regression suite | pending |
-| Spec Lifecycle Manager `lint_spec_package` | Package structure and traceability | pending |
-| `git diff --check` | Diff hygiene | pending |
+| `pnpm exec vitest run tests/runtime/snapshot-path-validity.test.ts tests/runtime/process-workspace-change-queue.test.ts tests/contracts/runtime-contracts.test.ts tests/mcp/repo-status-resource.test.ts tests/graph/query-tools.test.ts tests/graph/store.test.ts tests/graph/extraction-pipeline.test.ts tests/docs/fts-docs-search-fixtures.test.ts tests/mcp/query-tools.test.ts` | Focused validity, persistence, docs, and public-surface coverage | passed: 9 files / 109 tests |
+| `pnpm typecheck` | Contract and implementation types | passed |
+| `pnpm validate:plugin` | Packaged integration regression | passed |
+| `pnpm test` | Full regression suite | passed: 80 files / 610 tests |
+| Spec Lifecycle Manager `lint_spec_package` | Package structure and traceability | passed: 0 errors after adding the explicit Open Questions disposition |
+| `git diff --check` | Diff hygiene | passed |
 
 ## Requirement And Property Coverage
 
@@ -56,12 +56,12 @@ but is not sufficient implementation or closure proof.
 
 | Field | Evidence | Residual risk |
 | --- | --- | --- |
-| Scope | Snapshot validity, public freshness, graph stale behavior, docs pruning | No implementation started. |
+| Scope | Snapshot validity, public freshness, graph stale behavior, docs pruning | Implemented and validated. |
 | Out of scope | Parser/scanner fallbacks, inline rebuild, root policy, restoring specs | none |
 | Permissions | Repository code/tests/docs only | Installed runtime changes need separate authority. |
 | Validation | Commands above plus task-specific fixtures | Exact focused filenames may evolve with implementation. |
 | Review | Architecture and data-consistency review required | Cross-layer change. |
-| Closure impact | Promote to graph/runtime/MCP/contracts/backlog/changelog/history | pending |
+| Closure impact | Promote to graph/runtime/MCP/contracts/backlog/changelog/history | durable owners promoted; history cleanup follows final spec commit |
 
 ## Evidence Log
 
@@ -70,11 +70,15 @@ but is not sufficient implementation or closure proof.
 | 2026-07-19 | Live orientation/status/context and Git deletion evidence | defect confirmed | Snapshot `1783312125057` retained seven files deleted by `c90769b`. |
 | 2026-07-19 | Direct source mapping | root causes bounded | Persisted freshness trust, separate task-context default, stale path reads, and incomplete docs pruning identified. |
 | 2026-07-19 | Requirements/design/task/traceability review | package reconciled | Verification gates reflect the final initial design and task split. |
+| 2026-07-19 | Focused validity/status/graph/store/docs/MCP tests | passed | Nine files / 109 tests cover receipt, replacement refresh, shared graph gating, docs-first inventory, idempotent coverage, and extraction compatibility. |
+| 2026-07-19 | Independent architecture/data review | findings corrected | Snapshot-specific receipt selection and absolute-path redaction were added to the earlier graph, refresh, concurrency, and orphan corrections. |
+| 2026-07-19 | Final full regression | passed | `pnpm test`: 80 files / 610 tests. |
 
 ## Residual Risks
 
-- An O(N) validity check on every read would violate first-read goals; caching
-  must remain correct under pre-watcher deletions.
+- Bounded validation remains O(N) up to 2,000 indexed paths and uses concurrency
+  32. Valid-receipt caching remains prohibited until a material generation can
+  detect pre-watcher deletions.
 - Read paths must not mutate historical snapshots through several coordinators.
 - Graph coverage completeness and filesystem freshness must remain distinct.
 
@@ -82,18 +86,17 @@ but is not sufficient implementation or closure proof.
 
 | Spec content | Durable destination | Status |
 | --- | --- | --- |
-| snapshot validity and refresh semantics | runtime operations; runtime contracts | pending |
-| persistence/removal invariants | graph store design | pending |
-| graph stale/degraded behavior | MCP surface design; runtime contracts | pending |
-| agent-visible behavior | agent-readable changelog | pending |
-| completion/residual routing | backlog and history records | pending |
+| snapshot validity and refresh semantics | runtime operations; runtime contracts | promoted |
+| persistence/removal invariants | graph store design | promoted |
+| graph stale/degraded behavior | MCP surface design; runtime contracts | promoted |
+| agent-visible behavior | agent-readable changelog | promoted |
+| completion/residual routing | backlog and history records | ready for closure cleanup |
 
 ## Readiness Decision
 
-- **Ready for implementation:** yes, after T001 locks the failing contract
-  fixtures and resolves the catalog-generation reuse question.
-- **Ready for promotion:** no
-- **Ready for closure:** no
+- **Ready for implementation:** implementation complete
+- **Ready for promotion:** yes; promoted
+- **Ready for closure:** yes; final spec commit and closure cleanup remain
 
 ## Related Artifacts
 

@@ -194,6 +194,12 @@ refresh triggers, and links to the detailed status, scope, and overview
 resources. Ordinary content edits can make analysis stale without invalidating
 the orientation decision; root, scope, ignore-policy, runtime-identity, policy,
 or index-validity changes require a new orientation decision.
+An indexed path deletion is an explicit orientation refresh trigger. Status,
+orientation, and `context_for_task` consume the same bounded snapshot-validity
+receipt; scan completeness and watcher state remain separately labelled
+dimensions. Graph tools preflight the paths needed by their result and return a
+blocked stale envelope with refresh guidance instead of leaking filesystem
+errors or useful-looking partial evidence.
 `repo:///status` must expose cold, refreshing, fresh, stale, and degraded
 warm-up state, including queued work counts and indexing blockers where
 available.

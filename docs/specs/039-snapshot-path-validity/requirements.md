@@ -156,9 +156,9 @@ compatible, so that correctness does not create an unbounded first-read scan.
 
 1. Snapshot validity SHALL have an explicit work/query budget and observable
    incomplete state.
-2. Cached validity evidence SHALL be keyed by snapshot identity and invalidated
-   by material workspace/catalog changes; an incomplete cache SHALL NOT claim
-   fresh.
+2. IF validity evidence is cached, THEN it SHALL be keyed by snapshot identity
+   and invalidated by material workspace/catalog changes; an incomplete cache
+   SHALL NOT claim fresh.
 3. Existing public resource and tool names SHALL remain compatible.
 4. The implementation SHALL use the existing watcher, change queue, warm-up,
    and graph-store ownership boundaries rather than adding a parallel indexer.

@@ -6,22 +6,18 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import {
-  findReferencesRequestSchema,
-  type FindReferencesRequest
+  findReferencesRequestSchema
 } from "../../../../contracts/index.js";
 import {
   buildFindReferencesEnvelope,
   buildInvalidFindReferencesInputEnvelope
 } from "../../../../presentation/find-references-presenter.js";
 import {
-  formatMcpArgumentError,
-  parseMcpArguments
-} from "../../arguments/index.js";
+  classifiedFailureEnvelope,
+  classifyGraphQueryError,
+  registerMcpToolWithEnvelope
+} from "../../envelope.js";
 import type { McpToolDeclaration } from "../index.js";
-import {
-  mcpShapeForRootAuthority,
-  resolveMcpRequestRepoRoot
-} from "../root-authority.js";
 
 const findReferencesRawShape = {
   node_id: z.string().optional().describe("Indexed graph node id from symbol_search, context_for_task, or a previous graph result."),
@@ -55,44 +51,22 @@ export const findReferencesTool: McpToolDeclaration = {
     returns: "ResponseEnvelope<FindReferencesResult>"
   },
   register(server: McpServer, context) {
-    server.tool(
-      "find_references",
-      findReferencesDescription,
-      mcpShapeForRootAuthority(findReferencesRawShape, context),
-      async (args: unknown) => {
-        let request: FindReferencesRequest;
-        try {
-          request = parseMcpArguments(findReferencesRequestSchema, args);
-        } catch (error) {
-          const message = formatMcpArgumentError(error, "Invalid find_references arguments.");
-          return textResponse(buildInvalidFindReferencesInputEnvelope({ repoRoot: context.repoRoot, message }));
-        }
-
-        const rootDecision = resolveMcpRequestRepoRoot(request, context);
-        if (!rootDecision.ok) {
-          return textResponse(buildInvalidFindReferencesInputEnvelope({
-            repoRoot: rootDecision.repoRoot,
-            message: rootDecision.message
-          }));
-        }
-
-        if (context.findReferences === undefined) {
-          return textResponse(buildInvalidFindReferencesInputEnvelope({
-            repoRoot: context.repoRoot,
-            message: "find_references provider is not configured."
-          }));
-        }
-
-        return textResponse(buildFindReferencesEnvelope(await context.findReferences({
-          request: rootDecision.request
-        })));
-      }
-    );
+    registerMcpToolWithEnvelope({
+      server,
+      context,
+      name: "find_references",
+      description: findReferencesDescription,
+      rawShape: findReferencesRawShape,
+      schema: findReferencesRequestSchema,
+      invalidInputMessage: "Invalid find_references arguments.",
+      getProvider: (registryContext) => registryContext.findReferences,
+      buildFailureEnvelope: (input) => classifiedFailureEnvelope(
+        buildInvalidFindReferencesInputEnvelope({ repoRoot: input.repoRoot, message: input.message }),
+        input
+      ),
+      invoke: ({ provider, request }) => provider({ request }),
+      present: buildFindReferencesEnvelope,
+      classifyError: classifyGraphQueryError
+    });
   }
 };
-
-function textResponse(value: unknown) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }]
-  };
-}

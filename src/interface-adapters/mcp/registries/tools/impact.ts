@@ -5,20 +5,17 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { impactRequestSchema, type ImpactRequest } from "../../../../contracts/index.js";
+import { impactRequestSchema } from "../../../../contracts/index.js";
 import {
   buildImpactEnvelope,
   buildInvalidImpactInputEnvelope
 } from "../../../../presentation/impact-presenter.js";
 import {
-  formatMcpArgumentError,
-  parseMcpArguments
-} from "../../arguments/index.js";
+  classifiedFailureEnvelope,
+  classifyGraphQueryError,
+  registerMcpToolWithEnvelope
+} from "../../envelope.js";
 import type { McpToolDeclaration } from "../index.js";
-import {
-  mcpShapeForRootAuthority,
-  resolveMcpRequestRepoRoot
-} from "../root-authority.js";
 
 const impactRawShape = {
   node_id: z.string().describe("Indexed graph node id from symbol_search, context_for_task, or find_references to start traversal from."),
@@ -50,44 +47,22 @@ export const impactTool: McpToolDeclaration = {
     returns: "ResponseEnvelope<ImpactResult>"
   },
   register(server: McpServer, context) {
-    server.tool(
-      "impact",
-      impactDescription,
-      mcpShapeForRootAuthority(impactRawShape, context),
-      async (args: unknown) => {
-        let request: ImpactRequest;
-        try {
-          request = parseMcpArguments(impactRequestSchema, args);
-        } catch (error) {
-          const message = formatMcpArgumentError(error, "Invalid impact arguments.");
-          return textResponse(buildInvalidImpactInputEnvelope({ repoRoot: context.repoRoot, message }));
-        }
-
-        const rootDecision = resolveMcpRequestRepoRoot(request, context);
-        if (!rootDecision.ok) {
-          return textResponse(buildInvalidImpactInputEnvelope({
-            repoRoot: rootDecision.repoRoot,
-            message: rootDecision.message
-          }));
-        }
-
-        if (context.computeImpact === undefined) {
-          return textResponse(buildInvalidImpactInputEnvelope({
-            repoRoot: context.repoRoot,
-            message: "impact provider is not configured."
-          }));
-        }
-
-        return textResponse(buildImpactEnvelope(await context.computeImpact({
-          request: rootDecision.request
-        })));
-      }
-    );
+    registerMcpToolWithEnvelope({
+      server,
+      context,
+      name: "impact",
+      description: impactDescription,
+      rawShape: impactRawShape,
+      schema: impactRequestSchema,
+      invalidInputMessage: "Invalid impact arguments.",
+      getProvider: (registryContext) => registryContext.computeImpact,
+      buildFailureEnvelope: (input) => classifiedFailureEnvelope(
+        buildInvalidImpactInputEnvelope({ repoRoot: input.repoRoot, message: input.message }),
+        input
+      ),
+      invoke: ({ provider, request }) => provider({ request }),
+      present: buildImpactEnvelope,
+      classifyError: classifyGraphQueryError
+    });
   }
 };
-
-function textResponse(value: unknown) {
-  return {
-    content: [{ type: "text" as const, text: JSON.stringify(value, null, 2) }]
-  };
-}

@@ -152,6 +152,12 @@ export function classifyWorkspaceEditError(error: unknown): McpFailureClass {
 
 export function classifyGraphQueryError(error: unknown): McpFailureClass {
   const message = errorMessage(error, "").toLowerCase();
+  if (message.includes("enoent") || message.includes("no such file or directory")) {
+    return "stale_state";
+  }
+  if (message.includes("eacces") || message.includes("permission denied")) {
+    return "environment_unavailable";
+  }
   if (
     message.includes("database is locked") ||
     message.includes("sqlite") ||

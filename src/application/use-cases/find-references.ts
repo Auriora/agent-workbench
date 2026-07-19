@@ -16,7 +16,16 @@ import type {
   SnapshotPort,
   WorkspaceFilePort
 } from "../../ports/index.js";
-import { blockedMeta, resolveSnapshot, toSymbolReference } from "./query-helpers.js";
+import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
+import {
+  blockedMeta,
+  findMissingWorkspacePaths,
+  resolveSnapshot,
+  snapshotValidityMeta,
+  staleSnapshotMeta,
+  toSymbolReference,
+  validityForResolvedSnapshot
+} from "./query-helpers.js";
 import { capNextActions } from "./response-metadata.js";
 
 export type FindReferencesUseCaseResult = {
@@ -32,6 +41,7 @@ export async function findReferences(input: {
   snapshots: SnapshotPort;
   catalog: FileCatalogPort;
   workspace?: WorkspaceFilePort;
+  snapshot_validity?: SnapshotValidityReceipt;
   default_repo_root: string;
 }): Promise<FindReferencesUseCaseResult> {
   const repoRoot = input.request.repo_root ?? input.default_repo_root;
@@ -59,6 +69,23 @@ export async function findReferences(input: {
       })
     };
   }
+  const snapshotValidity = validityForResolvedSnapshot(input.snapshot_validity, resolved.snapshot_id);
+  if (snapshotValidity !== undefined && snapshotValidity.state !== "valid") {
+    return {
+      references: {
+        repo_root: resolved.repo_root,
+        snapshot_id: resolved.snapshot_id,
+        references: [],
+        result_count: 0,
+        next_actions: capNextActions([{
+          tool: "read_resource",
+          args: { uri: "repo:///status" },
+          reason: "Refresh or revalidate the repository snapshot before graph traversal."
+        }])
+      },
+      meta: snapshotValidityMeta({ meta: resolved.meta, validity: snapshotValidity })
+    };
+  }
 
   const target = input.request.node_id
     ? await input.graph.getNode({ snapshot_id: resolved.snapshot_id, node_id: input.request.node_id })
@@ -78,6 +105,32 @@ export async function findReferences(input: {
         next_actions: [{ tool: "symbol_search", args: { query: input.request.symbol ?? input.request.node_id ?? "" } }]
       },
       meta: resolved.meta
+    };
+  }
+
+  const lexicalCandidates = await input.catalog.listFiles({
+    snapshot_id: resolved.snapshot_id,
+    max_rows: Math.min(100, Math.max(10, input.request.max_results * 5))
+  });
+  const missingPaths = await findMissingWorkspacePaths({
+    workspace: input.workspace,
+    paths: [target.file_path, ...lexicalCandidates.map((file) => file.path)]
+  });
+  if (missingPaths.length > 0) {
+    return {
+      references: {
+        repo_root: resolved.repo_root,
+        snapshot_id: resolved.snapshot_id,
+        target: await toSymbolReference({ node: target, source_byte_limit: 0 }),
+        references: [],
+        result_count: 0,
+        next_actions: capNextActions([{
+          tool: "read_resource",
+          args: { uri: "repo:///status" },
+          reason: "Refresh the stale repository snapshot before graph traversal."
+        }])
+      },
+      meta: staleSnapshotMeta({ meta: resolved.meta, missing_paths: missingPaths })
     };
   }
 

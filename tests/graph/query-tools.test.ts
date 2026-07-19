@@ -997,6 +997,144 @@ describe("graph query use cases", () => {
     }
   });
 
+  it("returns bounded stale evidence when a lexical reference path was deleted after indexing", async () => {
+    const repoRoot = path.join(dir, "deleted-lexical-repo");
+    fs.mkdirSync(repoRoot, { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "target.py"), "def target() -> str:\n    return 'ok'\n");
+    fs.writeFileSync(path.join(repoRoot, "notes.md"), "Call target from the runtime adapter later.\n");
+    const fixture = await indexedFixture(repoRoot, "208");
+    try {
+      const target = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "208",
+        qualified_name: "target"
+      });
+      fs.rmSync(path.join(repoRoot, "notes.md"));
+
+      const result = await findReferences({
+        request: {
+          node_id: target[0]?.id,
+          max_depth: 1,
+          max_results: 5
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: repoRoot
+      });
+
+      expect(result.references.references).toEqual([]);
+      expect(result.references.result_count).toBe(0);
+      expect(result.meta).toMatchObject({
+        freshness: "stale",
+        verification_status: "blocked"
+      });
+      expect(result.references.next_actions).toEqual([
+        expect.objectContaining({
+          reason: expect.stringMatching(/refresh/i)
+        })
+      ]);
+      expect(JSON.stringify(result)).not.toContain("ENOENT");
+      expect(JSON.stringify(result)).not.toContain("no such file or directory");
+    } finally {
+      fixture.store.close();
+    }
+  });
+
+  it("gates symbol and impact queries on the shared snapshot validity receipt", async () => {
+    const repoRoot = path.join(dir, "shared-validity-graph-repo");
+    fs.mkdirSync(repoRoot, { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "target.py"), "def target() -> str:\n    return 'ok'\n");
+    const fixture = await indexedFixture(repoRoot, "209");
+    try {
+      const target = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "209",
+        qualified_name: "target"
+      });
+      const snapshotValidity = {
+        snapshot_id: "209",
+        state: "stale" as const,
+        complete: true,
+        checked_path_count: 1,
+        observed_path_count: 1,
+        missing_paths: ["target.py"],
+        inaccessible_paths: [],
+        refresh_required: true
+      };
+      const symbols = await searchSymbols({
+        request: { query: "target", exact: true, max_results: 5, languages: [], source_byte_limit: 0 },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        snapshot_validity: snapshotValidity,
+        default_repo_root: repoRoot
+      });
+      const impact = await computeImpact({
+        request: { node_id: target[0]?.id ?? "", max_depth: 1, max_nodes: 5, direction: "both" },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        snapshot_validity: snapshotValidity,
+        default_repo_root: repoRoot
+      });
+
+      expect(symbols.symbols.symbols).toEqual([]);
+      expect(symbols.meta).toMatchObject({ freshness: "stale", verification_status: "blocked" });
+      expect(impact.impact.affected_symbols).toEqual([]);
+      expect(impact.impact.affected_files).toEqual([]);
+      expect(impact.meta).toMatchObject({ freshness: "stale", verification_status: "blocked" });
+    } finally {
+      fixture.store.close();
+    }
+  });
+
+  it("does not apply validity evidence from a different selected snapshot", async () => {
+    const repoRoot = path.join(dir, "mismatched-validity-graph-repo");
+    fs.mkdirSync(repoRoot, { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "target.py"), "def target() -> str:\n    return 'ok'\n");
+    const fixture = await indexedFixture(repoRoot, "210");
+    try {
+      const result = await searchSymbols({
+        request: {
+          snapshot_id: "210",
+          query: "target",
+          exact: true,
+          max_results: 5,
+          languages: [],
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        snapshot_validity: {
+          snapshot_id: "209",
+          state: "valid",
+          complete: true,
+          checked_path_count: 1,
+          observed_path_count: 1,
+          missing_paths: [],
+          inaccessible_paths: [],
+          refresh_required: false
+        },
+        default_repo_root: repoRoot
+      });
+
+      expect(result.symbols.symbols).toEqual([]);
+      expect(result.meta).toMatchObject({
+        freshness: "unknown",
+        verification_status: "blocked"
+      });
+      expect(result.meta.caveats).toEqual([
+        expect.objectContaining({ kind: "degraded_snapshot_path_validity" })
+      ]);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
   it("keeps duplicate-name references ambiguous and bounded", async () => {
     const repoRoot = path.join(dir, "ambiguous-repo");
     fs.mkdirSync(repoRoot, { recursive: true });

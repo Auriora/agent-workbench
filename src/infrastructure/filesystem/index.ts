@@ -11,3 +11,4 @@ export * from "./ignore-file-policy.js";
 export * from "./workspace-event-policy.js";
 export * from "./workspace-hook-signal-router.js";
 export * from "./workspace-watcher.js";
+export * from "./snapshot-path-validator.js";

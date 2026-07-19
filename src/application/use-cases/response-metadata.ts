@@ -25,7 +25,11 @@ import type {
   VerificationStatus
 } from "../../contracts/index.js";
 import { makeEnvelope } from "../../contracts/index.js";
-import type { SnapshotState, WarmupExecution } from "../../domain/models/runtime.js";
+import type {
+  SnapshotState,
+  SnapshotValidityReceipt,
+  WarmupExecution
+} from "../../domain/models/runtime.js";
 
 export type RuntimeTrustState =
   | "cold"
@@ -440,6 +444,7 @@ export type PresentationSessionContext = {
 
 export function classifyRuntimeTrust(input: {
   snapshot?: SnapshotState | null;
+  snapshotValidity?: SnapshotValidityReceipt;
   warmup?: WarmupExecution | null;
   freshness: Freshness;
   hasEvidence: boolean;
@@ -455,6 +460,22 @@ export function classifyRuntimeTrust(input: {
       runtime_state: "cold",
       freshness: "cold",
       analysis_validity: "invalid"
+    };
+  }
+
+  if (input.snapshotValidity?.state === "stale") {
+    return {
+      runtime_state: "stale",
+      freshness: "stale",
+      analysis_validity: input.hasEvidence ? "valid" : "partial"
+    };
+  }
+
+  if (input.snapshotValidity?.state === "degraded") {
+    return {
+      runtime_state: "degraded",
+      freshness: "unknown",
+      analysis_validity: "partial"
     };
   }
 
@@ -560,6 +581,7 @@ function isFreshWatcherState(watcher: WatcherFreshnessState): boolean {
 export function deriveRuntimeStatusCaveats(input: {
   coverage: readonly AdapterEvidence[];
   snapshot?: SnapshotState | null;
+  snapshotValidity?: SnapshotValidityReceipt;
   warmup?: WarmupExecution | null;
   watcher?: WatcherFreshnessState;
 }): RuntimeStatusCaveat[] {
@@ -572,6 +594,27 @@ export function deriveRuntimeStatusCaveats(input: {
       severity: runtimeCaveatSeverities.language,
       message:
         "No scanner-visible adapter coverage was observed; status is limited to repository availability and cannot prove language, docs, config, or validation readiness.",
+      evidence_kinds: []
+    });
+  }
+
+  if (input.snapshotValidity?.state === "stale") {
+    caveats.push({
+      kind: "stale_snapshot_paths",
+      severity: "blocker",
+      message: snapshotPathValidityMessage(input.snapshotValidity),
+      evidence_kinds: [],
+      next_action: {
+        tool: "read_resource",
+        args: { uri: "repo:///status" },
+        reason: "Re-read repository status after the coordinated snapshot refresh completes."
+      }
+    });
+  } else if (input.snapshotValidity?.state === "degraded") {
+    caveats.push({
+      kind: "degraded_snapshot_path_validity",
+      severity: "blocker",
+      message: snapshotPathValidityMessage(input.snapshotValidity),
       evidence_kinds: []
     });
   }
@@ -717,6 +760,7 @@ export function buildRuntimeResponseMeta(input: {
   languages: readonly string[];
   coverage: readonly AdapterEvidence[];
   snapshot?: SnapshotState | null;
+  snapshotValidity?: SnapshotValidityReceipt;
   warmup?: WarmupExecution | null;
   watcher?: WatcherFreshnessState;
   freshness?: Freshness;
@@ -730,6 +774,7 @@ export function buildRuntimeResponseMeta(input: {
 } {
   const classification = classifyRuntimeTrust({
     snapshot: input.snapshot,
+    snapshotValidity: input.snapshotValidity,
     warmup: input.warmup,
     freshness: input.freshness ?? input.snapshot?.freshness ?? "fresh",
     hasEvidence: input.hasEvidence ?? input.coverage.length > 0,
@@ -742,6 +787,7 @@ export function buildRuntimeResponseMeta(input: {
       : deriveRuntimeStatusCaveats({
           coverage: input.coverage,
           snapshot: input.snapshot,
+          snapshotValidity: input.snapshotValidity,
           warmup: input.warmup,
           watcher: input.watcher
         });
@@ -765,6 +811,15 @@ export function buildRuntimeResponseMeta(input: {
       caveats
     })
   };
+}
+
+function snapshotPathValidityMessage(validity: SnapshotValidityReceipt): string {
+  if (validity.state === "stale") {
+    const sample = validity.missing_paths.slice(0, 3).join(", ");
+    const suffix = sample.length === 0 ? "" : ` Sample: ${sample}.`;
+    return `${validity.missing_paths.length} indexed path(s) are missing; snapshot evidence is stale.${suffix}`;
+  }
+  return validity.reason ?? "Snapshot path validity could not be established within the declared bound.";
 }
 
 function dedupeRuntimeCaveats(caveats: readonly RuntimeStatusCaveat[]): RuntimeStatusCaveat[] {

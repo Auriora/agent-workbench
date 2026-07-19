@@ -117,7 +117,7 @@ describe("process workspace change queue", () => {
         }
       ],
       bounded_rescan_required: true,
-      snapshot_id: "snap-1",
+      snapshot_id: "1783252800000",
       execution_id: "warmup-1"
     });
     expect(snapshots.freshnessMarks).toEqual([
@@ -130,7 +130,7 @@ describe("process workspace change queue", () => {
     expect(warmups.requests).toEqual([
       {
         repo_root: "/repo",
-        snapshot_id: "snap-1"
+        snapshot_id: "1783252800000"
       }
     ]);
   });

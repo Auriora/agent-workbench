@@ -26,6 +26,31 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
+## 2026-07-19: Snapshot Path Validity
+
+### Agent-Visible Changes
+
+- First-read status, orientation, task context, docs search, and graph queries
+  no longer trust persisted freshness when indexed paths were deleted.
+- Missing graph paths return bounded stale evidence and refresh guidance rather
+  than a raw filesystem error or partial success.
+
+### Contract Changes
+
+- Status may include a bounded `snapshot_validity` receipt with validity state,
+  completeness, path counts, missing/inaccessible evidence, and refresh state.
+- `indexed_path_is_deleted` is an orientation refresh trigger.
+
+### Required Agent Behavior Changes
+
+- Do not reuse orientation or graph/docs evidence when snapshot path validity is
+  stale or degraded; refresh or re-read status first.
+
+### Migration Notes
+
+- Existing SQLite stores require no schema migration. Removing a catalog entry
+  now atomically prunes graph, docs, heading, FTS, and coverage evidence.
+
 ## 2026-07-19: Claude Conditional Session Activation
 
 ### Agent-Visible Changes

@@ -155,6 +155,14 @@ Adapter domain describes what kind of surface an adapter covers.
 - `refreshing`: refresh is in progress.
 - `unknown`: freshness cannot be determined.
 
+Snapshot path validity is reported as a bounded receipt with `state`
+(`valid`, `stale`, or `degraded`), completeness, checked and observed path
+counts, bounded missing/inaccessible path evidence, and `refresh_required`.
+Only complete all-present evidence may be `valid`. Missing indexed paths are
+`stale`; inaccessible paths or an exhausted validation budget are `degraded`
+and map public freshness to `unknown`. The runtime caveat kinds are
+`stale_snapshot_paths` and `degraded_snapshot_path_validity`.
+
 Watcher freshness is evaluated separately from query execution before response
 metadata preserves a `fresh` claim. A watcher-clean snapshot requires the queue
 to be drained, scope to be synchronized, ignore rules to be synchronized, and no
@@ -489,6 +497,11 @@ failures use `analysis_validity: invalid_due_to_environment` and
 `verification_status: blocked`; stale-state failures use `freshness: stale`.
 Handlers may keep tool-specific data skeletons, but the failure code must match
 the next safe recovery action.
+`symbol_search`, `find_references`, and `impact` validate the indexed paths
+needed by the selected result before source-backed presentation. Missing paths
+return empty blocked graph evidence with `freshness: stale`; an unexpected
+`ENOENT` is classified as `stale_state`, while permission failures are
+`environment_unavailable`.
 
 ## Attention Item Shape
 

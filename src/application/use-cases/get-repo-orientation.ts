@@ -16,6 +16,7 @@ const refreshWhen: OrientationReceipt["refresh_when"] = [
   "scope_or_ignore_rules_change",
   "runtime_identity_changes",
   "policy_changes",
+  "indexed_path_is_deleted",
   "index_becomes_invalid"
 ];
 
@@ -49,6 +50,11 @@ function materialOrientationBlockers(
   const watcher = status.watcher_freshness;
   if (status.snapshot_id === undefined) {
     blockers.push("No repository snapshot is available.");
+  }
+  if (status.snapshot_validity?.state === "stale") {
+    blockers.push("One or more indexed paths are missing or deleted.");
+  } else if (status.snapshot_validity?.state === "degraded") {
+    blockers.push("Snapshot path validity could not be established within the declared bound.");
   }
   if (meta.analysis_validity === "invalid" || meta.analysis_validity === "invalid_due_to_environment") {
     blockers.push("Repository index evidence is invalid.");

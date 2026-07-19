@@ -11,6 +11,7 @@ import type {
   SourceSection,
   SymbolReference
 } from "../../contracts/index.js";
+import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
 import type { GraphNode } from "../../domain/models/index.js";
 import type {
   FileCatalogPort,
@@ -29,6 +30,89 @@ export type ResolvedSnapshot = {
   repo_root: string;
   meta: ResponseMetadata;
 };
+
+export async function findMissingWorkspacePaths(input: {
+  workspace?: WorkspaceFilePort;
+  paths: readonly string[];
+}): Promise<string[]> {
+  if (input.workspace === undefined) {
+    return [];
+  }
+  const uniquePaths = uniqueSorted(input.paths);
+  const checks = await Promise.all(uniquePaths.map(async (path) => ({
+    path,
+    stat: await input.workspace!.stat({ path })
+  })));
+  return checks.filter((check) => !check.stat.exists || !check.stat.is_file).map((check) => check.path);
+}
+
+export function staleSnapshotMeta(input: {
+  meta: ResponseMetadata;
+  missing_paths: readonly string[];
+}): ResponseMetadata {
+  return {
+    ...input.meta,
+    analysis_validity: "valid",
+    freshness: "stale",
+    verification_status: "blocked",
+    caveats: [
+      ...(input.meta.caveats ?? []).filter((caveat) => caveat.kind !== "stale_snapshot_paths"),
+      {
+        kind: "stale_snapshot_paths",
+        severity: "blocker",
+        message: `${input.missing_paths.length} indexed path(s) required by this graph query are missing.`,
+        evidence_kinds: []
+      }
+    ]
+  };
+}
+
+export function snapshotValidityMeta(input: {
+  meta: ResponseMetadata;
+  validity: SnapshotValidityReceipt;
+}): ResponseMetadata {
+  if (input.validity.state === "stale") {
+    return staleSnapshotMeta({ meta: input.meta, missing_paths: input.validity.missing_paths });
+  }
+  if (input.validity.state === "degraded") {
+    return {
+      ...input.meta,
+      analysis_validity: "partial",
+      freshness: "unknown",
+      verification_status: "blocked",
+      caveats: [
+        ...(input.meta.caveats ?? []).filter((caveat) => caveat.kind !== "degraded_snapshot_path_validity"),
+        {
+          kind: "degraded_snapshot_path_validity",
+          severity: "blocker",
+          message: input.validity.reason ?? "Snapshot path validity could not be established.",
+          evidence_kinds: []
+        }
+      ]
+    };
+  }
+  return input.meta;
+}
+
+export function validityForResolvedSnapshot(
+  validity: SnapshotValidityReceipt | undefined,
+  snapshotId: string
+): SnapshotValidityReceipt | undefined {
+  if (validity === undefined || validity.snapshot_id === snapshotId) {
+    return validity;
+  }
+  return {
+    snapshot_id: snapshotId,
+    state: "degraded",
+    complete: false,
+    checked_path_count: 0,
+    observed_path_count: 0,
+    missing_paths: [],
+    inaccessible_paths: [],
+    refresh_required: false,
+    reason: `Snapshot validity evidence was for ${validity.snapshot_id}, not the resolved snapshot ${snapshotId}.`
+  };
+}
 
 export async function resolveSnapshot(input: {
   repo_root: string;

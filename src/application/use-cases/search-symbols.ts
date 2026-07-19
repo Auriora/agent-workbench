@@ -15,7 +15,16 @@ import type {
   WorkspaceFilePort
 } from "../../ports/index.js";
 import type { GraphNode } from "../../domain/models/index.js";
-import { blockedMeta, resolveSnapshot, toSymbolReference } from "./query-helpers.js";
+import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
+import {
+  blockedMeta,
+  findMissingWorkspacePaths,
+  resolveSnapshot,
+  snapshotValidityMeta,
+  staleSnapshotMeta,
+  toSymbolReference,
+  validityForResolvedSnapshot
+} from "./query-helpers.js";
 import { capNextActions, uniqueSorted } from "./response-metadata.js";
 
 export type SearchSymbolsResult = {
@@ -29,6 +38,7 @@ export async function searchSymbols(input: {
   snapshots: SnapshotPort;
   catalog: FileCatalogPort;
   workspace?: WorkspaceFilePort;
+  snapshot_validity?: SnapshotValidityReceipt;
   default_repo_root: string;
 }): Promise<SearchSymbolsResult> {
   const repoRoot = input.request.repo_root ?? input.default_repo_root;
@@ -56,6 +66,23 @@ export async function searchSymbols(input: {
       })
     };
   }
+  const snapshotValidity = validityForResolvedSnapshot(input.snapshot_validity, resolved.snapshot_id);
+  if (snapshotValidity !== undefined && snapshotValidity.state !== "valid") {
+    return {
+      symbols: {
+        query: input.request.query,
+        repo_root: resolved.repo_root,
+        snapshot_id: resolved.snapshot_id,
+        symbols: [],
+        next_actions: capNextActions([{
+          tool: "read_resource",
+          args: { uri: "repo:///status" },
+          reason: "Refresh or revalidate the repository snapshot before symbol search."
+        }])
+      },
+      meta: snapshotValidityMeta({ meta: resolved.meta, validity: snapshotValidity })
+    };
+  }
 
   const searchResult: SymbolNodeSearchResult = input.request.exact
     ? await findExactThenFallbackSymbols({
@@ -81,6 +108,26 @@ export async function searchSymbols(input: {
   });
   const exactMiss = searchResult.exactMiss;
   const filtered = filterByLanguages(nodes, input.request.languages);
+  const missingPaths = await findMissingWorkspacePaths({
+    workspace: input.workspace,
+    paths: filtered.map((node) => node.file_path)
+  });
+  if (missingPaths.length > 0) {
+    return {
+      symbols: {
+        query: input.request.query,
+        repo_root: resolved.repo_root,
+        snapshot_id: resolved.snapshot_id,
+        symbols: [],
+        next_actions: capNextActions([{
+          tool: "read_resource",
+          args: { uri: "repo:///status" },
+          reason: "Refresh the stale repository snapshot before reading symbol evidence."
+        }])
+      },
+      meta: staleSnapshotMeta({ meta: resolved.meta, missing_paths: missingPaths })
+    };
+  }
 
   return {
     symbols: {

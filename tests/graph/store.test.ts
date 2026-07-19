@@ -483,7 +483,7 @@ describe("graph store", () => {
     }
   });
 
-  it("cleans FTS rows when file catalog entries are removed", async () => {
+  it("atomically prunes graph, docs, FTS, and coverage evidence when file catalog entries are removed", async () => {
     const store = openGraphStore(path.join(dir, "remove-entry-cleanup.sqlite"));
     const snapshot = snapshotState("461");
 
@@ -492,19 +492,86 @@ describe("graph store", () => {
       await store.replaceSnapshotExtraction({
         batch: extractionBatch({
           snapshot_id: snapshot.id,
-          source_path: "src/delete_me.py",
+          source_path: "docs/delete_me.md",
           node_id: "delete-me-node",
           name: "DeleteMe"
         }),
         replace: true
       });
+      await store.replaceSnapshotDocs({
+        snapshot_id: snapshot.id,
+        repo_root: snapshot.repo_root,
+        documents: [
+          {
+            path: "docs/delete_me.md",
+            title: "Delete me",
+            headings: [{ id: "delete-me", text: "Delete me", depth: 1, line: 1 }],
+            selected_text: "Unique obsolete documentation token",
+            content_hash: "docs-delete-hash",
+            byte_count: 36,
+            indexed_at: "2026-05-08T00:00:00.000Z",
+            truncated: false
+          }
+        ],
+        coverage: [
+          {
+            evidence_class: "docs",
+            state: "complete",
+            indexed_files: 1,
+            eligible_files_seen: 1,
+            scan_truncated: false,
+            indexed_roots: ["docs"]
+          },
+          {
+            evidence_class: "graph",
+            state: "complete",
+            indexed_files: 1,
+            eligible_files_seen: 1,
+            scan_truncated: false,
+            indexed_roots: ["."]
+          }
+        ]
+      });
       expect(countRows(store.db, "node_fts")).toBe(1);
+      expect(countRows(store.db, "docs_documents")).toBe(1);
+      expect(countRows(store.db, "docs_headings")).toBe(1);
+      expect(countRows(store.db, "docs_fts")).toBe(1);
 
-      await store.removeEntry({ snapshot_id: snapshot.id, path: "src/delete_me.py" });
+      await store.removeEntry({ snapshot_id: snapshot.id, path: "docs/delete_me.md" });
 
-      expect(await store.getFile({ snapshot_id: snapshot.id, path: "src/delete_me.py" })).toBeNull();
+      expect(await store.getFile({ snapshot_id: snapshot.id, path: "docs/delete_me.md" })).toBeNull();
       expect(await store.findNodesByName({ snapshot_id: snapshot.id, query: "DeleteMe", exact: true })).toEqual([]);
       expect(countRows(store.db, "node_fts")).toBe(0);
+      expect(countRows(store.db, "docs_documents")).toBe(0);
+      expect(countRows(store.db, "docs_headings")).toBe(0);
+      expect(countRows(store.db, "docs_fts")).toBe(0);
+      const docsSearch = await store.search({
+        repo_root: snapshot.repo_root,
+        query: "obsolete",
+        max_results: 10,
+        include_snippets: false
+      });
+      expect(docsSearch.hits).toEqual([]);
+      expect(docsSearch.indexed_docs_count).toBe(0);
+      const coverageRows = store.db.prepare(`
+        SELECT evidence_class, state, indexed_files
+        FROM snapshot_index_coverage
+        WHERE snapshot_id = ?
+        ORDER BY evidence_class
+      `).all(Number(snapshot.id));
+      expect(coverageRows).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ state: "complete", indexed_files: 1 })
+        ])
+      );
+      await store.removeEntry({ snapshot_id: snapshot.id, path: "docs/delete_me.md" });
+      const repeatedCoverageRows = store.db.prepare(`
+        SELECT evidence_class, state, indexed_files
+        FROM snapshot_index_coverage
+        WHERE snapshot_id = ?
+        ORDER BY evidence_class
+      `).all(Number(snapshot.id));
+      expect(repeatedCoverageRows).toEqual(coverageRows);
     } finally {
       store.close();
     }

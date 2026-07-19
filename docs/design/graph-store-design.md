@@ -121,8 +121,10 @@ caches should be added only when a concrete query requires relational storage.
 - `docs_headings.document_id` references `docs_documents`.
 - `edges.source_node_id` and `edges.target_node_id` reference `nodes` when both
   endpoints are resolved.
-- Deletes and renames remove stale file, node, edge, FTS, and unresolved-ref
-  rows in the same transaction.
+- Removing a catalog entry deletes its file, node, edge, unresolved-reference,
+  node FTS, documentation, heading, and docs FTS rows in one transaction. The
+  affected snapshot and coverage rows become stale in that transaction, so a
+  count or search cannot retain success-shaped orphan evidence.
 - Docs FTS rows are replaced transactionally for a snapshot and are treated as
   derived evidence tied to snapshot freshness.
 - Metadata fields must be typed JSON with schema-versioned interpretation.
@@ -200,13 +202,19 @@ traversal-depth caps.
   launchers, including parallel sub-agents in one session, elect one daemon
   starter before any graph store is opened. Startup warm-up is scheduled once
   per daemon lifetime.
-- Watcher-clean snapshots are the freshness authority for hot reads.
+- Watcher state and bounded current-path validation jointly constrain freshness
+  for hot reads. A drained watcher cannot prove that persisted paths deleted
+  before watcher startup still exist.
 - Stale rows must be labeled in downstream MCP responses.
 - A watcher-clean snapshot means the watcher queue is drained, no refresh is in
   progress, scope is synchronized, and root ignore-file rules have not changed
   since the snapshot began.
 - Create, modify, rename, delete, ignore-rule, and config-change events
   invalidate snapshot freshness before new evidence is considered fresh.
+- First-read validation checks a bounded set of indexed paths. Missing paths
+  make the snapshot stale and schedule the existing refresh path; inaccessible
+  paths or an exhausted budget produce degraded/incomplete evidence and never
+  a fresh claim.
 - Readers during rebuild must either see the previous valid database or a
   `refreshing`/`cold` state, never a partial replacement.
 

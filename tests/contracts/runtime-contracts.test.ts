@@ -32,6 +32,7 @@ import {
   repoScopeSchema,
   responseMetadataSchema,
   responseEnvelopeSchema,
+  snapshotValidityReceiptSchema,
   symbolSearchRequestSchema,
   symbolSearchResultSchema,
   taskContextRequestSchema,
@@ -102,6 +103,56 @@ describe("runtime contract categories", () => {
 });
 
 describe("runtime contracts", () => {
+  it("models bounded snapshot validity without allowing incomplete evidence to claim valid", () => {
+    expect(snapshotValidityReceiptSchema.parse({
+      snapshot_id: "snapshot-1",
+      state: "valid",
+      complete: true,
+      checked_path_count: 2,
+      observed_path_count: 2,
+      missing_paths: [],
+      inaccessible_paths: [],
+      refresh_required: false
+    })).toEqual({
+      snapshot_id: "snapshot-1",
+      state: "valid",
+      complete: true,
+      checked_path_count: 2,
+      observed_path_count: 2,
+      missing_paths: [],
+      inaccessible_paths: [],
+      refresh_required: false
+    });
+
+    expect(snapshotValidityReceiptSchema.parse({
+      snapshot_id: "snapshot-1",
+      state: "degraded",
+      complete: false,
+      checked_path_count: 1,
+      observed_path_count: 2,
+      missing_paths: [],
+      inaccessible_paths: [],
+      refresh_required: false
+    })).toMatchObject({
+      state: "degraded",
+      complete: false,
+      checked_path_count: 1,
+      observed_path_count: 2,
+      refresh_required: false
+    });
+
+    expect(snapshotValidityReceiptSchema.safeParse({
+      snapshot_id: "snapshot-1",
+      state: "valid",
+      complete: false,
+      checked_path_count: 1,
+      observed_path_count: 2,
+      missing_paths: [],
+      inaccessible_paths: [],
+      refresh_required: false
+    }).success).toBe(false);
+  });
+
   it("accepts only canonical capability levels", () => {
     expect(capabilityLevelSchema.parse("partial_semantic")).toBe("partial_semantic");
     expect(() => capabilityLevelSchema.parse("resource_only")).toThrow();

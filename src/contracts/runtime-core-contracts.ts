@@ -126,6 +126,8 @@ export const runtimeStatusCaveatKindSchema = z.enum([
   "missing_optional_enrichment_evidence",
   "unsupported_language_or_platform",
   "missing_test_runner",
+  "stale_snapshot_paths",
+  "degraded_snapshot_path_validity",
   "stale_watcher_snapshot",
   "watcher_refreshing",
   "degraded_watcher_freshness"
@@ -148,6 +150,52 @@ export const runtimeErrorSchema = z.object({
   next_action: nextActionSchema.optional()
 });
 export type RuntimeError = z.infer<typeof runtimeErrorSchema>;
+
+export const snapshotValidityReceiptSchema = z
+  .object({
+    snapshot_id: z.string().min(1),
+    state: z.enum(["valid", "stale", "degraded"]),
+    complete: z.boolean(),
+    checked_path_count: z.number().int().nonnegative(),
+    observed_path_count: z.number().int().nonnegative(),
+    missing_paths: z.array(z.string()),
+    inaccessible_paths: z.array(z.string()),
+    refresh_required: z.boolean(),
+    reason: z.string().optional()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.checked_path_count > value.observed_path_count) {
+      context.addIssue({
+        code: "custom",
+        message: "checked_path_count cannot exceed observed_path_count."
+      });
+    }
+    if (value.state === "valid" && (
+      !value.complete ||
+      value.missing_paths.length > 0 ||
+      value.inaccessible_paths.length > 0 ||
+      value.refresh_required
+    )) {
+      context.addIssue({
+        code: "custom",
+        message: "A valid snapshot receipt requires complete evidence with no missing or inaccessible paths."
+      });
+    }
+    if (value.state === "stale" && (value.missing_paths.length === 0 || !value.refresh_required)) {
+      context.addIssue({
+        code: "custom",
+        message: "A stale snapshot receipt requires missing paths and refresh_required."
+      });
+    }
+    if (value.state === "degraded" && value.complete && value.inaccessible_paths.length === 0) {
+      context.addIssue({
+        code: "custom",
+        message: "A degraded snapshot receipt requires incomplete or inaccessible evidence."
+      });
+    }
+  });
+export type SnapshotValidityReceipt = z.infer<typeof snapshotValidityReceiptSchema>;
 
 export const DEFAULT_WORKSPACE_WATCHER_ENABLED = false as const;
 export const DEFAULT_WORKSPACE_WATCHER_DEBOUNCE_MS = 250;

@@ -37,29 +37,31 @@ license: GPL-3.0-or-later
 
 | Property | Requirements | Tasks | Planned evidence | Residual risk |
 | --- | --- | --- | --- | --- |
-| CP-001 | Requirement 1 | T001-T002 | Index-then-delete freshness fixture | pending |
-| CP-002 | Requirement 2 | T001, T003 | Same-snapshot cross-surface golden | pending |
-| CP-003 | Requirement 3 | T001, T004 | Deleted-node MCP regression | pending |
-| CP-004 | Requirement 4 | T001, T005 | SQLite row/count/FTS assertions | pending |
-| CP-005 | Requirement 1, Requirement 5 | T001-T002 | Low-budget/incomplete receipt fixture | pending |
+| CP-001 | Requirement 1 | T001-T002 | Index-then-delete first-read fixture | verified |
+| CP-002 | Requirement 2 | T001, T003 | Status/orientation/context agreement plus shared graph receipt tests | verified |
+| CP-003 | Requirement 3 | T001, T004 | Deleted lexical path, graph receipt gates, and MCP classifier tests | verified |
+| CP-004 | Requirement 4 | T001, T005 | Atomic row/count/FTS/coverage and orphan assertions | verified |
+| CP-005 | Requirement 1, Requirement 5 | T001-T002 | Valid, missing, inaccessible, and budget-incomplete receipts | verified; valid receipts intentionally uncached until a safe material generation exists |
 
 ## Design To Implementation Matrix
 
 | Design section | Requirements | Tasks | Likely interfaces/files | Coverage state |
 | --- | --- | --- | --- | --- |
-| Shared Snapshot Validity | Requirement 1, Requirement 5 | T001-T002 | application use case, runtime model/contracts, path port | not-covered |
-| Coordinated Invalidation | Requirement 1, Requirement 5 | T002 | change queue, warm-up, server composition | not-covered |
-| Cross-Surface Freshness | Requirement 2 | T003 | status/orientation/task/docs/query helpers | not-covered |
-| Graph Query Guard | Requirement 3 | T004 | graph use cases, presenters, registries | not-covered |
-| Transactional Documentation Removal | Requirement 4 | T005 | SQLite graph/docs store | not-covered |
+| Shared Snapshot Validity | Requirement 1, Requirement 5 | T001-T002 | application use case, runtime model/contracts, path port | covered |
+| Coordinated Invalidation | Requirement 1, Requirement 5 | T002 | shared coordinator, change queue, background warm-up, server composition | covered |
+| Cross-Surface Freshness | Requirement 2 | T003 | status/orientation/task/docs/graph helpers | covered |
+| Graph Query Guard | Requirement 3 | T004 | graph use cases, targeted preflight, shared receipt, registries | covered |
+| Transactional Documentation Removal | Requirement 4 | T005 | SQLite graph/docs store | covered |
 
 ## Open Decision Impact
 
 | Decision ID | Blocks | Requirements | Tasks | Resolution needed |
 | --- | --- | --- | --- | --- |
-| D001 validity cache key | T002 implementation | Requirement 1, Requirement 5 | T001-T002 | Select an existing catalog/change-generation signal or document the minimal new contract before implementation. |
+| D001 validity cache key | none | Requirement 1, Requirement 5 | T001-T002 | Resolved: no safe generation exists; perform bounded uncached validation and forbid snapshot-ID-only valid caching. |
 
 ## Maintenance Notes
 
 - Replace `not-covered` only with concrete task and verification evidence.
 - Any partial result requires one destination before closure.
+- Re-reviewed after the final requirements and design revisions on 2026-07-19;
+  the conditional cache requirement and uncached implementation remain aligned.

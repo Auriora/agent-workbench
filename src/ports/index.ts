@@ -33,6 +33,7 @@ import type {
   RuntimeContextInput,
   SnapshotFreshness,
   SnapshotOwnershipRecord,
+  SnapshotValidityReceipt,
   SnapshotState,
   WarmupExecution
 } from "../domain/models/runtime.js";
@@ -185,6 +186,33 @@ export interface FileCatalogScanPort {
     skipped_roots: readonly string[];
     max_files: number;
   }): Promise<FileCatalogScanResult>;
+}
+
+export type SnapshotPathValidationOutcome = {
+  path: string;
+  status: "present" | "missing" | "inaccessible";
+  reason?: string;
+};
+
+export interface SnapshotPathValidationPort {
+  validatePaths(input: {
+    repo_root: string;
+    paths: readonly string[];
+  }): Promise<readonly SnapshotPathValidationOutcome[]>;
+}
+
+export interface SnapshotPathInventoryPort {
+  listIndexedPaths(input: {
+    snapshot_id: string;
+    max_rows: number;
+  }): Promise<readonly string[]>;
+}
+
+export interface SnapshotValidityPort {
+  validate(input: {
+    snapshot: SnapshotState;
+    max_paths: number;
+  }): Promise<SnapshotValidityReceipt>;
 }
 
 export interface FileIdentityPort {
@@ -389,6 +417,7 @@ export type DocsIndexState = {
 
 export type DocsIndexSearchRequest = {
   repo_root: string;
+  snapshot_id?: string;
   scope_path?: string;
   query: string;
   max_results: number;

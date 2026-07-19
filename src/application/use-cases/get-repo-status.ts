@@ -9,7 +9,11 @@ import type {
   ResponseMetadata
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
-import type { SnapshotState, WarmupExecution } from "../../domain/models/runtime.js";
+import type {
+  SnapshotState,
+  SnapshotValidityReceipt,
+  WarmupExecution
+} from "../../domain/models/runtime.js";
 import { summarizeAdapterEvidence } from "../../domain/policies/index.js";
 import {
   buildRuntimeResponseMeta,
@@ -44,6 +48,7 @@ export type RuntimeStatus = {
   owner_state?: SnapshotState["owner_state"];
   warmup_state?: WarmupExecution["state"];
   watcher_freshness?: WatcherFreshnessState;
+  snapshot_validity?: SnapshotValidityReceipt;
   reason?: string;
 };
 
@@ -63,6 +68,7 @@ export function getCatalogRepoStatus(input: {
   snapshot?: SnapshotState | null;
   warmup?: WarmupExecution | null;
   watcher?: WatcherFreshnessState;
+  snapshot_validity?: SnapshotValidityReceipt;
   row_limit?: number;
   truncated?: boolean;
 }): GetRepoStatusResult {
@@ -75,6 +81,7 @@ export function getCatalogRepoStatus(input: {
     languages,
     coverage,
     snapshot: input.snapshot,
+    snapshotValidity: input.snapshot_validity,
     warmup: input.warmup,
     watcher: input.watcher,
     freshness: input.freshness,
@@ -103,6 +110,9 @@ export function getCatalogRepoStatus(input: {
   if (input.watcher !== undefined) {
     status.watcher_freshness = input.watcher;
   }
+  if (input.snapshot_validity !== undefined) {
+    status.snapshot_validity = input.snapshot_validity;
+  }
   const reason = input.snapshot?.reason ?? input.warmup?.reason;
   if (reason !== undefined) {
     status.reason = reason;
@@ -119,6 +129,7 @@ export async function getSnapshotRepoStatus(input: {
   catalog: FileCatalogPort;
   warmups?: WarmupCoordinatorPort;
   watcher?: WatcherFreshnessState;
+  snapshot_validity?: SnapshotValidityReceipt;
   snapshot_id?: string;
   indexed_roots?: readonly string[];
   skipped_roots?: readonly string[];
@@ -157,6 +168,7 @@ export async function getSnapshotRepoStatus(input: {
     snapshot,
     warmup,
     watcher: input.watcher,
+    snapshot_validity: input.snapshot_validity,
     files,
     row_limit: rowLimit,
     truncated: files.length >= rowLimit
@@ -201,6 +213,7 @@ export function getSnapshotMetadataRepoStatus(input: {
   snapshot: SnapshotState | null;
   warmup?: WarmupExecution | null;
   watcher?: WatcherFreshnessState;
+  snapshot_validity?: SnapshotValidityReceipt;
   files?: readonly FileCatalogEntry[];
   row_limit?: number;
   truncated?: boolean;
@@ -215,6 +228,7 @@ export function getSnapshotMetadataRepoStatus(input: {
     languages,
     coverage,
     snapshot: input.snapshot,
+    snapshotValidity: input.snapshot_validity,
     warmup: input.warmup,
     watcher: input.watcher,
     freshness: input.snapshot?.freshness ?? "cold",
@@ -244,6 +258,9 @@ export function getSnapshotMetadataRepoStatus(input: {
   }
   if (input.watcher !== undefined) {
     status.watcher_freshness = input.watcher;
+  }
+  if (input.snapshot_validity !== undefined) {
+    status.snapshot_validity = input.snapshot_validity;
   }
   const reason = input.snapshot?.reason ?? input.warmup?.reason;
   if (reason !== undefined) {
