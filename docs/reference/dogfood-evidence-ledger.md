@@ -3,7 +3,7 @@ title: Dogfood evidence ledger
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-06-13
+last_reviewed: 2026-07-19
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -46,6 +46,7 @@ include secrets, customer data, full transcripts, or unredacted command output.
 | 2026-06-06 | Cross-repo smoke pass | Mixed repositories | Codex | First-read reliability smoke | status, scope, overview, integration profile, context | Confirmed first-call trust, scope visibility, and project-shape gaps | Manual inspection when validation plans timed out or were too broad | Several ranking and validation-planning gaps promoted into durable backlog | Some smoke evidence stayed partial/degraded | EB003, EB004, EB009, EB014 |
 | 2026-06-13 | Product positioning docs slice | Markdown/docs/package metadata | Codex | Documentation hardening | repo status/scope/overview, docs direct reads, package dry-run, focused tests | Added README, lifecycle bridge contract, proof/status guidance, and packaging metadata | Direct file reads for precise docs edits | Lifecycle dependency confusion reduced in durable docs | No runtime trust-calibration field yet | EB023, EB025, EB029 |
 | 2026-06-19 | Lifecycle-driven web app task | Web app/spec docs | Codex | Session-scoped plugin adoption feedback | None meaningfully used | Workbench was available but lost to shell, lifecycle tooling, subagents, and validation commands because the first useful Workbench action was not obvious | Shell `git status`, direct file reads, validation commands, and lifecycle tools | No Workbench-backed defects avoided in this phase | Discoverability gap between advertised `repo:///...` resources and visible tool-oriented affordances | EB044 |
+| 2026-07-19 | Agent Workbench repository | TypeScript/JavaScript/Markdown/plugin packaging | Claude Code | Four paired navigation, policy lookup, validation-planning, and change-context tasks | `find_references`, `docs_search`, `verification_plan`, `context_for_task` | Context routing found high-value hook, manifest, source-sync, and governing-doc evidence with explicit trust labels; stale graph/docs queries remained blocked | Direct `grep`, `package.json`, and CI workflow reads supplied exact consumers, policy text, and complete validation gates | Structured degraded envelopes avoided false graph/docs completeness; ranked files exposed a non-obvious Claude hook sync dependency | Refresh never converged; validation planning omitted `validate:plugin`, `validate:skills`, and `pack:dry-run`; named Codex/Kiro scopes were omitted and generic lexical plugin symbols outranked first-party hook evidence | EB052 refresh convergence; EB004 repository-policy validation and skipped-path summarization; EB049 multi-provider context ranking, supported by EB032 explanations |
 
 ## Maintenance Notes
 

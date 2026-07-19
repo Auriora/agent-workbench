@@ -226,6 +226,66 @@ describe("verification_plan use case", () => {
     }
   });
 
+  it("prioritizes repository plugin, skill, and package gates for a Claude hook change", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-plugin-hook-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "plugins", "agent-workbench", "claude-plugin", "hooks"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, "package.json"),
+        JSON.stringify(
+          {
+            scripts: {
+              typecheck: "tsc --noEmit",
+              test: "vitest run",
+              "validate:plugin": "node scripts/validate-plugin.mjs",
+              "validate:skills": "node scripts/validate-skills.mjs",
+              "pack:dry-run": "npm pack --dry-run"
+            }
+          },
+          null,
+          2
+        )
+      );
+      fs.writeFileSync(
+        path.join(repoRoot, "plugins", "agent-workbench", "claude-plugin", "hooks", "session-start.js"),
+        "export const sessionStart = true;\n"
+      );
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["plugins/agent-workbench/claude-plugin/hooks/session-start.js"],
+          changed_files: [],
+          task: "Change SessionStart hook payload construction in the Claude plugin.",
+          include_static_feedback: false,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
+        "pnpm run validate:plugin",
+        "pnpm run validate:skills",
+        "pnpm run pack:dry-run",
+        "pnpm run typecheck",
+        "pnpm run test"
+      ]);
+      expect(result.plan.planned_commands.slice(0, 3)).toEqual(
+        result.plan.planned_commands.slice(0, 3).map(() =>
+          expect.objectContaining({
+            reason: expect.stringMatching(/plugin|skill|package/iu),
+            execution: "not_executed"
+          })
+        )
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("plans MCP server smoke checks from package scripts and transport evidence without executing them", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-mcp-stdio-"));
     try {

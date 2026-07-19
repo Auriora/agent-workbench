@@ -425,6 +425,9 @@ function planValidationCommands(input: {
       input.selectedEntries.some((file) => isMcpServerEvidencePath(file.path)) ||
       input.selectedEntries.some((file) => file.path === "package.json") ||
       taskMentionsMcp(input.task));
+  const pluginIntegrationSelected =
+    taskMentionsPluginIntegration(input.task) ||
+    input.selectedEntries.some(isPluginIntegrationEvidencePath);
   const selectedPackageScripts = selectPackageScripts({
     packages: input.discovery.packageScripts,
     selectedEntries: input.selectedEntries,
@@ -617,6 +620,22 @@ function planValidationCommands(input: {
     } else {
       commands.push(
         ...configuredPackageCommands(selectedPackageScripts, [
+          ...(pluginIntegrationSelected
+            ? [
+                {
+                  script: "validate:plugin",
+                  reason: "Configured plugin validation script is relevant to the selected integration change."
+                },
+                {
+                  script: "validate:skills",
+                  reason: "Configured skill validation script checks the skills packaged with the selected integration."
+                },
+                {
+                  script: "pack:dry-run",
+                  reason: "Configured package dry-run script checks the distributable payload for the selected integration."
+                }
+              ]
+            : []),
           {
             script: "typecheck",
             reason: "Configured package script indicates type checking is available for JavaScript/TypeScript validation."
@@ -708,6 +727,15 @@ function planValidationCommands(input: {
     lowConfidenceReasons,
     blockerReasons
   };
+}
+
+function taskMentionsPluginIntegration(task: string | undefined): boolean {
+  return task !== undefined && /\b(?:plugin|plugins|hook|hooks|skill|skills|package|packaging)\b/iu.test(task);
+}
+
+function isPluginIntegrationEvidencePath(file: FileCatalogEntry): boolean {
+  return /(?:^|\/)(?:plugins?|skills?|hooks?)(?:\/|$)/iu.test(file.path) ||
+    /(?:^|\/)(?:plugin|skill|hook)[^/]*\.(?:[cm]?[jt]s|json|toml|ya?ml)$/iu.test(file.path);
 }
 
 function mcpServerValidationCommands(input: {

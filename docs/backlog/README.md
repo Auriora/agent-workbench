@@ -206,12 +206,22 @@ or runtime telemetry.
 - Priority: P0
 - Status: active implementation surface
 - Friction signal: agents repeatedly try commands, discover missing tools or
-  wrong environments, then change validation strategy manually.
+  wrong environments, then change validation strategy manually. On 2026-07-19,
+  Claude Code asked `verification_plan` how to validate a Claude SessionStart
+  hook payload change; the planned result contained only `pnpm typecheck` and
+  `pnpm test`, omitting the repository's plugin, skill, and package-payload CI
+  gates. The same response expanded roughly 50 generated/vendor paths around
+  the two useful commands instead of summarizing the skipped work.
 - Runtime surface: `verification_plan`, repo policy discovery, command safety,
   and validation protocol.
 - Acceptance:
   - Prefer repo scripts, docs, and policy files before generic validation
     commands.
+  - For plugin and package changes, discover and rank task-relevant
+    repository-owned package and CI gates alongside language-wide checks; do
+    not return only generic commands when more specific policy evidence exists.
+  - Summarize repeated skipped paths by reason, count, and a bounded sample
+    rather than emitting one entry per generated or vendor path.
   - Detect Docker, devcontainer, Nix, Bazel, package-manager, host-blocked, and
     missing-tool constraints where evidence exists.
   - Distinguish planned, blocked, and executed validation.
@@ -220,6 +230,10 @@ or runtime telemetry.
   - Fixtures for host-allowed, Docker-required, missing-tool, package-manager,
     CMake, .NET, SAM, Go, Python, JavaScript, and docs-only repos.
   - Golden responses for blocked and low-confidence validation plans.
+  - A SessionStart plugin-hook regression includes typecheck, test,
+    `validate:plugin`, `validate:skills`, and `pack:dry-run` exactly once with
+    repository-backed reasons; a 50-path generated/vendor fixture returns one
+    counted summary with a bounded sample.
 - Promotion target: continue current `verification_plan` work and promote weak
   ecosystem evidence into focused adapter specs.
 
@@ -1577,6 +1591,9 @@ Do not promote an item when:
   `context_for_task` calls but only three `symbol_search` calls, four
   `find_references` calls, and no `impact` calls. The evidence demonstrates
   low continuation usage but does not identify one cause.
+  A 2026-07-19 Claude comparison also named Claude, Codex, and Kiro hook
+  consistency explicitly, but `context_for_task` returned only Claude-side
+  files while generic `plugin.py` symbols outranked first-party hook modules.
 - Runtime surface: `context_for_task` ranking and presentation, symbol search,
   reference lookup, impact analysis, query budgets, and tool metadata.
 - Acceptance:
@@ -1590,6 +1607,11 @@ Do not promote an item when:
     cost without weaker evidence or failure attribution.
   - Report unsupported or incomplete semantic evidence explicitly rather than
     switching to an alternate parser or hidden query route.
+  - When a task explicitly names multiple providers or integration scopes,
+    include relevant first-party files for every named scope within the bound
+    or state why a named scope was omitted. Rank exact hook/provider/artifact
+    matches and source-sync relationships ahead of distant generic lexical
+    matches.
 - Validation:
   - Golden responses prove exact continuation arguments for supported,
     partial, and unsupported repositories.
@@ -1597,6 +1619,9 @@ Do not promote an item when:
     combined surface within query budgets.
   - Cross-client metadata and skill tests keep the recommended workflow
     discoverable.
+  - A Claude/Codex/Kiro SessionStart consistency regression surfaces each
+    provider hook area plus the shared or sync source, and excludes or
+    down-ranks generic dev-CLI `plugin.py` symbols.
 - Promotion target: closed
   [Spec 038](../history/spec-closure-log.md). Current continuation behavior
   lives in [MCP surface design](../design/mcp-surface-design.md),
@@ -1729,6 +1754,9 @@ Do not promote an item when:
   `warmup_state: scheduled` with `graph_freshness: unknown`, while the
   per-client coordinator remained `planned` and repeated status reads continued
   to report the same seven missing paths.
+  Four paired follow-up tasks confirmed the user impact: exact-reference and
+  documentation searches both remained blocked and returned no usable hits,
+  while direct repository search remained complete enough to answer them.
 - Root cause: the daemon shares the graph store but each connected MCP server
   creates its own in-memory warm-up coordinator. Only the first connection may
   run startup warm-up, so a later client can request a `planned` deletion
@@ -1756,6 +1784,8 @@ Do not promote an item when:
     non-startup client, and prove exactly one refresh reaches completion.
   - Prove the snapshot advances, excludes the deleted path, converges to fresh
     for both clients, and makes integration health leave `scheduled/unknown`.
+  - After convergence, execute `find_references` and `docs_search` against the
+    refreshed snapshot and prove both return usable, non-blocked envelopes.
   - Failure and disconnect regressions proving refresh ownership survives the
     requesting client and reports structured failure without adding a fallback
     execution path.
