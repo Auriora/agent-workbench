@@ -467,6 +467,31 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-07-19 - 040-provider-aware-integration-health
+
+- **Spec:** `docs/specs/040-provider-aware-integration-health/`
+- **Title:** Provider-aware integration health requirements
+- **Final spec commit:** `6430fda`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/coding-agent-integration-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/backlog/README.md`
+  - `docs/runbooks/codex-agent-workbench-plugin.md`
+  - `plugins/agent-workbench/README.md`
+  - `plugins/agent-workbench/kiro-power/POWER.md`
+  - `plugins/agent-workbench/kiro-power/README.md`
+  - `docs/reference/agent-readable-changelog.md`
+- **Verification summary:** Typecheck, plugin and skill validation, a 236-entry
+  package dry-run, focused 45/65/27-test slices, the full 80-file/623-test
+  suite, lifecycle lint, task-state audit, independent review, and diff checks
+  passed.
+- **Residual risks:**
+  - none
+- **Follow-up:** none
+
 ### 2026-07-19 - 039-snapshot-path-validity
 
 - **Spec:** `docs/specs/039-snapshot-path-validity/`
