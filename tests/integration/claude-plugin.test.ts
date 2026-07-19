@@ -20,8 +20,14 @@ describe("Claude Code plugin artifacts", () => {
     ) as {
       name: string;
       displayName: string;
+      version: string;
+      license: string;
       skills: string;
       mcpServers: string;
+    };
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as {
+      version: string;
+      license: string;
     };
     const mcpConfig = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8")) as {
       mcpServers: Record<string, { command: string; args: string[] }>;
@@ -40,6 +46,8 @@ describe("Claude Code plugin artifacts", () => {
     expect(manifest).toMatchObject({
       name: "agent-workbench",
       displayName: "Agent Workbench",
+      version: packageJson.version,
+      license: packageJson.license,
       skills: "./skills/",
       mcpServers: "./.mcp.json"
     });
@@ -53,7 +61,8 @@ describe("Claude Code plugin artifacts", () => {
     expect(claudeMcpArgs).not.toContain("bash");
     expect(claudeMcpArgs).not.toContain("-lc");
     expect(claudeMcpArgs).not.toContain("${VAR:-");
-    expect(Object.keys(hooksConfig.hooks)).toEqual(["PostToolUse"]);
+    expect(Object.keys(hooksConfig.hooks)).toEqual(["SessionStart", "PostToolUse"]);
+    expect((hooksConfig.hooks.SessionStart as Array<{ matcher?: string }>)[0].matcher).toBe("startup");
     expect(claudeGuidance).toContain("`/agent-workbench:agent-workbench` skill");
     expect(claudeGuidance).toContain("Skip this for trivial tasks");
     expect(claudeGuidance).not.toContain("repo:///status");
@@ -66,6 +75,62 @@ describe("Claude Code plugin artifacts", () => {
     expect(skill).toContain("repo:///orientation");
     expect(skill).toContain("Claude Code Integration");
     expect(skill).not.toContain("mcp__");
+  });
+
+  it("rejects Claude plugin manifest, hook, and MCP launcher drift", async () => {
+    const validator = await import(
+      pathToFileURL(path.resolve("scripts/validate-agent-workbench-plugin.mjs")).href
+    );
+    const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8"));
+    const manifest = JSON.parse(
+      fs.readFileSync(path.join(pluginRoot, ".claude-plugin/plugin.json"), "utf8")
+    );
+    const mcpConfig = JSON.parse(fs.readFileSync(path.join(pluginRoot, ".mcp.json"), "utf8"));
+    const hooksConfig = JSON.parse(
+      fs.readFileSync(path.join(pluginRoot, "hooks/hooks.json"), "utf8")
+    );
+    const validate = () =>
+      validator.validateClaudePlugin(
+        packageJson,
+        structuredClone(manifest),
+        structuredClone(mcpConfig),
+        structuredClone(hooksConfig)
+      );
+
+    expect(validate).not.toThrow();
+
+    const manifestCases: Array<[string, (value: Record<string, unknown>) => void, RegExp]> = [
+      ["version", (value) => { value.version = "0.0.0"; }, /version must match/u],
+      ["license", (value) => { value.license = "UNLICENSED"; }, /license must match/u],
+      ["skills", (value) => { delete value.skills; }, /reference \.\/skills\//u],
+      ["MCP path", (value) => { value.mcpServers = "./wrong.json"; }, /reference \.\/\.mcp\.json/u]
+    ];
+    for (const [label, mutate, message] of manifestCases) {
+      const changedManifest = structuredClone(manifest);
+      mutate(changedManifest);
+      expect(
+        () => validator.validateClaudePlugin(packageJson, changedManifest, mcpConfig, hooksConfig),
+        label
+      ).toThrow(message);
+    }
+
+    const missingSessionStart = structuredClone(hooksConfig);
+    delete missingSessionStart.hooks.SessionStart;
+    expect(
+      () => validator.validateClaudePlugin(packageJson, manifest, mcpConfig, missingSessionStart)
+    ).toThrow(/exactly one startup SessionStart/u);
+
+    const nonStartupSessionStart = structuredClone(hooksConfig);
+    nonStartupSessionStart.hooks.SessionStart[0].matcher = "resume";
+    expect(
+      () => validator.validateClaudePlugin(packageJson, manifest, mcpConfig, nonStartupSessionStart)
+    ).toThrow(/exactly one startup SessionStart/u);
+
+    const wrongLauncher = structuredClone(mcpConfig);
+    wrongLauncher.mcpServers["agent-workbench"].args = ["src/mcp/stdio.ts"];
+    expect(
+      () => validator.validateClaudePlugin(packageJson, manifest, wrongLauncher, hooksConfig)
+    ).toThrow(/plugin-root shim/u);
   });
 
   it("adapts Claude Code hook payloads to quiet Agent Workbench feedback", async () => {
@@ -81,13 +146,30 @@ describe("Claude Code plugin artifacts", () => {
       { hook_event_name: "SessionStart" },
       { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
     );
-    expect(sessionContext).toContain("Agent Workbench MCP is available.");
+    expect(sessionContext).toBe(
+      "For non-trivial repository investigation, change evidence, or validation planning, invoke `/agent-workbench:agent-workbench`; skip it for trivial tasks."
+    );
     expect(common.buildAdditionalContextOutput("SessionStart", sessionContext)).toMatchObject({
       hookSpecificOutput: {
         hookEventName: "SessionStart",
-        additionalContext: expect.stringContaining("repo:///status")
+        additionalContext: expect.stringContaining("/agent-workbench:agent-workbench")
       }
     });
+    expect(sessionContext).not.toContain("repo:///");
+    expect(sessionContext).not.toContain("context_for_task");
+    expect(sessionContext).not.toContain("MCP");
+    expect(
+      sessionStart.buildClaudeSessionStartContext(
+        { hook_event_name: "SessionStart", source: "resume" },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
+      )
+    ).toBeUndefined();
+    expect(
+      sessionStart.buildClaudeSessionStartContext(
+        { hook_event_name: "SessionStart", source: "startup" },
+        { AGENT_WORKBENCH_HOOK_FEEDBACK: "silent" }
+      )
+    ).toBeUndefined();
 
     expect(
       postEdit.buildClaudePostEditContext(
@@ -230,8 +312,10 @@ describe("Claude Code plugin artifacts", () => {
       hook_event_name: "SessionStart",
       source: "startup"
     });
-    expect(sessionOut).toContain("Agent Workbench MCP is available.");
-    expect(sessionOut).toContain("repo:///status");
+    expect(sessionOut).toContain("/agent-workbench:agent-workbench");
+    expect(sessionOut).toContain("non-trivial repository investigation");
+    expect(sessionOut).not.toContain("repo:///");
+    expect(sessionOut).not.toContain("context_for_task");
 
     const work = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-isolated-work-"));
     fs.writeFileSync(path.join(work, "bad.json"), "{ bad,,, }\n");

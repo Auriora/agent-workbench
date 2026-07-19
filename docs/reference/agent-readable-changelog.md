@@ -3,7 +3,7 @@ title: Agent-readable changelog
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-05
+last_reviewed: 2026-07-19
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -25,6 +25,35 @@ Each version or dated entry should include:
 - Contract changes
 - Required agent behavior changes
 - Migration notes
+
+## 2026-07-19: Claude Conditional Session Activation
+
+### Agent-Visible Changes
+
+- The Claude Code plugin advertises `/agent-workbench:agent-workbench` at
+  startup for non-trivial repository investigation, change evidence, or
+  validation planning.
+- The startup message is only a conditional skill pointer. It does not invoke
+  Agent Workbench or list the MCP workflow.
+
+### Contract Changes
+
+- SessionStart activation may advertise the packaged skill when plugin-root
+  guidance is not loaded as project guidance in the active repository.
+- The packaged skill remains the workflow authority and MCP remains the only
+  executable runtime surface.
+
+### Required Agent Behavior Changes
+
+- Invoke the advertised skill when the task warrants repository evidence; skip
+  it for trivial tasks.
+- Begin with `repo:///orientation` and follow detailed resource links only when
+  the task needs them.
+
+### Migration Notes
+
+- Reload or restart Claude Code after installing a package that contains this
+  hook change.
 
 ## 2026-07-07: Docs-First Warmup And Coverage Metadata
 

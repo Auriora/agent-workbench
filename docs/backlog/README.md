@@ -145,6 +145,11 @@ or runtime telemetry.
 - Promotion target: closed
   [Spec 019](../history/spec-closure-log.md),
   combined with EB002 and EB011.
+- Residual follow-up (2026-07-19): Claude-launched health still derives the
+  Codex integration profile, and an ordinary static resource read cannot carry
+  caller-discovery evidence. Create a provider-aware health slice that reports
+  configured, registered, caller-proven, and unknown state without inferring a
+  client from the server process.
 
 ### EB002: Session-Aware Next Actions
 
@@ -1288,13 +1293,17 @@ Do not promote an item when:
 - Priority: P1
 - Status: proposed spec
 - Friction signal: package version, MCP server metadata, integration health,
-  and integration profile currently duplicate `0.1.0`, risking install,
-  package, and health drift.
+  integration profile, and client plugin cache can drift independently. A live
+  client can therefore expose an older plugin/runtime than the current package
+  without health explaining which identity is stale.
 - Runtime surface: package metadata, MCP server card, integration health,
   common integration profile, Codex/Claude/Kiro packaging, tests, and release
   checks.
 - Acceptance:
   - Runtime version is derived from one source of truth at build/install time.
+  - Health distinguishes runtime identity from observed client plugin/package
+    identity and gives bounded refresh/restart guidance when both are known and
+    disagree.
   - Server-card metadata, health resources, integration profiles, and package
     manifests agree.
   - Tests fail when hardcoded version literals drift from package metadata.
@@ -1316,13 +1325,14 @@ Do not promote an item when:
 - Runtime surface: Claude Code plugin package, generated skills/instructions,
   common integration profile, plugin README, and MCP call sequence guidance.
 - Acceptance:
-  - Provide a concise Claude-facing guide with the expected call sequence:
-    status/scope/overview, `context_for_task`, targeted reads, preview/apply,
-    and `verification_plan`.
+  - Provide a concise Claude-facing guide whose workflow begins with
+    `repo:///orientation`, then uses `context_for_task`, targeted reads,
+    preview/apply, and `verification_plan` when task evidence warrants them.
   - Make the first action executable and verify that the packaged skill name
     and invocation wording resolve naturally in Claude Code.
-  - Keep activation conditional, deduplicated, and non-automatic so trivial
-    tasks do not acquire a startup ritual.
+  - Keep activation conditional and non-automatic. SessionStart may advertise
+    the packaged skill with one concise pointer, but must not invoke MCP,
+    duplicate the workflow, or turn trivial tasks into Workbench tasks.
   - Preserve MCP as the runtime contract and avoid Claude-specific runtime
     logic.
   - Omit normal `repo_root` override guidance.

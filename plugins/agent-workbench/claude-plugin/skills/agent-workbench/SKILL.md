@@ -1,6 +1,6 @@
 ---
 name: agent-workbench
-description: Use Agent Workbench for non-trivial repository investigation, change evidence, and validation planning when its MCP server is available.
+description: Use Agent Workbench for non-trivial repository investigation, including onboarding, code or docs review, implementation, refactoring, debugging, impact analysis, edits, and validation planning, when its MCP server is available.
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -56,8 +56,9 @@ from Claude Code's plugin cache.
 
 - `CLAUDE.md` and repository instructions give project guidance.
 - The MCP server is the only executable runtime surface.
-- The plugin packages this skill, quiet post-edit hooks, and MCP server
-  configuration. It does not run an Agent Workbench action at session start.
+- The plugin packages this skill, a concise conditional SessionStart pointer,
+  quiet post-edit hooks, and MCP server configuration. SessionStart does not run
+  an Agent Workbench action or duplicate this workflow.
 - Hooks are wrappers and must stay quiet and action-gated unless explicitly silenced.
 
 ## Failure Discipline

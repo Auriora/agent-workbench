@@ -38,6 +38,9 @@ const manifest = readJson("packaging/agent-workbench/package-manifest.json");
 const codexPlugin = readJson("plugins/agent-workbench/.codex-plugin/plugin.json");
 const codexMcp = readJson("plugins/agent-workbench/.mcp.json");
 const codexHooks = readJson("plugins/agent-workbench/hooks/hooks.json");
+const claudePlugin = readJson("plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json");
+const claudeMcp = readJson("plugins/agent-workbench/claude-plugin/.mcp.json");
+const claudeHooks = readJson("plugins/agent-workbench/claude-plugin/hooks/hooks.json");
 const marketplace = readJson(".agents/plugins/marketplace.json");
 const serverCard = readJson(".well-known/mcp/server-card.json");
 const expectedInstallCommand =
@@ -54,7 +57,13 @@ const requiredPaths = [
   "plugins/agent-workbench/hooks/post-edit-feedback.js",
   "plugins/agent-workbench/skills/agent-workbench/SKILL.md",
   "plugins/agent-workbench/skills/release-notes/SKILL.md",
+  "plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json",
+  "plugins/agent-workbench/claude-plugin/.mcp.json",
   "plugins/agent-workbench/claude-plugin/CLAUDE.md",
+  "plugins/agent-workbench/claude-plugin/hooks/hooks.json",
+  "plugins/agent-workbench/claude-plugin/hooks/session-start.js",
+  "plugins/agent-workbench/claude-plugin/skills/agent-workbench/SKILL.md",
+  "plugins/agent-workbench/claude-plugin/skills/release-notes/SKILL.md",
   "plugins/agent-workbench/README.md",
   ".agents/plugins/marketplace.json",
   ".well-known/mcp/server-card.json",
@@ -111,6 +120,52 @@ assert(
   !JSON.stringify(codexHooks).includes("${PLUGIN_ROOT}"),
   "Codex hooks must not rely on ${PLUGIN_ROOT} expansion."
 );
+
+export function validateClaudePlugin(packageJson, plugin, mcpConfig, hooksConfig) {
+  assert(plugin.name === "agent-workbench", "Claude plugin name must be agent-workbench.");
+  assert(plugin.version === packageJson.version, "Claude plugin version must match package.json.");
+  assert(
+    plugin.license === "GPL-3.0-or-later" && plugin.license === packageJson.license,
+    "Claude plugin license must match package.json GPL-3.0-or-later licensing."
+  );
+  assert(plugin.skills === "./skills/", "Claude plugin must reference ./skills/.");
+  assert(plugin.mcpServers === "./.mcp.json", "Claude plugin must reference ./.mcp.json.");
+
+  const sessionStart = hooksConfig.hooks?.SessionStart;
+  assert(
+    Array.isArray(sessionStart) &&
+      sessionStart.length === 1 &&
+      sessionStart[0]?.matcher === "startup",
+    "Claude hooks must register exactly one startup SessionStart hook."
+  );
+
+  const claudeMcpServer = mcpConfig.mcpServers?.["agent-workbench"];
+  assert(claudeMcpServer, "Claude .mcp.json must define mcpServers.agent-workbench.");
+  assert(
+    claudeMcpServer.command === "node",
+    "Claude MCP command must be a direct node invocation (no shell)."
+  );
+  assert(
+    claudeMcpServer.cwd === undefined,
+    "Claude MCP must not set cwd; the session cwd is the default repo root."
+  );
+  assert(
+    Array.isArray(claudeMcpServer.args) &&
+      claudeMcpServer.args.length === 1 &&
+      claudeMcpServer.args[0] === "${CLAUDE_PLUGIN_ROOT}/mcp-launch.mjs",
+    "Claude MCP args must invoke the plugin-root shim with ${CLAUDE_PLUGIN_ROOT}."
+  );
+  const claudeMcpArgs = claudeMcpServer.args.join(" ");
+  assert(
+    claudeMcpServer.command !== "bash" &&
+      !claudeMcpArgs.includes("-lc") &&
+      !claudeMcpArgs.includes("${VAR:-") &&
+      !claudeMcpArgs.includes("plugins/cache"),
+    "Claude MCP launch must remain shell-free and must not use plugin-cache runtime code."
+  );
+}
+
+validateClaudePlugin(packageJson, claudePlugin, claudeMcp, claudeHooks);
 
 const marketplaceEntry = marketplace.plugins?.find((plugin) => plugin.name === "agent-workbench");
 assert(marketplaceEntry, "Marketplace must expose agent-workbench.");

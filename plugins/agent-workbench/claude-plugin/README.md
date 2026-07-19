@@ -41,6 +41,9 @@ claude --plugin-dir plugins/agent-workbench/claude-plugin
 After edits, run `/reload-plugins` in Claude Code to reload plugin skills,
 hooks, MCP servers, and agents.
 
-Activation guidance lives in the packaged skill and the compact conditional
-pointer in `CLAUDE.md`; the plugin does not run Agent Workbench at session
-start. Post-edit hooks remain quiet unless task-owned edit feedback is needed.
+Activation guidance lives in the packaged skill. `CLAUDE.md` and the
+SessionStart hook provide the same compact conditional pointer because a
+plugin-root `CLAUDE.md` is not project guidance when another repository is the
+active workspace. The hook does not invoke Agent Workbench or duplicate its
+workflow. Post-edit hooks remain quiet unless task-owned edit feedback is
+needed.

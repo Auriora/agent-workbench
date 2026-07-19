@@ -3,7 +3,7 @@ title: Coding agent integration design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-05
+last_reviewed: 2026-07-19
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -52,11 +52,13 @@ MCP remains an interface adapter. Application, domain, graph, extraction,
 cache, and validation code must not know which agent is connected.
 
 Packaged integrations use one conditional skill entry for non-trivial
-repository investigation, change evidence, or validation planning. They do not
-invoke Agent Workbench automatically at session start. The skill reads
-`repo:///orientation` first and follows detailed resource links only when the
-task needs them. Provider instruction files may point to that skill but must
-not duplicate the full workflow or introduce provider-specific runtime policy.
+repository investigation, change evidence, or validation planning. A
+provider-specific SessionStart hook may advertise that skill with one concise
+conditional pointer, but it must not invoke Agent Workbench or duplicate the
+workflow automatically. The skill reads `repo:///orientation` first and follows
+detailed resource links only when the task needs them. Provider instruction
+files may point to that skill but must not duplicate the full workflow or
+introduce provider-specific runtime policy.
 
 `integration:///health/agent-workbench` is the runtime health surface for
 coding agents. It reports configured, registered, advertised,
@@ -198,9 +200,11 @@ Example hook intents:
 - `on_turn_stop_validation_summary`
 - `on_prompt_submit_secret_check`
 
-Session-start activation is not a current Agent Workbench hook intent. Startup
-hooks must not inject repeated workflow guidance when the packaged skill and
-repository instructions already provide a conditional entry point.
+Session-start activation may emit one concise conditional pointer to the
+packaged skill when the client does not otherwise load plugin-root guidance in
+the active repository. It must not invoke MCP actions, list the complete
+workflow, or turn trivial tasks into Workbench tasks. The packaged skill remains
+the workflow authority.
 
 Future hook and session-stop support may expose a read-only handoff packet with
 selected task, loaded context, changed files, validation status, stale-doc

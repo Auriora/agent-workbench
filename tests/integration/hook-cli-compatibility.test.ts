@@ -108,36 +108,46 @@ describe("agent CLI hook compatibility", () => {
     ]);
   });
 
-  it("runs the quiet Claude post-edit hook as command plus args without session activation", () => {
+  it("runs Claude plugin hooks as command plus args with a conditional session pointer", () => {
     const pluginRoot = path.resolve("plugins/agent-workbench/claude-plugin");
     const hooksConfig = JSON.parse(
       fs.readFileSync(path.join(pluginRoot, "hooks/hooks.json"), "utf8")
     ) as {
-      hooks: Record<string, Array<{ hooks: Array<{ command: string; args: string[] }> }>>;
+      hooks: Record<
+        string,
+        Array<{ matcher?: string; hooks: Array<{ command: string; args: string[] }> }>
+      >;
     };
-    expect(hooksConfig.hooks.SessionStart).toBeUndefined();
-    const hook = hooksConfig.hooks.PostToolUse[0].hooks[0];
+    expect(hooksConfig.hooks.SessionStart[0].matcher).toBe("startup");
+    const hook = hooksConfig.hooks.SessionStart[0].hooks[0];
     const args = hook.args.map((arg) => arg.replace("${CLAUDE_PLUGIN_ROOT}", pluginRoot));
 
     expect(hook.command).toBe("node");
-    expect(args).toEqual([path.join(pluginRoot, "hooks/post-edit-feedback.js")]);
+    expect(args).toEqual([path.join(pluginRoot, "hooks/session-start.js")]);
 
     const result = spawnSync(hook.command, args, {
       cwd: repoRoot,
-      input: JSON.stringify({
-        hook_event_name: "PostToolUse",
-        cwd: repoRoot,
-        tool_name: "Edit",
-        tool_input: { file_path: "README.md" },
-        tool_response: { code: 0 }
-      }),
+      input: JSON.stringify({ hook_event_name: "SessionStart", source: "startup", cwd: repoRoot }),
       encoding: "utf8"
     });
 
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
 
-    expect(result.stdout).toBe("");
+    const parsed = JSON.parse(result.stdout) as {
+      hookSpecificOutput?: {
+        hookEventName?: string;
+        additionalContext?: string;
+      };
+    };
+    expect(parsed.hookSpecificOutput).toEqual({
+      hookEventName: "SessionStart",
+      additionalContext:
+        "For non-trivial repository investigation, change evidence, or validation planning, invoke `/agent-workbench:agent-workbench`; skip it for trivial tasks."
+    });
+    expect(parsed.hookSpecificOutput?.additionalContext).not.toContain("repo:///");
+    expect(parsed.hookSpecificOutput?.additionalContext).not.toContain("context_for_task");
+    expect(parsed.hookSpecificOutput?.additionalContext).not.toContain("MCP");
   });
 
   it("runs Kiro custom-agent hooks as shell command strings with plain text output", () => {
