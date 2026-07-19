@@ -22,7 +22,7 @@ daemon health becomes authoritative and more strictly typed.
 | Current authority | Change responsibility |
 | --- | --- |
 | runtime operations design | replace connection-local refresh ownership with daemon ownership |
-| graph store design | preserve atomic replacement and stale-reader semantics |
+| graph store design | establish explicit atomic publication/selection and stale-reader semantics; do not assume the current path is atomic |
 | runtime contracts | constrain diagnostic execution/freshness/failure evidence |
 | MCP surface design | reflect only confirmed public presentation changes |
 | runtime requirements and proof matrix | record enduring behavior and package proof |
@@ -40,30 +40,53 @@ daemon health becomes authoritative and more strictly typed.
 
 | Area | Impact | Risk | Required proof |
 | --- | --- | --- | --- |
-| daemon composition | Own shared controller and keep it alive through active work | high | two-client, disconnect, idle, crash tests |
-| server composition | Inject refresh request/state boundaries | high | standalone and daemon compatibility tests |
-| runtime coordination | Reuse one planned/running execution | high | concurrency/unit tests |
-| watcher/first read | Call the same request path | medium | status and queue tests |
-| graph publication | Prevent selection of a replacement until indexing is completely published | high | store selection, snapshot, and query tests |
-| integration health | Await real state and constrain enums | medium | schema, presenter, resource tests |
-| packaging | Exercise installed entrypoint and mixed providers | high | package-entrypoint and pack checks |
+| daemon composition | Own the shared controller, active-work lease, executor, store lifetime, and terminal cleanup | high | two-client, cross-process, disconnect, idle-race, worker-cleanup, and crash tests |
+| server composition | Inject refresh request/state/diagnostic boundaries without disposing daemon-owned state on connection close | high | standalone and daemon compatibility tests |
+| runtime coordination | Reuse one planned/running execution and preserve invalidation arriving during active work | high | deterministic barrier and concurrency tests |
+| watcher/first read | Call the same request path and deduplicate concurrent/sequential duplicate events | medium | status, queue, and invalidation-during-running tests |
+| graph publication | Add an explicit selection boundary so incomplete replacement generations are never ordinary latest evidence | high | barrier, concurrent-reader, reopen, interruption, retention, and query tests |
+| integration health | Await one atomic diagnostic receipt with IDs, canonical state combinations, structured failure, and truthful top-level trust | high | schema, presenter, resource, transition, and redaction tests |
+| worker lifecycle | Define timeout, hang, abnormal/zero-exit, termination, and cleanup semantics | high | controlled worker and daemon shutdown tests |
+| packaging | Exercise an actually packed-and-installed bin with provider-labelled clients | high | isolated-install acceptance, pack, install-smoke, and launch-smoke checks |
+| persistence compatibility | Reconcile publication metadata/schema with existing databases and downgrade behavior | high | migration, reopen, rollback, and older-database fixtures |
 
 ## Failure And Operational Impact
 
 - The daemon must not idle-close while refresh is active.
+- Active refresh is an explicit daemon lifetime lease. Completion, failure,
+  requester disconnect, reconnect, and the idle timer may race without losing
+  ownership or starting a second grace timer.
 - Requesting-client disconnect becomes an ordinary condition, not cancellation.
 - Failure remains visible until a later successful refresh clears bounded
   diagnostic evidence.
 - A failed execution may be superseded only by another ordinary stale request
   through the same service; there is no automatic retry.
-- Graph-store locking, worker timeout, and snapshot retention behavior remain
-  governed by existing bounds.
+- Graph-store locking, file/extraction budgets, and snapshot retention remain
+  governed by existing bounds. This slice must define and enforce the warm-up
+  worker timeout, hang/termination behavior, graph-store close ownership, and
+  cleanup because those bounds are not established merely by unreferencing a
+  worker.
+- Daemon crash during publication may leave an unpublished generation. Restart
+  must identify it without selecting partial evidence or overlapping the prior
+  owner, and must preserve the previous readable generation until one later
+  ordinary request publishes a replacement.
+- Failure presentation must use bounded structured codes/categories and redact
+  paths, secrets, SQLite text, worker output, stacks, and control characters
+  across envelopes, diagnostics, stdout/stderr, and metadata.
 
 ## Compatibility
 
 - MCP names and provider behavior are unchanged.
-- Health fields become stricter but remain additive in meaning; fixtures must
-  determine whether a schema migration note is needed.
+- Health fields become stricter and add execution/snapshot correlation and
+  structured failure semantics. Enum tightening, state-combination rejection,
+  or changing top-level trust on daemon failure may affect existing consumers;
+  contract fixtures and release notes must state the compatibility boundary
+  rather than assuming the change is additive.
+- The publication-state migration is transactional: existing non-refreshing
+  rows become published, existing refreshing rows become failed and invisible,
+  and schema version advances. Older runtimes must block before read/write; no
+  in-place downgrade is supported. Rollback uses a pre-migration database copy
+  or the documented derived-store rebuild after all owners stop.
 - Existing stale envelopes and next actions remain the convergence trigger and
   completion signal; no new agent-facing refresh command is introduced.
 
@@ -77,7 +100,25 @@ daemon health becomes authoritative and more strictly typed.
 | `docs/design/mcp-surface-design.md` | only presentation changes confirmed by implementation |
 | `docs/requirements/runtime-requirements.md` | enduring convergence requirement |
 | `docs/reference/mvp-proof-matrix.md` | package two-client proof |
+| applicable integration/support runbook under `docs/runbooks/` | authoritative state diagnosis, safe metadata/socket cleanup, orphaned publication recovery, worker/store cleanup expectations, rollback and downgrade/schema compatibility, and redacted support evidence |
 | backlog/changelog/history | delivered status and closure evidence |
+
+## Package And Operational Proof Boundary
+
+Checkout tests that spawn `src/mcp/stdio-entrypoint.mjs` prove source
+composition only. Closure requires a real tarball installed into an isolated
+location and the installed `agent-workbench-mcp` bin, plus the existing CI
+`install-smoke.mjs` and `mcp-launch-smoke.mjs` gates. The two acceptance clients
+may carry Codex and Claude Code launcher identities to prove provider-neutral
+daemon behavior, but that does not prove either real agent CLI loaded the
+plugin; CLI-level claims require separate live evidence.
+
+Support and rollback guidance must identify safe observable state combinations,
+how to distinguish a failed execution from an unpublished generation, when
+stale daemon metadata or sockets may be removed, what cleanup evidence is
+required, and whether an older runtime can reopen the post-change database. It
+must not recommend deleting the graph database unless the existing positive
+evidence and rebuild contract authorize that action.
 
 ## Out-Of-Scope Destinations
 

@@ -13,68 +13,107 @@ license: GPL-3.0-or-later
 
 ## Requirement To Delivery Matrix
 
-Requirement delivery coverage below records whether the planned design, tasks,
-verification, and durable destinations are complete enough to implement. It is
-not implementation evidence. The implementation matrices remain
-`not-covered` until code and executed validation exist.
+Planning coverage records whether design, bounded tasks, verification, and
+durable destinations are sufficient for implementation. It is not implementation
+evidence. Implementation and property rows remain `not-covered` until code and
+executed evidence exist. Parent task rows express lifecycle sequencing; the
+explicit child tasks in `tasks.md` are the bounded implementation handoffs.
 
 | Requirement | Priority | Acceptance Criteria | Design Sections | Tasks | Verification | Durable Targets | Coverage State | Residual Destination |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Requirement 1 | must-have | AC1.1-AC1.4 | Daemon-Scoped Refresh Controller; Connection Composition | T001-T004 | V001-V003 | runtime operations design; runtime requirements | complete | none |
-| Requirement 2 | must-have | AC2.1-AC2.4 | Connection Composition; Lifetime And Disconnects | T001, T003, T006 | V002, V004 | runtime operations design; MVP proof matrix | complete | none |
-| Requirement 3 | must-have | AC3.1-AC3.4 | Authoritative Diagnostics | T001, T005, T006 | V005-V006 | runtime contracts; MCP surface design | complete | none |
-| Requirement 4 | must-have | AC4.1-AC4.4 | Snapshot Publication; Failure Behavior | T001, T002, T006 | V007-V009 | graph store design; MVP proof matrix | complete | none |
-| Requirement 5 | must-have | AC5.1-AC5.4 | Failure Behavior; Lifetime And Disconnects | T001-T003, T005-T006 | V003-V005, V010 | runtime operations design; runtime contracts | complete | none |
-| Requirement 6 | must-have | AC6.1-AC6.4 | Connection Composition; Resolved Decisions | T001-T007 | V011-V018 | runtime requirements; backlog/changelog/history | complete | none |
+| Requirement 1 | must-have | AC1.1-AC1.6 | Daemon-Scoped Refresh Controller; Canonical Execution State Machine; Connection Composition | T001-T002, T004-T005, T008-T009 | V001-V004, V011, V021 | `docs/design/runtime-operations-design.md`; `docs/requirements/runtime-requirements.md`; `docs/reference/mvp-proof-matrix.md` | complete | none |
+| Requirement 2 | must-have | AC2.1-AC2.6 | Lifetime And Disconnects; Connection Composition | T001, T004-T005, T008-T009 | V002-V004, V007, V021 | `docs/design/runtime-operations-design.md`; `docs/requirements/runtime-requirements.md`; `docs/reference/mvp-proof-matrix.md` | complete | none |
+| Requirement 3 | must-have | AC3.1-AC3.6 | Authoritative Diagnostics; Failure Behavior | T001, T006-T009 | V005-V006, V010, V021 | `docs/reference/runtime-contracts.md`; `docs/design/mcp-surface-design.md`; `docs/reference/mvp-proof-matrix.md` | complete | none |
+| Requirement 4 | must-have | AC4.1-AC4.6 | Publication Lifecycle; Snapshot Publication; Failure Behavior | T001-T003, T007-T009 | V007-V010, V021 | `docs/design/graph-store-design.md`; `docs/reference/runtime-contracts.md`; `docs/reference/mvp-proof-matrix.md` | complete | none |
+| Requirement 5 | must-have | AC5.1-AC5.6 | Failure Behavior; Repository Ownership And Crash Reconciliation; Lifetime And Disconnects | T001-T004, T006-T009 | V001, V003-V005, V008, V010-V011, V021 | `docs/design/runtime-operations-design.md`; `docs/design/graph-store-design.md`; `docs/reference/runtime-contracts.md`; `docs/reference/mvp-proof-matrix.md` | complete | none |
+| Requirement 6 | must-have | AC6.1-AC6.6 | Connection Composition; Low-Level Design; Resolved Decisions; Validation Strategy | T001-T009 | V011-V021 | `docs/design/layered-runtime-architecture.md`; `docs/requirements/runtime-requirements.md`; `docs/reference/agent-readable-changelog.md`; `docs/runbooks/install-agent-workbench.md`; `docs/runbooks/codex-agent-workbench-plugin.md`; `packaging/agent-workbench/README.md` | complete | none |
 
-## Correctness-Property Coverage
+## Correctness Property Mapping
 
-| Property | Design mechanism | Tasks | Verification | Coverage |
+| Property | Design Sections | Tasks | Verification | Coverage |
 | --- | --- | --- | --- | --- |
-| CP-001 | shared controller idempotence | T001-T003 | V001-V003 | not-covered |
-| CP-002 | daemon-scoped observable lifecycle | T001, T003, T006 | V002, V004 | not-covered |
-| CP-003 | controller lifetime independent of socket | T001, T003, T006 | V004 | not-covered |
-| CP-004 | existing atomic worker publication | T002, T006 | V007-V009 | not-covered |
-| CP-005 | awaited canonical diagnostics | T001, T005-T006 | V005-V006 | not-covered |
-| CP-006 | terminal structured failure, no fallback | T001-T002, T005-T006 | V003, V010-V011 | not-covered |
+| CP-001 | linearized shared controller admission | T001-T002, T004-T005, T008 | V001-V003, V011, V021 | not-covered |
+| CP-002 | daemon-scoped lifecycle plus generation-triggered convergence | T001-T002, T004-T005, T008 | V002-V004, V007, V021 | not-covered |
+| CP-003 | activity lease independent of requester socket | T001, T004, T007-T008 | V004, V010, V021 | not-covered |
+| CP-004 | explicit atomic publication and exact query recovery | T001-T003, T007-T008 | V007-V010, V021 | not-covered |
+| CP-005 | one awaited canonical diagnostics receipt | T001, T006, T008 | V005-V006, V021 | not-covered |
+| CP-006 | terminal structured failure with no retry/fallback | T001-T003, T006-T008 | V001, V003, V005-V006, V010-V011, V021 | not-covered |
+| CP-007 | monotonic accepted invalidation generations and coalesced catch-up | T001-T002, T005, T008 | V001, V003, V007, V021 | not-covered |
+| CP-008 | publication independent of freshness and coverage | T001, T003, T007-T008 | V007-V010, V021 | not-covered |
+| CP-009 | execution, ownership, activity, publication, and diagnostics identity agreement | T001-T002, T004-T008 | V001-V011, V021 | not-covered |
 
 ## Task To Context Matrix
 
-| Task ID | Requirements | Acceptance Criteria | Design Sections | Change Impact | Verification | Durable Targets | Open Decisions |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| T001 | Requirement 1; Requirement 2; Requirement 3; Requirement 4; Requirement 5; Requirement 6 | all | Confirmed Root Cause; Daemon-Scoped Refresh Controller; Authoritative Diagnostics | Code And Contract Impact | V001-V011 | runtime operations design; runtime contracts | none; D001-D005 resolved |
-| T002 | Requirement 1; Requirement 5; Requirement 6 | AC1.1-AC1.4; AC5.1-AC5.4; AC6.2-AC6.4 | Daemon-Scoped Refresh Controller; Failure Behavior | runtime coordination; graph publication | V001, V003, V008, V010-V011 | runtime operations design; graph store design | none |
-| T003 | Requirement 1; Requirement 2; Requirement 6 | AC1.1-AC1.3; AC2.1-AC2.4; AC6.1-AC6.4 | Connection Composition; Lifetime And Disconnects | daemon composition; server composition | V002-V004, V011 | runtime operations design; runtime requirements | none |
-| T004 | Requirement 1; Requirement 2; Requirement 5 | AC1.4; AC2.1-AC2.2; AC5.2 | Data Flow; Failure Behavior | watcher/first read | V002-V003, V007 | runtime operations design; MCP surface design | none |
-| T005 | Requirement 3; Requirement 5 | AC3.1-AC3.4; AC5.1 | Authoritative Diagnostics; Resolved Decisions | integration health | V005-V006, V010 | runtime contracts; MCP surface design | none |
-| T006 | Requirement 2; Requirement 4; Requirement 5 | AC2.1-AC2.4; AC4.1-AC4.4; AC5.1-AC5.4 | Snapshot Publication; Lifetime And Disconnects; Failure Behavior | daemon composition; graph publication; packaging | V002-V011 | graph store design; MVP proof matrix | none |
-| T007 | Requirement 1; Requirement 2; Requirement 3; Requirement 4; Requirement 5; Requirement 6 | all | Durable Promotion Targets | Promotion Targets; Out-Of-Scope Destinations | V012-V018 and completed focused evidence | all named durable owners | none |
+| Task ID | Requirements | Acceptance Criteria | Properties | Design Sections | Change Impact | Verification | Durable Targets | Encoded Constraints |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| T001 | Requirement 1; Requirement 2; Requirement 3; Requirement 4; Requirement 5; Requirement 6 | AC1.1-AC1.6; AC2.1-AC2.6; AC3.1-AC3.6; AC4.1-AC4.6; AC5.1-AC5.6; AC6.1-AC6.6 | CP-001-CP-009 | Confirmed Root Cause; all contract-bearing design sections | Code And Contract Impact | V001-V011 | `docs/reference/runtime-contracts.md`; `docs/reference/mvp-proof-matrix.md` | deterministic barriers; contracts before implementation |
+| T002 | Requirement 1; Requirement 4; Requirement 5; Requirement 6 | AC1.1-AC1.2, AC1.5-AC1.6; AC4.6; AC5.2-AC5.3, AC5.5-AC5.6; AC6.2-AC6.4, AC6.6 | CP-001, CP-004, CP-006-CP-007, CP-009 | Daemon-Scoped Refresh Controller; Publication Lifecycle; Failure Behavior | runtime coordination | V001, V003, V010-V011 | `docs/design/runtime-operations-design.md`; `docs/design/layered-runtime-architecture.md` | one linearized controller; one executor; no automatic retry |
+| T003 | Requirement 4; Requirement 5; Requirement 6 | AC4.1-AC4.6; AC5.3-AC5.5; AC6.4, AC6.6 | CP-004, CP-006, CP-008 | Publication Lifecycle; Snapshot Publication; Persistence Migration And Rollback | graph publication | V007-V011 | `docs/design/graph-store-design.md`; `docs/reference/runtime-contracts.md` | publication state is not freshness or coverage; unpublished rows stay invisible; older runtimes block after migration |
+| T004 | Requirement 1; Requirement 2; Requirement 5; Requirement 6 | AC1.1, AC1.3, AC1.5; AC2.3-AC2.6; AC5.4; AC6.1-AC6.5 | CP-001-CP-003, CP-009 | Connection Composition; Lifetime And Disconnects | daemon/standalone composition | V002, V004, V011 | `docs/design/runtime-operations-design.md`; `docs/design/layered-runtime-architecture.md`; `docs/requirements/runtime-requirements.md` | activity lease belongs to controller; terminal notification drives idle grace |
+| T005 | Requirement 1; Requirement 2; Requirement 5; Requirement 6 | AC1.4, AC1.6; AC2.1-AC2.2; AC5.2, AC5.6; AC6.5 | CP-001-CP-002, CP-007, CP-009 | Daemon-Scoped Refresh Controller; Connection Composition; Data Flow | watcher/first-read triggers | V003, V007, V011 | `docs/design/runtime-operations-design.md`; `docs/design/mcp-surface-design.md` | one daemon watcher/queue; one local standalone equivalent; sequential catch-up |
+| T006 | Requirement 3; Requirement 5; Requirement 6 | AC3.1-AC3.6; AC5.1, AC5.5; AC6.1-AC6.3, AC6.5 | CP-005-CP-006, CP-009 | Authoritative Diagnostics; Failure Behavior | integration health and security | V005-V006, V010-V011 | `docs/reference/runtime-contracts.md`; `docs/design/mcp-surface-design.md` | one awaited receipt; exact state matrix; structured bounded redaction |
+| T007 | Requirement 3; Requirement 4; Requirement 5; Requirement 6 | AC3.4-AC3.6; AC4.4-AC4.6; AC5.1-AC5.6; AC6.4-AC6.6 | CP-003, CP-006, CP-008-CP-009 | Failure Behavior; Repository Ownership And Crash Reconciliation; Snapshot Publication | crash/resource recovery | V004, V008, V010-V011 | `docs/design/runtime-operations-design.md`; `docs/design/graph-store-design.md`; `docs/reference/runtime-contracts.md` | positive dead-owner evidence; invisible orphan builds; cleanup exactly once |
+| T008 | Requirement 1; Requirement 2; Requirement 3; Requirement 4; Requirement 5; Requirement 6 | AC1.1-AC1.6; AC2.1-AC2.6; AC3.1-AC3.6; AC4.1-AC4.6; AC5.1-AC5.6; AC6.1-AC6.6 | CP-001-CP-009 | Validation Strategy; Data Flow | source and installed-package acceptance | V002, V007-V010, V019-V021 | `docs/reference/mvp-proof-matrix.md`; `docs/runbooks/install-agent-workbench.md`; `docs/runbooks/codex-agent-workbench-plugin.md`; `packaging/agent-workbench/README.md` | installed bin proof is distinct from source entrypoint and real CLI proof |
+| T009 | Requirement 1; Requirement 2; Requirement 3; Requirement 4; Requirement 5; Requirement 6 | AC1.1-AC1.6; AC2.1-AC2.6; AC3.1-AC3.6; AC4.1-AC4.6; AC5.1-AC5.6; AC6.1-AC6.6 | CP-001-CP-009 | Durable Promotion Targets; Validation Strategy | Promotion Targets; Out-Of-Scope Destinations | V012-V021 plus completed focused evidence | exact paths in Promotion Trace | no closure with unpromoted truth, unowned residual, or EB014 scope absorption |
 
 ## Design To Implementation Matrix
 
-| Design target | Likely implementation | Tasks | Coverage |
+| Design target | Implementation boundary | Tasks | Coverage |
 | --- | --- | --- | --- |
-| daemon-scoped controller | daemon, server, runtime/port modules | T002-T003 | not-covered |
-| shared invalidation request | server and workspace queue use case | T004 | not-covered |
-| authoritative diagnostics | daemon, contracts, health use case/presenter | T005 | not-covered |
-| atomic publication and query recovery | index use case, graph store selection, existing worker, and public query tests | T002, T006 | not-covered |
-| durable promotion | canonical targets in design | T007 | not-covered |
+| controller generations and sole executor | refresh controller, coordination use case, runtime port | T002 | not-covered |
+| publication/current selection and migration independent of freshness | graph index use case, graph store, snapshot port | T003 | not-covered |
+| daemon/standalone ownership and activity lease | daemon and server composition roots | T004 | not-covered |
+| daemon watcher and shared trigger generations | daemon watcher/queue, first-read and queue use cases | T005 | not-covered |
+| authoritative diagnostics and redaction | contracts, health use case, presenter, daemon binding | T006 | not-covered |
+| crash/orphan/resource recovery | daemon owner recovery, controller, worker/store cleanup | T007 | not-covered |
+| source and installed-package acceptance | MCP entrypoint fixtures and CI smoke scripts | T008 | not-covered |
+| durable promotion and closure | exact destinations below | T009 | not-covered |
 
 ## Open Decision Impact
 
-No open product or architecture decision remains. D001-D005 in `design.md` are
-resolved constraints; implementation naming cannot weaken them.
+No open decision remains. The requirements and design encode the controller state machine, invalidation
+generation authority, publication lifecycle, activity and ownership leases,
+watcher ownership, diagnostics state matrix, failure/retry policy, and evidence
+boundaries. Task execution may choose names and private module decomposition, but
+must not reopen or weaken those constraints. A genuine contradiction discovered
+during implementation requires requirements/design reconciliation before code,
+not an implicit alternate path.
 
 ## Task Dependencies
 
 ```text
-T001 -> T002 -> T003 -> T004
-                  |       |
-                  -> T005 -> T006 -> T007
+T001 -> T002
+T001 -> T003
+T002 + T003 -> T004
+T004 -> T005
+T004 -> T006
+T003 + T004 + T006 -> T007
+T005 + T006 + T007 -> T008
+T008 -> T009
 ```
 
 ## Promotion Trace
 
-T007 must reconcile every row above, record exact evidence in
-`verification.md`, promote lasting behavior to the named durable targets, and
-leave no `not-covered` row before closure.
+T009 must reconcile every `not-covered` row, record exact command/artifact
+evidence in `verification.md`, and promote verified truth to the applicable
+exact destinations:
+
+- `docs/design/runtime-operations-design.md`
+- `docs/design/graph-store-design.md`
+- `docs/design/layered-runtime-architecture.md`
+- `docs/reference/runtime-contracts.md`
+- `docs/design/mcp-surface-design.md`
+- `docs/requirements/runtime-requirements.md`
+- `docs/reference/mvp-proof-matrix.md`
+- `docs/reference/agent-readable-changelog.md`
+- `docs/runbooks/install-agent-workbench.md`
+- `docs/runbooks/codex-agent-workbench-plugin.md`
+- `packaging/agent-workbench/README.md`
+- `docs/backlog/README.md`
+- `docs/history/spec-closure-log.md`
+- `docs/history/spec-archive-index.md`
+
+If implementation does not change one candidate document, T009 must record the
+reasoned no-op instead of silently omitting it. CI workflow and smoke-script
+changes remain executable validation artifacts, not substitutes for durable
+behavior or support documentation.
