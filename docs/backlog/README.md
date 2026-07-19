@@ -1747,7 +1747,7 @@ Do not promote an item when:
 ### EB052: Daemon-Owned Refresh Convergence
 
 - Priority: P0
-- Status: proposed Spec 041
+- Status: active Spec 041
 - Friction signal: post-deployment Claude dogfooding on runtime `0.5.2`
   confirmed that Spec 039 correctly detects deleted indexed paths, but the
   coordinated refresh did not converge. Daemon PID `434059` remained
@@ -1789,8 +1789,10 @@ Do not promote an item when:
   - Failure and disconnect regressions proving refresh ownership survives the
     requesting client and reports structured failure without adding a fallback
     execution path.
-- Promotion target: create Spec 041 under EB003 first-read reliability, with
-  EB036 daemon ownership and EB051 snapshot validity as accepted prerequisites.
+- Promotion target: active
+  [Spec 041](../specs/041-daemon-owned-refresh-convergence/requirements.md)
+  under EB003 first-read reliability, with EB036 daemon ownership and EB051
+  snapshot validity as accepted prerequisites.
 
 ## Extension Idea Coverage
 
@@ -1851,6 +1853,7 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-- Select EB052 as the next P0 lifecycle intake and create Spec 041 after
-  preflight. Keep EB014 large-repository completion work separate from this
-  ordinary refresh-convergence defect.
+- Implement
+  [Spec 041](../specs/041-daemon-owned-refresh-convergence/requirements.md)
+  as the active P0 daemon refresh-convergence slice. Keep EB014
+  large-repository completion work separate from this ordinary refresh defect.
