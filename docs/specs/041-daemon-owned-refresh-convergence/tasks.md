@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: tasks
 status: draft
 owner: platform
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -89,7 +89,7 @@ preserve dependency order and record overlap before parallel work.
     - Status: Contract/reproduction complete; T004, T005, and T007 implement the locked behavior.
 ## Phase 2: Shared Execution And Publication
 
-- [ ] T002 Implement controller-owned invalidation generations and the sole
+- [x] T002 Implement controller-owned invalidation generations and the sole
   bounded executor.
   - Depends on: T001
   - Requirements: Requirement 1, Requirement 4, Requirement 5, Requirement 6;
@@ -107,33 +107,38 @@ preserve dependency order and record overlap before parallel work.
     reaches exactly one terminal outcome, and never creates a timer- or
     callback-driven retry.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: `pnpm typecheck` passed; the 12-file Phase 2 focused command reported 207 passes and 4 expected T004-T007 failures; `pnpm test` reported 80 files, 690 passes, and 9 expected later-phase failures. These fixtures exercise numeric allocation, linearized generations, reuse, sequential catch-up, finite one-result execution, generation-CAS publication, structured failures, exactly-once cleanup, and termination-unconfirmed no-overlap quarantine. Independent remediation re-review reported no Phase 2 blocker.
   - Expected evidence: Focused controller tests must record execution IDs,
     requested/started generations, worker invocation counts, terminal state,
     deadline behavior, and absence of automatic retry.
-  - [ ] T002.1 Implement linearized generation and state admission in
+  - Status: Phase 2 T002 acceptance complete.
+  - [x] T002.1 Implement linearized generation and state admission in
     `src/infrastructure/runtime/refresh-controller.ts` and `src/ports/index.ts`.
     - Acceptance: Concurrent requests reuse one execution and newer generations
       set one coalesced catch-up latch.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T002.2 Implement the one-result worker protocol and finite deadline in
+    - Evidence: Implemented SnapshotRefreshController linearized admission with monotonic requested/started generations, planned/running reuse, one execution identity, and newest-generation sequential catch-up. `pnpm typecheck` and focused runtime tests passed.
+  - Status: T002 child acceptance complete.
+  - [x] T002.2 Implement the one-result worker protocol and finite deadline in
     `src/infrastructure/runtime/refresh-controller.ts`.
     - Acceptance: Success, timeout, error, non-zero exit, zero exit without a
       result, and invalid result each settle exactly once.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T002.3 Prove controller admission, catch-up, deadline, and deterministic
-    post-failure behavior in `tests/runtime/operations.test.ts`. Replace the
-    Phase 1 reproduction factory in
+    - Evidence: `pnpm exec vitest run tests/runtime/operations.test.ts tests/runtime/workspace-change-queue.test.ts` reported 41 passes and 3 expected later-phase failures. The passing cases cover timeout, rejection, synchronous launch failure, non-zero exit, missing/invalid/multiple/mismatched results, exactly-one termination, termination quarantine, and structured allocation/publication store failures.
+  - Status: Phase 2 T002.2 acceptance complete.
+  - [x] T002.3 Prove controller admission, deadline, and deterministic
+    post-failure behavior in `tests/runtime/operations.test.ts`. Replace only
+    the Phase 1 deadline reproduction in
     `tests/helpers/spec041-refresh-reproductions.ts` with the production
-    controller and convert its expected failures to ordinary passing tests.
+    controller and convert that expected failure to an ordinary passing test.
+    The trigger-level catch-up reproduction remains owned by T005.3.
     - Acceptance: Barrier-controlled tests record one writer and no callback,
       timer, or health-read retry.
     - Evidence mode: validation
-    - Evidence: Pending.
+    - Evidence: `pnpm exec vitest run tests/runtime/operations.test.ts tests/runtime/workspace-change-queue.test.ts` reported 41 passes and 3 expected later-phase failures. The deadline reproduction now uses SnapshotRefreshController and proves admission, reuse, sequential catch-up, allocation/CAS classification, observer isolation, no overlapping successor, and no automatic retry; the one trigger-level catch-up expected failure remains owned by T005.3.
 
-- [ ] T003 Implement atomic publication and current-snapshot selection as a
+  - Status: Phase 2 T002.3 acceptance complete.
+- [x] T003 Implement atomic publication and current-snapshot selection as a
   state distinct from freshness and coverage.
   - Depends on: T001
   - Requirements: Requirement 4, Requirement 5, Requirement 6; Properties:
@@ -150,32 +155,36 @@ preserve dependency order and record overlap before parallel work.
     failed or superseded builds leave the prior published snapshot selected.
     Publication does not imply complete evidence-class coverage.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: `pnpm typecheck` passed; `pnpm exec vitest run tests/graph/store.test.ts tests/graph/extraction-pipeline.test.ts` reported 50 passes and 1 expected T007 orphan failure; `pnpm test` reported 80 files, 690 passes, and 9 expected later-phase failures. The passing cases cover migration, atomic build/publication, published-only lower/public reads, building-only evidence writes, generation CAS, partial coverage, cleanup, barriers, reopen, and retention. Independent remediation re-review reported no Phase 2 blocker.
   - Expected evidence: Barrier, concurrent-reader, reopen, interruption, and
     retention tests must identify visible and target snapshot IDs at every
     publication phase.
-  - [ ] T003.1 Add the transactional publication-state/schema migration in
+  - Status: Phase 2 T003 acceptance complete.
+  - [x] T003.1 Add the transactional publication-state/schema migration in
     `src/infrastructure/sqlite/graph-store.ts`.
     - Acceptance: Existing non-refreshing rows become published, existing
       refreshing rows become failed, migration rollback is atomic, and the
       schema-version gate blocks older runtimes.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T003.2 Implement published-only latest/explicit-id selection and final
+    - Evidence: `pnpm exec vitest run tests/graph/store.test.ts tests/graph/extraction-pipeline.test.ts` reported 50 passes and 1 expected T007 orphan failure. Passing migration fixtures classify existing rows, prove trigger-induced transactional rollback, and prove newer-schema refusal without WAL, journal-mode, database-size, mtime, or marker mutation.
+  - Status: Phase 2 T003.1 acceptance complete.
+  - [x] T003.2 Implement published-only latest/explicit-id selection and final
     publication in `src/application/use-cases/index-repository-graph.ts` and
     `src/infrastructure/sqlite/graph-store.ts`.
     - Acceptance: Only the final transaction advances visibility; partial
       coverage remains independent and truthful.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T003.3 Prove migration, every publication barrier, reopen, interruption,
+    - Evidence: `pnpm exec vitest run tests/graph/store.test.ts tests/graph/extraction-pipeline.test.ts` reported 50 passes and 1 expected T007 orphan failure. Passing publication fixtures prove exact atomic build creation, generation-fenced terminal transitions, published-only selection, structured snapshot_unpublished public results, building-only writes, freshness independence, and truthful partial coverage.
+  - Status: Phase 2 T003.2 acceptance complete.
+  - [x] T003.3 Prove migration, every publication barrier, reopen, interruption,
     and retention in `tests/graph/store.test.ts` and
     `tests/graph/extraction-pipeline.test.ts`.
     - Acceptance: The previous published snapshot remains selected until one
       complete publication and across failed upgrade/refresh.
     - Evidence mode: validation
-    - Evidence: Pending.
+    - Evidence: Barrier, separate-reader, reopen, interruption, retention, stale-generation CAS, production-worker generation, partial-coverage, terminal immutability, and future-schema no-storage-mutation fixtures pass. Focused Phase 2 suites and full repository suite pass; independent remediation re-review found no remaining Phase 2 blocker.
 
+  - Status: Phase 2 publication validation acceptance complete.
 ## Phase 3: Daemon Ownership And Public Triggers
 
 - [ ] T004 Compose one daemon controller, repository ownership lease, activity
@@ -201,6 +210,11 @@ preserve dependency order and record overlap before parallel work.
   - Expected evidence: Two-client, two-process, disconnect, reconnect, terminal
     notification, idle-timer race, and standalone-owner fixtures must record one
     daemon/controller identity and one activity-lease history.
+  - Status: Pending dependency-ordered implementation; Phase 2 residual recorded.
+  - Phase 2 handoff: Replace the explicitly marked legacy server post-worker
+    standalone publication fence with daemon/standalone controller composition,
+    and make termination-unconfirmed quarantine participate in shutdown and
+    lifetime admission.
   - [ ] T004.1 Compose and inject one daemon controller in `src/mcp/daemon.ts`
     and `src/server.ts`.
     - Acceptance: Every connection shares controller identity while provider
@@ -245,6 +259,11 @@ preserve dependency order and record overlap before parallel work.
   - Expected evidence: Deterministic status/watcher tests must record accepted,
     started, coalesced, and published generations plus one writer invocation at
     a time.
+  - Status: Pending dependency-ordered implementation; Phase 2 residual recorded.
+  - Phase 2 handoff: Replace the trigger-level catch-up reproduction and legacy
+    `coordinateSnapshotRefresh` timestamp-derived target allocation; all
+    startup, watcher, and stale-read triggers must use the controller/store
+    allocator boundary.
   - [ ] T005.1 Move watcher/change-queue ownership to `src/mcp/daemon.ts` and
     retain one local equivalent in standalone `src/server.ts` composition.
     - Acceptance: Connection creation no longer creates independent daemon
@@ -288,6 +307,10 @@ preserve dependency order and record overlap before parallel work.
   - Evidence: Pending.
   - Expected evidence: Schema, use-case, presenter, resource, state-matrix, and
     sentinel redaction tests must record exact accepted/rejected combinations.
+  - Status: Pending dependency-ordered implementation; Phase 2 residual recorded.
+  - Phase 2 handoff: Expose termination-unconfirmed quarantine truth in
+    authoritative diagnostics so terminal receipts cannot imply shutdown or
+    replacement safety before worker termination is confirmed.
   - [ ] T006.1 Define exact diagnostics and structured-failure schemas in
     `src/contracts/runtime-integration-contracts.ts`.
     - Acceptance: Enums, required identities, 512-byte safe message, and legal
@@ -332,6 +355,10 @@ preserve dependency order and record overlap before parallel work.
   - Expected evidence: Publication-barrier crash/reopen tests must record owner,
     writer/activity leases, child/store/socket cleanup, orphan disposition,
     visible snapshot, structured failure, and retry admission.
+  - Status: Pending dependency-ordered implementation; Phase 2 residual recorded.
+  - Phase 2 handoff: Reconcile termination-unconfirmed ownership across crash
+    and replacement, and retain structured SQLite, permission, orphan, and
+    cleanup recovery evidence.
   - [ ] T007.1 Implement worker/store/socket/metadata cleanup and explicit
     shutdown settlement in the controller, daemon, and server.
     - Acceptance: Every terminal and drain path releases each owned resource

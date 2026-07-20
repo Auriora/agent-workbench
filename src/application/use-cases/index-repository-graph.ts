@@ -19,6 +19,8 @@ import type {
   FileCatalogPort,
   FileCatalogScanPort,
   GraphWritePort,
+  SnapshotBuildPort,
+  SnapshotPublicationPort,
   SnapshotPort,
   WorkspaceFilePort
 } from "../../ports/index.js";
@@ -57,7 +59,7 @@ export type WarmupRepositoryGraphResult = IndexRepositoryGraphResult & {
   warmup_state: "complete";
 };
 
-export async function indexRepositoryGraph(input: {
+export type BuildRepositoryGraphInput = {
   repo_root: string;
   scanner: FileCatalogScanPort;
   workspace: WorkspaceFilePort;
@@ -66,14 +68,21 @@ export async function indexRepositoryGraph(input: {
   graph: GraphWritePort;
   catalog: FileCatalogPort;
   docs_index?: DocsIndexPort;
-  snapshots: SnapshotPort;
+  snapshots: SnapshotPort & SnapshotPublicationPort & SnapshotBuildPort;
   clock: ClockPort;
   schema_version: number;
   snapshot_id?: string;
   config_identity?: string;
   max_files?: number;
   max_extraction_files?: number;
-}): Promise<IndexRepositoryGraphResult> {
+  controller_generation?: number;
+  invalidation_generation?: number;
+};
+
+/** Build complete isolated evidence without selecting the target snapshot. */
+export async function buildRepositoryGraph(
+  input: BuildRepositoryGraphInput
+): Promise<IndexRepositoryGraphResult> {
   const snapshotId = input.snapshot_id ?? String(input.clock.nowUnixMs());
   const now = input.clock.nowIso8601();
   const configIdentity = input.config_identity ?? "default";
@@ -83,7 +92,7 @@ export async function indexRepositoryGraph(input: {
   if (existingSnapshot && existingSnapshot.config_identity !== configIdentity) {
     throw new Error("Existing snapshot config identity does not match the requested graph index config identity.");
   }
-  if (existingSnapshot && existingSnapshot.schema_version !== input.schema_version) {
+  if (existingSnapshot && existingSnapshot.schema_version > input.schema_version) {
     throw new Error("Existing snapshot schema version does not match the requested graph index schema version.");
   }
   const snapshot = buildSnapshot({
@@ -94,7 +103,12 @@ export async function indexRepositoryGraph(input: {
     freshness: "refreshing",
     now
   });
-  await input.snapshots.upsertSnapshot({ snapshot });
+  await input.snapshots.createBuildSnapshot({
+    snapshot,
+    controller_generation: input.controller_generation ?? 0,
+    invalidation_generation: input.invalidation_generation ?? 0,
+    created_at: now
+  });
 
   const scanned = await input.scanner.scan({
     repo_root: input.repo_root,
@@ -246,13 +260,10 @@ export async function indexRepositoryGraph(input: {
     graphScan: scanned,
     docsScan
   });
-  const freshness = coverage.some((item) => item.state === "partial" || item.state === "refreshing")
-    ? "refreshing"
-    : "fresh";
 
   await input.snapshots.markSnapshotFreshness({
     snapshot_id: snapshotId,
-    freshness
+    freshness: "fresh"
   });
 
   return {
@@ -271,6 +282,81 @@ export async function indexRepositoryGraph(input: {
     truncated: scanned.truncated,
     coverage
   };
+}
+
+/** Standalone indexing entry point that explicitly publishes a successful build. */
+export async function indexRepositoryGraph(
+  input: BuildRepositoryGraphInput
+): Promise<IndexRepositoryGraphResult> {
+  const snapshotId = input.snapshot_id ?? String(input.clock.nowUnixMs());
+  const standaloneInput = { ...input, snapshot_id: snapshotId };
+  try {
+    const result = await buildRepositoryGraph(standaloneInput);
+    await publishStandaloneRepositoryGraphBuild({
+      snapshots: input.snapshots,
+      result,
+      controller_generation: input.controller_generation ?? 0,
+      invalidation_generation: input.invalidation_generation ?? 0,
+      updated_at: input.clock.nowIso8601()
+    });
+    return result;
+  } catch (error) {
+    return rethrowWithPublicationCleanup({ input: standaloneInput, snapshotId, error });
+  }
+}
+
+/** Explicit legacy/standalone publication fence; daemon refresh controllers publish their own builds. */
+export async function publishStandaloneRepositoryGraphBuild(input: {
+  snapshots: SnapshotPublicationPort;
+  result: IndexRepositoryGraphResult;
+  controller_generation: number;
+  invalidation_generation: number;
+  updated_at: string;
+}): Promise<void> {
+  await input.snapshots.transitionBuild({
+    repo_root: input.result.repo_root,
+    snapshot_id: input.result.snapshot_id,
+    from: "building",
+    to: "published",
+    controller_generation: input.controller_generation,
+    invalidation_generation: input.invalidation_generation,
+    updated_at: input.updated_at
+  });
+}
+
+async function rethrowWithPublicationCleanup({ input, snapshotId, error }: {
+  input: BuildRepositoryGraphInput;
+  snapshotId: string;
+  error: unknown;
+}): Promise<never> {
+  let cleanupError: unknown;
+  try {
+    const publication = await input.snapshots.readExplicit({
+      repo_root: input.repo_root,
+      snapshot_id: snapshotId
+    });
+    if (publication.status === "blocked" && publication.publication_state === "building") {
+      await input.snapshots.transitionBuild({
+        repo_root: input.repo_root,
+        snapshot_id: snapshotId,
+        from: "building",
+        to: "failed",
+        controller_generation: input.controller_generation ?? 0,
+        invalidation_generation: input.invalidation_generation ?? 0,
+        updated_at: input.clock.nowIso8601()
+      });
+    }
+  } catch (caughtCleanupError) {
+    cleanupError = caughtCleanupError;
+  }
+  if (cleanupError !== undefined) {
+    throw new AggregateError(
+      [error, cleanupError],
+      "Graph indexing failed and publication cleanup also failed.",
+      { cause: error }
+    );
+  }
+  throw error;
 }
 
 function mergeDocsIndexFiles(input: {
@@ -489,7 +575,7 @@ export async function warmupRepositoryGraph(input: {
   graph: GraphWritePort;
   catalog: FileCatalogPort;
   docs_index?: DocsIndexPort;
-  snapshots: SnapshotPort;
+  snapshots: SnapshotPort & SnapshotPublicationPort & SnapshotBuildPort;
   warmups: WarmupCoordinatorPort;
   clock: ClockPort;
   schema_version: number;
@@ -498,6 +584,8 @@ export async function warmupRepositoryGraph(input: {
   config_identity?: string;
   max_files?: number;
   max_extraction_files?: number;
+  controller_generation?: number;
+  invalidation_generation?: number;
   cache?: CachePort;
 }): Promise<WarmupRepositoryGraphResult> {
   const snapshotId = input.snapshot_id ?? String(input.clock.nowUnixMs());
@@ -526,7 +614,9 @@ export async function warmupRepositoryGraph(input: {
       snapshot_id: snapshotId,
       config_identity: input.config_identity,
       max_files: input.max_files,
-      max_extraction_files: input.max_extraction_files
+      max_extraction_files: input.max_extraction_files,
+      controller_generation: input.controller_generation,
+      invalidation_generation: input.invalidation_generation
     });
     const files = await input.catalog.listFiles({
       snapshot_id: result.snapshot_id,

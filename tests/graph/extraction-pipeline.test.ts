@@ -6,11 +6,14 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { Worker } from "node:worker_threads";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  buildRepositoryGraph,
   indexRepositoryGraph,
   warmupRepositoryGraph
 } from "../../src/application/use-cases/index-repository-graph.js";
+import type { IndexRepositoryGraphResult } from "../../src/application/use-cases/index-repository-graph.js";
 import type { ClockPort, ExtractorPort, FileCatalogScanPort, WorkspaceFilePort } from "../../src/ports/index.js";
 import type { ExtractionRequest } from "../../src/domain/models/index.js";
 import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
@@ -79,6 +82,10 @@ describe("repository graph extraction pipeline", () => {
         id: "101",
         freshness: "fresh",
         schema_version: SCHEMA_VERSION
+      });
+      await expect(store.readExplicit({ repo_root: repoRoot, snapshot_id: "101" })).resolves.toMatchObject({
+        status: "selected",
+        publication: { state: "published" }
       });
 
       const runner = await store.findNodesByName({
@@ -331,16 +338,20 @@ describe("repository graph extraction pipeline", () => {
       });
       expect(snapshot).toMatchObject({
         id: "103",
-        freshness: "refreshing"
+        freshness: "fresh"
+      });
+      await expect(store.readExplicit({ repo_root: repoRoot, snapshot_id: "103" })).resolves.toMatchObject({
+        status: "selected",
+        publication: { state: "published" }
       });
       expect(files.map((file) => file.path)).not.toContain("docs/data-flow/processed/analytics-serving-boundary.md");
       expect(docsState).toMatchObject({
         status: "usable",
-        freshness: "refreshing",
+        freshness: "fresh",
         coverage_state: "complete",
-        document_count: 3,
-        reason: expect.stringContaining("refreshing graph snapshot")
+        document_count: 3
       });
+      expect(docsState.reason).toBeUndefined();
       expect(docsState.coverage).toEqual([
         expect.objectContaining({
           evidence_class: "docs",
@@ -353,7 +364,7 @@ describe("repository graph extraction pipeline", () => {
       ]);
       expect(docsSearch).toMatchObject({
         status: "done",
-        freshness: "refreshing",
+        freshness: "fresh",
         docs_index_state: "complete",
         indexed_docs_count: 3,
         coverage: [
@@ -376,6 +387,7 @@ describe("repository graph extraction pipeline", () => {
         ],
         result_count: 1
       });
+      expect(docsSearch.coverage_note).toBeUndefined();
       expect(agentDocsSearch).toMatchObject({
         status: "done",
         hits: [expect.objectContaining({ path: "AGENTS.md" })]
@@ -1342,6 +1354,510 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
+  it("keeps publication invisible at every production write barrier", async () => {
+    const repoRoot = createPublicationBarrierRepository(path.join(dir, "publication-barriers"));
+    const databasePath = path.join(dir, "publication-barriers.sqlite");
+    const writer = openGraphStore(databasePath);
+    const observer = openGraphStore(databasePath);
+    const prior = publicationTestSnapshot(repoRoot, "600");
+    const barriers: string[] = [];
+    const seen = new Set<string>();
+
+    const assertInvisible = async (barrier: string): Promise<void> => {
+      if (seen.has(barrier)) return;
+      seen.add(barrier);
+      barriers.push(barrier);
+      await expect(observer.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: prior.id });
+      await expect(observer.readExplicit({ repo_root: repoRoot, snapshot_id: "601" })).resolves.toMatchObject({
+        status: "blocked",
+        publication_state: "building"
+      });
+      if (barrier === "catalog") {
+        expect(snapshotRowCount(observer, "files", 601)).toBeGreaterThan(0);
+      }
+      if (barrier === "docs" || barrier === "before-publication") {
+        expect(snapshotRowCount(observer, "docs_documents", 601)).toBe(1);
+        expect(snapshotChildRowCount(observer, "docs_headings", "docs_documents", 601)).toBeGreaterThan(0);
+        expect(snapshotFtsRowCount(observer, "docs_fts", 601)).toBe(1);
+        expect(snapshotRowCount(observer, "snapshot_index_coverage", 601)).toBe(2);
+      }
+      if (barrier === "graph" || barrier === "before-publication") {
+        expect(snapshotRowCount(observer, "files", 601)).toBeGreaterThan(0);
+        expect(snapshotChildRowCount(observer, "nodes", "files", 601)).toBeGreaterThan(0);
+        expect(snapshotChildRowCount(observer, "unresolved_refs", "files", 601)).toBeGreaterThan(0);
+      }
+    };
+    const instrumented = decorateGraphStore(writer, {
+      before: async (method, args) => {
+        if (method === "transitionBuild" && (args[0] as { to?: string }).to === "published") {
+          await assertInvisible("before-publication");
+        }
+      },
+      after: async (method, args) => {
+        if (method === "createBuildSnapshot") await assertInvisible("build");
+        if (method === "upsertEntry") await assertInvisible("catalog");
+        if (method === "replaceSnapshotDocs") await assertInvisible("docs");
+        if (
+          method === "replaceSnapshotExtraction" &&
+          (args[0] as { batch?: { source_path?: string } }).batch?.source_path === "app.py"
+        ) {
+          await assertInvisible("graph");
+        }
+      }
+    });
+
+    try {
+      await writer.upsertSnapshot({ snapshot: prior });
+      await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: pythonRegistry(),
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: instrumented,
+        catalog: instrumented,
+        docs_index: instrumented,
+        snapshots: instrumented,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "601"
+      });
+
+      expect(barriers).toEqual(["build", "catalog", "docs", "graph", "before-publication"]);
+      await expect(observer.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: "601" });
+    } finally {
+      observer.close();
+      writer.close();
+    }
+  });
+
+  it("completes a build without taking publication authority from the refresh controller", async () => {
+    const repoRoot = createPublicationBarrierRepository(path.join(dir, "build-only-repository"));
+    const databasePath = path.join(dir, "build-only.sqlite");
+    const writer = openGraphStore(databasePath);
+    const reader = openGraphStore(databasePath);
+    const prior = publicationTestSnapshot(repoRoot, "605");
+
+    try {
+      await writer.upsertSnapshot({ snapshot: prior });
+      const result = await buildRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: pythonRegistry(),
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: writer,
+        catalog: writer,
+        docs_index: writer,
+        snapshots: writer,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "606",
+        controller_generation: 4,
+        invalidation_generation: 9
+      });
+
+      expect(result).toMatchObject({ snapshot_id: "606", repo_root: repoRoot });
+      await expect(reader.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: prior.id });
+      await expect(reader.readExplicit({ repo_root: repoRoot, snapshot_id: "606" })).resolves.toMatchObject({
+        status: "blocked",
+        publication_state: "building"
+      });
+      expect(reader.db.prepare(`
+        SELECT freshness, publication_state, controller_generation, invalidation_generation
+        FROM snapshots WHERE id = 606
+      `).get()).toEqual({
+        freshness: "fresh",
+        publication_state: "building",
+        controller_generation: 4,
+        invalidation_generation: 9
+      });
+      expect(snapshotRowCount(reader, "files", 606)).toBeGreaterThan(0);
+      expect(snapshotChildRowCount(reader, "nodes", "files", 606)).toBeGreaterThan(0);
+      expect(snapshotRowCount(reader, "docs_documents", 606)).toBeGreaterThan(0);
+      expect(snapshotRowCount(reader, "snapshot_index_coverage", 606)).toBe(2);
+    } finally {
+      reader.close();
+      writer.close();
+    }
+
+    const reopened = openGraphStore(databasePath);
+    try {
+      await expect(reopened.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: prior.id });
+      await expect(reopened.readExplicit({ repo_root: repoRoot, snapshot_id: "606" })).resolves.toMatchObject({
+        status: "blocked",
+        publication_state: "building"
+      });
+      await reopened.transitionBuild({
+        repo_root: repoRoot,
+        snapshot_id: "606",
+        from: "building",
+        to: "published",
+        controller_generation: 4,
+        invalidation_generation: 9,
+        updated_at: "2026-05-31T12:01:00.000Z"
+      });
+      await expect(reopened.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: "606" });
+    } finally {
+      reopened.close();
+    }
+  });
+
+  it("production startup worker returns a completed build without publishing it", async () => {
+    const repoRoot = createPublicationBarrierRepository(path.join(dir, "production-worker-repository"));
+    const databasePath = path.join(dir, "production-worker.sqlite");
+    const prior = publicationTestSnapshot(repoRoot, "607");
+    const setup = openGraphStore(databasePath);
+    await setup.upsertSnapshot({ snapshot: prior });
+    setup.close();
+
+    const result = await runStartupGraphWorker({
+      repoRoot,
+      databasePath,
+      snapshotId: "608",
+      configIdentity: "default",
+      maxFiles: 100,
+      retainLatestSnapshots: 2,
+      retainLatestFreshSnapshots: 2,
+      vacuum: false,
+      controllerGeneration: 8,
+      invalidationGeneration: 13
+    });
+    expect(result).toMatchObject({ snapshot_id: "608", repo_root: repoRoot });
+
+    const reopened = openGraphStore(databasePath);
+    try {
+      await expect(reopened.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: prior.id });
+      await expect(reopened.readExplicit({ repo_root: repoRoot, snapshot_id: "608" })).resolves.toMatchObject({
+        status: "blocked",
+        publication_state: "building"
+      });
+      expect(reopened.db.prepare(`
+        SELECT freshness, publication_state, controller_generation, invalidation_generation
+        FROM snapshots WHERE id = 608
+      `).get()).toEqual({
+        freshness: "fresh",
+        publication_state: "building",
+        controller_generation: 8,
+        invalidation_generation: 13
+      });
+      expect(snapshotRowCount(reopened, "files", 608)).toBeGreaterThan(0);
+      expect(snapshotChildRowCount(reopened, "nodes", "files", 608)).toBeGreaterThan(0);
+      await expect(reopened.transitionBuild({
+        repo_root: repoRoot,
+        snapshot_id: "608",
+        from: "building",
+        to: "published",
+        controller_generation: 8,
+        invalidation_generation: 12,
+        updated_at: "2026-05-31T12:02:00.000Z"
+      })).rejects.toThrow("publication generation does not match");
+      await reopened.transitionBuild({
+        repo_root: repoRoot,
+        snapshot_id: "608",
+        from: "building",
+        to: "published",
+        controller_generation: 8,
+        invalidation_generation: 13,
+        updated_at: "2026-05-31T12:02:00.000Z"
+      });
+      await expect(reopened.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: "608" });
+    } finally {
+      reopened.close();
+    }
+  });
+
+  it("leaves a controlled failed build terminally untouched for controller disposition", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-basic-python");
+    const store = openGraphStore(path.join(dir, "controlled-build-failure.sqlite"));
+    const prior = publicationTestSnapshot(repoRoot, "609");
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new FailingPythonExtractor("controlled parser failure"));
+    try {
+      await store.upsertSnapshot({ snapshot: prior });
+      await expect(buildRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "610",
+        controller_generation: 6,
+        invalidation_generation: 10
+      })).rejects.toThrow("controlled parser failure");
+
+      await expect(store.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: prior.id });
+      await expect(store.readExplicit({ repo_root: repoRoot, snapshot_id: "610" })).resolves.toMatchObject({
+        status: "blocked",
+        publication_state: "building"
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("keeps the prior publication selected when interrupted at every production write barrier", async () => {
+    const repoRoot = createPublicationBarrierRepository(path.join(dir, "publication-interruptions"));
+    const interruptionCases = ["build", "catalog", "docs", "graph", "before-publication"] as const;
+
+    for (const [index, interruption] of interruptionCases.entries()) {
+      const snapshotId = String(620 + index);
+      const databasePath = path.join(dir, `publication-interruption-${interruption}.sqlite`);
+      const writer = openGraphStore(databasePath);
+      const observer = openGraphStore(databasePath);
+      const prior = publicationTestSnapshot(repoRoot, "610");
+      let interrupted = false;
+      const instrumented = decorateGraphStore(writer, {
+        before: async (method, args) => {
+          if (
+            !interrupted &&
+            interruption === "before-publication" &&
+            method === "transitionBuild" &&
+            (args[0] as { to?: string }).to === "published"
+          ) {
+            interrupted = true;
+            throw new Error(`interrupted at ${interruption}`);
+          }
+        },
+        after: async (method, args) => {
+          const graphTarget = method === "replaceSnapshotExtraction" &&
+            (args[0] as { batch?: { source_path?: string } }).batch?.source_path === "app.py";
+          const matches =
+            (interruption === "build" && method === "createBuildSnapshot") ||
+            (interruption === "catalog" && method === "upsertEntry") ||
+            (interruption === "docs" && method === "replaceSnapshotDocs") ||
+            (interruption === "graph" && graphTarget);
+          if (!interrupted && matches) {
+            interrupted = true;
+            throw new Error(`interrupted at ${interruption}`);
+          }
+        }
+      });
+
+      try {
+        await writer.upsertSnapshot({ snapshot: prior });
+        await expect(indexRepositoryGraph({
+          repo_root: repoRoot,
+          scanner: new FileCatalogScannerAdapter(),
+          workspace: new WorkspaceFileAdapter({ repoRoot }),
+          extractors: pythonRegistry(),
+          resource_extractor: new ResourceExtractorAdapter(),
+          graph: instrumented,
+          catalog: instrumented,
+          docs_index: instrumented,
+          snapshots: instrumented,
+          clock,
+          schema_version: SCHEMA_VERSION,
+          snapshot_id: snapshotId
+        })).rejects.toThrow(`interrupted at ${interruption}`);
+        await expect(observer.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: prior.id });
+        await expect(observer.readExplicit({ repo_root: repoRoot, snapshot_id: snapshotId })).resolves.toMatchObject({
+          status: "blocked",
+          publication_state: "failed"
+        });
+      } finally {
+        observer.close();
+        writer.close();
+      }
+
+      const reopened = openGraphStore(databasePath);
+      try {
+        await expect(reopened.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: prior.id });
+        await expect(reopened.readExplicit({ repo_root: repoRoot, snapshot_id: snapshotId })).resolves.toMatchObject({
+          status: "blocked",
+          publication_state: "failed"
+        });
+        if (interruption === "catalog") {
+          expect(snapshotRowCount(reopened, "files", Number(snapshotId))).toBeGreaterThan(0);
+        }
+        if (interruption === "docs" || interruption === "before-publication") {
+          expect(snapshotRowCount(reopened, "docs_documents", Number(snapshotId))).toBe(1);
+          expect(snapshotChildRowCount(reopened, "docs_headings", "docs_documents", Number(snapshotId))).toBeGreaterThan(0);
+          expect(snapshotFtsRowCount(reopened, "docs_fts", Number(snapshotId))).toBe(1);
+          expect(snapshotRowCount(reopened, "snapshot_index_coverage", Number(snapshotId))).toBe(2);
+        }
+        if (interruption === "graph" || interruption === "before-publication") {
+          expect(snapshotRowCount(reopened, "files", Number(snapshotId))).toBeGreaterThan(0);
+          expect(snapshotChildRowCount(reopened, "nodes", "files", Number(snapshotId))).toBeGreaterThan(0);
+          expect(snapshotChildRowCount(reopened, "unresolved_refs", "files", Number(snapshotId))).toBeGreaterThan(0);
+        }
+      } finally {
+        reopened.close();
+      }
+    }
+  });
+
+  it("preserves indexing and publication-cleanup failures together", async () => {
+    const repoRoot = createPublicationBarrierRepository(path.join(dir, "publication-cleanup-failure"));
+    const databasePath = path.join(dir, "publication-cleanup-failure.sqlite");
+    const writer = openGraphStore(databasePath);
+    const prior = publicationTestSnapshot(repoRoot, "650");
+    const instrumented = decorateGraphStore(writer, {
+      after: async (method) => {
+        if (method === "createBuildSnapshot") {
+          throw new Error("induced indexing failure");
+        }
+      },
+      before: async (method, args) => {
+        if (method === "transitionBuild" && (args[0] as { to?: string }).to === "failed") {
+          throw new Error("induced publication cleanup failure");
+        }
+      }
+    });
+
+    try {
+      await writer.upsertSnapshot({ snapshot: prior });
+      let failure: unknown;
+      try {
+        await indexRepositoryGraph({
+          repo_root: repoRoot,
+          scanner: new FileCatalogScannerAdapter(),
+          workspace: new WorkspaceFileAdapter({ repoRoot }),
+          extractors: pythonRegistry(),
+          resource_extractor: new ResourceExtractorAdapter(),
+          graph: instrumented,
+          catalog: instrumented,
+          docs_index: instrumented,
+          snapshots: instrumented,
+          clock,
+          schema_version: SCHEMA_VERSION,
+          snapshot_id: "651"
+        });
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).toBeInstanceOf(AggregateError);
+      expect((failure as AggregateError).message).toBe(
+        "Graph indexing failed and publication cleanup also failed."
+      );
+      expect((failure as AggregateError).errors).toEqual([
+        expect.objectContaining({ message: "induced indexing failure" }),
+        expect.objectContaining({ message: "induced publication cleanup failure" })
+      ]);
+      expect((failure as AggregateError & { cause?: unknown }).cause).toEqual(
+        expect.objectContaining({ message: "induced indexing failure" })
+      );
+      await expect(writer.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: prior.id });
+      await expect(writer.readExplicit({ repo_root: repoRoot, snapshot_id: "651" })).resolves.toMatchObject({
+        status: "blocked",
+        publication_state: "building"
+      });
+    } finally {
+      writer.close();
+    }
+
+    const reopened = openGraphStore(databasePath);
+    try {
+      await expect(reopened.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: prior.id });
+      await expect(reopened.readExplicit({ repo_root: repoRoot, snapshot_id: "651" })).resolves.toMatchObject({
+        status: "blocked",
+        publication_state: "building"
+      });
+    } finally {
+      reopened.close();
+    }
+  });
+
+  it("uses one resolved snapshot id for standalone failure cleanup when the clock advances", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-basic-python");
+    const store = openGraphStore(path.join(dir, "standalone-clock-cleanup.sqlite"));
+    const prior = publicationTestSnapshot(repoRoot, "670");
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new FailingPythonExtractor("clock-advancing parser failure"));
+    let clockReads = 0;
+    const advancingClock: ClockPort = {
+      ...clock,
+      nowUnixMs: () => 671 + clockReads++
+    };
+    try {
+      await store.upsertSnapshot({ snapshot: prior });
+      await expect(indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock: advancingClock,
+        schema_version: SCHEMA_VERSION
+      })).rejects.toThrow("clock-advancing parser failure");
+
+      expect(clockReads).toBe(1);
+      await expect(store.readExplicit({ repo_root: repoRoot, snapshot_id: "671" })).resolves.toMatchObject({
+        status: "blocked",
+        publication_state: "failed"
+      });
+      await expect(store.readExplicit({ repo_root: repoRoot, snapshot_id: "672" })).resolves.toMatchObject({
+        status: "missing"
+      });
+      await expect(store.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: prior.id });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("keeps the prior publication visible to another connection until extraction completes", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-basic-python");
+    const databasePath = path.join(dir, "atomic-publication.sqlite");
+    const writer = openGraphStore(databasePath);
+    const reader = openGraphStore(databasePath);
+    const delegate = new PythonTreeSitterExtractorAdapter();
+    let observedDuringExtraction: string | undefined;
+    const registry = new ExtractorRegistryAdapter();
+    registry.register({
+      language: delegate.language,
+      supports: (input) => delegate.supports(input),
+      extract: async (input) => {
+        observedDuringExtraction ??= (await reader.getSnapshot({ repo_root: repoRoot }))?.id;
+        return delegate.extract(input);
+      }
+    });
+
+    try {
+      await writer.upsertSnapshot({
+        snapshot: {
+          id: "500",
+          repo_root: repoRoot,
+          workspace_root: repoRoot,
+          repo_identity: repoRoot,
+          config_identity: "default",
+          schema_version: SCHEMA_VERSION,
+          freshness: "fresh",
+          owner_state: "owner",
+          created_at: "2026-05-31T11:00:00.000Z",
+          updated_at: "2026-05-31T11:00:00.000Z"
+        }
+      });
+
+      await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: writer,
+        catalog: writer,
+        snapshots: writer,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "501"
+      });
+
+      expect(observedDuringExtraction).toBe("500");
+      await expect(reader.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({ id: "501" });
+    } finally {
+      reader.close();
+      writer.close();
+    }
+  });
+
   it("records failed warm-up state when parser work fails without returning partial graph evidence", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-basic-python");
     const store = openGraphStore(path.join(dir, "warmup-failed.sqlite"));
@@ -1350,6 +1866,20 @@ describe("repository graph extraction pipeline", () => {
     registry.register(new FailingPythonExtractor("parser timeout while extracting symbols"));
 
     try {
+      await store.upsertSnapshot({
+        snapshot: {
+          id: "500",
+          repo_root: repoRoot,
+          workspace_root: repoRoot,
+          repo_identity: repoRoot,
+          config_identity: "default",
+          schema_version: SCHEMA_VERSION,
+          freshness: "fresh",
+          owner_state: "owner",
+          created_at: "2026-05-31T11:00:00.000Z",
+          updated_at: "2026-05-31T11:00:00.000Z"
+        }
+      });
       await expect(
         warmupRepositoryGraph({
           repo_root: repoRoot,
@@ -1376,8 +1906,12 @@ describe("repository graph extraction pipeline", () => {
         reason: "parser timeout while extracting symbols"
       });
       await expect(store.getSnapshot({ repo_root: repoRoot })).resolves.toMatchObject({
-        id: "502",
-        freshness: "cold"
+        id: "500",
+        freshness: "fresh"
+      });
+      await expect(store.readExplicit({ repo_root: repoRoot, snapshot_id: "502" })).resolves.toMatchObject({
+        status: "blocked",
+        publication_state: "failed"
       });
       await expect(runtime.get({ namespace: "warmup", key: `graph:${repoRoot}` })).resolves.toBeNull();
     } finally {
@@ -1385,6 +1919,116 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 });
+
+type TestGraphStore = ReturnType<typeof openGraphStore>;
+type StoreHook = (method: string, args: readonly unknown[]) => Promise<void>;
+
+function decorateGraphStore(
+  store: TestGraphStore,
+  hooks: { before?: StoreHook; after?: StoreHook }
+): TestGraphStore {
+  return new Proxy(store, {
+    get(target, property) {
+      const value = Reflect.get(target, property, target) as unknown;
+      if (typeof value !== "function") return value;
+      const method = String(property);
+      if (hooks.before === undefined && hooks.after === undefined) return value.bind(target);
+      return async (...args: unknown[]) => {
+        await hooks.before?.(method, args);
+        const result = await value.apply(target, args);
+        await hooks.after?.(method, args);
+        return result;
+      };
+    }
+  }) as TestGraphStore;
+}
+
+function createPublicationBarrierRepository(repoRoot: string): string {
+  fs.mkdirSync(repoRoot, { recursive: true });
+  fs.writeFileSync(path.join(repoRoot, "app.py"), "def run():\n    missing_dependency()\n");
+  fs.writeFileSync(path.join(repoRoot, "unsupported.java"), "class Unsupported {}\n");
+  fs.writeFileSync(path.join(repoRoot, "README.md"), "# Barrier repository\n\nPublication barrier evidence.\n");
+  return repoRoot;
+}
+
+function pythonRegistry(): ExtractorRegistryAdapter {
+  const registry = new ExtractorRegistryAdapter();
+  registry.register(new PythonTreeSitterExtractorAdapter());
+  return registry;
+}
+
+function publicationTestSnapshot(repoRoot: string, id: string) {
+  return {
+    id,
+    repo_root: repoRoot,
+    workspace_root: repoRoot,
+    repo_identity: repoRoot,
+    config_identity: "default",
+    schema_version: SCHEMA_VERSION,
+    freshness: "fresh" as const,
+    owner_state: "owner" as const,
+    created_at: "2026-05-31T11:00:00.000Z",
+    updated_at: "2026-05-31T11:00:00.000Z"
+  };
+}
+
+function snapshotRowCount(store: TestGraphStore, table: string, snapshotId: number): number {
+  const row = store.db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE snapshot_id = ?`).get(snapshotId) as {
+    count: number;
+  };
+  return row.count;
+}
+
+function snapshotChildRowCount(
+  store: TestGraphStore,
+  childTable: "docs_headings" | "nodes" | "unresolved_refs",
+  parentTable: "docs_documents" | "files",
+  snapshotId: number
+): number {
+  const childKey = childTable === "docs_headings" ? "document_id" : "file_id";
+  const row = store.db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM ${childTable}
+    JOIN ${parentTable} ON ${parentTable}.id = ${childTable}.${childKey}
+    WHERE ${parentTable}.snapshot_id = ?
+  `).get(snapshotId) as { count: number };
+  return row.count;
+}
+
+function snapshotFtsRowCount(store: TestGraphStore, table: "docs_fts", snapshotId: number): number {
+  const row = store.db.prepare(`
+    SELECT COUNT(*) AS count
+    FROM ${table}
+    JOIN docs_documents ON docs_documents.id = ${table}.rowid
+    WHERE docs_documents.snapshot_id = ?
+  `).get(snapshotId) as { count: number };
+  return row.count;
+}
+
+function runStartupGraphWorker(workerData: Record<string, unknown>): Promise<IndexRepositoryGraphResult> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(
+      new URL("../../src/infrastructure/workers/startup-graph-warmup-worker-entrypoint.mjs", import.meta.url),
+      { workerData }
+    );
+    let settled = false;
+    worker.once("message", (message: unknown) => {
+      settled = true;
+      if (
+        typeof message === "object" && message !== null &&
+        (message as { type?: unknown }).type === "complete"
+      ) {
+        resolve((message as { result: IndexRepositoryGraphResult }).result);
+        return;
+      }
+      reject(new Error("Startup graph worker returned an invalid result."));
+    });
+    worker.once("error", reject);
+    worker.once("exit", (code) => {
+      if (!settled && code !== 0) reject(new Error(`Startup graph worker exited with code ${code}.`));
+    });
+  });
+}
 
 class FailingPythonExtractor implements ExtractorPort {
   public readonly language = "python";

@@ -21,6 +21,12 @@ import type {
   WarmupCoordinatorPort
 } from "../../ports/index.js";
 
+export {
+  SnapshotRefreshController,
+  SystemRefreshDeadlineScheduler
+} from "./refresh-controller.js";
+export type { SnapshotRefreshControllerOptions } from "./refresh-controller.js";
+
 type CacheEntry = {
   namespace: string;
   key: string;

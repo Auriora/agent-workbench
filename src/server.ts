@@ -29,7 +29,10 @@ import {
   SnapshotValidityService
 } from "./application/use-cases/validate-snapshot-paths.js";
 import { coordinateSnapshotRefresh } from "./application/use-cases/coordinate-snapshot-refresh.js";
-import type { IndexRepositoryGraphResult } from "./application/use-cases/index-repository-graph.js";
+import {
+  publishStandaloneRepositoryGraphBuild,
+  type IndexRepositoryGraphResult
+} from "./application/use-cases/index-repository-graph.js";
 import { planVerification } from "./application/use-cases/plan-verification.js";
 import { processWorkspaceChangeQueue, type WorkspaceChangeQueueProcessResult } from "./application/use-cases/process-workspace-change-queue.js";
 import { previewWorkspaceEdit } from "./application/use-cases/preview-workspace-edit.js";
@@ -178,10 +181,16 @@ export function createAgentWorkbenchServer(
   }
 
   async function selectValidatedSnapshot(repoRoot: string, store: GraphStore, snapshotId?: string) {
-    const snapshot = await store.getSnapshot({ repo_root: repoRoot, snapshot_id: snapshotId });
-    if (snapshot === null) {
+    const selection = snapshotId === undefined
+      ? await store.getLatestPublished({ repo_root: repoRoot })
+      : await store.readExplicit({ repo_root: repoRoot, snapshot_id: snapshotId });
+    if (selection.status === "blocked") {
+      return { snapshot_id: snapshotId, validity: undefined };
+    }
+    if (selection.status === "missing") {
       return { snapshot_id: null, validity: undefined };
     }
+    const snapshot = selection.snapshot;
     const validity = await new SnapshotValidityService(
       store,
       new FilesystemSnapshotPathValidatorAdapter({ repoRoot }),
@@ -489,7 +498,17 @@ export function createAgentWorkbenchServer(
           maxFiles: options.startupWarmupMaxFiles ?? DEFAULT_STARTUP_WARMUP_MAX_FILES,
           retainLatestSnapshots: DEFAULT_STARTUP_WARMUP_RETAIN_LATEST_SNAPSHOTS,
           retainLatestFreshSnapshots: DEFAULT_STARTUP_WARMUP_RETAIN_LATEST_FRESH_SNAPSHOTS,
-          vacuum: true
+          vacuum: true,
+          controllerGeneration: 0,
+          invalidationGeneration: 0
+        });
+        // T004 replaces this legacy startup fence with RefreshController publication authority.
+        await publishStandaloneRepositoryGraphBuild({
+          snapshots: store,
+          result,
+          controller_generation: 0,
+          invalidation_generation: 0,
+          updated_at: clock.nowIso8601()
         });
         const files = await store.listFiles({
           snapshot_id: result.snapshot_id,
@@ -549,6 +568,8 @@ function runStartupGraphWarmupWorker(input: {
   retainLatestSnapshots: number;
   retainLatestFreshSnapshots: number;
   vacuum: boolean;
+  controllerGeneration: number;
+  invalidationGeneration: number;
 }): Promise<IndexRepositoryGraphResult> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(

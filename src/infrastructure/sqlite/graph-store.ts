@@ -36,11 +36,20 @@ import type {
   GraphMaintenancePort,
   GraphQueryPort,
   GraphWritePort,
+  SnapshotPublicationPort,
+  SnapshotPublicationRecord,
+  SnapshotPublicationSelection,
+  SnapshotBuildPort,
   SnapshotPathInventoryPort,
   SnapshotPort
 } from "../../ports/index.js";
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
+
+const SNAPSHOT_SELECT_COLUMNS = `
+  SELECT id, repo_identity, config_identity, freshness, schema_version, created_at,
+         publication_state, controller_generation, invalidation_generation, publication_updated_at
+`;
 
 type SnapshotRow = {
   id: number;
@@ -49,6 +58,10 @@ type SnapshotRow = {
   freshness: string;
   schema_version: number;
   created_at: string;
+  publication_state: "building" | "published" | "superseded" | "failed";
+  controller_generation: number;
+  invalidation_generation: number;
+  publication_updated_at: string;
 };
 
 type FileRow = {
@@ -163,6 +176,8 @@ export interface GraphStore
     GraphQueryPort,
     GraphMaintenancePort,
     SnapshotPort,
+    SnapshotPublicationPort,
+    SnapshotBuildPort,
     FileCatalogPort,
     SnapshotPathInventoryPort,
     DocsIndexPort {
@@ -180,12 +195,18 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     this.db = new Database(databasePath, {
       timeout: options.busyTimeoutMs ?? DEFAULT_SQLITE_BUSY_TIMEOUT_MS
     });
-    this.db.pragma("journal_mode = WAL");
-    this.db.pragma("synchronous = NORMAL");
-    if (options.enforceForeignKeys !== false) {
-      this.db.pragma("foreign_keys = ON");
+    try {
+      assertCompatibleSchemaVersion(this.db);
+      this.db.pragma("journal_mode = WAL");
+      this.db.pragma("synchronous = NORMAL");
+      if (options.enforceForeignKeys !== false) {
+        this.db.pragma("foreign_keys = ON");
+      }
+      migrate(this.db);
+    } catch (error) {
+      this.db.close();
+      throw error;
     }
-    migrate(this.db);
   }
 
   public close(): void {
@@ -197,7 +218,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   }
 
   public async getNode(input: { snapshot_id: string; node_id: string }): Promise<GraphNodeReadModel | null> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "getNode");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return null;
     }
@@ -222,7 +243,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     exact?: boolean;
     max_rows?: number;
   }): Promise<readonly GraphNodeReadModel[]> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "findNodesByName");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return [];
     }
@@ -260,7 +281,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     qualified_name: string;
     max_rows?: number;
   }): Promise<readonly GraphNodeReadModel[]> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "findNodesByQualifiedName");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return [];
     }
@@ -291,7 +312,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     query: string;
     max_rows?: number;
   }): Promise<readonly GraphNodeReadModel[]> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "searchNodes");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return [];
     }
@@ -338,7 +359,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       end_column: number;
     };
   }): Promise<readonly GraphNodeReadModel[]> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "getNodesInRange");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return [];
     }
@@ -373,7 +394,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   public async getOutgoingEdges(input: { snapshot_id: string; node_id: string; max_rows?: number }): Promise<
     readonly GraphEdgeReadModel[]
   > {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "getOutgoingEdges");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return [];
     }
@@ -403,7 +424,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   public async getIncomingEdges(input: { snapshot_id: string; node_id: string; max_rows?: number }): Promise<
     readonly GraphEdgeReadModel[]
   > {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "getIncomingEdges");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return [];
     }
@@ -436,7 +457,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     max_depth?: number;
     max_rows?: number;
   }): Promise<readonly ResolvedReference[]> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "getReferences");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return [];
     }
@@ -485,7 +506,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     file_path?: string;
     max_rows?: number;
   }): Promise<readonly UnresolvedReferenceReadModel[]> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "getUnresolvedReferences");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return [];
     }
@@ -537,7 +558,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     snapshot_id: string;
     request: GraphTraversalRequest;
   }): Promise<GraphTraversalResult> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "traverse");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return {
         start_node_ids: input.request.start_node_ids,
@@ -646,10 +667,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   }
 
   public async replaceSnapshotExtraction(input: { batch: ExtractionBatch; replace: boolean }): Promise<void> {
-    const snapshotId = this.resolveSnapshotId(input.batch.snapshot_id, "replaceSnapshotExtraction");
-    if (snapshotId == null) {
-      throw new Error(`Unknown snapshot id: ${input.batch.snapshot_id}`);
-    }
+    const snapshotId = this.requireBuildingSnapshotId(input.batch.snapshot_id);
 
     const tx = this.db.transaction(() => {
       const upsertFile = this.db.prepare(`
@@ -864,10 +882,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   }
 
   public async upsertFileIdentity(input: { snapshot_id: string; file_identity: FileIdentity }): Promise<void> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "upsertFileIdentity");
-    if (snapshotId == null) {
-      return;
-    }
+    const snapshotId = this.requireBuildingSnapshotId(input.snapshot_id);
 
     this.db
       .prepare(`
@@ -897,8 +912,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     file_path: string;
     edges: readonly GraphEdgeReadModel[];
   }): Promise<void> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "insertEdges");
-    if (snapshotId == null || input.edges.length === 0) {
+    const snapshotId = this.requireBuildingSnapshotId(input.snapshot_id);
+    if (input.edges.length === 0) {
       return;
     }
 
@@ -957,10 +972,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   }
 
   public async clearFile(input: { snapshot_id: string; file_path: string }): Promise<void> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "clearFile");
-    if (snapshotId == null) {
-      return;
-    }
+    const snapshotId = this.requireBuildingSnapshotId(input.snapshot_id);
 
     const fileRow = this.getFileRow(snapshotId, input.file_path);
     if (!fileRow) {
@@ -971,10 +983,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   }
 
   public async clearSnapshot(input: { snapshot_id: string }): Promise<void> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "clearSnapshot");
-    if (snapshotId == null) {
-      return;
-    }
+    const snapshotId = this.requireBuildingSnapshotId(input.snapshot_id);
 
     this.clearSnapshotRecords({ snapshotId });
   }
@@ -983,23 +992,27 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     snapshot_id: string;
     source_node_id: string;
   }): Promise<void> {
-    this.db.prepare("DELETE FROM unresolved_refs WHERE source_node_id = @sourceNodeId").run({
-      sourceNodeId: input.source_node_id
+    const snapshotId = this.requireBuildingSnapshotId(input.snapshot_id);
+    this.db.prepare(`
+      DELETE FROM unresolved_refs
+      WHERE source_node_id = @sourceNodeId
+        AND file_id IN (SELECT id FROM files WHERE snapshot_id = @snapshotId)
+    `).run({
+      sourceNodeId: input.source_node_id,
+      snapshotId
     });
   }
 
   public async getSnapshot(input: { repo_root: string; snapshot_id?: string }): Promise<SnapshotState | null> {
     if (input.snapshot_id) {
-      const exactSnapshot = this.resolveSnapshotId(input.snapshot_id, "getSnapshot", { fallbackByRepo: false });
-      const row = exactSnapshot
+      const exactSnapshot = this.resolvePublishedSnapshotId(input.snapshot_id);
+      const row = exactSnapshot !== null
         ? (this.getSnapshotRowById(exactSnapshot) as SnapshotRow | undefined)
         : null;
-      if (row) {
+      if (row?.publication_state === "published") {
         return this.mapSnapshotRow(row);
       }
-
-      const latestByRepo = this.getSnapshotByRepo(input.snapshot_id);
-      return latestByRepo ? this.mapSnapshotRow(latestByRepo) : null;
+      return null;
     }
 
     const latest = this.getLatestSnapshotByRepo(input.repo_root);
@@ -1010,9 +1023,10 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     const rows = this.db
       .prepare(
         `
-        SELECT id, repo_identity, config_identity, freshness, schema_version, created_at
+        ${SNAPSHOT_SELECT_COLUMNS}
         FROM snapshots
         WHERE repo_identity = @repoRoot
+          AND publication_state = 'published'
         ORDER BY id ASC
       `
       )
@@ -1023,78 +1037,189 @@ export class SqliteGraphStoreAdapter implements GraphStore {
 
   public async upsertSnapshot(input: { snapshot: SnapshotState }): Promise<void> {
     const requestedId = this.parseNumericId(input.snapshot.id);
-
-    const existingById =
-      requestedId === null
-        ? null
-        : (this.db
-            .prepare("SELECT id FROM snapshots WHERE id = @id")
-            .get({ id: requestedId }) as { id: number } | undefined);
-    const existingByRepo = this.getLatestSnapshotByRepo(input.snapshot.repo_root);
-
-    if (existingById) {
-      this.db
-        .prepare(`
-          UPDATE snapshots
-          SET repo_identity = @repoIdentity,
-              config_identity = @configIdentity,
-              freshness = @freshness,
-              schema_version = @schemaVersion
-          WHERE id = @id
-        `)
-        .run({
-          id: existingById.id,
-          repoIdentity: input.snapshot.repo_root,
-          configIdentity: input.snapshot.config_identity,
-          freshness: input.snapshot.freshness,
-          schemaVersion: input.snapshot.schema_version
-        });
-      return;
+    if (requestedId === null || !Number.isSafeInteger(requestedId) || requestedId <= 0) {
+      throw new TypeError(`Snapshot id must be a positive safe integer: ${input.snapshot.id}`);
     }
-
-    if (existingByRepo && (requestedId === null || existingByRepo.id === requestedId)) {
-      this.db
-        .prepare(`
-          UPDATE snapshots
-          SET repo_identity = @repoIdentity,
-              config_identity = @configIdentity,
-              freshness = @freshness,
-              schema_version = @schemaVersion
-          WHERE id = @id
-        `)
-        .run({
-          id: existingByRepo.id,
-          repoIdentity: input.snapshot.repo_root,
-          configIdentity: input.snapshot.config_identity,
-          freshness: input.snapshot.freshness,
-          schemaVersion: input.snapshot.schema_version
-        });
-      return;
+    if (input.snapshot.freshness === "refreshing") {
+      throw new Error("Bootstrap snapshot seeding cannot create a controlled build.");
     }
-
-    const stmt =
-      requestedId === null
-        ? this.db.prepare(`
-            INSERT INTO snapshots (repo_identity, config_identity, freshness, schema_version, created_at)
-            VALUES (@repoIdentity, @configIdentity, @freshness, @schemaVersion, @createdAt)
-          `)
-        : this.db.prepare(`
-            INSERT INTO snapshots (id, repo_identity, config_identity, freshness, schema_version, created_at)
-            VALUES (@id, @repoIdentity, @configIdentity, @freshness, @schemaVersion, @createdAt)
-          `);
-
-    const params = {
+    this.db.prepare(`
+      INSERT INTO snapshots (
+        id, repo_identity, config_identity, freshness, schema_version, created_at,
+        publication_state, controller_generation, invalidation_generation, publication_updated_at
+      ) VALUES (
+        @id, @repoIdentity, @configIdentity, @freshness, @schemaVersion, @createdAt,
+        'published', 0, 0, @createdAt
+      )
+    `).run({
+      id: requestedId,
       repoIdentity: input.snapshot.repo_root,
       configIdentity: input.snapshot.config_identity,
       freshness: input.snapshot.freshness,
       schemaVersion: input.snapshot.schema_version,
       createdAt: input.snapshot.created_at
-    } as Record<string, string | number>;
-    if (requestedId !== null) {
-      params.id = requestedId;
-    }
+    });
+  }
 
-    stmt.run(params);
+  public async createBuildSnapshot(input: {
+    snapshot: SnapshotState;
+    controller_generation: number;
+    invalidation_generation: number;
+    created_at: string;
+  }): Promise<SnapshotPublicationRecord & { state: "building" }> {
+    const snapshotId = this.parseNumericId(input.snapshot.id);
+    if (snapshotId === null || !Number.isSafeInteger(snapshotId) || snapshotId <= 0) {
+      throw new Error(`Snapshot id must be a positive safe integer: ${input.snapshot.id}`);
+    }
+    if (!Number.isSafeInteger(input.controller_generation) || input.controller_generation < 0) {
+      throw new TypeError("controller_generation must be a non-negative safe integer.");
+    }
+    if (!Number.isSafeInteger(input.invalidation_generation) || input.invalidation_generation < 0) {
+      throw new TypeError("invalidation_generation must be a non-negative safe integer.");
+    }
+    try {
+      this.db.prepare(`
+        INSERT INTO snapshots (
+          id, repo_identity, config_identity, freshness, schema_version, created_at,
+          publication_state, controller_generation, invalidation_generation, publication_updated_at
+        ) VALUES (
+          @snapshotId, @repoRoot, @configIdentity, @freshness, @schemaVersion, @createdAt,
+          'building', @controllerGeneration, @invalidationGeneration, @createdAt
+        )
+      `).run({
+        snapshotId,
+        repoRoot: input.snapshot.repo_root,
+        configIdentity: input.snapshot.config_identity,
+        freshness: input.snapshot.freshness,
+        schemaVersion: input.snapshot.schema_version,
+        createdAt: input.created_at,
+        controllerGeneration: input.controller_generation,
+        invalidationGeneration: input.invalidation_generation
+      });
+    } catch (error) {
+      if (this.getSnapshotRowById(snapshotId) !== undefined) {
+        throw new Error(`Snapshot id already exists: ${input.snapshot.id}`, { cause: error });
+      }
+      throw error;
+    }
+    return {
+      repo_root: input.snapshot.repo_root,
+      snapshot_id: input.snapshot.id,
+      controller_generation: input.controller_generation,
+      invalidation_generation: input.invalidation_generation,
+      state: "building",
+      updated_at: input.created_at
+    };
+  }
+
+  public async allocateBuildSnapshotId(input: {
+    repo_root: string;
+    minimum_id: string;
+  }): Promise<string> {
+    const minimumId = this.parseNumericId(input.minimum_id);
+    if (minimumId === null || !Number.isSafeInteger(minimumId) || minimumId <= 0) {
+      throw new TypeError("minimum_id must be a positive numeric SQLite snapshot id.");
+    }
+    const latest = this.db.prepare(`
+      SELECT MAX(id) AS id
+      FROM snapshots
+      WHERE repo_identity = @repoRoot
+    `).get({ repoRoot: input.repo_root }) as { id: number | null };
+    const allocated = Math.max(minimumId, (latest.id ?? 0) + 1);
+    if (!Number.isSafeInteger(allocated) || allocated <= 0) {
+      throw new Error("No safe numeric snapshot id remains available.");
+    }
+    return String(allocated);
+  }
+
+  public async transitionBuild<TState extends "published" | "superseded" | "failed">(input: {
+    repo_root: string;
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: number;
+    from: "building";
+    to: TState;
+    updated_at: string;
+  }): Promise<SnapshotPublicationRecord & { state: TState }> {
+    const snapshotId = this.parseNumericId(input.snapshot_id);
+    if (snapshotId === null) {
+      throw new Error(`Unknown snapshot id: ${input.snapshot_id}`);
+    }
+    const transition = this.db.transaction(() => {
+      const current = this.getSnapshotRowById(snapshotId);
+      if (!current || current.repo_identity !== input.repo_root) {
+        throw new Error(`Unknown snapshot id: ${input.snapshot_id}`);
+      }
+      if (current.publication_state !== input.from) {
+        throw new Error(
+          `Snapshot ${input.snapshot_id} cannot transition from ${current.publication_state} to ${input.to}.`
+        );
+      }
+      if (
+        current.controller_generation !== input.controller_generation ||
+        current.invalidation_generation !== input.invalidation_generation
+      ) {
+        throw new Error(
+          `Snapshot ${input.snapshot_id} publication generation does not match the active build.`
+        );
+      }
+      this.db.prepare(`
+        UPDATE snapshots
+        SET publication_state = @state, publication_updated_at = @updatedAt
+        WHERE id = @snapshotId
+          AND publication_state = @fromState
+          AND controller_generation = @controllerGeneration
+          AND invalidation_generation = @invalidationGeneration
+      `).run({
+        snapshotId,
+        state: input.to,
+        fromState: input.from,
+        controllerGeneration: input.controller_generation,
+        invalidationGeneration: input.invalidation_generation,
+        updatedAt: input.updated_at
+      });
+      return this.getSnapshotRowById(snapshotId)!;
+    });
+    return this.mapPublicationRecord(transition.immediate()) as SnapshotPublicationRecord & { state: TState };
+  }
+
+  public async getLatestPublished(input: {
+    repo_root: string;
+  }): Promise<Exclude<SnapshotPublicationSelection, { status: "blocked" }>> {
+    const row = this.getLatestSnapshotByRepo(input.repo_root);
+    if (!row) {
+      return { status: "missing", reason: "no_published_snapshot" };
+    }
+    return {
+      status: "selected",
+      snapshot: this.mapSnapshotRow(row),
+      publication: { ...this.mapPublicationRecord(row), state: "published" }
+    };
+  }
+
+  public async readExplicit(input: {
+    repo_root: string;
+    snapshot_id: string;
+  }): Promise<SnapshotPublicationSelection> {
+    const snapshotId = this.parseNumericId(input.snapshot_id);
+    const row = snapshotId === null ? undefined : this.getSnapshotRowById(snapshotId);
+    if (!row || row.repo_identity !== input.repo_root) {
+      return { status: "missing", snapshot_id: input.snapshot_id, reason: "snapshot_not_found" };
+    }
+    if (row.publication_state !== "published") {
+      return {
+        status: "blocked",
+        snapshot_id: input.snapshot_id,
+        publication_state: row.publication_state,
+        reason: "snapshot_unpublished",
+        message: "Snapshot is not published."
+      };
+    }
+    return {
+      status: "selected",
+      snapshot: this.mapSnapshotRow(row),
+      publication: { ...this.mapPublicationRecord(row), state: "published" }
+    };
   }
 
   public async markSnapshotFreshness(input: {
@@ -1103,7 +1228,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     owner_state?: SnapshotState["owner_state"];
     reason?: string;
   }): Promise<void> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "markSnapshotFreshness");
+    const snapshotId = this.resolveExistingSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return;
     }
@@ -1118,7 +1243,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     after_path?: string;
     max_rows?: number;
   }): Promise<readonly FileCatalogEntry[]> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "listFiles");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return [];
     }
@@ -1161,7 +1286,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     snapshot_id: string;
     max_rows: number;
   }): Promise<readonly string[]> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "listIndexedPaths");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return [];
     }
@@ -1178,7 +1303,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   }
 
   public async getFile(input: { snapshot_id: string; path: string }): Promise<FileCatalogEntry | null> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "getFile");
+    const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
       return null;
     }
@@ -1204,10 +1329,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   }
 
   public async upsertEntry(input: { snapshot_id: string; entry: FileCatalogEntry }): Promise<void> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "upsertEntry");
-    if (snapshotId == null) {
-      return;
-    }
+    const snapshotId = this.requireBuildingSnapshotId(input.snapshot_id);
 
     this.db
       .prepare(`
@@ -1234,10 +1356,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   }
 
   public async removeEntry(input: { snapshot_id: string; path: string }): Promise<void> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "removeEntry");
-    if (snapshotId == null) {
-      return;
-    }
+    const snapshotId = this.requireBuildingSnapshotId(input.snapshot_id);
 
     const tx = this.db.transaction(() => {
       const fileRow = this.getFileRow(snapshotId, input.path);
@@ -1322,18 +1441,22 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   }> {
     const retainLatestSnapshots = Math.max(1, input.retain_latest_snapshots);
     const retainLatestFreshSnapshots = Math.max(0, input.retain_latest_fresh_snapshots);
-    const snapshots = this.db
+    const allSnapshots = this.db
       .prepare(
         `
-        SELECT id, repo_identity, config_identity, freshness, schema_version, created_at
+        ${SNAPSHOT_SELECT_COLUMNS}
         FROM snapshots
         WHERE repo_identity = @repoRoot
         ORDER BY id DESC
       `
       )
       .all({ repoRoot: input.repo_root }) as SnapshotRow[];
+    const snapshots = allSnapshots.filter((snapshot) => snapshot.publication_state === "published");
 
     const retained = new Set<number>();
+    for (const snapshot of allSnapshots.filter((candidate) => candidate.publication_state === "building")) {
+      retained.add(snapshot.id);
+    }
     for (const snapshot of snapshots.slice(0, retainLatestSnapshots)) {
       retained.add(snapshot.id);
     }
@@ -1341,7 +1464,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       retained.add(snapshot.id);
     }
 
-    const deleteIds = snapshots.map((snapshot) => snapshot.id).filter((snapshotId) => !retained.has(snapshotId));
+    const deleteIds = allSnapshots.map((snapshot) => snapshot.id).filter((snapshotId) => !retained.has(snapshotId));
     if (deleteIds.length > 0) {
       const tx = this.db.transaction(() => {
         this.deleteSnapshotData(deleteIds);
@@ -1364,7 +1487,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     return {
       repo_root: input.repo_root,
       deleted_snapshots: deleteIds.length,
-      retained_snapshot_ids: snapshots
+      retained_snapshot_ids: allSnapshots
         .map((snapshot) => snapshot.id)
         .filter((snapshotId) => retained.has(snapshotId))
         .map((snapshotId) => String(snapshotId)),
@@ -1379,10 +1502,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     documents: readonly DocsIndexDocumentWrite[];
     coverage?: readonly IndexCoverage[];
   }): Promise<void> {
-    const snapshotId = this.resolveSnapshotId(input.snapshot_id, "replaceSnapshotDocs");
-    if (snapshotId == null) {
-      throw new Error(`Unknown snapshot id: ${input.snapshot_id}`);
-    }
+    const snapshotId = this.requireBuildingSnapshotId(input.snapshot_id);
 
     const tx = this.db.transaction(() => {
       this.db.prepare("DELETE FROM docs_fts WHERE rowid IN (SELECT id FROM docs_documents WHERE snapshot_id = @snapshotId)").run({
@@ -1526,7 +1646,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       };
     }
 
-    const snapshotId = this.resolveSnapshotId(snapshot.id, "getDocsIndexState", { fallbackByRepo: false });
+    const snapshotId = this.resolvePublishedSnapshotId(snapshot.id);
     if (snapshotId == null) {
       return {
         repo_root: snapshot.repo_root,
@@ -1638,7 +1758,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       };
     }
 
-    const snapshotId = this.resolveSnapshotId(state.snapshot_id, "searchDocsIndex", { fallbackByRepo: false });
+    const snapshotId = this.resolvePublishedSnapshotId(state.snapshot_id);
     if (snapshotId == null) {
       return {
         status: "blocked",
@@ -1782,39 +1902,37 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     };
   }
 
-  private resolveSnapshotId(snapshotId: string, context: string, options: { fallbackByRepo?: boolean } = {}): number | null {
-    const fallbackByRepo = options.fallbackByRepo !== false;
+  private resolvePublishedSnapshotId(snapshotId: string): number | null {
     const byId = this.parseNumericId(snapshotId);
-    if (byId != null) {
-      const row = this.getSnapshotRowById(byId);
-      if (row) {
-        return row.id;
-      }
-    }
-
-    if (!fallbackByRepo) {
+    if (byId === null) {
       return null;
     }
+    const row = this.getSnapshotRowById(byId);
+    return row?.publication_state === "published" ? row.id : null;
+  }
 
-    const byRepo = this.getSnapshotByRepo(snapshotId);
-    if (!byRepo) {
-      return null;
+  private requireBuildingSnapshotId(snapshotId: string): number {
+    const byId = this.parseNumericId(snapshotId);
+    const row = byId === null ? undefined : this.getSnapshotRowById(byId);
+    if (row?.publication_state !== "building") {
+      throw new Error(`Snapshot ${snapshotId} is not building.`);
     }
+    return row.id;
+  }
 
-    if (process.env.NODE_ENV !== "production") {
-      void context;
-    }
-
-    return byRepo.id;
+  private resolveExistingSnapshotId(snapshotId: string): number | null {
+    const byId = this.parseNumericId(snapshotId);
+    return byId !== null && this.getSnapshotRowById(byId) !== undefined ? byId : null;
   }
 
   private getSnapshotByRepo(repoRoot: string): SnapshotRow | undefined {
     return this.db
       .prepare(
         `
-        SELECT id, repo_identity, config_identity, freshness, schema_version, created_at
+        ${SNAPSHOT_SELECT_COLUMNS}
         FROM snapshots
         WHERE repo_identity = @repoRoot
+          AND publication_state = 'published'
         ORDER BY id DESC
         LIMIT 1
       `
@@ -1826,15 +1944,15 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     return (this.db
       .prepare(
         `
-        SELECT id, repo_identity, config_identity, freshness, schema_version, created_at
+        ${SNAPSHOT_SELECT_COLUMNS}
         FROM snapshots
         WHERE repo_identity = @repoRoot
-          AND freshness = 'fresh'
+          AND publication_state = 'published'
         ORDER BY id DESC
         LIMIT 1
       `
       )
-      .get({ repoRoot }) as SnapshotRow | undefined) ?? this.getSnapshotByRepo(repoRoot);
+      .get({ repoRoot }) as SnapshotRow | undefined);
   }
 
   private getLatestUsableDocsSnapshotByRepo(repoRoot: string): (SnapshotRow & { document_count: number }) | undefined {
@@ -1847,11 +1965,16 @@ export class SqliteGraphStoreAdapter implements GraphStore {
                snapshots.freshness,
                snapshots.schema_version,
                snapshots.created_at,
+               snapshots.publication_state,
+               snapshots.controller_generation,
+               snapshots.invalidation_generation,
+               snapshots.publication_updated_at,
                COUNT(docs_documents.path) AS document_count
         FROM snapshots
         JOIN docs_documents ON docs_documents.snapshot_id = snapshots.id
         WHERE snapshots.repo_identity = @repoRoot
           AND snapshots.freshness = 'fresh'
+          AND snapshots.publication_state = 'published'
         GROUP BY snapshots.id
         HAVING document_count > 0
         ORDER BY snapshots.id DESC
@@ -1865,7 +1988,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     return this.db
       .prepare(
         `
-        SELECT id, repo_identity, config_identity, freshness, schema_version, created_at
+        ${SNAPSHOT_SELECT_COLUMNS}
         FROM snapshots
         WHERE id = @snapshotId
       `
@@ -2049,6 +2172,17 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       created_at: row.created_at,
       updated_at: row.created_at,
       reason: undefined
+    };
+  }
+
+  private mapPublicationRecord(row: SnapshotRow): SnapshotPublicationRecord {
+    return {
+      repo_root: row.repo_identity,
+      snapshot_id: String(row.id),
+      controller_generation: row.controller_generation,
+      invalidation_generation: row.invalidation_generation,
+      state: row.publication_state,
+      updated_at: row.publication_updated_at
     };
   }
 
@@ -2301,7 +2435,10 @@ export function openGraphStore(databasePath: string, options: GraphStoreOptions 
 }
 
 function migrate(db: Database.Database): void {
-  db.exec(`
+  const migration = db.transaction(() => {
+    const existingSnapshotColumns = tableColumns(db, "snapshots");
+    const needsPublicationMigration = existingSnapshotColumns.size > 0 && !existingSnapshotColumns.has("publication_state");
+    db.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
       version INTEGER PRIMARY KEY,
       applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -2313,7 +2450,11 @@ function migrate(db: Database.Database): void {
       config_identity TEXT NOT NULL,
       freshness TEXT NOT NULL,
       schema_version INTEGER NOT NULL,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      publication_state TEXT NOT NULL DEFAULT 'published',
+      controller_generation INTEGER NOT NULL DEFAULT 0,
+      invalidation_generation INTEGER NOT NULL DEFAULT 0,
+      publication_updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
     CREATE TABLE IF NOT EXISTS files (
@@ -2444,6 +2585,60 @@ function migrate(db: Database.Database): void {
 
     INSERT OR IGNORE INTO schema_migrations(version) VALUES (${SCHEMA_VERSION});
   `);
+    const snapshotColumns = tableColumns(db, "snapshots");
+    if (!snapshotColumns.has("publication_state")) {
+      db.exec("ALTER TABLE snapshots ADD COLUMN publication_state TEXT NOT NULL DEFAULT 'published'");
+    }
+    if (!snapshotColumns.has("controller_generation")) {
+      db.exec("ALTER TABLE snapshots ADD COLUMN controller_generation INTEGER NOT NULL DEFAULT 0");
+    }
+    if (!snapshotColumns.has("invalidation_generation")) {
+      db.exec("ALTER TABLE snapshots ADD COLUMN invalidation_generation INTEGER NOT NULL DEFAULT 0");
+    }
+    if (!snapshotColumns.has("publication_updated_at")) {
+      db.exec("ALTER TABLE snapshots ADD COLUMN publication_updated_at TEXT NOT NULL DEFAULT ''");
+    }
+    if (needsPublicationMigration) {
+      db.exec(`
+        UPDATE snapshots
+        SET publication_state = CASE WHEN freshness = 'refreshing' THEN 'failed' ELSE 'published' END,
+            publication_updated_at = created_at
+      `);
+    }
+    db.prepare("INSERT OR IGNORE INTO schema_migrations(version) VALUES (?)").run(SCHEMA_VERSION);
+  });
+  migration.immediate();
+}
+
+function assertCompatibleSchemaVersion(db: Database.Database): void {
+  const migrationsTable = db.prepare(`
+    SELECT 1 AS present
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'schema_migrations'
+  `).get() as { present: number } | undefined;
+  if (!migrationsTable) {
+    return;
+  }
+  const marker = db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as {
+    version: number | null;
+  };
+  if (marker.version !== null && marker.version > SCHEMA_VERSION) {
+    throw new Error(
+      `Graph store schema version ${marker.version} is newer than supported version ${SCHEMA_VERSION}.`
+    );
+  }
+}
+
+function tableColumns(db: Database.Database, table: string): Set<string> {
+  const exists = db.prepare(`
+    SELECT 1 AS present
+    FROM sqlite_master
+    WHERE type = 'table' AND name = ?
+  `).get(table) as { present: number } | undefined;
+  if (!exists) {
+    return new Set();
+  }
+  return new Set((db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((row) => row.name));
 }
 
 function validateSchema(db: Database.Database): boolean {

@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: traceability
 status: draft
 owner: platform
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -32,15 +32,15 @@ explicit child tasks in `tasks.md` are the bounded implementation handoffs.
 
 | Property | Design Sections | Tasks | Verification | Coverage |
 | --- | --- | --- | --- | --- |
-| CP-001 | linearized shared controller admission | T001-T002, T004-T005, T008 | V001-V003, V011, V021 | not-covered |
+| CP-001 | linearized shared controller admission | T001-T002, T004-T005, T008 | V001-V003, V011, V021 | partially-covered: T002 controller admission passes; daemon/trigger composition remains |
 | CP-002 | daemon-scoped lifecycle plus generation-triggered convergence | T001-T002, T004-T005, T008 | V002-V004, V007, V021 | not-covered |
 | CP-003 | activity lease independent of requester socket | T001, T004, T007-T008 | V004, V010, V021 | not-covered |
-| CP-004 | explicit atomic publication and exact query recovery | T001-T003, T007-T008 | V007-V010, V021 | not-covered |
+| CP-004 | explicit atomic publication and exact query recovery | T001-T003, T007-T008 | V007-V010, V021 | partially-covered: T002-T003 publication/query barriers pass; crash and installed acceptance remain |
 | CP-005 | one awaited canonical diagnostics receipt | T001, T006, T008 | V005-V006, V021 | not-covered |
-| CP-006 | terminal structured failure with no retry/fallback | T001-T003, T006-T008 | V001, V003, V005-V006, V010-V011, V021 | not-covered |
-| CP-007 | monotonic accepted invalidation generations and coalesced catch-up | T001-T002, T005, T008 | V001, V003, V007, V021 | not-covered |
-| CP-008 | publication independent of freshness and coverage | T001, T003, T007-T008 | V007-V010, V021 | not-covered |
-| CP-009 | execution, ownership, activity, publication, and diagnostics identity agreement | T001-T002, T004-T008 | V001-V011, V021 | not-covered |
+| CP-006 | terminal structured failure with no retry/fallback | T001-T003, T006-T008 | V001, V003, V005-V006, V010-V011, V021 | partially-covered: T002-T003 worker/store failure paths pass; diagnostics/recovery remain |
+| CP-007 | monotonic accepted invalidation generations and coalesced catch-up | T001-T002, T005, T008 | V001, V003, V007, V021 | partially-covered: controller catch-up passes; trigger-level catch-up remains T005 |
+| CP-008 | publication independent of freshness and coverage | T001, T003, T007-T008 | V007-V010, V021 | partially-covered: T003 lifecycle and immutability pass; crash/installed acceptance remain |
+| CP-009 | execution, ownership, activity, publication, and diagnostics identity agreement | T001-T002, T004-T008 | V001-V011, V021 | partially-covered: controller/publication generations agree; owner/diagnostics composition remains |
 
 ## Task To Context Matrix
 
@@ -60,8 +60,8 @@ explicit child tasks in `tasks.md` are the bounded implementation handoffs.
 
 | Design target | Implementation boundary | Tasks | Coverage |
 | --- | --- | --- | --- |
-| controller generations and sole executor | refresh controller, coordination use case, runtime port | T002 | not-covered |
-| publication/current selection and migration independent of freshness | graph index use case, graph store, snapshot port | T003 | not-covered |
+| controller generations and sole executor | refresh controller, coordination use case, runtime port | T002 | covered by Phase 2 implementation receipt |
+| publication/current selection and migration independent of freshness | graph index use case, graph store, snapshot port | T003 | covered by Phase 2 implementation receipt |
 | daemon/standalone ownership and activity lease | daemon and server composition roots | T004 | not-covered |
 | daemon watcher and shared trigger generations | daemon watcher/queue, first-read and queue use cases | T005 | not-covered |
 | authoritative diagnostics and redaction | contracts, health use case, presenter, daemon binding | T006 | not-covered |

@@ -5,24 +5,24 @@
 
 import type {
   ClockPort,
+  RefreshDeadlineSchedulerPort,
   RefreshActivityLease,
   RefreshExecutorPort,
+  SnapshotPublicationPort,
   SnapshotRefreshAdmission,
   SnapshotRefreshPort,
   SnapshotRefreshRequest
 } from "../../src/ports/index.js";
+import { SnapshotRefreshController } from "../../src/infrastructure/runtime/index.js";
 
 /**
- * Deliberately reproduces the missing controller-owned deadline path.
- * T002 replaces this factory with the production controller and executor.
+ * Deterministic harness around the production controller-owned deadline path.
  */
-export function createPhase1DeadlineControllerReproduction(clock: ClockPort) {
+export function createDeadlineControllerHarness(clock: ClockPort) {
   const workerStarted = deferred<void>();
   let workerInvocations = 0;
   let terminateInvocations = 0;
-  let state: "idle" | "running" | "failed" = "idle";
-  let activityLeaseHeld = false;
-  let failureCode: string | undefined;
+  let fireDeadline: (() => void) | undefined;
 
   const executor: RefreshExecutorPort = {
     async run(): Promise<never> {
@@ -34,41 +34,87 @@ export function createPhase1DeadlineControllerReproduction(clock: ClockPort) {
       terminateInvocations += 1;
     }
   };
+  const deadlineScheduler: RefreshDeadlineSchedulerPort = {
+    arm(input) {
+      fireDeadline = input.onDeadline;
+      return {
+        cancel(): void {
+          fireDeadline = undefined;
+        }
+      };
+    }
+  };
+  const publication: SnapshotPublicationPort = {
+    async allocateBuildSnapshotId() {
+      return "1001";
+    },
+    async transitionBuild(input) {
+      return {
+        repo_root: input.repo_root,
+        snapshot_id: input.snapshot_id,
+        controller_generation: 1,
+        invalidation_generation: 1,
+        state: input.to,
+        updated_at: input.updated_at
+      };
+    },
+    async getLatestPublished() {
+      return { status: "missing", reason: "no_published_snapshot" };
+    },
+    async readExplicit(input) {
+      return { status: "missing", snapshot_id: input.snapshot_id, reason: "snapshot_not_found" };
+    }
+  };
+  const controller = new SnapshotRefreshController({
+    repo_root: "/repo",
+    controller_generation: 1,
+    timeout_ms: 30_000,
+    clock,
+    executor,
+    publication,
+    deadline_scheduler: deadlineScheduler,
+    create_execution_id: () => "exec-deadline"
+  });
+  const terminal = deferred<void>();
+  controller.onTransition((transition) => {
+    if (transition.state === "terminal") {
+      terminal.resolve(undefined);
+    }
+  });
 
   return {
     workerStarted,
-    start(): void {
-      state = "running";
-      activityLeaseHeld = true;
-      void executor.run({
+    async start(): Promise<void> {
+      await controller.request({
         repo_root: "/repo",
-        execution_id: "exec-deadline",
-        target_snapshot_id: "snap-deadline",
-        generation: 1,
-        deadline: {
-          timeout_ms: 30_000,
-          deadline_at: new Date(clock.nowUnixMs() + 30_000).toISOString()
-        }
+        reason: "startup",
+        source: "test",
+        invalidation_generation: 1
       });
     },
-    fireDeadlineBarrier(): void {
-      // Intentionally does not terminate the worker or settle the lifecycle.
+    async fireDeadlineBarrier(): Promise<void> {
+      if (fireDeadline === undefined) {
+        throw new Error("Deadline was not armed.");
+      }
+      fireDeadline();
+      await terminal.promise;
     },
     receipt(): {
       execution_id: string;
-      state: "idle" | "running" | "failed";
+      state: "idle" | "running" | "complete" | "failed";
       activity_lease_held: boolean;
       worker_invocations: number;
       terminate_invocations: number;
       failure_code?: string;
     } {
+      const receipt = controller.getReceipt();
       return {
-        execution_id: "exec-deadline",
-        state,
-        activity_lease_held: activityLeaseHeld,
+        execution_id: receipt.execution_id ?? "exec-deadline",
+        state: receipt.execution_state === "planned" ? "running" : receipt.execution_state,
+        activity_lease_held: receipt.activity_lease?.state === "held",
         worker_invocations: workerInvocations,
         terminate_invocations: terminateInvocations,
-        failure_code: failureCode
+        failure_code: receipt.last_failure?.code
       };
     }
   };
@@ -76,7 +122,8 @@ export function createPhase1DeadlineControllerReproduction(clock: ClockPort) {
 
 /**
  * Deliberately records but drops a newer generation during publication.
- * T002/T005 replace this factory with the production controller boundary.
+ * T005 replaces this catch-up reproduction through the production trigger
+ * boundary. T002 owns only the deadline reproduction above.
  */
 export function createPhase1GenerationCatchupReproduction(): SnapshotRefreshPort & {
   workerStarted: ReturnType<typeof deferred<void>>;

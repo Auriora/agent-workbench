@@ -4,7 +4,7 @@
  */
 
 import { parentPort, workerData } from "node:worker_threads";
-import { indexRepositoryGraph } from "../../application/use-cases/index-repository-graph.js";
+import { buildRepositoryGraph } from "../../application/use-cases/index-repository-graph.js";
 import { SCHEMA_VERSION, openGraphStore } from "../sqlite/index.js";
 import {
   FileCatalogScannerAdapter,
@@ -31,9 +31,13 @@ type StartupGraphWarmupWorkerData = {
   retainLatestSnapshots: number;
   retainLatestFreshSnapshots: number;
   vacuum: boolean;
+  controllerGeneration: number;
+  invalidationGeneration: number;
 };
 
 const input = workerData as StartupGraphWarmupWorkerData;
+assertGeneration("controllerGeneration", input.controllerGeneration);
+assertGeneration("invalidationGeneration", input.invalidationGeneration);
 const scanner = new FileCatalogScannerAdapter();
 const workspace = new WorkspaceFileAdapter({ repoRoot: input.repoRoot });
 const graphStore = openGraphStore(input.databasePath);
@@ -46,7 +50,7 @@ extractors.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ languag
 extractors.register(new PythonTreeSitterExtractorAdapter());
 
 try {
-  const result = await indexRepositoryGraph({
+  const result = await buildRepositoryGraph({
     repo_root: input.repoRoot,
     scanner,
     workspace,
@@ -60,6 +64,8 @@ try {
     schema_version: SCHEMA_VERSION,
     snapshot_id: input.snapshotId,
     config_identity: input.configIdentity,
+    controller_generation: input.controllerGeneration,
+    invalidation_generation: input.invalidationGeneration,
     max_files: input.maxFiles
   });
   await graphStore.pruneRepositorySnapshots({
@@ -71,4 +77,10 @@ try {
   parentPort?.postMessage({ type: "complete", result });
 } finally {
   graphStore.close();
+}
+
+function assertGeneration(name: string, value: number): void {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new TypeError(`${name} must be a non-negative safe integer.`);
+  }
 }

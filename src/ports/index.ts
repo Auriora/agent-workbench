@@ -562,6 +562,11 @@ export type RefreshWorkerResult = {
   completed_generation: InvalidationGeneration;
 };
 
+export type RefreshExecutorCompletion = {
+  exit_code: number;
+  results: readonly unknown[];
+};
+
 export interface RefreshExecutorPort {
   run(input: {
     repo_root: string;
@@ -569,11 +574,22 @@ export interface RefreshExecutorPort {
     target_snapshot_id: string;
     generation: InvalidationGeneration;
     deadline: RefreshDeadline;
-  }): Promise<RefreshWorkerResult>;
+  }): Promise<RefreshExecutorCompletion>;
   terminate(input: {
     execution_id: string;
-    reason: "deadline" | "controller_shutdown";
+    reason: "deadline" | "worker_error" | "controller_shutdown";
   }): Promise<void>;
+}
+
+export interface RefreshDeadlineHandle {
+  cancel(): void;
+}
+
+export interface RefreshDeadlineSchedulerPort {
+  arm(input: {
+    deadline: RefreshDeadline;
+    onDeadline: () => void;
+  }): RefreshDeadlineHandle;
 }
 
 type RefreshActivityLeaseBase = {
@@ -610,6 +626,8 @@ export type PublishedSnapshotRecord = SnapshotPublicationRecord & {
 export type SnapshotPublicationTransition = {
   repo_root: string;
   snapshot_id: string;
+  controller_generation: number;
+  invalidation_generation: InvalidationGeneration;
   from: "building";
   to: "published" | "superseded" | "failed";
   updated_at: string;
@@ -635,13 +653,10 @@ export type SnapshotPublicationSelection =
     };
 
 export interface SnapshotPublicationPort {
-  createBuild(input: {
+  allocateBuildSnapshotId(input: {
     repo_root: string;
-    snapshot_id: string;
-    controller_generation: number;
-    invalidation_generation: InvalidationGeneration;
-    created_at: string;
-  }): Promise<SnapshotPublicationRecord & { state: "building" }>;
+    minimum_id: string;
+  }): Promise<string>;
   transitionBuild<TState extends SnapshotPublicationTransition["to"]>(
     input: SnapshotPublicationTransition & { to: TState }
   ): Promise<SnapshotPublicationRecord & { state: TState }>;
@@ -652,6 +667,15 @@ export interface SnapshotPublicationPort {
     repo_root: string;
     snapshot_id: string;
   }): Promise<SnapshotPublicationSelection>;
+}
+
+export interface SnapshotBuildPort {
+  createBuildSnapshot(input: {
+    snapshot: SnapshotState;
+    controller_generation: number;
+    invalidation_generation: InvalidationGeneration;
+    created_at: string;
+  }): Promise<SnapshotPublicationRecord & { state: "building" }>;
 }
 
 export type RepositoryOwnershipLease = {
@@ -705,10 +729,44 @@ export type SnapshotRefreshAdmission =
       reason: "ownership_ambiguous";
       message: string;
       owner: RepositoryOwnershipLease & { state: "ambiguous" };
+    }
+  | {
+      outcome: "blocked";
+      reused: false;
+      state: "idle";
+      reason: "termination_unconfirmed";
+      message: "Prior refresh worker termination is not yet confirmed.";
+      execution_id: string;
+    }
+  | {
+      outcome: "blocked";
+      reused: false;
+      state: "idle";
+      reason: "store_failure";
+      message: "Refresh store operation failed.";
     };
 
 export interface SnapshotRefreshPort {
   request(input: SnapshotRefreshRequest): Promise<SnapshotRefreshAdmission>;
+}
+
+export type SnapshotRefreshControllerReceipt = {
+  repo_root: string;
+  controller_generation: number;
+  execution_state: RefreshExecutionState;
+  execution_id?: string;
+  target_snapshot_id?: string;
+  started_generation: InvalidationGeneration;
+  requested_generation: InvalidationGeneration;
+  activity_lease: RefreshActivityLease | null;
+  worker_invocations: number;
+  last_failure?: RefreshFailure;
+};
+
+export interface SnapshotRefreshControllerPort
+  extends SnapshotRefreshPort,
+    DaemonRefreshActivityPort {
+  getReceipt(): SnapshotRefreshControllerReceipt;
 }
 
 export interface SnapshotRefreshDiagnosticsPort {
@@ -743,7 +801,9 @@ export type DaemonRefreshActivityTransition = DaemonRefreshActivityTransitionBas
   );
 
 export interface DaemonRefreshActivityPort {
-  onTransition(listener: (transition: DaemonRefreshActivityTransition) => void): () => void;
+  onTransition(
+    listener: (transition: DaemonRefreshActivityTransition) => void | Promise<void>
+  ): () => void;
 }
 
 export interface WorkQueuePort {

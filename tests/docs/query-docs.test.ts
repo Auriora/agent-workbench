@@ -781,7 +781,7 @@ async function indexFixtureDocs(root: string): Promise<GraphStore> {
   const store = openGraphStore(path.join(cacheDir, "agent-workbench-test.sqlite"));
   const snapshotId = "9001";
   const indexedAt = "2026-06-06T00:00:00.000Z";
-  await store.upsertSnapshot({
+  await store.createBuildSnapshot({
     snapshot: {
       id: snapshotId,
       repo_root: root,
@@ -793,7 +793,10 @@ async function indexFixtureDocs(root: string): Promise<GraphStore> {
       owner_state: "owner",
       created_at: indexedAt,
       updated_at: indexedAt
-    }
+    },
+    controller_generation: 0,
+    invalidation_generation: 0,
+    created_at: indexedAt
   });
   const scanned = await scanner.scan({
     repo_root: root,
@@ -822,6 +825,15 @@ async function indexFixtureDocs(root: string): Promise<GraphStore> {
     snapshot_id: snapshotId,
     repo_root: root,
     documents
+  });
+  await store.transitionBuild({
+    repo_root: root,
+    snapshot_id: snapshotId,
+    controller_generation: 0,
+    invalidation_generation: 0,
+    from: "building",
+    to: "published",
+    updated_at: indexedAt
   });
   return store;
 }

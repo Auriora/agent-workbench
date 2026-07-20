@@ -87,6 +87,89 @@ describe("graph query use cases", () => {
     }
   });
 
+  it("propagates explicit unpublished snapshot selection as a structured query blocker", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-basic-python", "201");
+    try {
+      await fixture.store.createBuildSnapshot({
+        snapshot: {
+          id: "299",
+          repo_root: fixture.repoRoot,
+          workspace_root: fixture.repoRoot,
+          repo_identity: fixture.repoRoot,
+          config_identity: "default",
+          schema_version: SCHEMA_VERSION,
+          freshness: "fresh",
+          owner_state: "owner",
+          created_at: clock.nowIso8601(),
+          updated_at: clock.nowIso8601()
+        },
+        controller_generation: 7,
+        invalidation_generation: 11,
+        created_at: clock.nowIso8601()
+      });
+
+      const symbols = await searchSymbols({
+        request: {
+          query: "Runner",
+          repo_root: fixture.repoRoot,
+          snapshot_id: "299",
+          exact: true,
+          languages: [],
+          max_results: 5,
+          source_byte_limit: 0
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        default_repo_root: fixture.repoRoot
+      });
+      const references = await findReferences({
+        request: {
+          symbol: "Runner",
+          repo_root: fixture.repoRoot,
+          snapshot_id: "299",
+          max_depth: 1,
+          max_results: 5
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        default_repo_root: fixture.repoRoot
+      });
+      const impact = await computeImpact({
+        request: {
+          node_id: "unpublished-node",
+          repo_root: fixture.repoRoot,
+          snapshot_id: "299",
+          max_depth: 1,
+          max_nodes: 5,
+          direction: "outgoing"
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        default_repo_root: fixture.repoRoot
+      });
+
+      for (const meta of [symbols.meta, references.meta, impact.meta]) {
+        expect(meta.verification_status).toBe("blocked");
+        expect(meta.caveats).toEqual([
+          expect.objectContaining({
+            kind: "snapshot_unpublished",
+            severity: "blocker",
+            message: expect.stringContaining("State: building")
+          })
+        ]);
+      }
+      expect(symbols.symbols.snapshot_id).toBe("299");
+      expect(references.references.snapshot_id).toBe("299");
+      expect(impact.impact.snapshot_id).toBe("299");
+      await expect(fixture.store.getSnapshot({ repo_root: fixture.repoRoot })).resolves.toMatchObject({ id: "201" });
+    } finally {
+      fixture.store.close();
+    }
+  });
+
   it("includes returned symbol languages in metadata even when catalog budget is narrower", async () => {
     const fixture = await indexedFixture("tests/fixtures/fixture-basic-python", "209");
     try {

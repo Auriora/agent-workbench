@@ -40,19 +40,7 @@ describe("graph query MCP tools", () => {
     const databasePath = graphStorePath(repoRoot);
     const store = openGraphStore(databasePath);
     try {
-      await store.upsertSnapshot({ snapshot: testSnapshot("1000", repoRoot) });
-      await store.upsertEntry({
-        snapshot_id: "1000",
-        entry: buildFileCatalogEntry({
-          file_identity: {
-            path: "target.ts",
-            language: "typescript",
-            content_hash: "sha256:before",
-            size_bytes: fs.statSync(sourcePath).size,
-            mtime_ms: fs.statSync(sourcePath).mtimeMs
-          }
-        })
-      });
+      await seedPublishedFileSnapshot(store, repoRoot, "1000", sourcePath);
     } finally {
       store.close();
     }
@@ -97,19 +85,7 @@ describe("graph query MCP tools", () => {
     const databasePath = graphStorePath(repoRoot);
     const store = openGraphStore(databasePath);
     try {
-      await store.upsertSnapshot({ snapshot: testSnapshot("1000", repoRoot) });
-      await store.upsertEntry({
-        snapshot_id: "1000",
-        entry: buildFileCatalogEntry({
-          file_identity: {
-            path: "target.ts",
-            language: "typescript",
-            content_hash: "sha256:before",
-            size_bytes: fs.statSync(sourcePath).size,
-            mtime_ms: fs.statSync(sourcePath).mtimeMs
-          }
-        })
-      });
+      await seedPublishedFileSnapshot(store, repoRoot, "1000", sourcePath);
     } finally {
       store.close();
     }
@@ -155,19 +131,7 @@ describe("graph query MCP tools", () => {
     const databasePath = graphStorePath(repoRoot);
     const store = openGraphStore(databasePath);
     try {
-      await store.upsertSnapshot({ snapshot: testSnapshot("1000", repoRoot) });
-      await store.upsertEntry({
-        snapshot_id: "1000",
-        entry: buildFileCatalogEntry({
-          file_identity: {
-            path: "target.ts",
-            language: "typescript",
-            content_hash: "sha256:before",
-            size_bytes: fs.statSync(sourcePath).size,
-            mtime_ms: fs.statSync(sourcePath).mtimeMs
-          }
-        })
-      });
+      await seedPublishedFileSnapshot(store, repoRoot, "1000", sourcePath);
     } finally {
       store.close();
     }
@@ -610,4 +574,40 @@ function testSnapshot(id: string, repoRoot: string) {
     created_at: "2026-07-19T12:00:00.000Z",
     updated_at: "2026-07-19T12:00:00.000Z"
   };
+}
+
+async function seedPublishedFileSnapshot(
+  store: ReturnType<typeof openGraphStore>,
+  repoRoot: string,
+  snapshotId: string,
+  sourcePath: string
+): Promise<void> {
+  const snapshot = testSnapshot(snapshotId, repoRoot);
+  await store.createBuildSnapshot({
+    snapshot,
+    controller_generation: 0,
+    invalidation_generation: 0,
+    created_at: snapshot.created_at
+  });
+  await store.upsertEntry({
+    snapshot_id: snapshotId,
+    entry: buildFileCatalogEntry({
+      file_identity: {
+        path: "target.ts",
+        language: "typescript",
+        content_hash: "sha256:before",
+        size_bytes: fs.statSync(sourcePath).size,
+        mtime_ms: fs.statSync(sourcePath).mtimeMs
+      }
+    })
+  });
+  await store.transitionBuild({
+    repo_root: repoRoot,
+    snapshot_id: snapshotId,
+    controller_generation: 0,
+    invalidation_generation: 0,
+    from: "building",
+    to: "published",
+    updated_at: snapshot.updated_at
+  });
 }

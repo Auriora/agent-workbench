@@ -3,13 +3,28 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import type { ClockPort, SnapshotPort, WarmupCoordinatorPort } from "../../ports/index.js";
+import type {
+  ClockPort,
+  SnapshotPort,
+  SnapshotRefreshAdmission,
+  SnapshotRefreshPort,
+  SnapshotRefreshRequest,
+  WarmupCoordinatorPort
+} from "../../ports/index.js";
 
 export type SnapshotRefreshCoordinationResult = {
   snapshot_id: string;
   execution_id: string;
   reused_active_warmup: boolean;
 };
+
+/** The application-facing entry point for every Spec 041 refresh trigger. */
+export async function requestSnapshotRefresh(input: {
+  controller: SnapshotRefreshPort;
+  request: SnapshotRefreshRequest;
+}): Promise<SnapshotRefreshAdmission> {
+  return await input.controller.request(input.request);
+}
 
 export async function coordinateSnapshotRefresh(input: {
   repo_root: string;

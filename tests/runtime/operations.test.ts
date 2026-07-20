@@ -4,18 +4,30 @@
  */
 
 import { describe, expect, expectTypeOf, it } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import type {
   ClockPort,
   DaemonRefreshActivityTransition,
   RefreshActivityLease,
+  RefreshDeadlineSchedulerPort,
+  RefreshExecutorCompletion,
+  RefreshExecutorPort,
+  SnapshotPublicationPort,
+  SnapshotPublicationRecord,
+  SnapshotPublicationSelection,
+  SnapshotPublicationTransition,
   SnapshotRefreshAdmission
 } from "../../src/ports/index.js";
 import type { FileContentHashBinding } from "../../src/domain/models/runtime.js";
 import {
   InMemoryCancellationAdapter,
-  InMemoryRuntimeOperationsAdapter
+  InMemoryRuntimeOperationsAdapter,
+  SnapshotRefreshController
 } from "../../src/infrastructure/runtime/index.js";
-import { createPhase1DeadlineControllerReproduction } from "../helpers/spec041-refresh-reproductions.js";
+import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
+import { createDeadlineControllerHarness } from "../helpers/spec041-refresh-reproductions.js";
 
 class MutableClock implements ClockPort {
   private timestamp: number;
@@ -41,7 +53,266 @@ class MutableClock implements ClockPort {
   }
 }
 
+class ControlledRefreshExecutor implements RefreshExecutorPort {
+  public readonly calls: Array<Parameters<RefreshExecutorPort["run"]>[0]> = [];
+  public readonly terminations: Array<{ execution_id: string; reason: string }> = [];
+  private readonly pending: Array<ReturnType<typeof controlledDeferred<RefreshExecutorCompletion>>> = [];
+  private readonly callWaiters: Array<{
+    count: number;
+    barrier: ReturnType<typeof controlledDeferred<void>>;
+  }> = [];
+
+  constructor(
+    private readonly terminationBehavior: "resolve" | "delayed" | "hang" | "reject" | "throw" = "resolve",
+    private readonly runThrows = false
+  ) {}
+  private readonly delayedTermination = controlledDeferred<void>();
+
+  public run(
+    input: Parameters<RefreshExecutorPort["run"]>[0]
+  ): Promise<RefreshExecutorCompletion> {
+    if (this.runThrows) {
+      throw new Error("synchronous executor failure");
+    }
+    this.calls.push(input);
+    const pending = controlledDeferred<RefreshExecutorCompletion>();
+    this.pending.push(pending);
+    for (const waiter of this.callWaiters) {
+      if (this.calls.length >= waiter.count) {
+        waiter.barrier.resolve(undefined);
+      }
+    }
+    return pending.promise;
+  }
+
+  public terminate(input: {
+    execution_id: string;
+    reason: "deadline" | "worker_error" | "controller_shutdown";
+  }): Promise<void> {
+    this.terminations.push(input);
+    if (this.terminationBehavior === "throw") {
+      throw new Error("synchronous termination failure");
+    }
+    if (this.terminationBehavior === "reject") {
+      return Promise.reject(new Error("termination rejection"));
+    }
+    if (this.terminationBehavior === "hang") {
+      return new Promise<void>(() => undefined);
+    }
+    if (this.terminationBehavior === "delayed") {
+      return this.delayedTermination.promise;
+    }
+    return Promise.resolve();
+  }
+
+  public complete(index: number, completion?: RefreshExecutorCompletion): void {
+    const call = this.calls[index];
+    if (call === undefined) {
+      throw new Error(`Worker invocation ${index} was not observed.`);
+    }
+    this.pending[index]?.resolve(
+      completion ?? {
+        exit_code: 0,
+        results: [{
+          outcome: "complete",
+          execution_id: call.execution_id,
+          target_snapshot_id: call.target_snapshot_id,
+          completed_generation: call.generation
+        }]
+      }
+    );
+  }
+
+  public fail(index: number): void {
+    this.pending[index]?.reject(new Error("unsafe worker detail"));
+  }
+
+  public async waitForCalls(count: number): Promise<void> {
+    if (this.calls.length >= count) {
+      return;
+    }
+    const barrier = controlledDeferred<void>();
+    this.callWaiters.push({ count, barrier });
+    await barrier.promise;
+  }
+
+  public confirmTermination(): void {
+    this.delayedTermination.resolve(undefined);
+  }
+
+  public async waitForTerminationConfirmation(): Promise<void> {
+    await this.delayedTermination.promise;
+  }
+}
+
+class ControlledDeadlineScheduler implements RefreshDeadlineSchedulerPort {
+  private readonly deadlines: Array<{ active: boolean; fire: () => void }> = [];
+
+  public arm(input: { onDeadline: () => void }) {
+    const entry = { active: true, fire: input.onDeadline };
+    this.deadlines.push(entry);
+    return {
+      cancel(): void {
+        entry.active = false;
+      }
+    };
+  }
+
+  public fire(index: number): void {
+    const deadline = this.deadlines[index];
+    if (deadline?.active === true) {
+      deadline.fire();
+    }
+  }
+
+  public activeCount(): number {
+    return this.deadlines.filter((deadline) => deadline.active).length;
+  }
+}
+
+class ControlledPublicationPort implements SnapshotPublicationPort {
+  public readonly transitions: SnapshotPublicationTransition[] = [];
+  private failingState: SnapshotPublicationTransition["to"] | undefined;
+  private deferredTransition: {
+    state: SnapshotPublicationTransition["to"];
+    entered: ReturnType<typeof controlledDeferred<void>>;
+    release: ReturnType<typeof controlledDeferred<void>>;
+  } | undefined;
+  private allocationSequence = 1000;
+  private allocationFails = false;
+
+  public async allocateBuildSnapshotId(): Promise<string> {
+    if (this.allocationFails) {
+      this.allocationFails = false;
+      throw new Error("target allocation failure");
+    }
+    this.allocationSequence += 1;
+    return String(this.allocationSequence);
+  }
+
+  public async transitionBuild<TState extends SnapshotPublicationTransition["to"]>(
+    input: SnapshotPublicationTransition & { to: TState }
+  ): Promise<SnapshotPublicationRecord & { state: TState }> {
+    this.transitions.push(input);
+    if (this.deferredTransition?.state === input.to) {
+      const deferred = this.deferredTransition;
+      this.deferredTransition = undefined;
+      deferred.entered.resolve(undefined);
+      await deferred.release.promise;
+    }
+    if (this.failingState === input.to) {
+      this.failingState = undefined;
+      throw new Error("publication transition failed");
+    }
+    return {
+      repo_root: input.repo_root,
+      snapshot_id: input.snapshot_id,
+      controller_generation: 7,
+      invalidation_generation: 0,
+      state: input.to,
+      updated_at: input.updated_at
+    };
+  }
+
+  public async getLatestPublished(): Promise<
+    Exclude<SnapshotPublicationSelection, { status: "blocked" }>
+  > {
+    return { status: "missing", reason: "no_published_snapshot" };
+  }
+
+  public async readExplicit(input: {
+    snapshot_id: string;
+  }): Promise<SnapshotPublicationSelection> {
+    return { status: "missing", snapshot_id: input.snapshot_id, reason: "snapshot_not_found" };
+  }
+
+  public failNext(state: SnapshotPublicationTransition["to"]): void {
+    this.failingState = state;
+  }
+
+  public failNextAllocation(): void {
+    this.allocationFails = true;
+  }
+
+  public deferNext(state: SnapshotPublicationTransition["to"]): {
+    entered: Promise<void>;
+    release: () => void;
+  } {
+    const entered = controlledDeferred<void>();
+    const release = controlledDeferred<void>();
+    this.deferredTransition = { state, entered, release };
+    return { entered: entered.promise, release: () => release.resolve(undefined) };
+  }
+}
+
+function controlledDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason: unknown) => void;
+} {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
+}
+
+function observeTerminal(controller: SnapshotRefreshController) {
+  const barrier = controlledDeferred<Extract<
+    DaemonRefreshActivityTransition,
+    { state: "terminal" }
+  >>();
+  const unsubscribe = controller.onTransition((transition) => {
+    if (transition.state === "terminal") {
+      unsubscribe();
+      barrier.resolve(transition);
+    }
+  });
+  return barrier.promise;
+}
+
+function createControlledController(options?: {
+  executor?: ControlledRefreshExecutor;
+  deadlines?: ControlledDeadlineScheduler;
+  publication?: ControlledPublicationPort;
+}) {
+  const clock = new MutableClock("2026-07-20T10:00:00.000Z");
+  const executor = options?.executor ?? new ControlledRefreshExecutor();
+  const deadlines = options?.deadlines ?? new ControlledDeadlineScheduler();
+  const publication = options?.publication ?? new ControlledPublicationPort();
+  let executionSequence = 0;
+  const controller = new SnapshotRefreshController({
+    repo_root: "/repo",
+    controller_generation: 7,
+    timeout_ms: 30_000,
+    clock,
+    executor,
+    publication,
+    deadline_scheduler: deadlines,
+    create_execution_id: () => `exec-${++executionSequence}`
+  });
+  return { clock, executor, deadlines, publication, controller };
+}
+
 describe("runtime operation adapters", () => {
+  it("requires a finite positive controller deadline", () => {
+    const clock = new MutableClock("2026-07-20T10:00:00.000Z");
+    const executor = new ControlledRefreshExecutor();
+    const publication = new ControlledPublicationPort();
+    for (const timeout of [0, -1, Number.POSITIVE_INFINITY, Number.NaN]) {
+      expect(() => new SnapshotRefreshController({
+        repo_root: "/repo",
+        controller_generation: 1,
+        timeout_ms: timeout,
+        clock,
+        executor,
+        publication
+      })).toThrow("timeout_ms must be a finite positive integer.");
+    }
+  });
+
   it("locks activity-lease settlement and blocked ownership admission shapes", () => {
     const heldLease = {
       execution_id: "exec-1",
@@ -233,28 +504,859 @@ describe("runtime operation adapters", () => {
     }>().not.toMatchTypeOf<DaemonRefreshActivityTransition>();
   });
 
-  it.fails("does not replace an admitted execution when a forced request races active work", async () => {
-    const clock = new MutableClock("2026-05-31T12:00:00.000Z");
-    const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
-
-    const [ordinaryRequest, legacyForcedRequest] = await Promise.all([
-      runtime.requestWarmup({ repo_root: "/repo", snapshot_id: "snap-2" }),
-      runtime.requestWarmup({ repo_root: "/repo", snapshot_id: "snap-3", force: true })
+  it("does not expose a forced path around admitted controller work", async () => {
+    const { controller, executor } = createControlledController();
+    const [ordinaryRequest, racingInvalidation] = await Promise.all([
+      controller.request({
+        repo_root: "/repo",
+        reason: "startup",
+        source: "startup",
+        invalidation_generation: 1
+      }),
+      controller.request({
+        repo_root: "/repo",
+        reason: "watcher_invalidation",
+        source: "watcher",
+        invalidation_generation: 2
+      })
     ]);
 
-    // Spec 041 removes force as a path around linearized controller admission.
-    // This expected failure reproduces the current second-execution seam.
-    expect(legacyForcedRequest).toBe(ordinaryRequest);
-    await expect(runtime.getState({ repo_root: "/repo" })).resolves.toMatchObject({
-      execution_id: ordinaryRequest,
-      state: "planned"
+    expect(ordinaryRequest).toMatchObject({ outcome: "accepted", state: "planned" });
+    expect(racingInvalidation).toMatchObject({
+      outcome: "reused",
+      execution_id: ordinaryRequest.outcome === "blocked" ? "" : ordinaryRequest.execution_id,
+      requested_generation: 2
+    });
+    await executor.waitForCalls(1);
+    expect(executor.calls).toHaveLength(1);
+    expect(executor.calls[0]?.deadline).toEqual({
+      timeout_ms: 30_000,
+      deadline_at: "2026-07-20T10:00:30.000Z"
     });
   });
 
-  it.fails("fails active work when the finite controller deadline expires", async () => {
+  it("linearizes requests and runs one coalesced newest-generation catch-up pass", async () => {
+    const { controller, executor, deadlines, publication } = createControlledController();
+    const transitions: DaemonRefreshActivityTransition[] = [];
+    controller.onTransition((transition) => {
+      transitions.push(transition);
+    });
+
+    const [first, duplicate] = await Promise.all([
+      controller.request({
+        repo_root: "/repo",
+        reason: "startup",
+        source: "startup",
+        invalidation_generation: 1
+      }),
+      controller.request({
+        repo_root: "/repo",
+        reason: "stale_first_read",
+        source: "client-2",
+        invalidation_generation: 1
+      })
+    ]);
+    expect(first).toMatchObject({ outcome: "accepted", state: "planned" });
+    expect(duplicate).toMatchObject({
+      outcome: "reused",
+      execution_id: first.outcome === "blocked" ? "" : first.execution_id,
+      started_generation: 1,
+      requested_generation: 1
+    });
+    await executor.waitForCalls(1);
+    expect(executor.calls).toHaveLength(1);
+
+    const [generationTwo, generationFour] = await Promise.all([
+      controller.request({
+        repo_root: "/repo",
+        reason: "watcher_invalidation",
+        source: "watcher",
+        invalidation_generation: 2
+      }),
+      controller.request({
+        repo_root: "/repo",
+        reason: "watcher_invalidation",
+        source: "watcher",
+        invalidation_generation: 4
+      })
+    ]);
+    expect(generationTwo).toMatchObject({ outcome: "reused", started_generation: 1 });
+    expect(generationFour).toMatchObject({
+      outcome: "reused",
+      started_generation: 1,
+      requested_generation: 4
+    });
+
+    executor.complete(0);
+    await executor.waitForCalls(2);
+    expect(executor.calls.map((call) => call.generation)).toEqual([1, 4]);
+    expect(executor.calls[1]?.execution_id).toBe(executor.calls[0]?.execution_id);
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "running",
+      started_generation: 4,
+      requested_generation: 4,
+      worker_invocations: 2,
+      activity_lease: { state: "held" }
+    });
+
+    const completion = observeTerminal(controller);
+    executor.complete(1);
+    await completion;
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "complete",
+      started_generation: 4,
+      requested_generation: 4,
+      worker_invocations: 2,
+      activity_lease: null
+    });
+    expect(transitions.map((transition) => [transition.state, transition.execution_state])).toEqual([
+      ["active", "planned"],
+      ["active", "running"],
+      ["active", "running"],
+      ["terminal", "complete"]
+    ]);
+    expect(transitions.at(-1)).toMatchObject({ lease: { state: "released" } });
+    expect(deadlines.activeCount()).toBe(0);
+    expect(publication.transitions.map((transition) => ({
+      snapshot_id: transition.snapshot_id,
+      to: transition.to
+    }))).toEqual([
+      { snapshot_id: "1001", to: "superseded" },
+      { snapshot_id: "1002", to: "published" }
+    ]);
+  });
+
+  it("publishes an ordinary successful build before releasing the execution lease", async () => {
+    const { controller, executor, publication } = createControlledController();
+    const observed: string[] = [];
+    controller.onTransition((transition) => {
+      if (transition.state === "terminal") {
+        observed.push(`terminal:${transition.execution_state}`);
+      }
+    });
+    const originalTransition = publication.transitionBuild.bind(publication);
+    publication.transitionBuild = async (input) => {
+      const result = await originalTransition(input);
+      observed.push(`publication:${input.to}`);
+      return result;
+    };
+    const terminal = observeTerminal(controller);
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    executor.complete(0);
+    await terminal;
+
+    expect(observed).toEqual(["publication:published", "terminal:complete"]);
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "published" })
+    ]);
+  });
+
+  it("serializes a racing request behind an in-flight publication decision", async () => {
+    const { controller, executor, publication } = createControlledController();
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    const publicationBarrier = publication.deferNext("published");
+    const firstTerminal = observeTerminal(controller);
+    executor.complete(0);
+    await publicationBarrier.entered;
+
+    const racingRequest = controller.request({
+      repo_root: "/repo",
+      reason: "watcher_invalidation",
+      source: "watcher",
+      invalidation_generation: 2
+    });
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "running",
+      started_generation: 1,
+      requested_generation: 1,
+      activity_lease: { state: "held" }
+    });
+
+    publicationBarrier.release();
+    await firstTerminal;
+    const admission = await racingRequest;
+    expect(admission).toMatchObject({
+      outcome: "accepted",
+      execution_id: "exec-2",
+      started_generation: 2,
+      requested_generation: 2
+    });
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "published" })
+    ]);
+  });
+
+  it.each([
+    {
+      name: "worker error",
+      settle: (executor: ControlledRefreshExecutor) => executor.fail(0),
+      code: "worker_error"
+    },
+    {
+      name: "non-zero exit",
+      settle: (executor: ControlledRefreshExecutor) =>
+        executor.complete(0, { exit_code: 2, results: [] }),
+      code: "worker_error"
+    },
+    {
+      name: "zero exit without result",
+      settle: (executor: ControlledRefreshExecutor) =>
+        executor.complete(0, { exit_code: 0, results: [] }),
+      code: "worker_exit_without_result"
+    },
+    {
+      name: "invalid result",
+      settle: (executor: ControlledRefreshExecutor) =>
+        executor.complete(0, { exit_code: 0, results: [{ outcome: "complete" }] }),
+      code: "invalid_worker_result"
+    },
+    {
+      name: "more than one result",
+      settle: (executor: ControlledRefreshExecutor) =>
+        executor.complete(0, { exit_code: 0, results: [{}, {}] }),
+      code: "invalid_worker_result"
+    }
+  ])("settles $name once and releases its activity lease", async ({ settle, code }) => {
+    const { controller, executor, deadlines, publication } = createControlledController();
+    const terminal: DaemonRefreshActivityTransition[] = [];
+    controller.onTransition((transition) => {
+      if (transition.state === "terminal") {
+        terminal.push(transition);
+      }
+    });
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    const terminalBarrier = observeTerminal(controller);
+    settle(executor);
+    await terminalBarrier;
+
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      last_failure: { code }
+    });
+    expect(terminal).toHaveLength(1);
+    expect(terminal[0]).toMatchObject({
+      state: "terminal",
+      execution_state: "failed",
+      lease: { state: "released" },
+      failure: { code }
+    });
+    expect(executor.terminations).toEqual([
+      { execution_id: "exec-1", reason: "worker_error" }
+    ]);
+    expect(deadlines.activeCount()).toBe(0);
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "failed" })
+    ]);
+  });
+
+  it.each(["hang", "reject", "throw"] as const)(
+    "settles deadline failure immediately when terminate %s",
+    async (terminationBehavior) => {
+      const executor = new ControlledRefreshExecutor(terminationBehavior);
+      const { controller, deadlines, publication } = createControlledController({ executor });
+      const terminal = observeTerminal(controller);
+      await controller.request({
+        repo_root: "/repo",
+        reason: "startup",
+        source: "test",
+        invalidation_generation: 1
+      });
+      await executor.waitForCalls(1);
+      deadlines.fire(0);
+      await terminal;
+
+      expect(executor.terminations).toEqual([{ execution_id: "exec-1", reason: "deadline" }]);
+      expect(controller.getReceipt()).toMatchObject({
+        execution_state: "failed",
+        activity_lease: null,
+        last_failure: { code: "worker_timeout" }
+      });
+      expect(deadlines.activeCount()).toBe(0);
+      expect(publication.transitions).toEqual([
+        expect.objectContaining({ snapshot_id: "1001", to: "failed" })
+      ]);
+      await expect(controller.request({
+        repo_root: "/repo",
+        reason: "stale_first_read",
+        source: "later-client",
+        invalidation_generation: 2
+      })).resolves.toMatchObject({
+        outcome: "blocked",
+        reason: "termination_unconfirmed",
+        execution_id: "exec-1"
+      });
+      expect(executor.calls).toHaveLength(1);
+    }
+  );
+
+  it("admits no successor until delayed worker termination is confirmed", async () => {
+    const executor = new ControlledRefreshExecutor("delayed");
+    const { controller, deadlines } = createControlledController({ executor });
+    const terminal = observeTerminal(controller);
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    deadlines.fire(0);
+    await terminal;
+
+    await expect(controller.request({
+      repo_root: "/repo",
+      reason: "stale_first_read",
+      source: "blocked-client",
+      invalidation_generation: 2
+    })).resolves.toMatchObject({
+      outcome: "blocked",
+      reason: "termination_unconfirmed",
+      execution_id: "exec-1"
+    });
+    expect(executor.calls).toHaveLength(1);
+
+    executor.confirmTermination();
+    await executor.waitForTerminationConfirmation();
+    const successor = await controller.request({
+      repo_root: "/repo",
+      reason: "stale_first_read",
+      source: "later-client",
+      invalidation_generation: 2
+    });
+    expect(successor).toMatchObject({
+      outcome: "accepted",
+      execution_id: "exec-2",
+      started_generation: 2
+    });
+    await executor.waitForCalls(2);
+    expect(executor.calls.map((call) => call.execution_id)).toEqual(["exec-1", "exec-2"]);
+  });
+
+  it("contains synchronous executor failure and cancels its armed deadline", async () => {
+    const executor = new ControlledRefreshExecutor("resolve", true);
+    const deadlines = new ControlledDeadlineScheduler();
+    const { controller, publication } = createControlledController({ executor, deadlines });
+    const terminal = observeTerminal(controller);
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await terminal;
+
+    expect(deadlines.activeCount()).toBe(0);
+    expect(executor.terminations).toEqual([
+      { execution_id: "exec-1", reason: "worker_error" }
+    ]);
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      last_failure: {
+        code: "worker_error"
+      }
+    });
+    expect(publication.transitions).toHaveLength(0);
+    expect(executor.calls).toHaveLength(0);
+  });
+
+  it("contains synchronous deadline-scheduler failure without launching the worker", async () => {
+    const clock = new MutableClock("2026-07-20T10:00:00.000Z");
+    const executor = new ControlledRefreshExecutor();
+    const controller = new SnapshotRefreshController({
+      repo_root: "/repo",
+      controller_generation: 1,
+      timeout_ms: 30_000,
+      clock,
+      executor,
+      publication: new ControlledPublicationPort(),
+      deadline_scheduler: {
+        arm(): never {
+          throw new Error("scheduler failure");
+        }
+      },
+      create_execution_id: () => "exec-scheduler"
+    });
+    const terminal = observeTerminal(controller);
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await terminal;
+
+    expect(executor.calls).toHaveLength(0);
+    expect(executor.terminations).toHaveLength(0);
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      last_failure: { code: "worker_error" }
+    });
+  });
+
+  it("isolates throwing transition listeners from successful settlement", async () => {
+    const { controller, executor } = createControlledController();
+    controller.onTransition(() => {
+      throw new Error("observer failure");
+    });
+    const terminal = observeTerminal(controller);
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    executor.complete(0);
+    await terminal;
+
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "complete",
+      activity_lease: null
+    });
+  });
+
+  it("contains rejected asynchronous transition observers without awaiting them", async () => {
+    const { controller, executor, deadlines, publication } = createControlledController();
+    controller.onTransition(async () => {
+      throw new Error("asynchronous observer failure");
+    });
+    const terminal = observeTerminal(controller);
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    executor.complete(0);
+    await terminal;
+
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "complete",
+      activity_lease: null
+    });
+    expect(deadlines.activeCount()).toBe(0);
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "published" })
+    ]);
+  });
+
+  it("contains target allocation failure during catch-up and releases the lease", async () => {
+    const publication = new ControlledPublicationPort();
+    const { controller, executor } = createControlledController({ publication });
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    await controller.request({
+      repo_root: "/repo",
+      reason: "watcher_invalidation",
+      source: "watcher",
+      invalidation_generation: 2
+    });
+    publication.failNextAllocation();
+    const terminal = observeTerminal(controller);
+    executor.complete(0);
+    await terminal;
+
+    expect(executor.calls).toHaveLength(1);
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      last_failure: {
+        code: "store_failure",
+        category: "store",
+        message: "Refresh store operation failed."
+      }
+    });
+    expect(JSON.stringify(controller.getReceipt())).not.toContain("target allocation failure");
+    expect(executor.terminations).toHaveLength(0);
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "superseded" })
+    ]);
+
+    const successor = await controller.request({
+      repo_root: "/repo",
+      reason: "stale_first_read",
+      source: "later-client",
+      invalidation_generation: 2
+    });
+    expect(successor).toMatchObject({
+      outcome: "accepted",
+      execution_id: "exec-2",
+      started_generation: 2
+    });
+    await executor.waitForCalls(2);
+  });
+
+  it("refuses initial target allocation failure before acquiring an activity lease", async () => {
+    const publication = new ControlledPublicationPort();
+    publication.failNextAllocation();
+    const { controller, executor } = createControlledController({ publication });
+
+    const refusal = await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    expect(refusal).toEqual({
+      outcome: "blocked",
+      reused: false,
+      state: "idle",
+      reason: "store_failure",
+      message: "Refresh store operation failed."
+    });
+    expect(JSON.stringify(refusal)).not.toContain("target allocation failure");
+    expect(executor.calls).toHaveLength(0);
+    expect(executor.terminations).toHaveLength(0);
+    expect(publication.transitions).toHaveLength(0);
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "idle",
+      started_generation: 0,
+      requested_generation: 0,
+      activity_lease: null,
+      last_failure: undefined
+    });
+
+    const laterAdmission = await controller.request({
+      repo_root: "/repo",
+      reason: "stale_first_read",
+      source: "later-client",
+      invalidation_generation: 1
+    });
+    expect(laterAdmission).toMatchObject({
+      outcome: "accepted",
+      execution_id: "exec-1",
+      started_generation: 1
+    });
+    await executor.waitForCalls(1);
+  });
+
+  it("allocates and publishes one exact numeric build row through the real graph store", async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "awb-refresh-controller-"));
+    const store = openGraphStore(path.join(directory, "graph.sqlite"));
+    const clock = new MutableClock("2026-07-20T10:00:00.000Z");
+    const priorId = String(clock.nowUnixMs() + 10);
+    const expectedTargetId = String(Number(priorId) + 1);
+    const deadlines = new ControlledDeadlineScheduler();
+    const executor: RefreshExecutorPort = {
+      async run(input) {
+        await store.createBuildSnapshot({
+          snapshot: {
+            id: input.target_snapshot_id,
+            repo_root: "/repo",
+            workspace_root: "/repo",
+            repo_identity: "/repo",
+            config_identity: "default",
+            schema_version: SCHEMA_VERSION,
+            freshness: "refreshing",
+            owner_state: "owner",
+            created_at: clock.nowIso8601(),
+            updated_at: clock.nowIso8601()
+          },
+          controller_generation: 9,
+          invalidation_generation: input.generation,
+          created_at: clock.nowIso8601()
+        });
+        return {
+          exit_code: 0,
+          results: [{
+            outcome: "complete",
+            execution_id: input.execution_id,
+            target_snapshot_id: input.target_snapshot_id,
+            completed_generation: input.generation
+          }]
+        };
+      },
+      async terminate() {}
+    };
+    try {
+      await store.upsertSnapshot({
+        snapshot: {
+          id: priorId,
+          repo_root: "/repo",
+          workspace_root: "/repo",
+          repo_identity: "/repo",
+          config_identity: "default",
+          schema_version: SCHEMA_VERSION,
+          freshness: "fresh",
+          owner_state: "owner",
+          created_at: clock.nowIso8601(),
+          updated_at: clock.nowIso8601()
+        }
+      });
+      const controller = new SnapshotRefreshController({
+        repo_root: "/repo",
+        controller_generation: 9,
+        timeout_ms: 30_000,
+        clock,
+        executor,
+        publication: store,
+        deadline_scheduler: deadlines,
+        create_execution_id: () => "exec-real-store"
+      });
+      const terminal = observeTerminal(controller);
+      const admission = await controller.request({
+        repo_root: "/repo",
+        reason: "startup",
+        source: "integration-test",
+        invalidation_generation: 3
+      });
+      await terminal;
+
+      expect(admission).toMatchObject({
+        outcome: "accepted",
+        target_snapshot_id: expectedTargetId
+      });
+      expect(await store.getLatestPublished({ repo_root: "/repo" })).toMatchObject({
+        status: "selected",
+        snapshot: { id: expectedTargetId },
+        publication: { controller_generation: 9, invalidation_generation: 3 }
+      });
+      expect(store.db.prepare("SELECT id, publication_state FROM snapshots ORDER BY id").all()).toEqual([
+        { id: Number(priorId), publication_state: "published" },
+        { id: Number(expectedTargetId), publication_state: "published" }
+      ]);
+
+      const staleTargetId = await store.allocateBuildSnapshotId({
+        repo_root: "/repo",
+        minimum_id: expectedTargetId
+      });
+      await store.createBuildSnapshot({
+        snapshot: {
+          id: staleTargetId,
+          repo_root: "/repo",
+          workspace_root: "/repo",
+          repo_identity: "/repo",
+          config_identity: "default",
+          schema_version: SCHEMA_VERSION,
+          freshness: "refreshing",
+          owner_state: "owner",
+          created_at: clock.nowIso8601(),
+          updated_at: clock.nowIso8601()
+        },
+        controller_generation: 12,
+        invalidation_generation: 5,
+        created_at: clock.nowIso8601()
+      });
+      await expect(store.transitionBuild({
+        repo_root: "/repo",
+        snapshot_id: staleTargetId,
+        controller_generation: 11,
+        invalidation_generation: 5,
+        from: "building",
+        to: "published",
+        updated_at: clock.nowIso8601()
+      })).rejects.toThrow("publication generation does not match");
+      await expect(store.transitionBuild({
+        repo_root: "/repo",
+        snapshot_id: staleTargetId,
+        controller_generation: 12,
+        invalidation_generation: 6,
+        from: "building",
+        to: "published",
+        updated_at: clock.nowIso8601()
+      })).rejects.toThrow("publication generation does not match");
+      await expect(store.createBuildSnapshot({
+        snapshot: {
+          id: staleTargetId,
+          repo_root: "/repo",
+          workspace_root: "/repo",
+          repo_identity: "/repo",
+          config_identity: "default",
+          schema_version: SCHEMA_VERSION,
+          freshness: "refreshing",
+          owner_state: "owner",
+          created_at: clock.nowIso8601(),
+          updated_at: clock.nowIso8601()
+        },
+        controller_generation: 13,
+        invalidation_generation: 6,
+        created_at: clock.nowIso8601()
+      })).rejects.toThrow("Snapshot id already exists");
+      await expect(store.readExplicit({
+        repo_root: "/repo",
+        snapshot_id: staleTargetId
+      })).resolves.toMatchObject({ status: "blocked", publication_state: "building" });
+    } finally {
+      store.close();
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    { field: "execution_id", value: "another-execution" },
+    { field: "target_snapshot_id", value: "another-snapshot" },
+    { field: "completed_generation", value: 99 }
+  ] as const)("rejects an otherwise valid result with mismatched $field", async ({ field, value }) => {
+    const { controller, executor, deadlines, publication } = createControlledController();
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    const call = executor.calls[0]!;
+    const terminal = observeTerminal(controller);
+    executor.complete(0, {
+      exit_code: 0,
+      results: [{
+        outcome: "complete",
+        execution_id: call.execution_id,
+        target_snapshot_id: call.target_snapshot_id,
+        completed_generation: call.generation,
+        [field]: value
+      }]
+    });
+    await terminal;
+
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      last_failure: { code: "invalid_worker_result" }
+    });
+    expect(executor.terminations).toEqual([
+      { execution_id: "exec-1", reason: "worker_error" }
+    ]);
+    expect(deadlines.activeCount()).toBe(0);
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "failed" })
+    ]);
+  });
+
+  it("reports store failure when final publication fails without terminating a valid worker", async () => {
+    const { controller, executor, deadlines, publication } = createControlledController();
+    publication.failNext("published");
+    const terminal = observeTerminal(controller);
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    executor.complete(0);
+    await terminal;
+
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      last_failure: { code: "store_failure", category: "store" }
+    });
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "published" })
+    ]);
+    expect(executor.terminations).toHaveLength(0);
+    expect(deadlines.activeCount()).toBe(0);
+  });
+
+  it("reports store failure once when failed-build publication settlement fails", async () => {
+    const { controller, executor, deadlines, publication } = createControlledController();
+    publication.failNext("failed");
+    const terminal = observeTerminal(controller);
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    executor.fail(0);
+    await terminal;
+
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      last_failure: { code: "store_failure", category: "store" }
+    });
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "failed" })
+    ]);
+    expect(executor.terminations).toEqual([
+      { execution_id: "exec-1", reason: "worker_error" }
+    ]);
+    expect(deadlines.activeCount()).toBe(0);
+  });
+
+  it("does not retry after failure and admits one successor only on a later request", async () => {
+    const { controller, executor, clock } = createControlledController();
+    const first = await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    const failed = observeTerminal(controller);
+    executor.fail(0);
+    await failed;
+    clock.advance(120_000);
+    expect(executor.calls).toHaveLength(1);
+    expect(controller.getReceipt()).toMatchObject({ execution_state: "failed" });
+
+    const [successor, reused] = await Promise.all([
+      controller.request({
+        repo_root: "/repo",
+        reason: "stale_first_read",
+        source: "client-1",
+        invalidation_generation: 2
+      }),
+      controller.request({
+        repo_root: "/repo",
+        reason: "stale_first_read",
+        source: "client-2",
+        invalidation_generation: 2
+      })
+    ]);
+    expect(successor).toMatchObject({ outcome: "accepted", started_generation: 2 });
+    expect(reused).toMatchObject({
+      outcome: "reused",
+      execution_id: successor.outcome === "blocked" ? "" : successor.execution_id
+    });
+    expect(successor.outcome === "blocked" ? "" : successor.execution_id).not.toBe(
+      first.outcome === "blocked" ? "" : first.execution_id
+    );
+    await executor.waitForCalls(2);
+    expect(executor.calls).toHaveLength(2);
+    const completed = observeTerminal(controller);
+    executor.complete(1);
+    await completed;
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "complete",
+      last_failure: undefined
+    });
+  });
+
+  it("fails active work when the finite controller deadline expires", async () => {
     const clock = new MutableClock("2026-05-31T12:00:00.000Z");
-    const controller = createPhase1DeadlineControllerReproduction(clock);
-    controller.start();
+    const controller = createDeadlineControllerHarness(clock);
+    await controller.start();
     await controller.workerStarted.promise;
     expect(controller.receipt()).toMatchObject({
       execution_id: "exec-deadline",
@@ -265,10 +1367,8 @@ describe("runtime operation adapters", () => {
     });
 
     clock.advance(30_001);
-    controller.fireDeadlineBarrier();
+    await controller.fireDeadlineBarrier();
 
-    // Worker admission and deadline barriers pass. This final receipt alone
-    // fails because the local pre-controller harness ignores deadline expiry.
     expect(controller.receipt()).toMatchObject({
       execution_id: "exec-deadline",
       state: "failed",
@@ -277,6 +1377,43 @@ describe("runtime operation adapters", () => {
       terminate_invocations: 1,
       failure_code: "worker_timeout"
     });
+  });
+
+  it("settles a deadline race once even when the worker reports a late result", async () => {
+    const { controller, executor, deadlines, publication } = createControlledController();
+    const terminal: DaemonRefreshActivityTransition[] = [];
+    controller.onTransition((transition) => {
+      if (transition.state === "terminal") {
+        terminal.push(transition);
+      }
+    });
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    const terminalBarrier = observeTerminal(controller);
+    deadlines.fire(0);
+    executor.complete(0);
+    await terminalBarrier;
+
+    expect(executor.terminations).toEqual([{ execution_id: "exec-1", reason: "deadline" }]);
+    expect(terminal).toHaveLength(1);
+    expect(terminal[0]).toMatchObject({
+      execution_state: "failed",
+      failure: { code: "worker_timeout" },
+      lease: { state: "released" }
+    });
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      last_failure: { code: "worker_timeout" }
+    });
+    expect(deadlines.activeCount()).toBe(0);
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "failed" })
+    ]);
   });
 
   it("admits exactly one successor only after a later request observes failed work", async () => {

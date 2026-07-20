@@ -215,7 +215,7 @@ describe("repo status MCP resource", () => {
 
     const store = openGraphStore(graphStorePath(repoRoot));
     try {
-      await store.upsertSnapshot({
+      await seedPublishedEntry(store, {
         snapshot: {
           id: "1000",
           repo_root: repoRoot,
@@ -227,9 +227,7 @@ describe("repo status MCP resource", () => {
           owner_state: "owner",
           created_at: "2026-07-05T12:00:00.000Z",
           updated_at: "2026-07-05T12:00:00.000Z"
-        }
-      });
-      await store.upsertEntry({
+        },
         snapshot_id: "1000",
         entry: buildFileCatalogEntry({
           file_identity: {
@@ -296,8 +294,8 @@ describe("repo status MCP resource", () => {
       const databasePath = graphStorePath(repoRoot);
       const store = openGraphStore(databasePath);
       try {
-        await store.upsertSnapshot({ snapshot: testSnapshot("1000", repoRoot) });
-        await store.upsertEntry({
+        await seedPublishedEntry(store, {
+          snapshot: testSnapshot("1000", repoRoot),
           snapshot_id: "1000",
           entry: buildFileCatalogEntry({
             file_identity: {
@@ -353,7 +351,7 @@ describe("repo status MCP resource", () => {
     fs.writeFileSync(sourcePath, "export const app = true;\n");
     const store = openGraphStore(graphStorePath(repoRoot));
     try {
-      await store.upsertSnapshot({
+      await seedPublishedEntry(store, {
         snapshot: {
           id: "1000",
           repo_root: repoRoot,
@@ -365,9 +363,7 @@ describe("repo status MCP resource", () => {
           owner_state: "owner",
           created_at: "2026-07-05T12:00:00.000Z",
           updated_at: "2026-07-05T12:00:00.000Z"
-        }
-      });
-      await store.upsertEntry({
+        },
         snapshot_id: "1000",
         entry: buildFileCatalogEntry({
           file_identity: {
@@ -414,7 +410,7 @@ describe("repo status MCP resource", () => {
 
     const store = openGraphStore(graphStorePath(repoRoot));
     try {
-      await store.upsertSnapshot({
+      await seedPublishedEntry(store, {
         snapshot: {
           id: "1001",
           repo_root: repoRoot,
@@ -426,9 +422,7 @@ describe("repo status MCP resource", () => {
           owner_state: "owner",
           created_at: "2026-07-05T12:00:00.000Z",
           updated_at: "2026-07-05T12:00:00.000Z"
-        }
-      });
-      await store.upsertEntry({
+        },
         snapshot_id: "1001",
         entry: buildFileCatalogEntry({
           file_identity: {
@@ -620,6 +614,32 @@ describe("repo status MCP resource", () => {
     ]);
   });
 });
+
+async function seedPublishedEntry(
+  store: ReturnType<typeof openGraphStore>,
+  input: {
+    snapshot: Parameters<ReturnType<typeof openGraphStore>["createBuildSnapshot"]>[0]["snapshot"];
+    snapshot_id: string;
+    entry: Parameters<ReturnType<typeof openGraphStore>["upsertEntry"]>[0]["entry"];
+  }
+): Promise<void> {
+  await store.createBuildSnapshot({
+    snapshot: input.snapshot,
+    controller_generation: 0,
+    invalidation_generation: 0,
+    created_at: input.snapshot.created_at
+  });
+  await store.upsertEntry({ snapshot_id: input.snapshot_id, entry: input.entry });
+  await store.transitionBuild({
+    repo_root: input.snapshot.repo_root,
+    snapshot_id: input.snapshot_id,
+    controller_generation: 0,
+    invalidation_generation: 0,
+    from: "building",
+    to: "published",
+    updated_at: input.snapshot.updated_at
+  });
+}
 
 function graphStorePath(repoRoot: string): string {
   const cacheDir = path.join(repoRoot, ".cache", "agent-workbench");

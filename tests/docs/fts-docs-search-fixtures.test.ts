@@ -176,7 +176,7 @@ describe("FTS docs search fixtures", () => {
     const fixture = copyFixture();
     const store = await indexFixtureDocs(fixture.root);
     try {
-      await store.upsertSnapshot({
+      await store.createBuildSnapshot({
         snapshot: {
           id: "9102",
           repo_root: fixture.root,
@@ -188,7 +188,10 @@ describe("FTS docs search fixtures", () => {
           owner_state: "owner",
           created_at: "2026-06-06T00:01:00.000Z",
           updated_at: "2026-06-06T00:01:00.000Z"
-        }
+        },
+        controller_generation: 1,
+        invalidation_generation: 1,
+        created_at: "2026-06-06T00:01:00.000Z"
       });
 
       const result = await searchDocs({
@@ -239,7 +242,7 @@ async function indexFixtureDocs(root: string): Promise<GraphStore> {
   const store = openGraphStore(path.join(cacheDir, "agent-workbench-test.sqlite"));
   const snapshotId = "9101";
   const indexedAt = "2026-06-06T00:00:00.000Z";
-  await store.upsertSnapshot({
+  await store.createBuildSnapshot({
     snapshot: {
       id: snapshotId,
       repo_root: root,
@@ -247,11 +250,14 @@ async function indexFixtureDocs(root: string): Promise<GraphStore> {
       repo_identity: root,
       config_identity: "test",
       schema_version: SCHEMA_VERSION,
-      freshness: "fresh",
+      freshness: "refreshing",
       owner_state: "owner",
       created_at: indexedAt,
       updated_at: indexedAt
-    }
+    },
+    controller_generation: 0,
+    invalidation_generation: 0,
+    created_at: indexedAt
   });
   const scanned = await scanner.scan({
     repo_root: root,
@@ -280,6 +286,16 @@ async function indexFixtureDocs(root: string): Promise<GraphStore> {
     snapshot_id: snapshotId,
     repo_root: root,
     documents
+  });
+  await store.markSnapshotFreshness({ snapshot_id: snapshotId, freshness: "fresh" });
+  await store.transitionBuild({
+    repo_root: root,
+    snapshot_id: snapshotId,
+    from: "building",
+    to: "published",
+    controller_generation: 0,
+    invalidation_generation: 0,
+    updated_at: indexedAt
   });
   return store;
 }

@@ -16,7 +16,8 @@ import type { GraphNode } from "../../domain/models/index.js";
 import type {
   FileCatalogPort,
   GraphQueryPort,
-  SnapshotPort,
+  SnapshotPublicationPort,
+  SnapshotPublicationSelection,
   WorkspaceFilePort
 } from "../../ports/index.js";
 import {
@@ -26,6 +27,7 @@ import {
 } from "./response-metadata.js";
 
 export type ResolvedSnapshot = {
+  status: "selected";
   snapshot_id: string;
   repo_root: string;
   meta: ResponseMetadata;
@@ -117,19 +119,19 @@ export function validityForResolvedSnapshot(
 export async function resolveSnapshot(input: {
   repo_root: string;
   snapshot_id?: string;
-  snapshots: SnapshotPort;
+  snapshots: SnapshotPublicationPort;
   catalog: FileCatalogPort;
   row_limit: number;
   traversal_depth?: number;
   source_byte_limit?: number;
-}): Promise<ResolvedSnapshot | null> {
-  const snapshot = await input.snapshots.getSnapshot({
-    repo_root: input.repo_root,
-    snapshot_id: input.snapshot_id
-  });
-  if (!snapshot) {
-    return null;
+}): Promise<ResolvedSnapshot | Exclude<SnapshotPublicationSelection, { status: "selected" }>> {
+  const selection = input.snapshot_id === undefined
+    ? await input.snapshots.getLatestPublished({ repo_root: input.repo_root })
+    : await input.snapshots.readExplicit({ repo_root: input.repo_root, snapshot_id: input.snapshot_id });
+  if (selection.status !== "selected") {
+    return selection;
   }
+  const snapshot = selection.snapshot;
 
   const files = await input.catalog.listFiles({
     snapshot_id: snapshot.id,
@@ -142,6 +144,7 @@ export async function resolveSnapshot(input: {
     evidence_kinds: file.adapter_evidence?.evidence_kinds ?? evidenceForLanguage(file.file_identity.language)
   }));
   return {
+    status: "selected",
     snapshot_id: snapshot.id,
     repo_root: snapshot.repo_root,
     meta: buildResponseMeta({
@@ -163,6 +166,24 @@ export async function resolveSnapshot(input: {
         source_byte_limit: input.source_byte_limit
       }
     })
+  };
+}
+
+export function publicationSelectionMeta(input: {
+  selection: Exclude<SnapshotPublicationSelection, { status: "selected" }>;
+  meta: ResponseMetadata;
+}): ResponseMetadata {
+  if (input.selection.status !== "blocked") {
+    return input.meta;
+  }
+  return {
+    ...input.meta,
+    caveats: [{
+      kind: "snapshot_unpublished",
+      severity: "blocker",
+      message: `${input.selection.message} State: ${input.selection.publication_state}.`,
+      evidence_kinds: []
+    }]
   };
 }
 

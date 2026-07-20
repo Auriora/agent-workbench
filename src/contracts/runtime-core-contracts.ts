@@ -130,7 +130,8 @@ export const runtimeStatusCaveatKindSchema = z.enum([
   "degraded_snapshot_path_validity",
   "stale_watcher_snapshot",
   "watcher_refreshing",
-  "degraded_watcher_freshness"
+  "degraded_watcher_freshness",
+  "snapshot_unpublished"
 ]);
 export type RuntimeStatusCaveatKind = z.infer<typeof runtimeStatusCaveatKindSchema>;
 

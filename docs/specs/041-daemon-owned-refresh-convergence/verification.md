@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: verification
 status: draft
 owner: platform
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -187,7 +187,10 @@ pnpm exec vitest run tests/mcp/integration-health-contract.test.ts tests/mcp/int
 
 | Task | Status | Evidence | Notes |
 | --- | --- | --- | --- |
-| T001-T009 and child slices | pending | | Update each parent and child separately during implementation. |
+| T001 and child slices | done | Phase 1 contract receipt below | Contract/reproduction evidence only. |
+| T002 and child slices | done | Phase 2 implementation receipt below | Shared controller/executor slice implemented and independently re-reviewed. |
+| T003 and child slices | done | Phase 2 implementation receipt below | Atomic publication/selection slice implemented and independently re-reviewed. |
+| T004-T009 and child slices | pending | | Phase 2 handoff residuals are recorded on T004-T007. |
 
 ## Evidence Log
 
@@ -197,6 +200,7 @@ pnpm exec vitest run tests/mcp/integration-health-contract.test.ts tests/mcp/int
 | 2026-07-19 | Independent spec review and lifecycle readiness reconciliation | done | Made incomplete replacement publication explicit implementation work and separated complete planning traceability from pending implementation evidence. |
 | 2026-07-19 | MoE findings reconciliation | done | Resolved four blockers and sixteen additional findings, including D013 migration/rollback and parser-visible CP mapping, across requirements, design, bounded child tasks, verification, traceability, impact, and canonical context; this is planning/review evidence, not implementation proof. |
 | 2026-07-19 | Phase 1 T001 contract and reproduction receipt | done | `pnpm typecheck` passed; focused runtime/store/contracts reported 39 pass and 12 expected failures; focused daemon/source-entrypoint reported 19 pass and 4 expected failures; full `pnpm test` reported 80 files, 640 pass, and 16 expected failures. Independent re-review found no remaining blockers or advisories. |
+| 2026-07-20 | Phase 2 T002-T003 implementation receipt | done | `pnpm typecheck` passed; the 12-file controller/publication/query focused suite reported 207 pass and 4 expected later-phase failures; full `pnpm test` reported 80 files, 690 pass, and 9 expected later-phase failures. Independent remediation re-review found no remaining Phase 2 blocker. |
 
 ## Phase 1 Contract Receipt
 
@@ -213,6 +217,23 @@ expected failures to ordinary passing tests as their production seams land.
 | `pnpm exec vitest run tests/mcp/daemon-launch.test.ts tests/mcp/daemon-entrypoint-integration.test.ts` | 19 passed; 4 expected failures | Locks shared diagnostic identity, the real ordered non-startup deleted-path request, synthetic daemon health, and the disconnect/idle activity-lease decision. |
 | `pnpm test` | 80 files passed; 640 passed; 16 expected failures | Proves the contract-first fixtures introduce no unexpected repository regression while retaining all intended missing-production seams. |
 | Independent Phase 1 re-review | no blockers or advisories | Confirmed the true prior-schema fixture, supported-schema orphan seam, separate newer-schema refusal, closed safe-message vocabulary, production-backed second-client reproduction, and mandatory shared-factory replacement in T002/T004/T005. |
+
+## Phase 2 Implementation Receipt
+
+Phase 2 implements the shared execution and publication foundations only. The
+four expected failures in the focused receipt remain owned by T004-T007: daemon
+ownership/admission, bounded diagnostics, trigger-level catch-up, and orphan
+reconciliation. They are not Phase 2 regressions.
+
+| Command/check | Result | Implementation evidence |
+| --- | --- | --- |
+| `pnpm typecheck` | passed | Controller, generation-fenced publication, build-only worker, structured unpublished selection, and building-only write contracts compose without type errors. |
+| `pnpm exec vitest run tests/runtime/operations.test.ts tests/runtime/workspace-change-queue.test.ts tests/graph/store.test.ts tests/graph/extraction-pipeline.test.ts tests/graph/query-tools.test.ts tests/docs/fts-docs-search-fixtures.test.ts tests/docs/query-docs.test.ts tests/mcp/docs-surfaces.test.ts tests/mcp/query-tools.test.ts tests/mcp/repo-status-resource.test.ts tests/mcp/stdio-entrypoint.test.ts tests/architecture/layer-boundaries.test.ts` | 12 files passed; 207 passed; 4 expected failures | Proves linearized admission, numeric allocation, finite one-result execution, generation catch-up, termination quarantine, atomic publication, migration/rollback, CAS refusal, published-only public reads, building-only writes, production-worker generation propagation, reopen/barrier behavior, and partial-but-fresh coverage. |
+| `pnpm test` | 80 files passed; 690 passed; 9 expected failures | Proves the Phase 2 implementation and fixture lifecycle migration introduce no unexpected repository regression while retaining later-phase contract failures. |
+| `pnpm run validate:plugin` | passed | Packaged plugin and package bindings remain valid. |
+| `pnpm run validate:skills` | passed; 6 owned skills, 0 errors, 0 warnings | Skill packaging remains valid. |
+| `pnpm pack:dry-run` | passed; 237 entries | Distribution still includes the changed runtime, worker, and contract files. |
+| Independent implementation review and remediation re-review | six blockers found and resolved; final verdict has no Phase 2 blockers | Closed target-ID mismatch, split publication authority, termination overlap, unpublished read leakage, missing generation CAS, freshness/publication coupling, worker generation propagation, structured allocation failure, and post-publication evidence mutability. |
 
 ## Residual Risks
 

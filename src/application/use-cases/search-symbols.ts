@@ -12,6 +12,7 @@ import type {
   FileCatalogPort,
   GraphQueryPort,
   SnapshotPort,
+  SnapshotPublicationPort,
   WorkspaceFilePort
 } from "../../ports/index.js";
 import type { GraphNode } from "../../domain/models/index.js";
@@ -19,6 +20,7 @@ import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
 import {
   blockedMeta,
   findMissingWorkspacePaths,
+  publicationSelectionMeta,
   resolveSnapshot,
   snapshotValidityMeta,
   staleSnapshotMeta,
@@ -35,7 +37,7 @@ export type SearchSymbolsResult = {
 export async function searchSymbols(input: {
   request: SymbolSearchRequest;
   graph: GraphQueryPort;
-  snapshots: SnapshotPort;
+  snapshots: SnapshotPort & SnapshotPublicationPort;
   catalog: FileCatalogPort;
   workspace?: WorkspaceFilePort;
   snapshot_validity?: SnapshotValidityReceipt;
@@ -51,7 +53,12 @@ export async function searchSymbols(input: {
     row_limit: input.request.max_results,
     source_byte_limit: input.request.source_byte_limit
   });
-  if (!resolved) {
+  if (!resolved || resolved.status !== "selected") {
+    const meta = blockedMeta({
+      repo_root: repoRoot,
+      row_limit: input.request.max_results,
+      source_byte_limit: input.request.source_byte_limit
+    });
     return {
       symbols: {
         query: input.request.query,
@@ -60,11 +67,7 @@ export async function searchSymbols(input: {
         symbols: [],
         next_actions: capNextActions([])
       },
-      meta: blockedMeta({
-        repo_root: repoRoot,
-        row_limit: input.request.max_results,
-        source_byte_limit: input.request.source_byte_limit
-      })
+      meta: resolved === null ? meta : publicationSelectionMeta({ selection: resolved, meta })
     };
   }
   const snapshotValidity = validityForResolvedSnapshot(input.snapshot_validity, resolved.snapshot_id);

@@ -154,16 +154,16 @@ describe("docs MCP tools", () => {
       store.close();
     }
 
-    const originalGetSnapshot = SqliteGraphStoreAdapter.prototype.getSnapshot;
+    const originalGetLatestPublished = SqliteGraphStoreAdapter.prototype.getLatestPublished;
     let selectionRead = true;
     const snapshotSpy = vi
-      .spyOn(SqliteGraphStoreAdapter.prototype, "getSnapshot")
+      .spyOn(SqliteGraphStoreAdapter.prototype, "getLatestPublished")
       .mockImplementation(async function (this: SqliteGraphStoreAdapter, input) {
-        if (selectionRead && input.snapshot_id === undefined) {
+        if (selectionRead) {
           selectionRead = false;
-          return null;
+          return { status: "missing", reason: "no_published_snapshot" };
         }
-        return originalGetSnapshot.call(this, input);
+        return originalGetLatestPublished.call(this, input);
       });
 
     try {
@@ -832,7 +832,8 @@ async function seedDocsSnapshot(
   title: string,
   selectedText: string
 ): Promise<void> {
-  await store.upsertSnapshot({
+  const indexedAt = "2026-07-19T12:00:00.000Z";
+  await store.createBuildSnapshot({
     snapshot: {
       id: snapshotId,
       repo_root: repoRoot,
@@ -840,11 +841,14 @@ async function seedDocsSnapshot(
       repo_identity: repoRoot,
       config_identity: "default",
       schema_version: SCHEMA_VERSION,
-      freshness: "fresh",
+      freshness: "refreshing",
       owner_state: "owner",
-      created_at: "2026-07-19T12:00:00.000Z",
-      updated_at: "2026-07-19T12:00:00.000Z"
-    }
+      created_at: indexedAt,
+      updated_at: indexedAt
+    },
+    controller_generation: 0,
+    invalidation_generation: 0,
+    created_at: indexedAt
   });
   await store.replaceSnapshotDocs({
     snapshot_id: snapshotId,
@@ -856,9 +860,19 @@ async function seedDocsSnapshot(
       selected_text: selectedText,
       content_hash: `sha256:${snapshotId}`,
       byte_count: Buffer.byteLength(selectedText, "utf8"),
-      indexed_at: "2026-07-19T12:00:00.000Z",
+      indexed_at: indexedAt,
       truncated: false
     }]
+  });
+  await store.markSnapshotFreshness({ snapshot_id: snapshotId, freshness: "fresh" });
+  await store.transitionBuild({
+    repo_root: repoRoot,
+    snapshot_id: snapshotId,
+    from: "building",
+    to: "published",
+    controller_generation: 0,
+    invalidation_generation: 0,
+    updated_at: indexedAt
   });
 }
 

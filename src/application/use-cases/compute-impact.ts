@@ -10,12 +10,14 @@ import type {
   FileCatalogPort,
   GraphQueryPort,
   SnapshotPort,
+  SnapshotPublicationPort,
   WorkspaceFilePort
 } from "../../ports/index.js";
 import {
   blockedMeta,
   fileReferencesForNodes,
   findMissingWorkspacePaths,
+  publicationSelectionMeta,
   resolveSnapshot,
   snapshotValidityMeta,
   staleSnapshotMeta,
@@ -32,7 +34,7 @@ export type ComputeImpactResult = {
 export async function computeImpact(input: {
   request: ImpactRequest;
   graph: GraphQueryPort;
-  snapshots: SnapshotPort;
+  snapshots: SnapshotPort & SnapshotPublicationPort;
   catalog: FileCatalogPort;
   workspace?: WorkspaceFilePort;
   snapshot_validity?: SnapshotValidityReceipt;
@@ -48,7 +50,12 @@ export async function computeImpact(input: {
     row_limit: input.request.max_nodes,
     traversal_depth: input.request.max_depth
   });
-  if (!resolved) {
+  if (!resolved || resolved.status !== "selected") {
+    const meta = blockedMeta({
+      repo_root: repoRoot,
+      row_limit: input.request.max_nodes,
+      traversal_depth: input.request.max_depth
+    });
     return {
       impact: {
         repo_root: repoRoot,
@@ -67,11 +74,7 @@ export async function computeImpact(input: {
         },
         next_actions: capNextActions([])
       },
-      meta: blockedMeta({
-        repo_root: repoRoot,
-        row_limit: input.request.max_nodes,
-        traversal_depth: input.request.max_depth
-      })
+      meta: resolved === null ? meta : publicationSelectionMeta({ selection: resolved, meta })
     };
   }
   const snapshotValidity = validityForResolvedSnapshot(input.snapshot_validity, resolved.snapshot_id);

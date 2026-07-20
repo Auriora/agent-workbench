@@ -31,7 +31,7 @@ import {
   WorkspaceFileAdapter,
   WorkspaceSafetyAdapter
 } from "../../src/infrastructure/filesystem/index.js";
-import { openGraphStore } from "../../src/infrastructure/sqlite/index.js";
+import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
 import { buildApplyWorkspaceEditEnvelope, buildPreviewWorkspaceEditEnvelope } from "../../src/presentation/workspace-edit-presenter.js";
 import { buildFindReferencesEnvelope } from "../../src/presentation/find-references-presenter.js";
 import { buildImpactEnvelope } from "../../src/presentation/impact-presenter.js";
@@ -644,6 +644,60 @@ describe("stdio MCP entrypoint", () => {
     }
   });
 
+  it("reports an explicit unpublished snapshot as a structured symbol-search blocker", async () => {
+    const fixtureRoot = createCleanFixtureCopy({
+      prefix: "agent-workbench-mcp-unpublished-query-",
+      sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
+    });
+    const graphStore = openGraphStore(graphStorePath(fixtureRoot));
+    await graphStore.createBuildSnapshot({
+      snapshot: {
+        id: "990",
+        repo_root: fixtureRoot,
+        workspace_root: fixtureRoot,
+        repo_identity: fixtureRoot,
+        config_identity: "default",
+        schema_version: SCHEMA_VERSION,
+        freshness: "fresh",
+        owner_state: "owner",
+        created_at: "2026-07-20T12:00:00.000Z",
+        updated_at: "2026-07-20T12:00:00.000Z"
+      },
+      controller_generation: 8,
+      invalidation_generation: 12,
+      created_at: "2026-07-20T12:00:00.000Z"
+    });
+    graphStore.close();
+    const session = await createStdioSession(fixtureRoot, { startGraphWarmup: false });
+
+    try {
+      await session.call(initializeMessage(1));
+      const response = parseResponseEnvelope<SymbolSearchEnvelope & {
+        meta: { verification_status: string; caveats?: Array<{ kind: string; message: string }> };
+      }>(await session.call({
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: "symbol_search",
+          arguments: { query: "Runner", snapshot_id: "990" }
+        }
+      }));
+
+      expect(response.data).toMatchObject({ snapshot_id: "990", symbols: [] });
+      expect(response.meta).toMatchObject({
+        verification_status: "blocked",
+        caveats: [expect.objectContaining({
+          kind: "snapshot_unpublished",
+          message: expect.stringContaining("State: building")
+        })]
+      });
+    } finally {
+      await session.close();
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+    }
+  });
+
   it("bounds startup graph warmup file count", async () => {
     const fixtureRoot = createCleanFixtureCopy({
       prefix: "agent-workbench-mcp-bounded-warmup-",
@@ -672,8 +726,8 @@ describe("stdio MCP entrypoint", () => {
       const status = await waitForWarmupStatus(session, "complete");
       expect(status.data).toMatchObject({
         repo_root: fixtureRoot,
-        runtime_state: "refreshing",
-        freshness: "refreshing",
+        runtime_state: "fresh",
+        freshness: "fresh",
         warmup_state: "complete"
       });
 

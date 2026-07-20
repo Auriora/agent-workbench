@@ -35,6 +35,7 @@ import type {
   FileCatalogSkippedPath,
   GraphQueryPort,
   SnapshotPort,
+  SnapshotPublicationPort,
   WorkspaceFilePort
 } from "../../ports/index.js";
 import { resolveSnapshot, toSymbolReference } from "./query-helpers.js";
@@ -69,7 +70,7 @@ export async function getTaskContext(input: {
   request: TaskContextRequest;
   scanner: FileCatalogScanPort;
   graph?: GraphQueryPort;
-  snapshots?: SnapshotPort;
+  snapshots?: SnapshotPort & SnapshotPublicationPort;
   catalog?: FileCatalogPort;
   workspace?: WorkspaceFilePort;
   snapshot_validity?: SnapshotValidityReceipt;
@@ -745,7 +746,7 @@ async function selectRankedSymbols(input: {
   requestedPaths: readonly string[];
   repo_root: string;
   graph?: GraphQueryPort;
-  snapshots?: SnapshotPort;
+  snapshots?: SnapshotPort & SnapshotPublicationPort;
   catalog?: FileCatalogPort;
   workspace?: WorkspaceFilePort;
   snapshot_id?: string | null;
@@ -780,13 +781,15 @@ async function selectRankedSymbols(input: {
     catalog: input.catalog,
     row_limit: input.limit
   });
-  if (resolved === null) {
+  if (resolved === null || resolved.status !== "selected") {
     return {
       ranked_symbols: [],
       skipped_work: [
         {
           kind: "ranked_symbols",
-          reason: "No graph snapshot is available, so symbol ranking is deferred."
+          reason: resolved?.status === "blocked"
+            ? `Snapshot ${resolved.snapshot_id} is ${resolved.publication_state} and is not published.`
+            : "No graph snapshot is available, so symbol ranking is deferred."
         }
       ]
     };
