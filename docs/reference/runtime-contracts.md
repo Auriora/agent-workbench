@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -236,7 +236,8 @@ normal task context. It contains:
   `target_snapshot_id` when an execution exists
 - `visible_snapshot_id` when a published snapshot exists
 - `warmup_state`
-- `publication_state` when a target exists
+- `publication_state` when a persisted target publication exists; an allocated
+  `target_snapshot_id` alone does not prove that build creation completed
 - `graph_freshness`
 - `activity_lease_held`
 - `worker_termination_state`
@@ -253,6 +254,48 @@ incompatible or missing daemon identity maps to `invalid_due_to_environment`;
 ambiguous owner state, malformed socket handshakes, blocked graph-store
 startup, and unavailable graph evidence map to `verification_status: blocked`.
 Raw SQLite lock text must not be emitted as non-JSON MCP output.
+
+### Refresh And Publication Vocabulary
+
+Refresh execution states are exactly `idle`, `planned`, `running`, `complete`,
+and `failed`. `scheduled` and `cancelled` are not canonical. Snapshot
+publication states are exactly `building`, `published`, `superseded`, and
+`failed`; publication is independent of `fresh`, `stale`, or `cold` graph
+freshness and of evidence-class coverage.
+
+Schema identity v2 stores current evidence in `graph-v2.sqlite`. Owner-gated
+legacy retirement preserves `graph-v1.sqlite.pre-v2` and atomically replaces
+the former `graph.sqlite` with a non-SQLite guard. A v0.5.2 adapter must fail
+with an incompatible-store error at that canonical path; it must never read or
+mutate the v2 publication store. Fresh repositories need no retirement
+artifacts, and v1 without a backup is valid before retirement. Inconsistent
+sets—such as a guard without its backup or a conflicting backup—block startup
+rather than selecting another path.
+
+`planned` and `running` hold the controller activity lease. `complete` names a
+`published` target that is also the visible snapshot, has matching started and
+requested generations, and has no retained failure. `failed` has no activity
+lease, keeps any previous publication visible, and includes structured failure.
+An unpublished target cannot be the visible snapshot. Worker termination uses
+`not_required`, `unconfirmed`, or `confirmed`; no successor may overlap an
+unconfirmed termination.
+
+Refresh failure codes are `worker_timeout`, `worker_error`,
+`worker_exit_without_result`, `invalid_worker_result`, `store_failure`,
+`permission_failure`, `ownership_lost`, `orphaned_build`, and
+`orphaned_pre_publication`. Each maps to a fixed safe category and message.
+Failure evidence includes execution identity, optional target identity, and
+occurrence time; messages are capped at 512 UTF-8 bytes and never expose raw
+worker, SQLite, stack, secret, control-character, or absolute-path text.
+
+The diagnostics receipt is the only public refresh authority. It contains
+repository identity, positive `controller_generation`, monotonic
+`diagnostic_revision`, cumulative `worker_invocations`, optional execution and
+snapshot identities when they exist, started/requested invalidation
+generations, execution/publication/freshness states, activity lease and worker
+termination state, and optional structured failure. Invalid state combinations
+or inability to obtain this awaited receipt degrade top-level trust rather than
+being presented as healthy status.
 
 ## Evidence Semantics
 

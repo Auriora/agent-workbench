@@ -1747,7 +1747,7 @@ Do not promote an item when:
 ### EB052: Daemon-Owned Refresh Convergence
 
 - Priority: P0
-- Status: active Spec 041
+- Status: closed by Spec 041
 - Friction signal: post-deployment Claude dogfooding on runtime `0.5.2`
   confirmed that Spec 039 correctly detects deleted indexed paths, but the
   coordinated refresh did not converge. Daemon PID `434059` remained
@@ -1789,10 +1789,16 @@ Do not promote an item when:
   - Failure and disconnect regressions proving refresh ownership survives the
     requesting client and reports structured failure without adding a fallback
     execution path.
-- Promotion target: active
-  [Spec 041](../specs/041-daemon-owned-refresh-convergence/requirements.md)
-  under EB003 first-read reliability, with EB036 daemon ownership and EB051
-  snapshot validity as accepted prerequisites.
+- Promotion target: closed
+  [Spec 041](../history/spec-closure-log.md) under EB003 first-read
+  reliability. Current behavior lives in
+  [runtime operations design](../design/runtime-operations-design.md),
+  [graph store design](../design/graph-store-design.md),
+  [MCP surface design](../design/mcp-surface-design.md), and
+  [runtime contracts](../reference/runtime-contracts.md), with EB036 daemon
+  ownership and EB051 snapshot validity as accepted prerequisites. Large-repo
+  completion scale and progress remain independently owned by
+  [EB014](#eb014-large-repo-graph-warmup-scale-and-progress).
 
 ## Extension Idea Coverage
 
@@ -1853,7 +1859,7 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-- Implement
-  [Spec 041](../specs/041-daemon-owned-refresh-convergence/requirements.md)
-  as the active P0 daemon refresh-convergence slice. Keep EB014
-  large-repository completion work separate from this ordinary refresh defect.
+- Spec 041 is closed; its durable behavior and verification are linked from
+  [EB052](#eb052-daemon-owned-refresh-convergence). Select the next spec from
+  current evidence rather than extending the removed package. EB014 remains the
+  separate candidate for large-repository completion scale and progress.

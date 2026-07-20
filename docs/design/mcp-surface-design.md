@@ -3,7 +3,7 @@ title: MCP surface design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -204,6 +204,21 @@ errors or useful-looking partial evidence.
 `repo:///status` must expose cold, refreshing, fresh, stale, and degraded
 warm-up state, including queued work counts and indexing blockers where
 available.
+
+Status and integration health consume the daemon controller's one awaited
+diagnostics receipt. They expose canonical execution, invalidation, publication,
+visible/target snapshot, activity, worker-termination, freshness, and bounded
+failure evidence without joining connection-local coordinator state to a
+separate snapshot read. Invalid combinations or diagnostics failure lower
+top-level trust; they do not synthesize `scheduled`, `unknown`, or healthy
+success.
+
+A stale first read requests the same daemon-owned generation boundary used by
+startup and the watcher queue. The read remains bounded and does not wait for
+broad indexing. Planned or running requests reuse one execution; a newer
+generation produces one sequential catch-up. There is no public manual refresh
+tool, polling contract, provider-specific route, or automatic retry action.
+
 Detailed language/platform coverage belongs to `repo:///scope` and
 `repo:///overview`; the status hot path must not enumerate broad catalog rows.
 
@@ -255,7 +270,19 @@ workspace, and reading the resource itself never proves discovery.
 
 When the runtime is hosted by the per-repo daemon, integration health also
 includes a compact `daemon` block with PID, socket path, repo root, connected
-client count, warm-up state, graph freshness, and last failure when available.
+client count, controller/diagnostic revisions, worker invocation count,
+execution and invalidation identities, target and visible snapshot identities,
+warm-up and publication states, graph freshness, activity/worker-termination
+state, and last failure when available.
+
+Graph and docs queries select only published snapshots. While a replacement is
+building, superseded, or failed they either use the prior published evidence
+with truthful stale/blocked trust metadata or return structured unpublished
+evidence when that exact snapshot was requested. They never expose partial rows
+from an unpublished target. After successful publication, deleted file, graph,
+documentation, heading, FTS, and coverage records are absent from the selected
+snapshot.
+
 Normal agent-facing resources such as `repo:///status` remain compact and expose
 only freshness or blocked-state information needed for the next safe action.
 

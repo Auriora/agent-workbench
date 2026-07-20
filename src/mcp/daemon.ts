@@ -13,6 +13,7 @@ import { fileURLToPath } from "node:url";
 import { createRootAuthorityPolicy } from "../interface-adapters/mcp/registries/root-authority.js";
 import type { IntegrationLauncherIdentity } from "../contracts/index.js";
 import { SCHEMA_VERSION } from "../infrastructure/sqlite/index.js";
+import { retireLegacyGraphStore } from "../infrastructure/sqlite/graph-store-location.js";
 import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../runtime/version.js";
 import {
   createAgentWorkbenchServer,
@@ -357,7 +358,9 @@ export async function startAgentWorkbenchDaemon(input: {
   let refreshController: SnapshotRefreshControllerPort &
     SnapshotRefreshDiagnosticsPort & SnapshotRefreshAdmissionFailurePort;
   try {
-    const orphanReconciliation = await (await sharedGraphStore()).reconcileOrphanedBuilds({
+    const store = await sharedGraphStore();
+    retireLegacyGraphStore(databasePath);
+    const orphanReconciliation = await store.reconcileOrphanedBuilds({
       repo_root: repoRoot,
       current_owner: ownershipLease,
       recovered_owners: ownershipAdmission.recovered_owners,
@@ -777,13 +780,48 @@ function acquireDaemonStartupLock(
   }
 }
 
-function createDaemonStartupLock(lockPath: string): { release: () => void } {
-  const fd = fs.openSync(lockPath, "wx");
+type DaemonStartupLockPayload = {
+  pid: number;
+  created_at: string;
+  token: string;
+};
+
+export function createDaemonStartupLock(
+  lockPath: string,
+  hooks: {
+    before_claim?: () => void;
+    persist_candidate?: (fd: number, serialized: string) => void;
+  } = {}
+): { release: () => void } {
+  const token = crypto.randomUUID();
+  const candidatePath = `${lockPath}.${process.pid}.${token}.candidate`;
+  const payload: DaemonStartupLockPayload = {
+    pid: process.pid,
+    created_at: new Date().toISOString(),
+    token
+  };
   let released = false;
+  let fd: number | undefined;
+  let claimedStat: fs.Stats;
   try {
-    fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, created_at: new Date().toISOString() }));
-  } finally {
+    fd = fs.openSync(candidatePath, "wx", 0o600);
+    const serialized = `${JSON.stringify(payload)}\n`;
+    if (hooks.persist_candidate !== undefined) {
+      hooks.persist_candidate(fd, serialized);
+    } else {
+      fs.writeFileSync(fd, serialized);
+      fs.fsyncSync(fd);
+    }
     fs.closeSync(fd);
+    fd = undefined;
+    hooks.before_claim?.();
+    fs.linkSync(candidatePath, lockPath);
+    claimedStat = fs.statSync(candidatePath);
+  } finally {
+    if (fd !== undefined) {
+      try { fs.closeSync(fd); } catch {}
+    }
+    fs.rmSync(candidatePath, { force: true });
   }
 
   return {
@@ -792,29 +830,45 @@ function createDaemonStartupLock(lockPath: string): { release: () => void } {
         return;
       }
       released = true;
-      fs.rmSync(lockPath, { force: true });
+      try {
+        const currentStat = fs.statSync(lockPath);
+        if (currentStat.dev !== claimedStat.dev || currentStat.ino !== claimedStat.ino) return;
+        const current = readDaemonStartupLockPayload(lockPath);
+        if (current !== undefined && (current.token !== token || current.pid !== process.pid)) return;
+        fs.rmSync(lockPath);
+      } catch (error) {
+        if (!isMissingFileError(error)) throw error;
+      }
     }
   };
 }
 
 function daemonStartupLockIsStale(lockPath: string): boolean | "ambiguous" {
-  let payload: unknown;
-  try {
-    payload = JSON.parse(fs.readFileSync(lockPath, "utf8"));
-  } catch {
-    return "ambiguous";
-  }
+  const payload = readDaemonStartupLockPayload(lockPath);
+  if (payload === undefined) return "ambiguous";
 
-  const pid =
-    typeof payload === "object" && payload !== null && "pid" in payload
-      ? (payload as { pid?: unknown }).pid
-      : undefined;
-  if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) {
-    return "ambiguous";
-  }
-
-  const processState = isProcessAlive(pid);
+  const processState = isProcessAlive(payload.pid);
   return processState === "ambiguous" ? "ambiguous" : processState === false;
+}
+
+function readDaemonStartupLockPayload(lockPath: string): DaemonStartupLockPayload | undefined {
+  try {
+    const payload = JSON.parse(fs.readFileSync(lockPath, "utf8")) as unknown;
+    if (typeof payload !== "object" || payload === null) return undefined;
+    const value = payload as Partial<DaemonStartupLockPayload>;
+    if (
+      typeof value.pid !== "number" ||
+      !Number.isInteger(value.pid) ||
+      value.pid <= 0 ||
+      typeof value.created_at !== "string" ||
+      !Number.isFinite(Date.parse(value.created_at)) ||
+      typeof value.token !== "string" ||
+      value.token.length === 0
+    ) return undefined;
+    return value as DaemonStartupLockPayload;
+  } catch {
+    return undefined;
+  }
 }
 
 function isFileExistsError(error: unknown): boolean {

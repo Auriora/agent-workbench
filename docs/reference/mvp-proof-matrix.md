@@ -3,7 +3,7 @@ title: MVP proof matrix
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-06-11
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -42,6 +42,8 @@ must appear in status, scope, and context with explicit capability metadata.
 | `fixture-degraded-tools` | Prove degraded behavior | missing `tree-sitter` parser/grammar, parser failure, missing optional enrichment, and missing test runner cases |
 | `fixture-workspace-safety` | Prove path and command refusal | symlink escape, generated root, `.env`, shell-looking command args |
 | `fixture-runtime-operations` | Prove cache, warm-up, and concurrency behavior | cold start, watcher update, queued extraction, parser timeout, obsolete result, concurrent read |
+| daemon refresh integration | Prove one daemon controller and crash recovery | two clients, requester disconnect, generation catch-up, activity/idle race, ownership conflict, five publication crash barriers |
+| installed-package MCP smoke | Prove packed runtime convergence below agent-CLI level | isolated tarball install, installed bin provenance, Codex- and Claude-labelled MCP sessions, deletion refresh, exact graph/docs queries, cleanup |
 | `fixture-runtime-boundaries` | Prove runtime context, registries, argument parsing, and OTEL boundaries | malformed MCP inputs, registry entries, runtime context fields, OTEL span/metric assertions |
 | `fixture-agent-integration-profile` | Prove common integration contract shape | Codex, Claude Code, Kiro, Augment, Gemini, and Junie target surfaces; unsupported-surface reasons; MCP binding metadata |
 | `fixture-markdown-quality` | Prove post-MVP Markdown quality contract shape | skipped heading levels, inconsistent numbering, ambiguous nested lists, wide tables, frontmatter violations, broken links, unchanged documents |
@@ -60,6 +62,11 @@ resource-backed discovery fixtures.
 | `repo:///status` | all fixtures | repo root, scope, freshness, capability coverage | fresh or degraded state is correct |
 | `repo:///status` | `fixture-mixed-language-platform` | per-language/platform capability coverage | non-Python areas are explicit, not silently ignored |
 | `repo:///status` | `fixture-runtime-operations` | warm-up phase, queued work, active workers, degraded background work | cold, refreshing, fresh, stale, and degraded states are visible |
+| daemon refresh diagnostics | daemon integration fixtures | one controller/diagnostic identity, worker count, generations, target/visible snapshots, publication/freshness, lease, termination, failure | every client observes one legal awaited receipt; invalid receipts lower trust |
+| refresh controller | runtime controller fixtures | linearized admission, reuse, newest-generation catch-up, finite deadline, one-result protocol, no automatic retry | at most one pass runs; one later ordinary request may recover a terminal failure |
+| snapshot publication | graph-store fixtures plus tagged v0.5.2 adapter probe | versioned v1 seed, owner-gated rollback artifact and atomic legacy guard, transactional migration, generation-fenced publication, explicit unpublished reads, partial coverage, retention, reopen | actual v0.5.2 blocks on the guard; only published v2 rows are selectable; prior publication survives every pre-publication failure |
+| crash and owner recovery | daemon and graph-store fixtures | positive death, bounded recovery chain, orphan disposition, five real process barriers, exact cleanup | orphan builds remain invisible and one later request converges without overlapping workers |
+| installed package convergence | isolated packed install | installed bin realpath, two labelled clients, one daemon, worker delta, replacement snapshot, exact surviving/deleted evidence, cleanup | proves installed-bin MCP behavior; provider labels are not real Codex or Claude CLI execution proof |
 | `repo:///scope` | all fixtures | indexed roots, skipped roots, generated/vendor caveats | path scope matches fixture expectations |
 | `repo:///scope` | `fixture-mixed-language-platform` | language/platform ids and unsupported/resource-backed areas | mixed repo scope is represented without Python-specific assumptions |
 | `repo:///overview` | `fixture-basic-python` | compact repo summary and language coverage | no source dump, no broad report |
@@ -82,6 +89,26 @@ resource-backed discovery fixtures.
 | OTEL instrumentation | `fixture-runtime-boundaries` | dispatch, use-case, graph/query, worker, cache, presentation spans or metrics | operational telemetry exists without durable usage records |
 | Integration profile contract | `fixture-agent-integration-profile` | target agents, MCP bindings, artifacts, unsupported surfaces, provenance | executable behavior remains MCP-first and vendor emitters stay outside core runtime |
 | Markdown quality contract | `fixture-markdown-quality` | finding shape, formatter plan shape, source ranges, preview/apply safety metadata | executable tools remain post-MVP unless explicitly promoted |
+
+## Refresh Convergence Proof Boundary
+
+The proof layers are intentionally distinct:
+
+- checkout/source entrypoint tests prove source composition and daemon behavior
+  from this repository;
+- install and MCP-launch smokes prove runtime-root and launcher wiring only;
+- installed-package acceptance packs and installs the npm artifact into isolated
+  roots, invokes that installed `agent-workbench-mcp` bin, and proves two
+  provider-labelled sessions share one daemon and one replacement refresh;
+- provider labels prove per-connection identity, not that the real Codex or
+  Claude Code CLI loaded or invoked the plugin;
+- Linux installed acceptance does not prove Windows named-pipe behavior.
+
+The installed acceptance receipt includes executable realpath, daemon PID,
+controller/execution/generation/snapshot agreement, worker invocation delta,
+exact surviving reference and docs hits, deleted-evidence absence, and cleanup
+of clients, daemon, socket, metadata, and temporary roots. A fresh final snapshot
+or an empty unblocked query alone is not sufficient proof.
 
 ## Capability Proof Status
 
@@ -134,6 +161,11 @@ measurements.
 | malformed MCP input | shared argument parser returns structured invalid-input response before use case execution |
 | runtime owner active | observer runtime reports owner state and does not start duplicate warm-up work |
 | prewarm cache reuse | fresh prewarm snapshot is reused only when repo fingerprint and config still match |
+| refresh requester disconnect | controller activity lease retains execution; daemon idle shutdown waits for terminal settlement |
+| invalidation during refresh | active unpublished pass is superseded and one newest-generation catch-up runs sequentially |
+| worker timeout or invalid protocol | execution fails with bounded structured evidence; worker termination is confirmed before later admission |
+| publication interruption | prior published snapshot remains selected; building/superseded/failed rows stay unavailable to ordinary and explicit readers |
+| dead-owner orphan | cleanup requires positive death evidence, marks matching builds failed, and preserves bounded recovery history |
 | generated/vendor target | write is refused unless explicitly allowed |
 | possible secret | value is skipped or redacted from index/report output |
 
@@ -183,6 +215,11 @@ The MVP docs are implementation-ready when:
 - every degraded mode returns structured metadata and next action
 - warm-up, cache invalidation, obsolete work rejection, concurrent reads, and
   single-writer graph transactions have fixture-backed tests
+- daemon ownership, generation coalescing, activity/idle lifetime, finite worker
+  settlement, atomic publication, transactional migration, crash barriers,
+  orphan recovery, and exact cleanup have fixture-backed tests
+- packed-and-installed-bin two-client acceptance is recorded separately from
+  checkout/source launcher tests and from any unproven real Codex/Claude CLI use
 - registry, typed argument parser, runtime context, and OTEL boundary behavior
   have fixture-backed tests
 - integration profile and Markdown quality contract shapes have fixture-backed

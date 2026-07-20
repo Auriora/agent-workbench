@@ -3,7 +3,7 @@ title: Install Agent Workbench (npm + Claude Code / Codex)
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-06-30
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -46,6 +46,11 @@ npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5
 For a different version, take the tarball URL from the matching release on
 <https://github.com/Auriora/agent-workbench/releases>. Offline/air-gapped: download
 the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.5.2.tgz`.
+
+The commands above install the latest released version, `0.5.2`. Daemon-owned
+refresh convergence and schema-isolated publication are implemented in the
+current unreleased `0.6.0` checkout; they are not available from that release
+URL until a v0.6.0 artifact is published.
 
 This builds the native modules in place and records a runtime-root pointer under
 the per-OS state directory (`%LOCALAPPDATA%\agent-workbench` on Windows,
@@ -142,3 +147,121 @@ In a new editor session, call an Agent Workbench resource (for example
 runtime-root pointer and started the MCP server against the installed copy. If
 the launcher reports the runtime is missing, reinstall the npm package rather
 than hand-editing config; the pointer is rewritten on install.
+
+## Verify refresh convergence
+
+The installed runtime owns refresh work in one per-repository daemon. Codex,
+Claude Code, and other MCP clients connected to the same canonical repository
+share that controller, graph store, watcher queue, and worker. A stale first
+read or repository change requests the existing refresh path automatically;
+there is no manual refresh command.
+
+Read `repo:///status`, then inspect `integration:///health/agent-workbench` when
+diagnostic detail is needed. The daemon block is authoritative for the current
+execution:
+
+- `planned` or `running` with `activity_lease_held: true` means refresh owns the
+  daemon lifetime. The prior published snapshot remains visible but must not be
+  treated as fresh proof.
+- `complete` with `publication_state: published` means the target and visible
+  snapshot identities agree and the activity lease has been released.
+- `failed` includes bounded `last_failure` evidence and leaves any existing
+  publication target invisible; a failure before build creation can have no
+  publication state. One later ordinary stale read may request one successor;
+  failure callbacks and health reads do not retry automatically.
+- `worker_invocations` is a cumulative controller count. It can demonstrate
+  that a bounded convergence interval used one worker pass, but it is not a
+  general performance metric.
+
+If another client disconnects while refresh is active, leave the daemon to
+finish. Do not remove the graph database, WAL/SHM files, socket, metadata, or
+ownership records. A replacement daemon recovers an orphaned build only after
+positive evidence that the previous owner is dead; ambiguous ownership returns
+a structured blocked result and requires investigation, not manual cleanup.
+
+Large-repository warm-up completion and deadline tuning remain tracked by
+EB014. A finite refresh failure on a repository that exceeds current bounds is
+not authorization to add a second indexer, retry loop, or partial-result path.
+
+## Upgrade, rollback, and schema compatibility
+
+The current unreleased 0.6.0 runtime adds schema-identity-v2 publication.
+It seeds `graph-v2.sqlite` from v0.5.2 `graph.sqlite` without modifying the
+source, then transactionally classifies non-refreshing snapshots as published
+and refreshing snapshots as failed. After owner admission and v2 readiness it
+checkpoints v1, preserves `graph-v1.sqlite.pre-v2`, and atomically replaces
+`graph.sqlite` with a non-SQLite guard. The released v0.5.2 adapter then blocks
+with `SQLITE_NOTADB`; it cannot read or mutate v2. Failed seeding, migration, or
+retirement cleans its candidate and leaves a recoverable state.
+
+For rollback, restore a known complete pre-migration cache only after every MCP
+client and daemon or standalone owner has stopped. Do not copy
+`graph-v1.sqlite.pre-v2` over the live guard in place; the runtime retains that
+artifact for recovery provenance, not as an ad hoc operator overwrite. When a
+complete cache restore is unavailable, rebuild the derived store from
+repository source using this recoverable quarantine procedure:
+
+1. Close every Codex, Claude Code, and direct MCP session for the repository.
+2. Confirm the authoritative repository ownership record is absent or names an
+   owner that is positively dead. If it names a daemon, also confirm the
+   reported PID no longer exists and its local socket or named pipe cannot be
+   connected. A standalone owner may have no daemon socket, so socket absence
+   alone is never sufficient. If any ownership, process, or endpoint check is
+   inconclusive, stop; ownership is ambiguous.
+3. Move the whole generated cache aside instead of deleting individual SQLite,
+   WAL/SHM, daemon, socket, metadata, or ownership files.
+
+On macOS or Linux, after replacing `/absolute/repo` with the canonical
+repository path:
+
+```bash
+AWB_ROLLBACK_REPO=/absolute/repo
+AWB_ROLLBACK_CACHE="$AWB_ROLLBACK_REPO/.cache/agent-workbench"
+mv "$AWB_ROLLBACK_CACHE" "$AWB_ROLLBACK_CACHE.pre-rollback-$(date +%Y%m%d%H%M%S)"
+```
+
+On Windows PowerShell:
+
+```powershell
+$awbRollbackRepo = "C:\absolute\repo"
+$awbRollbackCache = Join-Path $awbRollbackRepo ".cache\agent-workbench"
+$awbRollbackBackup = "$awbRollbackCache.pre-rollback-$(Get-Date -Format yyyyMMddHHmmss)"
+Move-Item -LiteralPath $awbRollbackCache -Destination $awbRollbackBackup
+```
+
+Install the intended older package only after the cache is quarantined, then
+start one session and let that runtime create a compatible derived store. Keep
+the backup until repository status and required queries are verified. Never
+attempt an in-place schema downgrade.
+
+## Understand the evidence boundary
+
+These checks establish different claims:
+
+- Checkout tests that launch `src/mcp/stdio-entrypoint.mjs` prove source
+  composition only.
+- Invoking `agent-workbench-mcp` from a real isolated tarball installation
+  proves the installed package entrypoint and native/runtime dependencies.
+- Two MCP sessions labelled `codex` and `claude_code` prove provider-neutral
+  behavior through one daemon; labels alone do not prove either real CLI loaded
+  its plugin.
+- A real Codex or Claude Code claim requires a separate live CLI session that
+  discovers the installed plugin and calls its Agent Workbench surfaces.
+
+Maintainers can reproduce the package-level gates with:
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm run validate:plugin
+pnpm run validate:skills
+pnpm pack:dry-run
+node scripts/ci/install-smoke.mjs
+node scripts/ci/mcp-launch-smoke.mjs
+CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs
+```
+
+The final smoke packs and installs a real tarball into isolated roots, starts
+the installed bin, connects two provider-labelled sessions to one daemon, and
+checks exact surviving graph/docs hits plus deleted-evidence absence. It
+records `real_agent_cli_executed: false` unless a separate CLI-level test ran.

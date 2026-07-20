@@ -8,7 +8,7 @@ import os from "node:os";
 import path from "node:path";
 import { Worker } from "node:worker_threads";
 import Database from "better-sqlite3";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExtractionBatch } from "../../src/domain/models/index.js";
 import type { SnapshotState } from "../../src/domain/models/runtime.js";
 import type {
@@ -17,6 +17,13 @@ import type {
   SnapshotPublicationSelection,
 } from "../../src/ports/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/graph-store.js";
+import {
+  GRAPH_STORE_FILE_NAME,
+  LEGACY_GRAPH_STORE_BACKUP_FILE_NAME,
+  graphStorePath,
+  retireLegacyGraphStore
+} from "../../src/infrastructure/sqlite/graph-store-location.js";
+import { LegacyV052GraphStoreFixture } from "../fixtures/legacy-v0.5.2-graph-store.js";
 
 describe("graph store", () => {
   let dir: string;
@@ -135,6 +142,178 @@ describe("graph store", () => {
     } finally {
       migrated.close();
     }
+  });
+
+  it("isolates the migrated publication store from the v0.5.2 store identity", () => {
+    const repoRoot = path.join(dir, "repo");
+    const cacheDirectory = path.join(repoRoot, ".cache", "agent-workbench");
+    const legacyPath = path.join(cacheDirectory, "graph.sqlite");
+    fs.mkdirSync(cacheDirectory, { recursive: true });
+    const legacySetup = new Database(legacyPath);
+    legacySetup.exec(`
+      CREATE TABLE schema_migrations (
+        version INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE snapshots (
+        id INTEGER PRIMARY KEY,
+        repo_identity TEXT NOT NULL,
+        config_identity TEXT NOT NULL,
+        freshness TEXT NOT NULL,
+        schema_version INTEGER NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+      INSERT INTO schema_migrations(version) VALUES (1);
+      INSERT INTO snapshots(id, repo_identity, config_identity, freshness, schema_version, created_at)
+      VALUES (91, '${repoRoot.replaceAll("'", "''")}', 'default', 'fresh', 1, '2026-07-20T00:00:00.000Z');
+    `);
+    legacySetup.close();
+
+    const versionedPath = graphStorePath(repoRoot);
+    expect(path.basename(versionedPath)).toBe(GRAPH_STORE_FILE_NAME);
+    expect(versionedPath).not.toBe(legacyPath);
+    const migrated = openGraphStore(versionedPath);
+    try {
+      expect(migrated.db.prepare(`
+        SELECT id, freshness, publication_state FROM snapshots WHERE id = 91
+      `).get()).toEqual({ id: 91, freshness: "fresh", publication_state: "published" });
+      expect(migrated.db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get())
+        .toEqual({ version: SCHEMA_VERSION });
+    } finally {
+      migrated.close();
+    }
+
+    expect(fs.statSync(legacyPath).isFile()).toBe(true);
+    expect(fs.existsSync(path.join(cacheDirectory, LEGACY_GRAPH_STORE_BACKUP_FILE_NAME))).toBe(false);
+    retireLegacyGraphStore(versionedPath);
+    expect(fs.statSync(legacyPath).isFile()).toBe(true);
+    expect(() => new LegacyV052GraphStoreFixture(repoRoot)).toThrow();
+
+    const rollbackPath = path.join(cacheDirectory, LEGACY_GRAPH_STORE_BACKUP_FILE_NAME);
+    const rollbackStore = new Database(rollbackPath);
+    try {
+      expect(rollbackStore.prepare("SELECT MAX(version) AS version FROM schema_migrations").get())
+        .toEqual({ version: 1 });
+      expect((rollbackStore.prepare("PRAGMA table_info(snapshots)").all() as Array<{ name: string }>)
+        .map((column) => column.name)).not.toContain("publication_state");
+      expect(rollbackStore.prepare("SELECT id, freshness FROM snapshots WHERE id = 91").get())
+        .toEqual({ id: 91, freshness: "fresh" });
+    } finally {
+      rollbackStore.close();
+    }
+
+    const reopened = openGraphStore(versionedPath);
+    try {
+      expect(reopened.db.prepare(`
+        SELECT id, freshness, publication_state FROM snapshots WHERE id = 91
+      `).get()).toEqual({ id: 91, freshness: "fresh", publication_state: "published" });
+    } finally {
+      reopened.close();
+    }
+
+  });
+
+  it("resumes atomic legacy blocker publication from the durable-backup barrier", () => {
+    const repoRoot = path.join(dir, "retirement-barrier-repo");
+    const cacheDirectory = path.join(repoRoot, ".cache", "agent-workbench");
+    const legacyPath = path.join(cacheDirectory, "graph.sqlite");
+    fs.mkdirSync(cacheDirectory, { recursive: true });
+    const legacy = new Database(legacyPath);
+    legacy.exec("CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY); INSERT INTO schema_migrations VALUES (1);");
+    legacy.close();
+    const versionedPath = graphStorePath(repoRoot);
+    openGraphStore(versionedPath).close();
+
+    const backupPath = path.join(cacheDirectory, LEGACY_GRAPH_STORE_BACKUP_FILE_NAME);
+    fs.copyFileSync(legacyPath, backupPath);
+    retireLegacyGraphStore(versionedPath);
+    expect(() => new LegacyV052GraphStoreFixture(repoRoot)).toThrow();
+    const blocker = fs.readFileSync(legacyPath);
+    const backup = fs.readFileSync(backupPath);
+
+    retireLegacyGraphStore(versionedPath);
+    expect(fs.readFileSync(legacyPath)).toEqual(blocker);
+    expect(fs.readFileSync(backupPath)).toEqual(backup);
+    expect(fs.readdirSync(cacheDirectory).filter((entry) => entry.includes(".block-") || entry.includes(".seed-")))
+      .toEqual([]);
+  });
+
+  it("cleans the temporary blocker when durable blocker publication fails", () => {
+    const repoRoot = path.join(dir, "retirement-blocker-failure-repo");
+    const cacheDirectory = path.join(repoRoot, ".cache", "agent-workbench");
+    const legacyPath = path.join(cacheDirectory, "graph.sqlite");
+    fs.mkdirSync(cacheDirectory, { recursive: true });
+    const legacy = new Database(legacyPath);
+    legacy.exec("CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY); INSERT INTO schema_migrations VALUES (1);");
+    legacy.close();
+    const versionedPath = graphStorePath(repoRoot);
+    openGraphStore(versionedPath).close();
+    const originalFsync = fs.fsyncSync;
+    let fsyncCalls = 0;
+    const fsync = vi.spyOn(fs, "fsyncSync").mockImplementation((descriptor) => {
+      fsyncCalls += 1;
+      if (fsyncCalls === 2) throw new Error("injected blocker fsync failure");
+      return originalFsync(descriptor);
+    });
+    try {
+      expect(() => retireLegacyGraphStore(versionedPath)).toThrow("injected blocker fsync failure");
+    } finally {
+      fsync.mockRestore();
+    }
+    expect(fs.readdirSync(cacheDirectory).filter((entry) => entry.includes(".block-"))).toEqual([]);
+    const stillLegacy = new LegacyV052GraphStoreFixture(repoRoot);
+    stillLegacy.close();
+    expect(fs.existsSync(path.join(cacheDirectory, LEGACY_GRAPH_STORE_BACKUP_FILE_NAME))).toBe(true);
+  });
+
+  it("blocks retirement when a crash artifact conflicts with the canonical v1 store", () => {
+    const repoRoot = path.join(dir, "retirement-conflict-repo");
+    const cacheDirectory = path.join(repoRoot, ".cache", "agent-workbench");
+    const legacyPath = path.join(cacheDirectory, "graph.sqlite");
+    fs.mkdirSync(cacheDirectory, { recursive: true });
+    const legacy = new Database(legacyPath);
+    legacy.exec("CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY); INSERT INTO schema_migrations VALUES (1);");
+    legacy.close();
+    const versionedPath = graphStorePath(repoRoot);
+    openGraphStore(versionedPath).close();
+    fs.writeFileSync(path.join(cacheDirectory, LEGACY_GRAPH_STORE_BACKUP_FILE_NAME), "conflict");
+
+    expect(() => retireLegacyGraphStore(versionedPath)).toThrow("conflicting rollback artifact");
+    const stillLegacy = new LegacyV052GraphStoreFixture(repoRoot);
+    stillLegacy.close();
+  });
+
+  it("blocks retirement when rollback comparison encounters an early short read", () => {
+    const repoRoot = path.join(dir, "retirement-short-read-repo");
+    const cacheDirectory = path.join(repoRoot, ".cache", "agent-workbench");
+    const legacyPath = path.join(cacheDirectory, "graph.sqlite");
+    fs.mkdirSync(cacheDirectory, { recursive: true });
+    const legacy = new Database(legacyPath);
+    legacy.exec("CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY); INSERT INTO schema_migrations VALUES (1);");
+    legacy.close();
+    const versionedPath = graphStorePath(repoRoot);
+    openGraphStore(versionedPath).close();
+    fs.copyFileSync(legacyPath, path.join(cacheDirectory, LEGACY_GRAPH_STORE_BACKUP_FILE_NAME));
+
+    const read = vi.spyOn(fs, "readSync").mockImplementationOnce(() => 0);
+    try {
+      expect(() => retireLegacyGraphStore(versionedPath)).toThrow("conflicting rollback artifact");
+    } finally {
+      read.mockRestore();
+    }
+    const stillLegacy = new LegacyV052GraphStoreFixture(repoRoot);
+    stillLegacy.close();
+  });
+
+  it("removes a failed versioned-store seed artifact", () => {
+    const repoRoot = path.join(dir, "invalid-legacy-repo");
+    const cacheDirectory = path.join(repoRoot, ".cache", "agent-workbench");
+    fs.mkdirSync(cacheDirectory, { recursive: true });
+    fs.writeFileSync(path.join(cacheDirectory, "graph.sqlite"), "not a sqlite database");
+
+    expect(() => openGraphStore(graphStorePath(repoRoot))).toThrow();
+    expect(fs.readdirSync(cacheDirectory).filter((entry) => entry.includes(".seed-"))).toEqual([]);
+    expect(fs.existsSync(path.join(cacheDirectory, GRAPH_STORE_FILE_NAME))).toBe(false);
   });
 
   it("rolls back a failed publication migration, closes startup resources, and reopens cleanly", () => {

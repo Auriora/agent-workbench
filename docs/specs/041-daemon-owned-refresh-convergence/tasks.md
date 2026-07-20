@@ -438,7 +438,7 @@ preserve dependency order and record overlap before parallel work.
   - Status: Exact query and evidence-boundary acceptance complete.
 ## Phase 5: Promotion And Closure Readiness
 
-- [ ] T009 Run all gates, promote verified behavior, reconcile EB052, and
+- [x] T009 Run all gates, promote verified behavior, reconcile EB052, and
   prepare closure.
   - Depends on: T008
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
@@ -465,29 +465,49 @@ preserve dependency order and record overlap before parallel work.
     `not-covered` row or unowned residual remains; and closure metadata identifies
     implementation and cleanup commits truthfully.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Phase 5 acceptance complete: final focused suites and 80-file/749-test full suite pass; typecheck, plugin/skill, 0.6.0/240-entry package, install, isolated launch, installed two-client, lifecycle, Markdown, and diff gates pass; all 15 promotion targets changed; EB052 closed and EB014 remains separate; actual tagged v0.5.2 blocks on the owner-gated v2 retirement guard; startup ownership is atomic; independent review has no implementation blocker; closure plan ec942aad7aa4 will render truthful final/cleanup commit metadata after this final spec commit.
   - Expected evidence: Record typecheck, full tests, plugin/skill/package gates,
     install and MCP-launch smokes, installed-package acceptance, lifecycle,
     Markdown, diff, promotion, review, closure, and archive-index outcomes.
-  - [ ] T009.1 Run and record every focused, full, plugin, skill, pack, install,
+  - Status: Phase 5 promotion, compatibility remediation, validation, review, and closure preparation complete.
+  - [x] T009.1 Run and record every focused, full, plugin, skill, pack, install,
     launcher, installed-package, lifecycle, Markdown, and diff gate.
     - Acceptance: Each command has an exact outcome and any exception has an
       owned residual destination.
     - Evidence mode: validation
-    - Evidence: Pending.
-  - [ ] T009.2 Promote verified behavior, migration/rollback, support, and proof
+    - Evidence: Final Phase 5 gates passed: four focused acceptance groups reported 51, 44, 44, and 23 tests; final graph-store and daemon suites reported 36 and 46; pnpm test reported 80 files/749 tests; typecheck, plugin, six-skill validation, 0.6.0/240-entry pack dry-run, install smoke, isolated MCP-launch smoke, and installed-package two-client smoke passed. All 15 changed Markdown docs had no non-table findings and git diff --check passed.
+  - Status: All focused, full, package, installed, Markdown, and diff gates complete.
+  - [x] T009.2 Promote verified behavior, migration/rollback, support, and proof
     to every exact durable target or record a reasoned no-op.
     - Acceptance: Canonical docs and runbooks match implemented behavior and do
       not overclaim source, installed-bin, provider-labelled, or real-CLI proof.
     - Evidence mode: artifact
-    - Evidence: Pending.
-  - [ ] T009.3 Reconcile EB052, EB014, traceability, review findings, closure
+    - Evidence: All 15 promotion candidates changed. Canonical design/contracts/requirements/proof docs and install/plugin/package support docs now match daemon-owned generations, leases, finite settlement, atomic publication, exact v2 migration/rollback/legacy guard behavior, proof boundaries, unreleased 0.6.0 availability, and the independent EB014 scale boundary. No reasoned no-op was required.
+  - Status: Durable promotion complete across every planned destination.
+  - [x] T009.3 Reconcile EB052, EB014, traceability, review findings, closure
     commits, and archive metadata.
     - Acceptance: No `not-covered` row, unowned residual, or untruthful commit
       claim remains.
     - Evidence mode: artifact
-    - Evidence: Pending.
+    - Evidence: EB052 is closed by Spec 041 and routes to durable docs; EB014 remains independently scoped. Traceability has no pending implementation row. Independent Phase 5 review has no implementation blocker after all findings were remediated. Lifecycle closure plan ec942aad7aa4 selected removed disposition with closure-log/archive rendering followed by package cleanup; the final implementation and cleanup hashes will be written by the post-commit closure actions because the package cannot truthfully contain its own removal commit.
+  - Status: Backlog, review, traceability, and removed-package closure plan are reconciled; hash resolution remains the post-commit lifecycle action.
+  - [x] T009.4 Remediate closure-review compatibility and startup-ownership
+    gaps discovered during Phase 5.
+    - Files: `src/infrastructure/sqlite/graph-store-location.ts`,
+      `src/infrastructure/sqlite/graph-store.ts`, `src/server.ts`,
+      `src/mcp/daemon.ts`, `tests/fixtures/legacy-v0.5.2-graph-store.ts`,
+      `tests/graph/store.test.ts`, `tests/mcp/daemon-launch.test.ts`, package and
+      plugin version manifests, and package validation.
+    - Acceptance: Schema identity v2 is inaccessible to the actual tagged
+      v0.5.2 adapter; legacy retirement is owner-gated, atomic,
+      crash-recoverable, bounded-memory, and rollback-safe; startup-lock
+      publication is atomic and exception-safe; 0.6.0 is explicitly unreleased
+      while install links remain on released 0.5.2; and focused regressions plus
+      the tagged-adapter probe pass without retry or fallback behavior.
+    - Evidence mode: validation
+    - Evidence: Closure review remediation passed: schema identity v2 uses graph-v2.sqlite; owner-gated retirement preserves graph-v1.sqlite.pre-v2 and atomically guards graph.sqlite; the actual tagged v0.5.2 adapter exited 1 with SQLITE_NOTADB; startup-lock publication and release are atomic/exception-safe; graph-store tests passed 36/36, daemon launch/entrypoint tests passed 46/46, typecheck passed, and unreleased 0.6.0 package/plugin identities validate while install links remain released 0.5.2.
 
+  - Status: Compatibility, startup ownership, and release-identity remediation complete.
 ## Execution Rules
 
 - Read all seven package artifacts before implementation; do not implement from

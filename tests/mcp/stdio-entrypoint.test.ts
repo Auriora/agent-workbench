@@ -1570,7 +1570,7 @@ async function buildExpectedVerificationPlanEnvelope(input: { fixtureRoot: strin
 function graphStorePath(repoRoot: string): string {
   const cacheDir = path.join(repoRoot, ".cache", "agent-workbench");
   fs.mkdirSync(cacheDir, { recursive: true });
-  return path.join(cacheDir, "graph.sqlite");
+  return path.join(cacheDir, "graph-v2.sqlite");
 }
 
 function normalizeFixturePaths<T>(value: T, sourceRoot: string, targetRoot: string): T {

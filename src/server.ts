@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import fs from "node:fs";
 import path from "node:path";
 import { applyWorkspaceEdit } from "./application/use-cases/apply-workspace-edit.js";
 import {
@@ -68,6 +67,10 @@ import {
 } from "./infrastructure/runtime/repository-ownership.js";
 import { StartupGraphRefreshExecutor } from "./infrastructure/runtime/startup-graph-refresh-executor.js";
 import { openGraphStore, SCHEMA_VERSION, type GraphStore } from "./infrastructure/sqlite/index.js";
+import {
+  graphStorePath,
+  retireLegacyGraphStore
+} from "./infrastructure/sqlite/graph-store-location.js";
 import {
   createTelemetryAdapter,
   telemetryConfigFromEnv
@@ -709,7 +712,9 @@ function createStandaloneRefreshAuthority(input: {
       heartbeat_at: input.clock.nowIso8601()
     },
     prepare_controller: async (admission) => {
-      const result = await (await input.graphStore()).reconcileOrphanedBuilds({
+      const store = await input.graphStore();
+      retireLegacyGraphStore(input.databasePath);
+      const result = await store.reconcileOrphanedBuilds({
         repo_root: input.repoRoot,
         current_owner: admission.lease,
         recovered_owners: admission.recovered_owners,
@@ -777,11 +782,7 @@ function watcherFreshnessFromQueueResult(
   };
 }
 
-export function graphStorePath(repoRoot: string): string {
-  const cacheDir = path.join(repoRoot, ".cache", "agent-workbench");
-  fs.mkdirSync(cacheDir, { recursive: true });
-  return path.join(cacheDir, "graph.sqlite");
-}
+export { graphStorePath } from "./infrastructure/sqlite/graph-store-location.js";
 
 export function repositoryOwnershipPath(databasePath: string): string {
   return path.join(path.dirname(databasePath), "refresh-owner.json");

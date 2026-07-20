@@ -3,7 +3,7 @@ title: Runtime requirements
 doc_type: requirements
 status: draft
 owner: platform
-last_reviewed: 2026-07-05
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -82,8 +82,38 @@ workflow designers.
 ## Operational Requirements
 
 - Runtime status must expose cold, refreshing, stale, and valid analysis states.
-- Index rebuilds must use locks, temporary databases, validation, and atomic
-  replacement.
+- One daemon-scoped controller, watcher/change queue, repository ownership
+  lease, activity lease, finite worker deadline, and executor must own refresh
+  for each repository. Connection-specific sessions share its narrow request
+  and awaited-diagnostics ports; standalone uses the same controller only after
+  successful ownership admission.
+- Startup, stale first reads, and watcher batches must advance or join one
+  monotonic invalidation generation. Planned/running requests reuse one
+  execution, and a newer generation causes one sequential catch-up without
+  parallel writers or automatic failure retry.
+- Entering `planned` must acquire controller activity before admission returns.
+  Disconnect cannot cancel it; idle shutdown must recheck both zero clients and
+  no active or termination-quarantined work.
+- Index rebuilds must use repository ownership, building snapshots, generation
+  fences, finite worker execution, and one atomic transition to published.
+  Building, superseded, and failed snapshots remain invisible, and prior
+  published evidence remains selected through failure or crash recovery.
+- Publication, freshness, and evidence coverage are independent. A completed
+  bounded scan may be fresh and published with partial coverage; EB014 owns
+  large-repository completion, incremental indexing, throughput, and deadline
+  tuning beyond current bounds.
+- Refresh diagnostics must come from one awaited authority and identify
+  controller/diagnostic revisions, worker invocation count, execution and
+  invalidation generations, target/visible snapshots, publication/freshness,
+  activity/termination state, and bounded structured failure. Invalid evidence
+  must lower top-level trust.
+- Publication migration must seed the schema-identity-v2 store without
+  mutating v1, transactionally classify legacy rows, and retire the v0.5.2
+  canonical path only after owner admission and v2 readiness. A durable v1
+  rollback artifact plus an atomically published non-SQLite guard must make the
+  actual older adapter block. Rollback requires stopped owners plus
+  pre-migration restore or the documented derived-store rebuild; in-place
+  downgrade is not supported.
 - Missing parser, LSP, or ecosystem tooling must be reported as degraded
   capability with explicit next actions.
 - Runtime output must be compact by default and include source sections only

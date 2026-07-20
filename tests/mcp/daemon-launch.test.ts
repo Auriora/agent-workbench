@@ -12,6 +12,7 @@ import {
   DAEMON_PROTOCOL_VERSION,
   classifyDaemonState,
   connectOrStartDaemon,
+  createDaemonStartupLock,
   createDaemonIdentity,
   daemonStartupRefreshDelayMsFromEnv,
   DaemonRefreshLifetimeCoordinator,
@@ -845,6 +846,69 @@ describe("Agent Workbench daemon launcher", () => {
 
       expect(starts).toBe(0);
       expect(fs.readFileSync(paths.startupLockPath, "utf8")).toBe("not-json\n");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("atomically publishes one complete startup owner and checks ownership before release", () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-lock-atomic-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+    let winner: { release: () => void } | undefined;
+
+    try {
+      expect(() => createDaemonStartupLock(paths.startupLockPath, {
+        before_claim: () => {
+          winner = createDaemonStartupLock(paths.startupLockPath);
+        }
+      })).toThrow(/EEXIST/);
+
+      const published = JSON.parse(fs.readFileSync(paths.startupLockPath, "utf8")) as {
+        pid?: unknown;
+        created_at?: unknown;
+        token?: unknown;
+      };
+      expect(published).toMatchObject({
+        pid: process.pid,
+        created_at: expect.any(String),
+        token: expect.any(String)
+      });
+      expect(Date.parse(published.created_at as string)).not.toBeNaN();
+      expect((published.token as string).length).toBeGreaterThan(0);
+      expect(fs.readdirSync(paths.metadataDir).filter((name) => name.endsWith(".candidate"))).toEqual([]);
+
+      fs.rmSync(paths.startupLockPath);
+      const replacement = createDaemonStartupLock(paths.startupLockPath);
+      winner?.release();
+      expect(fs.existsSync(paths.startupLockPath)).toBe(true);
+      replacement.release();
+      expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+
+      const corruptedOwner = createDaemonStartupLock(paths.startupLockPath);
+      fs.writeFileSync(paths.startupLockPath, "not-json\n");
+      corruptedOwner.release();
+      expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+    } finally {
+      winner?.release();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("removes its candidate when startup-lock persistence fails", () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-lock-write-failure-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+
+    try {
+      expect(() => createDaemonStartupLock(paths.startupLockPath, {
+        persist_candidate: (fd, serialized) => {
+          fs.writeFileSync(fd, serialized);
+          throw new Error("injected startup-lock persistence failure");
+        }
+      })).toThrow("injected startup-lock persistence failure");
+      expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+      expect(fs.readdirSync(paths.metadataDir).filter((name) => name.endsWith(".candidate"))).toEqual([]);
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }

@@ -15,9 +15,9 @@ license: GPL-3.0-or-later
 
 Planning coverage records whether design, bounded tasks, verification, and
 durable destinations are sufficient for implementation. It is not implementation
-evidence. Implementation and property rows remain `not-covered` until code and
-executed evidence exist. Parent task rows express lifecycle sequencing; the
-explicit child tasks in `tasks.md` are the bounded implementation handoffs.
+evidence. The completed rows below are backed by the executed receipts in
+`verification.md`. Parent task rows express lifecycle sequencing; the explicit
+child tasks in `tasks.md` are the bounded implementation handoffs.
 
 | Requirement | Priority | Acceptance Criteria | Design Sections | Tasks | Verification | Durable Targets | Coverage State | Residual Destination |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -55,6 +55,7 @@ explicit child tasks in `tasks.md` are the bounded implementation handoffs.
 | T007 | Requirement 3; Requirement 4; Requirement 5; Requirement 6 | AC3.4-AC3.6; AC4.4-AC4.6; AC5.1-AC5.6; AC6.4-AC6.6 | CP-003, CP-006, CP-008-CP-009 | Failure Behavior; Repository Ownership And Crash Reconciliation; Snapshot Publication | crash/resource recovery | V004, V008, V010-V011 | `docs/design/runtime-operations-design.md`; `docs/design/graph-store-design.md`; `docs/reference/runtime-contracts.md` | positive dead-owner evidence; invisible orphan builds; cleanup exactly once |
 | T008 | Requirement 1; Requirement 2; Requirement 3; Requirement 4; Requirement 5; Requirement 6 | AC1.1-AC1.6; AC2.1-AC2.6; AC3.1-AC3.6; AC4.1-AC4.6; AC5.1-AC5.6; AC6.1-AC6.6 | CP-001-CP-009 | Validation Strategy; Data Flow | source and installed-package acceptance | V002, V007-V010, V019-V021 | `docs/reference/mvp-proof-matrix.md`; `docs/runbooks/install-agent-workbench.md`; `docs/runbooks/codex-agent-workbench-plugin.md`; `packaging/agent-workbench/README.md` | installed bin proof is distinct from source entrypoint and real CLI proof |
 | T009 | Requirement 1; Requirement 2; Requirement 3; Requirement 4; Requirement 5; Requirement 6 | AC1.1-AC1.6; AC2.1-AC2.6; AC3.1-AC3.6; AC4.1-AC4.6; AC5.1-AC5.6; AC6.1-AC6.6 | CP-001-CP-009 | Durable Promotion Targets; Validation Strategy | Promotion Targets; Out-Of-Scope Destinations | V012-V021 plus completed focused evidence | exact paths in Promotion Trace | no closure with unpromoted truth, unowned residual, or EB014 scope absorption |
+| T009.4 | Requirement 4; Requirement 5; Requirement 6 | AC4.5-AC4.6; AC5.4-AC5.6; AC6.1-AC6.6 | CP-004, CP-006, CP-008-CP-009 | Persistence Migration And Rollback; Repository Ownership And Crash Reconciliation; Validation Strategy | graph-store identity; startup ownership; package identity | V008, V010-V016, V019-V021 | `docs/design/graph-store-design.md`; `docs/reference/runtime-contracts.md`; `docs/runbooks/install-agent-workbench.md`; `packaging/agent-workbench/README.md` | actual tagged v0.5.2 block; owner-gated atomic retirement; atomic startup lock; unreleased 0.6.0 identity |
 
 ## Design To Implementation Matrix
 
@@ -67,7 +68,8 @@ explicit child tasks in `tasks.md` are the bounded implementation handoffs.
 | authoritative diagnostics and redaction | contracts, health use case, presenter, daemon binding | T006 | covered by Phase 3 implementation receipt |
 | crash/orphan/resource recovery | daemon owner recovery, controller, worker/store cleanup | T007 | covered by Phase 4 recovery receipt |
 | source and installed-package acceptance | MCP entrypoint fixtures and CI smoke scripts | T008 | covered by Phase 4 installed acceptance receipt |
-| durable promotion and closure | exact destinations below | T009 | not-covered |
+| durable promotion and closure | exact destinations below | T009 | covered by Phase 5 promotion, EB052 reconciliation, and lifecycle closure receipts |
+| Phase 5 compatibility and startup-ownership remediation | graph-store identity/retirement, daemon startup lock, package identities | T009.4 | covered by tagged v0.5.2 probe, deterministic failure/crash fixtures, and final integrated gates |
 
 ## Open Decision Impact
 
@@ -94,9 +96,9 @@ T008 -> T009
 
 ## Promotion Trace
 
-T009 must reconcile every `not-covered` row, record exact command/artifact
-evidence in `verification.md`, and promote verified truth to the applicable
-exact destinations:
+T009 reconciles every pending implementation row, records exact
+command/artifact evidence in `verification.md`, and promotes verified truth to
+the applicable exact destinations:
 
 - `docs/design/runtime-operations-design.md`
 - `docs/design/graph-store-design.md`

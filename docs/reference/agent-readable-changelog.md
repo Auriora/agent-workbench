@@ -3,7 +3,7 @@ title: Agent-readable changelog
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -25,6 +25,72 @@ Each version or dated entry should include:
 - Contract changes
 - Required agent behavior changes
 - Migration notes
+
+## 2026-07-20: Daemon-Owned Refresh Convergence
+
+### Agent-Visible Changes
+
+- All MCP sessions for one canonical repository now observe one daemon-owned
+  refresh controller, watcher queue, graph store, activity lease, and worker.
+- A stale first read or watcher event requests executable refresh work even
+  when it comes from a non-startup client. Disconnecting that client does not
+  strand the work.
+- Integration health reports authoritative execution, generation,
+  target/visible snapshot, publication, freshness, activity, worker invocation,
+  and bounded failure evidence. `scheduled` is no longer a canonical warm-up
+  state.
+- Replacement publication is atomic. Readers retain the prior published
+  snapshot until the complete replacement becomes visible; failed,
+  superseded, and recovered orphan builds remain invisible.
+
+### Contract Changes
+
+- Refresh execution uses `idle`, `planned`, `running`, `complete`, or `failed`.
+  Planned/running states hold the daemon activity lease; complete and failed
+  states release it.
+- Snapshot publication uses `building`, `published`, `superseded`, or `failed`
+  independently of watcher freshness and evidence-class coverage.
+- `last_failure` remains bounded and redacted through a later attempt and
+  clears only after successful publication. Diagnostics and failure callbacks
+  do not retry automatically.
+- The graph schema now records publication lifecycle. Migration preserves
+  legacy non-refreshing snapshots as published and makes legacy refreshing
+  snapshots failed and invisible.
+- The unreleased `0.6.0` runtime uses `graph-v2.sqlite`. After repository-owner
+  admission it preserves `graph-v1.sqlite.pre-v2` and atomically guards the old
+  `graph.sqlite` path, so the actual released v0.5.2 adapter blocks instead of
+  opening a behaviorally incompatible store.
+
+### Required Agent Behavior Changes
+
+- Re-read `repo:///status` after stale-path evidence; do not look for a manual
+  refresh tool. A later ordinary stale read may request one successor after a
+  failure, while health reads alone never trigger retry.
+- Treat the prior visible snapshot as non-fresh evidence while execution is
+  planned or running. Require matching complete/published target and visible
+  identities before claiming convergence.
+- Do not remove graph, WAL/SHM, socket, metadata, or ownership files when owner
+  evidence is live or ambiguous. Orphan recovery is runtime-owned and requires
+  positive dead-owner evidence.
+- Keep source-entrypoint, installed-bin, provider-labelled client, and real CLI
+  proof distinct. Provider labels do not prove Codex or Claude Code loaded the
+  plugin.
+
+### Migration Notes
+
+- Older runtimes block on the non-SQLite legacy guard before reading or writing.
+  Rollback requires all owners to stop, followed by restoration of a known
+  complete pre-migration cache or recoverable quarantine of the whole derived
+  cache so the older runtime can rebuild. The runtime retains
+  `graph-v1.sqlite.pre-v2` for recovery provenance, but operators must not use
+  it to overwrite the live guard in place. In-place downgrade and ad hoc
+  database deletion are unsupported.
+- The installed-package acceptance test uses a real isolated tarball and bin,
+  two provider-labelled sessions, exact surviving graph/docs hits, and deleted
+  evidence absence. It deliberately records that no real agent CLI ran.
+- Current file, extraction, retention, query, and finite deadline bounds remain
+  in force. Large-repository throughput, incremental indexing, and deadline
+  tuning remain EB014.
 
 ## 2026-07-19: Provider-Aware Integration Health
 

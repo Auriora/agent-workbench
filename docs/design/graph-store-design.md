@@ -3,7 +3,7 @@ title: Graph store design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -46,7 +46,7 @@ validate and persist through graph ports.
 | Node writer | Persist symbols, file outlines, and resource-backed nodes | adapter output | `nodes` rows |
 | Edge writer | Persist relationships with confidence and provenance | resolver output | `edges` rows |
 | Reference store | Retain unresolved references for later resolution and caveats | adapter output | `unresolved_refs` rows |
-| Snapshot manager | Track repo/config identity and freshness | sync events, config | `snapshots` rows |
+| Snapshot manager | Track repo/config identity, publication, generation, and freshness | refresh controller, sync events, config | `snapshots` rows |
 | FTS indexer | Index names, qualified names, signatures, and selected non-secret text | selected graph rows | FTS tables and search results |
 | Docs FTS indexer | Index Markdown path, title, headings, and bounded selected body text | cataloged Markdown docs | `docs_documents`, `docs_headings`, and `docs_fts` rows |
 
@@ -60,6 +60,8 @@ MVP graph ports:
   incoming/outgoing edges, and bounded traversal.
 - `SnapshotPort`: reports and updates cold, refreshing, stale, and fresh
   snapshot state.
+- `SnapshotPublicationPort`: allocates `building` snapshots, reads published
+  selection, and performs generation-fenced terminal publication transitions.
 - `GraphTransactionPort`: commits stale cleanup, extraction writes, reference
   resolution writes, FTS refresh, and snapshot updates atomically.
 
@@ -99,13 +101,40 @@ watcher or scan event
   confidence, and metadata.
 - `unresolved_refs`: source node, reference name, reference kind, file, range,
   and candidate metadata.
-- `snapshots`: repo/config identity, created_at, freshness, and schema version.
+- `snapshots`: repo/config identity, created_at, freshness, schema version,
+  publication state, controller generation, invalidation generation, and
+  publication update time.
 - `docs_documents`: snapshot id, repo-relative Markdown path, title, content
   hash, byte count, indexed-at timestamp, and selected-text truncation flag.
 - `docs_headings`: document id, stable heading id, heading text, depth, and
   line number.
 - `docs_fts`: SQLite FTS5 virtual table over docs path, title, headings text,
   and bounded selected body text.
+
+## Snapshot Publication
+
+Publication is independent of freshness and evidence-class coverage:
+
+- `building` accepts snapshot-local catalog, graph, unresolved-reference,
+  documentation, heading, FTS, and coverage writes but is not selectable;
+- `published` is visible after the one generation-fenced atomic transition;
+- `superseded` records an unpublished pass overtaken by a newer invalidation;
+- `failed` records an unpublished build or publication failure.
+
+Ordinary latest selection considers only `published` rows. Explicit snapshot-id
+reads return a structured unpublished result for the other states and never
+expose their rows. The previous published snapshot remains visible throughout a
+replacement build and after failure. A published snapshot may be watcher-clean
+and `fresh` while a bounded evidence class remains `partial`; publication does
+not claim complete graph coverage.
+
+The controller allocates the building snapshot with its controller and
+invalidation generations. Final transition compares those generations and the
+expected `building` state, so stale owners or passes cannot publish. If a newer
+generation arrives before publication, the pass becomes `superseded` and the
+controller runs one sequential catch-up. Required catalog, graph, unresolved
+reference, docs, heading, FTS, and coverage writes complete before the atomic
+transition to `published`.
 
 Post-MVP tables such as `tests`, `attention_items`, `usage_events`, and report
 caches should be added only when a concrete query requires relational storage.
@@ -129,6 +158,10 @@ caches should be added only when a concrete query requires relational storage.
   derived evidence tied to snapshot freshness.
 - Metadata fields must be typed JSON with schema-versioned interpretation.
 - FTS rows are refreshed in the same transaction as node writes when possible.
+- Evidence writes are accepted only for `building` snapshots. Published,
+  superseded, and failed rows are terminal and immutable.
+- Retention and pruning preserve the previously selected publication while a
+  replacement is building and never promote an unpublished row.
 
 Docs FTS input is not limited to the bounded graph seed scan. Repository warm-up
 must populate docs rows from a docs/config priority scan, including front-door
@@ -206,6 +239,10 @@ traversal-depth caps.
   for hot reads. A drained watcher cannot prove that persisted paths deleted
   before watcher startup still exist.
 - Stale rows must be labeled in downstream MCP responses.
+- A failed, superseded, or orphaned replacement never replaces the prior
+  published selection. Positive dead-owner evidence may atomically mark all
+  matching orphaned `building` snapshots failed; ambiguous ownership blocks
+  reconciliation.
 - A watcher-clean snapshot means the watcher queue is drained, no refresh is in
   progress, scope is synchronized, and root ignore-file rules have not changed
   since the snapshot began.
@@ -217,6 +254,34 @@ traversal-depth caps.
   a fresh claim.
 - Readers during rebuild must either see the previous valid database or a
   `refreshing`/`cold` state, never a partial replacement.
+
+### Publication Migration And Rollback
+
+Schema identity v2 uses `.cache/agent-workbench/graph-v2.sqlite`; it never
+migrates the v0.5.2 `graph.sqlite` in place. On first v2 open, a transactionally
+consistent SQLite seed is created from v1 and claimed at the versioned path by
+one atomic hard link before migration. Concurrent opens reuse the one claimed
+seed. Existing snapshots whose freshness is not `refreshing` become
+`published`; legacy `refreshing` rows become `failed` and remain invisible. Publication columns and
+schema version advance in the v2 transaction, and any failure leaves v1
+untouched and cleans temporary `.seed-*` files. A canonical v2 seed that was
+already atomically installed at the v2 path remains a retryable v1 copy until
+its transactional migration succeeds.
+
+After v2 readiness and repository ownership are proven, the runtime checkpoints
+v1, publishes the rollback artifact `graph-v1.sqlite.pre-v2`, and
+atomically replaces canonical `graph.sqlite` with a fsynced non-SQLite guard.
+The actual v0.5.2 adapter therefore blocks with `SQLITE_NOTADB` rather than
+reading or mutating v2 or serving a divergent v1 store. Retirement re-entry is
+idempotent after the backup or guard boundary; a conflicting backup blocks.
+
+Supported rollback requires every owner to stop, followed by restoration from
+a known complete pre-migration cache or recoverable quarantine of the whole
+derived cache and rebuild by the older runtime. The artifact is retained for
+recovery provenance, but the operator runbook does not support overwriting the
+live guard in place. In-place downgrade or ad hoc deletion while an owner may
+be live is unsupported. Artifact size, copy duration, and progress at
+large-repository scale remain EB014 work.
 
 ## Documentation Currency Evidence
 

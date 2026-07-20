@@ -64,6 +64,65 @@ on Linux/macOS). The plugin shim reads that pointer (or the
 `AGENT_WORKBENCH_INSTALL_ROOT` override) to find the in-place runtime — nothing
 is copied to a prefix.
 
+Every installed launcher for one canonical repository connects to one
+repository daemon. That daemon owns the refresh controller, watcher queue,
+graph store, activity lease, and sole refresh worker independently of any one
+client connection. Stale first reads and watcher events request this path
+automatically; the package does not expose a manual refresh command, retry
+loop, provider branch, or alternate indexer.
+
+This convergence behavior describes the current unreleased `0.6.0` package.
+The install command above intentionally remains on the latest released
+`0.5.2`; it does not obtain this behavior until v0.6.0 is published.
+
+Snapshot replacement is transactional. Readers retain the prior published
+snapshot until the replacement's file, graph, unresolved-reference, docs,
+heading, FTS, and coverage writes are complete. Failed, superseded, and
+orphaned builds remain invisible. Publication is separate from freshness and
+coverage, so a published watcher-clean snapshot may still report bounded
+partial evidence-class coverage.
+
+Schema identity v2 seeds `graph-v2.sqlite` without mutating v0.5.2
+`graph.sqlite`, then classifies legacy non-refreshing rows as published and
+legacy refreshing rows as failed. After owner admission, it preserves
+`graph-v1.sqlite.pre-v2` and atomically guards `graph.sqlite`; the actual v0.5.2
+adapter blocks on that non-SQLite guard. Rollback is not an in-place downgrade:
+stop every owner, then restore a known complete pre-migration cache or move the
+whole generated `.cache/agent-workbench` directory to a recoverable backup
+before allowing the older runtime to rebuild from repository source. The
+retained v1 artifact is recovery provenance, not permission to overwrite the
+live guard. Never delete individual
+database, WAL/SHM, socket, metadata, or ownership files while owner evidence is
+live or ambiguous. The exact operator procedure is in the
+[install runbook](../../docs/runbooks/install-agent-workbench.md#upgrade-rollback-and-schema-compatibility).
+
+## Package acceptance boundary
+
+Run the complete package checks from a source checkout:
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm run validate:plugin
+pnpm run validate:skills
+pnpm pack:dry-run
+node scripts/ci/install-smoke.mjs
+node scripts/ci/mcp-launch-smoke.mjs
+CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs
+```
+
+`install-smoke.mjs` and `mcp-launch-smoke.mjs` are checkout/package-shape
+checks. `installed-package-mcp-smoke.mjs` creates a real tarball, installs it
+into isolated runtime and state roots, invokes that installation's
+`agent-workbench-mcp` bin, and checks one-daemon convergence with exact
+surviving reference/docs hits and deleted-evidence absence.
+
+Its Codex- and Claude-labelled MCP sessions establish provider-neutral daemon
+behavior only. They are not evidence that the real Codex or Claude Code CLIs
+discovered or invoked the plugin; live CLI proof must be collected separately.
+Large-repository convergence outside current bounds remains EB014 rather than a
+package fallback or second execution path.
+
 ## Contracts
 
 - `npm-package.json` — the npm package contract (`@auriora/agent-workbench`,

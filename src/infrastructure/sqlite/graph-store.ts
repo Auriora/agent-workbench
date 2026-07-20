@@ -4,6 +4,10 @@
  */
 
 import Database from "better-sqlite3";
+import {
+  GRAPH_STORE_IDENTITY_VERSION,
+  seedVersionedGraphStore
+} from "./graph-store-location.js";
 import type {
   ExtractionBatch,
   FileCatalogEntry,
@@ -47,7 +51,7 @@ import type {
   SnapshotPort
 } from "../../ports/index.js";
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = GRAPH_STORE_IDENTITY_VERSION;
 
 const SNAPSHOT_SELECT_COLUMNS = `
   SELECT id, repo_identity, config_identity, freshness, schema_version, created_at,
@@ -2489,6 +2493,7 @@ function slugifyDocsHeading(value: string): string {
 }
 
 export function openGraphStore(databasePath: string, options: GraphStoreOptions = {}): GraphStore {
+  seedVersionedGraphStore(databasePath);
   return new SqliteGraphStoreAdapter(databasePath, options);
 }
 

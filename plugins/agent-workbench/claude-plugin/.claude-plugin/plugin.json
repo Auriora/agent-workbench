@@ -1,7 +1,7 @@
 {
   "name": "agent-workbench",
   "displayName": "Agent Workbench",
-  "version": "0.5.2",
+  "version": "0.6.0",
   "description": "Use Agent Workbench MCP for repository status, scoped context, symbol navigation, edit planning, and validation planning.",
   "author": {
     "name": "Auriora"

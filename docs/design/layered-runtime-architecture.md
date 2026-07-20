@@ -3,7 +3,7 @@ title: Layered runtime architecture
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-11
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -115,9 +115,10 @@ other external tools.
   capture, and result presentation are separate responsibilities.
 - Reports consume graph read models through reporting ports; they do not query
   raw SQLite tables directly.
-- Warm-up, caching, queues, workers, and cancellation are infrastructure
-  concerns behind operation ports. Presentation and MCP adapters never manage
-  cache state or background work directly.
+- Refresh policy is an application/runtime service behind narrow operation
+  ports. Worker, SQLite, watcher, timer, process, socket, and lock mechanics are
+  infrastructure concerns. Presentation and MCP adapters never manage cache or
+  background state directly.
 - `RuntimeContext` carries per-call repo identity, workspace identity,
   snapshot/freshness, budget/deadline, cancellation, observability span, and
   optional usage context. Use cases receive context explicitly.
@@ -147,6 +148,28 @@ Architecture tests enforce these decisions: application code must not import
 There are no current intentional exceptions for these rules.
 
 ## Core Ports
+
+Refresh convergence uses one provider-neutral port family:
+
+- `SnapshotRefreshPort` admits startup, first-read, and watcher generations;
+- `SnapshotRefreshControllerPort` exposes the shared controller receipt and
+  transition subscription used for daemon lifetime;
+- `SnapshotRefreshDiagnosticsPort` provides the single awaited public-health
+  authority;
+- `SnapshotRefreshAdmissionFailurePort` records structured pre-execution store,
+  permission, and orphan-recovery failures;
+- `SnapshotPublicationPort` owns building allocation, published selection, and
+  generation-fenced terminal transitions;
+- `RefreshExecutorPort` and `RefreshDeadlineSchedulerPort` isolate the bounded
+  worker protocol and finite deadline.
+
+The daemon composition root owns one controller, watcher/change queue,
+repository ownership lease, activity lifetime coordinator, publication adapter,
+and worker executor, then injects the same request and diagnostics ports into
+every connection-specific server. Standalone composition uses the same
+controller only behind successful ownership admission. Use cases depend on
+these ports; MCP adapters, presenters, and provider integrations cannot import
+the controller, graph store, watcher, worker, or ownership implementation.
 
 MVP ports:
 

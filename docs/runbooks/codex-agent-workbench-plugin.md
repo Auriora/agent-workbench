@@ -3,7 +3,7 @@ title: Codex Agent Workbench plugin and MCP setup
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-06-13
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -152,6 +152,80 @@ may expose different prefixes for the same Agent Workbench surfaces.
 The plugin should not create a host-level Agent Workbench MCP block in
 `~/.codex/config.toml`. The supported Codex path is the plugin-bundled
 `.mcp.json` launching the npm-installed runtime through `mcp-launch.mjs`.
+
+## Refresh Ownership And Diagnosis
+
+This section describes the current unreleased `0.6.0` implementation. The
+latest released `0.5.2` package does not yet contain daemon-owned refresh
+convergence.
+
+The Codex connection does not own a private refresh coordinator. Every MCP
+connection for the same canonical repository uses one daemon-owned controller,
+watcher queue, graph store, activity lease, and refresh worker. Startup,
+first-read deleted-path detection, and watcher invalidation all request that
+same provider-neutral path. Closing the requesting Codex session does not
+cancel active work.
+
+Use `repo:///status` for normal task-facing freshness. Use
+`integration:///health/agent-workbench` only when diagnosing the shared daemon:
+
+- `warmup_state` is one of `idle`, `planned`, `running`, `complete`, or
+  `failed`; `scheduled` is not a canonical state.
+- A planned/running execution holds `activity_lease_held` and keeps the prior
+  published snapshot visible until atomic replacement publication.
+- A complete execution has a published target matching
+  `visible_snapshot_id`. A failed execution keeps any existing publication
+  target failed or superseded and reports structured `last_failure`; a failure
+  before build creation can have no publication state.
+- `controller_generation`, execution/generation IDs, target/visible snapshot
+  IDs, `diagnostic_revision`, and `worker_invocations` let separate clients
+  compare the same lifecycle without joining local state.
+
+After a failed execution, make one later ordinary stale read if the repository
+still needs convergence. Do not poll health as a retry trigger: diagnostics,
+timers, and failure callbacks never schedule a successor. The controller
+coalesces changes that arrive during active work and runs only its sequential
+catch-up pass.
+
+## Recovery And Support Boundary
+
+Daemon startup may recover an unpublished orphan only when PID and ownership
+evidence positively establish that the previous owner is dead. The replacement
+marks the orphan failed and invisible, reconciles ownership, and requests
+ordinary startup convergence. It never publishes partial rows or starts a
+recovery indexer.
+
+Do not manually unlink a daemon socket or remove metadata, ownership, SQLite,
+WAL, or SHM files while an owner may be live. `owner_active` means the existing
+owner remains authoritative. `ownership_ambiguous` or another structured
+blocked result means cleanup is not safe; capture the bounded status/health
+receipt and investigate the process and endpoint identities. Follow the
+[install runbook](install-agent-workbench.md#upgrade-rollback-and-schema-compatibility)
+for the recoverable whole-cache quarantine used during an intentional runtime
+rollback. Ad hoc database deletion and in-place schema downgrade are not
+supported.
+
+Refresh retains existing file, extraction, retention, and query bounds. EB014
+continues to own large-repository warm-up throughput, incremental indexing, and
+deadline tuning.
+
+## Installation Proof Levels
+
+Keep these claims separate when reporting plugin verification:
+
+- A checkout/source entrypoint test proves repository composition, not the
+  installed package.
+- An isolated tarball install that invokes its `agent-workbench-mcp` bin proves
+  the package entrypoint, daemon, and packaged dependencies.
+- Provider-labelled MCP clients prove the shared runtime behaves identically
+  for Codex and Claude Code identities. They do not prove real CLIs discovered
+  or invoked either plugin.
+- Real Codex proof requires a newly started Codex CLI session to discover the
+  installed plugin and successfully call its Agent Workbench MCP surface.
+
+The installed-package CI smoke deliberately records that last limitation. A
+live CLI receipt must be recorded separately rather than inferred from provider
+labels.
 
 ## MCP Discoverability Metadata
 

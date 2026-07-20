@@ -2,6 +2,8 @@
   "package_name": "@auriora/agent-workbench",
   "registry": "github-release",
   "publish_status": "github-release",
+  "release_status": "unreleased",
+  "latest_released_version": "0.5.2",
   "distribution_url": "https://github.com/Auriora/agent-workbench/releases",
   "version_source": "package.json#/version",
   "plugin_version_source": "plugins/agent-workbench/.codex-plugin/plugin.json#/version",

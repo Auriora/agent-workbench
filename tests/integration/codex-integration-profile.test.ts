@@ -945,6 +945,8 @@ describe("Codex plugin artifacts", () => {
       registry: string;
       image: string;
       version: string;
+      release_status: string;
+      latest_released_version: string;
       containerfile: string;
       install_command: string;
       npm_bin: string;
@@ -979,13 +981,14 @@ describe("Codex plugin artifacts", () => {
     const workflow = fs.readFileSync(workflowPath, "utf8");
     const ciWorkflow = fs.readFileSync(ciWorkflowPath, "utf8");
     const pluginValidator = fs.readFileSync(pluginValidatorPath, "utf8");
-    const expectedInstallCommand = `npm install -g https://github.com/Auriora/agent-workbench/releases/download/v${manifest.version}/auriora-agent-workbench-${manifest.version}.tgz`;
+    const latestReleasedInstallCommand = `npm install -g https://github.com/Auriora/agent-workbench/releases/download/v${manifest.latest_released_version}/auriora-agent-workbench-${manifest.latest_released_version}.tgz`;
 
     expect(manifest).toMatchObject({
       registry: "ghcr.io",
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile: "packaging/agent-workbench/Containerfile",
-      install_command: expectedInstallCommand,
+      release_status: "unreleased",
+      install_command: latestReleasedInstallCommand,
       npm_bin: "packaging/agent-workbench/mcp-bin.mjs"
     });
     // The container build still uses pnpm; the manifest's dependency_install
@@ -1026,7 +1029,7 @@ describe("Codex plugin artifacts", () => {
     );
     expect(manifest.codex.plugin_mcp_config).toBe("plugins/agent-workbench/.mcp.json");
     expect(manifest.codex.hook_installer).toBe("scripts/install-codex-hooks.mjs");
-    expect(manifest.codex.plugin_install_model).toBe(expectedInstallCommand);
+    expect(manifest.codex.plugin_install_model).toBe(latestReleasedInstallCommand);
     expect(containerfile).toContain("FROM node:24-bookworm-slim");
     expect(containerfile).toContain("COPY src ./src");
     expect(containerfile).toContain("rm -rf src/debug");

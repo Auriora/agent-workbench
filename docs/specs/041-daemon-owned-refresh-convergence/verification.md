@@ -13,9 +13,9 @@ license: GPL-3.0-or-later
 
 ## Scope
 
-Phase 1 through Phase 4 checks are recorded below. Phase 4 establishes crash
-recovery and installed-package convergence; durable promotion and closure remain
-T009.
+Phase 1 through Phase 5 checks are recorded below. Phase 5 promotes the verified
+behavior, remediates compatibility and startup-lock gaps discovered during
+closure review, and establishes closure readiness.
 
 This record covers Requirements 1-6, CP-001-CP-009, and T001-T009 for the
 daemon-owned refresh convergence slice.
@@ -24,12 +24,12 @@ daemon-owned refresh convergence slice.
 
 | Gate | Required? | Status | Evidence |
 | --- | --- | --- | --- |
-| Requirements and correctness properties reviewed | yes | done for Phase 4 | Phase 4 evidence covers every implementation property; T009 owns final promotion reconciliation. |
-| Parent and child task acceptance and evidence complete | yes | partial | T001-T008 are complete; T009 remains pending. |
-| Focused and full automated tests pass | yes | done | Phase 4 focused suites and the 80-file full suite pass without expected failures. |
-| Package/plugin/skill gates pass | yes | done | Installed smoke, plugin, skill, and package dry-run gates pass. |
-| Durable documentation promoted | yes | pending | |
-| Lifecycle reconciliation and closure risk complete | yes | pending | |
+| Requirements and correctness properties reviewed | yes | done | Phase 5 review found and remediated the downgrade-isolation and startup-lock gaps; all AC/CP rows have executable evidence. |
+| Parent and child task acceptance and evidence complete | yes | done | T001-T009.4 acceptance is recorded below and in `tasks.md`. |
+| Focused and full automated tests pass | yes | done | Final focused compatibility/daemon suites and the 80-file/749-test full suite pass without expected failures. |
+| Package/plugin/skill gates pass | yes | done | Installed smoke, plugin, skill, 0.6.0 package dry-run, and launch gates pass. |
+| Durable documentation promoted | yes | done | All 15 promotion candidates changed; no reasoned no-op was required. |
+| Lifecycle reconciliation and closure risk complete | yes | done | Independent review has no implementation blocker; closure/archive checks are recorded in the Phase 5 receipt. |
 
 ## Focused Verification
 
@@ -147,27 +147,27 @@ pnpm exec vitest run tests/mcp/integration-health-contract.test.ts tests/mcp/int
 
 | ID | Command/check | Status |
 | --- | --- | --- |
-| V012 | `pnpm typecheck` | passed for Phase 4 |
-| V013 | `pnpm test` | passed for Phase 4: 80 files, 741 passed, no expected failures |
-| V014 | `pnpm run validate:plugin` | passed for Phase 4 |
-| V015 | `pnpm run validate:skills` | passed for Phase 4: 6 skills, 0 errors, 0 warnings |
-| V016 | `pnpm pack:dry-run` | passed for Phase 4: 239 entries |
-| V017 | spec lifecycle authoring lint/readiness for Spec 041 | passed: package lint clean; T007/T008 audits pass; T009 is dependency-ready with no coverage gaps |
-| V018 | Markdown set check and `git diff --check` | passed for Phase 4; Markdown checks reported only table-readability warnings |
-| V019 | `node scripts/ci/install-smoke.mjs` | passed for Phase 4 |
-| V020 | `node scripts/ci/mcp-launch-smoke.mjs` | passed for Phase 4 |
-| V021 | real `npm pack`, isolated install, and installed-bin two-client acceptance | passed for Phase 4 |
+| V012 | `pnpm typecheck` | passed for final Phase 5 tree at 0.6.0 |
+| V013 | `pnpm test` | passed: 80 files, 749 tests, no expected failures |
+| V014 | `pnpm run validate:plugin` | passed; released/install and unreleased/runtime identities are consistent |
+| V015 | `pnpm run validate:skills` | passed: 6 skills, 0 errors, 0 warnings |
+| V016 | `pnpm pack:dry-run` | passed: unreleased 0.6.0, 240 entries |
+| V017 | spec lifecycle authoring lint/readiness for Spec 041 | passed: package lint, task audit, stage readiness, closure risk, and closure check recorded in Phase 5 receipt |
+| V018 | Markdown checks and `git diff --check` | passed; only non-blocking table-readability findings remain |
+| V019 | `node scripts/ci/install-smoke.mjs` | passed on Linux |
+| V020 | `node scripts/ci/mcp-launch-smoke.mjs` | passed against an isolated repository root; initial current-repo run correctly blocked on the live v0.5.2 daemon identity |
+| V021 | real `npm pack`, isolated install, and installed-bin two-client acceptance | passed for unreleased 0.6.0 with exact query, identity, convergence, and cleanup receipts |
 
 ## Requirement Coverage
 
 | Requirement | Criteria | Evidence | Residual risk |
 | --- | --- | --- | --- |
-| Requirement 1 | AC1.1-AC1.6 | Phase 1-4 controller, daemon, trigger, and installed-convergence receipts | implementation complete; T009 durable promotion/closure remains |
-| Requirement 2 | AC2.1-AC2.6 | Phase 1-4 lifetime, disconnect, watcher, crash, and installed receipts | implementation complete; T009 durable promotion/closure remains |
-| Requirement 3 | AC3.1-AC3.6 | Phase 1-4 diagnostics, state-matrix, redaction, recovery, and installed receipts | implementation complete; T009 durable promotion/closure remains |
-| Requirement 4 | AC4.1-AC4.6 | Phase 1-4 publication, migration, crash-barrier, and exact-query receipts | implementation complete; T009 durable promotion/closure remains |
-| Requirement 5 | AC5.1-AC5.6 | Phase 1-4 deadline, ownership, shutdown, crash, cleanup, and installed receipts | implementation complete; T009 durable promotion/closure remains |
-| Requirement 6 | AC6.1-AC6.6 | Phase 1-4 layering, composition, recovery, package, and CI receipts | implementation complete; T009 durable promotion/closure remains |
+| Requirement 1 | AC1.1-AC1.6 | Phase 1-5 controller, daemon, trigger, startup-lock, and installed-convergence receipts | none |
+| Requirement 2 | AC2.1-AC2.6 | Phase 1-5 lifetime, disconnect, watcher, crash, startup concurrency, and installed receipts | none |
+| Requirement 3 | AC3.1-AC3.6 | Phase 1-5 diagnostics, state-matrix, redaction, recovery, and installed receipts | none |
+| Requirement 4 | AC4.1-AC4.6 | Phase 1-5 publication, schema identity, tagged-v0.5.2 block, crash-barrier, and exact-query receipts | none |
+| Requirement 5 | AC5.1-AC5.6 | Phase 1-5 deadline, ownership, owner-gated retirement, startup-lock, crash, and cleanup receipts | none |
+| Requirement 6 | AC6.1-AC6.6 | Phase 1-5 layering, composition, recovery, 0.6.0 package identity, and CI receipts | none |
 
 ## Correctness Property Coverage
 
@@ -192,7 +192,8 @@ pnpm exec vitest run tests/mcp/integration-health-contract.test.ts tests/mcp/int
 | T003 and child slices | done | Phase 2 implementation receipt below | Atomic publication/selection slice implemented and independently re-reviewed. |
 | T004-T006 and child slices | done | Phase 3 implementation receipt below | Daemon ownership, public triggers, and authoritative diagnostics implemented. |
 | T007-T008 and child slices | done | Phase 4 implementation and installed acceptance receipt below | Crash recovery, exact installed queries, and cleanup are complete. |
-| T009 and child slices | pending | | Durable promotion, EB052 reconciliation, and closure remain Phase 5 work. |
+| T009 and T009.1-T009.3 | done | Phase 5 promotion and closure receipt below | All gates, 15 promotion candidates, EB052/EB014 reconciliation, review, and lifecycle records complete. |
+| T009.4 | done | Phase 5 compatibility and startup-ownership receipt below | Tagged v0.5.2 blocks, v2 retirement and rollback are owner-gated/atomic, startup-lock publication is atomic, and 0.6.0 identity is explicit. |
 
 ## Evidence Log
 
@@ -205,6 +206,7 @@ pnpm exec vitest run tests/mcp/integration-health-contract.test.ts tests/mcp/int
 | 2026-07-20 | Phase 2 T002-T003 implementation receipt | done | `pnpm typecheck` passed; the 12-file controller/publication/query focused suite reported 207 pass and 4 expected later-phase failures; full `pnpm test` reported 80 files, 690 pass, and 9 expected later-phase failures. Independent remediation re-review found no remaining Phase 2 blocker. |
 | 2026-07-20 | Phase 3 T004-T006 implementation receipt | done | `pnpm typecheck` passed; the ownership/trigger/diagnostics/status suite reported 130 ordinary passes across 8 in-process files plus 9 isolated daemon-entrypoint passes; full `pnpm test` reported 80 files, 722 pass, and the single expected T007 orphan-recovery failure. Plugin, skill, and package dry-run gates passed. |
 | 2026-07-20 | Phase 4 T007-T008 recovery and installed acceptance receipt | done | Crash/recovery suites, five real daemon crash barriers, exact source queries, checkout smokes, and installed-package two-client convergence pass; full `pnpm test` reports 80 files and 741 passes with no expected failures. |
+| 2026-07-20 | Phase 5 promotion, compatibility remediation, and closure receipt | done | Independent review found an older-runtime overclaim and startup-lock publication race. Both root causes were implemented and re-reviewed; all durable targets changed; full tests report 80 files/749 tests; 0.6.0 package, installed-bin, lifecycle, Markdown, and diff gates pass. |
 
 ## Phase 1 Contract Receipt
 
@@ -278,13 +280,57 @@ only the latter remains quarantined for one later ordinary request to reconcile.
 | `pnpm run validate:plugin`; `pnpm run validate:skills`; `pnpm pack:dry-run` | passed; 6 skills with no findings; 239 package entries | Plugin bindings, skill packaging, and distribution contents remain valid. |
 | Independent Phase 4 recovery review | no blockers after remediation | Verified atomic recovery, positive-death ownership, bounded cleanup, production-safe crash probes, and installed acceptance boundaries. |
 
+## Phase 5 Promotion, Compatibility, And Closure Receipt
+
+Phase 5 began as promotion-only work. Independent review reproduced two
+unproven assumptions: the released v0.5.2 adapter could open the same migrated
+SQLite path, and the daemon startup lock was visible before its JSON owner
+record was complete. Closure paused until both root causes were implemented and
+reviewed.
+
+| Command/check | Result | Acceptance evidence |
+| --- | --- | --- |
+| `pnpm exec vitest run tests/runtime/operations.test.ts tests/runtime/workspace-change-queue.test.ts` | 51 passed | Final controller and queue contract remains green. |
+| daemon launch/entrypoint focused suites | 46 passed after startup-lock remediation | A fully written/fsynced candidate is atomically hard-linked as the canonical lock; malformed non-owner evidence blocks; owner release is inode/token safe; persistence failures leave no candidate. |
+| `pnpm exec vitest run tests/mcp/repo-status-resource.test.ts tests/mcp/query-tools.test.ts tests/mcp/docs-surfaces.test.ts` | 44 passed | Status, exact graph queries, and docs queries retain replacement-snapshot semantics. |
+| `pnpm exec vitest run tests/mcp/integration-health-contract.test.ts tests/mcp/integration-health-resource.test.ts` | 23 passed | Authoritative diagnostic states and trust behavior remain valid. |
+| `pnpm exec vitest run tests/graph/store.test.ts` | 36 passed | Covers v2 seed/migration, owner-gated retirement, atomic legacy guard, rollback artifact, crash re-entry, cleanup failures, bounded comparison, and external truncation. |
+| actual tagged v0.5.2 adapter probe | exited 1 with `SQLITE_NOTADB` | `git archive v0.5.2` supplied the real legacy adapter; the non-SQLite guard blocks it from reading/mutating schema identity v2. |
+| `pnpm test` | 80 files; 749 tests passed | Final integrated tree has no expected or ordinary failures. The first run exposed the startup-lock race and was not accepted as proof; this rerun followed the atomic fix. |
+| `pnpm typecheck`; plugin/skill validation; package dry-run | passed; 6 skills/0 findings; unreleased 0.6.0/240 entries | Runtime, Codex, Claude, server-card, package manifests, and validation agree on 0.6.0 while install URLs remain latest released 0.5.2. |
+| install and isolated MCP-launch smokes | passed | Checkout install shape and portable launcher remain valid. The initial current-repo launch correctly blocked on an active schema-v1 daemon; the isolated gate then passed without mutating that owner. |
+| installed-package two-client smoke | passed for 0.6.0 | One daemon, one replacement worker, fresh shared identity, exact parser/docs hits, deleted evidence absent, complete cleanup, and `real_agent_cli_executed: false`. |
+| independent Phase 5 review | no implementation blockers after remediation | Reviewed ownership, migration/rollback, crash states, startup locks, package identity, proof boundaries, and durable wording. |
+
+### Promotion Disposition
+
+Every candidate changed; no reasoned no-op was required.
+
+| Candidate | Disposition |
+| --- | --- |
+| `docs/design/runtime-operations-design.md` | daemon controller, generations, leases, finite settlement, recovery, and EB014 boundary promoted |
+| `docs/design/graph-store-design.md` | publication plus exact v2 seed, owner-gated legacy guard, rollback, and scale boundary promoted |
+| `docs/design/layered-runtime-architecture.md` | narrow refresh/publication ports and composition ownership promoted |
+| `docs/reference/runtime-contracts.md` | execution/publication/failure vocabulary, v2 identity, retirement consistency, and diagnostic authority promoted |
+| `docs/design/mcp-surface-design.md` | bounded status/health triggers, trust, and published-query semantics promoted |
+| `docs/requirements/runtime-requirements.md` | daemon lifecycle, publication, v0.5.2 block, and rollback requirements promoted |
+| `docs/reference/mvp-proof-matrix.md` | controller, publication, crash, tagged-adapter, and installed proof gates promoted |
+| `docs/reference/agent-readable-changelog.md` | agent-visible behavior, migration, support, and 0.6.0 availability boundary promoted |
+| `docs/runbooks/install-agent-workbench.md` | diagnosis, safe ownership checks, whole-cache rollback, evidence levels, and release boundary promoted |
+| `docs/runbooks/codex-agent-workbench-plugin.md` | shared refresh diagnosis, safe recovery, evidence levels, and release boundary promoted |
+| `packaging/agent-workbench/README.md` | installed ownership, publication, migration/rollback, validation, and availability promoted |
+| `docs/backlog/README.md` | EB052 closed by Spec 041; EB014 remains independent |
+| `docs/specs/041-daemon-owned-refresh-convergence/traceability.md` | T009/T009.4 and all implementation/promotion coverage reconciled |
+| `docs/history/spec-closure-log.md` | closure entry records final implementation commit and pending cleanup truthfully |
+| `docs/history/spec-archive-index.md` | removed package lookup and cleanup metadata recorded truthfully |
+
 ## Residual Risks
 
-- T009 must promote the verified behavior, reconcile EB052, and prepare closure;
-  this is lifecycle/documentation work rather than an implementation gap.
 - Provider-labelled installed MCP sessions do not prove that real Codex or
   Claude Code CLIs loaded the plugin; the receipt states this boundary.
-- EB014 large-repository warm-up duration remains outside this slice.
+- EB014 independently owns large-repository warm-up duration, v1 artifact copy
+  scale/progress, incremental indexing, and deadline tuning; Spec 041 does not
+  claim those capabilities.
 
 ## Runtime Acceptance Receipt
 

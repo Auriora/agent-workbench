@@ -728,7 +728,7 @@ async function seedPublishedEntry(
 function graphStorePath(repoRoot: string): string {
   const cacheDir = path.join(repoRoot, ".cache", "agent-workbench");
   fs.mkdirSync(cacheDir, { recursive: true });
-  return path.join(cacheDir, "graph.sqlite");
+  return path.join(cacheDir, "graph-v2.sqlite");
 }
 
 function testSnapshot(id: string, repoRoot: string) {

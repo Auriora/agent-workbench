@@ -44,9 +44,20 @@ const claudeHooks = readJson("plugins/agent-workbench/claude-plugin/hooks/hooks.
 const kiroMcp = readJson("plugins/agent-workbench/kiro-power/mcp.json");
 const marketplace = readJson(".agents/plugins/marketplace.json");
 const serverCard = readJson(".well-known/mcp/server-card.json");
+assert(
+  manifest.release_status === "released" || manifest.release_status === "unreleased",
+  "Package release status must be released or unreleased."
+);
+const installVersion = manifest.release_status === "released"
+  ? packageJson.version
+  : manifest.latest_released_version;
+assert(
+  typeof installVersion === "string" && installVersion.length > 0,
+  "Unreleased package metadata must name the latest released version."
+);
 const expectedInstallCommand =
-  `npm install -g https://github.com/Auriora/agent-workbench/releases/download/v${packageJson.version}/` +
-  `auriora-agent-workbench-${packageJson.version}.tgz`;
+  `npm install -g https://github.com/Auriora/agent-workbench/releases/download/v${installVersion}/` +
+  `auriora-agent-workbench-${installVersion}.tgz`;
 
 const requiredPaths = [
   "CLAUDE.md",

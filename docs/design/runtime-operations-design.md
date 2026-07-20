@@ -3,7 +3,7 @@ title: Runtime operations design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-10
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -76,13 +76,25 @@ for startup responsiveness; when that seed truncates before covering the
 eligible graph scope, public graph evidence remains non-complete and reports
 `refreshing` freshness or coverage metadata until completion work exists.
 
-Warm-up states:
+The daemon-owned refresh controller is the sole admission and execution
+authority for this flow. Startup, bounded first-read path validity, and the
+daemon watcher/change queue all submit invalidation generations through the
+same `SnapshotRefreshPort`. The controller linearizes admission, reuses a
+planned or running execution, and retains at most one sequential catch-up for
+the newest generation. It never starts parallel writers or treats catch-up as
+failure retry.
+
+Warm-up presentation states:
 
 - `cold`: no usable graph exists
 - `refreshing`: warm-up or incremental update is running
 - `fresh`: current watcher queue is drained and snapshot matches scope/config
 - `stale`: changes are known but not yet incorporated
 - `degraded`: required parser, database, or filesystem capability is missing
+
+These are freshness/presentation labels, not snapshot publication states. A
+completed bounded scan can be published with partial graph coverage; EB014 owns
+completion beyond the existing seed bounds.
 
 Persisted `fresh` state is necessary but not sufficient for first-read reuse.
 The runtime performs bounded path validation against the indexed catalog. A
@@ -146,11 +158,19 @@ safety, parser, or cache invalidation rules.
 
 ## Runtime Ownership
 
-Only one runtime should own expensive warm-up and refresh work for a repo
-fingerprint at a time. The accepted implementation direction is a per-repo
-daemon: the first MCP stdio launcher for a canonical repo root starts the
-daemon when no healthy owner exists, and later launchers connect to it instead
-of opening their own graph store or starting their own warm-up writer.
+Only one runtime owns expensive warm-up and refresh work for a repo fingerprint
+at a time. The per-repo daemon constructs one refresh controller, one watcher
+and change queue, one repository ownership lease, one activity-lease chain, and
+the sole refresh executor. The first MCP stdio launcher for a canonical repo
+root starts the daemon when no healthy owner exists; later launchers connect to
+it instead of opening their own graph store or starting warm-up writers.
+
+Connection-specific servers retain provider and session identity, but receive
+the same narrow refresh request and awaited-diagnostics ports. A standalone
+server uses the same controller implementation only after the repository lease
+proves that no healthy daemon or standalone owner exists. Active or ambiguous
+ownership returns structured blocked evidence and does not create local
+`planned` state or choose another executor.
 
 Ownership states:
 
@@ -163,9 +183,10 @@ Ownership states:
   record
 
 The owner record lives in generated runtime cache state and includes repo
-fingerprint, process identity, heartbeat time, schema version, and snapshot id.
-Manual refresh follows the same ownership rule and reports `owner_active` when
-another process owns the repo.
+fingerprint, process identity, heartbeat time, schema version, owner generation,
+and snapshot identity. There is no public manual-refresh route. All ordinary
+triggers follow the same ownership rule and report `owner_active` when another
+process owns the repo.
 
 Daemon identity is derived from canonical repo root, runtime version, graph
 schema version, and daemon protocol version. The IPC endpoint is local-only:
@@ -184,6 +205,14 @@ metadata only when PID and socket evidence prove the owner is gone. Ambiguous
 evidence must produce a structured blocked state rather than destructive
 cleanup.
 
+Positive dead-owner recovery atomically reclaims the repository lease and marks
+matching orphaned `building` snapshots `failed` and invisible. Recovery retains
+a bounded owner chain and structured `orphaned_build` evidence. It never unlinks
+a live socket or treats an inconclusive process check as permission to clean up.
+Startup, shutdown, timeout, crash replacement, and failed publication unwind
+worker, writer, activity, graph-store, socket, metadata, WAL/SHM, and child
+resources exactly once along the applicable drain or dead-owner path.
+
 ## Async And Concurrency Model
 
 The runtime is async-first and uses bounded queues. It must support concurrent
@@ -195,8 +224,10 @@ Concurrency components:
   discovery, and report-generation jobs.
 - `WorkerPoolPort`: executes CPU-heavy parser work in isolated workers with
   timeouts and recycling.
-- `SnapshotCoordinator`: serializes snapshot transitions and publishes fresh,
-  stale, cold, or refreshing state.
+- `SnapshotRefreshControllerPort`: linearizes invalidation generations,
+  execution, activity leases, worker invocation, and terminal state.
+- `SnapshotPublicationPort`: allocates building snapshots and atomically
+  transitions them to `published`, `superseded`, or `failed`.
 - `GraphTransactionPort`: commits graph writes atomically.
 - `CancellationPort`: cancels obsolete work when file hashes, scope, or config
   change.
@@ -228,8 +259,19 @@ Concurrency rules:
 - Parallel clients for the same repo must not spawn competing cold-start daemon
   owners; they wait on the same repo daemon socket after one launcher wins the
   startup lock.
-- The daemon exits only after the last client disconnects plus a 30-second idle
-  grace period. A reconnect during the grace period cancels shutdown.
+- Admission to `planned` acquires a controller-owned activity lease before the
+  request resolves. The lease spans every coalesced pass and is released exactly
+  once at `complete` or `failed`; requester disconnect cannot release it.
+- The daemon arms its configured idle grace only when the last client is gone
+  and no activity lease is held. It rechecks both conditions before shutdown;
+  reconnect or new activity cancels the armed timer.
+- Every worker pass has a finite controller-owned deadline and must exit zero
+  after emitting exactly one valid completion result. Deadline, worker error,
+  missing/invalid/multiple result, or non-zero exit is terminal structured
+  failure. Worker termination must be confirmed before a successor can start.
+- Failure callbacks, timers, health reads, and terminal notifications never
+  retry. The first later ordinary stale request may admit one successor; all
+  concurrent requests reuse it.
 
 Daemon and graph-store failures must use the runtime envelope vocabulary.
 Refreshing graph state maps to `refreshing`; incompatible or missing daemon
@@ -263,6 +305,13 @@ MVP operation ports:
 - `CancellationPort`
 - `SnapshotCoordinatorPort`
 - `RuntimeOwnerPort`
+- `SnapshotRefreshPort`
+- `SnapshotRefreshControllerPort`
+- `SnapshotRefreshDiagnosticsPort`
+- `SnapshotRefreshAdmissionFailurePort`
+- `SnapshotPublicationPort`
+- `RefreshExecutorPort`
+- `RefreshDeadlineSchedulerPort`
 - `StateStorePort`
 - `TelemetryPort`
 
@@ -364,9 +413,19 @@ this slice. A future incremental indexer must define explicit port contracts and
 fixture-backed tests before changing graph, docs, node FTS, or docs FTS rows
 directly from file events.
 
-First-read path validation and watcher events call the same snapshot-refresh
-coordinator. It marks the current snapshot stale, reuses an already planned or
-running warm-up, and schedules at most one new warm-up for the transition.
+First-read path validation and watcher events call the same daemon-owned refresh
+controller. Each accepted trigger advances or joins one monotonic invalidation
+generation. A request reuses an already planned or running execution; a newer
+generation during active work supersedes the unpublished pass and produces one
+sequential newest-generation catch-up before `complete`.
+
+The controller exposes one awaited diagnostics receipt containing controller
+and diagnostic revisions, worker invocation count, execution and invalidation
+identities, target and visible snapshot identities, execution/publication
+states, authoritative freshness, activity and worker-termination state, and a
+bounded structured last failure. Status and integration health consume this
+receipt; they do not reconstruct state from connection-local booleans or a
+separate snapshot read.
 
 ## Related Docs
 
