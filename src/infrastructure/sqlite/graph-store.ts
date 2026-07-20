@@ -39,6 +39,9 @@ import type {
   SnapshotPublicationPort,
   SnapshotPublicationRecord,
   SnapshotPublicationSelection,
+  SnapshotOrphanReconciliationPort,
+  RepositoryOwnershipLease,
+  SnapshotOrphanReconciliationResult,
   SnapshotBuildPort,
   SnapshotPathInventoryPort,
   SnapshotPort
@@ -177,6 +180,7 @@ export interface GraphStore
     GraphMaintenancePort,
     SnapshotPort,
     SnapshotPublicationPort,
+    SnapshotOrphanReconciliationPort,
     SnapshotBuildPort,
     FileCatalogPort,
     SnapshotPathInventoryPort,
@@ -1181,6 +1185,60 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       return this.getSnapshotRowById(snapshotId)!;
     });
     return this.mapPublicationRecord(transition.immediate()) as SnapshotPublicationRecord & { state: TState };
+  }
+
+  public async reconcileOrphanedBuilds(input: {
+    repo_root: string;
+    current_owner: RepositoryOwnershipLease & { state: "active" };
+    recovered_owners?: readonly (RepositoryOwnershipLease & { state: "dead" })[];
+    updated_at: string;
+  }): Promise<SnapshotOrphanReconciliationResult> {
+    const reconcile = this.db.transaction(() => {
+      const rows = this.db.prepare(`
+        SELECT id, controller_generation
+        FROM snapshots
+        WHERE repo_identity = @repoRoot
+          AND publication_state = 'building'
+        ORDER BY id ASC
+      `).all({ repoRoot: input.repo_root }) as Array<{
+        id: number;
+        controller_generation: number;
+      }>;
+      const snapshotIds = rows.map((row) => String(row.id));
+      if (rows.length === 0) {
+        return { outcome: "reconciled" as const, snapshot_ids: snapshotIds };
+      }
+      if (
+        input.recovered_owners === undefined ||
+        input.recovered_owners.length === 0 ||
+        input.current_owner.repo_root !== input.repo_root ||
+        input.recovered_owners.some((owner) =>
+          owner.repo_root !== input.current_owner.repo_root ||
+          owner.runtime_identity !== input.current_owner.runtime_identity ||
+          owner.schema_version !== input.current_owner.schema_version
+        ) ||
+        rows.some((row) => !input.recovered_owners?.some(
+          (owner) => owner.owner_generation === row.controller_generation
+        ))
+      ) {
+        return {
+          outcome: "blocked" as const,
+          reason: "ownership_ambiguous" as const,
+          snapshot_ids: snapshotIds
+        };
+      }
+      const ownerGenerations = input.recovered_owners.map((owner) => owner.owner_generation);
+      const placeholders = sqlPlaceholders(ownerGenerations.length);
+      this.db.prepare(`
+        UPDATE snapshots
+        SET publication_state = 'failed', publication_updated_at = ?
+        WHERE repo_identity = ?
+          AND publication_state = 'building'
+          AND controller_generation IN (${placeholders})
+      `).run(input.updated_at, input.repo_root, ...ownerGenerations);
+      return { outcome: "reconciled" as const, snapshot_ids: snapshotIds };
+    });
+    return reconcile.immediate();
   }
 
   public async getLatestPublished(input: {

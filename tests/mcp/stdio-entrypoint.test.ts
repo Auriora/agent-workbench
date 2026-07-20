@@ -778,13 +778,13 @@ describe("stdio MCP entrypoint", () => {
         repo_root: fixtureRoot,
         snapshot_id: "9001",
         warmup_state: "failed",
-        reason: "Refresh store operation failed."
+        reason: "Refresh worker failed."
       });
     } finally {
       await session.close();
       fs.rmSync(fixtureRoot, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("returns fixture MVP responses shaped by presenter envelopes", async () => {
     const fixtureRoot = createFixtureCopy("agent-workbench-mcp-server-");

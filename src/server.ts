@@ -87,6 +87,7 @@ import {
 } from "./interface-adapters/mcp/registries/root-authority.js";
 import type { IntegrationLauncherIdentity } from "./contracts/index.js";
 import type {
+  RepositoryOwnershipLease,
   SnapshotPublicationPort,
   SnapshotRefreshAdmissionFailurePort,
   SnapshotRefreshControllerPort,
@@ -103,6 +104,10 @@ export type AgentWorkbenchSharedRepositoryServices = {
   graphStore: () => Promise<GraphStore>;
   pollWorkspaceWatcher(): Promise<WatcherFreshnessState | undefined>;
   registerDisposer(dispose: () => void | Promise<void>): () => void;
+};
+
+export type AsyncGraphStore = (() => Promise<GraphStore>) & {
+  close(): Promise<void>;
 };
 
 export type AgentWorkbenchDaemonHealthFacts = {
@@ -494,6 +499,9 @@ export function createAgentWorkbenchServer(
       if (localStartupTimer !== undefined) clearTimeout(localStartupTimer);
       await localWorkspaceRefresh?.close();
       await localRefreshAuthority.close();
+      if ("close" in graphStore && typeof graphStore.close === "function") {
+        await graphStore.close();
+      }
     };
   }
   return server;
@@ -512,12 +520,19 @@ export function createAgentWorkbenchServer(
 
 }
 
-export function createAsyncGraphStore(databasePath: string): () => Promise<GraphStore> {
+export function createAsyncGraphStore(databasePath: string): AsyncGraphStore {
   let graphStore: Promise<GraphStore> | undefined;
-  return () => {
+  let closePromise: Promise<void> | undefined;
+  const load = (() => {
     graphStore ??= Promise.resolve().then(() => openGraphStore(databasePath));
     return graphStore;
+  }) as AsyncGraphStore;
+  load.close = async () => {
+    if (graphStore === undefined) return;
+    closePromise ??= graphStore.then((store) => store.close(), () => undefined);
+    await closePromise;
   };
+  return load;
 }
 
 export async function createRepositoryRefreshController(input: {
@@ -679,8 +694,11 @@ function createStandaloneRefreshAuthority(input: {
   clock: SystemClockAdapter;
 }): LazyOwnershipGatedRefreshAuthority {
   const ownerGeneration = input.clock.nowUnixMs();
+  let recoveredSnapshotIds: readonly string[] = [];
+  let recoveryLease: (RepositoryOwnershipLease & { state: "active" }) | undefined;
+  const ownership = new FileRepositoryOwnershipAdapter(repositoryOwnershipPath(input.databasePath));
   return new LazyOwnershipGatedRefreshAuthority({
-    ownership: new FileRepositoryOwnershipAdapter(repositoryOwnershipPath(input.databasePath)),
+    ownership,
     ownership_request: {
       repo_root: input.repoRoot,
       runtime_identity: `${AGENT_WORKBENCH_RUNTIME_VERSION}:${SCHEMA_VERSION}`,
@@ -690,13 +708,38 @@ function createStandaloneRefreshAuthority(input: {
       owner_generation: ownerGeneration,
       heartbeat_at: input.clock.nowIso8601()
     },
-    create_controller: () => createRepositoryRefreshController({
-      repoRoot: input.repoRoot,
-      graphStore: input.graphStore,
-      databasePath: input.databasePath,
-      controllerGeneration: ownerGeneration,
-      maxFiles: input.maxFiles
-    })
+    prepare_controller: async (admission) => {
+      const result = await (await input.graphStore()).reconcileOrphanedBuilds({
+        repo_root: input.repoRoot,
+        current_owner: admission.lease,
+        recovered_owners: admission.recovered_owners,
+        updated_at: input.clock.nowIso8601()
+      });
+      recoveredSnapshotIds = result.outcome === "reconciled" ? result.snapshot_ids : [];
+      recoveryLease = result.outcome === "reconciled" ? admission.lease : undefined;
+      return result.outcome === "blocked" ? "ownership_ambiguous" : "ready";
+    },
+    create_controller: async () => {
+      const controller = await createRepositoryRefreshController({
+        repoRoot: input.repoRoot,
+        graphStore: input.graphStore,
+        databasePath: input.databasePath,
+        controllerGeneration: ownerGeneration,
+        maxFiles: input.maxFiles
+      });
+      if (recoveredSnapshotIds[0] !== undefined) {
+        await controller.recordAdmissionFailure({
+          repo_root: input.repoRoot,
+          invalidation_generation: 0,
+          code: "orphaned_build",
+          target_snapshot_id: recoveredSnapshotIds[0]
+        });
+      }
+      if (recoveryLease !== undefined) {
+        await ownership.confirmRecovery({ lease: recoveryLease });
+      }
+      return controller;
+    }
   });
 }
 

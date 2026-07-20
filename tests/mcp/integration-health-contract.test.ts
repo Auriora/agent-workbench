@@ -78,6 +78,7 @@ describe("integration health contract fixtures", () => {
       repo_identity: "repo-identity",
       controller_generation: 7,
       diagnostic_revision: 11,
+      worker_invocations: 0,
       graph_freshness: "stale" as const,
       worker_termination_state: "not_required" as const
     };
@@ -157,6 +158,7 @@ describe("integration health contract fixtures", () => {
       repo_identity: "repo-identity",
       controller_generation: 7,
       diagnostic_revision: 11,
+      worker_invocations: 0,
       graph_freshness: "stale",
       visible_snapshot_id: "snap-prior",
       worker_termination_state: "not_required"
@@ -311,6 +313,7 @@ describe("integration health contract fixtures", () => {
       connected_clients: 1,
       controller_generation: 7,
       diagnostic_revision: 11,
+      worker_invocations: 0,
       warmup_state: "idle",
       graph_freshness: "cold",
       activity_lease_held: false,

@@ -230,6 +230,8 @@ normal task context. It contains:
 - `connected_clients`
 - `controller_generation`
 - `diagnostic_revision`
+- `worker_invocations`, a cumulative controller count used to prove that a
+  bounded convergence interval launched exactly one worker pass
 - `execution_id`, `started_generation`, `requested_generation`, and
   `target_snapshot_id` when an execution exists
 - `visible_snapshot_id` when a published snapshot exists

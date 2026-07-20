@@ -687,12 +687,24 @@ export type RepositoryOwnershipLease = {
   owner_generation: number;
   heartbeat_at: string;
   state: "active" | "dead" | "ambiguous";
+  recovered_owners?: readonly {
+    repo_root: string;
+    runtime_identity: string;
+    schema_version: number;
+    owner_id: string;
+    owner_pid: number;
+    owner_generation: number;
+    heartbeat_at: string;
+    state: "active" | "dead" | "ambiguous";
+  }[];
 };
 
 export type RepositoryOwnershipAdmission =
   | {
       outcome: "acquired";
       lease: RepositoryOwnershipLease & { state: "active" };
+      recovered_owner?: RepositoryOwnershipLease & { state: "dead" };
+      recovered_owners?: readonly (RepositoryOwnershipLease & { state: "dead" })[];
     }
   | {
       outcome: "blocked";
@@ -716,6 +728,27 @@ export interface RepositoryOwnershipPort {
     heartbeat_at: string;
   }): Promise<RepositoryOwnershipAdmission>;
   release(input: { lease: RepositoryOwnershipLease & { state: "active" } }): Promise<void>;
+  confirmRecovery?(input: { lease: RepositoryOwnershipLease & { state: "active" } }): Promise<void>;
+}
+
+export type SnapshotOrphanReconciliationResult =
+  | {
+      outcome: "reconciled";
+      snapshot_ids: readonly string[];
+    }
+  | {
+      outcome: "blocked";
+      reason: "ownership_ambiguous";
+      snapshot_ids: readonly string[];
+    };
+
+export interface SnapshotOrphanReconciliationPort {
+  reconcileOrphanedBuilds(input: {
+    repo_root: string;
+    current_owner: RepositoryOwnershipLease & { state: "active" };
+    recovered_owners?: readonly (RepositoryOwnershipLease & { state: "dead" })[];
+    updated_at: string;
+  }): Promise<SnapshotOrphanReconciliationResult>;
 }
 
 export type SnapshotRefreshRequest = {
@@ -773,6 +806,13 @@ export type SnapshotRefreshAdmission =
       state: "idle";
       reason: "store_failure";
       message: "Refresh store operation failed.";
+    }
+  | {
+      outcome: "blocked";
+      reused: false;
+      state: "idle";
+      reason: "permission_failure";
+      message: "Refresh operation was not permitted.";
     };
 
 export interface SnapshotRefreshPort {
@@ -803,7 +843,8 @@ export interface SnapshotRefreshAdmissionFailurePort {
   recordAdmissionFailure(input: {
     repo_root: string;
     invalidation_generation: InvalidationGeneration;
-    code: "store_failure" | "permission_failure";
+    code: "store_failure" | "permission_failure" | "orphaned_build";
+    target_snapshot_id?: string;
   }): Promise<Extract<SnapshotRefreshAdmission, { outcome: "blocked" }>>;
 }
 

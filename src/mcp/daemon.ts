@@ -35,7 +35,11 @@ import { FilesystemWorkspaceWatcherAdapter } from "../infrastructure/filesystem/
 import { SystemClockAdapter } from "../infrastructure/time/index.js";
 import { resolveWorkspaceWatcherConfig } from "../domain/models/index.js";
 import { SocketServerTransport } from "./socket-transport.js";
-import type { SnapshotRefreshControllerPort } from "../ports/index.js";
+import type {
+  SnapshotRefreshAdmissionFailurePort,
+  SnapshotRefreshControllerPort,
+  SnapshotRefreshDiagnosticsPort
+} from "../ports/index.js";
 
 export const DAEMON_PROTOCOL_VERSION = 1;
 const DAEMON_METADATA_FILE = "daemon.json";
@@ -67,7 +71,7 @@ export type DaemonState =
   | { state: "absent"; reason: "missing" }
   | { state: "stale"; reason: "malformed_metadata" | "dead_process" | "missing_socket" | "identity_mismatch"; metadata?: AgentWorkbenchDaemonMetadata }
   | { state: "mismatched"; reason: "identity_mismatch"; metadata: AgentWorkbenchDaemonMetadata }
-  | { state: "blocked"; reason: "ambiguous_process"; metadata: AgentWorkbenchDaemonMetadata }
+  | { state: "blocked"; reason: "ambiguous_process" | "ambiguous_metadata"; metadata?: AgentWorkbenchDaemonMetadata }
   | { state: "ready"; metadata: AgentWorkbenchDaemonMetadata };
 
 export type DaemonPaths = {
@@ -228,7 +232,7 @@ export function classifyDaemonState(input: {
     return { state: "absent", reason: "missing" };
   }
   if (metadata === "malformed") {
-    return { state: "stale", reason: "malformed_metadata" };
+    return { state: "blocked", reason: "ambiguous_metadata" };
   }
   const processState = (input.isProcessAlive ?? isProcessAlive)(metadata.pid);
   if (processState === "ambiguous") {
@@ -236,7 +240,7 @@ export function classifyDaemonState(input: {
   }
   if (!daemonIdentityMatches(metadata.identity, input.expectedIdentity)) {
     return processState
-      ? { state: "mismatched", reason: "identity_mismatch", metadata }
+      ? { state: "blocked", reason: "ambiguous_process", metadata }
       : { state: "stale", reason: "identity_mismatch", metadata };
   }
   if (!processState) {
@@ -244,7 +248,7 @@ export function classifyDaemonState(input: {
   }
   const socketExists = input.socketExists ?? defaultSocketExists;
   if (metadata.socketPath !== input.socketPath || !socketExists(metadata.socketPath)) {
-    return { state: "stale", reason: "missing_socket", metadata };
+    return { state: "blocked", reason: "ambiguous_process", metadata };
   }
   return { state: "ready", metadata };
 }
@@ -272,7 +276,11 @@ export async function connectOrStartDaemon(
     }
 
     if (state.state === "absent" || state.state === "stale" || state.state === "mismatched") {
-      startupLock = acquireDaemonStartupLock(paths.startupLockPath);
+      const startupLockAdmission = acquireDaemonStartupLock(paths.startupLockPath);
+      if (startupLockAdmission === "ambiguous") {
+        throw new Error("Agent Workbench daemon is blocked: ambiguous startup ownership.");
+      }
+      startupLock = startupLockAdmission;
       if (startupLock !== null) {
         state = normalizeLaunchState(classifyDaemonState({
           metadataPath: paths.metadataPath,
@@ -316,13 +324,6 @@ export async function startAgentWorkbenchDaemon(input: {
   const identity = createDaemonIdentity(repoRoot);
   const paths = daemonPaths(identity);
   ensureDaemonDirectories(paths);
-  if (process.platform !== "win32") {
-    try {
-      fs.rmSync(paths.socketPath, { force: true });
-    } catch {
-      // Binding the server below is the authoritative outcome.
-    }
-  }
 
   const metadata: AgentWorkbenchDaemonMetadata = {
     identity,
@@ -353,13 +354,39 @@ export async function startAgentWorkbenchDaemon(input: {
     );
   }
   const ownershipLease = ownershipAdmission.lease;
-  const refreshController = await createRepositoryRefreshController({
-    repoRoot,
-    graphStore: sharedGraphStore,
-    databasePath,
-    controllerGeneration: ownerGeneration,
-    maxFiles: input.serverOptions?.startupWarmupMaxFiles ?? 2000
-  });
+  let refreshController: SnapshotRefreshControllerPort &
+    SnapshotRefreshDiagnosticsPort & SnapshotRefreshAdmissionFailurePort;
+  try {
+    const orphanReconciliation = await (await sharedGraphStore()).reconcileOrphanedBuilds({
+      repo_root: repoRoot,
+      current_owner: ownershipLease,
+      recovered_owners: ownershipAdmission.recovered_owners,
+      updated_at: new Date().toISOString()
+    });
+    if (orphanReconciliation.outcome === "blocked") {
+      throw new Error("Repository refresh ownership is ambiguous.");
+    }
+    refreshController = await createRepositoryRefreshController({
+      repoRoot,
+      graphStore: sharedGraphStore,
+      databasePath,
+      controllerGeneration: ownerGeneration,
+      maxFiles: input.serverOptions?.startupWarmupMaxFiles ?? 2000
+    });
+    if (orphanReconciliation.snapshot_ids[0] !== undefined) {
+      await refreshController.recordAdmissionFailure({
+        repo_root: repoRoot,
+        invalidation_generation: 0,
+        code: "orphaned_build",
+        target_snapshot_id: orphanReconciliation.snapshot_ids[0]
+      });
+    }
+    await ownership.confirmRecovery({ lease: ownershipLease });
+  } catch (error) {
+    await ownership.release({ lease: ownershipLease });
+    await sharedGraphStore.close();
+    throw error;
+  }
   const sharedDisposers = new Set<() => void | Promise<void>>();
   const refreshTriggers = new RepositoryRefreshTriggerCoordinator({
     repo_root: repoRoot,
@@ -432,14 +459,34 @@ export async function startAgentWorkbenchDaemon(input: {
   }, input.serverOptions?.startupRefreshDelayMs ?? DEFAULT_DAEMON_STARTUP_REFRESH_DELAY_MS);
   startupTimer.unref?.();
 
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(paths.socketPath, () => {
-      server.off("error", reject);
-      writeDaemonMetadata(paths.metadataPath, metadata);
-      resolve();
+  if (process.platform !== "win32") {
+    fs.rmSync(paths.socketPath, { force: true });
+  }
+
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(paths.socketPath, () => {
+        server.off("error", reject);
+        try {
+          writeDaemonMetadata(paths.metadataPath, metadata);
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
     });
-  });
+  } catch (error) {
+    clearTimeout(startupTimer);
+    await Promise.allSettled([...sharedDisposers].map((dispose) => Promise.resolve(dispose())));
+    if (server.listening) {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+    await ownership.release({ lease: ownershipLease });
+    await sharedGraphStore.close();
+    cleanupStaleDaemonState(undefined, paths);
+    throw error;
+  }
   lifetime.start();
 
   function close(): Promise<void> {
@@ -459,6 +506,7 @@ export async function startAgentWorkbenchDaemon(input: {
     await waitForControllerShutdownSafety(refreshController);
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await ownership.release({ lease: ownershipLease });
+    await sharedGraphStore.close();
     cleanupStaleDaemonState(metadata, paths);
   }
 
@@ -656,10 +704,9 @@ function writeDaemonMetadata(metadataPath: string, metadata: AgentWorkbenchDaemo
 }
 
 function cleanupStaleDaemonState(metadata: AgentWorkbenchDaemonMetadata | undefined, paths: DaemonPaths): void {
-  fs.rmSync(paths.metadataPath, { force: true });
-  const socketPath = metadata?.socketPath ?? paths.socketPath;
+  removeCanonicalFile(paths.metadataPath);
   if (process.platform !== "win32") {
-    fs.rmSync(socketPath, { force: true });
+    removeCanonicalFile(paths.socketPath);
     try {
       fs.rmdirSync(paths.ipcDir);
     } catch {
@@ -669,8 +716,17 @@ function cleanupStaleDaemonState(metadata: AgentWorkbenchDaemonMetadata | undefi
   }
 }
 
+function removeCanonicalFile(filePath: string): void {
+  try {
+    const stat = fs.lstatSync(filePath);
+    if (stat.isFile() || stat.isSocket()) fs.rmSync(filePath);
+  } catch (error) {
+    if (!isMissingFileError(error)) throw error;
+  }
+}
+
 function normalizeLaunchState(state: DaemonState, paths: DaemonPaths): DaemonState {
-  if (state.state !== "stale" && state.state !== "mismatched") {
+  if (state.state !== "stale") {
     return state;
   }
   cleanupStaleDaemonState(state.metadata, paths);
@@ -691,7 +747,9 @@ function ensurePrivateDirectory(directory: string): void {
   }
 }
 
-function acquireDaemonStartupLock(lockPath: string): { release: () => void } | null {
+function acquireDaemonStartupLock(
+  lockPath: string
+): { release: () => void } | "ambiguous" | null {
   try {
     return createDaemonStartupLock(lockPath);
   } catch (error) {
@@ -700,7 +758,11 @@ function acquireDaemonStartupLock(lockPath: string): { release: () => void } | n
     }
   }
 
-  if (!daemonStartupLockIsStale(lockPath)) {
+  const stale = daemonStartupLockIsStale(lockPath);
+  if (stale === "ambiguous") {
+    return "ambiguous";
+  }
+  if (!stale) {
     return null;
   }
 
@@ -735,12 +797,12 @@ function createDaemonStartupLock(lockPath: string): { release: () => void } {
   };
 }
 
-function daemonStartupLockIsStale(lockPath: string): boolean {
+function daemonStartupLockIsStale(lockPath: string): boolean | "ambiguous" {
   let payload: unknown;
   try {
     payload = JSON.parse(fs.readFileSync(lockPath, "utf8"));
   } catch {
-    return true;
+    return "ambiguous";
   }
 
   const pid =
@@ -748,10 +810,11 @@ function daemonStartupLockIsStale(lockPath: string): boolean {
       ? (payload as { pid?: unknown }).pid
       : undefined;
   if (typeof pid !== "number" || !Number.isInteger(pid) || pid <= 0) {
-    return true;
+    return "ambiguous";
   }
 
-  return isProcessAlive(pid) === false;
+  const processState = isProcessAlive(pid);
+  return processState === "ambiguous" ? "ambiguous" : processState === false;
 }
 
 function isFileExistsError(error: unknown): boolean {

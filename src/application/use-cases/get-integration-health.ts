@@ -133,6 +133,7 @@ export async function getIntegrationHealth(input: GetIntegrationHealthInput): Pr
     connected_clients: input.daemon.connected_clients,
     controller_generation: diagnostics.controller_generation,
     diagnostic_revision: diagnostics.diagnostic_revision,
+    worker_invocations: diagnostics.worker_invocations,
     execution_id: diagnostics.execution_id,
     started_generation: diagnostics.started_generation,
     requested_generation: diagnostics.requested_generation,

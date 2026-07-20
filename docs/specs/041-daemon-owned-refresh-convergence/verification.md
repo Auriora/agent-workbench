@@ -13,9 +13,9 @@ license: GPL-3.0-or-later
 
 ## Scope
 
-Phase 1 through Phase 3 checks are recorded below. Passing checkout tests and
-package-shape gates alone does not establish live installed-package convergence;
-that remains T008.
+Phase 1 through Phase 4 checks are recorded below. Phase 4 establishes crash
+recovery and installed-package convergence; durable promotion and closure remain
+T009.
 
 This record covers Requirements 1-6, CP-001-CP-009, and T001-T009 for the
 daemon-owned refresh convergence slice.
@@ -24,10 +24,10 @@ daemon-owned refresh convergence slice.
 
 | Gate | Required? | Status | Evidence |
 | --- | --- | --- | --- |
-| Requirements and correctness properties reviewed | yes | pending | |
-| Parent and child task acceptance and evidence complete | yes | pending | |
-| Focused and full automated tests pass | yes | pending | |
-| Package/plugin/skill gates pass | yes | pending | |
+| Requirements and correctness properties reviewed | yes | done for Phase 4 | Phase 4 evidence covers every implementation property; T009 owns final promotion reconciliation. |
+| Parent and child task acceptance and evidence complete | yes | partial | T001-T008 are complete; T009 remains pending. |
+| Focused and full automated tests pass | yes | done | Phase 4 focused suites and the 80-file full suite pass without expected failures. |
+| Package/plugin/skill gates pass | yes | done | Installed smoke, plugin, skill, and package dry-run gates pass. |
 | Durable documentation promoted | yes | pending | |
 | Lifecycle reconciliation and closure risk complete | yes | pending | |
 
@@ -35,17 +35,17 @@ daemon-owned refresh convergence slice.
 
 | ID | Check | Proves | Status |
 | --- | --- | --- | --- |
-| V001 | focused controller/runtime tests | one planned/running execution and no automatic retry | partial: Phase 2-3 controller and daemon paths pass; T007-T008 recovery/installed evidence remains |
-| V002 | two provider-labelled clients through an actually packed-and-installed npm bin | non-startup trigger, one daemon PID, one execution identity, one worker invocation, and shared fresh convergence | pending |
-| V003 | deterministic concurrent and sequential stale status/watcher requests | idempotent request, duplicate invalidation reuse, and one writer | partial: Phase 3 trigger-level catch-up and one-writer paths pass; T008 installed acceptance remains |
-| V004 | requester disconnect, zero-client active refresh, and idle-lease race cases | execution survives socket loss; reconnect cannot create a second owner; idle grace starts only after terminal state | partial: Phase 3 daemon lifetime cases pass; T007 crash recovery and T008 installed acceptance remain |
-| V005 | daemon-launch/integration-health success and exact failure transitions | identical execution/snapshot IDs, legal state combinations, bounded structured last failure, and correct top-level trust | partial: Phase 3 checkout/runtime diagnostics pass; T008 installed acceptance remains |
+| V001 | focused controller/runtime tests | one planned/running execution and no automatic retry | done |
+| V002 | two provider-labelled clients through an actually packed-and-installed npm bin | non-startup trigger, one daemon PID, one execution identity, one worker invocation, and shared fresh convergence | done |
+| V003 | deterministic concurrent and sequential stale status/watcher requests | idempotent request, duplicate invalidation reuse, and one writer | done |
+| V004 | requester disconnect, zero-client active refresh, and idle-lease race cases | execution survives socket loss; reconnect cannot create a second owner; idle grace starts only after terminal state | done |
+| V005 | daemon-launch/integration-health success and exact failure transitions | identical execution/snapshot IDs, legal state combinations, bounded structured last failure, and correct top-level trust | done |
 | V006 | health schema, presenter, and resource tests | canonical warm-up/freshness enums and state matrix; no terminal `scheduled/unknown` or false-success envelope | done |
-| V007 | status replacement-snapshot tests across two clients | identity advances once, both clients become fresh, and invalidation during running is not lost | partial: Phase 3 source-entrypoint and trigger catch-up pass; T008 installed acceptance remains |
-| V008 | barrier-controlled graph-store migration, publication, interruption, concurrent-reader, downgrade-block, and reopen tests | existing rows migrate transactionally, older runtimes block, incomplete generations are never selected, and deleted rows disappear only on completed publication | pending |
-| V009 | query-tool and docs-surface tests with known surviving evidence | `find_references` and `docs_search` return exact expected hits from the replacement snapshot | pending |
-| V010 | worker hang, timeout, zero-exit, invalid-result, SQLite, permission, and publication-failure fixtures | exact structured failure, non-fresh evidence, no raw output, worker/store cleanup, and deterministic recovery | pending |
-| V011 | daemon/standalone/cross-process architecture and negative assertions | one controller/executor path, one cross-process owner, no manual tool, provider branch, retry loop, or fallback | partial: Phase 3 composition and ownership paths pass; T007 cleanup and T008 package evidence remain |
+| V007 | status replacement-snapshot tests across two clients | identity advances once, both clients become fresh, and invalidation during running is not lost | done |
+| V008 | barrier-controlled graph-store migration, publication, interruption, concurrent-reader, downgrade-block, and reopen tests | existing rows migrate transactionally, older runtimes block, incomplete generations are never selected, and deleted rows disappear only on completed publication | done |
+| V009 | query-tool and docs-surface tests with known surviving evidence | `find_references` and `docs_search` return exact expected hits from the replacement snapshot | done |
+| V010 | worker hang, timeout, zero-exit, invalid-result, SQLite, permission, and publication-failure fixtures | exact structured failure, non-fresh evidence, no raw output, worker/store cleanup, and deterministic recovery | done |
+| V011 | daemon/standalone/cross-process architecture and negative assertions | one controller/executor path, one cross-process owner, no manual tool, provider branch, retry loop, or fallback | done |
 
 ### Deterministic Lifecycle Fixtures
 
@@ -147,41 +147,41 @@ pnpm exec vitest run tests/mcp/integration-health-contract.test.ts tests/mcp/int
 
 | ID | Command/check | Status |
 | --- | --- | --- |
-| V012 | `pnpm typecheck` | passed for Phase 3 |
-| V013 | `pnpm test` | passed for Phase 3: 80 files, 722 pass, 1 expected T007 failure |
-| V014 | `pnpm run validate:plugin` | passed for Phase 3 |
-| V015 | `pnpm run validate:skills` | passed for Phase 3: 6 skills, 0 errors, 0 warnings |
-| V016 | `pnpm pack:dry-run` | passed for Phase 3: 239 entries |
-| V017 | spec lifecycle authoring lint/readiness for Spec 041 | pending |
-| V018 | Markdown set check and `git diff --check` | passed for Phase 3; Markdown checks reported only table-readability warnings |
-| V019 | `node scripts/ci/install-smoke.mjs` | pending |
-| V020 | `node scripts/ci/mcp-launch-smoke.mjs` | pending |
-| V021 | real `npm pack`, isolated install, and installed-bin two-client acceptance | pending |
+| V012 | `pnpm typecheck` | passed for Phase 4 |
+| V013 | `pnpm test` | passed for Phase 4: 80 files, 741 passed, no expected failures |
+| V014 | `pnpm run validate:plugin` | passed for Phase 4 |
+| V015 | `pnpm run validate:skills` | passed for Phase 4: 6 skills, 0 errors, 0 warnings |
+| V016 | `pnpm pack:dry-run` | passed for Phase 4: 239 entries |
+| V017 | spec lifecycle authoring lint/readiness for Spec 041 | passed: package lint clean; T007/T008 audits pass; T009 is dependency-ready with no coverage gaps |
+| V018 | Markdown set check and `git diff --check` | passed for Phase 4; Markdown checks reported only table-readability warnings |
+| V019 | `node scripts/ci/install-smoke.mjs` | passed for Phase 4 |
+| V020 | `node scripts/ci/mcp-launch-smoke.mjs` | passed for Phase 4 |
+| V021 | real `npm pack`, isolated install, and installed-bin two-client acceptance | passed for Phase 4 |
 
 ## Requirement Coverage
 
 | Requirement | Criteria | Evidence | Residual risk |
 | --- | --- | --- | --- |
-| Requirement 1 | AC1.1-AC1.6 | Phase 1-3 contract, controller, daemon ownership, and trigger receipts | partial: installed acceptance and closure remain T008-T009 |
-| Requirement 2 | AC2.1-AC2.6 | Phase 1 and Phase 3 lifetime, disconnect, watcher, and trigger receipts | partial: installed acceptance and closure remain T008-T009 |
-| Requirement 3 | AC3.1-AC3.6 | Phase 1 and Phase 3 diagnostics, state-matrix, redaction, and failure receipts | partial: installed acceptance and durable closure remain T008-T009 |
-| Requirement 4 | AC4.1-AC4.6 | Phase 1-2 publication/migration receipts plus Phase 3 non-fresh failure evidence | partial: crash/orphan recovery and installed query acceptance remain T007-T008 |
-| Requirement 5 | AC5.1-AC5.6 | Phase 1-3 deadline, ownership contention, shutdown drain, and bounded failure receipts | partial: crash/resource reconciliation and installed acceptance remain T007-T008 |
-| Requirement 6 | AC6.1-AC6.6 | Phase 1-3 contract, layering, daemon composition, and package-shape receipts | partial: recovery, installed acceptance, and durable promotion remain T007-T009 |
+| Requirement 1 | AC1.1-AC1.6 | Phase 1-4 controller, daemon, trigger, and installed-convergence receipts | implementation complete; T009 durable promotion/closure remains |
+| Requirement 2 | AC2.1-AC2.6 | Phase 1-4 lifetime, disconnect, watcher, crash, and installed receipts | implementation complete; T009 durable promotion/closure remains |
+| Requirement 3 | AC3.1-AC3.6 | Phase 1-4 diagnostics, state-matrix, redaction, recovery, and installed receipts | implementation complete; T009 durable promotion/closure remains |
+| Requirement 4 | AC4.1-AC4.6 | Phase 1-4 publication, migration, crash-barrier, and exact-query receipts | implementation complete; T009 durable promotion/closure remains |
+| Requirement 5 | AC5.1-AC5.6 | Phase 1-4 deadline, ownership, shutdown, crash, cleanup, and installed receipts | implementation complete; T009 durable promotion/closure remains |
+| Requirement 6 | AC6.1-AC6.6 | Phase 1-4 layering, composition, recovery, package, and CI receipts | implementation complete; T009 durable promotion/closure remains |
 
 ## Correctness Property Coverage
 
 | Property | Covered by | Evidence | Residual risk |
 | --- | --- | --- | --- |
-| CP-001 | T001-T002, T004-T005, T008; V001-V003, V011, V021 | Phase 2-3 controller, atomic ownership, and shared trigger evidence | partial: installed acceptance remains |
-| CP-002 | T001-T002, T004-T005, T008; V002-V004, V007, V021 | Phase 3 daemon lifetime and autonomous trigger evidence | partial: installed acceptance remains |
-| CP-003 | T001, T004, T007-T008; V004, V010, V021 | Phase 3 disconnect and shutdown-drain evidence | partial: crash recovery and installed acceptance remain |
-| CP-004 | T001-T003, T007-T008; V007-V010, V021 | Phase 2 atomic publication/query evidence | partial: crash recovery and installed acceptance remain |
-| CP-005 | T001, T006, T008; V005-V006, V021 | Phase 3 one-receipt diagnostics evidence | partial: installed acceptance remains |
-| CP-006 | T001-T003, T006-T008; V001, V003, V005-V006, V010-V011, V021 | Phase 2-3 terminal, pre-admission, timeout, and redaction evidence | partial: crash recovery and installed acceptance remain |
-| CP-007 | T001-T002, T005, T008; V001, V003, V007, V021 | Phase 2-3 controller and sequential trigger catch-up evidence | partial: installed acceptance remains |
-| CP-008 | T001, T003, T007-T008; V007-V010, V021 | Phase 2 publication/freshness independence evidence | partial: crash recovery and installed acceptance remain |
-| CP-009 | T001-T002, T004-T008; V001-V011, V021 | Phase 2-3 controller, ownership, activity, trigger, publication, and diagnostics identity evidence | partial: T007-T008 remain |
+| CP-001 | T001-T002, T004-T005, T008; V001-V003, V011, V021 | Phase 2-4 controller, ownership, trigger, and installed evidence | none |
+| CP-002 | T001-T002, T004-T005, T008; V002-V004, V007, V021 | Phase 3-4 daemon lifetime, trigger, disconnect, and installed evidence | none |
+| CP-003 | T001, T004, T007-T008; V004, V010, V021 | Phase 3-4 disconnect, shutdown, crash, and installed evidence | none |
+| CP-004 | T001-T003, T007-T008; V007-V010, V021 | Phase 2-4 atomic publication, crash, and exact-query evidence | none |
+| CP-005 | T001, T006, T008; V005-V006, V021 | Phase 3-4 authoritative diagnostics and installed evidence | none |
+| CP-006 | T001-T003, T006-T008; V001, V003, V005-V006, V010-V011, V021 | Phase 2-4 terminal, recovery, redaction, and installed evidence | none |
+| CP-007 | T001-T002, T005, T008; V001, V003, V007, V021 | Phase 2-4 monotonic catch-up and installed evidence | none |
+| CP-008 | T001, T003, T007-T008; V007-V010, V021 | Phase 2-4 publication/freshness, crash, and installed evidence | none |
+| CP-009 | T001-T002, T004-T008; V001-V011, V021 | Phase 2-4 execution, ownership, publication, diagnostics, and installed identity evidence | none |
 
 ## Task Evidence
 
@@ -191,7 +191,8 @@ pnpm exec vitest run tests/mcp/integration-health-contract.test.ts tests/mcp/int
 | T002 and child slices | done | Phase 2 implementation receipt below | Shared controller/executor slice implemented and independently re-reviewed. |
 | T003 and child slices | done | Phase 2 implementation receipt below | Atomic publication/selection slice implemented and independently re-reviewed. |
 | T004-T006 and child slices | done | Phase 3 implementation receipt below | Daemon ownership, public triggers, and authoritative diagnostics implemented. |
-| T007-T009 and child slices | pending | | Crash recovery, installed acceptance, promotion, and closure remain. |
+| T007-T008 and child slices | done | Phase 4 implementation and installed acceptance receipt below | Crash recovery, exact installed queries, and cleanup are complete. |
+| T009 and child slices | pending | | Durable promotion, EB052 reconciliation, and closure remain Phase 5 work. |
 
 ## Evidence Log
 
@@ -203,6 +204,7 @@ pnpm exec vitest run tests/mcp/integration-health-contract.test.ts tests/mcp/int
 | 2026-07-19 | Phase 1 T001 contract and reproduction receipt | done | `pnpm typecheck` passed; focused runtime/store/contracts reported 39 pass and 12 expected failures; focused daemon/source-entrypoint reported 19 pass and 4 expected failures; full `pnpm test` reported 80 files, 640 pass, and 16 expected failures. Independent re-review found no remaining blockers or advisories. |
 | 2026-07-20 | Phase 2 T002-T003 implementation receipt | done | `pnpm typecheck` passed; the 12-file controller/publication/query focused suite reported 207 pass and 4 expected later-phase failures; full `pnpm test` reported 80 files, 690 pass, and 9 expected later-phase failures. Independent remediation re-review found no remaining Phase 2 blocker. |
 | 2026-07-20 | Phase 3 T004-T006 implementation receipt | done | `pnpm typecheck` passed; the ownership/trigger/diagnostics/status suite reported 130 ordinary passes across 8 in-process files plus 9 isolated daemon-entrypoint passes; full `pnpm test` reported 80 files, 722 pass, and the single expected T007 orphan-recovery failure. Plugin, skill, and package dry-run gates passed. |
+| 2026-07-20 | Phase 4 T007-T008 recovery and installed acceptance receipt | done | Crash/recovery suites, five real daemon crash barriers, exact source queries, checkout smokes, and installed-package two-client convergence pass; full `pnpm test` reports 80 files and 741 passes with no expected failures. |
 
 ## Phase 1 Contract Receipt
 
@@ -256,30 +258,55 @@ it is not counted as Phase 3 acceptance.
 | Independent Phase 3 review | done after remediation | Initial review found seven blockers and three advisories; follow-up reviews verified autonomous watcher ownership, sequential dedupe, atomic reclaim, safe shutdown, structured public ownership evidence, complete diagnostics/redaction, fresh-startup failure handling, and pre-admission failure visibility. |
 | Independent implementation review and remediation re-review | six blockers found and resolved; final verdict has no Phase 2 blockers | Closed target-ID mismatch, split publication authority, termination overlap, unpublished read leakage, missing generation CAS, freshness/publication coupling, worker generation propagation, structured allocation failure, and post-publication evidence mutability. |
 
+## Phase 4 Recovery And Installed Acceptance Receipt
+
+Phase 4 completes T007-T008. The recovery path distinguishes a worker that
+fails before creating a build from a present build whose terminal publication
+cannot be committed: the former releases its activity lease immediately, while
+only the latter remains quarantined for one later ordinary request to reconcile.
+
+| Command/check | Result | Acceptance evidence |
+| --- | --- | --- |
+| `pnpm typecheck` | passed | Recovery, ownership, worker, diagnostics, installed-smoke, and CI contracts compose without type errors. |
+| `pnpm exec vitest run tests/graph/store.test.ts tests/runtime/operations.test.ts tests/mcp/daemon-launch.test.ts` | 105 passed before the final pre-build-failure regression was added | Proves atomic orphan reconciliation, bounded owner chains, worker protocol settlement, structured failures, and daemon cleanup. |
+| `pnpm exec vitest run tests/runtime/operations.test.ts tests/mcp/stdio-entrypoint.test.ts` | 63 passed | Proves pre-build worker failure releases ownership, real worker-exit failure remains visible, and standalone shutdown is bounded. |
+| `pnpm exec vitest run tests/mcp/daemon-entrypoint-integration.test.ts` | 15 passed | Includes five real daemon/worker crashes at generation, catalog, docs, graph, and post-prune pre-completion barriers, with prior publication visibility and one later successor. |
+| `pnpm exec vitest run tests/mcp/repo-status-resource.test.ts tests/mcp/query-tools.test.ts tests/mcp/docs-surfaces.test.ts tests/mcp/integration-health-contract.test.ts tests/mcp/integration-health-resource.test.ts` | 67 passed | Proves exact query and trust behavior on the source/runtime surfaces. |
+| `pnpm test` | 80 files passed; 741 passed; no expected failures | Proves all Spec 041 implementation seams are ordinary passing tests. |
+| `node scripts/ci/install-smoke.mjs` and `node scripts/ci/mcp-launch-smoke.mjs` | passed | Retains explicitly checkout-scoped install and MCP launch coverage. |
+| `CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs` | passed | A real 0.5.2 tarball and installed bin hosted Codex- and Claude-labelled sessions on one daemon; worker invocation delta was one; exact parser reference and docs FTS hits survived; deleted symbol/docs evidence was absent; all clients, daemon, socket, metadata, and temporary roots were cleaned. `real_agent_cli_executed` remained false. |
+| `pnpm run validate:plugin`; `pnpm run validate:skills`; `pnpm pack:dry-run` | passed; 6 skills with no findings; 239 package entries | Plugin bindings, skill packaging, and distribution contents remain valid. |
+| Independent Phase 4 recovery review | no blockers after remediation | Verified atomic recovery, positive-death ownership, bounded cleanup, production-safe crash probes, and installed acceptance boundaries. |
+
 ## Residual Risks
 
-- Package-entrypoint refresh convergence is not implemented or verified yet.
-- Daemon crash during active publication and abandoned reclaim-guard recovery
-  remain T007 work; ordinary publication selection, ownership contention,
-  worker timeout, safe shutdown draining, and idle-lease races are verified.
+- T009 must promote the verified behavior, reconcile EB052, and prepare closure;
+  this is lifecycle/documentation work rather than an implementation gap.
+- Provider-labelled installed MCP sessions do not prove that real Codex or
+  Claude Code CLIs loaded the plugin; the receipt states this boundary.
 - EB014 large-repository warm-up duration remains outside this slice.
 
 ## Runtime Acceptance Receipt
 
-Before closure, capture bounded packed-and-installed-bin evidence containing:
+The combined Phase 4 installed-package smoke and focused recovery fixtures
+captured bounded evidence containing:
 
 - installed package identity, daemon PID, and two distinct provider-labelled
   client sessions, explicitly distinguished from real agent CLI execution;
 - old and replacement snapshot identities;
 - deleted path absent from replacement inventory;
-- one execution identity, one worker invocation, and its state transitions as
-  observed identically by both clients;
+- one execution identity and exactly one replacement worker invocation;
 - exact health state/freshness/identity/failure transitions and top-level trust;
 - fresh status observed by both clients;
 - exact expected surviving `find_references` and `docs_search` hits from the
   replacement snapshot;
 - requester disconnect, idle-lease, crash/orphan-recovery, and cleanup outcomes;
-- confirmation that no sentinel path, secret, SQLite, or worker output escaped.
+- complete client, daemon, socket, metadata, and temporary-root cleanup.
+
+Crash/orphan, timeout, redaction, disconnect, and idle-lease outcomes come from
+the focused source/daemon fixtures. Installed-bin provenance, shared-daemon
+convergence, exact queries, deleted-evidence absence, and installed resource
+cleanup come from the provider-labelled installed smoke.
 
 ## Closure Conditions
 

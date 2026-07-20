@@ -11,7 +11,20 @@ import {
   createDaemonIdentity,
   daemonPaths
 } from "../../src/mcp/daemon.js";
-import { graphStorePath } from "../../src/server.js";
+import { graphStorePath, repositoryOwnershipPath } from "../../src/server.js";
+import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/graph-store.js";
+import { indexRepositoryGraph } from "../../src/application/use-cases/index-repository-graph.js";
+import {
+  FileCatalogScannerAdapter,
+  WorkspaceFileAdapter
+} from "../../src/infrastructure/filesystem/index.js";
+import {
+  ExtractorRegistryAdapter,
+  ResourceExtractorAdapter
+} from "../../src/infrastructure/extraction/index.js";
+import { PythonTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
+import { SystemClockAdapter } from "../../src/infrastructure/time/index.js";
+import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../../src/runtime/version.js";
 import {
   initializeSession,
   parseEnvelope,
@@ -190,7 +203,9 @@ describe("daemon-backed stdio entrypoint integration", () => {
       artifact: "provider_plugin",
       version: "0.5.2"
     }));
-  }, 15_000);
+  // Two real entrypoint children may serialize native-module startup under the
+  // full-suite worker load; their individual I/O waits remain independently bounded.
+  }, 30_000);
 
   it("returns graph-backed results for concurrent checkout/source clients without raw lock output", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-concurrent-");
@@ -258,22 +273,248 @@ describe("daemon-backed stdio entrypoint integration", () => {
     expect(replacement.stderr()).toBe("");
   }, 15_000);
 
+  it("reconciles a crashed owner's orphan build before admitting replacement work", async () => {
+    const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-orphan-");
+    const databasePath = graphStorePath(repoRoot);
+    const store = openGraphStore(databasePath);
+    try {
+      await store.upsertSnapshot({ snapshot: integrationSnapshot(repoRoot, "80", "fresh") });
+      await store.createBuildSnapshot({
+        snapshot: integrationSnapshot(repoRoot, "81", "refreshing"),
+        controller_generation: 4,
+        invalidation_generation: 2,
+        created_at: "2026-07-20T09:00:00.000Z"
+      });
+    } finally {
+      store.close();
+    }
+    fs.writeFileSync(repositoryOwnershipPath(databasePath), `${JSON.stringify({
+      repo_root: repoRoot,
+      runtime_identity: `${AGENT_WORKBENCH_RUNTIME_VERSION}:${SCHEMA_VERSION}`,
+      schema_version: SCHEMA_VERSION,
+      owner_id: "crashed-daemon",
+      owner_pid: 999999999,
+      owner_generation: 4,
+      heartbeat_at: "2026-07-20T09:00:00.000Z",
+      state: "active"
+    })}\n`);
+
+    const replacement = trackSession(await startEntryPointSession(repoRoot, {
+      idleGraceMs: 3000,
+      startupRefreshDelayMs: 60_000
+    }));
+    await initializeSession(replacement);
+    const health = parseEnvelope(await replacement.call("resources/read", {
+      uri: "integration:///health/agent-workbench"
+    })) as {
+      data: { daemon?: { warmup_state?: string; worker_invocations?: number; last_failure?: { code: string; target_snapshot_id?: string } } };
+    };
+    expect(health.data.daemon).toMatchObject({
+      warmup_state: "failed",
+      worker_invocations: 0,
+      last_failure: { code: "orphaned_build", target_snapshot_id: "81" }
+    });
+
+    const reopened = openGraphStore(databasePath);
+    try {
+      expect(reopened.db.prepare(`
+        SELECT id, publication_state FROM snapshots ORDER BY id
+      `).all()).toEqual([
+        { id: 80, publication_state: "published" },
+        { id: 81, publication_state: "failed" }
+      ]);
+      await expect(reopened.getLatestPublished({ repo_root: repoRoot })).resolves.toMatchObject({
+        status: "selected",
+        snapshot: { id: "80" }
+      });
+    } finally {
+      reopened.close();
+    }
+  }, 15_000);
+
+  it.each([
+    "generation",
+    "catalog",
+    "docs",
+    "graph",
+    "prepublication"
+  ] as const)("recovers one orphaned real-worker build after a %s barrier crash", async (barrier) => {
+    const repoRoot = createCrashBarrierRepository(`agent-workbench-entrypoint-${barrier}-crash-`);
+    const databasePath = graphStorePath(repoRoot);
+    await seedPublishedBarrierSnapshot(repoRoot, databasePath);
+
+    const probeRoot = path.join(repoRoot, ".cache", "agent-workbench", "test-crash");
+    const markerPath = path.join(probeRoot, `${barrier}.json`);
+    const releasePath = path.join(probeRoot, `${barrier}.release`);
+    const first = trackSession(await startEntryPointSession(repoRoot, {
+      idleGraceMs: 5000,
+      startupRefreshDelayMs: 60_000,
+      env: {
+        NODE_ENV: "test",
+        AGENT_WORKBENCH_TEST_REFRESH_CRASH_BARRIER: barrier,
+        AGENT_WORKBENCH_TEST_REFRESH_CRASH_MARKER: markerPath,
+        AGENT_WORKBENCH_TEST_REFRESH_CRASH_RELEASE: releasePath
+      }
+    }));
+    let firstDaemonPid: number | undefined;
+    let replacementDaemonPid: number | undefined;
+
+    try {
+      await initializeSession(first);
+      const firstHealth = daemonRefreshHealth(await first.call("resources/read", {
+        uri: "integration:///health/agent-workbench"
+      }));
+      firstDaemonPid = firstHealth.pid;
+      const watcherBaseline = repoStatus(await first.call("resources/read", { uri: "repo:///status" }));
+      expect(watcherBaseline.data).toMatchObject({ snapshot_id: "80", freshness: "fresh" });
+      fs.rmSync(path.join(repoRoot, "stale-sentinel.py"));
+      const admitted = repoStatus(await first.call("resources/read", { uri: "repo:///status" }));
+      expect(admitted.data).toMatchObject({ snapshot_id: "80", freshness: "stale" });
+      const marker = await waitForCrashBarrierMarker(markerPath);
+      expect(marker).toMatchObject({
+        barrier,
+        controller_generation: firstHealth.controller_generation,
+        invalidation_generation: 1,
+        daemon_pid: firstDaemonPid
+      });
+      expect(marker.snapshot_id).not.toBe("80");
+      const executing = daemonRefreshHealth(await first.call("resources/read", {
+        uri: "integration:///health/agent-workbench"
+      }));
+      expect(executing.worker_invocations).toBe(1);
+      expect(executing.visible_snapshot_id).toBe("80");
+
+      const atBarrier = openGraphStore(databasePath);
+      try {
+        expect(readSnapshotPublication(atBarrier, 80)).toMatchObject({
+          publication_state: "published",
+          freshness: "fresh"
+        });
+        expect(readSnapshotPublication(atBarrier, Number(marker.snapshot_id))).toMatchObject({
+          publication_state: "building",
+          controller_generation: marker.controller_generation,
+          invalidation_generation: marker.invalidation_generation
+        });
+        expect(readBarrierEvidence(atBarrier, Number(marker.snapshot_id))).toEqual(
+          expectedBarrierEvidence(barrier)
+        );
+      } finally {
+        atBarrier.close();
+      }
+
+      process.kill(firstDaemonPid, "SIGTERM");
+      await waitForProcessExit(firstDaemonPid);
+      await first.close();
+
+      const replacement = trackSession(await startEntryPointSession(repoRoot, {
+        idleGraceMs: 100,
+        startupRefreshDelayMs: 60_000,
+        env: { NODE_ENV: "test" }
+      }));
+      await initializeSession(replacement);
+      const recovered = daemonRefreshHealth(await replacement.call("resources/read", {
+        uri: "integration:///health/agent-workbench"
+      }));
+      replacementDaemonPid = recovered.pid;
+      expect(recovered.pid).not.toBe(firstDaemonPid);
+      expect(recovered).toMatchObject({
+        warmup_state: "failed",
+        worker_invocations: 0,
+        last_failure: { code: "orphaned_build", target_snapshot_id: marker.snapshot_id }
+      });
+
+      await sleep(150);
+      const stillAwaitingRequest = daemonRefreshHealth(await replacement.call("resources/read", {
+        uri: "integration:///health/agent-workbench"
+      }));
+      expect(stillAwaitingRequest).toMatchObject({
+        warmup_state: "failed",
+        worker_invocations: 0,
+        last_failure: { code: "orphaned_build", target_snapshot_id: marker.snapshot_id }
+      });
+
+      const afterRecovery = openGraphStore(databasePath);
+      try {
+        expect(readSnapshotPublication(afterRecovery, Number(marker.snapshot_id))).toMatchObject({
+          publication_state: "failed"
+        });
+        expect(countBuildingSnapshots(afterRecovery, repoRoot)).toBe(0);
+        await expect(afterRecovery.getLatestPublished({ repo_root: repoRoot })).resolves.toMatchObject({
+          status: "selected",
+          snapshot: { id: "80" }
+        });
+      } finally {
+        afterRecovery.close();
+      }
+      expect(JSON.parse(fs.readFileSync(repositoryOwnershipPath(databasePath), "utf8"))).toMatchObject({
+        owner_pid: replacementDaemonPid,
+        state: "active"
+      });
+
+      const successorAdmission = repoStatus(await replacement.call("resources/read", {
+        uri: "repo:///status"
+      }));
+      expect(successorAdmission.data).toMatchObject({ snapshot_id: "80", freshness: "stale" });
+      const completed = await waitForRefreshCompletion(replacement, marker.snapshot_id);
+      expect(completed).toMatchObject({
+        warmup_state: "complete",
+        worker_invocations: 1,
+        visible_snapshot_id: completed.target_snapshot_id
+      });
+      expect(completed.target_snapshot_id).not.toBe("80");
+      expect(completed.target_snapshot_id).not.toBe(marker.snapshot_id);
+
+      const finalStatus = repoStatus(await replacement.call("resources/read", { uri: "repo:///status" }));
+      expect(finalStatus.data).toMatchObject({
+        snapshot_id: completed.target_snapshot_id,
+        freshness: "fresh"
+      });
+
+      await replacement.close();
+      await waitForProcessExit(replacementDaemonPid);
+      await waitForDaemonMetadata(repoRoot, false, 3000);
+      expect(fs.existsSync(repositoryOwnershipPath(databasePath))).toBe(false);
+      const daemonState = daemonPaths(createDaemonIdentity(repoRoot));
+      expect(fs.existsSync(daemonState.socketPath)).toBe(false);
+
+      const finalStore = openGraphStore(databasePath);
+      try {
+        expect(readSnapshotPublication(finalStore, 80).publication_state).toBe("published");
+        expect(finalStore.db.prepare("SELECT id FROM snapshots WHERE id = ?")
+          .get(Number(marker.snapshot_id))).toBeUndefined();
+        expect(readSnapshotPublication(finalStore, Number(completed.target_snapshot_id)).publication_state).toBe("published");
+        expect(countBuildingSnapshots(finalStore, repoRoot)).toBe(0);
+        await expect(finalStore.getLatestPublished({ repo_root: repoRoot })).resolves.toMatchObject({
+          status: "selected",
+          snapshot: { id: completed.target_snapshot_id }
+        });
+      } finally {
+        finalStore.close();
+      }
+      expect(fs.existsSync(`${databasePath}-wal`)).toBe(false);
+      expect(fs.existsSync(`${databasePath}-shm`)).toBe(false);
+    } finally {
+      fs.mkdirSync(path.dirname(releasePath), { recursive: true });
+      fs.writeFileSync(releasePath, "release\n");
+      terminateIfRunning(firstDaemonPid);
+      terminateIfRunning(replacementDaemonPid);
+    }
+  }, 30_000);
+
   it("does not expose raw SQLite lock text when graph startup is blocked", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-locked-");
     const lock = await holdExclusiveSqliteLockUntilReleased(graphStorePath(repoRoot));
     const session = trackSession(await startEntryPointSession(repoRoot, { idleGraceMs: 100 }));
 
     try {
-      await initializeSession(session);
-      const response = await session.call("resources/read", { uri: "repo:///status" }, 22_000);
+      await expect(initializeSession(session)).rejects.toThrow(/Timed out waiting for initialize/);
       const serialized = [
-        JSON.stringify(response),
         session.stderr(),
         session.stdoutRemainder()
       ].join("\n");
 
       expect(serialized).not.toMatch(/database is locked/i);
-      expect(serialized).toMatch(/invalid_due_to_environment|blocked|provider_unavailable/i);
+      expect(serialized).toMatch(/Timed out connecting to Agent Workbench daemon/i);
       expect(lock.released).toBe(false);
     } finally {
       lock.release();
@@ -375,6 +616,184 @@ function createCleanFixtureCopy(prefix: string): string {
   return destination;
 }
 
+type TestGraphStore = ReturnType<typeof openGraphStore>;
+type CrashBarrierMarker = {
+  barrier: "generation" | "catalog" | "docs" | "graph" | "prepublication";
+  snapshot_id: string;
+  controller_generation: number;
+  invalidation_generation: number;
+  daemon_pid: number;
+};
+
+function createCrashBarrierRepository(prefix: string): string {
+  const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  fs.writeFileSync(path.join(repoRoot, "app.py"), "def run():\n    missing_dependency()\n");
+  fs.writeFileSync(path.join(repoRoot, "stale-sentinel.py"), "def sentinel():\n    return True\n");
+  fs.writeFileSync(path.join(repoRoot, "unsupported.java"), "class Unsupported {}\n");
+  fs.writeFileSync(path.join(repoRoot, "README.md"), "# Barrier repository\n\nPublication barrier evidence.\n");
+  tempRoots.push(repoRoot);
+  return repoRoot;
+}
+
+async function seedPublishedBarrierSnapshot(repoRoot: string, databasePath: string): Promise<void> {
+  const store = openGraphStore(databasePath);
+  const extractors = new ExtractorRegistryAdapter();
+  extractors.register(new PythonTreeSitterExtractorAdapter());
+  try {
+    await indexRepositoryGraph({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      extractors,
+      resource_extractor: new ResourceExtractorAdapter(),
+      graph: store,
+      catalog: store,
+      docs_index: store,
+      snapshots: store,
+      clock: new SystemClockAdapter(),
+      schema_version: SCHEMA_VERSION,
+      snapshot_id: "80"
+    });
+  } finally {
+    store.close();
+  }
+}
+
+async function waitForCrashBarrierMarker(markerPath: string): Promise<CrashBarrierMarker> {
+  const started = Date.now();
+  while (Date.now() - started <= 10_000) {
+    if (fs.existsSync(markerPath)) {
+      return JSON.parse(fs.readFileSync(markerPath, "utf8")) as CrashBarrierMarker;
+    }
+    await sleep(25);
+  }
+  throw new Error(`Timed out waiting for refresh crash barrier marker: ${markerPath}`);
+}
+
+function daemonRefreshHealth(message: McpMessage): {
+  pid: number;
+  controller_generation: number;
+  warmup_state: string;
+  worker_invocations: number;
+  target_snapshot_id?: string;
+  visible_snapshot_id?: string;
+  last_failure?: { code: string; target_snapshot_id?: string };
+} {
+  const envelope = parseEnvelope(message) as {
+    data: {
+      daemon?: {
+        pid: number;
+        controller_generation: number;
+        warmup_state: string;
+        worker_invocations: number;
+        target_snapshot_id?: string;
+        visible_snapshot_id?: string;
+        last_failure?: { code: string; target_snapshot_id?: string };
+      };
+    };
+  };
+  if (envelope.data.daemon === undefined) {
+    throw new Error(`Missing daemon refresh health: ${JSON.stringify(envelope)}`);
+  }
+  return envelope.data.daemon;
+}
+
+async function waitForRefreshCompletion(
+  session: EntryPointSession,
+  orphanSnapshotId: string
+): Promise<ReturnType<typeof daemonRefreshHealth>> {
+  let lastHealth: ReturnType<typeof daemonRefreshHealth> | undefined;
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    lastHealth = daemonRefreshHealth(await session.call("resources/read", {
+      uri: "integration:///health/agent-workbench"
+    }));
+    if (
+      lastHealth.warmup_state === "complete" &&
+      lastHealth.worker_invocations === 1 &&
+      lastHealth.target_snapshot_id !== undefined &&
+      lastHealth.target_snapshot_id !== orphanSnapshotId
+    ) {
+      return lastHealth;
+    }
+    await sleep(50);
+  }
+  throw new Error(`Timed out waiting for replacement refresh completion: ${JSON.stringify(lastHealth)}`);
+}
+
+function readSnapshotPublication(store: TestGraphStore, snapshotId: number): {
+  publication_state: string;
+  freshness: string;
+  controller_generation: number;
+  invalidation_generation: number;
+} {
+  const row = store.db.prepare(`
+    SELECT publication_state, freshness, controller_generation, invalidation_generation
+    FROM snapshots
+    WHERE id = ?
+  `).get(snapshotId) as ReturnType<typeof readSnapshotPublication> | undefined;
+  if (row === undefined) throw new Error(`Missing snapshot publication row: ${snapshotId}`);
+  return row;
+}
+
+function readBarrierEvidence(store: TestGraphStore, snapshotId: number): {
+  catalog: boolean;
+  docs: boolean;
+  graph: boolean;
+  unresolved: boolean;
+  freshness: string;
+} {
+  const count = (sql: string): number => (store.db.prepare(sql).get(snapshotId) as { count: number }).count;
+  const freshness = (store.db.prepare("SELECT freshness FROM snapshots WHERE id = ?")
+    .get(snapshotId) as { freshness: string }).freshness;
+  return {
+    catalog: count("SELECT COUNT(*) AS count FROM files WHERE snapshot_id = ?") > 0,
+    docs: count("SELECT COUNT(*) AS count FROM docs_documents WHERE snapshot_id = ?") > 0,
+    graph: count(`
+      SELECT COUNT(*) AS count FROM nodes
+      WHERE file_id IN (SELECT id FROM files WHERE snapshot_id = ?)
+    `) > 0,
+    unresolved: count(`
+      SELECT COUNT(*) AS count FROM unresolved_refs
+      WHERE file_id IN (SELECT id FROM files WHERE snapshot_id = ?)
+    `) > 0,
+    freshness
+  };
+}
+
+function expectedBarrierEvidence(
+  barrier: CrashBarrierMarker["barrier"]
+): ReturnType<typeof readBarrierEvidence> {
+  if (barrier === "generation") {
+    return { catalog: false, docs: false, graph: false, unresolved: false, freshness: "refreshing" };
+  }
+  if (barrier === "catalog") {
+    return { catalog: true, docs: false, graph: false, unresolved: false, freshness: "refreshing" };
+  }
+  if (barrier === "docs") {
+    return { catalog: true, docs: true, graph: false, unresolved: false, freshness: "refreshing" };
+  }
+  if (barrier === "graph") {
+    return { catalog: true, docs: true, graph: true, unresolved: true, freshness: "refreshing" };
+  }
+  return { catalog: true, docs: true, graph: true, unresolved: true, freshness: "fresh" };
+}
+
+function countBuildingSnapshots(store: TestGraphStore, repoRoot: string): number {
+  return (store.db.prepare(`
+    SELECT COUNT(*) AS count FROM snapshots
+    WHERE repo_identity = ? AND publication_state = 'building'
+  `).get(repoRoot) as { count: number }).count;
+}
+
+function terminateIfRunning(pid: number | undefined): void {
+  if (pid === undefined) return;
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    // The expected crash/replacement shutdown path already removed the process.
+  }
+}
+
 async function waitForDaemonMetadata(repoRoot: string, exists: boolean, timeoutMs: number): Promise<void> {
   const metadataPath = daemonPaths(createDaemonIdentity(repoRoot)).metadataPath;
   const started = Date.now();
@@ -401,4 +820,23 @@ async function waitForProcessExit(pid: number): Promise<void> {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function integrationSnapshot(
+  repoRoot: string,
+  id: string,
+  freshness: "fresh" | "refreshing"
+) {
+  return {
+    id,
+    repo_root: repoRoot,
+    workspace_root: repoRoot,
+    repo_identity: repoRoot,
+    config_identity: "default",
+    schema_version: SCHEMA_VERSION,
+    freshness,
+    owner_state: "owner" as const,
+    created_at: "2026-07-20T09:00:00.000Z",
+    updated_at: "2026-07-20T09:00:00.000Z"
+  };
 }

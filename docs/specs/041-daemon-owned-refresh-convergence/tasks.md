@@ -338,7 +338,7 @@ preserve dependency order and record overlap before parallel work.
 
 ## Phase 4: Recovery And End-To-End Proof
 
-- [ ] T007 Implement and prove crash, orphan, lock, worker, and resource
+- [x] T007 Implement and prove crash, orphan, lock, worker, and resource
   recovery through the single ownership path.
   - Depends on: T003, T004, T006
   - Requirements: Requirement 3, Requirement 4, Requirement 5, Requirement 6;
@@ -356,36 +356,39 @@ preserve dependency order and record overlap before parallel work.
     owner to reconcile orphan builds and start ordinary convergence; ambiguous
     evidence blocks cleanup/execution. A later stale request may start one new
     execution, but failure handling itself never retries.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: validation
+  - Evidence: Phase 4 recovery complete: pnpm typecheck passed; graph/runtime/daemon-launch focused suites passed 105/105; daemon-entrypoint integration passed 15/15 including five real worker/daemon crashes at generation, catalog, docs, graph, and post-prune pre-completion barriers. Independent final review found no blockers. Recovery preserves full dead-owner chains, reconciles quarantined failures only on a later ordinary request, exposes bounded orphan evidence, and cleans worker/store/socket/ownership resources.
   - Expected evidence: Publication-barrier crash/reopen tests must record owner,
     writer/activity leases, child/store/socket cleanup, orphan disposition,
     visible snapshot, structured failure, and retry admission.
-  - Status: Pending dependency-ordered implementation; Phase 2 residual recorded.
+  - Status: T007 acceptance complete; T008 is dependency-ready.
   - Phase 2 handoff: Reconcile termination-unconfirmed ownership across crash
     and replacement, and retain structured SQLite, permission, orphan, and
     cleanup recovery evidence.
-  - [ ] T007.1 Implement worker/store/socket/metadata cleanup and explicit
+  - [x] T007.1 Implement worker/store/socket/metadata cleanup and explicit
     shutdown settlement in the controller, daemon, and server.
     - Acceptance: Every terminal and drain path releases each owned resource
       exactly once.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T007.2 Implement positive-evidence orphan/lock reconciliation in the
+    - Evidence: Worker protocol, failed-publication quarantine, daemon startup unwind, closeable stores, socket/metadata/ownership cleanup, and later-request settlement are implemented; focused recovery suites and daemon-entrypoint cleanup assertions pass.
+  - Status: Every terminal and drain path now has bounded exactly-once cleanup evidence.
+  - [x] T007.2 Implement positive-evidence orphan/lock reconciliation in the
     controller and graph store.
     - Acceptance: Dead-owner builds become failed and invisible; ambiguous
       owners block; no old worker can publish after replacement admission.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T007.3 Prove timeout, worker protocol failures, SQLite/permission
+    - Evidence: Positive-death ownership reclaim preserves a bounded full recovery chain, blocks ambiguous evidence, atomically fails matching orphan builds, and survives multi-crash rollback; graph/runtime/daemon tests pass.
+  - Status: Dead-owner orphan and lock reconciliation acceptance complete.
+  - [x] T007.3 Prove timeout, worker protocol failures, SQLite/permission
     failures, active-publication crashes, reopen, cleanup, and later-request
     recovery.
     - Acceptance: Exact structured failure and resource receipts establish one
       owner, no partial selection, and no automatic retry.
     - Evidence mode: validation
-    - Evidence: Pending.
+    - Evidence: Timeout/protocol/store/permission/orphan and five real worker/daemon crash-barrier cases pass; prior publication remains visible, recovery is structured, and one later ordinary request converges.
 
-- [ ] T008 Prove source-entrypoint and actually installed-package convergence
+  - Status: T007 failure and recovery proof complete.
+- [x] T008 Prove source-entrypoint and actually installed-package convergence
   with exact post-refresh query evidence.
   - Depends on: T005, T006, T007
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
@@ -406,29 +409,33 @@ preserve dependency order and record overlap before parallel work.
     `docs_search` hits are exact; deleted evidence is absent; and provider labels
     are not misrepresented as proof that real Codex or Claude CLIs ran.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Phase 4 installed acceptance complete: source/query suites passed 67/67; checkout daemon entrypoint passed 15/15; install and MCP-launch smokes passed; real packed-and-installed-bin two-client smoke passed with one daemon, worker delta 1, exact surviving reference/docs hits, deleted evidence absent, fresh replacement, and client/daemon/socket/metadata/temporary-root cleanup. Provider labels are explicitly not real CLI proof.
   - Expected evidence: Record V002, V007-V010, and V019-V021 receipts including
     tarball/install/bin provenance, daemon PID, execution/generation/snapshot
     IDs, worker count, query hits, trust metadata, cleanup, and limitations.
-  - [ ] T008.1 Retain and correctly label checkout/source-entrypoint convergence
+  - Status: T008 acceptance complete; Phase 4 is complete and T009 is dependency-ready.
+  - [x] T008.1 Retain and correctly label checkout/source-entrypoint convergence
     in the MCP entrypoint fixtures.
     - Acceptance: Source composition proves shared behavior without claiming an
       installed package or real agent CLI.
     - Evidence mode: validation
-    - Evidence: Pending.
-  - [ ] T008.2 Add and run `scripts/ci/installed-package-mcp-smoke.mjs` through
+    - Evidence: Checkout/source entrypoint tests are explicitly labelled and pass 15/15; helper documentation states they do not prove an installed package or real agent CLI.
+  - Status: Source-entrypoint evidence retained with the correct boundary.
+  - [x] T008.2 Add and run `scripts/ci/installed-package-mcp-smoke.mjs` through
     the CI workflow against a real isolated tarball installation.
     - Acceptance: The installed bin and its native/runtime dependencies host two
       provider-labelled sessions on one daemon.
     - Evidence mode: validation
-    - Evidence: Pending.
-  - [ ] T008.3 Prove exact surviving reference/doc hits, deleted-evidence
+    - Evidence: CI now runs scripts/ci/installed-package-mcp-smoke.mjs. A real 0.5.2 tarball installed into isolated roots and its installed agent-workbench-mcp bin hosted Codex- and Claude-labelled clients on one daemon; cleanup passed.
+  - Status: Installed-package two-client acceptance complete.
+  - [x] T008.3 Prove exact surviving reference/doc hits, deleted-evidence
     absence, trust, cleanup, and evidence-boundary wording.
     - Acceptance: Empty non-blocked results and provider labels alone cannot
       satisfy the installed-package receipt.
     - Evidence mode: validation
-    - Evidence: Pending.
+    - Evidence: Installed-bin acceptance proved worker delta 1, exact parser-backed greet-to-helper reference, exact docs/guide.md Details FTS hit, deleted symbol/docs absence, fresh replacement identity, trust metadata, and real_agent_cli_executed=false.
 
+  - Status: Exact query and evidence-boundary acceptance complete.
 ## Phase 5: Promotion And Closure Readiness
 
 - [ ] T009 Run all gates, promote verified behavior, reconcile EB052, and

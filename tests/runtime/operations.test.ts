@@ -7,6 +7,8 @@ import { describe, expect, expectTypeOf, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { EventEmitter } from "node:events";
+import type { Worker } from "node:worker_threads";
 import type {
   ClockPort,
   DaemonRefreshActivityTransition,
@@ -29,6 +31,7 @@ import {
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
 import { createDeadlineControllerHarness } from "../helpers/spec041-refresh-reproductions.js";
 import { RepositoryRefreshTriggerCoordinator } from "../../src/application/use-cases/repository-refresh-triggers.js";
+import { StartupGraphRefreshExecutor } from "../../src/infrastructure/runtime/startup-graph-refresh-executor.js";
 
 class MutableClock implements ClockPort {
   private timestamp: number;
@@ -52,6 +55,29 @@ class MutableClock implements ClockPort {
   public advance(ms: number): void {
     this.timestamp += ms;
   }
+}
+
+class ProtocolWorker extends EventEmitter {
+  public terminationCalls = 0;
+  public unref(): this { return this; }
+  public async terminate(): Promise<number> {
+    this.terminationCalls += 1;
+    queueMicrotask(() => this.emit("exit", 1));
+    return 1;
+  }
+}
+
+function createProtocolExecutor(worker: ProtocolWorker): StartupGraphRefreshExecutor {
+  return new StartupGraphRefreshExecutor({
+    database_path: "/tmp/test.sqlite",
+    config_identity: "test",
+    max_files: 1,
+    retain_latest_snapshots: 1,
+    retain_latest_fresh_snapshots: 1,
+    vacuum: false,
+    controller_generation: 4,
+    worker_factory: () => worker as unknown as Worker
+  });
 }
 
 class ControlledRefreshExecutor implements RefreshExecutorPort {
@@ -173,6 +199,7 @@ class ControlledDeadlineScheduler implements RefreshDeadlineSchedulerPort {
 
 class ControlledPublicationPort implements SnapshotPublicationPort {
   public readonly transitions: SnapshotPublicationTransition[] = [];
+  private readonly buildingSnapshotIds = new Set<string>();
   private failingState: SnapshotPublicationTransition["to"] | undefined;
   private deferredTransition: {
     state: SnapshotPublicationTransition["to"];
@@ -181,6 +208,8 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
   } | undefined;
   private allocationSequence = 1000;
   private allocationFails = false;
+  private allocationFailureCode: string | undefined;
+  private omitNextAllocatedBuild = false;
   private latestPublished: {
     snapshot: SnapshotState;
     publication: SnapshotPublicationRecord & { state: "published" };
@@ -189,10 +218,18 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
   public async allocateBuildSnapshotId(): Promise<string> {
     if (this.allocationFails) {
       this.allocationFails = false;
-      throw new Error("target allocation failure");
+      throw Object.assign(new Error("target allocation failure SENTINEL_SECRET"), {
+        code: this.allocationFailureCode
+      });
     }
     this.allocationSequence += 1;
-    return String(this.allocationSequence);
+    const snapshotId = String(this.allocationSequence);
+    if (this.omitNextAllocatedBuild) {
+      this.omitNextAllocatedBuild = false;
+    } else {
+      this.buildingSnapshotIds.add(snapshotId);
+    }
+    return snapshotId;
   }
 
   public async transitionBuild<TState extends SnapshotPublicationTransition["to"]>(
@@ -209,6 +246,7 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
       this.failingState = undefined;
       throw new Error("publication transition failed");
     }
+    this.buildingSnapshotIds.delete(input.snapshot_id);
     const record = {
       repo_root: input.repo_root,
       snapshot_id: input.snapshot_id,
@@ -248,6 +286,15 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
   public async readExplicit(input: {
     snapshot_id: string;
   }): Promise<SnapshotPublicationSelection> {
+    if (this.buildingSnapshotIds.has(input.snapshot_id)) {
+      return {
+        status: "blocked",
+        snapshot_id: input.snapshot_id,
+        publication_state: "building",
+        reason: "snapshot_unpublished",
+        message: "Snapshot is not published."
+      };
+    }
     return { status: "missing", snapshot_id: input.snapshot_id, reason: "snapshot_not_found" };
   }
 
@@ -255,8 +302,13 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
     this.failingState = state;
   }
 
-  public failNextAllocation(): void {
+  public failNextAllocation(code?: string): void {
     this.allocationFails = true;
+    this.allocationFailureCode = code;
+  }
+
+  public omitNextBuild(): void {
+    this.omitNextAllocatedBuild = true;
   }
 
   public setLatestPublished(snapshotId: string, freshness: SnapshotState["freshness"]): void {
@@ -329,6 +381,17 @@ function observeTerminal(controller: SnapshotRefreshController) {
   return barrier.promise;
 }
 
+async function waitForControllerState(
+  controller: SnapshotRefreshController,
+  state: "failed" | "complete"
+): Promise<void> {
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    if (controller.getReceipt().execution_state === state) return;
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+  throw new Error(`Timed out waiting for controller state ${state}.`);
+}
+
 function createControlledController(options?: {
   executor?: ControlledRefreshExecutor;
   deadlines?: ControlledDeadlineScheduler;
@@ -353,6 +416,64 @@ function createControlledController(options?: {
 }
 
 describe("runtime operation adapters", () => {
+  it("settles the production worker protocol only after exit with every emitted message", async () => {
+    const worker = new ProtocolWorker();
+    const executor = createProtocolExecutor(worker);
+    let settled = false;
+    const completion = executor.run({
+      repo_root: "/repo",
+      execution_id: "exec-protocol",
+      target_snapshot_id: "44",
+      generation: 7,
+      deadline: { timeout_ms: 1000, deadline_at: "2026-07-20T10:00:01.000Z" }
+    }).then((value) => {
+      settled = true;
+      return value;
+    });
+
+    worker.emit("message", { type: "complete", result: { snapshot_id: "44" } });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    worker.emit("message", { type: "complete", result: { snapshot_id: "44" } });
+    worker.emit("exit", 0);
+
+    await expect(completion).resolves.toMatchObject({ exit_code: 0, results: [{}, {}] });
+    expect((await completion).results).toHaveLength(2);
+  });
+
+  it("retains a valid message alongside a later nonzero worker exit", async () => {
+    const worker = new ProtocolWorker();
+    const executor = createProtocolExecutor(worker);
+    const completion = executor.run({
+      repo_root: "/repo",
+      execution_id: "exec-nonzero",
+      target_snapshot_id: "45",
+      generation: 8,
+      deadline: { timeout_ms: 1000, deadline_at: "2026-07-20T10:00:01.000Z" }
+    });
+    worker.emit("message", { type: "complete", result: { snapshot_id: "45" } });
+    worker.emit("exit", 2);
+    await expect(completion).resolves.toMatchObject({ exit_code: 2, results: [{}] });
+  });
+
+  it("terminates a retained production worker exactly once", async () => {
+    const worker = new ProtocolWorker();
+    const executor = createProtocolExecutor(worker);
+    const completion = executor.run({
+      repo_root: "/repo",
+      execution_id: "exec-terminate",
+      target_snapshot_id: "46",
+      generation: 9,
+      deadline: { timeout_ms: 1000, deadline_at: "2026-07-20T10:00:01.000Z" }
+    });
+    await Promise.all([
+      executor.terminate({ execution_id: "exec-terminate", reason: "worker_error" }),
+      executor.terminate({ execution_id: "exec-terminate", reason: "worker_error" })
+    ]);
+    expect(worker.terminationCalls).toBe(1);
+    await expect(completion).resolves.toEqual({ exit_code: 1, results: [] });
+  });
+
   it("requires a finite positive controller deadline", () => {
     const clock = new MutableClock("2026-07-20T10:00:00.000Z");
     const executor = new ControlledRefreshExecutor();
@@ -781,6 +902,40 @@ describe("runtime operation adapters", () => {
     ]);
   });
 
+  it("releases a failed execution when the worker exits before creating its build snapshot", async () => {
+    const publication = new ControlledPublicationPort();
+    publication.omitNextBuild();
+    const { controller, executor, deadlines } = createControlledController({ publication });
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    const terminal = observeTerminal(controller);
+    executor.fail(0);
+    await terminal;
+
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      last_failure: { code: "worker_error" }
+    });
+    expect(controller.getReceipt()).toMatchObject({
+      target_snapshot_id: "1001",
+      last_failure: { target_snapshot_id: undefined }
+    });
+    await expect(controller.getDiagnostics({ repo_root: "/repo" })).resolves.toMatchObject({
+      execution_state: "failed",
+      graph_freshness: "cold",
+      activity_lease_held: false,
+      last_failure: { code: "worker_error" }
+    });
+    expect(publication.transitions).toHaveLength(0);
+    expect(deadlines.activeCount()).toBe(0);
+  });
+
   it.each([
     {
       name: "worker error",
@@ -1139,11 +1294,11 @@ describe("runtime operation adapters", () => {
     expect(executor.terminations).toHaveLength(0);
     expect(publication.transitions).toHaveLength(0);
     expect(controller.getReceipt()).toMatchObject({
-      execution_state: "idle",
-      started_generation: 0,
-      requested_generation: 0,
+      execution_state: "failed",
+      started_generation: 1,
+      requested_generation: 1,
       activity_lease: null,
-      last_failure: undefined
+      last_failure: { code: "store_failure", category: "store" }
     });
 
     const laterAdmission = await controller.request({
@@ -1154,10 +1309,36 @@ describe("runtime operation adapters", () => {
     });
     expect(laterAdmission).toMatchObject({
       outcome: "accepted",
-      execution_id: "exec-1",
+      execution_id: "exec-2",
       started_generation: 1
     });
     await executor.waitForCalls(1);
+  });
+
+  it("classifies permission-denied allocation through the closed safe failure envelope", async () => {
+    const publication = new ControlledPublicationPort();
+    publication.failNextAllocation("EACCES");
+    const { controller } = createControlledController({ publication });
+
+    await expect(controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    })).resolves.toEqual({
+      outcome: "blocked",
+      reused: false,
+      state: "idle",
+      reason: "permission_failure",
+      message: "Refresh operation was not permitted."
+    });
+    const diagnostics = await controller.getDiagnostics({ repo_root: "/repo" });
+    expect(diagnostics.last_failure).toMatchObject({
+      code: "permission_failure",
+      category: "permission",
+      message: "Refresh operation was not permitted."
+    });
+    expect(JSON.stringify(diagnostics)).not.toContain("SENTINEL_SECRET");
   });
 
   it("allocates and publishes one exact numeric build row through the real graph store", async () => {
@@ -1380,10 +1561,9 @@ describe("runtime operation adapters", () => {
     expect(deadlines.activeCount()).toBe(0);
   });
 
-  it("reports store failure once when failed-build publication settlement fails", async () => {
+  it("quarantines failed-build settlement until one later request cleans it and admits a successor", async () => {
     const { controller, executor, deadlines, publication } = createControlledController();
     publication.failNext("failed");
-    const terminal = observeTerminal(controller);
     await controller.request({
       repo_root: "/repo",
       reason: "startup",
@@ -1392,11 +1572,11 @@ describe("runtime operation adapters", () => {
     });
     await executor.waitForCalls(1);
     executor.fail(0);
-    await terminal;
+    await waitForControllerState(controller, "failed");
 
     expect(controller.getReceipt()).toMatchObject({
       execution_state: "failed",
-      activity_lease: null,
+      activity_lease: { state: "held" },
       last_failure: { code: "store_failure", category: "store" }
     });
     expect(publication.transitions).toEqual([
@@ -1406,6 +1586,28 @@ describe("runtime operation adapters", () => {
       { execution_id: "exec-1", reason: "worker_error" }
     ]);
     expect(deadlines.activeCount()).toBe(0);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(executor.calls).toHaveLength(1);
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "failed" })
+    ]);
+
+    await expect(controller.request({
+      repo_root: "/repo",
+      reason: "stale_first_read",
+      source: "later-client",
+      invalidation_generation: 2
+    })).resolves.toMatchObject({
+      outcome: "accepted",
+      execution_id: "exec-2",
+      started_generation: 2
+    });
+    await executor.waitForCalls(2);
+    expect(executor.calls).toHaveLength(2);
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "failed" }),
+      expect.objectContaining({ snapshot_id: "1001", to: "failed" })
+    ]);
   });
 
   it("does not retry after failure and admits one successor only on a later request", async () => {

@@ -54,7 +54,7 @@ type PassOutcome =
   | { outcome: "complete"; result: RefreshWorkerResult }
   | { outcome: "failed"; code: ControllerWorkerFailureCode; worker_started: boolean };
 
-type ControllerFailureCode = ControllerWorkerFailureCode | "store_failure";
+type ControllerFailureCode = ControllerWorkerFailureCode | "store_failure" | "permission_failure";
 
 export type SnapshotRefreshControllerOptions = {
   repo_root: string;
@@ -103,6 +103,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
   private terminationConfirmationNotified = false;
   private diagnosticRevision = 0;
   private targetPublicationState: SnapshotPublicationState | undefined;
+  private unsettledPublicationExecutionId: string | undefined;
 
   constructor(options: SnapshotRefreshControllerOptions) {
     if (!Number.isInteger(options.controller_generation) || options.controller_generation <= 0) {
@@ -133,6 +134,10 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
   }
 
   private async admit(input: SnapshotRefreshRequest): Promise<SnapshotRefreshAdmission> {
+    if (this.unsettledPublicationExecutionId !== undefined) {
+      const blocked = await this.reconcileUnsettledBuild(input);
+      if (blocked !== undefined) return blocked;
+    }
     if (this.terminationUnconfirmedExecutionId !== undefined) {
       return {
         outcome: "blocked",
@@ -169,14 +174,27 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
         repo_root: this.repoRoot,
         minimum_id: String(Math.max(1, this.clock.nowUnixMs()))
       });
-    } catch {
-      return {
-        outcome: "blocked",
-        reused: false,
-        state: "idle",
-        reason: "store_failure",
-        message: "Refresh store operation failed."
-      };
+    } catch (error) {
+      const code = classifyRefreshInfrastructureFailure(error);
+      this.recordFailedAdmission({
+        invalidation_generation: admittedGeneration,
+        code
+      });
+      return code === "permission_failure"
+        ? {
+            outcome: "blocked",
+            reused: false,
+            state: "idle",
+            reason: "permission_failure",
+            message: "Refresh operation was not permitted."
+          }
+        : {
+            outcome: "blocked",
+            reused: false,
+            state: "idle",
+            reason: "store_failure",
+            message: "Refresh store operation failed."
+          };
     }
     const executionId = this.createExecutionId();
     this.pass = 1;
@@ -252,8 +270,9 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
   public async recordAdmissionFailure(input: {
     repo_root: string;
     invalidation_generation: InvalidationGeneration;
-    code: "store_failure" | "permission_failure";
-  }): Promise<Extract<SnapshotRefreshAdmission, { outcome: "blocked"; reason: "store_failure" }>> {
+    code: "store_failure" | "permission_failure" | "orphaned_build";
+    target_snapshot_id?: string;
+  }): Promise<Extract<SnapshotRefreshAdmission, { outcome: "blocked" }>> {
     if (input.repo_root !== this.repoRoot) {
       throw new TypeError("Refresh admission failure repository does not match controller ownership.");
     }
@@ -261,27 +280,22 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
       if (this.active !== undefined) {
         throw new Error("Cannot record an admission failure while refresh execution is active.");
       }
-      const executionId = this.createExecutionId();
-      this.requestedGeneration = Math.max(this.requestedGeneration, input.invalidation_generation);
-      this.startedGeneration = this.requestedGeneration;
-      this.executionId = executionId;
-      this.targetSnapshotId = undefined;
-      this.targetPublicationState = undefined;
-      this.executionState = "failed";
-      this.workerTerminationState = "not_required";
-      this.lastFailure = createRefreshFailure({
-        code: input.code,
-        execution_id: executionId,
-        occurred_at: this.clock.nowIso8601()
-      });
-      this.bumpDiagnosticRevision();
-      return {
-        outcome: "blocked",
-        reused: false,
-        state: "idle",
-        reason: "store_failure",
-        message: "Refresh store operation failed."
-      };
+      this.recordFailedAdmission(input);
+      return input.code === "permission_failure"
+        ? {
+            outcome: "blocked",
+            reused: false,
+            state: "idle",
+            reason: "permission_failure",
+            message: "Refresh operation was not permitted."
+          }
+        : {
+            outcome: "blocked",
+            reused: false,
+            state: "idle",
+            reason: "store_failure",
+            message: "Refresh store operation failed."
+          };
     });
   }
 
@@ -300,6 +314,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
           ? "fresh"
           : "stale";
       const nonIdle = this.executionState !== "idle";
+      const hasTargetPublication = nonIdle && this.targetPublicationState !== undefined;
       return snapshotRefreshDiagnosticsReceiptSchema.parse({
         repo_identity: this.repoRoot,
         controller_generation: this.controllerGeneration,
@@ -307,12 +322,13 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
         execution_id: nonIdle ? this.executionId : undefined,
         started_generation: nonIdle ? this.startedGeneration : undefined,
         requested_generation: nonIdle ? this.requestedGeneration : undefined,
-        target_snapshot_id: nonIdle ? this.targetSnapshotId : undefined,
+        target_snapshot_id: hasTargetPublication ? this.targetSnapshotId : undefined,
         visible_snapshot_id: visibleSnapshotId,
         execution_state: this.executionState,
-        publication_state: nonIdle ? this.targetPublicationState : undefined,
+        publication_state: hasTargetPublication ? this.targetPublicationState : undefined,
         graph_freshness: graphFreshness,
         activity_lease_held: this.active?.lease.state === "held",
+        worker_invocations: this.workerInvocations,
         worker_termination_state: this.workerTerminationState,
         last_failure: this.lastFailure
       });
@@ -363,8 +379,8 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
             pass.publication_state = "superseded";
             this.targetPublicationState = "superseded";
             this.bumpDiagnosticRevision();
-          } catch {
-            await this.failActiveBuild(executionId, "store_failure");
+          } catch (error) {
+            await this.failActiveBuild(executionId, classifyRefreshInfrastructureFailure(error));
             return false;
           }
           this.pass += 1;
@@ -375,8 +391,8 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
               repo_root: this.repoRoot,
               minimum_id: String(Math.max(1, this.clock.nowUnixMs()))
             });
-          } catch {
-            this.fail(executionId, "store_failure");
+          } catch (error) {
+            this.fail(executionId, classifyRefreshInfrastructureFailure(error));
             return false;
           }
           this.targetSnapshotId = targetSnapshotId;
@@ -404,8 +420,8 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
           pass.publication_state = "published";
           this.targetPublicationState = "published";
           this.bumpDiagnosticRevision();
-        } catch {
-          await this.failActiveBuild(executionId, "store_failure");
+        } catch (error) {
+          await this.failActiveBuild(executionId, classifyRefreshInfrastructureFailure(error));
           return false;
         }
         this.complete(executionId);
@@ -568,19 +584,25 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
     });
   }
 
-  private fail(executionId: string, code: ControllerFailureCode): void {
+  private fail(
+    executionId: string,
+    code: ControllerFailureCode,
+    targetWasCreated = true
+  ): void {
     const execution = this.active;
     if (execution?.execution_id !== executionId) {
       return;
     }
+    const targetSnapshotId = targetWasCreated ? execution.target_snapshot_id : undefined;
     const failure = createRefreshFailure({
       code,
       execution_id: executionId,
-      target_snapshot_id: execution.target_snapshot_id,
+      target_snapshot_id: targetSnapshotId,
       occurred_at: this.clock.nowIso8601()
     });
     const releasedLease = this.releaseLease(execution.lease);
     this.executionState = "failed";
+    if (!targetWasCreated) this.targetPublicationState = undefined;
     this.lastFailure = failure;
     this.workerTerminationState = this.terminationConfirmedExecutionId === executionId
       ? "confirmed"
@@ -613,6 +635,24 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
       return;
     }
     try {
+      const selection = await this.publication.readExplicit({
+        repo_root: this.repoRoot,
+        snapshot_id: execution.target_snapshot_id
+      });
+      if (selection.status === "missing") {
+        this.fail(executionId, code, false);
+        return;
+      }
+      if (selection.status === "blocked" && selection.publication_state !== "building") {
+        execution.publication_state = selection.publication_state;
+        this.targetPublicationState = selection.publication_state;
+        this.fail(executionId, code);
+        return;
+      }
+      if (selection.status === "selected") {
+        this.quarantineUnsettledBuild(executionId, "store_failure");
+        return;
+      }
       await this.publication.transitionBuild({
         repo_root: this.repoRoot,
         snapshot_id: execution.target_snapshot_id,
@@ -626,8 +666,125 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
       this.targetPublicationState = "failed";
       this.bumpDiagnosticRevision();
       this.fail(executionId, code);
-    } catch {
+    } catch (error) {
+      this.quarantineUnsettledBuild(executionId, classifyRefreshInfrastructureFailure(error));
+    }
+  }
+
+  private recordFailedAdmission(input: {
+    invalidation_generation: InvalidationGeneration;
+    code: "store_failure" | "permission_failure" | "orphaned_build";
+    target_snapshot_id?: string;
+  }): void {
+    const executionId = this.createExecutionId();
+    this.requestedGeneration = Math.max(this.requestedGeneration, input.invalidation_generation);
+    this.startedGeneration = this.requestedGeneration;
+    this.executionId = executionId;
+    this.targetSnapshotId = input.target_snapshot_id;
+    this.targetPublicationState = input.code === "orphaned_build" ? "failed" : undefined;
+    this.executionState = "failed";
+    this.workerTerminationState = "not_required";
+    this.lastFailure = createRefreshFailure({
+      code: input.code,
+      execution_id: executionId,
+      target_snapshot_id: input.target_snapshot_id,
+      occurred_at: this.clock.nowIso8601()
+    });
+    this.bumpDiagnosticRevision();
+  }
+
+  private quarantineUnsettledBuild(
+    executionId: string,
+    code: "store_failure" | "permission_failure"
+  ): void {
+    const execution = this.active;
+    if (execution?.execution_id !== executionId) return;
+    this.unsettledPublicationExecutionId = executionId;
+    this.executionState = "failed";
+    this.targetPublicationState = "building";
+    this.lastFailure = createRefreshFailure({
+      code,
+      execution_id: executionId,
+      target_snapshot_id: execution.target_snapshot_id,
+      occurred_at: this.clock.nowIso8601()
+    });
+    this.workerTerminationState = this.terminationConfirmedExecutionId === executionId
+      ? "confirmed"
+      : this.terminationUnconfirmedExecutionId === executionId
+        ? "unconfirmed"
+        : "not_required";
+    this.bumpDiagnosticRevision();
+  }
+
+  private async reconcileUnsettledBuild(
+    input: SnapshotRefreshRequest
+  ): Promise<Extract<SnapshotRefreshAdmission, { outcome: "blocked" }> | undefined> {
+    const executionId = this.unsettledPublicationExecutionId;
+    const execution = this.active;
+    if (executionId === undefined || execution?.execution_id !== executionId) {
+      return undefined;
+    }
+    this.requestedGeneration = Math.max(this.requestedGeneration, input.invalidation_generation);
+    try {
+      const selection = await this.publication.readExplicit({
+        repo_root: this.repoRoot,
+        snapshot_id: execution.target_snapshot_id
+      });
+      if (selection.status === "missing") {
+        this.unsettledPublicationExecutionId = undefined;
+        this.fail(executionId, "store_failure", false);
+        return undefined;
+      }
+      if (selection.status === "blocked" && selection.publication_state !== "building") {
+        execution.publication_state = selection.publication_state;
+        this.targetPublicationState = selection.publication_state;
+        this.unsettledPublicationExecutionId = undefined;
+        this.fail(executionId, "store_failure");
+        return undefined;
+      }
+      if (selection.status === "selected") {
+        this.quarantineUnsettledBuild(executionId, "store_failure");
+        return {
+          outcome: "blocked",
+          reused: false,
+          state: "idle",
+          reason: "store_failure",
+          message: "Refresh store operation failed."
+        };
+      }
+      await this.publication.transitionBuild({
+        repo_root: this.repoRoot,
+        snapshot_id: execution.target_snapshot_id,
+        controller_generation: this.controllerGeneration,
+        invalidation_generation: execution.started_generation,
+        from: "building",
+        to: "failed",
+        updated_at: this.clock.nowIso8601()
+      });
+      execution.publication_state = "failed";
+      this.targetPublicationState = "failed";
+      this.unsettledPublicationExecutionId = undefined;
+      this.bumpDiagnosticRevision();
       this.fail(executionId, "store_failure");
+      return undefined;
+    } catch (error) {
+      const code = classifyRefreshInfrastructureFailure(error);
+      this.quarantineUnsettledBuild(executionId, code);
+      return code === "permission_failure"
+        ? {
+            outcome: "blocked",
+            reused: false,
+            state: "idle",
+            reason: "permission_failure",
+            message: "Refresh operation was not permitted."
+          }
+        : {
+            outcome: "blocked",
+            reused: false,
+            state: "idle",
+            reason: "store_failure",
+            message: "Refresh store operation failed."
+          };
     }
   }
 
@@ -724,6 +881,16 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
   private bumpDiagnosticRevision(): void {
     this.diagnosticRevision += 1;
   }
+}
+
+export function classifyRefreshInfrastructureFailure(
+  error: unknown
+): "store_failure" | "permission_failure" {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = (error as { code?: unknown }).code;
+    if (code === "EACCES" || code === "EPERM") return "permission_failure";
+  }
+  return "store_failure";
 }
 
 export class SystemRefreshDeadlineScheduler implements RefreshDeadlineSchedulerPort {

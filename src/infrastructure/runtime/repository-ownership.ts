@@ -18,6 +18,7 @@ import type {
 
 type ProcessState = "active" | "dead" | "ambiguous";
 type BlockedOwnershipAdmission = Extract<RepositoryOwnershipAdmission, { outcome: "blocked" }>;
+const MAX_RECOVERED_OWNER_EVIDENCE = 32;
 
 export class FileRepositoryOwnershipAdapter implements RepositoryOwnershipPort {
   public constructor(
@@ -31,6 +32,10 @@ export class FileRepositoryOwnershipAdapter implements RepositoryOwnershipPort {
   ): Promise<RepositoryOwnershipAdmission> {
     fs.mkdirSync(path.dirname(this.lockPath), { recursive: true });
     const lease: RepositoryOwnershipLease & { state: "active" } = { ...input, state: "active" };
+    const orphanGuardRecovery = this.recoverMissingCanonicalFromGuard();
+    if (orphanGuardRecovery === "blocked") {
+      return { outcome: "blocked", reason: "ownership_ambiguous", owner: ambiguousLease(input) };
+    }
     try {
       writeExclusive(this.lockPath, lease);
       return { outcome: "acquired", lease };
@@ -49,20 +54,44 @@ export class FileRepositoryOwnershipAdapter implements RepositoryOwnershipPort {
     if (state === "ambiguous") {
       return { outcome: "blocked", reason: "ownership_ambiguous", owner: { ...existing, state: "ambiguous" } };
     }
+    if ((existing.recovered_owners?.length ?? 0) >= MAX_RECOVERED_OWNER_EVIDENCE) {
+      return { outcome: "blocked", reason: "ownership_ambiguous", owner: ambiguousLease(input) };
+    }
 
     await this.beforeDeadOwnerReclaim?.();
     const reclaimPath = `${this.lockPath}.reclaim`;
+    const recoveredOwners = [
+      ...deadRecoveryChain(existing),
+      { ...existing, recovered_owners: undefined, state: "dead" as const }
+    ];
+    const recoveredLease = { ...lease, recovered_owners: recoveredOwners };
     let reclaimClaimed = false;
     try {
-      writeExclusive(reclaimPath, lease);
+      const existingGuard = readLease(reclaimPath);
+      if (fs.existsSync(reclaimPath)) {
+        if (
+          existingGuard === undefined ||
+          this.processState(existingGuard.owner_pid) !== "dead" ||
+          !sameOwner(readLease(reclaimPath), existingGuard)
+        ) {
+          return { outcome: "blocked", reason: "ownership_ambiguous", owner: ambiguousLease(input) };
+        }
+        fs.rmSync(reclaimPath);
+      }
+      writeExclusive(reclaimPath, recoveredLease);
       reclaimClaimed = true;
       const current = readLease(this.lockPath);
       if (!sameOwner(current, existing) || current === undefined || this.processState(current.owner_pid) !== "dead") {
         return { outcome: "blocked", reason: "ownership_ambiguous", owner: ambiguousLease(input) };
       }
-      fs.rmSync(this.lockPath);
-      writeExclusive(this.lockPath, lease);
-      return { outcome: "acquired", lease };
+      fs.renameSync(reclaimPath, this.lockPath);
+      reclaimClaimed = false;
+      return {
+        outcome: "acquired",
+        lease: recoveredLease,
+        recovered_owner: recoveredOwners[recoveredOwners.length - 1],
+        recovered_owners: recoveredOwners
+      };
     } catch (error) {
       if (isFileExistsError(error) || isMissingFileError(error)) {
         return { outcome: "blocked", reason: "ownership_ambiguous", owner: ambiguousLease(input) };
@@ -79,7 +108,49 @@ export class FileRepositoryOwnershipAdapter implements RepositoryOwnershipPort {
       existing?.owner_id === input.lease.owner_id &&
       existing.owner_generation === input.lease.owner_generation
     ) {
-      fs.rmSync(this.lockPath, { force: true });
+      const recoveredOwners = input.lease.recovered_owners ?? [];
+      const recovered = recoveredOwners.at(-1);
+      if (recovered !== undefined) {
+        const restored = {
+          ...recovered,
+          recovered_owners: recoveredOwners.length > 1
+            ? recoveredOwners.slice(0, -1)
+            : undefined
+        };
+        fs.writeFileSync(this.lockPath, `${JSON.stringify(restored)}\n`);
+      } else {
+        fs.rmSync(this.lockPath, { force: true });
+      }
+    }
+  }
+
+  public async confirmRecovery(input: {
+    lease: RepositoryOwnershipLease & { state: "active" };
+  }): Promise<void> {
+    const existing = readLease(this.lockPath);
+    if (!sameOwner(existing, input.lease)) return;
+    const confirmed = { ...input.lease, recovered_owners: undefined };
+    fs.writeFileSync(this.lockPath, `${JSON.stringify(confirmed)}\n`);
+    input.lease.recovered_owners = undefined;
+  }
+
+  private recoverMissingCanonicalFromGuard(): "ready" | "blocked" | "not_required" {
+    if (fs.existsSync(this.lockPath)) return "not_required";
+    const reclaimPath = `${this.lockPath}.reclaim`;
+    if (!fs.existsSync(reclaimPath)) return "not_required";
+    const guard = readLease(reclaimPath);
+    if (
+      guard === undefined ||
+      this.processState(guard.owner_pid) !== "dead" ||
+      !sameOwner(readLease(reclaimPath), guard)
+    ) return "blocked";
+    try {
+      writeExclusive(this.lockPath, { ...guard, state: "dead" });
+      fs.rmSync(reclaimPath);
+      return "ready";
+    } catch (error) {
+      if (isFileExistsError(error) || isMissingFileError(error)) return "blocked";
+      throw error;
     }
   }
 }
@@ -96,7 +167,12 @@ export class LazyOwnershipGatedRefreshAuthority implements SnapshotRefreshContro
   public constructor(private readonly options: {
     ownership: RepositoryOwnershipPort;
     ownership_request: Parameters<RepositoryOwnershipPort["acquire"]>[0];
-    create_controller: () => Promise<SnapshotRefreshControllerPort>;
+    prepare_controller?: (
+      admission: Extract<RepositoryOwnershipAdmission, { outcome: "acquired" }>
+    ) => Promise<"ready" | "ownership_ambiguous">;
+    create_controller: (
+      admission: Extract<RepositoryOwnershipAdmission, { outcome: "acquired" }>
+    ) => Promise<SnapshotRefreshControllerPort>;
   }) {}
 
   public async request(input: SnapshotRefreshRequest): Promise<SnapshotRefreshAdmission> {
@@ -210,7 +286,17 @@ export class LazyOwnershipGatedRefreshAuthority implements SnapshotRefreshContro
     if (admission.outcome === "blocked") return admission;
     this.lease = admission.lease;
     try {
-      this.controller = await this.options.create_controller();
+      const preparation = await this.options.prepare_controller?.(admission) ?? "ready";
+      if (preparation === "ownership_ambiguous") {
+        await this.options.ownership.release({ lease: admission.lease });
+        this.lease = undefined;
+        return {
+          outcome: "blocked",
+          reason: "ownership_ambiguous",
+          owner: { ...admission.lease, state: "ambiguous" }
+        };
+      }
+      this.controller = await this.options.create_controller(admission);
       this.unsubscribeController = this.controller.onTransition((transition) => {
         for (const listener of this.listeners) {
           try { void Promise.resolve(listener(transition)).catch(() => undefined); } catch {}
@@ -248,10 +334,36 @@ function readLease(lockPath: string): RepositoryOwnershipLease | undefined {
       typeof value.owner_generation !== "number" ||
       typeof value.heartbeat_at !== "string"
     ) return undefined;
-    return { ...value, state: "active" } as RepositoryOwnershipLease;
+    const recoveredOwners = parseRecoveredOwners(value.recovered_owners);
+    if (value.recovered_owners !== undefined && recoveredOwners === undefined) return undefined;
+    return { ...value, recovered_owners: recoveredOwners, state: "active" } as RepositoryOwnershipLease;
   } catch {
     return undefined;
   }
+}
+
+function parseRecoveredOwners(
+  value: unknown
+): RepositoryOwnershipLease["recovered_owners"] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length > MAX_RECOVERED_OWNER_EVIDENCE) return undefined;
+  const owners: NonNullable<RepositoryOwnershipLease["recovered_owners"]>[number][] = [];
+  for (const candidate of value) {
+    if (typeof candidate !== "object" || candidate === null) return undefined;
+    const owner = candidate as Record<string, unknown>;
+    if (
+      typeof owner.repo_root !== "string" ||
+      typeof owner.runtime_identity !== "string" ||
+      typeof owner.schema_version !== "number" ||
+      typeof owner.owner_id !== "string" ||
+      typeof owner.owner_pid !== "number" ||
+      typeof owner.owner_generation !== "number" ||
+      typeof owner.heartbeat_at !== "string" ||
+      owner.state !== "dead"
+    ) return undefined;
+    owners.push(owner as NonNullable<RepositoryOwnershipLease["recovered_owners"]>[number]);
+  }
+  return owners;
 }
 
 function currentProcessState(pid: number): ProcessState {
@@ -303,6 +415,15 @@ function ambiguousLease(
   input: Parameters<RepositoryOwnershipPort["acquire"]>[0]
 ): RepositoryOwnershipLease & { state: "ambiguous" } {
   return { ...input, owner_id: "unknown", owner_pid: 0, state: "ambiguous" };
+}
+
+function deadRecoveryChain(
+  lease: RepositoryOwnershipLease
+): Array<RepositoryOwnershipLease & { state: "dead" }> {
+  return (lease.recovered_owners ?? []).map((owner) => ({
+    ...owner,
+    state: "dead"
+  }));
 }
 
 function isFileExistsError(error: unknown): boolean {

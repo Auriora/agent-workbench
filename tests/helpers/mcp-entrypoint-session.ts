@@ -23,6 +23,10 @@ export type EntryPointSession = {
   close: () => Promise<void>;
 };
 
+/**
+ * Starts the checkout/source entrypoint at `src/mcp/stdio-entrypoint.mjs`.
+ * This helper does not exercise an installed package bin or a real agent CLI.
+ */
 export async function startEntryPointSession(
   repoRoot: string,
   options: {
@@ -41,7 +45,9 @@ export async function startEntryPointSession(
     env: {
       ...process.env,
       ...options.env,
-      AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS: String(options.idleGraceMs ?? 3000),
+      // Keep ordinary integration cases isolated from the next fixture. Tests
+      // that exercise reconnect/idle semantics opt into their required grace.
+      AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS: String(options.idleGraceMs ?? 250),
       AGENT_WORKBENCH_DAEMON_STARTUP_REFRESH_DELAY_MS: String(
         options.startupRefreshDelayMs ?? 60_000
       )

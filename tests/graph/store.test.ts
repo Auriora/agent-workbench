@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { ExtractionBatch } from "../../src/domain/models/index.js";
 import type { SnapshotState } from "../../src/domain/models/runtime.js";
 import type {
+  RepositoryOwnershipLease,
   SnapshotPublicationPort,
   SnapshotPublicationSelection,
 } from "../../src/ports/index.js";
@@ -705,33 +706,24 @@ describe("graph store", () => {
     }
   });
 
-  it.fails("reconciles a positively orphaned building snapshot as failed on reopen", async () => {
+  it("reconciles a positively orphaned building snapshot as failed on reopen", async () => {
     const databasePath = path.join(dir, "orphaned-building.sqlite");
     const store = openGraphStore(databasePath);
     try {
-      await store.upsertSnapshot({ snapshot: snapshotState("83") });
-      ensureSqliteColumn(store.db, "snapshots", "publication_state", "TEXT");
-      ensureSqliteColumn(store.db, "snapshots", "owner_id", "TEXT");
-      ensureSqliteColumn(store.db, "snapshots", "owner_pid", "INTEGER");
-      ensureSqliteColumn(store.db, "snapshots", "owner_generation", "INTEGER");
-      ensureSqliteColumn(store.db, "snapshots", "heartbeat_at", "TEXT");
-      store.db.prepare(`
-        UPDATE snapshots
-        SET publication_state = 'building',
-            owner_id = 'dead-owner',
-            owner_pid = 999999999,
-            owner_generation = 4,
-            heartbeat_at = '2026-07-18T00:00:00.000Z'
-        WHERE id = ?
-      `).run(83);
+      await store.upsertSnapshot({ snapshot: snapshotState("82") });
+      await store.createBuildSnapshot({
+        snapshot: snapshotState("83"),
+        controller_generation: 4,
+        invalidation_generation: 7,
+        created_at: "2026-07-18T00:00:00.000Z"
+      });
       expect(store.db.prepare(`
-        SELECT publication_state, owner_id, owner_pid
+        SELECT publication_state, controller_generation
         FROM snapshots
         WHERE id = ?
       `).get(83)).toEqual({
         publication_state: "building",
-        owner_id: "dead-owner",
-        owner_pid: 999999999
+        controller_generation: 4
       });
     } finally {
       store.close();
@@ -740,18 +732,107 @@ describe("graph store", () => {
     const reopened = openGraphStore(databasePath);
     try {
       expect(reopened.validateSchema()).toBe(true);
+      await expect(reopened.reconcileOrphanedBuilds({
+        repo_root: "/tmp/repo",
+        current_owner: activeOwnerLease(5),
+        recovered_owners: [deadOwnerLease(4)],
+        updated_at: "2026-07-20T00:00:00.000Z"
+      })).resolves.toEqual({ outcome: "reconciled", snapshot_ids: ["83"] });
       const orphan = reopened.db.prepare(`
-        SELECT publication_state
+        SELECT publication_state, publication_updated_at
         FROM snapshots
         WHERE id = ?
-      `).get(83) as { publication_state: string };
-      expect(orphan.publication_state).toBe("failed");
+      `).get(83);
+      expect(orphan).toEqual({
+        publication_state: "failed",
+        publication_updated_at: "2026-07-20T00:00:00.000Z"
+      });
       await expect(reopened.getSnapshot({
         repo_root: "/tmp/repo",
         snapshot_id: "83"
       })).resolves.toBeNull();
+      await expect(reopened.getLatestPublished({ repo_root: "/tmp/repo" })).resolves.toMatchObject({
+        status: "selected",
+        snapshot: { id: "82" }
+      });
     } finally {
       reopened.close();
+    }
+  });
+
+  it("blocks orphan cleanup without exact positive dead-owner evidence", async () => {
+    const store = openGraphStore(path.join(dir, "ambiguous-orphan.sqlite"));
+    try {
+      await store.createBuildSnapshot({
+        snapshot: snapshotState("91"),
+        controller_generation: 8,
+        invalidation_generation: 1,
+        created_at: "2026-07-18T00:00:00.000Z"
+      });
+
+      await expect(store.reconcileOrphanedBuilds({
+        repo_root: "/tmp/repo",
+        current_owner: activeOwnerLease(10),
+        updated_at: "2026-07-20T00:00:00.000Z"
+      })).resolves.toEqual({
+        outcome: "blocked",
+        reason: "ownership_ambiguous",
+        snapshot_ids: ["91"]
+      });
+      await expect(store.reconcileOrphanedBuilds({
+        repo_root: "/tmp/repo",
+        current_owner: activeOwnerLease(10),
+        recovered_owners: [{ ...deadOwnerLease(8), runtime_identity: "other-runtime" }],
+        updated_at: "2026-07-20T00:00:00.000Z"
+      })).resolves.toMatchObject({ outcome: "blocked", reason: "ownership_ambiguous" });
+      await expect(store.reconcileOrphanedBuilds({
+        repo_root: "/tmp/repo",
+        current_owner: activeOwnerLease(10),
+        recovered_owners: [deadOwnerLease(9)],
+        updated_at: "2026-07-20T00:00:00.000Z"
+      })).resolves.toEqual({
+        outcome: "blocked",
+        reason: "ownership_ambiguous",
+        snapshot_ids: ["91"]
+      });
+      expect(store.db.prepare(`
+        SELECT publication_state, publication_updated_at
+        FROM snapshots
+        WHERE id = 91
+      `).get()).toEqual({
+        publication_state: "building",
+        publication_updated_at: "2026-07-18T00:00:00.000Z"
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("reconciles every matching orphan in a positively proven multi-crash owner chain", async () => {
+    const store = openGraphStore(path.join(dir, "multi-crash-orphans.sqlite"));
+    try {
+      for (const [snapshotId, generation] of [[101, 4], [102, 5]] as const) {
+        await store.createBuildSnapshot({
+          snapshot: snapshotState(String(snapshotId)),
+          controller_generation: generation,
+          invalidation_generation: 1,
+          created_at: "2026-07-18T00:00:00.000Z"
+        });
+      }
+      await expect(store.reconcileOrphanedBuilds({
+        repo_root: "/tmp/repo",
+        current_owner: activeOwnerLease(6),
+        recovered_owners: [deadOwnerLease(4), deadOwnerLease(5)],
+        updated_at: "2026-07-20T00:00:00.000Z"
+      })).resolves.toEqual({ outcome: "reconciled", snapshot_ids: ["101", "102"] });
+      expect(store.db.prepare(`
+        SELECT id, publication_state FROM snapshots ORDER BY id
+      `).all()).toEqual([
+        { id: 101, publication_state: "failed" },
+        { id: 102, publication_state: "failed" }
+      ]);
+    } finally {
+      store.close();
     }
   });
 
@@ -1714,6 +1795,28 @@ function ensureSqliteColumn(
   if (!columns.some((candidate) => candidate.name === column)) {
     db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${declaration}`);
   }
+}
+
+function deadOwnerLease(ownerGeneration: number): RepositoryOwnershipLease & { state: "dead" } {
+  return {
+    repo_root: "/tmp/repo",
+    runtime_identity: `test:${SCHEMA_VERSION}`,
+    schema_version: SCHEMA_VERSION,
+    owner_id: "dead-owner",
+    owner_pid: 999999999,
+    owner_generation: ownerGeneration,
+    heartbeat_at: "2026-07-18T00:00:00.000Z",
+    state: "dead"
+  };
+}
+
+function activeOwnerLease(ownerGeneration: number): RepositoryOwnershipLease & { state: "active" } {
+  return {
+    ...deadOwnerLease(ownerGeneration),
+    owner_id: "replacement-owner",
+    owner_pid: process.pid,
+    state: "active"
+  };
 }
 
 async function holdExclusiveSqliteLock(

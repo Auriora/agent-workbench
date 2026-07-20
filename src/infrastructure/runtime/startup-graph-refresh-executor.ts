@@ -17,11 +17,13 @@ export type StartupGraphRefreshExecutorOptions = {
   retain_latest_fresh_snapshots: number;
   vacuum: boolean;
   controller_generation: number;
+  worker_factory?: (input: { workerData: Record<string, unknown> }) => Worker;
 };
 
 /** Sole production adapter for the existing startup graph worker. */
 export class StartupGraphRefreshExecutor implements RefreshExecutorPort {
   private readonly workers = new Map<string, Worker>();
+  private readonly terminations = new Map<string, Promise<void>>();
 
   public constructor(private readonly options: StartupGraphRefreshExecutorOptions) {}
 
@@ -29,10 +31,7 @@ export class StartupGraphRefreshExecutor implements RefreshExecutorPort {
     if (this.workers.has(input.execution_id)) {
       throw new Error("Refresh execution already has a worker.");
     }
-    const worker = new Worker(
-      new URL("../workers/startup-graph-warmup-worker-entrypoint.mjs", import.meta.url),
-      {
-        workerData: {
+    const workerData = {
           repoRoot: input.repo_root,
           databasePath: this.options.database_path,
           snapshotId: input.target_snapshot_id,
@@ -43,54 +42,65 @@ export class StartupGraphRefreshExecutor implements RefreshExecutorPort {
           vacuum: this.options.vacuum,
           controllerGeneration: this.options.controller_generation,
           invalidationGeneration: input.generation
-        }
-      }
+    };
+    const worker = this.options.worker_factory?.({ workerData }) ?? new Worker(
+      new URL("../workers/startup-graph-warmup-worker-entrypoint.mjs", import.meta.url),
+      { workerData }
     );
     this.workers.set(input.execution_id, worker);
     worker.unref();
 
     return new Promise<RefreshExecutorCompletion>((resolve, reject) => {
-      let settled = false;
-      const finish = (completion: RefreshExecutorCompletion): void => {
-        if (settled) return;
-        settled = true;
+      const results: unknown[] = [];
+      let workerError: Error | undefined;
+      const cleanup = (): void => {
         this.workers.delete(input.execution_id);
-        resolve(completion);
+        this.terminations.delete(input.execution_id);
+        worker.off("message", onMessage);
+        worker.off("error", onError);
+        worker.off("exit", onExit);
       };
-      worker.once("message", (message: unknown) => {
+      const onMessage = (message: unknown): void => {
+        if (results.length >= 2) return;
         if (!isCompleteWorkerMessage(message, input.target_snapshot_id)) {
-          finish({ exit_code: 0, results: [message] });
+          results.push(message);
           return;
         }
-        finish({
-          exit_code: 0,
-          results: [{
+        results.push({
             outcome: "complete",
             execution_id: input.execution_id,
             target_snapshot_id: input.target_snapshot_id,
             completed_generation: input.generation
-          }]
         });
-      });
-      worker.once("error", (error) => {
-        if (settled) return;
-        settled = true;
-        this.workers.delete(input.execution_id);
-        reject(error);
-      });
-      worker.once("exit", (code) => {
-        if (!settled) {
-          finish({ exit_code: code, results: [] });
+      };
+      const onError = (error: Error): void => {
+        workerError = error;
+      };
+      const onExit = (code: number): void => {
+        cleanup();
+        if (workerError !== undefined) {
+          reject(workerError);
+        } else {
+          resolve({ exit_code: code, results });
         }
-      });
+      };
+      worker.on("message", onMessage);
+      worker.once("error", onError);
+      worker.once("exit", onExit);
     });
   }
 
   public async terminate(input: Parameters<RefreshExecutorPort["terminate"]>[0]): Promise<void> {
     const worker = this.workers.get(input.execution_id);
     if (worker === undefined) return;
-    await worker.terminate();
-    this.workers.delete(input.execution_id);
+    let termination = this.terminations.get(input.execution_id);
+    if (termination === undefined) {
+      termination = Promise.resolve().then(async () => {
+        await worker.terminate();
+      });
+      this.terminations.set(input.execution_id, termination);
+    }
+    await termination;
   }
 }
 

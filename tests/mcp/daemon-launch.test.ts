@@ -79,7 +79,99 @@ describe("Agent Workbench daemon launcher", () => {
 
       const dead = new FileRepositoryOwnershipAdapter(lockPath, () => "dead");
       const replacement = await dead.acquire({ ...ownershipRequest(), owner_id: "replacement" });
-      expect(replacement).toMatchObject({ outcome: "acquired", lease: { owner_id: "replacement" } });
+      expect(replacement).toMatchObject({
+        outcome: "acquired",
+        lease: { owner_id: "replacement" },
+        recovered_owners: [{ owner_id: "owner", state: "dead" }]
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves dead-owner evidence until recovery is confirmed across replacement crashes", async () => {
+    const root = makeRepoRoot("agent-workbench-owner-chain-");
+    const lockPath = path.join(root, "refresh-owner.json");
+    try {
+      const first = new FileRepositoryOwnershipAdapter(lockPath, () => "dead");
+      await first.acquire({ ...ownershipRequest(), owner_pid: 700001, owner_generation: 1 });
+      const second = await first.acquire({
+        ...ownershipRequest(), owner_id: "second", owner_pid: 700002, owner_generation: 2
+      });
+      expect(second).toMatchObject({ outcome: "acquired", recovered_owners: [{ owner_generation: 1 }] });
+
+      const thirdAdapter = new FileRepositoryOwnershipAdapter(lockPath, () => "dead");
+      const third = await thirdAdapter.acquire({
+        ...ownershipRequest(), owner_id: "third", owner_pid: 700003, owner_generation: 3
+      });
+      expect(third).toMatchObject({
+        outcome: "acquired",
+        recovered_owners: [{ owner_generation: 1 }, { owner_generation: 2 }]
+      });
+      if (third.outcome === "acquired") {
+        await thirdAdapter.release({ lease: third.lease });
+      }
+      expect(JSON.parse(fs.readFileSync(lockPath, "utf8"))).toMatchObject({
+        owner_generation: 2,
+        state: "dead",
+        recovered_owners: [{ owner_generation: 1 }]
+      });
+      const fourth = await new FileRepositoryOwnershipAdapter(lockPath, () => "dead").acquire({
+        ...ownershipRequest(), owner_id: "fourth", owner_pid: 700004, owner_generation: 4
+      });
+      expect(fourth).toMatchObject({
+        outcome: "acquired",
+        recovered_owners: [{ owner_generation: 1 }, { owner_generation: 2 }]
+      });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("reclaims an abandoned reclaim guard only with positive guard-owner death", async () => {
+    const root = makeRepoRoot("agent-workbench-reclaim-guard-");
+    const lockPath = path.join(root, "refresh-owner.json");
+    const guardPath = `${lockPath}.reclaim`;
+    try {
+      fs.writeFileSync(lockPath, `${JSON.stringify({
+        ...ownershipRequest(), owner_pid: 700010, owner_generation: 10, state: "active"
+      })}\n`);
+      fs.writeFileSync(guardPath, `${JSON.stringify({
+        ...ownershipRequest(), owner_id: "dead-guard", owner_pid: 700011,
+        owner_generation: 11, state: "active"
+      })}\n`);
+      const adapter = new FileRepositoryOwnershipAdapter(lockPath, (pid) =>
+        pid === process.pid ? "active" : "dead"
+      );
+      await expect(adapter.acquire({
+        ...ownershipRequest(), owner_id: "replacement", owner_generation: 12
+      })).resolves.toMatchObject({ outcome: "acquired" });
+      expect(fs.existsSync(guardPath)).toBe(false);
+
+      fs.writeFileSync(lockPath, `${JSON.stringify({
+        ...ownershipRequest(), owner_pid: 700020, owner_generation: 20, state: "active"
+      })}\n`);
+      fs.writeFileSync(guardPath, `${JSON.stringify({
+        ...ownershipRequest(), owner_id: "live-guard", owner_pid: process.pid,
+        owner_generation: 21, state: "active"
+      })}\n`);
+      await expect(adapter.acquire({
+        ...ownershipRequest(), owner_id: "blocked", owner_generation: 22
+      })).resolves.toMatchObject({ outcome: "blocked", reason: "ownership_ambiguous" });
+      expect(fs.existsSync(guardPath)).toBe(true);
+
+      fs.rmSync(lockPath, { force: true });
+      fs.writeFileSync(guardPath, `${JSON.stringify({
+        ...ownershipRequest(), owner_id: "orphaned-dead-guard", owner_pid: 700030,
+        owner_generation: 30, state: "active"
+      })}\n`);
+      await expect(adapter.acquire({
+        ...ownershipRequest(), owner_id: "guard-replacement", owner_generation: 31
+      })).resolves.toMatchObject({
+        outcome: "acquired",
+        recovered_owners: [{ owner_generation: 30 }]
+      });
+      expect(fs.existsSync(guardPath)).toBe(false);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -377,6 +469,51 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
+  it("does not unlink a healthy daemon socket when a second direct start loses ownership", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-second-start-");
+    const first = await startAgentWorkbenchDaemon({
+      repoRoot,
+      idleGraceMs: 3000,
+      serverOptions: { startupRefreshDelayMs: 60_000 }
+    });
+    try {
+      await expect(startAgentWorkbenchDaemon({
+        repoRoot,
+        idleGraceMs: 3000,
+        serverOptions: { startupRefreshDelayMs: 60_000 }
+      })).rejects.toThrow("Repository refresh owner is active");
+      expect(fs.existsSync(first.metadata.socketPath)).toBe(process.platform !== "win32");
+      const socket = net.createConnection(first.metadata.socketPath);
+      await new Promise<void>((resolve, reject) => {
+        socket.once("connect", resolve);
+        socket.once("error", reject);
+      });
+      socket.destroy();
+    } finally {
+      await first.close();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("unwinds ownership, store, and canonical socket when daemon startup fails after listen", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-start-failure-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    fs.mkdirSync(paths.metadataPath, { recursive: true });
+    try {
+      await expect(startAgentWorkbenchDaemon({
+        repoRoot,
+        idleGraceMs: 3000,
+        serverOptions: { startupRefreshDelayMs: 60_000 }
+      })).rejects.toThrow();
+      expect(fs.existsSync(path.join(repoRoot, ".cache", "agent-workbench", "refresh-owner.json"))).toBe(false);
+      expect(fs.existsSync(paths.socketPath)).toBe(false);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  });
+
   it("serializes cold same-repo startup across parallel clients", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-parallel-");
     const daemons: StartedAgentWorkbenchDaemon[] = [];
@@ -567,7 +704,7 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
-  it("replaces live daemon metadata with a mismatched identity", async () => {
+  it("blocks live mismatched daemon identity without deleting its canonical socket", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-mismatch-");
     const identity = createDaemonIdentity(repoRoot);
     const paths = daemonPaths(identity);
@@ -595,7 +732,7 @@ describe("Agent Workbench daemon launcher", () => {
     }
 
     try {
-      const socket = await connectOrStartDaemon({
+      await expect(connectOrStartDaemon({
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2000,
@@ -608,17 +745,10 @@ describe("Agent Workbench daemon launcher", () => {
           }).then((daemon) => daemons.push(daemon));
           return fakeChildProcess();
         }
-      });
-      socket.destroy();
+      })).rejects.toThrow("blocked: ambiguous_process");
 
-      expect(starts).toBe(1);
-      const metadata = JSON.parse(fs.readFileSync(paths.metadataPath, "utf8")) as {
-        identity: { id: string; runtimeVersion: string };
-      };
-      expect(metadata.identity).toMatchObject({
-        id: identity.id,
-        runtimeVersion: identity.runtimeVersion
-      });
+      expect(starts).toBe(0);
+      expect(fs.existsSync(paths.socketPath)).toBe(process.platform !== "win32");
     } finally {
       await closeDaemons(daemons);
       fs.rmSync(repoRoot, { recursive: true, force: true });
@@ -694,6 +824,32 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
+  it("blocks malformed daemon startup-lock evidence without deleting it", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-lock-ambiguous-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    let starts = 0;
+
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+    fs.writeFileSync(paths.startupLockPath, "not-json\n");
+
+    try {
+      await expect(connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 200,
+        spawnDaemon: () => {
+          starts += 1;
+          return fakeChildProcess();
+        }
+      })).rejects.toThrow("blocked: ambiguous startup ownership");
+
+      expect(starts).toBe(0);
+      expect(fs.readFileSync(paths.startupLockPath, "utf8")).toBe("not-json\n");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("creates owner-only metadata and IPC directories on POSIX", async () => {
     if (process.platform === "win32") {
       return;
@@ -716,7 +872,7 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
-  it("classifies malformed metadata as stale and rejects identity mismatches", () => {
+  it("blocks ambiguous metadata and live identity or socket mismatches", () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-classify-");
     const identity = createDaemonIdentity(repoRoot);
     const paths = daemonPaths(identity);
@@ -731,7 +887,7 @@ describe("Agent Workbench daemon launcher", () => {
           expectedIdentity: identity,
           socketPath: paths.socketPath
         })
-      ).toEqual({ state: "stale", reason: "malformed_metadata" });
+      ).toEqual({ state: "blocked", reason: "ambiguous_metadata" });
 
       const otherIdentity = createDaemonIdentity(path.join(repoRoot, "other"));
       fs.writeFileSync(
@@ -752,7 +908,34 @@ describe("Agent Workbench daemon launcher", () => {
           isProcessAlive: () => true,
           socketExists: () => true
         })
-      ).toMatchObject({ state: "mismatched", reason: "identity_mismatch" });
+      ).toMatchObject({ state: "blocked", reason: "ambiguous_process" });
+
+      fs.writeFileSync(
+        paths.metadataPath,
+        `${JSON.stringify({
+          identity,
+          pid: process.pid,
+          socketPath: paths.socketPath,
+          createdAt: "2026-07-05T00:00:00.000Z"
+        })}\n`
+      );
+      expect(classifyDaemonState({
+        metadataPath: paths.metadataPath,
+        expectedIdentity: identity,
+        socketPath: paths.socketPath,
+        isProcessAlive: () => true,
+        socketExists: () => false
+      })).toMatchObject({ state: "blocked", reason: "ambiguous_process" });
+
+      fs.writeFileSync(
+        paths.metadataPath,
+        `${JSON.stringify({
+          identity: otherIdentity,
+          pid: process.pid,
+          socketPath: paths.socketPath,
+          createdAt: "2026-07-05T00:00:00.000Z"
+        })}\n`
+      );
 
       expect(
         classifyDaemonState({
