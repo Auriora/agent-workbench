@@ -467,6 +467,32 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-07-20 - 041-daemon-owned-refresh-convergence
+
+- **Spec:** `docs/specs/041-daemon-owned-refresh-convergence/`
+- **Title:** Daemon-owned refresh convergence requirements
+- **Final spec commit:** `5b7b850`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/runtime-operations-design.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/requirements/runtime-requirements.md`
+  - `docs/backlog/README.md`
+  - `docs/reference/mvp-proof-matrix.md`
+  - `docs/design/layered-runtime-architecture.md`
+  - `docs/runbooks/install-agent-workbench.md`
+  - `docs/runbooks/codex-agent-workbench-plugin.md`
+  - `packaging/agent-workbench/README.md`
+  - `docs/reference/agent-readable-changelog.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Closure validation not yet executed.
+- **Residual risks:**
+  - none
+- **Follow-up:** none
 ### 2026-07-19 - 040-provider-aware-integration-health
 
 - **Spec:** `docs/specs/040-provider-aware-integration-health/`
