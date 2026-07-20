@@ -1,0 +1,234 @@
+---
+title: Authority-aware documentation intent ranking and count semantics tasks
+doc_type: spec
+artifact_type: tasks
+status: draft
+owner: platform
+last_reviewed: 2026-07-20
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
+---
+
+# Tasks
+
+## Task Dependency Graph
+
+```text
+T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008 -> T009 -> T010
+```
+
+No implementation task is complete. Each task is one reviewable contract or
+layer boundary; do not combine these tasks into one ranking change.
+
+## Phase 1: Contracts And Failing Proof
+
+- [ ] T001 Lock concern, rank, cursor, count, trust, and compatibility contracts.
+  - Depends on: none
+  - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
+    CP-001-CP-008
+  - Acceptance criteria: AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6,
+    AC1.7, AC1.8, AC1.9, AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6,
+    AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6, AC4.1, AC4.2, AC4.3,
+    AC4.4, AC4.5, AC4.6, AC4.7, AC4.8
+  - Files: `src/contracts/runtime-docs-contracts.ts`, `src/ports/index.ts`,
+    `tests/contracts/docs-ranking-contracts.test.ts`
+  - Acceptance: Contracts fix normalization/match evidence, exact tuple and
+    versions, 500/501 behavior, cursor identity, exact count/filter names,
+    legacy aggregate `score`, optional `lexical_score`, candidate-source union,
+    page filter basis, overflow blocker, and trust states. Consumer tests prove
+    response order/tuple is authoritative and legacy `score` meaning is stable.
+  - Evidence mode: command
+  - Evidence: Pending.
+
+- [ ] T002 Add stable fixtures and failing example/property proofs.
+  - Depends on: T001
+  - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
+    CP-001-CP-008
+  - Acceptance criteria: AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6,
+    AC1.7, AC1.8, AC1.9, AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6,
+    AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6, AC4.1, AC4.2, AC4.3,
+    AC4.4, AC4.5, AC4.6, AC4.7, AC4.8
+  - Files: `tests/fixtures/fixture-docs-authority-ranking/`,
+    `tests/docs/documentation-concern-routing.test.ts`,
+    `tests/docs/docs-ranking-policy.test.ts`, and
+    `tests/docs/docs-ranking-pagination.test.ts`
+  - Acceptance: Fixtures contain SessionStart owner/supporting documents,
+    explicit terms, multi/no-match/tie cases, draft/archived/missing/conflicting
+    and one-to-many owners, out-of-priority Markdown, partial priority scan,
+    and deterministic 0/499/500/501 distinct candidate unions. Boundary sets
+    cover both an owner at FTS row 501 and an owner-only document that becomes
+    distinct union row 501; both expect blockers, not incomplete results.
+  - Evidence mode: command
+  - Evidence: Pending.
+
+## Phase 2: Snapshot Ownership
+
+- [ ] T003 Extract and publish documentation-map ownership with graph snapshots.
+  - Depends on: T002
+  - Requirements: Requirement 1, Requirement 2; CP-002-CP-003, CP-008
+  - Acceptance criteria: AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.8,
+    AC1.9, AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6
+  - Files: `src/application/use-cases/index-repository-graph.ts`,
+    `src/application/use-cases/document-currency-routing.ts`,
+    `src/infrastructure/sqlite/graph-store.ts`, `src/ports/index.ts`,
+    `tests/graph/documentation-map-indexing.test.ts`,
+    `tests/graph/documentation-owner-publication.test.ts`
+  - Acceptance: Shared normalization and exact term extraction populate
+    concern/term/owner relations; one-to-many ownership is lossless; schema
+    migration, incompatible-old-snapshot handling, coordinated backfill, atomic
+    publication, failed-build isolation, and exhaustive owner-state-to-tier/
+    caveat cases pass. Query-time broad map reads are absent.
+  - Evidence mode: command
+  - Evidence: Pending.
+
+## Phase 3: Pure Ranking And Frozen Pagination
+
+- [ ] T004 Implement pure concern resolution and deterministic ranking policy.
+  - Depends on: T003
+  - Requirements: Requirement 1, Requirement 2, Requirement 4; CP-001-CP-003,
+    CP-007-CP-008
+  - Acceptance criteria: AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7,
+    AC1.8, AC1.9, AC2.1, AC2.2, AC2.3, AC2.4, AC2.6, AC4.1, AC4.2,
+    AC4.8
+  - Files: `src/domain/policies/document-concern.ts`,
+    `src/domain/policies/docs-ranking.ts`,
+    `tests/docs/documentation-concern-routing.test.ts`,
+    `tests/docs/docs-ranking-policy.test.ts`
+  - Acceptance: Exact phrase/token, multi/no-match/tie, FTS/owner candidate
+    source, `intent_owner_match` band, exhaustive owner tiers/caveats, tuple,
+    legacy aggregate score compatibility, optional FTS-only lexical score, and
+    reasons are deterministic; modules are pure and have no SQLite, workspace,
+    or presenter dependency.
+  - Evidence mode: command
+  - Evidence: Pending.
+
+- [ ] T005 Persist complete ranked universes and page only frozen order.
+  - Depends on: T004
+  - Requirements: Requirement 3; CP-004-CP-005
+  - Acceptance criteria: AC1.9, AC3.1, AC3.2, AC3.3, AC3.4, AC3.5,
+    AC3.6, AC4.3, AC4.5
+  - Files: `src/application/use-cases/query-docs.ts`, `src/ports/index.ts`,
+    `src/infrastructure/sqlite/graph-store.ts`,
+    `tests/docs/docs-ranking-pagination.test.ts`,
+    `tests/graph/docs-ranked-universe-store.test.ts`
+  - Acceptance: SQLite retrieves at most 501 FTS rows and at most 501 distinct
+    matched-owner document IDs once, without page offset; exact matched owners
+    load from the same snapshot; stable-ID deduplication precedes the
+    cap; 0-500 distinct union results freeze before first output; union row 501
+    blocks with zero hits/cursor; continuation reads the stored universe only.
+    Example and property tests vary source overlap, owner-only candidates, page
+    size, cursor position, equal rank components, and insertion order and prove
+    stable total order, concatenation equivalence, no duplicates/omissions,
+    expiry, identity rejection, and 499/500/501 boundaries.
+  - Evidence mode: command
+  - Evidence: Pending.
+
+## Phase 4: Presentation And Trust
+
+- [ ] T006 Present rank, compatibility, counts, filters, and trust receipts.
+  - Depends on: T005
+  - Requirements: Requirement 2, Requirement 4; CP-002, CP-006-CP-008
+  - Acceptance criteria: AC2.1, AC2.2, AC2.3, AC2.4, AC2.6, AC4.1,
+    AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8
+  - Files: `src/presentation/docs-presenter.ts`,
+    `src/application/use-cases/query-docs.ts`,
+    `src/contracts/runtime-docs-contracts.ts`,
+    `src/interface-adapters/mcp/registries/tools/docs-search.ts`,
+    `tests/presentation/docs-ranking-presenter.test.ts`,
+    `tests/mcp/docs-ranking-tool.test.ts`
+  - Acceptance: Presenter preserves final order, legacy aggregate `score`, and
+    `lexical_score`; emits exact tuple/reasons/source-count/page-filter names and
+    compatibility aliases; compresses caveats; and returns structured
+    overflow/expired/unavailable trust without ranking logic in presenter or
+    thin MCP adapter.
+  - Evidence mode: command
+  - Evidence: Pending.
+
+## Phase 5: Verification, Installation, And Lifecycle
+
+- [ ] T007 Run focused, property, full, architecture, and budget validation.
+  - Depends on: T006
+  - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
+    CP-001-CP-008
+  - Acceptance criteria: AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6,
+    AC1.7, AC1.8, AC1.9, AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6,
+    AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6, AC4.1, AC4.2, AC4.3,
+    AC4.4, AC4.5, AC4.6, AC4.7, AC4.8
+  - Files: `verification.md`
+  - Acceptance: V001-V010 pass and evidence records seeds/runs for property
+    tests, 499/500/501 budgets, architecture boundaries, typecheck, full suite,
+    plugin/skill validation, and package dry-run.
+  - Evidence mode: command
+  - Evidence: Pending.
+
+- [ ] T008 Prove the exact packed artifact through installed-package smoke.
+  - Depends on: T007
+  - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
+    SC-001-SC-004
+  - Acceptance criteria: AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6,
+    AC1.7, AC1.8, AC1.9, AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6,
+    AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6, AC4.1, AC4.2, AC4.3,
+    AC4.4, AC4.5, AC4.6, AC4.7, AC4.8
+  - Files: `scripts/ci/installed-package-mcp-smoke.mjs`, `verification.md`
+  - Acceptance: V011 packs the current checkout, installs that tarball into an
+    isolated prefix/cache/home, launches only its resolved installed bin, and
+    exercises SessionStart rank, candidate union, tuple/legacy score/lexical
+    score, counts, page filter, cursor equivalence, and both provider identities.
+    The JSON receipt records tarball/package hashes,
+    version, installed realpath, snapshot/universe/policy IDs, stable hit paths,
+    counts, provider identities, and cleanup. It proves clients closed, daemon
+    stopped, socket/metadata removed, and all temp roots removed on pass/fail.
+  - Evidence mode: command
+  - Evidence: Pending.
+
+- [ ] T009 Promote durable contracts and pass documentation/expert gates.
+  - Depends on: T008
+  - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
+    SC-004
+  - Acceptance criteria: AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6,
+    AC1.7, AC1.8, AC1.9, AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6,
+    AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6, AC4.1, AC4.2, AC4.3,
+    AC4.4, AC4.5, AC4.6, AC4.7, AC4.8
+  - Files: all durable promotion targets, `verification.md`, `traceability.md`
+  - Acceptance: V012-V016 pass separately: lifecycle package lint, bounded
+    Markdown set/link check, promotion-plan review, architecture/code review,
+    documentation-governance/lifecycle review, and review disposition. Lasting
+    concern schema, ranking, cursor, count, trust, and compatibility behavior is
+    promoted; no current behavior remains spec-only.
+  - Evidence mode: artifact
+  - Evidence: Pending.
+
+- [ ] T010 Reconcile closure and archive metadata.
+  - Depends on: T009
+  - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
+    SC-004
+  - Acceptance criteria: AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6,
+    AC1.7, AC1.8, AC1.9, AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6,
+    AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6, AC4.1, AC4.2, AC4.3,
+    AC4.4, AC4.5, AC4.6, AC4.7, AC4.8
+  - Files: EB054, agent-readable changelog, closure log, archive index,
+    `traceability.md`, `verification.md`
+  - Acceptance: V017-V019 separately prove closure check, archive-index/closure
+    consistency, and final lifecycle readiness. Every criterion and finding has
+    evidence or an owned non-blocking destination; implementation and cleanup
+    commit identities are truthful before the package is archived/removed.
+  - Evidence mode: artifact
+  - Evidence: Pending.
+
+## Execution Rules
+
+- Read the complete package and canonical context before implementation.
+- Keep SQLite retrieval/storage, pure policy, orchestration, presentation, and
+  MCP adapter responsibilities in their declared layers.
+- Do not add embeddings, broad per-query map reads, unbounded scans, hidden
+  fallbacks, partial results after overflow, status promotion, or cursor rebuild.
+- Do not change fixed contract decisions inside an implementation task; revise
+  and re-review this package first if evidence makes one infeasible.
+- Update traceability and verification with every scope or evidence change.
+
+## Related Artifacts
+
+- Requirements: `requirements.md`
+- Design: `design.md`
+- Traceability: `traceability.md`
+- Verification: `verification.md`

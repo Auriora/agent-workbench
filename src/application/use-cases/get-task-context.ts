@@ -58,6 +58,15 @@ import {
   loadDocumentationMapOwners,
   publicCurrency
 } from "./document-currency-routing.js";
+import {
+  detectCodingAgentIntegrationIntent,
+  integrationPathEvidence,
+  namedScopeLabel,
+  prioritizeIntegrationSymbolTerms,
+  type CodingAgentIntegrationIntent,
+  type IntegrationPathEvidence,
+  type NamedIntegrationScope
+} from "./coding-agent-integration-routing.js";
 
 export type GetTaskContextResult = {
   context: Omit<TaskContext, "lifecycle_evidence"> & {
@@ -104,15 +113,18 @@ export async function getTaskContext(input: {
     toFileReference(filePath, directRequestedEntries.get(normalizeRepoPath(filePath)))
   );
   const catalogFiles = [...directRequestedEntries.values()].sort((left, right) => left.path.localeCompare(right.path));
-  const relatedFiles = selectRelatedFiles({
+  const integrationIntent = detectCodingAgentIntegrationIntent(input.request.task);
+  const relatedFileSelection = selectRelatedFiles({
     task: input.request.task,
     symbols: input.request.symbols,
     requestedPaths: requestedFiles.filter((file) => file.exists).map((file) => file.path),
     files: scanned.files,
     exclude: new Set(requestedFiles.map((file) => file.path)),
     jsTsPackageRoots: jsTsShape.package_roots,
-    limit: maxFiles
+    limit: maxFiles,
+    integrationIntent
   });
+  const relatedFiles = relatedFileSelection.files;
   const governingDocs = await selectGoverningDocs({
     task: input.request.task,
     files: scanned.files,
@@ -147,10 +159,12 @@ export async function getTaskContext(input: {
     catalog: input.catalog,
     workspace: input.workspace,
     snapshot_id: input.selected_snapshot_id,
-    limit: Math.min(10, Math.max(1, input.request.max_files))
+    limit: Math.min(10, Math.max(1, input.request.max_files)),
+    integrationIntent
   });
   const skippedWork = [
     ...rankedSymbolResult.skipped_work,
+    ...relatedFileSelection.skipped_work,
     ...skippedWorkForCatalog({
       scanned,
       requestedFiles,
@@ -665,19 +679,110 @@ function selectRelatedFiles(input: {
   exclude: Set<string>;
   jsTsPackageRoots: readonly string[];
   limit: number;
-}): FileReference[] {
+  integrationIntent: CodingAgentIntegrationIntent;
+}): { files: FileReference[]; skipped_work: SkippedWork[] } {
   const terms = tokenSet([input.task, ...input.symbols]);
-  return input.files
+  const candidates = input.files
     .filter((file) => input.exclude.has(file.path) === false)
-    .map((file) => ({
-      file,
-      score: scoreFile(file, terms) + scoreFileSeededEvidence(file, input.requestedPaths, input.jsTsPackageRoots),
-      reason: reasonForRelatedFile(file, terms, input.requestedPaths, input.jsTsPackageRoots)
-    }))
+    .map((file) => {
+      const integrationEvidence = integrationPathEvidence(file.path, input.integrationIntent);
+      return {
+        file,
+        integrationEvidence,
+        score:
+          scoreFile(file, terms) +
+          scoreFileSeededEvidence(file, input.requestedPaths, input.jsTsPackageRoots) +
+          (integrationEvidence?.score ?? 0),
+        reason: integrationEvidence?.reason ??
+          reasonForRelatedFile(file, terms, input.requestedPaths, input.jsTsPackageRoots)
+      };
+    })
     .filter((item) => item.score > 0)
-    .sort((left, right) => right.score - left.score || left.file.path.localeCompare(right.file.path))
-    .slice(0, input.limit)
-    .map((item) => toFileReference(item.file.path, item.file, item.reason));
+    .sort(compareRelatedFileCandidates);
+  const requestedScopes = new Set(
+    input.requestedPaths.flatMap((requestedPath) =>
+      integrationPathEvidence(requestedPath, input.integrationIntent)?.scopes ?? []
+    )
+  );
+  const hookScopes = input.integrationIntent.hook_intent
+    ? input.integrationIntent.scopes
+    : [];
+  const selected = selectRelatedFileCandidatesWithScopeCoverage({
+    candidates,
+    scopes: hookScopes.filter((scope) => !requestedScopes.has(scope)),
+    includeSourceSync: input.integrationIntent.hook_intent &&
+      input.integrationIntent.consistency_intent && hookScopes.length > 1,
+    limit: input.limit
+  });
+  const selectedScopes = new Set([
+    ...requestedScopes,
+    ...selected.flatMap((candidate) => candidate.integrationEvidence?.scopes ?? [])
+  ]);
+  const sourceSyncCandidate = candidates.find(
+    (candidate) => candidate.integrationEvidence?.kind === "source_sync"
+  );
+  const sourceSyncSelected = selected.some(
+    (candidate) => candidate.integrationEvidence?.kind === "source_sync"
+  );
+  const skippedIntegrationScopes: SkippedWork[] = hookScopes
+    .filter((scope) => !selectedScopes.has(scope))
+    .map((scope) => ({
+      kind: "named_integration_scope",
+      reason: candidates.some((candidate) => candidate.integrationEvidence?.scopes.includes(scope))
+        ? `${namedScopeLabel(scope)} was explicitly named but omitted because max_files=${input.limit} could not cover every named integration scope.`
+        : `${namedScopeLabel(scope)} was explicitly named but no matching first-party hook area was present in the bounded file catalog.`
+    }));
+  const skippedSourceSync: SkippedWork[] = sourceSyncCandidate !== undefined && !sourceSyncSelected
+    ? [{
+        kind: "integration_source_sync",
+        reason: `The verified hook source-sync path ${sourceSyncCandidate.file.path} was omitted because max_files=${input.limit} was exhausted by explicitly named provider scopes.`
+      }]
+    : [];
+  return {
+    files: selected
+      .sort(compareRelatedFileCandidates)
+      .map((item) => toFileReference(item.file.path, item.file, item.reason)),
+    skipped_work: [...skippedIntegrationScopes, ...skippedSourceSync]
+  };
+}
+
+type RelatedFileCandidate = {
+  file: FileCatalogEntry;
+  score: number;
+  reason: string;
+  integrationEvidence?: IntegrationPathEvidence;
+};
+
+function selectRelatedFileCandidatesWithScopeCoverage(input: {
+  candidates: readonly RelatedFileCandidate[];
+  scopes: readonly NamedIntegrationScope[];
+  includeSourceSync: boolean;
+  limit: number;
+}): RelatedFileCandidate[] {
+  const selected: RelatedFileCandidate[] = [];
+  const selectedPaths = new Set<string>();
+  const add = (candidate: RelatedFileCandidate | undefined) => {
+    if (candidate === undefined || selected.length >= input.limit || selectedPaths.has(candidate.file.path)) {
+      return;
+    }
+    selected.push(candidate);
+    selectedPaths.add(candidate.file.path);
+  };
+
+  for (const scope of input.scopes) {
+    add(input.candidates.find((candidate) => candidate.integrationEvidence?.scopes.includes(scope)));
+  }
+  if (input.includeSourceSync) {
+    add(input.candidates.find((candidate) => candidate.integrationEvidence?.kind === "source_sync"));
+  }
+  for (const candidate of input.candidates) {
+    add(candidate);
+  }
+  return selected;
+}
+
+function compareRelatedFileCandidates(left: RelatedFileCandidate, right: RelatedFileCandidate): number {
+  return right.score - left.score || left.file.path.localeCompare(right.file.path);
 }
 
 async function selectGoverningDocs(input: {
@@ -751,6 +856,7 @@ async function selectRankedSymbols(input: {
   workspace?: WorkspaceFilePort;
   snapshot_id?: string | null;
   limit: number;
+  integrationIntent: CodingAgentIntegrationIntent;
 }): Promise<{
   ranked_symbols: RankedSymbolCandidate[];
   skipped_work: SkippedWork[];
@@ -796,6 +902,7 @@ async function selectRankedSymbols(input: {
   }
 
   const terms = symbolTerms(input);
+  const taskTermSet = tokenSet([input.task]);
   const requestedPaths = new Set(input.requestedPaths);
   const candidates = new Map<string, { node: GraphNode; score: number; reason: string }>();
   for (const term of terms) {
@@ -806,7 +913,11 @@ async function selectRankedSymbols(input: {
     });
     for (const node of nodes) {
       const requestedFileMatch = requestedPaths.has(node.file_path);
-      const score = scoreSymbol(node, term, input.symbols) + (requestedFileMatch ? 50 : 0);
+      const integrationEvidence = integrationPathEvidence(node.file_path, input.integrationIntent);
+      const score =
+        scoreSymbol(node, term, input.symbols, taskTermSet, input.integrationIntent.hook_intent) +
+        (requestedFileMatch ? 50 : 0) +
+        (integrationEvidence?.score ?? 0);
       const existing = candidates.get(node.id);
       if (existing === undefined || score > existing.score) {
         candidates.set(node.id, {
@@ -814,6 +925,8 @@ async function selectRankedSymbols(input: {
           score,
           reason: requestedFileMatch
             ? "Matched task terms in a caller-supplied implementation file."
+            : integrationEvidence !== undefined
+              ? integrationEvidence.reason
             : input.symbols.includes(term)
               ? "Matched a caller-supplied symbol through indexed graph evidence."
               : "Matched task terms through indexed graph evidence."
@@ -1070,21 +1183,30 @@ function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHin
   return hints;
 }
 
-function symbolTerms(input: { task: string; symbols: readonly string[] }): string[] {
-  const explicit = input.symbols.map((symbol) => symbol.trim()).filter((symbol) => symbol.length > 0);
-  if (explicit.length > 0) {
-    return Array.from(new Set(explicit)).slice(0, 5);
-  }
-  return Array.from(tokenSet([input.task]))
-    .filter((term) => term.length >= 3)
-    .slice(0, 5);
+function symbolTerms(input: {
+  task: string;
+  symbols: readonly string[];
+  integrationIntent: CodingAgentIntegrationIntent;
+}): string[] {
+  return prioritizeIntegrationSymbolTerms({
+    task: input.task,
+    symbols: input.symbols,
+    intent: input.integrationIntent,
+    limit: 5
+  });
 }
 
 function firstUsefulTerm(task: string): string | undefined {
   return Array.from(tokenSet([task])).find((term) => term.length >= 3);
 }
 
-function scoreSymbol(node: GraphNode, term: string, explicitSymbols: readonly string[]): number {
+function scoreSymbol(
+  node: GraphNode,
+  term: string,
+  explicitSymbols: readonly string[],
+  taskTerms: ReadonlySet<string>,
+  namedIntegrationHookIntent: boolean
+): number {
   const lowerTerm = term.toLowerCase();
   const lowerName = node.name.toLowerCase();
   const lowerQualified = node.qualified_name?.toLowerCase() ?? "";
@@ -1094,7 +1216,7 @@ function scoreSymbol(node: GraphNode, term: string, explicitSymbols: readonly st
   } else if (lowerName.includes(lowerTerm) || lowerQualified.includes(lowerTerm)) {
     score += 10;
   }
-  if (node.language === "python") {
+  if (node.language === "python" && (taskTerms.has("python") || !namedIntegrationHookIntent)) {
     score += 2;
   }
   return score;

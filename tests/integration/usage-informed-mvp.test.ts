@@ -8,6 +8,10 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { getTaskContext } from "../../src/application/use-cases/get-task-context.js";
+import {
+  detectCodingAgentIntegrationIntent,
+  integrationPathEvidence
+} from "../../src/application/use-cases/coding-agent-integration-routing.js";
 import { indexRepositoryGraph } from "../../src/application/use-cases/index-repository-graph.js";
 import { planVerification } from "../../src/application/use-cases/plan-verification.js";
 import { describeCodexIntegrationProfile } from "../../src/application/use-cases/describe-codex-integration-profile.js";
@@ -17,7 +21,10 @@ import {
   WorkspaceFileAdapter
 } from "../../src/infrastructure/filesystem/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
-import { PythonTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
+import {
+  JavaScriptTypeScriptTreeSitterExtractorAdapter,
+  PythonTreeSitterExtractorAdapter
+} from "../../src/infrastructure/tree-sitter/index.js";
 import type { ClockPort } from "../../src/ports/index.js";
 
 const scanner = new FileCatalogScannerAdapter();
@@ -26,6 +33,56 @@ const clock: ClockPort = {
   nowIso8601: () => "2026-06-03T00:00:00.000Z",
   nowUnixMs: () => 0
 };
+
+const integrationRoutingTask =
+  "Change SessionStart hook payload construction in the Claude plugin while keeping Codex and Kiro hooks consistent.";
+
+async function withIntegrationRoutingFixture(
+  run: (query: (maxFiles: number, task?: string) => ReturnType<typeof getTaskContext>) => Promise<void>
+): Promise<void> {
+  const repoRoot = path.resolve("tests/fixtures/fixture-agent-integration-routing");
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-integration-routing-"));
+  const store = openGraphStore(path.join(tempDir, "graph.sqlite"));
+  const registry = new ExtractorRegistryAdapter();
+  registry.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "javascript" }));
+  registry.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "typescript" }));
+  registry.register(new PythonTreeSitterExtractorAdapter());
+  const workspace = new WorkspaceFileAdapter({ repoRoot });
+  try {
+    await indexRepositoryGraph({
+      repo_root: repoRoot,
+      scanner,
+      workspace,
+      extractors: registry,
+      resource_extractor: new ResourceExtractorAdapter(),
+      graph: store,
+      catalog: store,
+      snapshots: store,
+      clock,
+      schema_version: SCHEMA_VERSION,
+      snapshot_id: "2028"
+    });
+    await run((maxFiles, task = integrationRoutingTask) => getTaskContext({
+      request: {
+        task,
+        repo_root: repoRoot,
+        files: [],
+        symbols: [],
+        max_files: maxFiles,
+        max_docs: 2
+      },
+      scanner,
+      graph: store,
+      snapshots: store,
+      catalog: store,
+      workspace,
+      default_repo_root: repoRoot
+    }));
+  } finally {
+    store.close();
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+}
 
 describe("usage-informed MVP validation", () => {
   it("routes broad prompts to expected implementation files without high-frequency drift", async () => {
@@ -220,6 +277,95 @@ describe("usage-informed MVP validation", () => {
       store.close();
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
+  });
+
+  it("covers every explicitly named coding-agent hook scope and verified source-sync path", async () => {
+    await withIntegrationRoutingFixture(async (query) => {
+      const result = await query(8);
+      const relatedPaths = result.context.related_files.map((file) => file.path);
+
+      expect(relatedPaths).toEqual(expect.arrayContaining([
+        "plugins/agent-workbench/claude-plugin/hooks/session-start.js",
+        "plugins/agent-workbench/hooks/session-start.core.js",
+        "plugins/agent-workbench/kiro-power/hooks/session-start.js",
+        "scripts/sync-claude-plugin-hooks.mjs"
+      ]));
+      expect(result.context.related_files.find((file) => file.path === "scripts/sync-claude-plugin-hooks.mjs")?.reason)
+        .toContain("source-sync relationship");
+    });
+  });
+
+  it("ranks explicitly named provider hook symbols ahead of generic lexical noise", async () => {
+    await withIntegrationRoutingFixture(async (query) => {
+      const result = await query(8);
+      const rankedPaths = result.context.ranked_symbols.map((candidate) => candidate.symbol.path);
+      const firstNoiseIndex = rankedPaths.findIndex((candidatePath) =>
+        candidatePath === "tools/devcli/src/auriora_dev/plugin.py" ||
+        candidatePath === "src/daemon/claude-monitor.ts"
+      );
+      const providerSymbolIndexes = [
+        "plugins/agent-workbench/claude-plugin/hooks/session-start.js",
+        "plugins/agent-workbench/hooks/session-start.js",
+        "plugins/agent-workbench/kiro-power/hooks/session-start.js"
+      ].map((candidatePath) => rankedPaths.indexOf(candidatePath));
+      expect(providerSymbolIndexes.every((index) => index >= 0)).toBe(true);
+      expect(firstNoiseIndex === -1 || providerSymbolIndexes.every((index) => index < firstNoiseIndex)).toBe(true);
+    });
+  });
+
+  it("reports provider and source-sync evidence omitted by tight file bounds", async () => {
+    await withIntegrationRoutingFixture(async (query) => {
+      const allProviders = await query(3);
+      expect(allProviders.context.related_files.map((file) => file.path)).toEqual(expect.arrayContaining([
+        "plugins/agent-workbench/claude-plugin/hooks/session-start.js",
+        "plugins/agent-workbench/hooks/session-start.core.js",
+        "plugins/agent-workbench/kiro-power/hooks/session-start.js"
+      ]));
+      expect(allProviders.context.related_files.map((file) => file.path))
+        .not.toContain("scripts/sync-claude-plugin-hooks.mjs");
+      expect(allProviders.context.skipped_work).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          kind: "integration_source_sync",
+          reason: expect.stringContaining("scripts/sync-claude-plugin-hooks.mjs")
+        })
+      ]));
+
+      const missingProvider = await query(2);
+      expect(missingProvider.context.skipped_work).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          kind: "named_integration_scope",
+          reason: expect.stringContaining("Kiro was explicitly named but omitted because max_files=2")
+        })
+      ]));
+    });
+  });
+
+  it("does not activate hook routing for generic provider integrations or misleading paths", () => {
+    for (const task of [
+      "Update the Claude integration authentication flow",
+      "Review Codex integrations and configuration"
+    ]) {
+      const intent = detectCodingAgentIntegrationIntent(task);
+      expect(intent.provider_integration_intent).toBe(true);
+      expect(intent.hook_intent).toBe(false);
+      expect(integrationPathEvidence("plugins/agent-workbench/hooks/session-start.js", intent)).toBeUndefined();
+    }
+
+    const hookIntent = detectCodingAgentIntegrationIntent(integrationRoutingTask);
+    expect(integrationPathEvidence("plugins/foo/hooks/session-start.js", hookIntent)).toBeUndefined();
+    expect(integrationPathEvidence("scripts/sync-webhook.mjs", hookIntent)).toBeUndefined();
+    expect(integrationPathEvidence("tools/sync-githooks.mjs", hookIntent)).toBeUndefined();
+  });
+
+  it("does not emit hook-scope omissions for a generic provider integration task", async () => {
+    await withIntegrationRoutingFixture(async (query) => {
+      const result = await query(2, "Review Codex integrations and configuration");
+
+      expect(result.context.skipped_work).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: "named_integration_scope" }),
+        expect.objectContaining({ kind: "integration_source_sync" })
+      ]));
+    });
   });
 
   it("keeps docs/config and non-Python evidence as routing metadata with direct-read caveats", async () => {

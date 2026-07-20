@@ -1585,8 +1585,9 @@ Do not promote an item when:
 ### EB049: Executable Context Continuation And Bounded Navigation
 
 - Priority: P1
-- Status: delivered by closed Spec 038; combined-surface comparison remains
-  evidence-gated and unscheduled
+- Status: delivered by closed Spec 038; named multi-provider scope regression
+  repaired 2026-07-20; combined-surface comparison remains evidence-gated and
+  unscheduled
 - Friction signal: the same supported Codex corpus contained 70
   `context_for_task` calls but only three `symbol_search` calls, four
   `find_references` calls, and no `impact` calls. The evidence demonstrates
@@ -1622,14 +1623,24 @@ Do not promote an item when:
   - A Claude/Codex/Kiro SessionStart consistency regression surfaces each
     provider hook area plus the shared or sync source, and excludes or
     down-ranks generic dev-CLI `plugin.py` symbols.
+- Regression-repair evidence (2026-07-20): explicit coding-agent hook intent
+  now reserves one bounded result for each named Claude, Codex, and Kiro scope
+  plus executable source-sync evidence, counts caller-supplied paths toward
+  scope coverage, and reports `named_integration_scope` when a smaller bound
+  omits a named provider. Generic provider-integration language no longer
+  activates hook-scope selection or hook-specific skipped-work reporting. The
+  focused integration suite passed 11/11, graph query
+  regressions passed 27/27, typecheck passed, and the full suite passed 80 test
+  files / 754 tests. Plugin, skill, and package dry-run gates also passed.
 - Promotion target: closed
   [Spec 038](../history/spec-closure-log.md). Current continuation behavior
   lives in [MCP surface design](../design/mcp-surface-design.md),
   [Runtime contracts](../reference/runtime-contracts.md), and
-  [Language adapter design](../design/language-adapter-design.md). The combined
-  navigation surface remains residual backlog work only if a controlled
-  comparison demonstrates lower interaction cost without weaker evidence or
-  failure attribution.
+  [Language adapter design](../design/language-adapter-design.md). The named
+  scope repair is implemented in the task-context application routing policy
+  with fixture-backed Claude/Codex/Kiro proof. The combined navigation surface
+  remains residual backlog work only if a controlled comparison demonstrates
+  lower interaction cost without weaker evidence or failure attribution.
 
 ### EB050: Intent-Aware Validation Guidance
 
@@ -1800,6 +1811,118 @@ Do not promote an item when:
   completion scale and progress remain independently owned by
   [EB014](#eb014-large-repo-graph-warmup-scale-and-progress).
 
+### EB053: Reference Completeness And Bounded-Scan Truthfulness
+
+- Priority: P0
+- Status: active Spec 042
+- Friction signal: a healthy runtime `0.6.0` Claude Code rerun asked
+  `find_references` for consumers of `buildSessionStartContext`. The response
+  returned nine low-confidence `bounded_lexical_identifier_scan` hits and did
+  not report truncation, while direct repository search returned twelve. The
+  omitted occurrences were three TypeScript integration-test references that
+  exercise the Codex hook twin. Source inspection confirmed the lexical path
+  accepts TypeScript but reads only the first bounded catalog window, then
+  derives completeness from hits inside that window rather than from catalog
+  exhaustion.
+- Runtime surface: `find_references`, file-catalog pagination, graph/reference
+  contracts, response metadata, query cursors, and trust presentation.
+- Acceptance:
+  - A reference response SHALL claim complete results only when the selected
+    parser/graph evidence or lexical candidate universe is demonstrably
+    exhausted for the resolved snapshot and request scope.
+  - A bounded lexical scan that stops before catalog exhaustion SHALL expose
+    partial/truncated analysis, inspected-versus-eligible evidence, scanned
+    language coverage derived from actually inspected files, a stop reason,
+    and a callable continuation rather than an apparently complete count.
+  - `result_count` and any count-basis field SHALL distinguish page hits,
+    inspected-window matches, and complete indexed matches without implying
+    unseen files contain no references.
+  - The Agent Workbench SessionStart fixture SHALL include all twelve known
+    lexical identifier occurrences, including the three TypeScript
+    integration-test occurrences, or SHALL return an explicitly partial page
+    whose continuation reaches them. Lexical occurrences SHALL remain
+    explicitly distinct from resolved semantic consumers.
+  - Files SHALL be whole-file atomic scan units under the current workspace
+    port. Declared-size admission, monotonic time deadlines, file/byte/result
+    bounds, atomic overruns, and replay reads SHALL remain observable. Scan
+    progress SHALL advance only after a fully accounted file; a separate result
+    cursor MAY page multiple occurrences from that completed file.
+  - Searchable oversized, unreadable, missing, or changed indexed candidates
+    SHALL prevent valid absence, while explicit policy exclusions remain
+    outside the declared evidence universe.
+  - Resolution SHALL use the existing parser/graph route and paginated catalog
+    boundary. It SHALL NOT add shell search, an alternate parser, an unbounded
+    read, or a hidden fallback.
+- Validation:
+  - Contract tests for complete parser evidence, complete lexical exhaustion,
+    partial catalog windows, continuation, stable count bases, and stale
+    snapshot handling.
+  - Fixture-backed TypeScript/JavaScript regression using the SessionStart hook
+    twins and `tests/integration/codex-integration-profile.test.ts` references.
+  - Query-budget tests proving deterministic pagination, bounded file and byte
+    reads, stable deduplication, and honest trust metadata.
+- Promotion target: active
+  [Spec 042 requirements](../specs/042-reference-completeness-and-bounded-scan-truthfulness/requirements.md)
+  with durable destinations in [MCP surface design](../design/mcp-surface-design.md),
+  [Runtime contracts](../reference/runtime-contracts.md), and
+  [Graph store design](../design/graph-store-design.md), plus
+  [Language adapter design](../design/language-adapter-design.md) and the
+  [MVP proof matrix](../reference/mvp-proof-matrix.md).
+
+### EB054: Authority-Aware Documentation Intent Ranking And Count Semantics
+
+- Priority: P1
+- Status: active Spec 043
+- Friction signal: a healthy runtime `0.6.0` documentation-intent query for the
+  rule governing SessionStart behavior returned a draft supporting install
+  guide as the top result with roughly three times the score of later hits,
+  while the canonical coding-agent integration design containing the governing
+  rule did not appear on page one. The response correctly exposed authority and
+  currency labels, but ranking used them as small additive boosts that lexical
+  score could overwhelm. The same response reported
+  `indexed_docs_count: 100` and `index_coverage.docs.indexed_files: 40`; source
+  review showed these are valid counts for different universes whose names do
+  not disclose their bases.
+- Runtime surface: `docs_search`, documentation-map ownership, document
+  authority and currency classification, FTS candidate selection and ranking,
+  cursor pagination, documentation inventory contracts, and docs coverage
+  presentation.
+- Acceptance:
+  - Documentation-intent ranking SHALL first establish query relevance, then
+    prefer the documentation-map governing owner and stronger authority within
+    the relevant set; an irrelevant canonical document SHALL NOT outrank an
+    exact relevant result solely because of status.
+  - Governing ownership SHALL remain distinct from truthful `doc_status` and
+    authority labels. A draft owner may rank first with an explicit draft
+    caveat; an archived or superseded owner SHALL surface a governance
+    inconsistency rather than become authoritative.
+  - Ranking SHALL be deterministic across pages and cursors SHALL bind the
+    snapshot, query, scope, and ranking-policy identity so pagination cannot
+    duplicate, omit, or reorder final ranked results.
+  - The runtime SHALL freeze and persist a complete ranked universe of at most
+    500 candidates before returning page one. A 501st candidate SHALL block
+    with zero hits and no cursor rather than continuing from an incomplete
+    universe.
+  - Documentation-map owner signals SHALL be available to bounded indexed
+    reranking without an unbounded per-query repository read.
+  - Documentation counts SHALL expose their universe and basis, distinguishing
+    searchable snapshot documents from dedicated priority-scan coverage and
+    scoped counts without presenting near-identical names as interchangeable.
+- Validation:
+  - Fixture-backed intent query with a governing design owner, highly lexical
+    supporting install guide, archived exact match, and irrelevant current
+    canonical document.
+  - Ownership-conflict and archived/superseded-owner tests preserve truthful
+    authority and explicit governance caveats.
+  - Stable multi-page ranking tests plus global, scoped, merged-scan, and
+    partial-priority-scan count contracts.
+- Promotion target: active
+  [Spec 043 requirements](../specs/043-authority-aware-documentation-intent-ranking-and-count-semantics/requirements.md)
+  with durable destinations in [MCP surface design](../design/mcp-surface-design.md),
+  [Graph store design](../design/graph-store-design.md),
+  [Runtime contracts](../reference/runtime-contracts.md), and the
+  [Documentation map](../reference/documentation-map.md).
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |
@@ -1856,10 +1979,12 @@ Do not promote an item when:
 | Intent-aware validation guidance | EB050, with EB004 and EB024 validation trust boundaries. |
 | Snapshot freshness versus deleted indexed paths | EB051, under EB003 first-read reliability, with EB048 orientation reuse, EB023 trust calibration, and EB038 error-envelope boundaries. |
 | Daemon-owned refresh convergence | EB052, under EB003 first-read reliability, with EB036 daemon ownership and EB051 snapshot validity as prerequisites. |
+| Reference completeness and bounded-scan truthfulness | EB053, under EB010 navigation quality and EB023 trust calibration. |
+| Authority-aware documentation intent ranking and count semantics | EB054, under EB018 stale-doc filtering, EB032 ranking explanations, and documentation governance. |
 
 ## Immediate Next Specs
 
-- Spec 041 is closed; its durable behavior and verification are linked from
-  [EB052](#eb052-daemon-owned-refresh-convergence). Select the next spec from
-  current evidence rather than extending the removed package. EB014 remains the
-  separate candidate for large-repository completion scale and progress.
+- Specs 042 and 043 are active from the runtime `0.6.0` healthy dogfood
+  evidence. Implement them independently: EB053 owns reference completeness;
+  EB054 owns documentation authority ranking and count semantics. EB014 remains
+  the separate candidate for large-repository completion scale and progress.
