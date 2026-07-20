@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/041-daemon-owned-refresh-convergence/`
 - **Title:** Daemon-owned refresh convergence requirements
 - **Final spec commit:** `5b7b850`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `ead2cde`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/runtime-operations-design.md`
