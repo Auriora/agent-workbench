@@ -953,7 +953,7 @@ describe("context_for_task use case", () => {
       });
 
     try {
-      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const server = createAgentWorkbenchServer(repoRoot, { startupRefreshDelayMs: 60_000 });
       const result = parseMcpTextContent<{
         data: GetTaskContextResult["context"];
         meta: GetTaskContextResult["meta"];
@@ -1728,7 +1728,7 @@ describe("context_for_task MCP tool", () => {
 
   it("is registered by the composed server", () => {
     const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
-      startGraphWarmup: false
+      startupRefreshDelayMs: 60_000
     });
 
     expect(registeredToolNames(server)).toContain("context_for_task");

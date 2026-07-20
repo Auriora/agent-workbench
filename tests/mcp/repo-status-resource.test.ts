@@ -11,8 +11,12 @@ import { repoStatusResource } from "../../src/interface-adapters/mcp/registries/
 import type { GetRepoStatusResult } from "../../src/application/use-cases/get-repo-status.js";
 import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
 import { InMemoryRuntimeOperationsAdapter } from "../../src/infrastructure/runtime/index.js";
+import { FileRepositoryOwnershipAdapter } from "../../src/infrastructure/runtime/repository-ownership.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
-import { createAgentWorkbenchServer } from "../../src/server.js";
+import {
+  createAgentWorkbenchServer,
+  repositoryOwnershipPath
+} from "../../src/server.js";
 import {
   getRegisteredResource,
   getRegisteredTool,
@@ -189,7 +193,7 @@ describe("repo status MCP resource", () => {
     try {
       fs.writeFileSync(path.join(repoRoot, "package.json"), "{\"name\":\"cold-fixture\"}\n");
       const server = createAgentWorkbenchServer(repoRoot, {
-        startGraphWarmup: false
+        startupRefreshDelayMs: 60_000
       });
 
       const response = await getRegisteredResource(server, "repo:///status").readCallback({});
@@ -248,7 +252,7 @@ describe("repo status MCP resource", () => {
 
     try {
       const server = createAgentWorkbenchServer(repoRoot, {
-        startGraphWarmup: false
+        startupRefreshDelayMs: 60_000
       });
       const status = parseMcpResourceText<{
         data: GetRepoStatusResult["status"];
@@ -327,7 +331,7 @@ describe("repo status MCP resource", () => {
         });
 
       try {
-        const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+        const server = createAgentWorkbenchServer(repoRoot, { startupRefreshDelayMs: 60_000 });
         const result = parseMcpResourceText<{
           data: { snapshot_id?: string; snapshot_validity?: { snapshot_id: string } };
         }>(await getRegisteredResource(server, uri).readCallback({}));
@@ -382,7 +386,7 @@ describe("repo status MCP resource", () => {
 
     try {
       const server = createAgentWorkbenchServer(repoRoot, {
-        startupWarmupDelayMs: 60_000,
+        startupRefreshDelayMs: 60_000,
         startupWarmupMaxFiles: 100
       });
       const readStatus = async () => parseMcpResourceText<{
@@ -397,6 +401,86 @@ describe("repo status MCP resource", () => {
       expect(refreshed.data.freshness).toBe("fresh");
       expect(refreshed.data.snapshot_validity).toMatchObject({ state: "valid", complete: true });
     } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves structured active-owner refusal through the public status surface", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-status-owner-observer-"));
+    const sourceDir = path.join(repoRoot, "src");
+    const sourcePath = path.join(sourceDir, "app.ts");
+    fs.mkdirSync(sourceDir, { recursive: true });
+    fs.writeFileSync(sourcePath, "export const app = true;\n");
+    const store = openGraphStore(graphStorePath(repoRoot));
+    try {
+      await seedPublishedEntry(store, {
+        snapshot: {
+          id: "1000",
+          repo_root: repoRoot,
+          workspace_root: repoRoot,
+          repo_identity: repoRoot,
+          config_identity: "default",
+          schema_version: SCHEMA_VERSION,
+          freshness: "fresh",
+          owner_state: "owner",
+          created_at: "2026-07-05T12:00:00.000Z",
+          updated_at: "2026-07-05T12:00:00.000Z"
+        },
+        snapshot_id: "1000",
+        entry: buildFileCatalogEntry({
+          file_identity: {
+            path: "src/app.ts",
+            language: "typescript",
+            content_hash: "sha256:before",
+            size_bytes: fs.statSync(sourcePath).size,
+            mtime_ms: fs.statSync(sourcePath).mtimeMs
+          }
+        })
+      });
+    } finally {
+      store.close();
+    }
+    fs.rmSync(sourcePath);
+
+    const ownership = new FileRepositoryOwnershipAdapter(
+      repositoryOwnershipPath(graphStorePath(repoRoot))
+    );
+    const external = await ownership.acquire({
+      repo_root: repoRoot,
+      runtime_identity: `external:${SCHEMA_VERSION}`,
+      schema_version: SCHEMA_VERSION,
+      owner_id: "external-daemon",
+      owner_pid: process.pid,
+      owner_generation: 41,
+      heartbeat_at: "2026-07-20T10:00:00.000Z"
+    });
+    expect(external.outcome).toBe("acquired");
+    if (external.outcome !== "acquired") throw new Error("Expected external ownership acquisition.");
+    const server = createAgentWorkbenchServer(repoRoot, { startupRefreshDelayMs: 60_000 });
+
+    try {
+      const parsed = parseMcpResourceText<{
+        data: GetRepoStatusResult["status"];
+        meta: GetRepoStatusResult["meta"];
+      }>(await getRegisteredResource(server, "repo:///status").readCallback({}));
+
+      expect(parsed.data.watcher_freshness).toMatchObject({
+        status: "degraded",
+        reason: "Repository refresh owner is active.",
+        refresh_admission: {
+          outcome: "blocked",
+          reason: "owner_active",
+          owner: {
+            owner_id: "external-daemon",
+            owner_generation: 41,
+            state: "active"
+          }
+        }
+      });
+      expect(parsed.meta.verification_status).toBe("blocked");
+    } finally {
+      await server.close();
+      await ownership.release({ lease: external.lease });
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
   });
@@ -441,7 +525,7 @@ describe("repo status MCP resource", () => {
 
     try {
       const server = createAgentWorkbenchServer(repoRoot, {
-        startGraphWarmup: false,
+        startupRefreshDelayMs: 60_000,
         workspaceWatcher: {
           enabled: true,
           debounce_ms: 0,

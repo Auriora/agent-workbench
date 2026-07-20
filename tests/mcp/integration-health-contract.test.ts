@@ -78,7 +78,8 @@ describe("integration health contract fixtures", () => {
       repo_identity: "repo-identity",
       controller_generation: 7,
       diagnostic_revision: 11,
-      graph_freshness: "stale" as const
+      graph_freshness: "stale" as const,
+      worker_termination_state: "not_required" as const
     };
     const failure = {
       code: "worker_timeout" as const,
@@ -97,6 +98,7 @@ describe("integration health contract fixtures", () => {
       },
       {
         ...base,
+        graph_freshness: "fresh",
         execution_id: "exec-planned",
         started_generation: 12,
         requested_generation: 12,
@@ -108,6 +110,7 @@ describe("integration health contract fixtures", () => {
       },
       {
         ...base,
+        graph_freshness: "fresh",
         execution_id: "exec-running",
         started_generation: 12,
         requested_generation: 13,
@@ -139,6 +142,7 @@ describe("integration health contract fixtures", () => {
         execution_state: "failed",
         publication_state: "failed",
         activity_lease_held: false,
+        worker_termination_state: "confirmed",
         last_failure: failure
       }
     ] as const;
@@ -154,7 +158,8 @@ describe("integration health contract fixtures", () => {
       controller_generation: 7,
       diagnostic_revision: 11,
       graph_freshness: "stale",
-      visible_snapshot_id: "snap-prior"
+      visible_snapshot_id: "snap-prior",
+      worker_termination_state: "not_required"
     };
     const running = {
       ...base,
@@ -187,6 +192,7 @@ describe("integration health contract fixtures", () => {
       execution_state: "failed",
       publication_state: "failed",
       activity_lease_held: false,
+      worker_termination_state: "unconfirmed",
       last_failure: {
         code: "worker_error",
         category: "worker",
@@ -221,6 +227,9 @@ describe("integration health contract fixtures", () => {
       ["failed target is visible", { ...failed, visible_snapshot_id: "snap-failed" }],
       ["failed has building target", { ...failed, publication_state: "building" }],
       ["failed holds lease", { ...failed, activity_lease_held: true }]
+      , ["running reports termination", { ...running, worker_termination_state: "confirmed" }]
+      , ["failed reports fresh graph", { ...failed, graph_freshness: "fresh" }]
+      , ["missing visible snapshot is stale", { ...running, visible_snapshot_id: undefined }]
     ];
 
     const unexpectedlyAccepted = invalidReceipts
@@ -293,23 +302,29 @@ describe("integration health contract fixtures", () => {
     }).success).toBe(false);
   });
 
-  it.fails("rejects synthetic daemon health before it can be presented as success", () => {
+  it("rejects synthetic daemon health before it can be presented as success", () => {
     const fixture = buildIntegrationHealthFixture({ discovery_state: "unknown" });
-    const syntheticHealth = {
-      ...fixture,
-      daemon: {
-        pid: 1234,
-        socket_path: "/tmp/agent-workbench.sock",
-        repo_root: "/repo",
-        connected_clients: 1,
-        warmup_state: "scheduled",
-        graph_freshness: "unknown"
-      }
+    const daemon = {
+      pid: 1234,
+      socket_path: "/tmp/agent-workbench.sock",
+      repo_root: "/repo",
+      connected_clients: 1,
+      controller_generation: 7,
+      diagnostic_revision: 11,
+      warmup_state: "idle",
+      graph_freshness: "cold",
+      activity_lease_held: false,
+      worker_termination_state: "not_required"
     };
 
-    // The legacy additive health schema accepts this false-success shape.
-    // T006 must bind authoritative diagnostics and trust at this boundary.
-    expect(integrationHealthSchema.safeParse(syntheticHealth).success).toBe(false);
+    expect(integrationHealthSchema.safeParse({
+      ...fixture,
+      daemon: { ...daemon, warmup_state: "scheduled" }
+    }).success).toBe(false);
+    expect(integrationHealthSchema.safeParse({
+      ...fixture,
+      daemon: { ...daemon, graph_freshness: "unknown" }
+    }).success).toBe(false);
   });
 
   it("keeps provider and artifact identities typed and explicit", () => {
@@ -431,7 +446,7 @@ describe("integration health contract fixtures", () => {
     expect(advertised).not.toContain("tool:integration_health");
   });
 
-  it("emits guidance only for comparable Agent Workbench artifact drift", () => {
+  it("emits guidance only for comparable Agent Workbench artifact drift", async () => {
     const identity = {
       provider_identity: {
         provider: "claude_code" as const,
@@ -445,7 +460,7 @@ describe("integration health contract fixtures", () => {
         { artifact: "client_cache" as const, name: "agent-workbench", version: "1.5.0", state: "observed" as const, provenance: "cache" as const }
       ]
     };
-    const mismatched = getIntegrationHealth({
+    const mismatched = await getIntegrationHealth({
       request: { discovery_state: "unknown", discovered_tools: [], discovered_resources: [], discovered_prompts: [] },
       default_repo_root: "/repo",
       runtime_version: "2.0.0",
@@ -468,14 +483,14 @@ describe("integration health contract fixtures", () => {
       state: "observed",
       provenance: "manifest"
     };
-    expect(getIntegrationHealth({
+    expect((await getIntegrationHealth({
       request: { discovery_state: "unknown", discovered_tools: [], discovered_resources: [], discovered_prompts: [] },
       default_repo_root: "/repo",
       runtime_version: "2.0.0",
       profile: "claude_code",
       connection_identity: identity,
       surfaces: []
-    }).health.next_actions[0]?.args.task).toMatch(/client_cache 1\.5\.0/);
+    })).health.next_actions[0]?.args.task).toMatch(/client_cache 1\.5\.0/);
 
     identity.identities[3] = {
       artifact: "client_cache",
@@ -484,14 +499,14 @@ describe("integration health contract fixtures", () => {
       state: "observed",
       provenance: "cache"
     };
-    expect(getIntegrationHealth({
+    expect((await getIntegrationHealth({
       request: { discovery_state: "unknown", discovered_tools: [], discovered_resources: [], discovered_prompts: [] },
       default_repo_root: "/repo",
       runtime_version: "2.0.0",
       profile: "claude_code",
       connection_identity: identity,
       surfaces: []
-    }).health.next_actions).toEqual([]);
+    })).health.next_actions).toEqual([]);
 
     identity.identities[2] = {
       artifact: "provider_plugin",
@@ -500,14 +515,14 @@ describe("integration health contract fixtures", () => {
       state: "observed",
       provenance: "manifest"
     };
-    expect(getIntegrationHealth({
+    expect((await getIntegrationHealth({
       request: { discovery_state: "unknown", discovered_tools: [], discovered_resources: [], discovered_prompts: [] },
       default_repo_root: "/repo",
       runtime_version: "2.0.0",
       profile: "claude_code",
       connection_identity: identity,
       surfaces: []
-    }).health.next_actions).toEqual([]);
+    })).health.next_actions).toEqual([]);
   });
 });
 

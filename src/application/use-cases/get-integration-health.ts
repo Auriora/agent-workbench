@@ -14,8 +14,13 @@ import type {
   McpSurfaceKind,
   NextAction,
   ResponseMetadata,
+  RuntimeError,
+  SnapshotRefreshDiagnosticsReceipt,
   ToolCapabilityClass
 } from "../../contracts/index.js";
+import { snapshotRefreshDiagnosticsReceiptSchema } from "../../contracts/index.js";
+import type { SnapshotRefreshDiagnosticsPort } from "../../ports/index.js";
+import { invalidResponseMeta } from "./response-metadata.js";
 
 export type IntegrationSurfaceInput = {
   name: string;
@@ -42,15 +47,24 @@ export type GetIntegrationHealthInput = {
     authority: "launch_root";
     debug_repo_root_override: boolean;
   };
-  daemon?: IntegrationDaemonHealth;
+  daemon?: {
+    pid: number;
+    socket_path: string;
+    repo_root: string;
+    connected_clients: number;
+    diagnostics: SnapshotRefreshDiagnosticsPort;
+  };
 };
 
 export type GetIntegrationHealthResult = {
   health: IntegrationHealth;
   meta: ResponseMetadata;
+  errors?: RuntimeError[];
 };
 
-export function getIntegrationHealth(input: GetIntegrationHealthInput): GetIntegrationHealthResult {
+const DIAGNOSTICS_UNAVAILABLE_MESSAGE = "Authoritative refresh diagnostics are unavailable.";
+
+export async function getIntegrationHealth(input: GetIntegrationHealthInput): Promise<GetIntegrationHealthResult> {
   const repoRoot = input.request.repo_root ?? input.default_repo_root;
   const session: IntegrationSessionEvidence = {
     client: input.request.client,
@@ -66,8 +80,7 @@ export function getIntegrationHealth(input: GetIntegrationHealthInput): GetInteg
   const providerIdentity = input.connection_identity?.provider_identity;
   const identities = input.connection_identity?.identities;
 
-  return {
-    health: {
+  const baseHealth = {
       repo_root: repoRoot,
       runtime_version: input.runtime_version,
       profile: input.profile,
@@ -78,13 +91,68 @@ export function getIntegrationHealth(input: GetIntegrationHealthInput): GetInteg
       surfaces,
       counts: countSurfaces(surfaces),
       root_policy: input.root_policy,
-      daemon: input.daemon,
       next_actions: [
         ...buildIdentityRecoveryActions(providerIdentity?.provider, identities),
         ...buildNextActions(surfaces)
       ]
-    },
-    meta: {
+  } satisfies Omit<IntegrationHealth, "daemon">;
+
+  if (input.daemon === undefined) {
+    return {
+      health: baseHealth,
+      meta: healthyMeta(repoRoot)
+    };
+  }
+
+  let diagnostics: SnapshotRefreshDiagnosticsReceipt;
+  try {
+    const received = await input.daemon.diagnostics.getDiagnostics({ repo_root: repoRoot });
+    diagnostics = snapshotRefreshDiagnosticsReceiptSchema.parse(received);
+    if (diagnostics.repo_identity !== repoRoot || input.daemon.repo_root !== repoRoot) {
+      throw new TypeError("Authoritative refresh diagnostics repository identity mismatch.");
+    }
+  } catch {
+    return {
+      health: baseHealth,
+      meta: invalidResponseMeta({
+        repoRoot,
+        analysis_validity: "invalid_due_to_environment"
+      }),
+      errors: [{
+        code: "provider_unavailable",
+        message: DIAGNOSTICS_UNAVAILABLE_MESSAGE,
+        retryable: true
+      }]
+    };
+  }
+
+  const daemon: IntegrationDaemonHealth = {
+    pid: input.daemon.pid,
+    socket_path: input.daemon.socket_path,
+    repo_root: input.daemon.repo_root,
+    connected_clients: input.daemon.connected_clients,
+    controller_generation: diagnostics.controller_generation,
+    diagnostic_revision: diagnostics.diagnostic_revision,
+    execution_id: diagnostics.execution_id,
+    started_generation: diagnostics.started_generation,
+    requested_generation: diagnostics.requested_generation,
+    target_snapshot_id: diagnostics.target_snapshot_id,
+    visible_snapshot_id: diagnostics.visible_snapshot_id,
+    warmup_state: diagnostics.execution_state,
+    publication_state: diagnostics.publication_state,
+    graph_freshness: diagnostics.graph_freshness,
+    activity_lease_held: diagnostics.activity_lease_held,
+    worker_termination_state: diagnostics.worker_termination_state,
+    last_failure: diagnostics.last_failure
+  };
+  return {
+    health: { ...baseHealth, daemon },
+    meta: diagnosticsMeta(repoRoot, diagnostics)
+  };
+}
+
+function healthyMeta(repoRoot: string): ResponseMetadata {
+  return {
       analysis_validity: "valid",
       freshness: "fresh",
       scope: {
@@ -97,7 +165,19 @@ export function getIntegrationHealth(input: GetIntegrationHealthInput): GetInteg
       evidence_kinds: ["config"],
       verification_status: "done",
       truncated: false
-    }
+  };
+}
+
+function diagnosticsMeta(
+  repoRoot: string,
+  diagnostics: SnapshotRefreshDiagnosticsReceipt
+): ResponseMetadata {
+  const refreshing = diagnostics.execution_state === "planned" || diagnostics.execution_state === "running";
+  const blocked = diagnostics.execution_state === "failed" || diagnostics.graph_freshness !== "fresh";
+  return {
+    ...healthyMeta(repoRoot),
+    freshness: refreshing ? "refreshing" : diagnostics.graph_freshness,
+    verification_status: blocked || refreshing ? "blocked" : "done"
   };
 }
 

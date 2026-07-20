@@ -20,7 +20,7 @@ import type {
   SnapshotPublicationTransition,
   SnapshotRefreshAdmission
 } from "../../src/ports/index.js";
-import type { FileContentHashBinding } from "../../src/domain/models/runtime.js";
+import type { FileContentHashBinding, SnapshotState } from "../../src/domain/models/runtime.js";
 import {
   InMemoryCancellationAdapter,
   InMemoryRuntimeOperationsAdapter,
@@ -28,6 +28,7 @@ import {
 } from "../../src/infrastructure/runtime/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
 import { createDeadlineControllerHarness } from "../helpers/spec041-refresh-reproductions.js";
+import { RepositoryRefreshTriggerCoordinator } from "../../src/application/use-cases/repository-refresh-triggers.js";
 
 class MutableClock implements ClockPort {
   private timestamp: number;
@@ -180,6 +181,10 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
   } | undefined;
   private allocationSequence = 1000;
   private allocationFails = false;
+  private latestPublished: {
+    snapshot: SnapshotState;
+    publication: SnapshotPublicationRecord & { state: "published" };
+  } | undefined;
 
   public async allocateBuildSnapshotId(): Promise<string> {
     if (this.allocationFails) {
@@ -204,7 +209,7 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
       this.failingState = undefined;
       throw new Error("publication transition failed");
     }
-    return {
+    const record = {
       repo_root: input.repo_root,
       snapshot_id: input.snapshot_id,
       controller_generation: 7,
@@ -212,12 +217,32 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
       state: input.to,
       updated_at: input.updated_at
     };
+    if (input.to === "published") {
+      this.latestPublished = {
+        snapshot: {
+          id: input.snapshot_id,
+          repo_root: input.repo_root,
+          workspace_root: input.repo_root,
+          repo_identity: input.repo_root,
+          config_identity: "test",
+          schema_version: SCHEMA_VERSION,
+          freshness: "fresh",
+          owner_state: "owner",
+          created_at: input.updated_at,
+          updated_at: input.updated_at
+        },
+        publication: { ...record, state: "published" }
+      };
+    }
+    return record;
   }
 
   public async getLatestPublished(): Promise<
     Exclude<SnapshotPublicationSelection, { status: "blocked" }>
   > {
-    return { status: "missing", reason: "no_published_snapshot" };
+    return this.latestPublished === undefined
+      ? { status: "missing", reason: "no_published_snapshot" }
+      : { status: "selected", ...this.latestPublished };
   }
 
   public async readExplicit(input: {
@@ -232,6 +257,37 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
 
   public failNextAllocation(): void {
     this.allocationFails = true;
+  }
+
+  public setLatestPublished(snapshotId: string, freshness: SnapshotState["freshness"]): void {
+    const updatedAt = "2026-07-20T09:59:00.000Z";
+    this.latestPublished = {
+      snapshot: {
+        id: snapshotId,
+        repo_root: "/repo",
+        workspace_root: "/repo",
+        repo_identity: "/repo",
+        config_identity: "test",
+        schema_version: SCHEMA_VERSION,
+        freshness,
+        owner_state: "owner",
+        created_at: updatedAt,
+        updated_at: updatedAt
+      },
+      publication: {
+        repo_root: "/repo",
+        snapshot_id: snapshotId,
+        controller_generation: 7,
+        invalidation_generation: 0,
+        state: "published",
+        updated_at: updatedAt
+      }
+    };
+  }
+
+  public markLatestFreshness(freshness: SnapshotState["freshness"]): void {
+    if (this.latestPublished === undefined) throw new Error("Missing published snapshot fixture.");
+    this.latestPublished.snapshot = { ...this.latestPublished.snapshot, freshness };
   }
 
   public deferNext(state: SnapshotPublicationTransition["to"]): {
@@ -626,6 +682,33 @@ describe("runtime operation adapters", () => {
     ]);
   });
 
+  it("advances diagnostics revision for a same-generation reused request", async () => {
+    const { controller, executor } = createControlledController();
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "startup",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    const before = await controller.getDiagnostics({ repo_root: "/repo" });
+
+    await expect(controller.request({
+      repo_root: "/repo",
+      reason: "stale_first_read",
+      source: "client-2",
+      invalidation_generation: 1
+    })).resolves.toMatchObject({
+      outcome: "reused",
+      requested_generation: 1
+    });
+
+    const after = await controller.getDiagnostics({ repo_root: "/repo" });
+    expect(after.diagnostic_revision).toBe(before.diagnostic_revision + 1);
+    expect(after.execution_id).toBe(before.execution_id);
+    expect(executor.calls).toHaveLength(1);
+  });
+
   it("publishes an ordinary successful build before releasing the execution lease", async () => {
     const { controller, executor, publication } = createControlledController();
     const observed: string[] = [];
@@ -788,7 +871,11 @@ describe("runtime operation adapters", () => {
       expect(controller.getReceipt()).toMatchObject({
         execution_state: "failed",
         activity_lease: null,
-        last_failure: { code: "worker_timeout" }
+        last_failure: {
+          code: "worker_timeout",
+          category: "worker",
+          message: "Refresh worker deadline expired."
+        }
       });
       expect(deadlines.activeCount()).toBe(0);
       expect(publication.transitions).toEqual([
@@ -822,6 +909,13 @@ describe("runtime operation adapters", () => {
     deadlines.fire(0);
     await terminal;
 
+    const unconfirmed = await controller.getDiagnostics({ repo_root: "/repo" });
+    expect(unconfirmed).toMatchObject({
+      execution_state: "failed",
+      worker_termination_state: "unconfirmed",
+      last_failure: { code: "worker_timeout" }
+    });
+
     await expect(controller.request({
       repo_root: "/repo",
       reason: "stale_first_read",
@@ -836,6 +930,13 @@ describe("runtime operation adapters", () => {
 
     executor.confirmTermination();
     await executor.waitForTerminationConfirmation();
+    const confirmed = await controller.getDiagnostics({ repo_root: "/repo" });
+    expect(confirmed).toMatchObject({
+      execution_state: "failed",
+      worker_termination_state: "confirmed",
+      last_failure: unconfirmed.last_failure
+    });
+    expect(confirmed.diagnostic_revision).toBeGreaterThan(unconfirmed.diagnostic_revision);
     const successor = await controller.request({
       repo_root: "/repo",
       reason: "stale_first_read",
@@ -875,7 +976,9 @@ describe("runtime operation adapters", () => {
         code: "worker_error"
       }
     });
-    expect(publication.transitions).toHaveLength(0);
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "failed" })
+    ]);
     expect(executor.calls).toHaveLength(0);
   });
 
@@ -1270,7 +1373,8 @@ describe("runtime operation adapters", () => {
       last_failure: { code: "store_failure", category: "store" }
     });
     expect(publication.transitions).toEqual([
-      expect.objectContaining({ snapshot_id: "1001", to: "published" })
+      expect.objectContaining({ snapshot_id: "1001", to: "published" }),
+      expect.objectContaining({ snapshot_id: "1001", to: "failed" })
     ]);
     expect(executor.terminations).toHaveLength(0);
     expect(deadlines.activeCount()).toBe(0);
@@ -1444,41 +1548,150 @@ describe("runtime operation adapters", () => {
     expect(concurrentLaterRequest).toBe(firstLaterRequest);
   });
 
-  it.fails("shares a non-startup request with the daemon owner instead of stranding it locally", async () => {
-    const clock = new MutableClock("2026-05-31T12:00:00.000Z");
-    const startupConnection = new InMemoryRuntimeOperationsAdapter({ clock });
-    const laterConnection = new InMemoryRuntimeOperationsAdapter({ clock });
+  it("bounds, redacts, retains, and atomically clears controller failure evidence", async () => {
+    const publication = new ControlledPublicationPort();
+    publication.setLatestPublished("snap-prior", "stale");
+    const { controller, executor } = createControlledController({ publication });
 
-    const executionId = await laterConnection.requestWarmup({
+    const firstTerminal = observeTerminal(controller);
+    await controller.request({
       repo_root: "/repo",
-      snapshot_id: "snap-stale"
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    executor.fail(0);
+    await firstTerminal;
+
+    const failed = await controller.getDiagnostics({ repo_root: "/repo" });
+    expect(failed).toMatchObject({
+      execution_state: "failed",
+      publication_state: "failed",
+      visible_snapshot_id: "snap-prior",
+      graph_freshness: "stale",
+      last_failure: {
+        code: "worker_error",
+        category: "worker",
+        message: "Refresh worker failed.",
+        execution_id: "exec-1",
+        target_snapshot_id: "1001"
+      }
+    });
+    expect(Buffer.byteLength(failed.last_failure?.message ?? "", "utf8")).toBeLessThanOrEqual(512);
+    expect(JSON.stringify(failed.last_failure)).not.toMatch(
+      /unsafe worker detail|private\/workspace|API_TOKEN|SELECT \*|at worker/
+    );
+
+    await Promise.resolve();
+    const successorTerminal = observeTerminal(controller);
+    await expect(controller.request({
+      repo_root: "/repo",
+      reason: "stale_first_read",
+      source: "later-client",
+      invalidation_generation: 2
+    })).resolves.toMatchObject({ outcome: "accepted", execution_id: "exec-2" });
+    await executor.waitForCalls(2);
+    const successor = await controller.getDiagnostics({ repo_root: "/repo" });
+    expect(successor.execution_state).toBe("running");
+    expect(successor.last_failure).toEqual(failed.last_failure);
+    expect(successor.diagnostic_revision).toBeGreaterThan(failed.diagnostic_revision);
+
+    executor.complete(1);
+    await successorTerminal;
+    const complete = await controller.getDiagnostics({ repo_root: "/repo" });
+    expect(complete).toMatchObject({
+      execution_state: "complete",
+      publication_state: "published",
+      target_snapshot_id: "1002",
+      visible_snapshot_id: "1002",
+      graph_freshness: "fresh",
+      worker_termination_state: "not_required"
+    });
+    expect(complete.last_failure).toBeUndefined();
+    expect(complete.diagnostic_revision).toBeGreaterThan(successor.diagnostic_revision);
+  });
+
+  it("reports authoritative failure after startup invalidates a fresh visible snapshot", async () => {
+    const publication = new ControlledPublicationPort();
+    publication.setLatestPublished("snap-prior", "fresh");
+    const { controller, executor } = createControlledController({ publication });
+    const triggers = new RepositoryRefreshTriggerCoordinator({
+      repo_root: "/repo",
+      controller,
+      publications: publication,
+      snapshots: {
+        async markSnapshotFreshness(input) {
+          expect(input).toMatchObject({
+            snapshot_id: "snap-prior",
+            freshness: "stale",
+            reason: "startup_refresh_requested"
+          });
+          publication.markLatestFreshness(input.freshness);
+        }
+      }
     });
 
-    // This models the confirmed root cause without timing: the later
-    // connection owns planned state that the startup executor cannot observe.
-    await expect(startupConnection.getState({ repo_root: "/repo" })).resolves.toMatchObject({
-      execution_id: executionId,
-      state: "planned"
+    const terminal = observeTerminal(controller);
+    await triggers.startup({ source: "daemon-startup" });
+    await executor.waitForCalls(1);
+    expect(await controller.getDiagnostics({ repo_root: "/repo" })).toMatchObject({
+      execution_state: "running",
+      visible_snapshot_id: "snap-prior",
+      graph_freshness: "stale",
+      activity_lease_held: true
+    });
+
+    executor.fail(0);
+    await terminal;
+    expect(await controller.getDiagnostics({ repo_root: "/repo" })).toMatchObject({
+      execution_state: "failed",
+      publication_state: "failed",
+      visible_snapshot_id: "snap-prior",
+      graph_freshness: "stale",
+      activity_lease_held: false,
+      last_failure: {
+        code: "worker_error",
+        message: "Refresh worker failed."
+      }
     });
   });
 
-  it.fails("bounds and redacts retained warm-up failure evidence", async () => {
-    const clock = new MutableClock("2026-05-31T12:00:00.000Z");
-    const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
-    const executionId = await runtime.requestWarmup({
+  it("records safe authoritative failure when startup freshness invalidation is unavailable", async () => {
+    const publication = new ControlledPublicationPort();
+    publication.setLatestPublished("snap-prior", "fresh");
+    const { controller, executor } = createControlledController({ publication });
+    const triggers = new RepositoryRefreshTriggerCoordinator({
       repo_root: "/repo",
-      snapshot_id: "snap-failure"
-    });
-    const sentinel = "/private/workspace/index.sqlite API_TOKEN=secret SELECT * FROM snapshots\n    at worker";
-    await runtime.completeWarmup({
-      execution_id: executionId,
-      success: false,
-      reason: sentinel.repeat(20)
+      controller,
+      publications: publication,
+      snapshots: {
+        async markSnapshotFreshness() {
+          throw new Error("API_TOKEN=secret SELECT * FROM snapshots at /private/workspace");
+        }
+      }
     });
 
-    const failure = await runtime.getState({ repo_root: "/repo" });
-    expect(Buffer.byteLength(failure?.reason ?? "", "utf8")).toBeLessThanOrEqual(512);
-    expect(failure?.reason).not.toMatch(/private\/workspace|API_TOKEN|SELECT \*|at worker/);
+    await expect(triggers.startup({ source: "daemon-startup" })).resolves.toMatchObject({
+      outcome: "blocked",
+      reason: "store_failure",
+      message: "Refresh store operation failed."
+    });
+    expect(executor.calls).toHaveLength(0);
+    const diagnostics = await controller.getDiagnostics({ repo_root: "/repo" });
+    expect(diagnostics).toMatchObject({
+      execution_state: "failed",
+      visible_snapshot_id: "snap-prior",
+      graph_freshness: "stale",
+      activity_lease_held: false,
+      worker_termination_state: "not_required",
+      last_failure: {
+        code: "store_failure",
+        category: "store",
+        message: "Refresh store operation failed."
+      }
+    });
+    expect(JSON.stringify(diagnostics)).not.toMatch(/API_TOKEN|SELECT \*|private\/workspace/);
   });
 
   it("stores cache entries with TTL and explicit snapshot/file invalidation", async () => {

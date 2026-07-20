@@ -8,6 +8,7 @@ import { z } from "zod";
 import { integrationHealthRequestSchema } from "../../../../contracts/index.js";
 import {
   buildIntegrationHealthEnvelope,
+  buildIntegrationHealthProviderFailureEnvelope,
   buildInvalidIntegrationHealthInputEnvelope
 } from "../../../../presentation/integration-health-presenter.js";
 import {
@@ -53,13 +54,25 @@ export const integrationHealthTool: McpToolDeclaration = {
       schema: integrationHealthRequestSchema,
       invalidInputMessage: "Invalid integration_health arguments.",
       getProvider: (registryContext) => registryContext.getIntegrationHealth,
-      buildFailureEnvelope: (input) => classifiedFailureEnvelope(
-        buildInvalidIntegrationHealthInputEnvelope({
-          repoRoot: input.repoRoot,
-          message: input.message
-        }),
-        input
-      ),
+      buildFailureEnvelope: (input) => {
+        if (input.classification === "invalid_input") {
+          return classifiedFailureEnvelope(
+            buildInvalidIntegrationHealthInputEnvelope({
+              repoRoot: input.repoRoot,
+              message: input.message
+            }),
+            input
+          );
+        }
+        const message = "Authoritative integration health is unavailable.";
+        return classifiedFailureEnvelope(
+          buildIntegrationHealthProviderFailureEnvelope({
+            repoRoot: input.repoRoot,
+            message
+          }),
+          { ...input, message }
+        );
+      },
       invoke: ({ provider, request, context: registryContext }) => provider({
         request,
         connection_identity: registryContext.getConnectionIdentity?.()

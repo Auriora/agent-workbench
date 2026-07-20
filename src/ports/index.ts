@@ -689,6 +689,35 @@ export type RepositoryOwnershipLease = {
   state: "active" | "dead" | "ambiguous";
 };
 
+export type RepositoryOwnershipAdmission =
+  | {
+      outcome: "acquired";
+      lease: RepositoryOwnershipLease & { state: "active" };
+    }
+  | {
+      outcome: "blocked";
+      reason: "owner_active";
+      owner: RepositoryOwnershipLease & { state: "active" };
+    }
+  | {
+      outcome: "blocked";
+      reason: "ownership_ambiguous";
+      owner: RepositoryOwnershipLease & { state: "ambiguous" };
+    };
+
+export interface RepositoryOwnershipPort {
+  acquire(input: {
+    repo_root: string;
+    runtime_identity: string;
+    schema_version: number;
+    owner_id: string;
+    owner_pid: number;
+    owner_generation: number;
+    heartbeat_at: string;
+  }): Promise<RepositoryOwnershipAdmission>;
+  release(input: { lease: RepositoryOwnershipLease & { state: "active" } }): Promise<void>;
+}
+
 export type SnapshotRefreshRequest = {
   repo_root: string;
   reason: "startup" | "stale_first_read" | "watcher_invalidation";
@@ -760,6 +789,7 @@ export type SnapshotRefreshControllerReceipt = {
   requested_generation: InvalidationGeneration;
   activity_lease: RefreshActivityLease | null;
   worker_invocations: number;
+  worker_termination_state: "not_required" | "unconfirmed" | "confirmed";
   last_failure?: RefreshFailure;
 };
 
@@ -767,6 +797,14 @@ export interface SnapshotRefreshControllerPort
   extends SnapshotRefreshPort,
     DaemonRefreshActivityPort {
   getReceipt(): SnapshotRefreshControllerReceipt;
+}
+
+export interface SnapshotRefreshAdmissionFailurePort {
+  recordAdmissionFailure(input: {
+    repo_root: string;
+    invalidation_generation: InvalidationGeneration;
+    code: "store_failure" | "permission_failure";
+  }): Promise<Extract<SnapshotRefreshAdmission, { outcome: "blocked" }>>;
 }
 
 export interface SnapshotRefreshDiagnosticsPort {
@@ -797,6 +835,12 @@ export type DaemonRefreshActivityTransition = DaemonRefreshActivityTransitionBas
         execution_state: "failed";
         lease: RefreshActivityLease & { state: "released" };
         failure: RefreshFailure;
+      }
+    | {
+        state: "termination_confirmed";
+        execution_state: "failed";
+        lease?: never;
+        failure?: never;
       }
   );
 

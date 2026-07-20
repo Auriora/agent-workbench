@@ -61,7 +61,7 @@ describe("graph query MCP tools", () => {
       });
 
     try {
-      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const server = createAgentWorkbenchServer(repoRoot, { startupRefreshDelayMs: 60_000 });
       const result = parseMcpTextContent<{
         data: { snapshot_id: string };
         meta: { freshness: string; verification_status: string; caveats?: Array<{ kind: string }> };
@@ -106,7 +106,7 @@ describe("graph query MCP tools", () => {
       });
 
     try {
-      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const server = createAgentWorkbenchServer(repoRoot, { startupRefreshDelayMs: 60_000 });
       const result = parseMcpTextContent<{
         data: SearchSymbolsResult["symbols"];
         meta: SearchSymbolsResult["meta"];
@@ -151,7 +151,7 @@ describe("graph query MCP tools", () => {
       });
 
     try {
-      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const server = createAgentWorkbenchServer(repoRoot, { startupRefreshDelayMs: 60_000 });
       const result = parseMcpTextContent<{
         data: SearchSymbolsResult["symbols"];
       }>(await getRegisteredTool(server, "symbol_search").handler({
@@ -176,7 +176,7 @@ describe("graph query MCP tools", () => {
     }
 
     try {
-      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const server = createAgentWorkbenchServer(repoRoot, { startupRefreshDelayMs: 60_000 });
       const result = parseMcpTextContent<{
         data: SearchSymbolsResult["symbols"];
         meta: SearchSymbolsResult["meta"];
@@ -520,7 +520,7 @@ describe("graph query MCP tools", () => {
 
   it("is registered by the composed server", () => {
     const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
-      startGraphWarmup: false
+      startupRefreshDelayMs: 60_000
     });
 
     expect(registeredToolNames(server)).toEqual([

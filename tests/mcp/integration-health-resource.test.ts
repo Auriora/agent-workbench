@@ -6,13 +6,17 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type {
   IntegrationHealth,
   IntegrationHealthRequest,
-  ResponseMetadata
+  ResponseMetadata,
+  SnapshotRefreshDiagnosticsReceipt
 } from "../../src/contracts/index.js";
-import type { GetIntegrationHealthResult } from "../../src/application/use-cases/get-integration-health.js";
+import {
+  getIntegrationHealth,
+  type GetIntegrationHealthResult
+} from "../../src/application/use-cases/get-integration-health.js";
 import { integrationHealthResource } from "../../src/interface-adapters/mcp/registries/resources/integration-health.js";
 import { integrationHealthTool } from "../../src/interface-adapters/mcp/registries/tools/integration-health.js";
 import { createAgentWorkbenchServer } from "../../src/server.js";
@@ -96,7 +100,7 @@ describe("integration health MCP resource", () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-health-"));
     try {
       const server = createAgentWorkbenchServer(repoRoot, {
-        startGraphWarmup: false
+        startupRefreshDelayMs: 60_000
       });
 
       const response = await getRegisteredResource(
@@ -151,6 +155,255 @@ describe("integration health MCP resource", () => {
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
+  });
+
+  it("awaits exactly one authoritative diagnostics receipt before responding", async () => {
+    const deferred = controlledDeferred<SnapshotRefreshDiagnosticsReceipt>();
+    let calls = 0;
+    const registered = registerMcpResource(integrationHealthResource, {
+      repoRoot: "/repo",
+      getIntegrationHealth: ({ request }) => getIntegrationHealth({
+        request,
+        default_repo_root: "/repo",
+        runtime_version: "0.5.2",
+        profile: "codex",
+        surfaces: [],
+        daemon: {
+          pid: 1234,
+          socket_path: "/tmp/agent-workbench.sock",
+          repo_root: "/repo",
+          connected_clients: 1,
+          diagnostics: {
+            getDiagnostics: async () => {
+              calls += 1;
+              return await deferred.promise;
+            }
+          }
+        }
+      })
+    });
+    let settled = false;
+    const responsePromise = registered.handler({}).then((response) => {
+      settled = true;
+      return response;
+    });
+    await Promise.resolve();
+    expect(calls).toBe(1);
+    expect(settled).toBe(false);
+
+    deferred.resolve(idleDiagnostics());
+    const parsed = JSON.parse((await responsePromise).contents[0]?.text ?? "{}") as {
+      data: { daemon?: Record<string, unknown> };
+    };
+    expect(parsed.data.daemon).toMatchObject({
+      controller_generation: 7,
+      diagnostic_revision: 11,
+      warmup_state: "idle",
+      graph_freshness: "cold",
+      activity_lease_held: false,
+      worker_termination_state: "not_required"
+    });
+    expect(calls).toBe(1);
+  });
+
+  it("degrades safely when authoritative diagnostics reject", async () => {
+    const sentinel = "/private/workspace/index.sqlite API_TOKEN=secret SELECT * FROM snapshots\n    at worker";
+    const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const registered = registerMcpResource(integrationHealthResource, {
+      repoRoot: "/repo",
+      getIntegrationHealth: ({ request }) => getIntegrationHealth({
+        request,
+        default_repo_root: "/repo",
+        runtime_version: "0.5.2",
+        profile: "codex",
+        surfaces: [],
+        daemon: {
+          pid: 1234,
+          socket_path: "/tmp/agent-workbench.sock",
+          repo_root: "/repo",
+          connected_clients: 1,
+          diagnostics: { getDiagnostics: async () => { throw new Error(sentinel); } }
+        }
+      })
+    });
+    const response = await registered.handler({});
+    const stdoutCalls = stdout.mock.calls.length;
+    const stderrCalls = stderr.mock.calls.length;
+    stdout.mockRestore();
+    stderr.mockRestore();
+    const text = response.contents[0]?.text ?? "{}";
+    const parsed = JSON.parse(text) as {
+      data: { daemon?: unknown };
+      meta: ResponseMetadata;
+      errors: Array<{ code: string; message: string }>;
+    };
+
+    expect(text).not.toContain(sentinel);
+    expect(JSON.stringify(parsed.meta)).not.toContain(sentinel);
+    expect(stdoutCalls).toBe(0);
+    expect(stderrCalls).toBe(0);
+    expect(parsed.data.daemon).toBeUndefined();
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid_due_to_environment",
+      freshness: "unknown",
+      verification_status: "blocked"
+    });
+    expect(parsed.meta.trust?.safe_to_use_for).not.toContain("runtime_availability");
+    expect(parsed.meta.trust?.must_verify_by).toEqual(expect.arrayContaining([
+      "refresh_runtime_snapshot",
+      "resolve_blocked_environment"
+    ]));
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "provider_unavailable",
+        message: "Authoritative refresh diagnostics are unavailable."
+      })
+    ]);
+  });
+
+  it("degrades safely when authoritative diagnostics return an illegal state pair", async () => {
+    const registered = registerMcpResource(integrationHealthResource, {
+      repoRoot: "/repo",
+      getIntegrationHealth: ({ request }) => getIntegrationHealth({
+        request,
+        default_repo_root: "/repo",
+        runtime_version: "0.5.2",
+        profile: "codex",
+        surfaces: [],
+        daemon: {
+          pid: 1234,
+          socket_path: "/tmp/agent-workbench.sock",
+          repo_root: "/repo",
+          connected_clients: 1,
+          diagnostics: {
+            getDiagnostics: async () => ({
+              ...idleDiagnostics(),
+              graph_freshness: "fresh"
+            })
+          }
+        }
+      })
+    });
+    const parsed = JSON.parse((await registered.handler({})).contents[0]?.text ?? "{}") as {
+      data: { daemon?: unknown };
+      meta: ResponseMetadata;
+      errors: Array<{ code: string; message: string }>;
+    };
+    expect(parsed.data.daemon).toBeUndefined();
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid_due_to_environment",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors[0]).toEqual(expect.objectContaining({
+      code: "provider_unavailable",
+      message: "Authoritative refresh diagnostics are unavailable."
+    }));
+  });
+
+  it("reports startup refresh over a fresh visible snapshot as authoritative refreshing health", async () => {
+    const registered = registerMcpResource(integrationHealthResource, {
+      repoRoot: "/repo",
+      getIntegrationHealth: ({ request }) => getIntegrationHealth({
+        request,
+        default_repo_root: "/repo",
+        runtime_version: "0.5.2",
+        profile: "codex",
+        surfaces: [],
+        daemon: {
+          pid: 1234,
+          socket_path: "/tmp/agent-workbench.sock",
+          repo_root: "/repo",
+          connected_clients: 1,
+          diagnostics: {
+            getDiagnostics: async () => ({
+              repo_identity: "/repo",
+              controller_generation: 7,
+              diagnostic_revision: 12,
+              execution_id: "exec-startup",
+              started_generation: 1,
+              requested_generation: 1,
+              target_snapshot_id: "snap-target",
+              visible_snapshot_id: "snap-prior",
+              execution_state: "running",
+              publication_state: "building",
+              graph_freshness: "fresh",
+              activity_lease_held: true,
+              worker_termination_state: "not_required"
+            })
+          }
+        }
+      })
+    });
+
+    const parsed = JSON.parse((await registered.handler({})).contents[0]?.text ?? "{}") as {
+      data: { daemon?: { warmup_state?: string; graph_freshness?: string } };
+      meta: ResponseMetadata;
+      errors?: unknown[];
+    };
+    expect(parsed.data.daemon).toMatchObject({
+      warmup_state: "running",
+      graph_freshness: "fresh"
+    });
+    expect(parsed.meta).toMatchObject({ freshness: "refreshing", verification_status: "blocked" });
+    expect(parsed.errors).toEqual([]);
+  });
+
+  it("reports a failed startup refresh as authoritative non-fresh health", async () => {
+    const registered = registerMcpResource(integrationHealthResource, {
+      repoRoot: "/repo",
+      getIntegrationHealth: ({ request }) => getIntegrationHealth({
+        request,
+        default_repo_root: "/repo",
+        runtime_version: "0.5.2",
+        profile: "codex",
+        surfaces: [],
+        daemon: {
+          pid: 1234,
+          socket_path: "/tmp/agent-workbench.sock",
+          repo_root: "/repo",
+          connected_clients: 1,
+          diagnostics: {
+            getDiagnostics: async () => ({
+              repo_identity: "/repo",
+              controller_generation: 7,
+              diagnostic_revision: 13,
+              execution_id: "exec-startup",
+              started_generation: 1,
+              requested_generation: 1,
+              target_snapshot_id: "snap-target",
+              visible_snapshot_id: "snap-prior",
+              execution_state: "failed",
+              publication_state: "failed",
+              graph_freshness: "stale",
+              activity_lease_held: false,
+              worker_termination_state: "confirmed",
+              last_failure: {
+                code: "worker_error",
+                category: "worker",
+                message: "Refresh worker failed.",
+                execution_id: "exec-startup",
+                target_snapshot_id: "snap-target",
+                occurred_at: "2026-07-20T10:00:00.000Z"
+              }
+            })
+          }
+        }
+      })
+    });
+
+    const parsed = JSON.parse((await registered.handler({})).contents[0]?.text ?? "{}") as {
+      data: { daemon?: { warmup_state?: string; graph_freshness?: string; last_failure?: unknown } };
+      meta: ResponseMetadata;
+      errors: unknown[];
+    };
+    expect(parsed.data.daemon).toMatchObject({
+      warmup_state: "failed",
+      graph_freshness: "stale",
+      last_failure: { code: "worker_error", message: "Refresh worker failed." }
+    });
+    expect(parsed.meta).toMatchObject({ freshness: "stale", verification_status: "blocked" });
+    expect(parsed.errors).toEqual([]);
   });
 });
 
@@ -232,7 +485,48 @@ describe("integration_health MCP tool", () => {
       expect.objectContaining({ code: "invalid_input", retryable: false })
     ]);
   });
+
+  it("redacts unexpected provider failures from the tool envelope", async () => {
+    const sentinel = "/private/workspace/index.sqlite API_TOKEN=secret SELECT * FROM snapshots";
+    const registered = registerMcpTool(integrationHealthTool, {
+      repoRoot: "/repo",
+      getIntegrationHealth: async () => { throw new Error(sentinel); }
+    });
+    const response = await registered.handler({ discovery_state: "unknown" });
+    const text = response.content[0]?.text ?? "{}";
+    const parsed = JSON.parse(text) as {
+      meta: ResponseMetadata;
+      errors: Array<{ code: string; message: string }>;
+    };
+    expect(text).not.toContain(sentinel);
+    expect(parsed.meta.trust?.safe_to_use_for).not.toContain("runtime_availability");
+    expect(parsed.errors[0]).toMatchObject({
+      code: "internal_error",
+      message: "Authoritative integration health is unavailable."
+    });
+  });
 });
+
+function idleDiagnostics(): SnapshotRefreshDiagnosticsReceipt {
+  return {
+    repo_identity: "/repo",
+    controller_generation: 7,
+    diagnostic_revision: 11,
+    execution_state: "idle",
+    graph_freshness: "cold",
+    activity_lease_held: false,
+    worker_termination_state: "not_required"
+  };
+}
+
+function controlledDeferred<T>(): {
+  promise: Promise<T>;
+  resolve(value: T): void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((promiseResolve) => { resolve = promiseResolve; });
+  return { promise, resolve };
+}
 
 function healthResult(
   repoRoot: string,

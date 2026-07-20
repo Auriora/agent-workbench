@@ -135,6 +135,13 @@ export type SnapshotPublicationState = z.infer<typeof snapshotPublicationStateSc
 export const authoritativeGraphFreshnessSchema = z.enum(["fresh", "stale", "cold"]);
 export type AuthoritativeGraphFreshness = z.infer<typeof authoritativeGraphFreshnessSchema>;
 
+export const workerTerminationStateSchema = z.enum([
+  "not_required",
+  "unconfirmed",
+  "confirmed"
+]);
+export type WorkerTerminationState = z.infer<typeof workerTerminationStateSchema>;
+
 export const invalidationGenerationSchema = z.number().int().nonnegative();
 export type InvalidationGeneration = z.infer<typeof invalidationGenerationSchema>;
 
@@ -181,7 +188,7 @@ export const refreshFailureMessageSchema = z.enum([
 ]);
 export type RefreshFailureMessage = z.infer<typeof refreshFailureMessageSchema>;
 
-const refreshFailureCategoryByCode: Readonly<Record<RefreshFailureCode, RefreshFailureCategory>> = {
+export const refreshFailureCategoryByCode: Readonly<Record<RefreshFailureCode, RefreshFailureCategory>> = {
   worker_timeout: "worker",
   worker_error: "worker",
   worker_exit_without_result: "worker",
@@ -193,7 +200,7 @@ const refreshFailureCategoryByCode: Readonly<Record<RefreshFailureCode, RefreshF
   orphaned_pre_publication: "publication"
 };
 
-const refreshFailureMessageByCode: Readonly<Record<RefreshFailureCode, RefreshFailureMessage>> = {
+export const refreshFailureMessageByCode: Readonly<Record<RefreshFailureCode, RefreshFailureMessage>> = {
   worker_timeout: "Refresh worker deadline expired.",
   worker_error: "Refresh worker failed.",
   worker_exit_without_result: "Refresh worker exited without a valid result.",
@@ -216,6 +223,13 @@ export const refreshFailureSchema = z
   })
   .strict()
   .superRefine((value, context) => {
+    if (new TextEncoder().encode(value.message).byteLength > 512) {
+      context.addIssue({
+        code: "custom",
+        message: "Refresh failure message must not exceed 512 UTF-8 bytes.",
+        path: ["message"]
+      });
+    }
     if (refreshFailureCategoryByCode[value.code] !== value.category) {
       context.addIssue({
         code: "custom",
@@ -233,6 +247,22 @@ export const refreshFailureSchema = z
   });
 export type RefreshFailure = z.infer<typeof refreshFailureSchema>;
 
+export function createRefreshFailure(input: {
+  code: RefreshFailureCode;
+  execution_id: string;
+  target_snapshot_id?: string;
+  occurred_at: string;
+}): RefreshFailure {
+  return refreshFailureSchema.parse({
+    code: input.code,
+    category: refreshFailureCategoryByCode[input.code],
+    message: refreshFailureMessageByCode[input.code],
+    execution_id: input.execution_id,
+    target_snapshot_id: input.target_snapshot_id,
+    occurred_at: input.occurred_at
+  });
+}
+
 export const snapshotRefreshDiagnosticsReceiptSchema = z
   .object({
     repo_identity: z.string().min(1).max(512),
@@ -247,6 +277,7 @@ export const snapshotRefreshDiagnosticsReceiptSchema = z
     publication_state: snapshotPublicationStateSchema.optional(),
     graph_freshness: authoritativeGraphFreshnessSchema,
     activity_lease_held: z.boolean(),
+    worker_termination_state: workerTerminationStateSchema,
     last_failure: refreshFailureSchema.optional()
   })
   .strict()
@@ -267,10 +298,17 @@ export const snapshotRefreshDiagnosticsReceiptSchema = z
         "publication_state"
       );
     }
+    if ((value.visible_snapshot_id === undefined) !== (value.graph_freshness === "cold")) {
+      issue(
+        "Cold graph diagnostics require no visible snapshot, and a visible snapshot cannot be cold.",
+        "graph_freshness"
+      );
+    }
 
     if (value.execution_state === "idle") {
       if (hasExecutionIdentity || value.started_generation !== undefined ||
-          value.requested_generation !== undefined || hasTargetIdentity || value.activity_lease_held) {
+          value.requested_generation !== undefined || hasTargetIdentity || value.activity_lease_held ||
+          value.worker_termination_state !== "not_required") {
         issue("Idle diagnostics cannot identify active execution state or hold an activity lease.", "execution_state");
       }
       return;
@@ -294,6 +332,9 @@ export const snapshotRefreshDiagnosticsReceiptSchema = z
       if (hasTargetIdentity && value.target_snapshot_id === value.visible_snapshot_id) {
         issue("A planned target cannot already be the visible snapshot.", "target_snapshot_id");
       }
+      if (value.worker_termination_state !== "not_required") {
+        issue("Planned diagnostics cannot report worker termination settlement.", "worker_termination_state");
+      }
       return;
     }
 
@@ -311,6 +352,9 @@ export const snapshotRefreshDiagnosticsReceiptSchema = z
       if (value.target_snapshot_id === value.visible_snapshot_id) {
         issue("A running target cannot be the visible snapshot.", "target_snapshot_id");
       }
+      if (value.worker_termination_state !== "not_required") {
+        issue("Running diagnostics cannot report worker termination settlement.", "worker_termination_state");
+      }
       return;
     }
 
@@ -321,7 +365,8 @@ export const snapshotRefreshDiagnosticsReceiptSchema = z
     if (value.execution_state === "complete") {
       if (value.started_generation === undefined || value.publication_state !== "published" ||
           !hasTargetIdentity || value.visible_snapshot_id !== value.target_snapshot_id ||
-          value.started_generation !== value.requested_generation || value.last_failure !== undefined) {
+          value.started_generation !== value.requested_generation || value.last_failure !== undefined ||
+          value.graph_freshness !== "fresh" || value.worker_termination_state !== "not_required") {
         issue(
           "Complete diagnostics require matching published target/visible identities, a completed requested generation, and no failure.",
           "execution_state"
@@ -344,6 +389,9 @@ export const snapshotRefreshDiagnosticsReceiptSchema = z
     if (hasTargetIdentity && value.target_snapshot_id === value.visible_snapshot_id) {
       issue("A failed target cannot be the visible snapshot.", "target_snapshot_id");
     }
+    if (value.graph_freshness === "fresh") {
+      issue("Failed diagnostics cannot report a fresh graph.", "graph_freshness");
+    }
   });
 export type SnapshotRefreshDiagnosticsReceipt = z.infer<
   typeof snapshotRefreshDiagnosticsReceiptSchema
@@ -355,11 +403,46 @@ export const integrationDaemonHealthSchema = z
     socket_path: z.string(),
     repo_root: z.string(),
     connected_clients: z.number().int().nonnegative(),
-    warmup_state: z.string(),
-    graph_freshness: z.string(),
-    last_failure: z.string().optional()
+    controller_generation: z.number().int().positive(),
+    diagnostic_revision: z.number().int().nonnegative(),
+    execution_id: z.string().min(1).max(200).optional(),
+    started_generation: invalidationGenerationSchema.optional(),
+    requested_generation: invalidationGenerationSchema.optional(),
+    target_snapshot_id: z.string().min(1).max(200).optional(),
+    visible_snapshot_id: z.string().min(1).max(200).optional(),
+    warmup_state: refreshExecutionStateSchema,
+    publication_state: snapshotPublicationStateSchema.optional(),
+    graph_freshness: authoritativeGraphFreshnessSchema,
+    activity_lease_held: z.boolean(),
+    worker_termination_state: workerTerminationStateSchema,
+    last_failure: refreshFailureSchema.optional()
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const diagnostics = snapshotRefreshDiagnosticsReceiptSchema.safeParse({
+      repo_identity: value.repo_root,
+      controller_generation: value.controller_generation,
+      diagnostic_revision: value.diagnostic_revision,
+      execution_id: value.execution_id,
+      started_generation: value.started_generation,
+      requested_generation: value.requested_generation,
+      target_snapshot_id: value.target_snapshot_id,
+      visible_snapshot_id: value.visible_snapshot_id,
+      execution_state: value.warmup_state,
+      publication_state: value.publication_state,
+      graph_freshness: value.graph_freshness,
+      activity_lease_held: value.activity_lease_held,
+      worker_termination_state: value.worker_termination_state,
+      last_failure: value.last_failure
+    });
+    if (!diagnostics.success) {
+      context.addIssue({
+        code: "custom",
+        message: "Daemon refresh diagnostics contain an invalid state combination.",
+        path: ["warmup_state"]
+      });
+    }
+  });
 export type IntegrationDaemonHealth = z.infer<typeof integrationDaemonHealthSchema>;
 
 export const integrationHealthSchema = z

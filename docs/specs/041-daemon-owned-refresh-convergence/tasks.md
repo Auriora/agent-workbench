@@ -187,7 +187,7 @@ preserve dependency order and record overlap before parallel work.
   - Status: Phase 2 publication validation acceptance complete.
 ## Phase 3: Daemon Ownership And Public Triggers
 
-- [ ] T004 Compose one daemon controller, repository ownership lease, activity
+- [x] T004 Compose one daemon controller, repository ownership lease, activity
   lease, and equivalent standalone controller.
   - Depends on: T002, T003
   - Requirements: Requirement 1, Requirement 2, Requirement 5, Requirement 6;
@@ -206,37 +206,40 @@ preserve dependency order and record overlap before parallel work.
     only after acquiring repository ownership and never competes with a healthy
     daemon owner.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: Phase 3 T004 complete. Parent verification: `pnpm typecheck` passed; daemon launch, daemon entrypoint, and runtime controller suites reported 3 files passed, 62 ordinary passes, and 5 expected T005-T007 failures; `git diff --check` passed. Evidence covers one injected daemon controller, sole worker/publication path, repository ownership exclusion, disconnect/reconnect lifetime, exact activity-lease release, idle recheck, and termination-unconfirmed quarantine.
   - Expected evidence: Two-client, two-process, disconnect, reconnect, terminal
     notification, idle-timer race, and standalone-owner fixtures must record one
     daemon/controller identity and one activity-lease history.
-  - Status: Pending dependency-ordered implementation; Phase 2 residual recorded.
+  - Status: T004 acceptance complete; T005 and T006 may proceed in dependency order.
   - Phase 2 handoff: Replace the explicitly marked legacy server post-worker
     standalone publication fence with daemon/standalone controller composition,
     and make termination-unconfirmed quarantine participate in shutdown and
     lifetime admission.
-  - [ ] T004.1 Compose and inject one daemon controller in `src/mcp/daemon.ts`
+  - [x] T004.1 Compose and inject one daemon controller in `src/mcp/daemon.ts`
     and `src/server.ts`.
     - Acceptance: Every connection shares controller identity while provider
       and session identity remain connection-local.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T004.2 Integrate the activity lease, terminal notification, closing
+    - Evidence: One daemon-scoped controller, graph store, sole worker executor, and shared service bundle are injected into every connection while integration identity remains handshake-local. `pnpm typecheck` and focused daemon/entrypoint/controller suites passed.
+  - Status: Shared daemon controller composition complete.
+  - [x] T004.2 Integrate the activity lease, terminal notification, closing
     admission, and idle-timer recheck in `src/mcp/daemon.ts`.
     - Acceptance: Disconnect, reconnect, completion, failure, and timer-fire
       races cannot close an active owner or start duplicate grace timers. The
       daemon lifetime test SHALL replace the Phase 1 reproduction factory with
       the production lifetime policy and become an ordinary passing test.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T004.3 Implement standalone repository-lease admission in
+    - Evidence: Production DaemonRefreshLifetimeCoordinator holds daemon lifetime across disconnect, rechecks connected clients, controller activity lease, and worker termination quarantine at timer fire, and reacts to terminal/termination-confirmed transitions. Focused lifetime and daemon suites passed.
+  - Status: Activity lease, idle race, and termination quarantine integration complete.
+  - [x] T004.3 Implement standalone repository-lease admission in
     `src/server.ts` and prove daemon/standalone exclusion in daemon tests.
     - Acceptance: A healthy owner yields structured `owner_active`; ambiguous
       evidence blocks; no refused contender enters planned state.
     - Evidence mode: implementation
-    - Evidence: Pending.
+    - Evidence: File-backed repository ownership gates daemon and lazy standalone controller creation; active and ambiguous owners block without controller creation, while positive dead-owner evidence permits reclaim. Focused ownership and daemon suites passed.
 
-- [ ] T005 Move watcher/change-queue authority and all refresh triggers to the
+  - Status: Standalone and daemon repository-lease admission complete.
+- [x] T005 Move watcher/change-queue authority and all refresh triggers to the
   daemon generation boundary.
   - Depends on: T004
   - Requirements: Requirement 1, Requirement 2, Requirement 5, Requirement 6;
@@ -255,38 +258,41 @@ preserve dependency order and record overlap before parallel work.
     requests reuse active work, while a newer invalidation during execution is
     retained for one sequential catch-up pass before completion.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: Phase 3 T005 complete. Parent verification: `pnpm typecheck` passed; five queue/status/daemon-entrypoint/stdio files reported 45 ordinary passes and 1 expected T006 failure; `git diff --check` passed. The non-startup daemon refresh and production catch-up cases are ordinary passes. No source/test reference to coordinateSnapshotRefresh, startGraphWarmup, or startupWarmupScheduled remains.
   - Expected evidence: Deterministic status/watcher tests must record accepted,
     started, coalesced, and published generations plus one writer invocation at
     a time.
-  - Status: Pending dependency-ordered implementation; Phase 2 residual recorded.
+  - Status: T005 acceptance complete; T006 remains the Phase 3 dependency-ready task.
   - Phase 2 handoff: Replace the trigger-level catch-up reproduction and legacy
     `coordinateSnapshotRefresh` timestamp-derived target allocation; all
     startup, watcher, and stale-read triggers must use the controller/store
     allocator boundary.
-  - [ ] T005.1 Move watcher/change-queue ownership to `src/mcp/daemon.ts` and
+  - [x] T005.1 Move watcher/change-queue ownership to `src/mcp/daemon.ts` and
     retain one local equivalent in standalone `src/server.ts` composition.
     - Acceptance: Connection creation no longer creates independent daemon
       watchers or queues.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T005.2 Connect startup, first-read validity, and queue invalidation to
+    - Evidence: One repository workspace-refresh service owns the watcher and queue for the daemon, with one local standalone equivalent. Shared polling is serialized, watcher start is lazy and single, connection close does not dispose daemon state, and daemon/local owner close stops it once. Focused queue/status/entrypoint/stdio suites passed.
+  - Status: Shared watcher and queue ownership complete.
+  - [x] T005.2 Connect startup, first-read validity, and queue invalidation to
     the generation request port in `src/server.ts` and
     `src/application/use-cases/process-workspace-change-queue.ts`.
     - Acceptance: All triggers share one admission path and bounded reads remain
       non-blocking.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T005.3 Prove concurrent/sequential duplicate events and an invalidation
+    - Evidence: RepositoryRefreshTriggerCoordinator serializes startup, stale-first-read, and watcher admissions through SnapshotRefreshPort, seeds from controller/published generations, marks prior publication stale on watcher work, and uses store allocation only. Legacy coordinateSnapshotRefresh and startGraphWarmup paths/options were removed. Focused suites passed.
+  - Status: All refresh triggers use the shared generation boundary.
+  - [x] T005.3 Prove concurrent/sequential duplicate events and an invalidation
     arriving during a running pass in the queue/status fixtures.
     - Acceptance: Duplicate observations do not create successor work; a truly
       newer generation causes exactly one sequential catch-up. Replace the
       Phase 1 catch-up reproduction factory with the production controller and
       convert the expected failure to an ordinary passing test.
     - Evidence mode: validation
-    - Evidence: Pending.
+    - Evidence: Production-controller barrier fixtures prove repeated dirty reads reuse one generation, one later watcher batch advances once, the active build becomes superseded, one sequential catch-up publishes the newest generation, and no overlapping or third worker starts. Parent focused run reported 45 passes and 1 expected T006 failure.
 
-- [ ] T006 Publish authoritative, bounded, and redacted controller diagnostics.
+  - Status: Trigger dedupe and sequential catch-up acceptance complete.
+- [x] T006 Publish authoritative, bounded, and redacted controller diagnostics.
   - Depends on: T004
   - Requirements: Requirement 3, Requirement 5, Requirement 6; Properties:
     CP-005-CP-006, CP-009
@@ -304,31 +310,31 @@ preserve dependency order and record overlap before parallel work.
     only by successful publication. Diagnostics failure changes top-level trust
     instead of returning synthetic healthy evidence.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: Authoritative bounded diagnostics complete. Final validation: pnpm typecheck; 8 focused files 130/130 plus daemon entrypoint 9/9; full suite 80 files, 722 pass, 1 expected T007 orphan-recovery failure; plugin, skills, and 239-entry pack dry-run passed. Independent re-review found no remaining code blocker.
   - Expected evidence: Schema, use-case, presenter, resource, state-matrix, and
     sentinel redaction tests must record exact accepted/rejected combinations.
-  - Status: Pending dependency-ordered implementation; Phase 2 residual recorded.
+  - Status: Phase 3 T006 acceptance complete; T007 is dependency-ready.
   - Phase 2 handoff: Expose termination-unconfirmed quarantine truth in
     authoritative diagnostics so terminal receipts cannot imply shutdown or
     replacement safety before worker termination is confirmed.
-  - [ ] T006.1 Define exact diagnostics and structured-failure schemas in
+  - [x] T006.1 Define exact diagnostics and structured-failure schemas in
     `src/contracts/runtime-integration-contracts.ts`.
     - Acceptance: Enums, required identities, 512-byte safe message, and legal
       state combinations are schema-enforced.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T006.2 Bind the one awaited receipt through
+    - Evidence: Exact diagnostics, worker-termination, and structured failure schemas implemented; contract and controller state-matrix tests pass.
+  - [x] T006.2 Bind the one awaited receipt through
     `get-integration-health.ts`, the presenter, daemon, and server.
     - Acceptance: No synchronous cache or presenter-side join remains, and
       diagnostic failure changes top-level trust.
     - Evidence mode: implementation
-    - Evidence: Pending.
-  - [ ] T006.3 Prove every state pair, identity transition, failure lifetime,
+    - Evidence: One awaited controller diagnostics receipt is bound through integration health, presenter, MCP resource/tool, daemon, and server; invalid receipts degrade trust safely.
+  - [x] T006.3 Prove every state pair, identity transition, failure lifetime,
     and sentinel redaction channel in integration-health tests.
     - Acceptance: JSON, stdout, stderr, metadata, and timeout evidence contain
       stable safe codes and no sentinel material.
     - Evidence mode: validation
-    - Evidence: Pending.
+    - Evidence: Phase 3 validation covers legal states, shared identities, fresh-startup and pre-admission failure, failure retention/clearing, 512-byte closed messages, JSON/metadata/stdout/stderr sentinel redaction, safe timeout evidence, and standalone failure delegation. Final focused validation: 8 files 130/130 plus daemon entrypoint 9/9.
 
 ## Phase 4: Recovery And End-To-End Proof
 

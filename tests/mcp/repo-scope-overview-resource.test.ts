@@ -547,7 +547,7 @@ describe("repo scope and overview composed server resources", () => {
   it("represents mixed-language and platform scope from the default composed server", async () => {
     const server = createAgentWorkbenchServer(
       "tests/fixtures/fixture-mixed-language-platform",
-      { startGraphWarmup: false }
+      { startupRefreshDelayMs: 60_000 }
     );
 
     const scopeResponse = await getRegisteredResource(server, "repo:///scope").readCallback({});

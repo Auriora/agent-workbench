@@ -15,15 +15,22 @@ import type {
   RefreshWorkerResult,
   SnapshotPublicationPort,
   SnapshotRefreshAdmission,
+  SnapshotRefreshAdmissionFailurePort,
   SnapshotRefreshControllerPort,
   SnapshotRefreshControllerReceipt,
+  SnapshotRefreshDiagnosticsPort,
   SnapshotRefreshRequest
 } from "../../ports/index.js";
 import type {
   InvalidationGeneration,
   RefreshFailure,
   RefreshFailureCode,
-  RefreshFailureMessage
+  SnapshotPublicationState,
+  SnapshotRefreshDiagnosticsReceipt
+} from "../../contracts/index.js";
+import {
+  createRefreshFailure,
+  snapshotRefreshDiagnosticsReceiptSchema
 } from "../../contracts/index.js";
 
 type ActiveExecution = {
@@ -60,14 +67,6 @@ export type SnapshotRefreshControllerOptions = {
   create_execution_id?: () => string;
 };
 
-const failureMessageByCode = {
-  worker_timeout: "Refresh worker deadline expired.",
-  worker_error: "Refresh worker failed.",
-  worker_exit_without_result: "Refresh worker exited without a valid result.",
-  invalid_worker_result: "Refresh worker returned an invalid result.",
-  store_failure: "Refresh store operation failed."
-} as const satisfies Record<ControllerFailureCode, RefreshFailureMessage>;
-
 /**
  * Repository-scoped refresh admission and execution authority.
  *
@@ -75,7 +74,7 @@ const failureMessageByCode = {
  * the controller's linearization point. Executor work is launched in a
  * microtask so every accepted caller observes `planned` first.
  */
-export class SnapshotRefreshController implements SnapshotRefreshControllerPort {
+export class SnapshotRefreshController implements SnapshotRefreshControllerPort, SnapshotRefreshDiagnosticsPort, SnapshotRefreshAdmissionFailurePort {
   private readonly repoRoot: string;
   private readonly controllerGeneration: number;
   private readonly timeoutMs: number;
@@ -99,6 +98,11 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
   private pass = 0;
   private mutationTail: Promise<void> = Promise.resolve();
   private terminationUnconfirmedExecutionId: string | undefined;
+  private terminationConfirmedExecutionId: string | undefined;
+  private workerTerminationState: SnapshotRefreshControllerReceipt["worker_termination_state"] = "not_required";
+  private terminationConfirmationNotified = false;
+  private diagnosticRevision = 0;
+  private targetPublicationState: SnapshotPublicationState | undefined;
 
   constructor(options: SnapshotRefreshControllerOptions) {
     if (!Number.isInteger(options.controller_generation) || options.controller_generation <= 0) {
@@ -144,6 +148,9 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
         this.requestedGeneration,
         input.invalidation_generation
       );
+      // Every admitted request advances the immutable diagnostics identity,
+      // including same-generation requests that reuse the active execution.
+      this.bumpDiagnosticRevision();
       return {
         outcome: "reused",
         reused: true,
@@ -184,6 +191,11 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
     this.executionId = executionId;
     this.targetSnapshotId = targetSnapshotId;
     this.executionState = "planned";
+    this.workerTerminationState = "not_required";
+    this.terminationUnconfirmedExecutionId = undefined;
+    this.terminationConfirmedExecutionId = undefined;
+    this.terminationConfirmationNotified = false;
+    this.targetPublicationState = "building";
     this.active = {
       execution_id: executionId,
       target_snapshot_id: targetSnapshotId,
@@ -192,6 +204,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
       lease,
       publication_state: "building"
     };
+    this.bumpDiagnosticRevision();
     this.emitActive("planned", this.active);
 
     queueMicrotask(() => {
@@ -231,8 +244,79 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
       requested_generation: this.requestedGeneration,
       activity_lease: this.active?.lease ?? null,
       worker_invocations: this.workerInvocations,
+      worker_termination_state: this.workerTerminationState,
       last_failure: this.lastFailure
     };
+  }
+
+  public async recordAdmissionFailure(input: {
+    repo_root: string;
+    invalidation_generation: InvalidationGeneration;
+    code: "store_failure" | "permission_failure";
+  }): Promise<Extract<SnapshotRefreshAdmission, { outcome: "blocked"; reason: "store_failure" }>> {
+    if (input.repo_root !== this.repoRoot) {
+      throw new TypeError("Refresh admission failure repository does not match controller ownership.");
+    }
+    return await this.withMutation(() => {
+      if (this.active !== undefined) {
+        throw new Error("Cannot record an admission failure while refresh execution is active.");
+      }
+      const executionId = this.createExecutionId();
+      this.requestedGeneration = Math.max(this.requestedGeneration, input.invalidation_generation);
+      this.startedGeneration = this.requestedGeneration;
+      this.executionId = executionId;
+      this.targetSnapshotId = undefined;
+      this.targetPublicationState = undefined;
+      this.executionState = "failed";
+      this.workerTerminationState = "not_required";
+      this.lastFailure = createRefreshFailure({
+        code: input.code,
+        execution_id: executionId,
+        occurred_at: this.clock.nowIso8601()
+      });
+      this.bumpDiagnosticRevision();
+      return {
+        outcome: "blocked",
+        reused: false,
+        state: "idle",
+        reason: "store_failure",
+        message: "Refresh store operation failed."
+      };
+    });
+  }
+
+  public async getDiagnostics(input: { repo_root: string }): Promise<SnapshotRefreshDiagnosticsReceipt> {
+    if (input.repo_root !== this.repoRoot) {
+      throw new TypeError("Refresh diagnostics repository does not match controller ownership.");
+    }
+    return await this.withMutation(async () => {
+      const visible = await this.publication.getLatestPublished({ repo_root: this.repoRoot });
+      const visibleSnapshotId = visible.status === "selected" ? visible.snapshot.id : undefined;
+      const graphFreshness = visible.status !== "selected"
+        ? "cold"
+        : this.executionState === "failed"
+          ? "stale"
+        : visible.snapshot.freshness === "fresh"
+          ? "fresh"
+          : "stale";
+      const nonIdle = this.executionState !== "idle";
+      return snapshotRefreshDiagnosticsReceiptSchema.parse({
+        repo_identity: this.repoRoot,
+        controller_generation: this.controllerGeneration,
+        diagnostic_revision: this.diagnosticRevision,
+        execution_id: nonIdle ? this.executionId : undefined,
+        started_generation: nonIdle ? this.startedGeneration : undefined,
+        requested_generation: nonIdle ? this.requestedGeneration : undefined,
+        target_snapshot_id: nonIdle ? this.targetSnapshotId : undefined,
+        visible_snapshot_id: visibleSnapshotId,
+        execution_state: this.executionState,
+        publication_state: nonIdle ? this.targetPublicationState : undefined,
+        graph_freshness: graphFreshness,
+        activity_lease_held: this.active?.lease.state === "held",
+        worker_termination_state: this.workerTerminationState,
+        last_failure: this.lastFailure
+      });
+    });
   }
 
   public onTransition(
@@ -244,11 +328,17 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
 
   private async execute(executionId: string): Promise<void> {
     while (this.active?.execution_id === executionId) {
-      const pass = this.active;
-      pass.state = "running";
-      this.executionState = "running";
-      this.emitActive("running", pass);
-      this.workerInvocations += 1;
+      const pass = await this.withMutation(() => {
+        const current = this.active;
+        if (current?.execution_id !== executionId) return undefined;
+        current.state = "running";
+        this.executionState = "running";
+        this.workerInvocations += 1;
+        this.bumpDiagnosticRevision();
+        this.emitActive("running", current);
+        return current;
+      });
+      if (pass === undefined) return;
 
       const outcome = await this.executePass(pass);
       const continueExecution = await this.withMutation(async () => {
@@ -256,11 +346,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
           return false;
         }
         if (outcome.outcome === "failed") {
-          if (outcome.worker_started) {
-            await this.failActiveBuild(executionId, outcome.code);
-          } else {
-            this.fail(executionId, outcome.code);
-          }
+          await this.failActiveBuild(executionId, outcome.code);
           return false;
         }
         if (this.requestedGeneration > pass.started_generation) {
@@ -275,8 +361,10 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
               updated_at: this.clock.nowIso8601()
             });
             pass.publication_state = "superseded";
+            this.targetPublicationState = "superseded";
+            this.bumpDiagnosticRevision();
           } catch {
-            this.fail(executionId, "store_failure");
+            await this.failActiveBuild(executionId, "store_failure");
             return false;
           }
           this.pass += 1;
@@ -292,6 +380,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
             return false;
           }
           this.targetSnapshotId = targetSnapshotId;
+          this.targetPublicationState = "building";
           this.active = {
             ...pass,
             target_snapshot_id: targetSnapshotId,
@@ -299,6 +388,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
             state: "running",
             publication_state: "building"
           };
+          this.bumpDiagnosticRevision();
           return true;
         }
         try {
@@ -312,8 +402,10 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
             updated_at: this.clock.nowIso8601()
           });
           pass.publication_state = "published";
+          this.targetPublicationState = "published";
+          this.bumpDiagnosticRevision();
         } catch {
-          this.fail(executionId, "store_failure");
+          await this.failActiveBuild(executionId, "store_failure");
           return false;
         }
         this.complete(executionId);
@@ -464,7 +556,9 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
     const releasedLease = this.releaseLease(execution.lease);
     this.executionState = "complete";
     this.lastFailure = undefined;
+    this.workerTerminationState = "not_required";
     this.active = undefined;
+    this.bumpDiagnosticRevision();
     this.emit({
       execution_id: executionId,
       controller_generation: this.controllerGeneration,
@@ -479,19 +573,22 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
     if (execution?.execution_id !== executionId) {
       return;
     }
-    const message = failureMessageByCode[code];
-    const failure: RefreshFailure = {
+    const failure = createRefreshFailure({
       code,
-      category: code === "store_failure" ? "store" : "worker",
-      message,
       execution_id: executionId,
       target_snapshot_id: execution.target_snapshot_id,
       occurred_at: this.clock.nowIso8601()
-    };
+    });
     const releasedLease = this.releaseLease(execution.lease);
     this.executionState = "failed";
     this.lastFailure = failure;
+    this.workerTerminationState = this.terminationConfirmedExecutionId === executionId
+      ? "confirmed"
+      : this.terminationUnconfirmedExecutionId === executionId
+        ? "unconfirmed"
+        : "not_required";
     this.active = undefined;
+    this.bumpDiagnosticRevision();
     this.emit({
       execution_id: executionId,
       controller_generation: this.controllerGeneration,
@@ -500,11 +597,12 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
       lease: releasedLease,
       failure
     });
+    this.emitTerminationConfirmed(executionId);
   }
 
   private async failActiveBuild(
     executionId: string,
-    code: ControllerWorkerFailureCode
+    code: ControllerFailureCode
   ): Promise<void> {
     const execution = this.active;
     if (execution?.execution_id !== executionId) {
@@ -525,6 +623,8 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
         updated_at: this.clock.nowIso8601()
       });
       execution.publication_state = "failed";
+      this.targetPublicationState = "failed";
+      this.bumpDiagnosticRevision();
       this.fail(executionId, code);
     } catch {
       this.fail(executionId, "store_failure");
@@ -588,15 +688,41 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort 
     try {
       void this.executor.terminate({ execution_id: executionId, reason }).then(
         () => {
-          if (this.terminationUnconfirmedExecutionId === executionId) {
+          void this.withMutation(() => {
+            if (this.terminationUnconfirmedExecutionId !== executionId) return;
             this.terminationUnconfirmedExecutionId = undefined;
-          }
+            this.terminationConfirmedExecutionId = executionId;
+            if (this.executionState === "failed" && this.executionId === executionId) {
+              this.workerTerminationState = "confirmed";
+              this.bumpDiagnosticRevision();
+            }
+            this.emitTerminationConfirmed(executionId);
+          });
         },
         () => undefined
       );
     } catch {
       // Admission remains quarantined because termination was not confirmed.
     }
+  }
+
+  private emitTerminationConfirmed(executionId: string): void {
+    if (
+      this.executionState !== "failed" ||
+      this.workerTerminationState !== "confirmed" ||
+      this.terminationConfirmationNotified
+    ) return;
+    this.terminationConfirmationNotified = true;
+    this.emit({
+      execution_id: executionId,
+      controller_generation: this.controllerGeneration,
+      state: "termination_confirmed",
+      execution_state: "failed"
+    });
+  }
+
+  private bumpDiagnosticRevision(): void {
+    this.diagnosticRevision += 1;
   }
 }
 

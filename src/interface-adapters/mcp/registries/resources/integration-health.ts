@@ -14,7 +14,6 @@ import type { McpResourceDeclaration } from "../index.js";
 import {
   resolveMcpRequestRepoRoot
 } from "../root-authority.js";
-import { providerFailureMessage } from "./provider-failure.js";
 
 export const integrationHealthResource: McpResourceDeclaration = {
   kind: "resource",
@@ -54,10 +53,10 @@ export const integrationHealthResource: McpResourceDeclaration = {
           connection_identity: context.getConnectionIdentity?.()
         });
         envelope = buildIntegrationHealthEnvelope(result);
-      } catch (error) {
+      } catch {
         envelope = buildIntegrationHealthProviderFailureEnvelope({
           repoRoot: rootDecision.request.repo_root ?? context.repoRoot,
-          message: providerFailureMessage("integration:///health/agent-workbench", error)
+          message: "Authoritative integration health is unavailable."
         });
       }
       return integrationHealthResourceResponse(envelope);

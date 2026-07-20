@@ -4,14 +4,10 @@
  */
 
 import type { WorkspaceFileEvent } from "../../domain/models/index.js";
-import type { SnapshotState } from "../../domain/models/runtime.js";
-import type {
-  ClockPort,
-  SnapshotPort,
-  WarmupCoordinatorPort
-} from "../../ports/index.js";
 import type { WorkspaceChangeQueue } from "./workspace-change-queue.js";
-import { coordinateSnapshotRefresh } from "./coordinate-snapshot-refresh.js";
+import type { RepositoryRefreshTriggerPort } from "./repository-refresh-triggers.js";
+
+const overflowSequenceByQueue = new WeakMap<WorkspaceChangeQueue, number>();
 
 export type WorkspaceChangeQueueProcessResult =
   | {
@@ -41,12 +37,9 @@ export type WorkspaceChangeQueueProcessResult =
 export async function processWorkspaceChangeQueue(input: {
   repo_root: string;
   queue: WorkspaceChangeQueue;
-  snapshots: SnapshotPort;
-  warmups: WarmupCoordinatorPort;
-  clock: ClockPort;
+  triggers: RepositoryRefreshTriggerPort;
 }): Promise<WorkspaceChangeQueueProcessResult> {
   const drain = input.queue.drain();
-  const currentSnapshot = await input.snapshots.getSnapshot({ repo_root: input.repo_root });
 
   if (drain.status === "idle" && drain.snapshot_freshness === "fresh") {
     return {
@@ -54,7 +47,7 @@ export async function processWorkspaceChangeQueue(input: {
       repo_root: input.repo_root,
       events: drain.events,
       bounded_rescan_required: false,
-      snapshot_id: currentSnapshot?.id
+      snapshot_id: undefined
     };
   }
 
@@ -64,7 +57,7 @@ export async function processWorkspaceChangeQueue(input: {
       repo_root: input.repo_root,
       events: drain.events,
       bounded_rescan_required: false,
-      snapshot_id: currentSnapshot?.id
+      snapshot_id: undefined
     };
   }
 
@@ -74,36 +67,72 @@ export async function processWorkspaceChangeQueue(input: {
       repo_root: input.repo_root,
       events: drain.events,
       bounded_rescan_required: false,
-      snapshot_id: currentSnapshot?.id
+      snapshot_id: undefined
     };
   }
 
   try {
-    const coordinated = await coordinateSnapshotRefresh({
-      repo_root: input.repo_root,
-      snapshots: input.snapshots,
-      warmups: input.warmups,
-      clock: input.clock,
-      reason: staleReason(drain.status)
+    const admission = await input.triggers.watcherBatch({
+      source: staleReason(drain.status),
+      batch_identity: watcherBatchIdentity(input.queue, drain.status, drain.events)
     });
+    if (admission.outcome === "blocked") {
+      return {
+        status: "degraded",
+        repo_root: input.repo_root,
+        events: drain.events,
+        bounded_rescan_required: true,
+        reason: admission.message
+      };
+    }
+    if (admission.target_snapshot_id === undefined) {
+      return {
+        status: "degraded",
+        repo_root: input.repo_root,
+        events: drain.events,
+        bounded_rescan_required: true,
+        reason: "Refresh admission did not identify a target snapshot."
+      };
+    }
     return {
       status: "stale_rescan_scheduled",
       repo_root: input.repo_root,
       events: drain.events,
       bounded_rescan_required: true,
-      snapshot_id: coordinated.snapshot_id,
-      execution_id: coordinated.execution_id
+      snapshot_id: admission.target_snapshot_id,
+      execution_id: admission.execution_id
     };
-  } catch (error) {
+  } catch {
     return {
       status: "degraded",
       repo_root: input.repo_root,
       events: drain.events,
       bounded_rescan_required: true,
-      snapshot_id: currentSnapshot?.id,
-      reason: error instanceof Error ? error.message : String(error)
+      reason: "Workspace refresh trigger failed."
     };
   }
+}
+
+function watcherBatchIdentity(
+  queue: WorkspaceChangeQueue,
+  status: "drained" | "overflow",
+  events: readonly WorkspaceFileEvent[]
+): string {
+  if (status === "overflow") {
+    const sequence = (overflowSequenceByQueue.get(queue) ?? 0) + 1;
+    overflowSequenceByQueue.set(queue, sequence);
+    return `overflow:${sequence}`;
+  }
+  return [
+    status,
+    ...events.map((event) => [
+      event.kind,
+      event.path,
+      event.old_path ?? "",
+      event.recorded_at,
+      event.snapshot_id ?? ""
+    ].join("\u0000"))
+  ].join("\u0001");
 }
 
 function staleReason(status: "drained" | "overflow"): string {

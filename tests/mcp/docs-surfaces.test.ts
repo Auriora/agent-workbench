@@ -167,7 +167,7 @@ describe("docs MCP tools", () => {
       });
 
     try {
-      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const server = createAgentWorkbenchServer(repoRoot, { startupRefreshDelayMs: 60_000 });
       const result = parseMcpTextContent<{
         data: DocsSearchUseCaseResult["search"];
         meta: DocsSearchUseCaseResult["meta"];
@@ -216,7 +216,7 @@ describe("docs MCP tools", () => {
       });
 
     try {
-      const server = createAgentWorkbenchServer(repoRoot, { startGraphWarmup: false });
+      const server = createAgentWorkbenchServer(repoRoot, { startupRefreshDelayMs: 60_000 });
       const result = parseMcpTextContent<{
         data: DocsSearchUseCaseResult["search"];
       }>(await getRegisteredTool(server, "docs_search").handler({ query: "selection" }));

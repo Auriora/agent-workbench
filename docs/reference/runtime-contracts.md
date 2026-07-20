@@ -228,9 +228,23 @@ normal task context. It contains:
 - `socket_path`
 - `repo_root`
 - `connected_clients`
+- `controller_generation`
+- `diagnostic_revision`
+- `execution_id`, `started_generation`, `requested_generation`, and
+  `target_snapshot_id` when an execution exists
+- `visible_snapshot_id` when a published snapshot exists
 - `warmup_state`
+- `publication_state` when a target exists
 - `graph_freshness`
-- `last_failure` when available
+- `activity_lease_held`
+- `worker_termination_state`
+- structured `last_failure` when available
+
+The detached daemon process accepts
+`AGENT_WORKBENCH_DAEMON_STARTUP_REFRESH_DELAY_MS` as an internal launcher and
+test control. The value is a nonnegative safe integer in milliseconds; zero is
+valid, malformed values refuse daemon startup, and the default is 1000. It is
+not a provider-specific mode or a second refresh path.
 
 Daemon or graph-store startup failures use existing envelope vocabulary:
 incompatible or missing daemon identity maps to `invalid_due_to_environment`;

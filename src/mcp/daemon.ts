@@ -11,16 +11,31 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRootAuthorityPolicy } from "../interface-adapters/mcp/registries/root-authority.js";
-import type { IntegrationDaemonHealth, IntegrationLauncherIdentity } from "../contracts/index.js";
+import type { IntegrationLauncherIdentity } from "../contracts/index.js";
 import { SCHEMA_VERSION } from "../infrastructure/sqlite/index.js";
 import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../runtime/version.js";
 import {
   createAgentWorkbenchServer,
   createAsyncGraphStore,
+  createAsyncPublicationPort,
+  createRepositoryRefreshController,
+  createRepositoryWorkspaceRefreshService,
   graphStorePath,
+  repositoryOwnershipPath,
+  type AgentWorkbenchDaemonHealthFacts,
+  type AgentWorkbenchSharedRepositoryServices,
   type AgentWorkbenchServerOptions
 } from "../server.js";
+import {
+  FileRepositoryOwnershipAdapter,
+  waitForControllerShutdownSafety
+} from "../infrastructure/runtime/repository-ownership.js";
+import { RepositoryRefreshTriggerCoordinator } from "../application/use-cases/repository-refresh-triggers.js";
+import { FilesystemWorkspaceWatcherAdapter } from "../infrastructure/filesystem/index.js";
+import { SystemClockAdapter } from "../infrastructure/time/index.js";
+import { resolveWorkspaceWatcherConfig } from "../domain/models/index.js";
 import { SocketServerTransport } from "./socket-transport.js";
+import type { SnapshotRefreshControllerPort } from "../ports/index.js";
 
 export const DAEMON_PROTOCOL_VERSION = 1;
 const DAEMON_METADATA_FILE = "daemon.json";
@@ -28,8 +43,10 @@ const DAEMON_STARTUP_LOCK_FILE = "startup.lock";
 const DEFAULT_DAEMON_START_TIMEOUT_MS = 4000;
 const DEFAULT_DAEMON_HANDSHAKE_TIMEOUT_MS = 1000;
 const DEFAULT_DAEMON_IDLE_GRACE_MS = 30_000;
+const DEFAULT_DAEMON_STARTUP_REFRESH_DELAY_MS = 1000;
 const DAEMON_ENV_FLAG = "AGENT_WORKBENCH_DAEMON_PROCESS";
 const DAEMON_IDLE_GRACE_ENV = "AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS";
+const DAEMON_STARTUP_REFRESH_DELAY_ENV = "AGENT_WORKBENCH_DAEMON_STARTUP_REFRESH_DELAY_MS";
 
 export type AgentWorkbenchDaemonIdentity = {
   repoRoot: string;
@@ -85,6 +102,74 @@ export type StartedAgentWorkbenchDaemon = {
   close: () => Promise<void>;
   connectedClients: () => number;
 };
+
+export class DaemonRefreshLifetimeCoordinator {
+  private idleHandle: { cancel(): void } | undefined;
+  private closing = false;
+  private readonly unsubscribe: () => void;
+
+  public constructor(private readonly options: {
+    controller: SnapshotRefreshControllerPort;
+    connected_clients: () => number;
+    idle_grace_ms: number;
+    close: () => void | Promise<void>;
+    schedule?: (delayMs: number, callback: () => void) => { cancel(): void };
+  }) {
+    this.unsubscribe = options.controller.onTransition((transition) => {
+      if (transition.state === "active") {
+        this.cancelIdle();
+      } else {
+        this.scheduleIdle();
+      }
+    });
+  }
+
+  public clientConnected(): void {
+    this.cancelIdle();
+  }
+
+  public clientDisconnected(): void {
+    this.scheduleIdle();
+  }
+
+  public start(): void {
+    this.scheduleIdle();
+  }
+
+  public dispose(): void {
+    this.closing = true;
+    this.cancelIdle();
+    this.unsubscribe();
+  }
+
+  private scheduleIdle(): void {
+    if (this.closing || this.options.connected_clients() > 0 || this.refreshUnsafe()) return;
+    this.cancelIdle();
+    const schedule = this.options.schedule ?? defaultIdleSchedule;
+    this.idleHandle = schedule(this.options.idle_grace_ms, () => {
+      this.idleHandle = undefined;
+      if (this.closing || this.options.connected_clients() > 0 || this.refreshUnsafe()) return;
+      this.closing = true;
+      void this.options.close();
+    });
+  }
+
+  private cancelIdle(): void {
+    this.idleHandle?.cancel();
+    this.idleHandle = undefined;
+  }
+
+  private refreshUnsafe(): boolean {
+    const receipt = this.options.controller.getReceipt();
+    return receipt.activity_lease?.state === "held" || receipt.worker_termination_state === "unconfirmed";
+  }
+}
+
+function defaultIdleSchedule(delayMs: number, callback: () => void): { cancel(): void } {
+  const timer = setTimeout(callback, delayMs);
+  timer.unref?.();
+  return { cancel: () => clearTimeout(timer) };
+}
 
 type DaemonHandshake = {
   protocol: "agent-workbench-daemon";
@@ -247,17 +332,80 @@ export async function startAgentWorkbenchDaemon(input: {
   };
   const connected = new Set<Socket>();
   const mcpServers = new Set<{ close: () => Promise<void> }>();
-  const sharedGraphStore = createAsyncGraphStore(graphStorePath(repoRoot));
-  let startupWarmupScheduled = false;
-  let idleTimer: NodeJS.Timeout | undefined;
-  let closed = false;
+  const databasePath = graphStorePath(repoRoot);
+  const sharedGraphStore = createAsyncGraphStore(databasePath);
+  const ownerGeneration = Date.now();
+  const ownership = new FileRepositoryOwnershipAdapter(repositoryOwnershipPath(databasePath));
+  const ownershipAdmission = await ownership.acquire({
+    repo_root: repoRoot,
+    runtime_identity: `${AGENT_WORKBENCH_RUNTIME_VERSION}:${SCHEMA_VERSION}`,
+    schema_version: SCHEMA_VERSION,
+    owner_id: `daemon:${process.pid}:${ownerGeneration}`,
+    owner_pid: process.pid,
+    owner_generation: ownerGeneration,
+    heartbeat_at: new Date().toISOString()
+  });
+  if (ownershipAdmission.outcome === "blocked") {
+    throw new Error(
+      ownershipAdmission.reason === "owner_active"
+        ? "Repository refresh owner is active."
+        : "Repository refresh ownership is ambiguous."
+    );
+  }
+  const ownershipLease = ownershipAdmission.lease;
+  const refreshController = await createRepositoryRefreshController({
+    repoRoot,
+    graphStore: sharedGraphStore,
+    databasePath,
+    controllerGeneration: ownerGeneration,
+    maxFiles: input.serverOptions?.startupWarmupMaxFiles ?? 2000
+  });
+  const sharedDisposers = new Set<() => void | Promise<void>>();
+  const refreshTriggers = new RepositoryRefreshTriggerCoordinator({
+    repo_root: repoRoot,
+    controller: refreshController,
+    publications: createAsyncPublicationPort(sharedGraphStore),
+    snapshots: {
+      async markSnapshotFreshness(request) {
+        await (await sharedGraphStore()).markSnapshotFreshness(request);
+      }
+    }
+  });
+  const workspaceRefresh = createRepositoryWorkspaceRefreshService({
+    repoRoot,
+    triggers: refreshTriggers,
+    watcher: new FilesystemWorkspaceWatcherAdapter(),
+    clock: new SystemClockAdapter(),
+    config: resolveWorkspaceWatcherConfig(input.serverOptions?.workspaceWatcher),
+    indexedRoots: input.serverOptions?.workspaceWatcherIndexedRoots ?? ["."],
+    skippedRoots: input.serverOptions?.workspaceWatcherSkippedRoots ?? []
+  });
+  sharedDisposers.add(() => workspaceRefresh.close());
+  const sharedRepositoryServices: AgentWorkbenchSharedRepositoryServices = {
+    refreshController,
+    refreshDiagnostics: refreshController,
+    refreshTriggers,
+    graphStore: sharedGraphStore,
+    pollWorkspaceWatcher: () => workspaceRefresh.poll(),
+    registerDisposer(dispose) {
+      sharedDisposers.add(dispose);
+      return () => sharedDisposers.delete(dispose);
+    }
+  };
+  let closePromise: Promise<void> | undefined;
+  const lifetime = new DaemonRefreshLifetimeCoordinator({
+    controller: refreshController,
+    connected_clients: () => connected.size,
+    idle_grace_ms: input.idleGraceMs ?? readIdleGraceMs(process.env),
+    close
+  });
 
   const server = net.createServer((socket) => {
-    clearIdleTimer();
+    lifetime.clientConnected();
     connected.add(socket);
     socket.once("close", () => {
       connected.delete(socket);
-      scheduleIdleClose();
+      lifetime.clientDisconnected();
     });
     void acceptDaemonClient({
       socket,
@@ -265,25 +413,24 @@ export async function startAgentWorkbenchDaemon(input: {
       repoRoot,
       debugRepoRootOverride: input.debugRepoRootOverride === true,
       serverOptions: input.serverOptions,
-      graphStore: sharedGraphStore,
-      daemonDiagnostics: () => ({
-        pid: metadata.pid,
-        socket_path: metadata.socketPath,
-        repo_root: metadata.identity.repoRoot,
-        connected_clients: connected.size,
-        warmup_state: startupWarmupScheduled ? "scheduled" : "idle",
-        graph_freshness: "unknown"
-      }),
-      shouldScheduleStartupWarmup: () => {
-        if (startupWarmupScheduled) {
-          return false;
-        }
-        startupWarmupScheduled = true;
-        return true;
+      sharedRepositoryServices,
+      daemonDiagnostics: () => {
+        return {
+          pid: metadata.pid,
+          socket_path: metadata.socketPath,
+          repo_root: metadata.identity.repoRoot,
+          connected_clients: connected.size
+        };
       },
       mcpServers
     });
   });
+  let startupRefreshPromise: Promise<void> | undefined;
+  const startupTimer = setTimeout(() => {
+    startupRefreshPromise = refreshTriggers.startup({ source: "daemon-startup" })
+      .then(() => undefined, () => undefined);
+  }, input.serverOptions?.startupRefreshDelayMs ?? DEFAULT_DAEMON_STARTUP_REFRESH_DELAY_MS);
+  startupTimer.unref?.();
 
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);
@@ -293,37 +440,26 @@ export async function startAgentWorkbenchDaemon(input: {
       resolve();
     });
   });
-  scheduleIdleClose();
+  lifetime.start();
 
-  async function close(): Promise<void> {
-    if (closed) {
-      return;
-    }
-    closed = true;
-    clearIdleTimer();
+  function close(): Promise<void> {
+    closePromise ??= closeDaemon();
+    return closePromise;
+  }
+
+  async function closeDaemon(): Promise<void> {
+    clearTimeout(startupTimer);
+    lifetime.dispose();
     for (const socket of connected) {
       socket.destroy();
     }
     await Promise.allSettled([...mcpServers].map((mcpServer) => mcpServer.close()));
+    await Promise.allSettled([...sharedDisposers].map((dispose) => Promise.resolve(dispose())));
+    await startupRefreshPromise;
+    await waitForControllerShutdownSafety(refreshController);
     await new Promise<void>((resolve) => server.close(() => resolve()));
+    await ownership.release({ lease: ownershipLease });
     cleanupStaleDaemonState(metadata, paths);
-  }
-
-  function clearIdleTimer(): void {
-    if (idleTimer !== undefined) {
-      clearTimeout(idleTimer);
-      idleTimer = undefined;
-    }
-  }
-
-  function scheduleIdleClose(): void {
-    if (closed || connected.size > 0) {
-      return;
-    }
-    idleTimer = setTimeout(() => {
-      void close();
-    }, input.idleGraceMs ?? readIdleGraceMs(process.env));
-    idleTimer.unref?.();
   }
 
   return {
@@ -342,7 +478,10 @@ export async function runDaemonFromEnv(env: NodeJS.ProcessEnv = process.env): Pr
   await startAgentWorkbenchDaemon({
     repoRoot,
     debugRepoRootOverride: env.AGENT_WORKBENCH_DAEMON_DEBUG_REPO_ROOT_OVERRIDE === "1",
-    idleGraceMs: readIdleGraceMs(env)
+    idleGraceMs: readIdleGraceMs(env),
+    serverOptions: {
+      startupRefreshDelayMs: daemonStartupRefreshDelayMsFromEnv(env)
+    }
   });
 }
 
@@ -372,9 +511,8 @@ async function acceptDaemonClient(input: {
   repoRoot: string;
   debugRepoRootOverride: boolean;
   serverOptions?: AgentWorkbenchServerOptions;
-  graphStore: ReturnType<typeof createAsyncGraphStore>;
-  daemonDiagnostics: () => IntegrationDaemonHealth;
-  shouldScheduleStartupWarmup: () => boolean;
+  sharedRepositoryServices: AgentWorkbenchSharedRepositoryServices;
+  daemonDiagnostics: () => AgentWorkbenchDaemonHealthFacts;
   mcpServers: Set<{ close: () => Promise<void> }>;
 }): Promise<void> {
   try {
@@ -386,12 +524,8 @@ async function acceptDaemonClient(input: {
     const mcpServer = createAgentWorkbenchServer(input.repoRoot, {
       ...input.serverOptions,
       integrationIdentity: handshake.integrationIdentity,
-      graphStore: input.graphStore,
+      sharedRepositoryServices: input.sharedRepositoryServices,
       daemonDiagnostics: input.daemonDiagnostics,
-      startGraphWarmup:
-        input.serverOptions?.startGraphWarmup === false
-          ? false
-          : input.shouldScheduleStartupWarmup(),
       rootAuthorityPolicy: createRootAuthorityPolicy({
         launchRoot: input.repoRoot,
         debugRepoRootOverride: input.debugRepoRootOverride
@@ -775,6 +909,19 @@ function readIdleGraceMs(env: NodeJS.ProcessEnv): number {
   }
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : DEFAULT_DAEMON_IDLE_GRACE_MS;
+}
+
+export function daemonStartupRefreshDelayMsFromEnv(env: NodeJS.ProcessEnv): number {
+  const raw = env[DAEMON_STARTUP_REFRESH_DELAY_ENV];
+  if (raw === undefined) return DEFAULT_DAEMON_STARTUP_REFRESH_DELAY_MS;
+  if (!/^\d+$/u.test(raw)) {
+    throw new Error(`${DAEMON_STARTUP_REFRESH_DELAY_ENV} must be a nonnegative integer.`);
+  }
+  const parsed = Number(raw);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new Error(`${DAEMON_STARTUP_REFRESH_DELAY_ENV} must be a nonnegative safe integer.`);
+  }
+  return parsed;
 }
 
 function stableHash(value: string): string {

@@ -307,7 +307,7 @@ describe("Codex integration profile", () => {
   });
 
   it("is exposed by the composed server alongside repo resources", async () => {
-    const server = createAgentWorkbenchServer(".", { startGraphWarmup: false });
+    const server = createAgentWorkbenchServer(".", { startupRefreshDelayMs: 60_000 });
 
     expect(registeredResourceUris(server)).toEqual([
       "integration:///health/agent-workbench",

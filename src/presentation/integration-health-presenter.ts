@@ -14,10 +14,20 @@ import { invalidResponseMeta, makeTrustedEnvelope } from "../application/use-cas
 export function buildIntegrationHealthEnvelope(
   result: GetIntegrationHealthResult
 ): ResponseEnvelope<IntegrationHealth> {
+  const parsed = integrationHealthSchema.safeParse(result.health);
+  if (!parsed.success) {
+    return buildIntegrationHealthProviderFailureEnvelope({
+      repoRoot: result.health.repo_root,
+      message: "Authoritative integration health is unavailable."
+    });
+  }
   return makeTrustedEnvelope({
-    data: integrationHealthSchema.parse(result.health),
+    data: parsed.data,
     meta: result.meta,
-    trust_policy: { surface_kind: "integration_health" }
+    trust_policy: {
+      surface_kind: result.errors?.length ? "generic_error" : "integration_health"
+    },
+    errors: result.errors
   });
 }
 
@@ -47,7 +57,7 @@ export function buildInvalidIntegrationHealthInputEnvelope(input: {
       next_actions: []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
-    trust_policy: { surface_kind: "integration_health" },
+    trust_policy: { surface_kind: "generic_error" },
     errors: [
       {
         code: "invalid_input",
@@ -87,7 +97,7 @@ export function buildIntegrationHealthProviderFailureEnvelope(input: {
       repoRoot: input.repoRoot,
       analysis_validity: "invalid_due_to_environment"
     }),
-    trust_policy: { surface_kind: "integration_health" },
+    trust_policy: { surface_kind: "generic_error" },
     errors: [
       {
         code: "provider_unavailable",

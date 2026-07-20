@@ -27,6 +27,7 @@ export async function startEntryPointSession(
   repoRoot: string,
   options: {
     idleGraceMs?: number;
+    startupRefreshDelayMs?: number;
     cwd?: string;
     env?: NodeJS.ProcessEnv;
   } = {}
@@ -40,7 +41,10 @@ export async function startEntryPointSession(
     env: {
       ...process.env,
       ...options.env,
-      AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS: String(options.idleGraceMs ?? 150)
+      AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS: String(options.idleGraceMs ?? 3000),
+      AGENT_WORKBENCH_DAEMON_STARTUP_REFRESH_DELAY_MS: String(
+        options.startupRefreshDelayMs ?? 60_000
+      )
     }
   });
   let stdout = "";

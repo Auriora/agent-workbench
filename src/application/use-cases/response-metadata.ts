@@ -30,6 +30,12 @@ import type {
   SnapshotValidityReceipt,
   WarmupExecution
 } from "../../domain/models/runtime.js";
+import type { SnapshotRefreshAdmission } from "../../ports/index.js";
+
+export type BlockedSnapshotRefreshAdmission = Extract<
+  SnapshotRefreshAdmission,
+  { outcome: "blocked" }
+>;
 
 export type RuntimeTrustState =
   | "cold"
@@ -53,6 +59,7 @@ export type WatcherFreshnessState = {
   scope_status: "synchronized" | "changed" | "unknown";
   ignore_rules_status: "synchronized" | "changed" | "unknown";
   reason?: string;
+  refresh_admission?: BlockedSnapshotRefreshAdmission;
 };
 
 const runtimeCaveatSeverities: Record<
@@ -805,7 +812,8 @@ export function buildRuntimeResponseMeta(input: {
       },
       capability_level: strongestCapabilityLevel(input.coverage.map((item) => item.capability_level)),
       evidence_kinds: evidenceKinds,
-      verification_status: input.verification_status ?? "needed",
+      verification_status:
+        input.verification_status ?? (input.watcher?.refresh_admission === undefined ? "needed" : "blocked"),
       truncated: input.truncated ?? false,
       budget: input.budget,
       caveats

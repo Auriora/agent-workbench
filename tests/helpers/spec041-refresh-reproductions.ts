@@ -14,6 +14,7 @@ import type {
   SnapshotRefreshRequest
 } from "../../src/ports/index.js";
 import { SnapshotRefreshController } from "../../src/infrastructure/runtime/index.js";
+import { DaemonRefreshLifetimeCoordinator } from "../../src/mcp/daemon.js";
 
 /**
  * Deterministic harness around the production controller-owned deadline path.
@@ -120,12 +121,7 @@ export function createDeadlineControllerHarness(clock: ClockPort) {
   };
 }
 
-/**
- * Deliberately records but drops a newer generation during publication.
- * T005 replaces this catch-up reproduction through the production trigger
- * boundary. T002 owns only the deadline reproduction above.
- */
-export function createPhase1GenerationCatchupReproduction(): SnapshotRefreshPort & {
+export function createGenerationCatchupHarness(): SnapshotRefreshPort & {
   workerStarted: ReturnType<typeof deferred<void>>;
   releaseWorker: ReturnType<typeof deferred<void>>;
   beforePublication: ReturnType<typeof deferred<void>>;
@@ -143,58 +139,76 @@ export function createPhase1GenerationCatchupReproduction(): SnapshotRefreshPort
   const releaseWorker = deferred<void>();
   const beforePublication = deferred<void>();
   const releasePublication = deferred<void>();
-  let executionState: "idle" | "planned" | "running" | "complete" = "idle";
-  let startedGeneration = 0;
-  let requestedGeneration = 0;
   let publishedGeneration = 0;
   let workerInvocations = 0;
-  const executionId = "exec-refresh-1";
+  let snapshotSequence = 1000;
+  const terminal = deferred<void>();
+  const executor: RefreshExecutorPort = {
+    async run(input) {
+      workerInvocations += 1;
+      if (workerInvocations === 1) {
+        workerStarted.resolve(undefined);
+        await releaseWorker.promise;
+      }
+      return {
+        exit_code: 0,
+        results: [{
+          outcome: "complete",
+          execution_id: input.execution_id,
+          target_snapshot_id: input.target_snapshot_id,
+          completed_generation: input.generation
+        }]
+      };
+    },
+    async terminate() {}
+  };
+  const publication: SnapshotPublicationPort = {
+    async allocateBuildSnapshotId() { return String(++snapshotSequence); },
+    async transitionBuild(input) {
+      if (input.to === "superseded") {
+        beforePublication.resolve(undefined);
+        await releasePublication.promise;
+      }
+      if (input.to === "published") publishedGeneration = input.invalidation_generation;
+      return { ...input, state: input.to };
+    },
+    async getLatestPublished() { return { status: "missing", reason: "no_published_snapshot" }; },
+    async readExplicit(input) {
+      return { status: "missing", snapshot_id: input.snapshot_id, reason: "snapshot_not_found" };
+    }
+  };
+  const controller = new SnapshotRefreshController({
+    repo_root: "/repo",
+    controller_generation: 1,
+    timeout_ms: 30_000,
+    clock: {
+      now: () => new Date("2026-07-19T12:00:00.000Z"),
+      nowIso8601: () => "2026-07-19T12:00:00.000Z",
+      nowUnixMs: () => 1000
+    },
+    executor,
+    publication,
+    create_execution_id: () => "exec-refresh-1"
+  });
+  controller.onTransition((transition) => {
+    if (transition.state === "terminal") terminal.resolve(undefined);
+  });
 
   return {
     workerStarted,
     releaseWorker,
     beforePublication,
     releasePublication,
-    async request(input: SnapshotRefreshRequest): Promise<SnapshotRefreshAdmission> {
-      requestedGeneration = Math.max(requestedGeneration, input.invalidation_generation);
-      if (executionState === "running") {
-        return {
-          outcome: "reused",
-          reused: true,
-          execution_id: executionId,
-          target_snapshot_id: "snap-building-1",
-          state: "running",
-          started_generation: startedGeneration,
-          requested_generation: requestedGeneration
-        };
-      }
-      executionState = "planned";
-      startedGeneration = input.invalidation_generation;
-      return {
-        outcome: "accepted",
-        reused: false,
-        execution_id: executionId,
-        target_snapshot_id: "snap-building-1",
-        state: "planned",
-        started_generation: startedGeneration,
-        requested_generation: requestedGeneration
-      };
-    },
+    request: (input) => controller.request(input),
     async executeAcceptedPass(): Promise<void> {
-      executionState = "running";
-      workerInvocations += 1;
-      workerStarted.resolve(undefined);
-      await releaseWorker.promise;
-      beforePublication.resolve(undefined);
-      await releasePublication.promise;
-      publishedGeneration = startedGeneration;
-      executionState = "complete";
+      await terminal.promise;
     },
     receipt() {
+      const receipt = controller.getReceipt();
       return {
-        execution_state: executionState,
-        started_generation: startedGeneration,
-        requested_generation: requestedGeneration,
+        execution_state: receipt.execution_state as "idle" | "planned" | "running" | "complete",
+        started_generation: receipt.started_generation,
+        requested_generation: receipt.requested_generation,
         worker_invocations: workerInvocations,
         published_generation: publishedGeneration
       };
@@ -202,49 +216,102 @@ export function createPhase1GenerationCatchupReproduction(): SnapshotRefreshPort
   };
 }
 
-/**
- * Deliberately closes on client count alone while a refresh lease is held.
- * T004 replaces this factory with production daemon lifetime coordination.
- */
 export function createPhase1DaemonLifetimeReproduction() {
   const workerStarted = deferred<void>();
   const releaseWorker = deferred<void>();
   let connectedClients = 0;
   let closed = false;
-  const activityLease: RefreshActivityLease = {
-    execution_id: "exec-1",
-    controller_generation: 1,
-    acquired_at: "2026-07-19T12:00:00.000Z",
-    state: "held"
+  let fireIdle: (() => void) | undefined;
+  const executor: RefreshExecutorPort = {
+    async run(input) {
+      workerStarted.resolve(undefined);
+      await releaseWorker.promise;
+      return {
+        exit_code: 0,
+        results: [{
+          outcome: "complete",
+          execution_id: input.execution_id,
+          target_snapshot_id: input.target_snapshot_id,
+          completed_generation: input.generation
+        }]
+      };
+    },
+    async terminate() {}
   };
+  const publication: SnapshotPublicationPort = {
+    async allocateBuildSnapshotId() { return "1001"; },
+    async transitionBuild(input) {
+      return { ...input, state: input.to };
+    },
+    async getLatestPublished() { return { status: "missing", reason: "no_published_snapshot" }; },
+    async readExplicit(input) {
+      return { status: "missing", snapshot_id: input.snapshot_id, reason: "snapshot_not_found" };
+    }
+  };
+  const controller = new SnapshotRefreshController({
+    repo_root: "/repo",
+    controller_generation: 1,
+    timeout_ms: 30_000,
+    clock: {
+      now: () => new Date("2026-07-19T12:00:00.000Z"),
+      nowIso8601: () => "2026-07-19T12:00:00.000Z",
+      nowUnixMs: () => 1000
+    },
+    executor,
+    publication,
+    create_execution_id: () => "exec-1"
+  });
+  const lifetime = new DaemonRefreshLifetimeCoordinator({
+    controller,
+    connected_clients: () => connectedClients,
+    idle_grace_ms: 1,
+    close: () => { closed = true; },
+    schedule: (_delay, callback) => {
+      fireIdle = callback;
+      return { cancel: () => { fireIdle = undefined; } };
+    }
+  });
+  lifetime.start();
 
   return {
     workerStarted,
     releaseWorker,
     connectRequester(): void {
       connectedClients += 1;
+      lifetime.clientConnected();
     },
     disconnectRequester(): void {
       connectedClients -= 1;
+      lifetime.clientDisconnected();
     },
     async startRefresh(): Promise<void> {
-      workerStarted.resolve(undefined);
-      await releaseWorker.promise;
+      await controller.request({
+        repo_root: "/repo",
+        reason: "startup",
+        source: "test",
+        invalidation_generation: 1
+      });
+      await new Promise<void>((resolve) => {
+        const unsubscribe = controller.onTransition((transition) => {
+          if (transition.state === "terminal") {
+            unsubscribe();
+            resolve();
+          }
+        });
+      });
     },
     fireIdleDecision(): void {
-      if (connectedClients === 0) {
-        closed = true;
-      }
+      fireIdle?.();
     },
     receipt(): {
       connected_clients: number;
       closed: boolean;
-      activity_lease: RefreshActivityLease;
+      activity_lease: RefreshActivityLease | null;
     } {
       return {
         connected_clients: connectedClients,
         closed,
-        activity_lease: activityLease
+        activity_lease: controller.getReceipt().activity_lease
       };
     }
   };

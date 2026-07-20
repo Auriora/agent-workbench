@@ -87,7 +87,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
     )).toBeGreaterThanOrEqual(2);
   }, 15_000);
 
-  it.fails("shares one authoritative refresh diagnostic identity across checkout/source clients", async () => {
+  it("shares one authoritative refresh diagnostic identity across checkout/source clients", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-shared-refresh-");
     const first = trackSession(await startEntryPointSession(repoRoot));
     const second = trackSession(await startEntryPointSession(repoRoot));
@@ -109,11 +109,15 @@ describe("daemon-backed stdio entrypoint integration", () => {
       diagnostic_revision: firstDiagnostics.diagnostic_revision,
       execution_state: firstDiagnostics.execution_state
     });
+    expect(secondDiagnostics.target_snapshot_id).toBe(firstDiagnostics.target_snapshot_id);
+    expect(secondDiagnostics.visible_snapshot_id).toBe(firstDiagnostics.visible_snapshot_id);
   }, 15_000);
 
-  it.fails("executes a refresh requested by a non-startup checkout/source client", async () => {
+  it("executes a refresh requested by a non-startup checkout/source client", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-non-startup-refresh-");
-    const startupClient = trackSession(await startEntryPointSession(repoRoot));
+    const startupClient = trackSession(await startEntryPointSession(repoRoot, {
+      startupRefreshDelayMs: 0
+    }));
     await initializeSession(startupClient);
     await waitForSymbolSearch(startupClient, "Runner");
     const before = repoStatus(await startupClient.call("resources/read", { uri: "repo:///status" }));
@@ -143,9 +147,6 @@ describe("daemon-backed stdio entrypoint integration", () => {
       await new Promise<void>((resolve) => setTimeout(resolve, 25));
     }
 
-    // The legacy later connection remains planned with no executor. Setup and
-    // stale admission pass; only this replacement/fresh assertion is expected
-    // to fail until the daemon owns the controller and executor.
     expect(observed.data).toMatchObject({ freshness: "fresh" });
     expect(observed.data.snapshot_id).not.toBe(previousSnapshotId);
   }, 20_000);
@@ -193,8 +194,8 @@ describe("daemon-backed stdio entrypoint integration", () => {
 
   it("returns graph-backed results for concurrent checkout/source clients without raw lock output", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-concurrent-");
-    const first = trackSession(await startEntryPointSession(repoRoot));
-    const second = trackSession(await startEntryPointSession(repoRoot));
+    const first = trackSession(await startEntryPointSession(repoRoot, { startupRefreshDelayMs: 0 }));
+    const second = trackSession(await startEntryPointSession(repoRoot, { startupRefreshDelayMs: 0 }));
     await Promise.all([initializeSession(first), initializeSession(second)]);
 
     const [firstSearch, secondSearch] = await Promise.all([
@@ -333,20 +334,27 @@ function refreshDiagnostics(message: McpMessage): {
   controller_generation?: number;
   diagnostic_revision?: number;
   execution_state?: string;
+  target_snapshot_id?: string;
+  visible_snapshot_id?: string;
 } {
   const envelope = parseEnvelope(message) as {
     data: {
       daemon?: {
         controller_generation?: number;
         diagnostic_revision?: number;
-        execution_state?: string;
+        warmup_state?: string;
+        target_snapshot_id?: string;
+        visible_snapshot_id?: string;
       };
     };
   };
   if (envelope.data.daemon === undefined) {
     throw new Error(`Missing daemon health: ${JSON.stringify(envelope)}`);
   }
-  return envelope.data.daemon;
+  return {
+    ...envelope.data.daemon,
+    execution_state: envelope.data.daemon.warmup_state
+  };
 }
 
 function repoStatus(message: McpMessage): {

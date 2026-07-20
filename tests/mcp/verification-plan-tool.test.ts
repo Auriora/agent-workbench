@@ -1573,7 +1573,7 @@ describe("verification_plan MCP tool", () => {
 
   it("is registered by the composed server", () => {
     const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
-      startGraphWarmup: false
+      startupRefreshDelayMs: 60_000
     });
 
     expect(registeredToolNames(server)).toEqual([
@@ -1606,7 +1606,7 @@ describe("verification_plan MCP tool", () => {
         JSON.stringify({ scripts: { test: "vitest run" } }, null, 2)
       );
       const server = createAgentWorkbenchServer(defaultRoot, {
-        startGraphWarmup: false
+        startupRefreshDelayMs: 60_000
       });
 
       const response = await getRegisteredTool(server, "verification_plan").handler({

@@ -451,7 +451,7 @@ describe("stdio MCP entrypoint", () => {
   it("keeps the stdio server alive through initialize", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-mixed-language-platform");
     const session = await createStdioSession(repoRoot, {
-      startupWarmupDelayMs: 60_000
+      startupRefreshDelayMs: 60_000
     });
 
     try {
@@ -501,7 +501,7 @@ describe("stdio MCP entrypoint", () => {
       sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
     });
     const session = await createStdioSession(fixtureRoot, {
-      startupWarmupDelayMs: 0
+      startupRefreshDelayMs: 0
     });
 
     try {
@@ -557,10 +557,10 @@ describe("stdio MCP entrypoint", () => {
       sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
     });
     const firstSession = await createStdioSession(fixtureRoot, {
-      startupWarmupDelayMs: 0
+      startupRefreshDelayMs: 0
     });
     const secondSession = await createStdioSession(fixtureRoot, {
-      startupWarmupDelayMs: 0
+      startupRefreshDelayMs: 0
     });
 
     try {
@@ -604,7 +604,7 @@ describe("stdio MCP entrypoint", () => {
       sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
     });
     const session = await createStdioSession(fixtureRoot, {
-      startupWarmupDelayMs: 60_000
+      startupRefreshDelayMs: 60_000
     });
 
     try {
@@ -668,7 +668,7 @@ describe("stdio MCP entrypoint", () => {
       created_at: "2026-07-20T12:00:00.000Z"
     });
     graphStore.close();
-    const session = await createStdioSession(fixtureRoot, { startGraphWarmup: false });
+    const session = await createStdioSession(fixtureRoot, { startupRefreshDelayMs: 60_000 });
 
     try {
       await session.call(initializeMessage(1));
@@ -704,7 +704,7 @@ describe("stdio MCP entrypoint", () => {
       sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
     });
     const session = await createStdioSession(fixtureRoot, {
-      startupWarmupDelayMs: 0,
+      startupRefreshDelayMs: 0,
       startupWarmupMaxFiles: 1
     });
 
@@ -753,7 +753,6 @@ describe("stdio MCP entrypoint", () => {
       sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
     });
     const graphStore = openGraphStore(graphStorePath(fixtureRoot));
-    const failures: unknown[] = [];
 
     await graphStore.upsertSnapshot({
       snapshot: {
@@ -771,34 +770,15 @@ describe("stdio MCP entrypoint", () => {
     });
     graphStore.close();
 
-    const session = await createStdioSession(fixtureRoot, {
-      onGraphWarmupFailure(error) {
-        failures.push(error);
-      }
-    });
+    const session = await createStdioSession(fixtureRoot, { startupRefreshDelayMs: 0 });
 
     try {
-      await waitForCondition(() => failures.length > 0);
-      expect(failures[0]).toBeInstanceOf(Error);
-      expect((failures[0] as Error).message).toBe(
-        "Existing snapshot schema version does not match the requested graph index schema version."
-      );
-
-      const status = parseResponseEnvelope<StatusEnvelope>(
-        await session.call({
-          jsonrpc: "2.0",
-          id: 100,
-          method: "resources/read",
-          params: {
-            uri: "repo:///status"
-          }
-        })
-      );
+      const status = await waitForWarmupStatus(session, "failed");
       expect(status.data).toMatchObject({
         repo_root: fixtureRoot,
         snapshot_id: "9001",
         warmup_state: "failed",
-        reason: "Existing snapshot schema version does not match the requested graph index schema version."
+        reason: "Refresh store operation failed."
       });
     } finally {
       await session.close();
@@ -826,7 +806,7 @@ describe("stdio MCP entrypoint", () => {
         fixtureRoot
       );
       const session = await createStdioSession(fixtureRoot, {
-        startGraphWarmup: false
+        startupRefreshDelayMs: 60_000
       });
       await session.call({
         jsonrpc: "2.0",
@@ -1196,9 +1176,7 @@ function initializeMessage(id: number): { id: number } & Record<string, unknown>
 async function createStdioSession(
   repoRoot: string,
   options: {
-    startGraphWarmup?: boolean;
-    onGraphWarmupFailure?: (error: unknown) => void;
-    startupWarmupDelayMs?: number;
+    startupRefreshDelayMs?: number;
     startupWarmupMaxFiles?: number;
   } = {}
 ): Promise<StdioSession> {
@@ -1206,9 +1184,7 @@ async function createStdioSession(
   const output = new PassThrough();
   const transport = new StdioServerTransport(input, output);
   const server = createAgentWorkbenchServer(path.resolve(repoRoot), {
-    startGraphWarmup: options.startGraphWarmup,
-    onGraphWarmupFailure: options.onGraphWarmupFailure,
-    startupWarmupDelayMs: options.startupWarmupDelayMs,
+    startupRefreshDelayMs: options.startupRefreshDelayMs,
     startupWarmupMaxFiles: options.startupWarmupMaxFiles
   });
   let stdout = "";
@@ -1261,6 +1237,7 @@ async function createStdioSession(
     async close() {
       input.end();
       await transport.close();
+      await server.close();
       for (const waiter of pendingCalls.values()) {
         waiter.reject(new Error("MCP session closed before response"));
       }

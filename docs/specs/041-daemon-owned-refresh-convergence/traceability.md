@@ -32,15 +32,15 @@ explicit child tasks in `tasks.md` are the bounded implementation handoffs.
 
 | Property | Design Sections | Tasks | Verification | Coverage |
 | --- | --- | --- | --- | --- |
-| CP-001 | linearized shared controller admission | T001-T002, T004-T005, T008 | V001-V003, V011, V021 | partially-covered: T002 controller admission passes; daemon/trigger composition remains |
-| CP-002 | daemon-scoped lifecycle plus generation-triggered convergence | T001-T002, T004-T005, T008 | V002-V004, V007, V021 | not-covered |
-| CP-003 | activity lease independent of requester socket | T001, T004, T007-T008 | V004, V010, V021 | not-covered |
+| CP-001 | linearized shared controller admission | T001-T002, T004-T005, T008 | V001-V003, V011, V021 | partially-covered: controller plus daemon/trigger composition pass; installed acceptance remains |
+| CP-002 | daemon-scoped lifecycle plus generation-triggered convergence | T001-T002, T004-T005, T008 | V002-V004, V007, V021 | partially-covered: daemon lifetime and trigger generations pass; installed acceptance remains |
+| CP-003 | activity lease independent of requester socket | T001, T004, T007-T008 | V004, V010, V021 | partially-covered: disconnect/idle activity lease passes; crash recovery and installed acceptance remain |
 | CP-004 | explicit atomic publication and exact query recovery | T001-T003, T007-T008 | V007-V010, V021 | partially-covered: T002-T003 publication/query barriers pass; crash and installed acceptance remain |
-| CP-005 | one awaited canonical diagnostics receipt | T001, T006, T008 | V005-V006, V021 | not-covered |
-| CP-006 | terminal structured failure with no retry/fallback | T001-T003, T006-T008 | V001, V003, V005-V006, V010-V011, V021 | partially-covered: T002-T003 worker/store failure paths pass; diagnostics/recovery remain |
-| CP-007 | monotonic accepted invalidation generations and coalesced catch-up | T001-T002, T005, T008 | V001, V003, V007, V021 | partially-covered: controller catch-up passes; trigger-level catch-up remains T005 |
+| CP-005 | one awaited canonical diagnostics receipt | T001, T006, T008 | V005-V006, V021 | partially-covered: source/runtime receipt and health paths pass; installed acceptance remains |
+| CP-006 | terminal structured failure with no retry/fallback | T001-T003, T006-T008 | V001, V003, V005-V006, V010-V011, V021 | partially-covered: worker/store and bounded diagnostics failure paths pass; crash recovery and installed acceptance remain |
+| CP-007 | monotonic accepted invalidation generations and coalesced catch-up | T001-T002, T005, T008 | V001, V003, V007, V021 | partially-covered: controller and trigger-level catch-up pass; installed acceptance remains |
 | CP-008 | publication independent of freshness and coverage | T001, T003, T007-T008 | V007-V010, V021 | partially-covered: T003 lifecycle and immutability pass; crash/installed acceptance remain |
-| CP-009 | execution, ownership, activity, publication, and diagnostics identity agreement | T001-T002, T004-T008 | V001-V011, V021 | partially-covered: controller/publication generations agree; owner/diagnostics composition remains |
+| CP-009 | execution, ownership, activity, publication, and diagnostics identity agreement | T001-T002, T004-T008 | V001-V011, V021 | partially-covered: controller, publication, owner, activity, trigger, and diagnostics composition agree; T007-T008 remain |
 
 ## Task To Context Matrix
 
@@ -62,9 +62,9 @@ explicit child tasks in `tasks.md` are the bounded implementation handoffs.
 | --- | --- | --- | --- |
 | controller generations and sole executor | refresh controller, coordination use case, runtime port | T002 | covered by Phase 2 implementation receipt |
 | publication/current selection and migration independent of freshness | graph index use case, graph store, snapshot port | T003 | covered by Phase 2 implementation receipt |
-| daemon/standalone ownership and activity lease | daemon and server composition roots | T004 | not-covered |
-| daemon watcher and shared trigger generations | daemon watcher/queue, first-read and queue use cases | T005 | not-covered |
-| authoritative diagnostics and redaction | contracts, health use case, presenter, daemon binding | T006 | not-covered |
+| daemon/standalone ownership and activity lease | daemon and server composition roots | T004 | covered by Phase 3 implementation receipt |
+| daemon watcher and shared trigger generations | daemon watcher/queue, first-read and queue use cases | T005 | covered by Phase 3 implementation receipt |
+| authoritative diagnostics and redaction | contracts, health use case, presenter, daemon binding | T006 | covered by Phase 3 implementation receipt |
 | crash/orphan/resource recovery | daemon owner recovery, controller, worker/store cleanup | T007 | not-covered |
 | source and installed-package acceptance | MCP entrypoint fixtures and CI smoke scripts | T008 | not-covered |
 | durable promotion and closure | exact destinations below | T009 | not-covered |

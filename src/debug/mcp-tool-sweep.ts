@@ -500,7 +500,7 @@ async function callResource(input: {
   }
   if (input.resourceName === "integration-health") {
     const identity = resolveIntegrationIdentity({});
-    return buildIntegrationHealthEnvelope(getIntegrationHealth({
+    return buildIntegrationHealthEnvelope(await getIntegrationHealth({
       request: {
         repo_root: input.repoRoot,
         discovery_state: "provided",
@@ -572,7 +572,7 @@ async function callTool(input: {
   }
   if (input.toolName === "integration_health") {
     const identity = resolveIntegrationIdentity({});
-    return buildIntegrationHealthEnvelope(getIntegrationHealth({
+    return buildIntegrationHealthEnvelope(await getIntegrationHealth({
       request: {
         repo_root: input.repoRoot,
         discovery_state: "provided",
