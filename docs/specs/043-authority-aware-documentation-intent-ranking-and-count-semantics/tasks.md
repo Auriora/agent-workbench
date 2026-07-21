@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: tasks
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -17,12 +17,13 @@ license: GPL-3.0-or-later
 T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008 -> T009 -> T010
 ```
 
-No implementation task is complete. Each task is one reviewable contract or
-layer boundary; do not combine these tasks into one ranking change.
+Phase 1 contract and failing-proof tasks are complete. Each remaining task is
+one reviewable implementation or lifecycle boundary; do not combine them into
+one ranking change.
 
 ## Phase 1: Contracts And Failing Proof
 
-- [ ] T001 Lock concern, rank, cursor, count, trust, and compatibility contracts.
+- [x] T001 Lock concern, rank, cursor, count, trust, and compatibility contracts.
   - Depends on: none
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
     CP-001-CP-008
@@ -35,12 +36,13 @@ layer boundary; do not combine these tasks into one ranking change.
   - Acceptance: Contracts fix normalization/match evidence, exact tuple and
     versions, 500/501 behavior, cursor identity, exact count/filter names,
     legacy aggregate `score`, optional `lexical_score`, candidate-source union,
-    page filter basis, overflow blocker, and trust states. Consumer tests prove
+    strict per-count `query_filter_basis`, page filter basis, exact-versus-501
+    overflow receipts, blocker invariants, and trust states. Consumer tests prove
     response order/tuple is authoritative and legacy `score` meaning is stable.
   - Evidence mode: command
-  - Evidence: Pending.
+  - Evidence: Implemented additive versioned ranking, concern, owner, tuple, cursor, count/filter, overflow, unavailable-trust, candidate-query, cursor-codec, and frozen-universe contracts without changing legacy DocsIndexPort/public requirements. V001 passed 11 tests; runtime contract barrel passed 17 tests; pnpm typecheck and git diff --check passed. Parent review corrected query-level concern matches versus hit-specific ownership, and regressions prove unrelated owners cannot alter the hit tier.
 
-- [ ] T002 Add stable fixtures and failing example/property proofs.
+- [x] T002 Add stable fixtures and failing example/property proofs.
   - Depends on: T001
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
     CP-001-CP-008
@@ -59,8 +61,9 @@ layer boundary; do not combine these tasks into one ranking change.
     cover both an owner at FTS row 501 and an owner-only document that becomes
     distinct union row 501; both expect blockers, not incomplete results.
   - Evidence mode: command
-  - Evidence: Pending.
+  - Evidence: Phase 1 fixture and red-proof delivery complete: compact 13-document authority fixture; normalization, concern-routing, ranking, count/filter, 0/499/500/501 and cursor/expiry oracles; 15 ordinary fixture tests plus 9 expected-failure proofs passed. Combined Phase 1 focused suite passed 43 ordinary tests plus 9 expected failures; pnpm typecheck and git diff --check passed. Independent review blockers were corrected by scenario-specific candidate identities and complete source preconditions.
 
+  - Status: Phase 1 complete; T003 remains the next implementation task.
 ## Phase 2: Snapshot Ownership
 
 - [ ] T003 Extract and publish documentation-map ownership with graph snapshots.

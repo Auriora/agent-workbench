@@ -1,0 +1,19 @@
+{
+  "complete": {
+    "searchable_snapshot_documents_count": 13,
+    "searchable_scope_documents_count": 13,
+    "priority_scan_eligible_markdown_files_count": 12,
+    "priority_scan_indexed_markdown_files_count": 12,
+    "priority_scan_skipped_markdown_files_count": 0,
+    "priority_scan_state": "complete"
+  },
+  "partial": {
+    "searchable_snapshot_documents_count": 13,
+    "searchable_scope_documents_count": 13,
+    "priority_scan_eligible_markdown_files_count": 12,
+    "priority_scan_indexed_markdown_files_count": 11,
+    "priority_scan_skipped_markdown_files_count": 1,
+    "priority_scan_state": "partial"
+  },
+  "out_of_priority_path": "notes/out-of-priority.md"
+}

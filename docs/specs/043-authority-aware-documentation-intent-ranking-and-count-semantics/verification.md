@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: verification
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -15,14 +15,15 @@ license: GPL-3.0-or-later
 
 This record covers Requirements 1-4 and every criterion explicitly enumerated
 in the Requirement Coverage table, plus CP-001-CP-008, SC-001-SC-004, and
-T001-T010. Spec review findings are addressed in the package design; all
-implementation, promotion, release, and closure evidence remains pending.
+T001-T010. Spec review findings are addressed in the package design. Phase 1
+contract and fixture evidence is complete; production implementation,
+promotion, release, and closure evidence remains pending.
 
 ## Quality Gates
 
 | Gate | Required | Status | Evidence owner |
 | --- | --- | --- | --- |
-| contract/fixture review | yes | pending | T001-T002, V001-V005 |
+| contract/fixture review | yes | passed for Phase 1 | T001-T002, V001-V005 |
 | schema/index/publication proof | yes | pending | T003, V006 |
 | architecture boundary proof | yes | pending | T004-T006, V007 |
 | property and 499/500/501 budget proof | yes | pending | T005, V005, V008 |
@@ -42,14 +43,14 @@ implementation, promotion, release, and closure evidence remains pending.
 
 | ID | Command or tool | Purpose | Result |
 | --- | --- | --- | --- |
-| V001 | `pnpm exec vitest run tests/contracts/docs-ranking-contracts.test.ts` | concern/rank/cursor/count/trust contracts, legacy aggregate score, and lexical-score consumers | pending |
-| V002 | `pnpm exec vitest run tests/docs/documentation-concern-routing.test.ts` | normalization, exact phrase/token, SessionStart, multi/no-match/tie behavior, and matched-owner admission | pending |
-| V003 | `pnpm exec vitest run tests/docs/docs-ranking-policy.test.ts` | relevance bands including `intent_owner_match`, exhaustive owner tiers/caveats, tuple/reasons, and both score semantics | pending |
+| V001 | `pnpm exec vitest run tests/contracts/docs-ranking-contracts.test.ts` | concern/rank/cursor/count/trust contracts, legacy aggregate score, and lexical-score consumers | passed: 11 contract tests |
+| V002 | `pnpm exec vitest run tests/docs/documentation-concern-routing.test.ts` | normalization, exact phrase/token, SessionStart, multi/no-match/tie behavior, and matched-owner admission | Phase 1 fixture/oracle checks passed; T003-T004 implementation proofs remain expected failures |
+| V003 | `pnpm exec vitest run tests/docs/docs-ranking-policy.test.ts` | relevance bands including `intent_owner_match`, exhaustive owner tiers/caveats, tuple/reasons, and both score semantics | Phase 1 fixture/oracle checks passed; T004 implementation proofs remain expected failures |
 | V004 | `pnpm exec vitest run tests/presentation/docs-ranking-presenter.test.ts tests/mcp/docs-ranking-tool.test.ts` | public order, candidate/page counts and filter bases, aliases, blockers, trust | pending |
-| V005 | `pnpm exec vitest run tests/docs/docs-ranking-pagination.test.ts` | seeded property tests for FTS/owner union, total order, cursor binding, page equivalence, duplicates, and 0/499/500/501 | pending |
+| V005 | `pnpm exec vitest run tests/docs/docs-ranking-pagination.test.ts` | seeded property tests for FTS/owner union, total order, cursor binding, page equivalence, duplicates, and 0/499/500/501 | Phase 1 boundary preconditions passed; T005 overflow/cursor implementation proofs remain expected failures |
 | V006 | `pnpm exec vitest run tests/graph/documentation-map-indexing.test.ts tests/graph/documentation-owner-publication.test.ts tests/graph/docs-ranked-universe-store.test.ts` | schema, migration/backfill, one-to-many extraction, atomic publication, universe persistence | pending |
 | V007 | `pnpm exec vitest run tests/architecture/layer-boundaries.test.ts` | SQLite/application/domain/presentation/adapter boundaries | pending |
-| V008 | `pnpm exec vitest run tests/docs/docs-ranking-pagination.test.ts --testNamePattern='candidate budget'` | deterministic 499/500/501 distinct-union budget gate, including independently bounded FTS and owner-query sentinels plus owner-only union overflow | pending |
+| V008 | `pnpm exec vitest run tests/docs/docs-ranking-pagination.test.ts --testNamePattern='candidate budget'` | deterministic 499/500/501 distinct-union budget gate, including independently bounded FTS and owner-query sentinels plus owner-only union overflow | Phase 1 0/499/500/501 fixtures and source preconditions passed; T005 blocker behavior remains expected failure |
 | V009 | `pnpm typecheck && pnpm test` | TypeScript and full regression suite | pending |
 | V010 | `pnpm run validate:plugin && pnpm run validate:skills && pnpm run pack:dry-run` | integration/package contents | pending |
 | V011 | `node scripts/ci/installed-package-mcp-smoke.mjs` | exact packed/installed artifact and dual-provider candidate-union/ranking/count smoke | pending |
@@ -112,10 +113,10 @@ claim that real Codex or Claude CLIs loaded the plugin.
 
 | Requirement | Acceptance criteria | Planned evidence | Current residual |
 | --- | --- | --- | --- |
-| Requirement 1 | AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7, AC1.8, AC1.9 | V001-V005, V007-V016 | implementation absent |
-| Requirement 2 | AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6 | V001-V004, V006-V016 | schema/index absent |
-| Requirement 3 | AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6 | V001, V004-V005, V008-V016 | frozen universe absent |
-| Requirement 4 | AC4.1, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8 | V001, V003-V005, V007-V016 | contract/presentation absent |
+| Requirement 1 | AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7, AC1.8, AC1.9 | V001-V005, V007-V016 | contracts and red proofs locked; production behavior absent |
+| Requirement 2 | AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6 | V001-V004, V006-V016 | contracts and fixtures locked; schema/index absent |
+| Requirement 3 | AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6 | V001, V004-V005, V008-V016 | cursor/count contracts and red proofs locked; frozen universe absent |
+| Requirement 4 | AC4.1, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8 | V001, V003-V005, V007-V016 | contracts locked; presentation absent |
 
 ## Review Disposition
 
@@ -166,8 +167,8 @@ or closure evidence.
 
 | Task | Status | Evidence | Notes |
 | --- | --- | --- | --- |
-| T001 | pending | none | contract implementation not started |
-| T002 | pending | none | fixtures/tests not created |
+| T001 | complete | V001: 11 contract tests; runtime-contract regression: 17 tests; typecheck | additive contracts and candidate-query ports locked; independent-review source/band and bounded-result findings corrected |
+| T002 | complete | 15 ordinary fixture/oracle tests and 9 expected-failure proofs; combined Phase 1 suite: 43 ordinary plus 9 expected failures | 13-document fixture, exact concern/rank oracles, source-backed 0/499/500/501 boundaries, frozen-page/cursor/expiry red proofs |
 | T003 | pending | none | schema/indexing not implemented |
 | T004 | pending | none | pure policies not implemented |
 | T005 | pending | none | frozen pagination not implemented |
@@ -185,7 +186,10 @@ or closure evidence.
 | 2026-07-20 | authoring | source review confirmed SQLite bounded FTS retrieval, query-docs delegation, additive authority scoring, missing docs-search owner signal, and distinct merged/priority count universes | current/target boundaries corrected |
 | 2026-07-20 | expert-review revision | four blockers and sixteen additional findings converted to fixed contracts, tasks, traceability, and gates | authoring findings resolved |
 | 2026-07-20 | final audit reconciliation | repaired FTS-plus-owner admission, legacy/lexical score compatibility, page filter basis, exhaustive owner-state mapping, and lifecycle traceability columns/criteria | lifecycle lint: zero diagnostics; bounded seven-document Markdown check: table-readability warnings only |
-| pending | implementation | V001-V011 | no implementation evidence yet |
+| 2026-07-21 | Phase 1 contract preflight | T001 review found one scalar `query_filter_basis` could not represent distinct FTS/owner/union bases and owner-source overflow lacked a lower bound | revised AC3.3/AC4.5 and design to use a strict per-count basis object plus exact-or-literal-501 source/union receipts |
+| 2026-07-21 | Phase 1 fixture preflight | T002 review found multiple owners could not define `conflicting`, stable document identity was unspecified, and all-token relevance did not state token filtering | fixed conflict derivation to contradictory owner frontmatter, stable ID to normalized repo-relative POSIX path, and all-token matching to every normalized token without stopword/minimum-length filtering |
+| 2026-07-21 | Phase 1 implementation | T001-T002 delivered additive runtime contracts and ports plus a 13-document fixture, ranking/count oracles, and executable red proofs; focused suite passed 43 ordinary tests plus 9 expected failures | independent review found and verified corrections for the complete source/band matrix, non-empty reasons, exact-or-overflow port invariants, scenario-specific 501 source identities, frozen-page equivalence, cursor identity, and expiry |
+| pending | production implementation | remaining V002-V011 gates | Phase 1 contracts, fixtures, and red proofs are recorded above; T003-T008 production and installed-artifact evidence remains pending |
 | pending | promotion/closure | V012-V019 | no durable promotion or closure evidence yet |
 
 ## Durable Promotion And Cleanup
@@ -208,7 +212,9 @@ or closure evidence.
   narrowing guidance and production evidence that the bound is practical.
 - Additive compatibility fields increase payload size until legacy aliases can
   be removed through a separately governed deprecation.
-- The fixed contracts remain unproved until T001-T010 and V001-V019 complete.
+- The fixed contracts are schema- and fixture-proved for Phase 1; production
+  behavior remains unproved until T003-T010 and the remaining V002-V019 gates
+  complete.
 
 ## Readiness Decision
 
@@ -217,7 +223,8 @@ or closure evidence.
   promoted-document gates.
 - **Ready to implement:** yes; the post-revision authoring review found no
   remaining blocking requirement, design, or traceability gap.
-- **Ready to validate implementation:** no; T001-T006 are pending.
+- **Ready to validate implementation:** no; T001-T002 are complete and
+  T003-T006 production implementation remains pending.
 - **Ready for promotion/release/closure/archive:** no.
 - **Risk:** medium-high; schema, ranking, cursor, and public contract change.
 - **Rollback boundary:** do not publish mixed schema/policy or partial overflow

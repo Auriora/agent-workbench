@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: requirements
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -138,7 +138,10 @@ frozen ranked-universe repository do not yet exist.
 3. **AC3.3:** If the distinct FTS-plus-owner union contains candidate 501, the
    runtime SHALL return a structured
    `candidate_universe_exceeds_limit` blocked result with zero hits and no
-   cursor; it SHALL NOT page or continue from an incomplete universe.
+   cursor; it SHALL NOT page or continue from an incomplete universe. The
+   blocker SHALL expose an exact count for a fully retrieved source or the
+   corresponding literal-501 lower bound for an overflowing FTS, matched-owner,
+   or union source.
 4. **AC3.4:** A cursor SHALL identify the frozen universe and next position and
    SHALL bind snapshot, normalized query, scope, retrieval bound, schema
    version, and ranking-policy version.
@@ -177,8 +180,10 @@ frozen ranked-universe repository do not yet exist.
    `priority_scan_skipped_markdown_files_count`.
 5. **AC4.5:** Receipts SHALL name `searchable_filter_basis`,
    `scope_filter_basis`, `query_filter_basis`, `page_filter_basis`, and
-   `priority_scan_filter_basis`; a count SHALL have exactly one universe and
-   filter basis.
+   `priority_scan_filter_basis`. `query_filter_basis` SHALL be a strict object
+   keyed by each query-derived count field, because FTS, matched-owner, and
+   union/ranked counts have different bases. Every count SHALL have exactly one
+   universe and one keyed filter basis.
 6. **AC4.6:** Documents indexed outside priority roots SHALL increase the
    searchable snapshot/scope counts but SHALL NOT inflate priority-scan counts.
 7. **AC4.7:** Partial/skipped priority scans SHALL preserve explicit coverage

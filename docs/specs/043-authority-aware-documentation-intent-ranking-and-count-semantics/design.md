@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -114,7 +114,9 @@ The indexer and query resolver share one pure function:
 4. collapse ASCII whitespace and trim;
 5. split tokens on the remaining ASCII spaces.
 
-Normalized empty strings do not index or match. `SessionStart`, `sessionstart`,
+Normalized empty strings do not index or match. Every remaining normalized
+query token participates in all-token relevance tests; this slice applies no
+stopword list or minimum token length. `SessionStart`, `sessionstart`,
 and `SESSIONSTART` normalize to `sessionstart`; `session-start` normalizes to
 `session start` and is therefore a different two-token phrase unless both forms
 are explicitly registered.
@@ -192,7 +194,11 @@ prove that resorting by either numeric field is unsupported and that legacy
 
 Draft valid owners retain draft status/caveats. Missing, archived, superseded,
 or conflicting owner relations receive no valid-owner tier and emit a bounded
-governance inconsistency.
+governance inconsistency. Multiple map owners are valid and never constitute a
+conflict by themselves. A mapped owner is `conflicting` only when that
+repository-present document declares a different supported `canonical_owner`
+path in its own frontmatter; conflict evidence names the map relation, mapped
+path, and contradictory declared path.
 
 ## Complete Frozen Pagination
 
@@ -232,6 +238,10 @@ rank components. Its identity hashes:
 - retrieval bound (`500`);
 - ranking schema and policy versions.
 
+For this slice, the stable document ID is the canonical normalized
+repo-relative POSIX path stored with the selected snapshot. SQLite row IDs and
+insertion order are never public or cursor identities.
+
 The record lives no longer than its graph snapshot and has a bounded expiry for
 abandoned queries. The first response and every cursor reference the universe
 ID and next position. Later pages load this record; they do not re-query FTS or
@@ -245,20 +255,26 @@ the same stored list and must therefore be identical.
 | --- | --- | --- |
 | `searchable_snapshot_documents_count` | all searchable Markdown in selected snapshot | `searchable_filter_basis: merged_graph_and_priority_markdown` |
 | `searchable_scope_documents_count` | searchable snapshot documents under selected scope | `scope_filter_basis: repo_root` or `normalized_scope_path` |
-| `fts_candidate_documents_count` | distinct FTS rows admitted before union | `query_filter_basis: normalized_fts_match_within_scope` |
-| `matched_owner_candidate_documents_count` | repository-present exact matched-owner documents admitted before union | `query_filter_basis: exact_matched_concern_owners_within_scope` |
-| `candidate_union_documents_count` | distinct stable document IDs across both candidate sources | `query_filter_basis: distinct_fts_and_exact_owner_union_within_scope` |
-| `ranked_candidate_universe_count` | complete frozen candidate union after ranking | `query_filter_basis: distinct_fts_and_exact_owner_union_within_scope` |
+| `fts_candidate_documents_count` | distinct FTS rows admitted before union | `query_filter_basis.fts_candidate_documents_count: normalized_fts_match_within_scope` |
+| `matched_owner_candidate_documents_count` | repository-present exact matched-owner documents admitted before union | `query_filter_basis.matched_owner_candidate_documents_count: exact_matched_concern_owners_within_scope` |
+| `candidate_union_documents_count` | distinct stable document IDs across both candidate sources | `query_filter_basis.candidate_union_documents_count: distinct_fts_and_exact_owner_union_within_scope` |
+| `ranked_candidate_universe_count` | complete frozen candidate union after ranking | `query_filter_basis.ranked_candidate_universe_count: distinct_fts_and_exact_owner_union_within_scope` |
 | `returned_page_documents_count` | current frozen-universe page slice | `page_filter_basis: frozen_universe_position_and_requested_page_size` |
 | `priority_scan_eligible_markdown_files_count` | Markdown seen by dedicated priority scan | `priority_scan_filter_basis: configured_priority_roots` |
 | `priority_scan_indexed_markdown_files_count` | eligible priority files indexed | same priority filter basis |
 | `priority_scan_skipped_markdown_files_count` | eligible priority files skipped | same priority filter basis plus bounded reason summary |
 
+`query_filter_basis` is one strict keyed object containing the four query count
+keys shown above; it is not a scalar reused with conflicting meanings.
+
 On overflow, `ranked_candidate_universe_count` is absent because no complete
-universe exists. The other source/union counts are exact when FTS returned at
-most 500 rows; when the FTS sentinel is present, the blocker instead records
-`fts_candidate_count_lower_bound: 501` and
-`candidate_union_count_lower_bound: 501`.
+universe exists. Each source and the union exposes exactly one of its exact
+`*_documents_count` field or its matching literal-501 lower bound. The lower
+bound fields are `fts_candidate_count_lower_bound`,
+`matched_owner_candidate_count_lower_bound`, and
+`candidate_union_count_lower_bound`. Any lower bound requires a blocked result,
+zero hits, no cursor, and no ranked-universe count; either source sentinel also
+requires the union lower bound.
 Priority coverage state remains independent. Existing ambiguous fields remain
 temporary additive aliases and their documented legacy meanings do not change.
 

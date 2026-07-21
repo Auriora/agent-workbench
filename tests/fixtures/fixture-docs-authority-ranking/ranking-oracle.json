@@ -1,0 +1,63 @@
+{
+  "normalization": [
+    { "input": "SessionStart", "normalized": "sessionstart" },
+    { "input": "ＳｅｓｓｉｏｎＳｔａｒｔ", "normalized": "sessionstart" },
+    { "input": "session-start", "normalized": "session start" },
+    { "input": "runtime/contracts + graph_schema", "normalized": "runtime contracts graph schema" }
+  ],
+  "queries": [
+    {
+      "query": "What rule governs SessionStart behavior?",
+      "normalized_tokens": ["what", "rule", "governs", "sessionstart", "behavior"],
+      "matched_concerns": ["coding-agent-integrations"]
+    },
+    {
+      "query": "runtime contracts and graph schema",
+      "normalized_tokens": ["runtime", "contracts", "and", "graph", "schema"],
+      "matched_concerns": ["graph-schema", "runtime-contracts"]
+    },
+    {
+      "query": "shared tie",
+      "normalized_tokens": ["shared", "tie"],
+      "matched_concerns": ["tie-alpha", "tie-beta"]
+    },
+    {
+      "query": "Session startup diagnostics",
+      "normalized_tokens": ["session", "startup", "diagnostics"],
+      "matched_concerns": []
+    },
+    {
+      "query": "sessionstarter behavior",
+      "normalized_tokens": ["sessionstarter", "behavior"],
+      "matched_concerns": []
+    }
+  ],
+  "owner_states": [
+    { "path": "docs/design/coding-agent-integration-design.md", "state": "valid", "tier": "valid_owner" },
+    { "path": "docs/drafts/draft-owner.md", "state": "draft", "tier": "valid_owner" },
+    { "path": "docs/missing/missing-owner.md", "state": "missing", "tier": "invalid_owner" },
+    { "path": "docs/history/archived-owner.md", "state": "archived", "tier": "invalid_owner" },
+    { "path": "docs/design/superseded-owner.md", "state": "superseded", "tier": "invalid_owner" },
+    {
+      "path": "docs/design/conflicting-owner.md",
+      "state": "conflicting",
+      "tier": "invalid_conflicting_owner",
+      "declared_canonical_owner": "docs/design/current-owner.md"
+    }
+  ],
+  "stable_document_ids": [
+    "docs/design/coding-agent-integration-design.md",
+    "docs/reference/runtime-contracts.md",
+    "notes/out-of-priority.md"
+  ],
+  "sessionstart_expected_order": [
+    "docs/design/coding-agent-integration-design.md",
+    "docs/runbooks/install-agent-workbench.md"
+  ],
+  "query_filter_basis": {
+    "fts_candidate_documents_count": "normalized_fts_match_within_scope",
+    "matched_owner_candidate_documents_count": "exact_matched_concern_owners_within_scope",
+    "candidate_union_documents_count": "distinct_fts_and_exact_owner_union_within_scope",
+    "ranked_candidate_universe_count": "distinct_fts_and_exact_owner_union_within_scope"
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "candidate_limit": 500,
+  "sentinel_limit": 501,
+  "scenarios": [
+    { "id": "empty", "fts_count": 0, "owner_count": 0, "overlap_count": 0, "distinct_union_count": 0, "outcome": "complete" },
+    { "id": "union-499", "fts_count": 498, "owner_count": 2, "overlap_count": 1, "distinct_union_count": 499, "outcome": "complete" },
+    { "id": "union-500", "fts_count": 499, "owner_count": 2, "overlap_count": 1, "distinct_union_count": 500, "outcome": "complete" },
+    {
+      "id": "fts-owner-row-501",
+      "fts_count_lower_bound": 501,
+      "owner_count": 1,
+      "owner_fts_ordinal": 501,
+      "overlap_count": 1,
+      "distinct_union_count_lower_bound": 501,
+      "outcome": "candidate_universe_exceeds_limit"
+    },
+    {
+      "id": "owner-only-union-row-501",
+      "fts_count": 500,
+      "owner_count": 1,
+      "overlap_count": 0,
+      "distinct_union_count_lower_bound": 501,
+      "outcome": "candidate_universe_exceeds_limit"
+    },
+    {
+      "id": "matched-owner-source-row-501",
+      "fts_count": 1,
+      "owner_count_lower_bound": 501,
+      "overlap_count": 1,
+      "distinct_union_count_lower_bound": 501,
+      "outcome": "candidate_universe_exceeds_limit"
+    }
+  ]
+}

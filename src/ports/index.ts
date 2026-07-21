@@ -43,6 +43,8 @@ import type {
   DiagnosticsProviderStatus,
   DocsDocument,
   DocsHeading,
+  DocsRankingCursorPayload,
+  DocsRankingCandidateQueryResult,
   DocsSearchHit,
   EvidenceCoverageState,
   EditToken,
@@ -56,6 +58,7 @@ import type {
   RefreshExecutionState,
   RefreshFailure,
   ReferenceCursorPayload,
+  RankedDocsSearchHit,
   SnapshotPublicationState,
   SnapshotRefreshDiagnosticsReceipt
 } from "../contracts/index.js";
@@ -421,6 +424,50 @@ export interface DocsIndexPort {
   }): Promise<void>;
   search(input: DocsIndexSearchRequest): Promise<DocsIndexSearchResult>;
   getState(input: { repo_root: string; snapshot_id?: string }): Promise<DocsIndexState>;
+}
+
+export interface DocsRankingCandidateQueryPort {
+  findFtsCandidates(input: {
+    snapshot_id: string;
+    normalized_query: string;
+    normalized_scope_path?: string;
+    max_rows: 501;
+  }): Promise<DocsRankingCandidateQueryResult>;
+  findMatchedOwnerCandidates(input: {
+    snapshot_id: string;
+    concern_keys: readonly string[];
+    normalized_scope_path?: string;
+    max_rows: 501;
+  }): Promise<DocsRankingCandidateQueryResult>;
+}
+
+export type DocsRankingCursorDecodeResult =
+  | { ok: true; payload: DocsRankingCursorPayload }
+  | { ok: false; code: "invalid_cursor" | "cursor_expired" };
+
+export interface DocsRankingCursorCodecPort {
+  encode(payload: DocsRankingCursorPayload): string;
+  decode(cursor: string): DocsRankingCursorDecodeResult;
+}
+
+export type RankedDocsUniverseIdentity = Omit<
+  DocsRankingCursorPayload,
+  "version" | "universe_id" | "next_position"
+>;
+
+export type RankedDocsUniverseRecord = {
+  universe_id: string;
+  identity: RankedDocsUniverseIdentity;
+  hits: readonly RankedDocsSearchHit[];
+  created_at: string;
+  expires_at: string;
+};
+
+export interface RankedDocsUniversePort {
+  put(input: { universe: RankedDocsUniverseRecord }): Promise<void>;
+  get(input: { universe_id: string; snapshot_id: string }): Promise<RankedDocsUniverseRecord | null>;
+  delete(input: { universe_id: string }): Promise<void>;
+  purgeExpired(input: { now_iso8601: string }): Promise<number>;
 }
 
 export type DocsIndexDocumentWrite = {
