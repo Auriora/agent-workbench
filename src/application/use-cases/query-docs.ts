@@ -366,13 +366,14 @@ export async function searchRankedDocs(input: {
     const concernState = await input.documentation_concerns.getDocumentationConcernIndexState({
       snapshot_id: input.selected_snapshot_id
     });
-    if (concernState.status !== "ready" || concernState.state === "invalid") {
+    if (concernState.snapshot_id !== input.selected_snapshot_id ||
+        concernState.status !== "ready" || concernState.state === "invalid") {
       return rankingUnavailable(base, "ranking_unavailable");
     }
     const terms = await input.documentation_concerns.listDocumentationConcernTerms({
       snapshot_id: input.selected_snapshot_id
     });
-    if (terms.status !== "ready") {
+    if (terms.snapshot_id !== input.selected_snapshot_id || terms.status !== "ready") {
       return rankingUnavailable(base, "ranking_unavailable");
     }
     const termResolution = resolveDocumentationConcerns({
@@ -385,7 +386,7 @@ export async function searchRankedDocs(input: {
       snapshot_id: input.selected_snapshot_id,
       concern_keys: concernKeys
     });
-    if (owners.status !== "ready") {
+    if (owners.snapshot_id !== input.selected_snapshot_id || owners.status !== "ready") {
       return rankingUnavailable(base, "ranking_unavailable");
     }
     const resolution = resolveDocumentationConcerns({

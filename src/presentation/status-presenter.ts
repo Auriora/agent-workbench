@@ -3,12 +3,17 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import type { ResponseEnvelope } from "../contracts/index.js";
+import {
+  DOCUMENTATION_RANKING_REASON_MAX_BYTES,
+  documentationRankingReceiptSchema,
+  type ResponseEnvelope
+} from "../contracts/index.js";
 import {
   type RuntimeStatus,
   type RuntimeStatusResult
 } from "../application/use-cases/get-repo-status.js";
 import { invalidResponseMeta, makeTrustedEnvelope } from "../application/use-cases/response-metadata.js";
+import { redactAndBoundPresentationText } from "./redaction.js";
 
 export type StatusPresentationPayload = {
   status: RuntimeStatus;
@@ -18,8 +23,22 @@ export type StatusPresentationPayload = {
 export function toStatusPresentationPayload(
   result: RuntimeStatusResult
 ): StatusPresentationPayload {
+  const documentationRanking = result.status.documentation_ranking;
   return {
-    status: result.status,
+    status: documentationRanking === undefined
+      ? result.status
+      : {
+          ...result.status,
+          documentation_ranking: documentationRankingReceiptSchema.parse({
+            ...documentationRanking,
+            reason: documentationRanking.reason === undefined
+              ? undefined
+              : redactAndBoundPresentationText(documentationRanking.reason, {
+                  context: "message",
+                  max_utf8_bytes: DOCUMENTATION_RANKING_REASON_MAX_BYTES
+                })
+          })
+        },
     meta: result.meta
   };
 }

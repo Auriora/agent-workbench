@@ -89,6 +89,62 @@ describe("repo status MCP resource", () => {
     expect(parsed.data.adapter_coverage).toEqual(result.status.adapter_coverage);
   });
 
+  it("redacts and UTF-8 bounds documentation ranking reasons at the public resource", async () => {
+    const rawReason = [
+      `/home/example/${"a".repeat(600)}`,
+      "BOUNDARY_MARKER",
+      "../outside/secrets.txt",
+      "C:\\Users\\example\\secret.txt",
+      "token=secret-value",
+      "🙂".repeat(200)
+    ].join(" ");
+    const result: GetRepoStatusResult = {
+      status: {
+        repo_root: "/repo",
+        runtime_state: "fresh",
+        freshness: "fresh",
+        indexed_roots: ["."],
+        skipped_roots: [],
+        adapter_coverage: [],
+        snapshot_id: "snapshot-1",
+        documentation_ranking: {
+          snapshot_id: "snapshot-1",
+          state: "invalid",
+          recovery: "source_repair",
+          authority_map: "unknown",
+          reason: rawReason
+        }
+      },
+      meta: {
+        analysis_validity: "invalid",
+        freshness: "fresh",
+        scope: { repo_root: "/repo", indexed_roots: ["."], skipped_roots: [], languages: [] },
+        capability_level: "unsupported",
+        evidence_kinds: ["docs"],
+        verification_status: "blocked",
+        truncated: false
+      }
+    };
+    const registered = registerMcpResource(repoStatusResource, {
+      repoRoot: "/repo",
+      getRepoStatus: () => result
+    });
+
+    const response = await registered.handler({});
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
+      data: { documentation_ranking: { reason: string } };
+    };
+    const reason = parsed.data.documentation_ranking.reason;
+    expect(reason).toContain("[REDACTED_ABSOLUTE_PATH]");
+    expect(reason).toContain("[REDACTED_WORKSPACE_ESCAPE]");
+    expect(reason).toContain("token=[REDACTED]");
+    expect(reason).toContain("BOUNDARY_MARKER");
+    expect(reason).not.toMatch(/home\/example|outside\/secrets|C:\\Users|secret-value/u);
+    expect(Buffer.byteLength(reason, "utf8")).toBeLessThanOrEqual(512);
+    expect(reason).not.toContain("�");
+    expect(result.status.documentation_ranking?.reason).toBe(rawReason);
+  });
+
   it("returns a structured invalid-input envelope before provider execution", async () => {
     let providerCalled = false;
 

@@ -19,6 +19,38 @@ import {
   verificationStatusSchema
 } from "./runtime-core-contracts.js";
 
+export const DOCUMENTATION_RANKING_REASON_MAX_BYTES = 512 as const;
+
+const documentationRankingReasonSchema = z.string().refine(
+  (value) => new TextEncoder().encode(value).byteLength <= DOCUMENTATION_RANKING_REASON_MAX_BYTES,
+  `Documentation ranking reasons must not exceed ${DOCUMENTATION_RANKING_REASON_MAX_BYTES} UTF-8 bytes.`
+).optional();
+
+export const documentationRankingReceiptSchema = z.discriminatedUnion("state", [
+  z.object({
+    snapshot_id: z.string().min(1),
+    state: z.literal("ready"),
+    recovery: z.literal("none"),
+    authority_map: z.enum(["present", "absent"]),
+    reason: documentationRankingReasonSchema
+  }).strict(),
+  z.object({
+    snapshot_id: z.string().min(1),
+    state: z.literal("invalid"),
+    recovery: z.literal("source_repair"),
+    authority_map: z.literal("unknown"),
+    reason: documentationRankingReasonSchema
+  }).strict(),
+  z.object({
+    snapshot_id: z.string().min(1),
+    state: z.literal("unavailable"),
+    recovery: z.enum(["refresh", "request_repair", "environment_repair"]),
+    authority_map: z.literal("unknown"),
+    reason: documentationRankingReasonSchema
+  }).strict()
+]);
+export type DocumentationRankingReceipt = z.infer<typeof documentationRankingReceiptSchema>;
+
 export const sourceSectionSchema = z
   .object({
     path: z.string(),

@@ -80,7 +80,7 @@ describe("installed provider plugin smoke", () => {
     const broad = runFixture("claude", "broad-provider-discovery");
     expect(broad.status).toBe(1);
     expect(broad.stderr).toContain("ToolSearch max_results is bounded from 1 through 50");
-  });
+  }, 15_000);
 
   it("bounds direct-tool result diagnostics to kind and top-level shape", () => {
     const result = runFixture("codex", "unexpected-result-shape");

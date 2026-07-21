@@ -13,6 +13,8 @@ import {
   adapterEvidenceSchema,
   capabilityLevelSchema,
   CONTRACT_VERSION,
+  DOCUMENTATION_RANKING_REASON_MAX_BYTES,
+  documentationRankingReceiptSchema,
   runtimeStatusCaveatSchema,
   workspaceWatcherConfigSchema,
   DEFAULT_WORKSPACE_WATCHER_DEBOUNCE_MS,
@@ -103,6 +105,51 @@ describe("runtime contract categories", () => {
 });
 
 describe("runtime contracts", () => {
+  it("models a strict and UTF-8 bounded documentation ranking readiness receipt", () => {
+    expect(documentationRankingReceiptSchema.parse({
+      snapshot_id: "snapshot-1",
+      state: "ready",
+      recovery: "none",
+      authority_map: "present",
+      reason: "x".repeat(DOCUMENTATION_RANKING_REASON_MAX_BYTES)
+    })).toMatchObject({ state: "ready", authority_map: "present" });
+
+    expect(documentationRankingReceiptSchema.safeParse({
+      snapshot_id: "snapshot-1",
+      state: "unavailable",
+      recovery: "refresh",
+      authority_map: "unknown",
+      reason: "🙂".repeat(128)
+    }).success).toBe(true);
+    expect(documentationRankingReceiptSchema.safeParse({
+      snapshot_id: "snapshot-1",
+      state: "unavailable",
+      recovery: "refresh",
+      authority_map: "unknown",
+      reason: "🙂".repeat(129)
+    }).success).toBe(false);
+    expect(documentationRankingReceiptSchema.safeParse({
+      snapshot_id: "snapshot-1",
+      state: "ready",
+      recovery: "none",
+      authority_map: "present",
+      extra: true
+    }).success).toBe(false);
+    for (const impossible of [
+      { state: "ready", recovery: "refresh", authority_map: "present" },
+      { state: "ready", recovery: "none", authority_map: "unknown" },
+      { state: "invalid", recovery: "none", authority_map: "unknown" },
+      { state: "invalid", recovery: "source_repair", authority_map: "present" },
+      { state: "unavailable", recovery: "source_repair", authority_map: "unknown" },
+      { state: "unavailable", recovery: "refresh", authority_map: "absent" }
+    ]) {
+      expect(documentationRankingReceiptSchema.safeParse({
+        snapshot_id: "snapshot-1",
+        ...impossible
+      }).success).toBe(false);
+    }
+  });
+
   it("models bounded snapshot validity without allowing incomplete evidence to claim valid", () => {
     expect(snapshotValidityReceiptSchema.parse({
       snapshot_id: "snapshot-1",

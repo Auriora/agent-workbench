@@ -342,6 +342,103 @@ describe("documentation ranked-universe boundary fixture", () => {
     });
   });
 
+  it.each([
+    { status: "ready", snapshot_id: "snapshot-043", state: "invalid", failure_reason: "map invalid" } as const,
+    ...([
+      "snapshot_not_found",
+      "snapshot_not_published",
+      "snapshot_schema_incompatible",
+      "concern_index_state_missing",
+      "concern_index_invalid"
+    ] as const).map((reason) => ({ status: "unavailable" as const, snapshot_id: "snapshot-043", reason }))
+  ])("blocks every unusable concern-index state without candidate results ($status)", async (concernState) => {
+    const harness = rankedUniverseProofHarness();
+    const calls: string[] = [];
+    harness.documentation_concerns = {
+      ...noConcernIndex(),
+      async getDocumentationConcernIndexState() {
+        calls.push("state");
+        return concernState;
+      },
+      async listDocumentationConcernTerms() {
+        calls.push("terms");
+        return { status: "ready", snapshot_id: "snapshot-043", rows: [] };
+      },
+      async listDocumentationConcernOwners() {
+        calls.push("owners");
+        return { status: "ready", snapshot_id: "snapshot-043", rows: [] };
+      }
+    };
+
+    const result = await runPagedSearch(harness, "frozen query");
+    expect(result).toMatchObject({
+      status: "blocked",
+      blocker: "ranking_unavailable",
+      trust_state: "blocked_ranking_unavailable",
+      hits: []
+    });
+    expect(calls).toEqual(["state"]);
+    expect(harness.candidate_calls).toEqual([]);
+  });
+
+  it.each(["state", "terms", "owners"] as const)(
+    "blocks a %s snapshot mismatch before ranking candidates execute",
+    async (mismatchAt) => {
+      const harness = rankedUniverseProofHarness();
+      const calls: string[] = [];
+      harness.documentation_concerns = {
+        ...noConcernIndex(),
+        async getDocumentationConcernIndexState() {
+          calls.push("state");
+          return {
+            status: "ready",
+            snapshot_id: mismatchAt === "state" ? "snapshot-other" : "snapshot-043",
+            state: "complete"
+          };
+        },
+        async listDocumentationConcernTerms() {
+          calls.push("terms");
+          return {
+            status: "ready",
+            snapshot_id: mismatchAt === "terms" ? "snapshot-other" : "snapshot-043",
+            rows: [{ concern_key: "frozen", normalized_term: "frozen query", token_count: 2 }]
+          };
+        },
+        async listDocumentationConcernOwners() {
+          calls.push("owners");
+          return {
+            status: "ready",
+            snapshot_id: mismatchAt === "owners" ? "snapshot-other" : "snapshot-043",
+            rows: []
+          };
+        }
+      };
+
+      const result = await runPagedSearch(harness, "frozen query");
+      expect(result).toMatchObject({
+        status: "blocked",
+        blocker: "ranking_unavailable",
+        trust_state: "blocked_ranking_unavailable",
+        hits: []
+      });
+      expect(calls).toEqual(
+        mismatchAt === "state" ? ["state"] : mismatchAt === "terms" ? ["state", "terms"] : ["state", "terms", "owners"]
+      );
+      expect(harness.candidate_calls).toEqual([]);
+    }
+  );
+
+  it("keeps a same-snapshot no-map state usable", async () => {
+    const harness = rankedUniverseProofHarness({ paths: [] });
+    const calls: string[] = [];
+    harness.documentation_concerns = noConcernIndex(calls);
+    const result = await runPagedSearch(harness, "frozen query");
+
+    expect(result.status).toBe("not_applicable");
+    expect(calls).toEqual(["state", "terms", "owners"]);
+    expect(harness.candidate_calls.map(({ source }) => source)).toEqual(["fts", "owner"]);
+  });
+
   it("resolves a late term across more than 501 terms and loads only its owners from a larger global relation set", async () => {
     const harness = rankedUniverseProofHarness();
     const concernCalls: string[] = [];

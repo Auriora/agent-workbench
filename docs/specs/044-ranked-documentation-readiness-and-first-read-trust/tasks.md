@@ -105,7 +105,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
 
 ## Phase 2: Snapshot-Bound Readiness Contract
 
-- [ ] T003 Add ranking-readiness contracts and status assembly.
+- [x] T003 Add ranking-readiness contracts and status assembly.
   - Depends on: T002
   - Requirements: Requirement 2 AC1-AC6, CP-001
   - Files: `src/contracts/`, `src/application/use-cases/get-repo-status.ts`,
@@ -113,17 +113,24 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
   - Acceptance: Ready, invalid, unavailable, recovery category, bounded reason,
     and exact snapshot identity are exposed without a broad scan.
   - Evidence mode: implementation
-  - Evidence: Pending.
-  - [ ] T003.1 Add the canonical readiness contract and schemas.
-  - [ ] T003.2 Wire the selected-snapshot concern state through status assembly
+  - Evidence: Phase 2 complete: focused readiness suites pass 97/97, typecheck passes, full suite passes 1029/1029, git diff check passes, and independent re-review cleared all five findings. Full-suite validation also corrected the provider-smoke test's inconsistent default timeout after two reproducible full-run timeouts and an isolated pass.
+  - [x] T003.1 Add the canonical readiness contract and schemas.
+  - Evidence: `src/contracts/runtime-docs-contracts.ts` defines the strict discriminated receipt and 512-byte schema; `tests/contracts/runtime-contracts.test.ts` passed within the 97/97 focused run.
+  - Evidence mode: command
+  - [x] T003.2 Wire the selected-snapshot concern state through status assembly
     and presentation without querying from an adapter.
-  - [ ] T003.3 Add table-driven coverage for `complete`, `no_map`, every
+  - Evidence: `getSnapshotRepoStatus` performs one selected-snapshot concern-state read; `tests/runtime/status.test.ts` proves exact identity, store/mismatch containment, monotonic trust, and unchanged freshness within the 97/97 focused run.
+  - Evidence mode: command
+  - [x] T003.3 Add table-driven coverage for `complete`, `no_map`, every
     ready `invalid`, every unavailable reason, store failure,
     status/orientation trust projection, recovery kind, docs-search behavior,
     and cross-snapshot cases.
-  - [ ] T003.4 Prove public reasons use shared presentation redaction and stay
+  - Evidence: `tests/runtime/status.test.ts`, `tests/mcp/repo-orientation-resource.test.ts`, and `tests/docs/docs-ranking-pagination.test.ts` passed within the 97/97 focused run; state, term, and owner mismatches stop before candidate calls.
+  - Evidence mode: command
+  - [x] T003.4 Prove public reasons use shared presentation redaction and stay
     within 512 UTF-8 bytes for absolute-path, traversal, and secret-like input.
-
+  - Evidence: `tests/mcp/repo-status-resource.test.ts` passed within the 97/97 focused run and asserts POSIX/Windows absolute, traversal, and secret raw values are absent, `BOUNDARY_MARKER` survives redact-before-cap, output is at most 512 UTF-8 bytes, and input evidence is unchanged.
+  - Evidence mode: command
 ## Phase 3: First-Read Trust And Recovery
 
 - [ ] T004 Make orientation consume ranking readiness truthfully.

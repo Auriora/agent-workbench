@@ -20,7 +20,7 @@ installed-runtime acceptance.
 | Gate | Required? | Status | Evidence |
 | --- | --- | --- | --- |
 | Gate 1: Worktree map recovery and repository-real regression | yes | passed | T001-T002: production extraction complete; focused suite 26/26 |
-| Gate 2: Snapshot-bound status readiness | yes | pending | T003 |
+| Gate 2: Snapshot-bound status readiness | yes | passed | T003: exhaustive readiness, trust, recovery, snapshot identity, and presentation-safety regressions pass |
 | Gate 3: Orientation and recovery agreement | yes | pending | T004-T005 |
 | Gate 4: Published snapshot and two-client acceptance | yes | pending | T006 |
 | Gate 5: Full validation, promotion, and closure review | yes | pending | T007 |
@@ -30,9 +30,9 @@ installed-runtime acceptance.
 | Command | Purpose | Result | Evidence |
 | --- | --- | --- | --- |
 | focused concern-routing and map-index tests | Production extractor and invalid owner behavior | pending | T001-T002 |
-| focused status, orientation, docs ranking, and MCP tests | Public readiness and recovery | pending | T003-T005 |
-| `pnpm typecheck` | TypeScript contracts and wiring | pending | T006-T007 |
-| `pnpm test` | Full regression suite | pending | T006-T007 |
+| focused status, orientation, docs ranking, and MCP tests | Public readiness and recovery | passed for Phase 2 | T003: 97/97 tests passed; T004-T005 remain |
+| `pnpm typecheck` | TypeScript contracts and wiring | passed for Phase 2 | T003 |
+| `pnpm test` | Full regression suite | passed for Phase 2 | T003: 97 files, 1029/1029 tests passed |
 | `pnpm run validate:plugin` | Packaged MCP/provider wiring | pending | T006-T007 |
 | `pnpm run validate:skills` | Packaged skill integrity | pending | T007 |
 | `pnpm run pack:dry-run` | Distribution contents | pending | T007 |
@@ -81,7 +81,7 @@ diagnostic, not parity fields.
 | Requirement | Acceptance criteria covered | Evidence | Residual risk |
 | --- | --- | --- | --- |
 | Requirement 1 | AC1-AC6 | T001-T002: repository-real worktree map candidate complete with restored backlog owner; bounded metadata and invalid-owner regressions pass | revision-bound evidence follows the Phase 1 commit |
-| Requirement 2 | pending | T003 | status hot-path/store failure behavior |
+| Requirement 2 | AC1-AC6 | T003: strict readiness receipt; one selected-snapshot state read; exhaustive persisted/unavailable/store-failure mapping; non-blocking `no_map`; docs-search identity guards; public redaction and 512-byte cap | installed-runtime publication remains T006, not a Requirement 2 implementation gap |
 | Requirement 3 | pending | T004-T005 | refresh/source-repair classification |
 | Requirement 4 | pending | T006 | installed provider reload and convergence |
 
@@ -89,7 +89,7 @@ diagnostic, not parity fields.
 
 | Property | Covered by | Evidence | Residual risk |
 | --- | --- | --- | --- |
-| CP-001 | T003, T006 | pending | cross-snapshot mismatch |
+| CP-001 | T003, T006 | status and docs-search regressions reject foreign snapshot state, terms, and owners before use | installed Codex/Claude agreement remains T006 |
 | CP-002 | T004 | pending | false reusable orientation |
 | CP-003 | T004-T005 | pending | refresh loop |
 
@@ -98,7 +98,7 @@ diagnostic, not parity fields.
 | Field | Evidence | Residual risk |
 | --- | --- | --- |
 | Scope and out-of-scope files | canonical context and slice boundary | none identified |
-| Must-read context | all package artifacts plus named durable sources | review pending |
+| Must-read context | all package artifacts plus named durable sources | Phase 2 implementation review complete; later phases remain |
 | Permissions and approval points | user requested repair, backlog, and active spec creation | implementation remains task-gated |
 | Validation commands | table above and repository CI gates | focused file selection may evolve |
 | Review needs | independent work-product review before implementation | completed; findings addressed and re-reviewed |
@@ -111,7 +111,7 @@ diagnostic, not parity fields.
 | --- | --- | --- | --- |
 | T001 | complete | map/ledger edits and revision-bound extractor result | live publication deliberately moves to T006 after implementation |
 | T002 | complete | production extraction 59 concerns/73 terms/61 owners; focused suite 26/26; typecheck and docs checks passed | repository-real regression and bounded metadata classification |
-| T003 | pending | | status readiness |
+| T003 | complete | strict readiness contract; exact-snapshot status and docs-search guards; orientation trust/refresh projection; public safety regression; focused 97/97; typecheck; full 1029/1029 | independent review found five issues; all were fixed and re-review cleared the slice |
 | T004 | pending | | orientation |
 | T005 | pending | | recovery action |
 | T006 | pending | | cross-client acceptance |
@@ -127,11 +127,13 @@ diagnostic, not parity fields.
 | 2026-07-21 | `pnpm exec vitest run tests/docs/documentation-concern-routing.test.ts`; `pnpm typecheck`; docs link/frontmatter test; Markdown set check; `git diff --check` | passed | 26/26 focused tests and 2/2 docs tests; no non-table Markdown findings. |
 | 2026-07-21 | `pnpm test`, followed by exact daemon-suite rerun | partial full-suite environment evidence | Full suite reached 1004/1005; one daemon refresh case observed stale instead of fresh outside the changed file set. `tests/mcp/daemon-entrypoint-integration.test.ts` then passed 15/15 in isolation, proving intermittence but not root cause. The failure remains recorded rather than treated as a clean full-suite pass. |
 | 2026-07-21 | Final `pnpm test` after bounded-iterator correction | passed | 97 test files passed; 1006/1006 tests passed. This supplies clean full-suite Phase 1 evidence while preserving the earlier intermittent observation above. |
+| 2026-07-21 | Spec 044 Phase 2 focused contract, status, orientation, docs-ranking, and MCP resource suites; `pnpm typecheck`; `git diff --check` | passed | 5 files and 97/97 focused tests passed; strict receipt, exhaustive mapping, CP-001 guards, trust projection, recovery classification, and public reason safety are covered. |
+| 2026-07-21 | Independent Phase 2 implementation review and two re-review passes over the 14-file diff; reviewer reran 5 focused files, 97/97 tests, `pnpm typecheck`, and `git diff --check` | passed | Five reported issues were repaired: foreign docs concern evidence, incorrect refresh guidance, permissive receipt combinations, mismatch recovery semantics, and incomplete public redaction proof; the final 3-file/66-test narrow rerun reported zero blockers and warnings. |
+| 2026-07-21 | First two Phase 2 full-suite runs plus isolated installed-provider smoke rerun | test-budget failure characterized | Both full runs passed 1028/1029 and exceeded the default 5-second budget in the same three-process Claude discovery test; the exact 37-test file passed in isolation. The test budget was aligned to the existing 15-second multi-process convention without adding retries. |
+| 2026-07-21 | Final `pnpm test` after provider-smoke budget correction | passed | 97 test files passed; 1029/1029 tests passed. |
 
 ## Residual Risks
 
-- Public receipt naming may change during implementation review without changing
-  required semantics.
 - Installed-provider acceptance requires reload after the repo-local package is rebuilt.
 - EB059 and EB061 remain intentionally outside this package.
 

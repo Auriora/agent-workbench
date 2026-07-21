@@ -109,6 +109,31 @@ export function redactPresentationText(
   return redacted;
 }
 
+export function redactAndBoundPresentationText(
+  value: string,
+  options: {
+    context?: PresentationRedactionContext;
+    max_utf8_bytes: number;
+  }
+): string {
+  const redacted = redactPresentationText(value, { context: options.context });
+  const encoder = new TextEncoder();
+  if (encoder.encode(redacted).byteLength <= options.max_utf8_bytes) {
+    return redacted;
+  }
+  let bounded = "";
+  let byteCount = 0;
+  for (const character of redacted) {
+    const characterBytes = encoder.encode(character).byteLength;
+    if (byteCount + characterBytes > options.max_utf8_bytes) {
+      break;
+    }
+    bounded += character;
+    byteCount += characterBytes;
+  }
+  return bounded;
+}
+
 /**
  * Sanitizes every free-text field exposed by a public symbol reference while
  * preserving its typed, repository-relative path and graph identity fields.

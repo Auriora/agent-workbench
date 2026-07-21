@@ -15,6 +15,7 @@ import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
 import type { SnapshotState } from "../../src/domain/models/runtime.js";
 import type { WatcherFreshnessState } from "../../src/application/use-cases/response-metadata.js";
 import type {
+  DocumentationConcernIndexPort,
   FileCatalogPort,
   SnapshotPort,
   WarmupCoordinatorPort
@@ -282,6 +283,7 @@ describe("runtime status", () => {
         repo_root: "/repo",
         snapshots: snapshotPort(testCase.snapshot),
         catalog: catalogPort(testCase.snapshot === null ? [] : [file]),
+        documentation_concerns: documentationConcernPort(),
         warmups: warmupPort(testCase.warmup ?? null),
         max_files: 10
       });
@@ -367,6 +369,7 @@ describe("runtime status", () => {
         repo_root: "/repo",
         snapshots: snapshotPort(snapshot({ freshness: "fresh" })),
         catalog: catalogPort([file]),
+        documentation_concerns: documentationConcernPort(),
         watcher: testCase.watcher,
         max_files: 10
       });
@@ -393,6 +396,195 @@ describe("runtime status", () => {
         );
       }
     }
+  });
+
+  it("projects every documentation ranking state from one read of the selected snapshot", async () => {
+    const cases = [
+      {
+        name: "complete",
+        concern: { status: "ready", snapshot_id: "snap-1", state: "complete" } as const,
+        receipt: { state: "ready", recovery: "none", authority_map: "present" },
+        validity: "valid",
+        verification: "needed"
+      },
+      {
+        name: "no authority map",
+        concern: { status: "ready", snapshot_id: "snap-1", state: "no_map" } as const,
+        receipt: { state: "ready", recovery: "none", authority_map: "absent" },
+        validity: "partial",
+        verification: "needed"
+      },
+      {
+        name: "invalid ready state",
+        concern: { status: "ready", snapshot_id: "snap-1", state: "invalid", failure_reason: "bad map" } as const,
+        receipt: { state: "invalid", recovery: "source_repair", authority_map: "unknown", reason: "bad map" },
+        validity: "invalid",
+        verification: "blocked"
+      },
+      {
+        name: "invalid concern index",
+        concern: { status: "unavailable", snapshot_id: "snap-1", reason: "concern_index_invalid" } as const,
+        receipt: { state: "invalid", recovery: "source_repair", authority_map: "unknown" },
+        validity: "invalid",
+        verification: "blocked"
+      },
+      ...(["snapshot_not_published", "snapshot_schema_incompatible", "concern_index_state_missing"] as const).map(
+        (reason) => ({
+          name: reason,
+          concern: { status: "unavailable" as const, snapshot_id: "snap-1", reason },
+          receipt: { state: "unavailable", recovery: "refresh", authority_map: "unknown", reason },
+          validity: "invalid_due_to_environment",
+          verification: "blocked"
+        })
+      ),
+      {
+        name: "snapshot not found",
+        concern: { status: "unavailable", snapshot_id: "snap-1", reason: "snapshot_not_found" } as const,
+        receipt: {
+          state: "unavailable",
+          recovery: "request_repair",
+          authority_map: "unknown",
+          reason: "snapshot_not_found"
+        },
+        validity: "invalid",
+        verification: "blocked"
+      }
+    ];
+    for (const testCase of cases) {
+      const calls: string[] = [];
+      const concerns = documentationConcernPort(testCase.concern);
+      const originalRead = concerns.getDocumentationConcernIndexState.bind(concerns);
+      concerns.getDocumentationConcernIndexState = async (input) => {
+        calls.push(input.snapshot_id);
+        return originalRead(input);
+      };
+      const result = await getSnapshotRepoStatus({
+        repo_root: "/repo",
+        snapshots: snapshotPort(snapshot({ freshness: "fresh" })),
+        catalog: catalogPort([statusTypeScriptFile()]),
+        documentation_concerns: concerns,
+        selected_snapshot_id: "snap-1"
+      });
+
+      expect(calls, testCase.name).toEqual(["snap-1"]);
+      expect(result.status.snapshot_id, testCase.name).toBe("snap-1");
+      expect(result.status.documentation_ranking, testCase.name).toMatchObject({
+        snapshot_id: "snap-1",
+        ...testCase.receipt
+      });
+      expect(result.meta.analysis_validity, testCase.name).toBe(testCase.validity);
+      expect(result.meta.verification_status, testCase.name).toBe(testCase.verification);
+      expect(result.status.runtime_state, testCase.name).toBe("fresh");
+      expect(result.status.freshness, testCase.name).toBe("fresh");
+      if (testCase.name === "no authority map") {
+        expect(result.meta.caveats).toEqual(expect.arrayContaining([
+          expect.objectContaining({ kind: "authority_map_absent", severity: "warning" })
+        ]));
+      }
+    }
+  });
+
+  it("does not join mismatched readiness and contains concern-store failures", async () => {
+    const mismatched = await getSnapshotRepoStatus({
+      repo_root: "/repo",
+      snapshots: snapshotPort(snapshot({ freshness: "fresh" })),
+      catalog: catalogPort([statusTypeScriptFile()]),
+      documentation_concerns: documentationConcernPort({
+        status: "ready",
+        snapshot_id: "different-snapshot",
+        state: "complete"
+      })
+    });
+    expect(mismatched.status.documentation_ranking).toEqual({
+      snapshot_id: "snap-1",
+      state: "unavailable",
+      recovery: "environment_repair",
+      authority_map: "unknown",
+      reason: "Documentation ranking readiness did not match the selected snapshot."
+    });
+    expect(mismatched.meta).toMatchObject({
+      analysis_validity: "invalid_due_to_environment",
+      verification_status: "blocked"
+    });
+
+    const failing = documentationConcernPort();
+    failing.getDocumentationConcernIndexState = async () => {
+      throw new Error("database is locked at /home/example/private.sqlite token=secret-value");
+    };
+    const failed = await getSnapshotRepoStatus({
+      repo_root: "/repo",
+      snapshots: snapshotPort(snapshot({ freshness: "fresh" })),
+      catalog: catalogPort([statusTypeScriptFile()]),
+      documentation_concerns: failing
+    });
+    expect(failed.status.documentation_ranking).toEqual({
+      snapshot_id: "snap-1",
+      state: "unavailable",
+      recovery: "environment_repair",
+      authority_map: "unknown",
+      reason: "Documentation ranking readiness could not be read from the snapshot store."
+    });
+    expect(JSON.stringify(failed)).not.toContain("database is locked");
+  });
+
+  it("never weakens stronger status trust while projecting documentation readiness", async () => {
+    const cases = [
+      {
+        name: "complete preserves environment invalidity",
+        snapshotValidity: "invalid_due_to_environment" as const,
+        concern: { status: "ready", snapshot_id: "snap-1", state: "complete" } as const,
+        expected: "invalid_due_to_environment"
+      },
+      {
+        name: "no-map preserves invalidity",
+        snapshotValidity: "invalid" as const,
+        concern: { status: "ready", snapshot_id: "snap-1", state: "no_map" } as const,
+        expected: "invalid"
+      },
+      {
+        name: "ranking invalid preserves environment invalidity",
+        snapshotValidity: "invalid_due_to_environment" as const,
+        concern: { status: "ready", snapshot_id: "snap-1", state: "invalid" } as const,
+        expected: "invalid_due_to_environment"
+      }
+    ];
+    for (const testCase of cases) {
+      const result = await getSnapshotRepoStatus({
+        repo_root: "/repo",
+        snapshots: snapshotPort(snapshot({
+          freshness: "fresh",
+          analysis_validity: testCase.snapshotValidity
+        })),
+        catalog: catalogPort([statusTypeScriptFile()]),
+        documentation_concerns: documentationConcernPort(testCase.concern)
+      });
+      expect(result.meta.analysis_validity, testCase.name).toBe(testCase.expected);
+      expect(result.meta.verification_status, testCase.name).toBe("blocked");
+      expect(result.status.runtime_state, testCase.name).toBe(testCase.snapshotValidity);
+      expect(result.status.freshness, testCase.name).toBe("fresh");
+    }
+  });
+
+  it("redacts then UTF-8 bounds public documentation ranking reasons", async () => {
+    const result = await getSnapshotRepoStatus({
+      repo_root: "/repo",
+      snapshots: snapshotPort(snapshot({ freshness: "fresh" })),
+      catalog: catalogPort([statusTypeScriptFile()]),
+      documentation_concerns: documentationConcernPort({
+        status: "ready",
+        snapshot_id: "snap-1",
+        state: "invalid",
+        failure_reason: `/home/example/private/map.md token=secret-value ${"🙂".repeat(200)}`
+      })
+    });
+    const envelope = buildStatusEnvelope(result);
+    const reason = envelope.data.documentation_ranking?.reason ?? "";
+    expect(reason).toContain("[REDACTED_ABSOLUTE_PATH]");
+    expect(reason).toContain("token=[REDACTED]");
+    expect(reason).not.toContain("/home/example");
+    expect(reason).not.toContain("secret-value");
+    expect(Buffer.byteLength(reason, "utf8")).toBeLessThanOrEqual(512);
+    expect(reason).not.toContain("�");
   });
 
   it("adds structured caveats for degraded snapshot states", async () => {
@@ -492,6 +684,7 @@ describe("runtime status", () => {
               repo_root: "/repo",
               snapshots: snapshotPort(testCase.snapshot),
               catalog: catalogPort(testCase.files),
+              documentation_concerns: documentationConcernPort(),
               max_files: 10
             });
       const caveats = result.meta.caveats ?? [];
@@ -542,6 +735,7 @@ describe("runtime status", () => {
         async upsertEntry() {},
         async removeEntry() {}
       },
+      documentation_concerns: documentationConcernPort(),
       max_files: 10
     });
 
@@ -759,6 +953,18 @@ function snapshot(input: {
   };
 }
 
+function statusTypeScriptFile() {
+  return buildFileCatalogEntry({
+    file_identity: {
+      path: "src/app.ts",
+      language: "typescript",
+      content_hash: "sha256:ts",
+      size_bytes: 10,
+      mtime_ms: 1
+    }
+  });
+}
+
 function snapshotPort(value: SnapshotState | null): SnapshotPort {
   return {
     async getSnapshot() {
@@ -782,6 +988,27 @@ function catalogPort(files: Parameters<typeof getCatalogRepoStatus>[0]["files"])
     },
     async upsertEntry() {},
     async removeEntry() {}
+  };
+}
+
+function documentationConcernPort(
+  state: Awaited<ReturnType<DocumentationConcernIndexPort["getDocumentationConcernIndexState"]>> = {
+    status: "ready",
+    snapshot_id: "snap-1",
+    state: "complete"
+  }
+): DocumentationConcernIndexPort {
+  return {
+    async replaceSnapshotDocumentationConcerns() {},
+    async getDocumentationConcernIndexState() {
+      return state;
+    },
+    async listDocumentationConcernTerms() {
+      return { status: "ready", snapshot_id: state.snapshot_id, rows: [] };
+    },
+    async listDocumentationConcernOwners() {
+      return { status: "ready", snapshot_id: state.snapshot_id, rows: [] };
+    }
   };
 }
 

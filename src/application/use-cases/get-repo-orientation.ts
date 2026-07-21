@@ -22,6 +22,7 @@ const refreshWhen: OrientationReceipt["refresh_when"] = [
 
 export function getRepoOrientation(input: GetRepoStatusResult): GetRepoOrientationResult {
   const blockers = materialOrientationBlockers(input.status, input.meta);
+  const refreshRequired = orientationRefreshRequired(input.status);
   return {
     orientation: {
       repo_root: input.status.repo_root,
@@ -34,12 +35,31 @@ export function getRepoOrientation(input: GetRepoStatusResult): GetRepoOrientati
       },
       material_blockers: blockers,
       detail_resources: ["repo:///status", "repo:///scope", "repo:///overview"],
-      refresh_required: blockers.length > 0,
+      refresh_required: refreshRequired,
       refresh_when: refreshWhen,
       ordinary_content_edit_requires_refresh: false
     },
     meta: input.meta
   };
+}
+
+function orientationRefreshRequired(status: RuntimeStatus): boolean {
+  const watcher = status.watcher_freshness;
+  return status.snapshot_id === undefined ||
+    status.runtime_state === "invalid" ||
+    status.snapshot_validity?.refresh_required === true ||
+    status.documentation_ranking?.recovery === "refresh" ||
+    watcher?.status === "degraded" ||
+    watcher?.queue_state === "overflowed" ||
+    watcher?.queue_state === "failed" ||
+    watcher?.queue_state === "unavailable" ||
+    watcher?.scope_status === "changed" ||
+    watcher?.ignore_rules_status === "changed" ||
+    watcher?.scope_status === "unknown" ||
+    watcher?.ignore_rules_status === "unknown" ||
+    status.owner_state === "stale_owner" ||
+    status.owner_state === "dead_owner" ||
+    status.warmup_state === "failed";
 }
 
 function materialOrientationBlockers(

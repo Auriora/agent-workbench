@@ -79,6 +79,76 @@ describe("repo orientation receipt", () => {
     ]);
   });
 
+  it("preserves refresh for a genuinely invalid repository index", () => {
+    const result = statusResult({ runtime_state: "invalid" });
+    result.meta.analysis_validity = "invalid";
+    result.meta.verification_status = "blocked";
+
+    expect(getRepoOrientation(result).orientation).toMatchObject({
+      refresh_required: true,
+      trust_summary: { orientation_reusable: false },
+      material_blockers: ["Repository index evidence is invalid."]
+    });
+  });
+
+  it.each([
+    {
+      label: "complete ranking",
+      receipt: { state: "ready", recovery: "none", authority_map: "present" } as const,
+      validity: "valid" as const,
+      reusable: true,
+      refresh: false
+    },
+    {
+      label: "no authority map",
+      receipt: { state: "ready", recovery: "none", authority_map: "absent" } as const,
+      validity: "partial" as const,
+      reusable: true,
+      refresh: false
+    },
+    {
+      label: "invalid source",
+      receipt: { state: "invalid", recovery: "source_repair", authority_map: "unknown" } as const,
+      validity: "invalid" as const,
+      reusable: false,
+      refresh: false
+    },
+    {
+      label: "refreshable unavailable ranking",
+      receipt: { state: "unavailable", recovery: "refresh", authority_map: "unknown" } as const,
+      validity: "invalid_due_to_environment" as const,
+      reusable: false,
+      refresh: true
+    },
+    {
+      label: "environment repair",
+      receipt: { state: "unavailable", recovery: "environment_repair", authority_map: "unknown" } as const,
+      validity: "invalid_due_to_environment" as const,
+      reusable: false,
+      refresh: false
+    },
+    {
+      label: "request repair",
+      receipt: { state: "unavailable", recovery: "request_repair", authority_map: "unknown" } as const,
+      validity: "invalid" as const,
+      reusable: false,
+      refresh: false
+    }
+  ])("projects $label without inventing a refresh path", ({ receipt, validity, reusable, refresh }) => {
+    const result = statusResult({
+      documentation_ranking: { snapshot_id: "snapshot-1", ...receipt }
+    });
+    result.meta.analysis_validity = validity;
+    result.meta.verification_status = validity === "valid" || validity === "partial" ? "needed" : "blocked";
+
+    const orientation = getRepoOrientation(result).orientation;
+    expect(orientation).toMatchObject({
+      refresh_required: refresh,
+      trust_summary: { orientation_reusable: reusable }
+    });
+    expect(orientation.material_blockers.length === 0).toBe(reusable);
+  });
+
   it.each([
     {
       label: "degraded watcher",
