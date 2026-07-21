@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/044-ranked-documentation-readiness-and-first-read-trust/`
 - **Title:** Ranked documentation readiness and first-read trust requirements
 - **Final spec commit:** `4303146`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `5dd16a7`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/reference/runtime-contracts.md`
