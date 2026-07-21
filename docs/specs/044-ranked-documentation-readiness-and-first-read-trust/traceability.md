@@ -35,8 +35,8 @@ last_reviewed: 2026-07-21
 | Property | Requirements | Design Sections | Tasks | Tests Or Verification | Residual Risk |
 | --- | --- | --- | --- | --- | --- |
 | CP-001 | Requirement 2, Requirement 4 | Data Flow | T003, T006 | Cross-snapshot store/status and daemon tests | pending |
-| CP-002 | Requirement 3 | Algorithms | T004 | Table-driven orientation readiness tests | pending |
-| CP-003 | Requirement 3 | Algorithms, Operations | T004-T005 | Source-repair versus refresh next-action tests | pending |
+| CP-002 | Requirement 3 | Algorithms | T004 | Table-driven exact-snapshot orientation readiness tests | installed-client proof remains T006 |
+| CP-003 | Requirement 3 | Algorithms, Operations | T004-T005 | Refresh-admission and executable status next-action tests | installed-client proof remains T006 |
 
 ## Design To Implementation Matrix
 

@@ -8,12 +8,13 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   getCatalogRepoStatus,
-  getSnapshotRepoStatus,
+  getSnapshotRepoStatus as getSnapshotRepoStatusUseCase,
   getScannedRepoStatus
 } from "../../src/application/use-cases/get-repo-status.js";
 import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
 import type { SnapshotState } from "../../src/domain/models/runtime.js";
 import type { WatcherFreshnessState } from "../../src/application/use-cases/response-metadata.js";
+import type { RepositoryRefreshTriggerPort } from "../../src/application/use-cases/repository-refresh-triggers.js";
 import type {
   DocumentationConcernIndexPort,
   FileCatalogPort,
@@ -24,6 +25,26 @@ import {
   buildStatusEnvelope,
   toStatusPresentationPayload
 } from "../../src/presentation/status-presenter.js";
+
+type SnapshotStatusInput = Parameters<typeof getSnapshotRepoStatusUseCase>[0];
+
+function getSnapshotRepoStatus(
+  input: Omit<SnapshotStatusInput, "refresh_triggers"> & {
+    refresh_triggers?: RepositoryRefreshTriggerPort;
+  }
+) {
+  return getSnapshotRepoStatusUseCase({
+    ...input,
+    refresh_triggers: input.refresh_triggers ?? refreshTriggerPort(async () => ({
+      outcome: "accepted",
+      reused: false,
+      execution_id: "test-refresh",
+      state: "planned",
+      started_generation: 1,
+      requested_generation: 1
+    }))
+  });
+}
 
 describe("runtime status", () => {
   it("returns raw status result data without response envelope fields", () => {
@@ -527,6 +548,111 @@ describe("runtime status", () => {
     expect(JSON.stringify(failed)).not.toContain("database is locked");
   });
 
+  it("admits only refresh-class readiness through the shared coordinator before reading warmup", async () => {
+    const events: string[] = [];
+    const triggers = refreshTriggerPort(async (input) => {
+      events.push(`trigger:${input.source}:${input.visible_snapshot_id}`);
+      return {
+        outcome: "accepted",
+        reused: false,
+        execution_id: "refresh-1",
+        state: "planned",
+        started_generation: 1,
+        requested_generation: 1
+      };
+    });
+    const result = await getSnapshotRepoStatus({
+      repo_root: "/repo",
+      snapshots: snapshotPort(snapshot({ freshness: "fresh" })),
+      catalog: catalogPort([statusTypeScriptFile()]),
+      documentation_concerns: documentationConcernPort({
+        status: "unavailable",
+        snapshot_id: "snap-1",
+        reason: "snapshot_not_published"
+      }),
+      refresh_triggers: triggers,
+      warmups: {
+        ...warmupPort(null),
+        async getState() {
+          events.push("warmup");
+          return null;
+        }
+      }
+    });
+
+    expect(events).toEqual([
+      "trigger:documentation-ranking-readiness:snap-1",
+      "warmup"
+    ]);
+    expect(result.status.documentation_ranking?.recovery).toBe("refresh");
+  });
+
+  it.each([
+    {
+      concern: { status: "ready", snapshot_id: "snap-1", state: "invalid" } as const,
+      recovery: "source_repair"
+    },
+    {
+      concern: { status: "ready", snapshot_id: "snap-1", state: "complete" } as const,
+      recovery: "none"
+    },
+    {
+      concern: { status: "ready", snapshot_id: "snap-1", state: "no_map" } as const,
+      recovery: "none"
+    },
+    {
+      concern: { status: "unavailable", snapshot_id: "snap-1", reason: "snapshot_not_found" } as const,
+      recovery: "request_repair"
+    },
+    {
+      concern: { status: "ready", snapshot_id: "different-snapshot", state: "complete" } as const,
+      recovery: "environment_repair"
+    }
+  ])("does not admit $recovery readiness through refresh", async ({ concern }) => {
+    const calls: string[] = [];
+    await getSnapshotRepoStatus({
+      repo_root: "/repo",
+      snapshots: snapshotPort(snapshot({ freshness: "fresh" })),
+      catalog: catalogPort([statusTypeScriptFile()]),
+      documentation_concerns: documentationConcernPort(concern),
+      refresh_triggers: refreshTriggerPort(async () => {
+        calls.push("triggered");
+        throw new Error("unexpected trigger");
+      })
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it("projects blocked refresh admission without retrying the coordinator", async () => {
+    let calls = 0;
+    const result = await getSnapshotRepoStatus({
+      repo_root: "/repo",
+      snapshots: snapshotPort(snapshot({ freshness: "fresh" })),
+      catalog: catalogPort([statusTypeScriptFile()]),
+      documentation_concerns: documentationConcernPort({
+        status: "unavailable",
+        snapshot_id: "snap-1",
+        reason: "concern_index_state_missing"
+      }),
+      refresh_triggers: refreshTriggerPort(async () => {
+        calls += 1;
+        return {
+          outcome: "blocked",
+          reused: false,
+          state: "idle",
+          reason: "store_failure",
+          message: "Refresh store operation failed."
+        };
+      })
+    });
+    expect(calls).toBe(1);
+    expect(result.status.watcher_freshness?.refresh_admission).toMatchObject({
+      outcome: "blocked",
+      reason: "store_failure"
+    });
+    expect(result.meta.verification_status).toBe("blocked");
+  });
+
   it("never weakens stronger status trust while projecting documentation readiness", async () => {
     const cases = [
       {
@@ -1022,6 +1148,26 @@ function warmupPort(value: Awaited<ReturnType<WarmupCoordinatorPort["getState"]>
     },
     async markOwner() {},
     async completeWarmup() {}
+  };
+}
+
+function refreshTriggerPort(
+  staleFirstRead: RepositoryRefreshTriggerPort["staleFirstRead"]
+): RepositoryRefreshTriggerPort {
+  return {
+    async startup() {
+      throw new Error("unexpected startup refresh");
+    },
+    staleFirstRead,
+    async watcherBatch() {
+      throw new Error("unexpected watcher refresh");
+    },
+    async hasPendingGeneration() {
+      return false;
+    },
+    getGenerationReceipt() {
+      return { generation: 0 };
+    }
   };
 }
 

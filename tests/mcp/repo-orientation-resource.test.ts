@@ -147,6 +147,39 @@ describe("repo orientation receipt", () => {
       trust_summary: { orientation_reusable: reusable }
     });
     expect(orientation.material_blockers.length === 0).toBe(reusable);
+    if (!reusable) {
+      expect(orientation.material_blockers).toContain(
+        "Ranked documentation readiness is invalid or unavailable."
+      );
+      expect(JSON.stringify(orientation)).not.toContain("reason");
+      expect(JSON.stringify(orientation)).not.toContain("source_repair");
+    }
+  });
+
+  it.each([
+    {
+      label: "missing readiness",
+      documentation_ranking: undefined,
+      blocker: "Ranked documentation readiness is unavailable for the selected snapshot."
+    },
+    {
+      label: "foreign readiness",
+      documentation_ranking: {
+        snapshot_id: "snapshot-other",
+        state: "unavailable" as const,
+        recovery: "refresh" as const,
+        authority_map: "unknown" as const
+      },
+      blocker: "Ranked documentation readiness does not match the selected snapshot."
+    }
+  ])("makes $label non-reusable without inventing refresh", ({ documentation_ranking, blocker }) => {
+    const result = statusResult({ documentation_ranking });
+    const orientation = getRepoOrientation(result).orientation;
+    expect(orientation).toMatchObject({
+      refresh_required: false,
+      trust_summary: { orientation_reusable: false }
+    });
+    expect(orientation.material_blockers).toContain(blocker);
   });
 
   it.each([
@@ -230,6 +263,12 @@ function statusResult(overrides: Partial<GetRepoStatusResult["status"]> = {}): G
       skipped_roots: [],
       adapter_coverage: [],
       snapshot_id: "snapshot-1",
+      documentation_ranking: {
+        snapshot_id: "snapshot-1",
+        state: "ready",
+        recovery: "none",
+        authority_map: "present"
+      },
       owner_state: "owner",
       warmup_state: "complete",
       ...overrides

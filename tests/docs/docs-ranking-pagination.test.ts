@@ -382,7 +382,7 @@ describe("documentation ranked-universe boundary fixture", () => {
   });
 
   it.each(["state", "terms", "owners"] as const)(
-    "blocks a %s snapshot mismatch before ranking candidates execute",
+    "does not treat a %s snapshot mismatch after readiness as a successful ranking result",
     async (mismatchAt) => {
       const harness = rankedUniverseProofHarness();
       const calls: string[] = [];
@@ -414,13 +414,21 @@ describe("documentation ranked-universe boundary fixture", () => {
         }
       };
 
-      const result = await runPagedSearch(harness, "frozen query");
-      expect(result).toMatchObject({
-        status: "blocked",
-        blocker: "ranking_unavailable",
-        trust_state: "blocked_ranking_unavailable",
-        hits: []
-      });
+      if (mismatchAt === "state") {
+        const result = await runPagedSearch(harness, "frozen query");
+        expect(result).toMatchObject({
+          status: "blocked",
+          blocker: "ranking_unavailable",
+          trust_state: "blocked_ranking_unavailable",
+          hits: []
+        });
+      } else {
+        await expect(runPagedSearch(harness, "frozen query")).rejects.toThrow(
+          mismatchAt === "terms"
+            ? "Documentation ranking terms became unavailable after readiness was established."
+            : "Documentation ranking owners became unavailable after readiness was established."
+        );
+      }
       expect(calls).toEqual(
         mismatchAt === "state" ? ["state"] : mismatchAt === "terms" ? ["state", "terms"] : ["state", "terms", "owners"]
       );

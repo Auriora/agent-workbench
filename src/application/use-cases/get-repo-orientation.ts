@@ -45,10 +45,15 @@ export function getRepoOrientation(input: GetRepoStatusResult): GetRepoOrientati
 
 function orientationRefreshRequired(status: RuntimeStatus): boolean {
   const watcher = status.watcher_freshness;
+  const ranking = status.documentation_ranking;
+  const matchingRanking = status.snapshot_id !== undefined &&
+    ranking?.snapshot_id === status.snapshot_id
+    ? ranking
+    : undefined;
   return status.snapshot_id === undefined ||
     status.runtime_state === "invalid" ||
     status.snapshot_validity?.refresh_required === true ||
-    status.documentation_ranking?.recovery === "refresh" ||
+    matchingRanking?.recovery === "refresh" ||
     watcher?.status === "degraded" ||
     watcher?.queue_state === "overflowed" ||
     watcher?.queue_state === "failed" ||
@@ -70,6 +75,15 @@ function materialOrientationBlockers(
   const watcher = status.watcher_freshness;
   if (status.snapshot_id === undefined) {
     blockers.push("No repository snapshot is available.");
+  } else if (status.documentation_ranking === undefined) {
+    blockers.push("Ranked documentation readiness is unavailable for the selected snapshot.");
+  } else if (status.documentation_ranking.snapshot_id !== status.snapshot_id) {
+    blockers.push("Ranked documentation readiness does not match the selected snapshot.");
+  } else if (
+    status.documentation_ranking.state === "invalid" ||
+    status.documentation_ranking.state === "unavailable"
+  ) {
+    blockers.push("Ranked documentation readiness is invalid or unavailable.");
   }
   if (status.snapshot_validity?.state === "stale") {
     blockers.push("One or more indexed paths are missing or deleted.");

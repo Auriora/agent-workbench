@@ -34,7 +34,11 @@ import {
   type RepositoryRefreshTriggerPort
 } from "./application/use-cases/repository-refresh-triggers.js";
 import { previewWorkspaceEdit } from "./application/use-cases/preview-workspace-edit.js";
-import type { WatcherFreshnessState } from "./application/use-cases/response-metadata.js";
+import {
+  refreshAdmissionWatcher,
+  refreshTriggerFailureWatcher,
+  type WatcherFreshnessState
+} from "./application/use-cases/response-metadata.js";
 import { WorkspaceChangeQueue } from "./application/use-cases/workspace-change-queue.js";
 import { resolveWorkspaceWatcherConfig, type WorkspaceWatcherConfig, type WorkspaceWatchHandle } from "./domain/models/index.js";
 import {
@@ -236,24 +240,9 @@ export function createAgentWorkbenchServer(
           source: validity.reason ?? "first-read-validity",
           visible_snapshot_id: snapshot.id
         });
-        if (admission.outcome === "blocked") {
-          refreshBlocker = {
-            status: "degraded",
-            queue_state: "failed",
-            scope_status: "unknown",
-            ignore_rules_status: "unknown",
-            reason: admission.message,
-            refresh_admission: admission
-          };
-        }
+        refreshBlocker = refreshAdmissionWatcher(admission);
       } catch {
-        refreshBlocker = {
-          status: "degraded",
-          queue_state: "failed",
-          scope_status: "unknown",
-          ignore_rules_status: "unknown",
-          reason: "Repository refresh trigger failed."
-        };
+        refreshBlocker = refreshTriggerFailureWatcher();
       }
     }
     return { snapshot_id: snapshot.id, validity, refresh_blocker: refreshBlocker };
@@ -275,6 +264,7 @@ export function createAgentWorkbenchServer(
         snapshots: store,
         catalog: store,
         documentation_concerns: store,
+        refresh_triggers: refreshTriggers,
         warmups: warmupView,
         watcher: selected.refresh_blocker ?? watcher,
         selected_snapshot_id: selected.snapshot_id,
@@ -290,6 +280,7 @@ export function createAgentWorkbenchServer(
         snapshots: store,
         catalog: store,
         documentation_concerns: store,
+        refresh_triggers: refreshTriggers,
         warmups: warmupView,
         watcher: selected.refresh_blocker ?? watcher,
         selected_snapshot_id: selected.snapshot_id,

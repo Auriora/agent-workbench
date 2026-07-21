@@ -173,6 +173,61 @@ describe("process workspace change queue", () => {
     expect(triggers.getGenerationReceipt()).toMatchObject({ generation: 7, dirty_generation: 7 });
   });
 
+  it("does not retry a failed stale-first-read generation", async () => {
+    let requests = 0;
+    let executionState: "idle" | "failed" = "idle";
+    const admission = {
+      outcome: "accepted" as const,
+      reused: false as const,
+      execution_id: "exec-failed",
+      target_snapshot_id: "1001",
+      state: "planned" as const,
+      started_generation: 6,
+      requested_generation: 6
+    };
+    const triggers = new RepositoryRefreshTriggerCoordinator({
+      repo_root: "/repo",
+      controller: {
+        async request() {
+          requests += 1;
+          return admission;
+        },
+        getReceipt() {
+          return {
+            repo_root: "/repo",
+            controller_generation: 1,
+            requested_generation: 5,
+            started_generation: 5,
+            execution_state: executionState,
+            activity_lease: null,
+            worker_invocations: 1,
+            worker_termination_state: "not_required" as const
+          };
+        }
+      },
+      publications: {
+        async getLatestPublished() {
+          return {
+            status: "selected" as const,
+            snapshot: { id: "1000", freshness: "fresh" as const },
+            publication: { invalidation_generation: 5 }
+          } as any;
+        },
+        async allocateBuildSnapshotId() { throw new Error("not used"); },
+        async transitionBuild() { throw new Error("not used"); },
+        async readExplicit() { throw new Error("not used"); }
+      },
+      snapshots: { async markSnapshotFreshness() {} }
+    });
+
+    expect(await triggers.staleFirstRead({ source: "status", visible_snapshot_id: "1000" }))
+      .toEqual(admission);
+    executionState = "failed";
+    expect(await triggers.staleFirstRead({ source: "orientation", visible_snapshot_id: "1000" }))
+      .toEqual(admission);
+    expect(requests).toBe(1);
+  });
+
   it("autonomously admits modifications without a status or orientation read", async () => {
     const clock = new MutableClock("2026-07-05T12:00:00.000Z");
     const triggers = new RecordingTriggers();

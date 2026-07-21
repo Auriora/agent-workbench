@@ -68,6 +68,7 @@ import {
 } from "./document-currency-routing.js";
 import { capNextActions } from "./response-metadata.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
+import { readDocumentationRankingReadiness } from "./documentation-ranking-readiness.js";
 
 const DOC_ROW_LIMIT = 15000;
 const DIRECT_READ_CAVEAT = "Docs search is routing evidence; use docs_read_section for precise claims.";
@@ -362,19 +363,22 @@ export async function searchRankedDocs(input: {
     });
   }
 
+  const readiness = await readDocumentationRankingReadiness({
+    snapshot_id: input.selected_snapshot_id,
+    documentation_concerns: input.documentation_concerns
+  });
+  if (readiness.blocked) {
+    return rankingUnavailable(base, "ranking_unavailable");
+  }
+
   try {
-    const concernState = await input.documentation_concerns.getDocumentationConcernIndexState({
-      snapshot_id: input.selected_snapshot_id
-    });
-    if (concernState.snapshot_id !== input.selected_snapshot_id ||
-        concernState.status !== "ready" || concernState.state === "invalid") {
-      return rankingUnavailable(base, "ranking_unavailable");
-    }
     const terms = await input.documentation_concerns.listDocumentationConcernTerms({
       snapshot_id: input.selected_snapshot_id
     });
     if (terms.snapshot_id !== input.selected_snapshot_id || terms.status !== "ready") {
-      return rankingUnavailable(base, "ranking_unavailable");
+      throw new DocsRankingUnavailableError(
+        "Documentation ranking terms became unavailable after readiness was established."
+      );
     }
     const termResolution = resolveDocumentationConcerns({
       query: input.request.query,
@@ -387,7 +391,9 @@ export async function searchRankedDocs(input: {
       concern_keys: concernKeys
     });
     if (owners.snapshot_id !== input.selected_snapshot_id || owners.status !== "ready") {
-      return rankingUnavailable(base, "ranking_unavailable");
+      throw new DocsRankingUnavailableError(
+        "Documentation ranking owners became unavailable after readiness was established."
+      );
     }
     const resolution = resolveDocumentationConcerns({
       query: input.request.query,
@@ -492,9 +498,6 @@ export async function searchRankedDocs(input: {
       counts
     });
   } catch (error) {
-    if (error instanceof DocsRankingUnavailableError) {
-      return rankingUnavailable(base, "ranking_unavailable");
-    }
     throw error;
   }
 }

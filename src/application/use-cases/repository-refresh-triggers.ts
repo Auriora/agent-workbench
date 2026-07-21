@@ -36,6 +36,11 @@ export class RepositoryRefreshTriggerCoordinator implements RepositoryRefreshTri
     identity: string;
     admission: SnapshotRefreshAdmission;
   } | undefined;
+  private lastStaleFirstRead: {
+    generation: number;
+    visible_snapshot_id: string;
+    admission: SnapshotRefreshAdmission;
+  } | undefined;
   private mutationTail: Promise<void> = Promise.resolve();
 
   public constructor(private readonly options: {
@@ -95,13 +100,28 @@ export class RepositoryRefreshTriggerCoordinator implements RepositoryRefreshTri
           generation: this.generation,
           visible_snapshot_id: input.visible_snapshot_id
         };
+        this.lastStaleFirstRead = undefined;
       }
-      return await this.options.controller.request({
+      const receipt = this.options.controller.getReceipt?.();
+      if (
+        receipt?.execution_state === "failed" &&
+        this.lastStaleFirstRead?.generation === this.dirty.generation &&
+        this.lastStaleFirstRead.visible_snapshot_id === input.visible_snapshot_id
+      ) {
+        return this.lastStaleFirstRead.admission;
+      }
+      const admission = await this.options.controller.request({
         repo_root: this.options.repo_root,
         reason: "stale_first_read",
         source: input.source,
         invalidation_generation: this.dirty.generation
       });
+      this.lastStaleFirstRead = {
+        generation: this.dirty.generation,
+        visible_snapshot_id: input.visible_snapshot_id,
+        admission
+      };
+      return admission;
     });
   }
 
@@ -182,6 +202,7 @@ export class RepositoryRefreshTriggerCoordinator implements RepositoryRefreshTri
       (visibleSnapshotId === undefined || published.snapshot.id === visibleSnapshotId)
     ) {
       this.dirty = undefined;
+      this.lastStaleFirstRead = undefined;
       this.generation = Math.max(this.generation, published.publication.invalidation_generation);
     }
   }

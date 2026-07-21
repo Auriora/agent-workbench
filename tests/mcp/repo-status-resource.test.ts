@@ -574,7 +574,8 @@ describe("repo status MCP resource", () => {
             mtime_ms: fs.statSync(sourcePath).mtimeMs,
             indexed_at: "2026-07-05T12:00:00.000Z"
           }
-        })
+        }),
+        documentation_concern_state: "complete"
       });
     } finally {
       store.close();
@@ -762,6 +763,7 @@ async function seedPublishedEntry(
     snapshot: Parameters<ReturnType<typeof openGraphStore>["createBuildSnapshot"]>[0]["snapshot"];
     snapshot_id: string;
     entry: Parameters<ReturnType<typeof openGraphStore>["upsertEntry"]>[0]["entry"];
+    documentation_concern_state?: "complete";
   }
 ): Promise<void> {
   await store.createBuildSnapshot({
@@ -771,6 +773,17 @@ async function seedPublishedEntry(
     created_at: input.snapshot.created_at
   });
   await store.upsertEntry({ snapshot_id: input.snapshot_id, entry: input.entry });
+  if (input.documentation_concern_state !== undefined) {
+    await store.replaceSnapshotDocumentationConcerns({
+      snapshot_id: input.snapshot_id,
+      state: input.documentation_concern_state,
+      source_path: "docs/reference/documentation-map.md",
+      source_content_hash: "sha256:test-documentation-map",
+      concerns: [],
+      terms: [],
+      owners: []
+    });
+  }
   await store.transitionBuild({
     repo_root: input.snapshot.repo_root,
     snapshot_id: input.snapshot_id,

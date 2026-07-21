@@ -5,7 +5,6 @@
 
 import type {
   AdapterEvidence,
-  AnalysisValidity,
   DocumentationRankingReceipt,
   Freshness,
   ResponseMetadata
@@ -29,6 +28,15 @@ import type {
   SnapshotPort,
   WarmupCoordinatorPort
 } from "../../ports/index.js";
+import type { RepositoryRefreshTriggerPort } from "./repository-refresh-triggers.js";
+import {
+  mergeDocumentationRankingTrust,
+  readDocumentationRankingReadiness
+} from "./documentation-ranking-readiness.js";
+import {
+  refreshAdmissionWatcher,
+  refreshTriggerFailureWatcher
+} from "./response-metadata.js";
 
 export type RuntimeStatusState =
   | "cold"
@@ -133,6 +141,7 @@ export async function getSnapshotRepoStatus(input: {
   catalog: FileCatalogPort;
   documentation_concerns: DocumentationConcernIndexPort;
   warmups?: WarmupCoordinatorPort;
+  refresh_triggers: RepositoryRefreshTriggerPort;
   watcher?: WatcherFreshnessState;
   snapshot_validity?: SnapshotValidityReceipt;
   snapshot_id?: string;
@@ -147,10 +156,10 @@ export async function getSnapshotRepoStatus(input: {
       repo_root: input.repo_root,
       snapshot_id: input.selected_snapshot_id ?? input.snapshot_id
     });
-  const warmup = input.warmups
-    ? await input.warmups.getState({ repo_root: input.repo_root })
-    : null;
   if (snapshot === null) {
+    const warmup = input.warmups
+      ? await input.warmups.getState({ repo_root: input.repo_root })
+      : null;
     return getCatalogRepoStatus({
       repo_root: input.repo_root,
       indexed_roots: input.indexed_roots ?? ["."],
@@ -163,6 +172,26 @@ export async function getSnapshotRepoStatus(input: {
     });
   }
 
+  const readiness = await readDocumentationRankingReadiness({
+    snapshot_id: snapshot.id,
+    documentation_concerns: input.documentation_concerns
+  });
+  let rankingRefreshWatcher: WatcherFreshnessState | undefined;
+  if (readiness.receipt.recovery === "refresh") {
+    try {
+      const admission = await input.refresh_triggers.staleFirstRead({
+        source: "documentation-ranking-readiness",
+        visible_snapshot_id: snapshot.id
+      });
+      rankingRefreshWatcher = refreshAdmissionWatcher(admission);
+    } catch {
+      rankingRefreshWatcher = refreshTriggerFailureWatcher();
+    }
+  }
+  const warmup = input.warmups
+    ? await input.warmups.getState({ repo_root: input.repo_root })
+    : null;
+
   const rowLimit = input.max_files ?? 200;
   const files = await input.catalog.listFiles({
     snapshot_id: snapshot.id,
@@ -174,15 +203,11 @@ export async function getSnapshotRepoStatus(input: {
     skipped_roots: input.skipped_roots ?? [],
     snapshot,
     warmup,
-    watcher: input.watcher,
+    watcher: rankingRefreshWatcher ?? input.watcher,
     snapshot_validity: input.snapshot_validity,
     files,
     row_limit: rowLimit,
     truncated: files.length >= rowLimit
-  });
-  const readiness = await readDocumentationRankingReadiness({
-    snapshot_id: snapshot.id,
-    documentation_concerns: input.documentation_concerns
   });
   result.status.documentation_ranking = readiness.receipt;
   result.meta = mergeDocumentationRankingTrust(result.meta, readiness);
@@ -217,164 +242,6 @@ export async function getScannedRepoStatus(input: {
   return {
     status: result.status,
     meta: result.meta
-  };
-}
-
-type DocumentationRankingReadiness = {
-  receipt: DocumentationRankingReceipt;
-  analysis_validity?: AnalysisValidity;
-  blocked: boolean;
-  authority_map_absent: boolean;
-};
-
-async function readDocumentationRankingReadiness(input: {
-  snapshot_id: string;
-  documentation_concerns: DocumentationConcernIndexPort;
-}): Promise<DocumentationRankingReadiness> {
-  try {
-    const state = await input.documentation_concerns.getDocumentationConcernIndexState({
-      snapshot_id: input.snapshot_id
-    });
-    if (state.snapshot_id !== input.snapshot_id) {
-      return unavailableDocumentationRanking(
-        input.snapshot_id,
-        "environment_repair",
-        "Documentation ranking readiness did not match the selected snapshot.",
-        "invalid_due_to_environment"
-      );
-    }
-    if (state.status === "ready") {
-      if (state.state === "complete") {
-        return {
-          receipt: {
-            snapshot_id: input.snapshot_id,
-            state: "ready",
-            recovery: "none",
-            authority_map: "present"
-          },
-          blocked: false,
-          authority_map_absent: false
-        };
-      }
-      if (state.state === "no_map") {
-        return {
-          receipt: {
-            snapshot_id: input.snapshot_id,
-            state: "ready",
-            recovery: "none",
-            authority_map: "absent",
-            ...(state.failure_reason === undefined ? {} : { reason: state.failure_reason })
-          },
-          analysis_validity: "partial",
-          blocked: false,
-          authority_map_absent: true
-        };
-      }
-      return invalidDocumentationRanking(input.snapshot_id, state.failure_reason);
-    }
-    switch (state.reason) {
-      case "concern_index_invalid":
-        return invalidDocumentationRanking(input.snapshot_id, state.failure_reason);
-      case "snapshot_not_published":
-      case "snapshot_schema_incompatible":
-      case "concern_index_state_missing":
-        return unavailableDocumentationRanking(
-          input.snapshot_id,
-          "refresh",
-          state.failure_reason ?? state.reason,
-          "invalid_due_to_environment"
-        );
-      case "snapshot_not_found":
-        return unavailableDocumentationRanking(
-          input.snapshot_id,
-          "request_repair",
-          state.failure_reason ?? state.reason,
-          "invalid"
-        );
-    }
-  } catch {
-    return unavailableDocumentationRanking(
-      input.snapshot_id,
-      "environment_repair",
-      "Documentation ranking readiness could not be read from the snapshot store.",
-      "invalid_due_to_environment"
-    );
-  }
-}
-
-function invalidDocumentationRanking(
-  snapshot_id: string,
-  reason?: string
-): DocumentationRankingReadiness {
-  return {
-    receipt: {
-      snapshot_id,
-      state: "invalid",
-      recovery: "source_repair",
-      authority_map: "unknown",
-      ...(reason === undefined ? {} : { reason })
-    },
-    analysis_validity: "invalid",
-    blocked: true,
-    authority_map_absent: false
-  };
-}
-
-function unavailableDocumentationRanking(
-  snapshot_id: string,
-  recovery: "refresh" | "request_repair" | "environment_repair",
-  reason: string,
-  analysis_validity: "invalid" | "invalid_due_to_environment"
-): DocumentationRankingReadiness {
-  return {
-    receipt: {
-      snapshot_id,
-      state: "unavailable",
-      recovery,
-      authority_map: "unknown",
-      reason
-    },
-    analysis_validity,
-    blocked: true,
-    authority_map_absent: false
-  };
-}
-
-function mergeDocumentationRankingTrust(
-  meta: ResponseMetadata,
-  readiness: DocumentationRankingReadiness
-): ResponseMetadata {
-  const analysisStrength: Record<AnalysisValidity, number> = {
-    valid: 0,
-    partial: 1,
-    invalid: 2,
-    invalid_due_to_environment: 3
-  };
-  const desiredValidity = readiness.analysis_validity;
-  const analysisValidity = desiredValidity !== undefined &&
-      analysisStrength[desiredValidity] > analysisStrength[meta.analysis_validity]
-    ? desiredValidity
-    : meta.analysis_validity;
-  const caveats = readiness.authority_map_absent
-    ? [
-        ...(meta.caveats ?? []),
-        {
-          kind: "authority_map_absent" as const,
-          severity: "warning" as const,
-          message: "No documentation authority map was published for this snapshot.",
-          evidence_kinds: ["docs" as const]
-        }
-      ]
-    : meta.caveats;
-  return {
-    ...meta,
-    analysis_validity: analysisValidity,
-    verification_status: readiness.blocked ||
-        analysisValidity === "invalid" ||
-        analysisValidity === "invalid_due_to_environment"
-      ? "blocked"
-      : meta.verification_status,
-    ...(caveats === undefined ? {} : { caveats })
   };
 }
 

@@ -62,6 +62,30 @@ export type WatcherFreshnessState = {
   refresh_admission?: BlockedSnapshotRefreshAdmission;
 };
 
+export function refreshAdmissionWatcher(
+  admission: SnapshotRefreshAdmission
+): WatcherFreshnessState | undefined {
+  if (admission.outcome !== "blocked") return undefined;
+  return {
+    status: "degraded",
+    queue_state: "failed",
+    scope_status: "unknown",
+    ignore_rules_status: "unknown",
+    reason: admission.message,
+    refresh_admission: admission
+  };
+}
+
+export function refreshTriggerFailureWatcher(): WatcherFreshnessState {
+  return {
+    status: "degraded",
+    queue_state: "failed",
+    scope_status: "unknown",
+    ignore_rules_status: "unknown",
+    reason: "Repository refresh trigger failed."
+  };
+}
+
 const runtimeCaveatSeverities: Record<
   "parser" | "grammar" | "timeout" | "crash" | "enrichment" | "language" | "runner" | "watcher",
   RuntimeStatusCaveat["severity"]

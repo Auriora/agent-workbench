@@ -133,7 +133,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
   - Evidence mode: command
 ## Phase 3: First-Read Trust And Recovery
 
-- [ ] T004 Make orientation consume ranking readiness truthfully.
+- [x] T004 Make orientation consume ranking readiness truthfully.
   - Depends on: T003
   - Requirements: Requirement 3 AC1-AC2, CP-002, CP-003
   - Files: orientation use case/contracts/presenter and tests
@@ -141,16 +141,16 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
     does not set refresh-only guidance; refreshable state still schedules the
     existing coordinator.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: Phase 3 implementation centralizes exact-snapshot documentation-ranking readiness, makes missing/foreign/blocked ranking evidence non-reusable in orientation, schedules the existing refresh coordinator only for recovery=refresh, preserves independent refresh causes, and prevents repeated first-read polling from retrying a failed generation. Focused Phase 3 validation passed 131/131; typecheck, full pnpm test, and git diff --check passed; independent review reported no findings.
 
-- [ ] T005 Align `docs_search` recovery with status evidence.
+- [x] T005 Align `docs_search` recovery with status evidence.
   - Depends on: T004
   - Requirements: Requirement 3 AC3, SC-002, SC-003
   - Files: docs query/presenter/MCP integration tests and status resource tests
   - Acceptance: Executing the emitted status next action exposes the same
     snapshot readiness category and useful recovery boundary.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: docs_search now uses the shared exact-snapshot readiness classifier for initial searches and emits the existing callable repo:///status action only for status-explainable ranking_unavailable states. The MCP recovery-chain test executes that action verbatim and proves identical snapshot, readiness category, recovery kind, and bounded public reasons across all recovery classes and store failure. Cursor continuations retain Spec 043 frozen-universe semantics. Focused Phase 3 validation passed 131/131; typecheck, full pnpm test, and git diff --check passed; independent review reported no findings.
 
 ## Phase 4: Cross-Client Acceptance
 
