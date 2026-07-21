@@ -23,20 +23,20 @@ installed-runtime acceptance.
 | Gate 2: Snapshot-bound status readiness | yes | passed | T003: exhaustive readiness, trust, recovery, snapshot identity, and presentation-safety regressions pass |
 | Gate 3: Orientation and recovery agreement | yes | passed | T004-T005: exact-snapshot orientation trust, bounded refresh admission, and executable docs-search recovery agree |
 | Gate 4: Published snapshot and two-client acceptance | yes | passed | T006: snapshot `1784667715173`; Codex and Claude parity |
-| Gate 5: Full validation, promotion, and closure review | yes | pending | T007 |
+| Gate 5: Full validation, promotion, and closure review | yes | passed | T007: reviewed candidate `54f1dfe`; final lifecycle gates below |
 
 ## Validation Commands
 
 | Command | Purpose | Result | Evidence |
 | --- | --- | --- | --- |
-| focused concern-routing and map-index tests | Production extractor and invalid owner behavior | pending | T001-T002 |
+| focused concern-routing and map-index tests | Production extractor and invalid owner behavior | passed | Final combined focused run: 10 files; 191/191 tests |
 | focused status, orientation, docs ranking, refresh, and MCP tests | Public readiness and recovery | passed for Phase 3 | T004-T005: 131/131 tests passed |
-| `pnpm typecheck` | TypeScript contracts and wiring | passed for Phase 4 | T006 |
-| `pnpm test` | Full regression suite | passed for Phase 4 | 99 files; 1050/1050 tests |
-| `pnpm run validate:plugin` | Packaged MCP/provider wiring | passed for Phase 4 | T006 |
-| `pnpm run validate:skills` | Packaged skill integrity | passed for Phase 4 | 6 owned files; no errors or warnings |
-| `pnpm run pack:dry-run` | Distribution contents | passed for Phase 4 | package `0.6.1`; 246 entries |
-| lifecycle lint, task audit, evidence quality, closure checks | Spec readiness and closure | pending | T001, T007 |
+| `pnpm typecheck` | TypeScript contracts and wiring | passed | Final Phase 5 candidate |
+| `pnpm test` | Full regression suite | passed | Uncontended final run: 99 files; 1061/1061 tests |
+| `pnpm run validate:plugin` | Packaged MCP/provider wiring | passed | Final Phase 5 candidate |
+| `pnpm run validate:skills` | Packaged skill integrity | passed | 6 owned files; no errors or warnings |
+| `pnpm run pack:dry-run` | Distribution contents | passed | package `0.6.1`; 246 entries |
+| lifecycle lint, task audit, evidence quality, closure checks | Spec readiness and closure | passed | T007; final commands returned no blockers before removal |
 
 ## Production Extractor Command
 
@@ -81,9 +81,9 @@ diagnostic, not parity fields.
 | Requirement | Acceptance criteria covered | Evidence | Residual risk |
 | --- | --- | --- | --- |
 | Requirement 1 | AC1-AC6 | T001-T002: repository-real worktree map candidate complete with restored backlog owner; bounded metadata and invalid-owner regressions pass | revision-bound evidence follows the Phase 1 commit |
-| Requirement 2 | AC1-AC6 | T003: strict readiness receipt; one selected-snapshot state read; exhaustive persisted/unavailable/store-failure mapping; non-blocking `no_map`; docs-search identity guards; public redaction and 512-byte cap | installed-runtime publication remains T006, not a Requirement 2 implementation gap |
+| Requirement 2 | AC1-AC6 | T003/T007: strict readiness receipt; exhaustive mapping; non-blocking `no_map` with frozen partial trust; atomic legacy-universe migration; typed term/owner/overflow environment races; public redaction and 512-byte cap | none identified |
 | Requirement 3 | AC1-AC3 | T004-T005: blocked ranking evidence makes orientation non-reusable; only refresh recovery admits the coordinator; the callable status action returns the same snapshot/category/recovery | installed-client acceptance remains T006 |
-| Requirement 4 | AC1-AC4 | T006: fresh ranking-ready snapshot `1784667715173`; exact pinned query; Codex/Claude snapshot and field parity | none identified |
+| Requirement 4 | AC1-AC4 | T006: fresh ranking-ready snapshot `1784667715173`; exact Codex/Claude parity receipt. T007 final candidate install and daemon restart published `1784671161602`; Claude Code `2.1.217` repeated the exact query and Codex `0.144.6` observed the same fresh ready snapshot/runtime, while its non-interactive MCP client cancelled the search call before execution. | Phase 4 remains the complete two-client query parity proof; final candidate happy-path behavior is additionally covered by daemon-provider regression and Claude live acceptance |
 
 ## Correctness Property Coverage
 
@@ -115,9 +115,14 @@ diagnostic, not parity fields.
 | T004 | complete | shared readiness classifier, truthful orientation blockers, refresh-only admission, failed-generation convergence; focused 131/131 and full suite pass | independent implementation review found no issues |
 | T005 | complete | docs-search action executed verbatim through MCP and matched status snapshot/category/recovery; frozen cursor continuation preserved | installed-client proof belongs to T006 |
 | T006 | complete | daemon-backed two-provider regression; repaired `0.6.1` package install; Codex `0.144.6` and Claude Code `2.1.216` accepted snapshot `1784667715173` and identical pinned result fields | global per-file FTS sweep removed after live rebuild timeout; duplicate same-ID FTS rows routed to EB062 |
-| T007 | pending | | promotion and closure |
+| T007 | complete | candidate `54f1dfe`; independent MoE review/re-review; 191/191 focused and 1061/1061 full tests; exact installed artifact and final fresh publication | EB063 routes generic shared failure-message redaction outside this spec |
 
 ## Evidence Log
+
+Evidence-quality tooling may report the Markdown table separator immediately
+below as weak evidence. That row is table syntax, not an evidence claim; the
+warning is accepted as a parser false positive and does not reduce the concrete
+records that follow.
 
 | Date | Evidence | Result | Notes |
 | --- | --- | --- | --- |
@@ -136,6 +141,10 @@ diagnostic, not parity fields.
 | 2026-07-21 | Phase 4 real-repository rebuild with the unchanged 60-second worker deadline | failed, repaired, then passed | Repeated pre-repair workers timed out after per-file `node_fts NOT IN` sweeps amplified retained snapshot cost. Scoped file/snapshot cleanup already preserved the invariant; after removal, snapshot `1784667715173` published fresh in 34.6 seconds and pruned failed builds. |
 | 2026-07-21 | Fresh Codex app-server and Claude Code clients executed the exact cross-client payload against installed runtime/plugin `0.6.1` | passed | Both selected snapshot `1784667715173`, reported reusable orientation with no blockers and `complete_ranked_universe`, and returned `docs/design/coding-agent-integration-design.md` as `current`/`canonical` with the coding-agent concern match. |
 | 2026-07-21 | Phase 4 focused graph-store and daemon ranking suites; daemon crash-recovery and status-refresh suites; `pnpm typecheck`; plugin, skills, package, and documentation gates; final serial `pnpm test` | passed | Focused acceptance passed 44/44; crash/status process suites passed 28/28; full suite passed 99 files and 1050/1050 tests. The crash fixture now seeds concern evidence so first-read ranking cannot start an unintended refresh, and real-process test budgets match their concurrent full-suite execution cost. |
+| 2026-07-21 | Independent Phase 5 architecture, QA, lifecycle, and operations/security review with repeated re-review | passed after repair | Findings repaired: first-insertion FTS cleanup, no-map public trust, frozen continuation admission, bounded production owner I/O, atomic legacy-universe migration, typed term/owner/overflow environment races, installed-client receipt granularity, snapshot-independent proof, and durable contract wording. Shared generic MCP error-message redaction is separately routed to EB063. |
+| 2026-07-21 | Final focused tests; `pnpm typecheck`; plugin/skills/package gates; uncontended `pnpm test` | passed | Focused run passed 10 files and 191/191 tests. Final full suite passed 99 files and 1061/1061 tests. A prior full run overlapped reviewer test processes and passed 1056/1058 with two daemon timing failures; the uncontended rerun supplied the closure gate. |
+| 2026-07-21 | Candidate `54f1dfe` local package install and source parity | passed | Tarball `auriora-agent-workbench-0.6.1.tgz` SHA-256 `4c4083ec9aa3c4dcfbc02ca56d954638ab55f3f2d6aeac862927499ff82ba356`; installed and repository graph-store source SHA-256 both `3004852f23c4eabc1ebd8c10552e87458d6cae70729a38d0af6a034173c73675`; Codex and repo-local Claude plugins enabled at `0.6.1`. |
+| 2026-07-21 | Final daemon restart and installed-client acceptance | passed with recorded Codex-client limitation | Final-source daemon PID `2881415` completed execution `refresh-10988012-9680-4c29-9785-87d2d8d2b2a0` and published snapshot `1784671161602` fresh/ready. Claude Code `2.1.217` returned `complete_ranked_universe` and the canonical/current coding-agent design with owner evidence. Codex `0.144.6` observed the same runtime/plugin, PID, snapshot, freshness, and readiness; its non-interactive MCP client cancelled two `docs_search` attempts before execution, so complete Codex query parity remains the Phase 4 receipt. |
 
 ## Residual Risks
 
@@ -145,8 +154,8 @@ diagnostic, not parity fields.
 
 | Spec content | Durable destination or deferral | Status | Evidence |
 | --- | --- | --- | --- |
-| Readiness and recovery contracts | runtime contracts and MCP surface design | pending | T007 |
-| Publication/operations behavior | graph-store and runtime operations design | pending | T007 |
+| Readiness and recovery contracts | runtime contracts and MCP surface design | complete | T007; five result shapes, no-map/frozen trust, and recovery promoted |
+| Publication/operations behavior | graph-store and runtime operations design | complete | T007; bounded I/O, atomic migration, and first-insertion cleanup promoted |
 | Map authoring rule | documentation map | complete for Phase 1 | file-only owner rule retained and backlog owner restored |
 | Repository-real extraction proof | `docs/reference/mvp-proof-matrix.md` | complete for Phase 1 | checked-in map and metadata-boundary gate added; final promotion review remains T007 |
 | Operational dogfood evidence | dogfood ledger | complete for Phase 4 | installed two-client acceptance and rebuild repair recorded |
@@ -156,26 +165,26 @@ diagnostic, not parity fields.
 
 - **Cleanup action:** remove after verified promotion
 - **Reason:** Repository policy keeps closed packages out of `docs/specs/`.
-- **Final spec commit:** pending
+- **Final spec commit:** recorded by the closure plan after this evidence commit
 - **Closure log path:** `docs/history/spec-closure-log.md`
-- **Closure log entry updated:** no
-- **Closure cleanup commit:** pending
-- **Active indexes updated:** backlog promotion added; closure pending
-- **Durable docs linked back to evidence where useful:** partial
-- **Residual spec-only content:** implementation coordination until closure
+- **Closure log entry updated:** prepared for closure application
+- **Closure cleanup commit:** resolved after package removal
+- **Active indexes updated:** EB060 closure and archive records accompany removal
+- **Durable docs linked back to evidence where useful:** yes
+- **Residual spec-only content:** none after removal
 
 ## Ship Or Closure Risk
 
-- **Risk level:** medium
+- **Risk level:** low
 - **Breaking change:** no
-- **Blast radius checked:** partial
+- **Blast radius checked:** yes; runtime, graph store, filesystem adapter, MCP presentation, persistence migration, packaging, and live daemon/client paths
 - **Rollback path:** revert readiness contract and preserve structured blocked docs result
-- **Requires human review:** yes
-- **Release notes needed:** yes if public receipts change
-- **Follow-up issue or spec needed:** EB059 and EB061 already own excluded work
+- **Requires human review:** completed through independent MoE review
+- **Release notes needed:** agent-readable unreleased changelog updated; formal release notes remain release-flow work
+- **Follow-up issue or spec needed:** EB059, EB061, EB062, and EB063 own excluded work
 
 ## Readiness Decision
 
-- **Ready for promotion:** no
+- **Ready for promotion:** yes
 - **Ready for release:** no
-- **Ready for closure:** no
+- **Ready for closure:** yes

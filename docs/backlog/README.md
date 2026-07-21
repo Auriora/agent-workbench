@@ -2128,7 +2128,9 @@ Do not promote an item when:
 ### EB060: Ranked Documentation Readiness And First-Read Trust
 
 - Priority: P1
-- Status: promoted to active Spec 044 on 2026-07-21
+- Status: closed through Spec 044 on 2026-07-21; accepted behavior is promoted
+  to the runtime contracts, MCP surface, graph-store and runtime-operations
+  designs, proof matrix, changelog, and dogfood ledger
 - Friction signal: after Spec 043 closed, Claude Code and Codex independently
   called `docs_search` on runtime `0.6.1` against the same published fresh
   snapshot. Both received `blocked_ranking_unavailable`, while
@@ -2169,12 +2171,15 @@ Do not promote an item when:
   - A fixture-backed regression and a real-repository acceptance check SHALL
     prove a published fresh snapshot has ready concern evidence and returns a
     non-blocked authority-aware ranked result for the SessionStart intent query.
-- Promotion target: active
-  [Spec 044](../specs/044-ranked-documentation-readiness-and-first-read-trust/requirements.md)
-  under EB003 and EB048 first-read reliability, with EB054 ranking semantics
-  retained and EB059 capacity/eviction policy explicitly unchanged. Promote
-  accepted behavior to MCP surface design, runtime operations design, runtime
-  contracts, graph-store design, the documentation map, and validation guidance.
+- Promotion target: delivered through removed Spec 044 under EB003 and EB048
+  first-read reliability, with EB054 ranking semantics retained and EB059
+  capacity/eviction policy explicitly unchanged. Durable authority lives in
+  [runtime contracts](../reference/runtime-contracts.md),
+  [MCP surface design](../design/mcp-surface-design.md),
+  [runtime operations design](../design/runtime-operations-design.md),
+  [graph-store design](../design/graph-store-design.md), and the
+  [proof matrix](../reference/mvp-proof-matrix.md); closure history is recorded
+  in the [spec closure log](../history/spec-closure-log.md).
 
 ### EB061: Parser-Route Coverage-Domain Disclosure
 
@@ -2323,9 +2328,10 @@ Do not promote an item when:
 | Diagnostics exclusion truthfulness | EB057, under EB005 diagnostics, EB038 error envelopes, and EB039 shared path policy. |
 | Same-schema runtime upgrade orphan recovery | EB058, under EB036 daemon ownership and EB052 refresh convergence. |
 | Ranked documentation universe population and observability | EB059, under EB054 authority-aware docs ranking, EB009 telemetry, and EB036 daemon ownership. |
-| Ranked documentation readiness and first-read trust | EB060/Spec 044, under EB003, EB048, and EB054 without absorbing EB059 capacity policy. |
+| Ranked documentation readiness and first-read trust | EB060, delivered through removed Spec 044 under EB003, EB048, and EB054 without absorbing EB059 capacity policy. |
 | Parser-route coverage-domain disclosure | EB061, under EB053 and JS/TS capability truthfulness. |
 | Node FTS batch identity deduplication | EB062, under EB014 large-repository scale and graph-store storage invariants. |
+| Shared MCP failure-message redaction | EB063, under EB038 error-envelope consistency and workspace safety. |
 
 ## Immediate Next Specs
 
@@ -2334,10 +2340,8 @@ Do not promote an item when:
   installed-runtime acceptance is already recorded for EB055 through EB057.
 - EB053/Spec 042 and EB054/Spec 043 are closed with durable reference and
   authority-aware documentation-discovery contracts and evidence.
-- Complete EB060/Spec 044 before promoting EB059: a fresh snapshot must expose
-  ranked-documentation readiness and truthful first-read recovery before live
-  universe capacity policy is added.
-- Promote EB059 only after choosing the live-universe cap and
+- EB060/Spec 044 is closed with fresh snapshot readiness and truthful first-read
+  recovery. Promote EB059 only after choosing the live-universe cap and
   cursor-eviction semantics; do not fold an arbitrary capacity constant into
   the closed Spec 043 scope.
   EB014 remains the separate candidate for large-repository completion scale
@@ -2345,3 +2349,5 @@ Do not promote an item when:
 - Keep EB061 in backlog until the parser capability decision chooses explicit
   unsupported-form disclosure or canonical dynamic-import member-call
   extraction.
+- Schedule EB063 as a direct shared-envelope hardening repair before treating
+  generic provider exception messages as uniformly redacted.

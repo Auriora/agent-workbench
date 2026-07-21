@@ -44,11 +44,11 @@ invalid concern map from passing closure.
 
 | Spec content | Durable destination | Promotion status | Notes |
 | --- | --- | --- | --- |
-| Public receipt and recovery semantics | `docs/reference/runtime-contracts.md` | pending | Preserve existing ranking variants. |
-| First-read behavior | `docs/design/mcp-surface-design.md` | pending | Status action must explain blocker. |
-| Refresh versus source repair | `docs/design/runtime-operations-design.md` | pending | No refresh loop. |
-| Concern readiness publication | `docs/design/graph-store-design.md` | pending | Same-snapshot evidence. |
-| Repository-real proof gate | `docs/reference/mvp-proof-matrix.md` | pending | Production extractor, directory-owner, and large-owner boundary fixtures. |
+| Public receipt and recovery semantics | `docs/reference/runtime-contracts.md` | complete | Five ranked result shapes, snapshot readiness, no-map trust, and recovery are explicit. |
+| First-read behavior | `docs/design/mcp-surface-design.md` | complete | Status/orientation/search agree; frozen continuation trust is retained. |
+| Refresh versus source repair | `docs/design/runtime-operations-design.md` | complete | Refresh admission and publication performance boundaries are explicit. |
+| Concern readiness publication | `docs/design/graph-store-design.md` | complete | Same-snapshot evidence, bounded owner reads, atomic universe migration, and FTS cleanup are explicit. |
+| Repository-real proof gate | `docs/reference/mvp-proof-matrix.md` | complete | Production extractor, directory-owner, bounded large-owner, publication, and installed-client gates are durable. |
 
 ## Unchanged Durable Areas
 

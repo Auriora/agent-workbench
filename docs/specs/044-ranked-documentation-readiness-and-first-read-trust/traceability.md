@@ -20,6 +20,9 @@ last_reviewed: 2026-07-21
 | T005 | Requirement 3 | Requirement 3 AC3 | Data Flow, Error Handling | Recovery action | Gate 3 | MCP surface, runtime contracts | none |
 | T006 | Requirement 4 | Requirement 4 AC1-AC4 | Validation Strategy, Operations | Cross-client proof | Gate 4 | ledger, MVP proof matrix | none |
 | T007 | Requirements 1-4; CP-001-CP-003 | Requirement 1 AC1-AC6; Requirement 2 AC1-AC6; Requirement 3 AC1-AC3; Requirement 4 AC1-AC4 | Slice Boundary, Promotion | all | Gate 5 | all promotion targets | none |
+| T007.1 | Requirements 1-4; CP-001-CP-003 | all acceptance criteria | Promotion | Durable promotion | Gate 5 | all promotion targets | none |
+| T007.2 | Requirements 1-4; CP-001-CP-003 | all acceptance criteria | Validation, Operations | Review disposition | Gate 5 | review evidence and EB063 | none |
+| T007.3 | Requirements 1-4; CP-001-CP-003 | all acceptance criteria | Slice Boundary | Closure | Gate 5 | closure log and archive index | none |
 
 ## Requirement To Delivery Matrix
 

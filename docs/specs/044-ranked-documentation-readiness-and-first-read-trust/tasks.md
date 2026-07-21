@@ -187,7 +187,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
 
 ## Phase 5: Promotion, Review, And Closure
 
-- [~] T007 Promote durable behavior, address review, and close the spec.
+- [x] T007 Promote durable behavior, address review, and close the spec.
   - Depends on: T006
   - Requirements: Requirement 1 AC1-AC6; Requirement 2 AC1-AC6;
     Requirement 3 AC1-AC3; Requirement 4 AC1-AC4; CP-001-CP-003
@@ -199,16 +199,32 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
   - Validation: full suite, plugin/skills/package gates, lifecycle lint,
     evidence quality, task audit, closure risk and closure check.
   - Evidence mode: validation
-  - Evidence: Phase 5 started after Phase 4 commit `963066b`; lifecycle
-    inventory is healthy and identifies T007 as the sole dependency-ready task.
+  - Evidence: Phase 5 implementation/promotion candidate `54f1dfe`; independent
+    architecture, QA, lifecycle, and operations/security review findings were
+    repaired and re-reviewed; 10 focused files passed 191/191, the uncontended
+    full suite passed 99 files and 1061/1061 tests, package/plugin/skills gates
+    passed, and the installed final candidate published snapshot
+    `1784671161602` fresh and ranking-ready.
   - Scope boundary: Preserve EB059, EB061, and EB062 as separate backlog
     destinations; do not implement them through this task.
-  - [ ] T007.1 Promote accepted contracts and operational behavior to every
+  - [x] T007.1 Accepted contracts and operational behavior are present in every
     durable target in `change-impact.md`.
-  - [ ] T007.2 Run independent implementation review and all required gates,
-    then address or route every finding.
-  - [ ] T007.3 Reconcile coverage, record closure evidence, and remove the
-    active package under repository policy.
+    - Evidence: Candidate `54f1dfe` updates
+      `docs/reference/runtime-contracts.md`,
+      `docs/design/mcp-surface-design.md`,
+      `docs/design/runtime-operations-design.md`,
+      `docs/design/graph-store-design.md`, and
+      `docs/reference/mvp-proof-matrix.md`; all five promotion rows are
+      `complete`.
+  - [x] T007.2 Independent implementation reviews and all required gates passed;
+    every finding was repaired or routed.
+    - Evidence: Architecture, QA, lifecycle, and operations/security reviewers
+      cleared all blockers; generic shared failure redaction is routed to EB063.
+  - [x] T007.3 Coverage and closure evidence are reconciled; the active package
+    is approved for repository-policy removal.
+    - Evidence: Requirement/property matrices are covered, lifecycle gates are
+      ready for the final pre-removal commit, and EB059/EB061/EB062/EB063 remain
+      durable backlog destinations.
 
 ## Execution Rules
 
