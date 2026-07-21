@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/042-reference-completeness-and-bounded-scan-truthfulness/`
 - **Title:** Reference completeness and bounded-scan truthfulness requirements
 - **Final spec commit:** `2c236a4`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `647c820`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/mcp-surface-design.md`
