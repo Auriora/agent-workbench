@@ -165,7 +165,7 @@ T008 + T010 -> T011 -> T012 -> T013
 
 ## Phase 3: Verification
 
-- [ ] T008 Run focused contract, route, scanner, property, and MCP validation.
+- [x] T008 Run focused contract, route, scanner, property, and MCP validation.
   - Depends on: T007
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
     CP-001, CP-002, CP-003, CP-004, CP-005, CP-006, CP-007, CP-008, CP-009,
@@ -176,9 +176,9 @@ T008 + T010 -> T011 -> T012 -> T013
     declared-byte, and result limits while checking actual-byte observation and
     classified-failure progress without a hidden retry or fallback.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Phase 3 rerun on 2026-07-21 passed V001-V006 and V008 exactly: 50, 35, 38, 16, 7, 22, and 15 tests respectively. V008 directly proves monotonic file-admission timing, file/declared-byte/result bounds, post-read actual-byte observation, and classified-failure progress without fallback.
 
-- [ ] T009 Implement installed provider-plugin smoke coverage.
+- [x] T009 Implement installed provider-plugin smoke coverage.
   - Depends on: T007
   - Requirements: Requirement 4; CP-001, CP-005
   - Files: `scripts/ci/installed-provider-plugin-smoke.mjs`,
@@ -191,9 +191,9 @@ T008 + T010 -> T011 -> T012 -> T013
     roots were removed. The test distinguishes real CLI execution from
     provider-labelled MCP sessions.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: Implemented isolated installed-provider verification with direct Codex app-server JSON-RPC evidence and Claude stream-json correlation. Focused coverage passes 37/37 plus node syntax, typecheck, and whitespace checks; it proves exact installed artifacts and versions, fresh snapshot convergence, exact 12-occurrence/zero-based-column oracle, callable continuation handling, bounded provider discovery, credential isolation/redaction, protocol failures, and process/daemon/socket/install cleanup. Live V011 and V012 passed against Codex CLI 0.144.6 and Claude Code 2.1.216 with package/runtime/plugin 0.6.1; final gate evidence is recorded under T010.
 
-- [ ] T010 Run repository and installed-package gates.
+- [x] T010 Run repository and installed-package gates.
   - Depends on: T009
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
     CP-001, CP-002, CP-003, CP-004, CP-005, CP-006, CP-007, CP-008, CP-009,
@@ -204,7 +204,7 @@ T008 + T010 -> T011 -> T012 -> T013
     provider-plugin smokes. Any unavailable client is a blocking unrun gate,
     not a package-smoke substitute.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: V007 passed typecheck and 88 files/884 tests. V009 passed plugin validation, six owned skill checks, and the 242-entry package dry-run. V010 passed installed package 0.6.1 convergence, queries, and cleanup. Final V011 and V012 passed against real Codex CLI 0.144.6 and Claude Code 2.1.216: both installed the packed 0.6.1 plugin, reported runtime/provider-plugin 0.6.1, returned the exact 12-reference zero-based occurrence oracle, and passed all nine cleanup checks. The provider harness passes 37/37 focused tests, node syntax, typecheck, and whitespace validation.
 
 ## Phase 4: Review, Promotion, And Closure
 
