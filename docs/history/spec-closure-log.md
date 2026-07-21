@@ -3,7 +3,7 @@ title: Spec closure log
 doc_type: history
 status: active
 owner: platform
-last_reviewed: 2026-07-05
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -466,6 +466,35 @@ durable docs, or backlog items instead of restoring removed packages unless a
 historical audit explicitly needs the original scaffolding.
 
 ## Entries
+
+### 2026-07-21 - 044-ranked-documentation-readiness-and-first-read-trust
+
+- **Spec:** `docs/specs/044-ranked-documentation-readiness-and-first-read-trust/`
+- **Title:** Ranked documentation readiness and first-read trust requirements
+- **Final spec commit:** `4303146`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/reference/runtime-contracts.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/design/runtime-operations-design.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/reference/mvp-proof-matrix.md`
+  - `docs/reference/agent-readable-changelog.md`
+  - `docs/reference/dogfood-evidence-ledger.md`
+  - `docs/backlog/README.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Ten focused files with 191 tests and the full 99-file,
+  1061-test suite passed, together with typecheck, plugin, skill, package,
+  lifecycle, independent review, installed-source parity, and live published
+  snapshot `1784671161602` evidence.
+- **Residual risks:**
+  - EB059 owns ranked-universe capacity and eviction.
+  - EB061 owns parser-route coverage disclosure.
+  - EB062 owns duplicate node-FTS batch identity.
+  - EB063 owns generic shared MCP failure-message redaction.
+- **Follow-up:** EB059, EB061, EB062, and EB063.
 
 ### 2026-07-21 - 043-authority-aware-documentation-intent-ranking-and-count-semantics
 
