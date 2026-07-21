@@ -97,10 +97,10 @@ one ranking change.
   - Evidence mode: command
   - Evidence: Delivered graph identity/schema v3, migration-before-publication with rollback-safe failure cleanup, bounded exact documentation-map and owner extraction, snapshot-scoped concern/term/owner state, production startup/debug wiring, and resolved independent review findings. V002 passed 11 tests; V006 passed 50 tests; V007 passed 6 tests; production-path integration passed 51 tests; pnpm typecheck passed; full suite passed 94 files with 933 tests plus 8 expected failures; git diff --check passed.
 
-  - Status: Phase 2 complete; T004 is next.
+  - Status: Phase 2 complete; T004-T005 completed in Phase 3.
 ## Phase 3: Pure Ranking And Frozen Pagination
 
-- [ ] T004 Implement pure concern resolution and deterministic ranking policy.
+- [x] T004 Implement pure concern resolution and deterministic ranking policy.
   - Depends on: T003
   - Requirements: Requirement 1, Requirement 2, Requirement 4; CP-001-CP-003,
     CP-007-CP-008
@@ -117,9 +117,10 @@ one ranking change.
     reasons are deterministic; modules are pure and have no SQLite, workspace,
     or presenter dependency.
   - Evidence mode: command
-  - Evidence: Pending.
+  - Evidence: Pure exact concern resolution and deterministic authority-aware ranking implemented, including ordinal Unicode-safe identity ordering and exhaustive production tuple coverage. V002 passed 14/14; V003 passed 12/12; V007 passed 6/6; typecheck, full suite 95 files/966 tests, and git diff --check passed. Independent Phase 3 review found no remaining T004 blocker.
 
-- [ ] T005 Persist complete ranked universes and page only frozen order.
+  - Status: T004 complete and independently reviewed; T005 is complete.
+- [x] T005 Persist complete ranked universes and page only frozen order.
   - Depends on: T004
   - Requirements: Requirement 3; CP-004-CP-005
   - Acceptance criteria: AC1.9, AC3.1, AC3.2, AC3.3, AC3.4, AC3.5,
@@ -138,8 +139,9 @@ one ranking change.
     stable total order, concatenation equivalence, no duplicates/omissions,
     expiry, identity rejection, and 499/500/501 boundaries.
   - Evidence mode: command
-  - Evidence: Pending.
+  - Evidence: Implemented internal ranked-search orchestration, complete concern evidence retrieval, separately bounded 501-row FTS/owner candidate sources, stable-ID union, immutable snapshot/query/scope/policy-bound SQLite universes, literal scope filtering, canonical expiry, cardinality validation, and continuation from persisted state only. V001 passed 11/11; V005 passed 31/31; V006 passed 50/50; V007 passed 6/6; V008 selected and passed 6/6; typecheck and full suite 95 files/966 tests passed; git diff --check passed. Independent Phase 3 review found no remaining T005 code or architecture blocker.
 
+  - Status: Phase 3 complete; T006 public presentation and production wiring is next.
 ## Phase 4: Presentation And Trust
 
 - [ ] T006 Present rank, compatibility, counts, filters, and trust receipts.

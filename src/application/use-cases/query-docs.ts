@@ -18,22 +18,41 @@ import type {
   DocsSearchRequest,
   DocsSearchResult,
   DocsWarning,
+  DocsRankingCursorPayload,
+  DocsRankingCountReceipt,
   IndexCoverage,
+  RankedDocsSearchResult,
   ResponseMetadata,
   SourceSection
+} from "../../contracts/index.js";
+import {
+  DOCS_RANKING_CANDIDATE_LIMIT,
+  DOCS_RANKING_CONTRACT_VERSION,
+  DOCS_RANKING_POLICY_VERSION,
+  DOCS_RANKING_SCHEMA_VERSION
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
 import {
   catalogSkipReason,
+  normalizeDocumentationConcern,
+  rankDocumentationCandidates,
+  resolveDocumentationConcerns,
   type CatalogSkipReason
 } from "../../domain/policies/index.js";
 import type {
+  DocumentationConcernIndexPort,
   DocsIndexPort,
+  DocsRankingCandidateQueryPort,
+  DocsRankingCursorCodecPort,
   FileCatalogScanPort,
   FileCatalogSkippedPath,
+  RankedDocsUniverseIdentity,
+  RankedDocsUniversePort,
+  RankedDocsUniverseRecord,
   WorkspaceFilePort
 } from "../../ports/index.js";
+import { DocsRankingUnavailableError } from "../../ports/index.js";
 import {
   extractMarkdownDocLinks,
   markdownTitleFromPath,
@@ -51,6 +70,7 @@ import { getCatalogRepoStatus } from "./get-repo-status.js";
 const DOC_ROW_LIMIT = 15000;
 const DIRECT_READ_CAVEAT = "Docs search is routing evidence; use docs_read_section for precise claims.";
 const DOCS_CURSOR_KIND = "docs";
+const RANKED_DOCS_UNIVERSE_TTL_MS = 15 * 60 * 1000;
 
 export type DocsOverviewUseCaseResult = {
   overview: DocsOverview;
@@ -262,6 +282,216 @@ export async function searchDocs(input: {
       coverageNote: result.coverage_note
     })
   };
+}
+
+export async function searchRankedDocs(input: {
+  request: DocsSearchRequest;
+  selected_snapshot_id: string;
+  docs_index: DocsIndexPort;
+  documentation_concerns: DocumentationConcernIndexPort;
+  ranking_candidates: DocsRankingCandidateQueryPort;
+  ranking_cursor_codec: DocsRankingCursorCodecPort;
+  ranked_universes: RankedDocsUniversePort;
+  default_repo_root: string;
+  now_iso8601: string;
+  universe_id: string;
+}): Promise<RankedDocsSearchResult> {
+  const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
+  const normalizedQuery = normalizeDocumentationConcern(input.request.query);
+  if (normalizedQuery.length === 0) {
+    throw new TypeError("Ranked documentation query must contain at least one normalized token.");
+  }
+  const normalizedScopePath = normalizeRankedDocsScopePath(input.request.scope_path);
+  const base = rankedResultBase({
+    repoRoot,
+    snapshotId: input.selected_snapshot_id,
+    query: input.request.query,
+    normalizedQuery,
+    normalizedScopePath
+  });
+
+  if (input.request.cursor !== undefined) {
+    const decoded = input.ranking_cursor_codec.decode(input.request.cursor);
+    if (!decoded.ok) {
+      return rankingUnavailable(
+        base,
+        decoded.code === "cursor_expired" ? "ranked_universe_expired" : "ranking_cursor_invalid"
+      );
+    }
+    const expectedIdentity = rankedUniverseIdentity({
+      snapshotId: input.selected_snapshot_id,
+      normalizedQuery,
+      normalizedScopePath
+    });
+    if (!cursorIdentityEquals(decoded.payload, expectedIdentity)) {
+      return rankingUnavailable(base, "ranking_cursor_invalid");
+    }
+    let universe;
+    try {
+      universe = await input.ranked_universes.get({
+        universe_id: decoded.payload.universe_id,
+        snapshot_id: input.selected_snapshot_id
+      });
+    } catch (error) {
+      if (error instanceof DocsRankingUnavailableError) {
+        return rankingUnavailable(base, "ranked_universe_expired");
+      }
+      throw error;
+    }
+    if (universe === null) return rankingUnavailable(base, "ranked_universe_expired");
+    if (!universeIdentityEquals(universe.identity, expectedIdentity)) {
+      return rankingUnavailable(base, "ranking_cursor_invalid");
+    }
+    if (Date.parse(universe.expires_at) <= Date.parse(input.now_iso8601)) {
+      await input.ranked_universes.delete({ universe_id: universe.universe_id });
+      return rankingUnavailable(base, "ranked_universe_expired");
+    }
+    if (decoded.payload.next_position >= universe.hits.length) {
+      return rankingUnavailable(base, "ranking_cursor_invalid");
+    }
+    return rankedPageResult({
+      base,
+      universe,
+      position: decoded.payload.next_position,
+      pageSize: input.request.max_results,
+      cursorCodec: input.ranking_cursor_codec,
+      counts: { ...universe.counts, returned_page_documents_count: 0 }
+    });
+  }
+
+  try {
+    const concernState = await input.documentation_concerns.getDocumentationConcernIndexState({
+      snapshot_id: input.selected_snapshot_id
+    });
+    if (concernState.status !== "ready" || concernState.state === "invalid") {
+      return rankingUnavailable(base, "ranking_unavailable");
+    }
+    const terms = await input.documentation_concerns.listDocumentationConcernTerms({
+      snapshot_id: input.selected_snapshot_id
+    });
+    if (terms.status !== "ready") {
+      return rankingUnavailable(base, "ranking_unavailable");
+    }
+    const termResolution = resolveDocumentationConcerns({
+      query: input.request.query,
+      terms: terms.rows,
+      owners: []
+    });
+    const concernKeys = [...new Set(termResolution.matches.map(({ concern_key }) => concern_key))].sort();
+    const owners = await input.documentation_concerns.listDocumentationConcernOwners({
+      snapshot_id: input.selected_snapshot_id,
+      concern_keys: concernKeys
+    });
+    if (owners.status !== "ready") {
+      return rankingUnavailable(base, "ranking_unavailable");
+    }
+    const resolution = resolveDocumentationConcerns({
+      query: input.request.query,
+      terms: terms.rows,
+      owners: owners.rows
+    });
+    const [fts, matchedOwners] = await Promise.all([
+      input.ranking_candidates.findFtsCandidates({
+        snapshot_id: input.selected_snapshot_id,
+        normalized_query: normalizedQuery,
+        ...(normalizedScopePath === undefined ? {} : { normalized_scope_path: normalizedScopePath }),
+        max_rows: 501
+      }),
+      input.ranking_candidates.findMatchedOwnerCandidates({
+        snapshot_id: input.selected_snapshot_id,
+        concern_keys: concernKeys,
+        normalized_query: normalizedQuery,
+        ...(normalizedScopePath === undefined ? {} : { normalized_scope_path: normalizedScopePath }),
+        max_rows: 501
+      })
+    ]);
+    const ftsCount = fts.status === "exact" ? fts.candidates.length : undefined;
+    const ownerCount = matchedOwners.status === "exact" ? matchedOwners.candidates.length : undefined;
+    if (fts.status === "overflow" || matchedOwners.status === "overflow") {
+      return rankedOverflowResult({
+        base,
+        docsIndex: input.docs_index,
+        candidates: input.ranking_candidates,
+        repoRoot,
+        snapshotId: input.selected_snapshot_id,
+        normalizedScopePath,
+        ftsCount,
+        ownerCount
+      });
+    }
+    const union = new Map(fts.candidates.map((candidate) => [candidate.stable_document_id, candidate]));
+    for (const candidate of matchedOwners.candidates) {
+      if (!union.has(candidate.stable_document_id)) union.set(candidate.stable_document_id, candidate);
+    }
+    if (union.size > DOCS_RANKING_CANDIDATE_LIMIT) {
+      return rankedOverflowResult({
+        base,
+        docsIndex: input.docs_index,
+        candidates: input.ranking_candidates,
+        repoRoot,
+        snapshotId: input.selected_snapshot_id,
+        normalizedScopePath,
+        ftsCount,
+        ownerCount
+      });
+    }
+    const ranked = rankDocumentationCandidates({
+      query: input.request.query,
+      concern_resolution: resolution,
+      candidates: [...union.values()].map((candidate) => {
+        if (candidate.hit.authority === undefined || candidate.hit.currency_state === undefined) {
+          throw new Error(`Ranking candidate ${candidate.stable_document_id} lacks authority or currency evidence.`);
+        }
+        return {
+          stable_document_id: candidate.stable_document_id,
+          hit: { ...candidate.hit, authority: candidate.hit.authority, currency_state: candidate.hit.currency_state },
+          ...(candidate.lexical_score === undefined ? {} : { lexical_score: candidate.lexical_score }),
+          title_heading_text: candidate.title_heading_text,
+          body_text: candidate.body_text
+        };
+      })
+    });
+    const identity = rankedUniverseIdentity({
+      snapshotId: input.selected_snapshot_id,
+      normalizedQuery,
+      normalizedScopePath
+    });
+    const expiresAt = new Date(Date.parse(input.now_iso8601) + RANKED_DOCS_UNIVERSE_TTL_MS).toISOString();
+    const counts = await rankedCounts({
+      docsIndex: input.docs_index,
+      candidates: input.ranking_candidates,
+      repoRoot,
+      snapshotId: input.selected_snapshot_id,
+      normalizedScopePath,
+      ftsCount: fts.candidates.length,
+      ownerCount: matchedOwners.candidates.length,
+      unionCount: union.size
+    });
+    const { returned_page_documents_count: _returnedPageCount, ...storedCounts } = counts;
+    const universe = {
+      universe_id: input.universe_id,
+      identity,
+      hits: ranked,
+      counts: storedCounts,
+      created_at: input.now_iso8601,
+      expires_at: expiresAt
+    };
+    await input.ranked_universes.purgeExpired({ now_iso8601: input.now_iso8601 });
+    await input.ranked_universes.put({ universe });
+    return rankedPageResult({
+      base,
+      universe,
+      position: 0,
+      pageSize: input.request.max_results,
+      cursorCodec: input.ranking_cursor_codec,
+      counts
+    });
+  } catch (error) {
+    if (error instanceof DocsRankingUnavailableError) {
+      return rankingUnavailable(base, "ranking_unavailable");
+    }
+    throw error;
+  }
 }
 
 export async function getDocsOutline(input: {
@@ -954,6 +1184,236 @@ function publicAuthority(input: ReturnType<typeof classifyMarkdownDoc>) {
     authority: input.authority,
     authority_caveat: input.authority_caveat
   };
+}
+
+type RankedResultBase = {
+  ranking_contract_version: typeof DOCS_RANKING_CONTRACT_VERSION;
+  repo_root: string;
+  snapshot_id: string;
+  query: string;
+  normalized_query: string;
+  normalized_scope_path?: string;
+  ranking_schema_version: typeof DOCS_RANKING_SCHEMA_VERSION;
+  ranking_policy_version: typeof DOCS_RANKING_POLICY_VERSION;
+  warnings: DocsWarning[];
+  next_actions: [];
+};
+
+function rankedResultBase(input: {
+  repoRoot: string;
+  snapshotId: string;
+  query: string;
+  normalizedQuery: string;
+  normalizedScopePath?: string;
+}): RankedResultBase {
+  return {
+    ranking_contract_version: DOCS_RANKING_CONTRACT_VERSION,
+    repo_root: input.repoRoot,
+    snapshot_id: input.snapshotId,
+    query: input.query,
+    normalized_query: input.normalizedQuery,
+    ...(input.normalizedScopePath === undefined ? {} : { normalized_scope_path: input.normalizedScopePath }),
+    ranking_schema_version: DOCS_RANKING_SCHEMA_VERSION,
+    ranking_policy_version: DOCS_RANKING_POLICY_VERSION,
+    warnings: [],
+    next_actions: []
+  };
+}
+
+function rankingUnavailable(
+  base: RankedResultBase,
+  blocker: "ranked_universe_expired" | "ranking_cursor_invalid" | "ranking_unavailable"
+): RankedDocsSearchResult {
+  const trustState = blocker === "ranked_universe_expired"
+    ? "blocked_cursor_stale"
+    : blocker === "ranking_cursor_invalid"
+      ? "blocked_cursor_invalid"
+      : "blocked_ranking_unavailable";
+  return {
+    ...base,
+    status: "blocked",
+    trust_state: trustState,
+    blocker,
+    hits: [],
+    truncated: false
+  };
+}
+
+function rankedUniverseIdentity(input: {
+  snapshotId: string;
+  normalizedQuery: string;
+  normalizedScopePath?: string;
+}): RankedDocsUniverseIdentity {
+  return {
+    snapshot_id: input.snapshotId,
+    normalized_query: input.normalizedQuery,
+    ...(input.normalizedScopePath === undefined ? {} : { normalized_scope_path: input.normalizedScopePath }),
+    retrieval_bound: DOCS_RANKING_CANDIDATE_LIMIT,
+    ranking_schema_version: DOCS_RANKING_SCHEMA_VERSION,
+    ranking_policy_version: DOCS_RANKING_POLICY_VERSION
+  };
+}
+
+function universeIdentityEquals(
+  left: RankedDocsUniverseIdentity,
+  right: RankedDocsUniverseIdentity
+): boolean {
+  return left.snapshot_id === right.snapshot_id &&
+    left.normalized_query === right.normalized_query &&
+    left.normalized_scope_path === right.normalized_scope_path &&
+    left.retrieval_bound === right.retrieval_bound &&
+    left.ranking_schema_version === right.ranking_schema_version &&
+    left.ranking_policy_version === right.ranking_policy_version;
+}
+
+function cursorIdentityEquals(
+  payload: DocsRankingCursorPayload,
+  identity: RankedDocsUniverseIdentity
+): boolean {
+  return payload.version === DOCS_RANKING_CONTRACT_VERSION && universeIdentityEquals(payload, identity);
+}
+
+async function rankedCounts(input: {
+  docsIndex: DocsIndexPort;
+  candidates: DocsRankingCandidateQueryPort;
+  repoRoot: string;
+  snapshotId: string;
+  normalizedScopePath?: string;
+  ftsCount: number;
+  ownerCount: number;
+  unionCount: number;
+}): Promise<DocsRankingCountReceipt> {
+  const [state, searchable] = await Promise.all([
+    input.docsIndex.getState({ repo_root: input.repoRoot, snapshot_id: input.snapshotId }),
+    input.candidates.countSearchableDocuments({
+      snapshot_id: input.snapshotId,
+      ...(input.normalizedScopePath === undefined ? {} : { normalized_scope_path: input.normalizedScopePath })
+    })
+  ]);
+  const docsCoverage = state.coverage?.find(({ evidence_class }) => evidence_class === "docs");
+  const indexed = docsCoverage?.indexed_files ?? state.document_count;
+  const eligible = docsCoverage?.eligible_files_seen ?? indexed;
+  return {
+    ...searchable,
+    fts_candidate_documents_count: input.ftsCount,
+    matched_owner_candidate_documents_count: input.ownerCount,
+    candidate_union_documents_count: input.unionCount,
+    ranked_candidate_universe_count: input.unionCount,
+    returned_page_documents_count: 0,
+    priority_scan_eligible_markdown_files_count: eligible,
+    priority_scan_indexed_markdown_files_count: indexed,
+    priority_scan_skipped_markdown_files_count: Math.max(0, eligible - indexed),
+    searchable_filter_basis: "merged_graph_and_priority_markdown",
+    scope_filter_basis: input.normalizedScopePath === undefined ? "repo_root" : "normalized_scope_path",
+    query_filter_basis: {
+      fts_candidate_documents_count: "normalized_fts_match_within_scope",
+      matched_owner_candidate_documents_count: "exact_matched_concern_owners_within_scope",
+      candidate_union_documents_count: "distinct_fts_and_exact_owner_union_within_scope",
+      ranked_candidate_universe_count: "distinct_fts_and_exact_owner_union_within_scope"
+    },
+    page_filter_basis: "frozen_universe_position_and_requested_page_size",
+    priority_scan_filter_basis: "configured_priority_roots"
+  };
+}
+
+async function rankedOverflowResult(input: {
+  base: RankedResultBase;
+  docsIndex: DocsIndexPort;
+  candidates: DocsRankingCandidateQueryPort;
+  repoRoot: string;
+  snapshotId: string;
+  normalizedScopePath?: string;
+  ftsCount?: number;
+  ownerCount?: number;
+}): Promise<RankedDocsSearchResult> {
+  const [state, searchable] = await Promise.all([
+    input.docsIndex.getState({ repo_root: input.repoRoot, snapshot_id: input.snapshotId }),
+    input.candidates.countSearchableDocuments({
+      snapshot_id: input.snapshotId,
+      ...(input.normalizedScopePath === undefined ? {} : { normalized_scope_path: input.normalizedScopePath })
+    })
+  ]);
+  const docsCoverage = state.coverage?.find(({ evidence_class }) => evidence_class === "docs");
+  const indexed = docsCoverage?.indexed_files ?? state.document_count;
+  const eligible = docsCoverage?.eligible_files_seen ?? indexed;
+  return {
+    ...input.base,
+    status: "blocked",
+    trust_state: "blocked_candidate_overflow",
+    blocker: "candidate_universe_exceeds_limit",
+    hits: [],
+    counts: {
+      ...searchable,
+      ...(input.ftsCount === undefined
+        ? { fts_candidate_count_lower_bound: 501 as const }
+        : { fts_candidate_documents_count: input.ftsCount }),
+      ...(input.ownerCount === undefined
+        ? { matched_owner_candidate_count_lower_bound: 501 as const }
+        : { matched_owner_candidate_documents_count: input.ownerCount }),
+      candidate_union_count_lower_bound: 501,
+      returned_page_documents_count: 0,
+      priority_scan_eligible_markdown_files_count: eligible,
+      priority_scan_indexed_markdown_files_count: indexed,
+      priority_scan_skipped_markdown_files_count: Math.max(0, eligible - indexed),
+      searchable_filter_basis: "merged_graph_and_priority_markdown",
+      scope_filter_basis: input.normalizedScopePath === undefined ? "repo_root" : "normalized_scope_path",
+      query_filter_basis: {
+        fts_candidate_documents_count: "normalized_fts_match_within_scope",
+        matched_owner_candidate_documents_count: "exact_matched_concern_owners_within_scope",
+        candidate_union_documents_count: "distinct_fts_and_exact_owner_union_within_scope",
+        ranked_candidate_universe_count: "distinct_fts_and_exact_owner_union_within_scope"
+      },
+      page_filter_basis: "frozen_universe_position_and_requested_page_size",
+      priority_scan_filter_basis: "configured_priority_roots"
+    },
+    truncated: false
+  };
+}
+
+function rankedPageResult(input: {
+  base: RankedResultBase;
+  universe: RankedDocsUniverseRecord;
+  position: number;
+  pageSize: number;
+  cursorCodec: DocsRankingCursorCodecPort;
+  counts: DocsRankingCountReceipt;
+}): RankedDocsSearchResult {
+  const hits = input.universe.hits.slice(input.position, input.position + input.pageSize);
+  const nextPosition = input.position + hits.length;
+  const hasMore = nextPosition < input.universe.hits.length;
+  return {
+    ...input.base,
+    status: input.universe.hits.length === 0 ? "not_applicable" : "done",
+    trust_state: "complete_ranked_universe",
+    universe_id: input.universe.universe_id,
+    hits: [...hits],
+    counts: { ...input.counts, returned_page_documents_count: hits.length },
+    ...(hasMore
+      ? {
+          cursor: input.cursorCodec.encode({
+            version: DOCS_RANKING_CONTRACT_VERSION,
+            universe_id: input.universe.universe_id,
+            next_position: nextPosition,
+            ...input.universe.identity
+          })
+        }
+      : {}),
+    truncated: hasMore
+  };
+}
+
+function normalizeRankedDocsScopePath(value: string | undefined): string | undefined {
+  if (value === undefined || value === ".") return undefined;
+  const normalized = value.replaceAll("\\", "/").replace(/^\.\/+/, "").replace(/\/+$/u, "");
+  if (
+    normalized.length === 0 ||
+    normalized.startsWith("/") ||
+    normalized.startsWith("../") ||
+    normalized.split("/").some((segment) => segment.length === 0 || segment === "." || segment === "..")
+  ) {
+    throw new TypeError("scope_path must be a contained repo-relative path.");
+  }
+  return normalized;
 }
 
 function normalizeRepoPath(value: string): string {

@@ -301,7 +301,9 @@ export const docsRankingCandidateSchema = z
   .object({
     stable_document_id: z.string().min(1),
     hit: docsSearchHitSchema,
-    lexical_score: z.number().finite().optional()
+    lexical_score: z.number().finite().optional(),
+    title_heading_text: z.string(),
+    body_text: z.string()
   })
   .strict()
   .superRefine((value, context) => {

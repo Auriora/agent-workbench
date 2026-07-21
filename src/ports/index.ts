@@ -44,6 +44,7 @@ import type {
   DocsDocument,
   DocsHeading,
   DocumentationConcernOwnerState,
+  DocsRankingCountReceipt,
   DocsRankingCursorPayload,
   DocsRankingCandidateQueryResult,
   DocsSearchHit,
@@ -514,6 +515,13 @@ export interface DocumentationConcernIndexPort {
 }
 
 export interface DocsRankingCandidateQueryPort {
+  countSearchableDocuments(input: {
+    snapshot_id: string;
+    normalized_scope_path?: string;
+  }): Promise<{
+    searchable_snapshot_documents_count: number;
+    searchable_scope_documents_count: number;
+  }>;
   findFtsCandidates(input: {
     snapshot_id: string;
     normalized_query: string;
@@ -523,9 +531,17 @@ export interface DocsRankingCandidateQueryPort {
   findMatchedOwnerCandidates(input: {
     snapshot_id: string;
     concern_keys: readonly string[];
+    normalized_query: string;
     normalized_scope_path?: string;
     max_rows: 501;
   }): Promise<DocsRankingCandidateQueryResult>;
+}
+
+export class DocsRankingUnavailableError extends Error {
+  public constructor(message: string) {
+    super(message);
+    this.name = "DocsRankingUnavailableError";
+  }
 }
 
 export type DocsRankingCursorDecodeResult =
@@ -546,6 +562,7 @@ export type RankedDocsUniverseRecord = {
   universe_id: string;
   identity: RankedDocsUniverseIdentity;
   hits: readonly RankedDocsSearchHit[];
+  counts: Omit<DocsRankingCountReceipt, "returned_page_documents_count">;
   created_at: string;
   expires_at: string;
 };

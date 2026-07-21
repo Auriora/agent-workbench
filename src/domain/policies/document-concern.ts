@@ -3,7 +3,11 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import type { DocumentationConcernOwnerState } from "../../contracts/index.js";
+import type {
+  DocsConcernMatchEvidence,
+  DocumentationConcernOwnerEvidence,
+  DocumentationConcernOwnerState
+} from "../../contracts/index.js";
 import {
   classifyMarkdownDoc,
   extractMarkdownFrontmatterSignals,
@@ -44,6 +48,28 @@ export type ClassifiedDocumentationConcernOwner = {
   declared_canonical_owner?: string;
 };
 
+export type DocumentationConcernResolution = {
+  normalized_query: string;
+  query_tokens: string[];
+  concern_match_state: "matched" | "no_match";
+  matches: DocsConcernMatchEvidence[];
+};
+
+export type DocumentationConcernResolutionTerm = {
+  concern_key: string;
+  normalized_term: string;
+  token_count: number;
+};
+
+export type DocumentationConcernResolutionOwner = {
+  concern_key: string;
+  mapped_owner_path: string;
+  document_id?: string;
+  owner_state: DocumentationConcernOwnerState;
+  superseded_by?: string;
+  declared_canonical_owner?: string;
+};
+
 export function normalizeDocumentationConcern(value: string): string {
   return value
     .normalize("NFKC")
@@ -55,6 +81,98 @@ export function normalizeDocumentationConcern(value: string): string {
 
 export function documentationConcernKey(label: string): string {
   return normalizeDocumentationConcern(label).split(" ").filter(Boolean).join("-");
+}
+
+export function resolveDocumentationConcerns(input: {
+  query: string;
+  terms: readonly DocumentationConcernResolutionTerm[];
+  owners: readonly DocumentationConcernResolutionOwner[];
+}): DocumentationConcernResolution {
+  const normalizedQuery = normalizeDocumentationConcern(input.query);
+  const queryTokens = normalizedQuery.length === 0 ? [] : normalizedQuery.split(" ");
+  const ownersByConcern = new Map<string, DocumentationConcernOwnerEvidence[]>();
+  for (const owner of input.owners) {
+    const evidence: DocumentationConcernOwnerEvidence = {
+      path: owner.mapped_owner_path,
+      state: owner.owner_state,
+      ...(owner.document_id === undefined ? {} : { document_id: owner.document_id }),
+      ...(owner.superseded_by === undefined ? {} : { superseded_by: owner.superseded_by }),
+      ...(owner.declared_canonical_owner === undefined
+        ? {}
+        : { declared_canonical_owner: owner.declared_canonical_owner })
+    };
+    const current = ownersByConcern.get(owner.concern_key) ?? [];
+    const identity = ownerEvidenceIdentity(evidence);
+    if (!current.some((candidate) => ownerEvidenceIdentity(candidate) === identity)) {
+      current.push(evidence);
+      current.sort(compareOwnerEvidence);
+      ownersByConcern.set(owner.concern_key, current);
+    }
+  }
+
+  const matches = new Map<string, DocsConcernMatchEvidence>();
+  for (const term of input.terms) {
+    const normalizedTerm = normalizeDocumentationConcern(term.normalized_term);
+    if (normalizedTerm.length === 0) continue;
+    const termTokens = normalizedTerm.split(" ");
+    if (term.token_count !== termTokens.length) continue;
+    for (let start = 0; start <= queryTokens.length - termTokens.length; start += 1) {
+      if (!termTokens.every((token, offset) => queryTokens[start + offset] === token)) continue;
+      const key = `${term.concern_key}\u0000${normalizedTerm}\u0000${start}`;
+      matches.set(key, {
+        concern_key: term.concern_key,
+        normalized_term: normalizedTerm,
+        query_token_start: start,
+        query_token_end_exclusive: start + termTokens.length,
+        token_count: termTokens.length,
+        owners: [...(ownersByConcern.get(term.concern_key) ?? [])]
+      });
+    }
+  }
+
+  const orderedMatches = [...matches.values()].sort((left, right) =>
+    right.token_count - left.token_count ||
+    compareOrdinal(left.concern_key, right.concern_key) ||
+    compareOrdinal(firstOwnerPath(left), firstOwnerPath(right)) ||
+    compareOrdinal(left.normalized_term, right.normalized_term) ||
+    left.query_token_start - right.query_token_start
+  );
+  return {
+    normalized_query: normalizedQuery,
+    query_tokens: queryTokens,
+    concern_match_state: orderedMatches.length === 0 ? "no_match" : "matched",
+    matches: orderedMatches
+  };
+}
+
+function ownerEvidenceIdentity(owner: DocumentationConcernOwnerEvidence): string {
+  return [
+    owner.path,
+    owner.state,
+    owner.document_id ?? "",
+    owner.superseded_by ?? "",
+    owner.declared_canonical_owner ?? ""
+  ].join("\u0000");
+}
+
+function compareOwnerEvidence(
+  left: DocumentationConcernOwnerEvidence,
+  right: DocumentationConcernOwnerEvidence
+): number {
+  return compareOrdinal(left.path, right.path) ||
+    compareOrdinal(left.state, right.state) ||
+    compareOrdinal(left.document_id ?? "", right.document_id ?? "") ||
+    compareOrdinal(left.superseded_by ?? "", right.superseded_by ?? "") ||
+    compareOrdinal(left.declared_canonical_owner ?? "", right.declared_canonical_owner ?? "");
+}
+
+function firstOwnerPath(match: DocsConcernMatchEvidence): string {
+  return match.owners[0]?.path ?? "";
+}
+
+function compareOrdinal(left: string, right: string): number {
+  if (left === right) return 0;
+  return left < right ? -1 : 1;
 }
 
 export function parseDocumentationConcernMap(input: {
@@ -147,14 +265,14 @@ export function parseDocumentationConcernMap(input: {
   return {
     status: "complete",
     concerns: [...concerns.values()]
-      .sort((left, right) => left.concern_key.localeCompare(right.concern_key))
+      .sort((left, right) => compareOrdinal(left.concern_key, right.concern_key))
       .map(({ source_line: _sourceLine, ...concern }) => concern),
     terms: [...terms.values()].sort((left, right) =>
-      left.concern_key.localeCompare(right.concern_key) || left.normalized_term.localeCompare(right.normalized_term)
+      compareOrdinal(left.concern_key, right.concern_key) || compareOrdinal(left.normalized_term, right.normalized_term)
     ),
     owners: [...owners.values()].sort((left, right) =>
-      left.concern_key.localeCompare(right.concern_key) ||
-      left.mapped_owner_path.localeCompare(right.mapped_owner_path) ||
+      compareOrdinal(left.concern_key, right.concern_key) ||
+      compareOrdinal(left.mapped_owner_path, right.mapped_owner_path) ||
       left.source_line - right.source_line
     )
   };

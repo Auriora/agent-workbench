@@ -10,7 +10,8 @@ import { describe, expect, it, vi } from "vitest";
 import { extractDocumentationConcernIndex } from "../../src/application/use-cases/document-currency-routing.js";
 import {
   normalizeDocumentationConcern,
-  parseDocumentationConcernMap
+  parseDocumentationConcernMap,
+  resolveDocumentationConcerns
 } from "../../src/domain/policies/index.js";
 import { WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
 import type { WorkspaceFilePort } from "../../src/ports/index.js";
@@ -69,6 +70,104 @@ describe("documentation concern routing fixture", () => {
     for (const stableId of oracle.stable_document_ids) {
       expect(stableId).toBe(canonicalPosixPath(stableId));
       expect(fs.existsSync(path.join(FIXTURE_ROOT, stableId))).toBe(true);
+    }
+  });
+
+  it("resolves exact contiguous terms, preserves every concern, and sorts evidence deterministically", () => {
+    const resolution = resolveDocumentationConcerns({
+      query: "runtime contracts and graph schema shared tie",
+      terms: [
+        { concern_key: "tie-beta", normalized_term: "shared tie", token_count: 2 },
+        { concern_key: "runtime-contracts", normalized_term: "runtime contracts", token_count: 2 },
+        { concern_key: "graph-schema", normalized_term: "graph schema", token_count: 2 },
+        { concern_key: "tie-alpha", normalized_term: "shared tie", token_count: 2 },
+        { concern_key: "ignored-malformed-count", normalized_term: "graph schema", token_count: 1 }
+      ],
+      owners: [
+        {
+          concern_key: "tie-beta",
+          mapped_owner_path: "docs/design/z.md",
+          document_id: "docs/design/z.md",
+          owner_state: "valid"
+        },
+        {
+          concern_key: "tie-alpha",
+          mapped_owner_path: "docs/design/a.md",
+          document_id: "docs/design/a.md",
+          owner_state: "valid"
+        },
+        {
+          concern_key: "runtime-contracts",
+          mapped_owner_path: "docs/reference/runtime-contracts.md",
+          document_id: "docs/reference/runtime-contracts.md",
+          owner_state: "valid"
+        }
+      ]
+    });
+
+    expect(resolution.concern_match_state).toBe("matched");
+    expect(resolution.matches.map(({ concern_key }) => concern_key)).toEqual([
+      "graph-schema",
+      "runtime-contracts",
+      "tie-alpha",
+      "tie-beta"
+    ]);
+    expect(resolution.matches.find(({ concern_key }) => concern_key === "runtime-contracts"))
+      .toMatchObject({
+        normalized_term: "runtime contracts",
+        query_token_start: 0,
+        query_token_end_exclusive: 2,
+        token_count: 2,
+        owners: [{ path: "docs/reference/runtime-contracts.md", state: "valid" }]
+      });
+  });
+
+  it("does not infer substrings, reordered terms, or separated multi-token phrases", () => {
+    const terms = [
+      { concern_key: "coding-agent-integrations", normalized_term: "sessionstart", token_count: 1 },
+      { concern_key: "agent-hooks", normalized_term: "agent hooks", token_count: 2 }
+    ];
+    const owners = [{
+      concern_key: "coding-agent-integrations",
+      mapped_owner_path: "docs/design/coding-agent-integration-design.md",
+      document_id: "docs/design/coding-agent-integration-design.md",
+      owner_state: "valid" as const
+    }];
+
+    for (const query of ["sessionstarter behavior", "hooks agent", "agent quiet hooks"]) {
+      expect(resolveDocumentationConcerns({ query, terms, owners })).toMatchObject({
+        concern_match_state: "no_match",
+        matches: []
+      });
+    }
+    expect(resolveDocumentationConcerns({
+      query: "SessionStart behavior and agent hooks",
+      terms,
+      owners
+    }).matches.map(({ concern_key }) => concern_key)).toEqual([
+      "agent-hooks",
+      "coding-agent-integrations"
+    ]);
+  });
+
+  it("orders distinct canonically equivalent owner paths independently of insertion order", () => {
+    const term = [{ concern_key: "unicode-owner", normalized_term: "runtime", token_count: 1 }];
+    const decomposed = {
+      concern_key: "unicode-owner",
+      mapped_owner_path: "docs/e\u0301.md",
+      document_id: "docs/e\u0301.md",
+      owner_state: "valid" as const
+    };
+    const composed = {
+      concern_key: "unicode-owner",
+      mapped_owner_path: "docs/é.md",
+      document_id: "docs/é.md",
+      owner_state: "valid" as const
+    };
+
+    for (const owners of [[decomposed, composed], [composed, decomposed]]) {
+      expect(resolveDocumentationConcerns({ query: "runtime", terms: term, owners }).matches[0]?.owners
+        .map(({ path: ownerPath }) => ownerPath)).toEqual(["docs/e\u0301.md", "docs/é.md"]);
     }
   });
 

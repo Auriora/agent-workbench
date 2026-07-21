@@ -21,11 +21,15 @@ import type {
 } from "../../domain/models/index.js";
 import type { SnapshotState } from "../../domain/models/runtime.js";
 import type {
+  DocsRankingCandidate,
+  DocsRankingCandidateQueryResult,
   DocsHeading,
   DocsSearchHit,
   Freshness,
-  IndexCoverage
+  IndexCoverage,
+  RankedDocsSearchHit
 } from "../../contracts/index.js";
+import { docsRankingCountReceiptSchema, rankedDocsSearchHitSchema } from "../../contracts/index.js";
 import {
   classifyMarkdownDocCurrency,
   extractMarkdownFrontmatterSignals
@@ -43,6 +47,7 @@ import type {
   DocsIndexSearchRequest,
   DocsIndexSearchResult,
   DocsIndexState,
+  DocsRankingCandidateQueryPort,
   FileCatalogPort,
   GraphMaintenancePort,
   GraphQueryPort,
@@ -52,11 +57,14 @@ import type {
   SnapshotPublicationSelection,
   SnapshotOrphanReconciliationPort,
   RepositoryOwnershipLease,
+  RankedDocsUniversePort,
+  RankedDocsUniverseRecord,
   SnapshotOrphanReconciliationResult,
   SnapshotBuildPort,
   SnapshotPathInventoryPort,
   SnapshotPort
 } from "../../ports/index.js";
+import { DocsRankingUnavailableError } from "../../ports/index.js";
 
 export const SCHEMA_VERSION = GRAPH_STORE_IDENTITY_VERSION;
 
@@ -167,6 +175,20 @@ type DocsSearchRow = {
   selected_text: string;
   mtime_ms: number | null;
   rank_score: number;
+  lexical_score?: number;
+};
+
+type RankedDocsUniverseRow = {
+  universe_id: string;
+  snapshot_id: number;
+  normalized_query: string;
+  normalized_scope_path: string | null;
+  retrieval_bound: number;
+  ranking_schema_version: number;
+  ranking_policy_version: string;
+  counts_json: string;
+  created_at: string;
+  expires_at: string;
 };
 
 type IndexCoverageRow = {
@@ -196,7 +218,9 @@ export interface GraphStore
     FileCatalogPort,
     SnapshotPathInventoryPort,
     DocsIndexPort,
-    DocumentationConcernIndexPort {
+    DocumentationConcernIndexPort,
+    DocsRankingCandidateQueryPort,
+    RankedDocsUniversePort {
   db: Database.Database;
   close(): void;
   validateSchema(): boolean;
@@ -1940,14 +1964,14 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     if (availability.status === "unavailable") {
       return availability;
     }
-    const maxRows = boundedDocumentationConcernRowLimit(input.max_rows);
+    const maxRows = input.max_rows === undefined ? undefined : boundedDocumentationConcernRowLimit(input.max_rows);
     const rows = this.db.prepare(`
       SELECT concern_key, normalized_term, token_count
       FROM documentation_concern_terms
       WHERE snapshot_id = ?
       ORDER BY concern_key ASC, token_count DESC, normalized_term ASC
-      LIMIT ?
-    `).all(availability.snapshotId, maxRows) as DocumentationConcernTermWrite[];
+      ${maxRows === undefined ? "" : "LIMIT ?"}
+    `).all(...(maxRows === undefined ? [availability.snapshotId] : [availability.snapshotId, maxRows])) as DocumentationConcernTermWrite[];
     return { status: "ready", snapshot_id: input.snapshot_id, rows };
   }
 
@@ -1960,7 +1984,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     if (availability.status === "unavailable") {
       return availability;
     }
-    const maxRows = boundedDocumentationConcernRowLimit(input.max_rows);
+    const maxRows = input.max_rows === undefined ? undefined : boundedDocumentationConcernRowLimit(input.max_rows);
     const concernKeys = [...new Set(input.concern_keys ?? [])].sort();
     if (input.concern_keys !== undefined && concernKeys.length === 0) {
       return { status: "ready", snapshot_id: input.snapshot_id, rows: [] };
@@ -1980,11 +2004,11 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       FROM documentation_concern_owners
       WHERE snapshot_id = ?${filters}
       ORDER BY concern_key ASC, mapped_owner_path ASC, source_line ASC
-      LIMIT ?
+      ${maxRows === undefined ? "" : "LIMIT ?"}
     `).all(
       availability.snapshotId,
       ...concernKeys,
-      maxRows
+      ...(maxRows === undefined ? [] : [maxRows])
     ) as Array<{
       concern_key: string;
       mapped_owner_path: string;
@@ -2007,6 +2031,261 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         declared_canonical_owner: row.declared_canonical_owner ?? undefined
       }))
     };
+  }
+
+  public async findFtsCandidates(input: {
+    snapshot_id: string;
+    normalized_query: string;
+    normalized_scope_path?: string;
+    max_rows: 501;
+  }): Promise<DocsRankingCandidateQueryResult> {
+    const snapshotId = this.requirePublishedSnapshotId(input.snapshot_id);
+    const scopePath = assertNormalizedDocsScopePath(input.normalized_scope_path);
+    const ftsQuery = buildDocsFtsQuery(input.normalized_query);
+    if (ftsQuery.length === 0) return { status: "exact", candidates: [] };
+    const rows = this.db.prepare(`
+      SELECT
+        docs_documents.path,
+        docs_documents.title,
+        docs_fts.headings_text,
+        docs_fts.selected_text,
+        files.mtime_ms,
+        bm25(docs_fts, -7.0, -9.0, -6.0, -1.0) AS rank_score,
+        -bm25(docs_fts, -7.0, -9.0, -6.0, -1.0) AS lexical_score
+      FROM docs_fts
+      INNER JOIN docs_documents ON docs_documents.id = docs_fts.rowid
+      LEFT JOIN files ON files.snapshot_id = docs_documents.snapshot_id
+        AND files.path = docs_documents.path
+      WHERE docs_documents.snapshot_id = @snapshotId
+        AND docs_fts MATCH @ftsQuery
+        AND (@scopePath IS NULL OR docs_documents.path = @scopePath
+          OR docs_documents.path LIKE @scopePrefix ESCAPE '\\')
+      ORDER BY lexical_score DESC, docs_documents.path ASC
+      LIMIT @limit
+    `).all({
+      snapshotId,
+      ftsQuery,
+      scopePath: scopePath ?? null,
+      scopePrefix: scopePath === undefined ? null : `${escapeSqlLike(scopePath)}/%`,
+      limit: input.max_rows
+    }) as DocsSearchRow[];
+    if (rows.length === input.max_rows) {
+      return { status: "overflow", candidates: [], candidate_count_lower_bound: 501 };
+    }
+    return {
+      status: "exact",
+      candidates: rows.map((row) => this.mapDocsRankingCandidate({
+        row,
+        query: input.normalized_query,
+        lexicalScore: Number(row.lexical_score)
+      }))
+    };
+  }
+
+  public async countSearchableDocuments(input: {
+    snapshot_id: string;
+    normalized_scope_path?: string;
+  }): Promise<{
+    searchable_snapshot_documents_count: number;
+    searchable_scope_documents_count: number;
+  }> {
+    const snapshotId = this.requirePublishedSnapshotId(input.snapshot_id);
+    const scopePath = assertNormalizedDocsScopePath(input.normalized_scope_path);
+    const row = this.db.prepare(`
+      SELECT
+        COUNT(*) AS snapshot_count,
+        SUM(CASE
+          WHEN @scopePath IS NULL OR path = @scopePath OR path LIKE @scopePrefix ESCAPE '\\' THEN 1
+          ELSE 0
+        END) AS scope_count
+      FROM docs_documents
+      WHERE snapshot_id = @snapshotId
+    `).get({
+      snapshotId,
+      scopePath: scopePath ?? null,
+      scopePrefix: scopePath === undefined ? null : `${escapeSqlLike(scopePath)}/%`
+    }) as { snapshot_count: number; scope_count: number | null };
+    return {
+      searchable_snapshot_documents_count: row.snapshot_count,
+      searchable_scope_documents_count: row.scope_count ?? 0
+    };
+  }
+
+  public async findMatchedOwnerCandidates(input: {
+    snapshot_id: string;
+    concern_keys: readonly string[];
+    normalized_query: string;
+    normalized_scope_path?: string;
+    max_rows: 501;
+  }): Promise<DocsRankingCandidateQueryResult> {
+    const snapshotId = this.requirePublishedSnapshotId(input.snapshot_id);
+    const scopePath = assertNormalizedDocsScopePath(input.normalized_scope_path);
+    const concernKeys = [...new Set(input.concern_keys)].sort();
+    if (concernKeys.length === 0) return { status: "exact", candidates: [] };
+    const rows = this.db.prepare(`
+      SELECT DISTINCT
+        docs_documents.path,
+        docs_documents.title,
+        docs_fts.headings_text,
+        docs_fts.selected_text,
+        files.mtime_ms,
+        0.0 AS rank_score,
+        NULL AS lexical_score
+      FROM documentation_concern_owners
+      INNER JOIN docs_documents
+        ON docs_documents.snapshot_id = documentation_concern_owners.snapshot_id
+       AND docs_documents.path = documentation_concern_owners.document_id
+      INNER JOIN docs_fts ON docs_fts.rowid = docs_documents.id
+      LEFT JOIN files ON files.snapshot_id = docs_documents.snapshot_id
+        AND files.path = docs_documents.path
+      WHERE documentation_concern_owners.snapshot_id = ?
+        AND documentation_concern_owners.concern_key IN (${sqlPlaceholders(concernKeys.length)})
+        AND documentation_concern_owners.document_id IS NOT NULL
+        AND (? IS NULL OR docs_documents.path = ? OR docs_documents.path LIKE ? ESCAPE '\\')
+      ORDER BY docs_documents.path ASC
+      LIMIT ?
+    `).all(
+      snapshotId,
+      ...concernKeys,
+      scopePath ?? null,
+      scopePath ?? null,
+      scopePath === undefined ? null : `${escapeSqlLike(scopePath)}/%`,
+      input.max_rows
+    ) as DocsSearchRow[];
+    if (rows.length === input.max_rows) {
+      return { status: "overflow", candidates: [], candidate_count_lower_bound: 501 };
+    }
+    return {
+      status: "exact",
+      candidates: rows.map((row) => this.mapDocsRankingCandidate({
+        row,
+        query: input.normalized_query
+      }))
+    };
+  }
+
+  public async put(input: { universe: RankedDocsUniverseRecord }): Promise<void> {
+    const { universe } = input;
+    if (universe.universe_id.length === 0) throw new TypeError("Ranked documentation universe id is required.");
+    const snapshotId = this.requirePublishedSnapshotId(universe.identity.snapshot_id);
+    if (universe.hits.length > 500) throw new RangeError("Ranked documentation universe exceeds 500 hits.");
+    const createdAt = requireCanonicalUtcIso8601(universe.created_at, "created_at");
+    const expiresAt = requireCanonicalUtcIso8601(universe.expires_at, "expires_at");
+    if (createdAt >= expiresAt) {
+      throw new TypeError("Ranked documentation universe expiry must follow creation.");
+    }
+    const identities = universe.hits.map((hit) => hit.final_rank_components.stable_document_id);
+    if (new Set(identities).size !== identities.length) {
+      throw new Error("Ranked documentation universe contains duplicate stable document ids.");
+    }
+    const parsedCounts = docsRankingCountReceiptSchema.parse({
+      ...universe.counts,
+      returned_page_documents_count: 0
+    });
+    if (universe.hits.length !== parsedCounts.ranked_candidate_universe_count) {
+      throw new Error("Ranked documentation universe hit count must equal its ranked candidate count.");
+    }
+    const { returned_page_documents_count: _returnedPageCount, ...storedCounts } = parsedCounts;
+    const insert = this.db.transaction(() => {
+      this.db.prepare(`
+        INSERT INTO ranked_docs_universes (
+          universe_id, snapshot_id, normalized_query, normalized_scope_path,
+          retrieval_bound, ranking_schema_version, ranking_policy_version,
+          counts_json, created_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        universe.universe_id,
+        snapshotId,
+        universe.identity.normalized_query,
+        universe.identity.normalized_scope_path ?? null,
+        universe.identity.retrieval_bound,
+        universe.identity.ranking_schema_version,
+        universe.identity.ranking_policy_version,
+        JSON.stringify(storedCounts),
+        universe.created_at,
+        universe.expires_at
+      );
+      const insertHit = this.db.prepare(`
+        INSERT INTO ranked_docs_universe_hits (
+          universe_id, position, stable_document_id, hit_json
+        ) VALUES (?, ?, ?, ?)
+      `);
+      universe.hits.forEach((hit, position) => {
+        const parsed = rankedDocsSearchHitSchema.parse(hit);
+        insertHit.run(universe.universe_id, position, parsed.path, JSON.stringify(parsed));
+      });
+    });
+    insert.immediate();
+  }
+
+  public async get(input: {
+    universe_id: string;
+    snapshot_id: string;
+  }): Promise<RankedDocsUniverseRecord | null> {
+    const snapshotId = this.requirePublishedSnapshotId(input.snapshot_id);
+    const row = this.db.prepare(`
+      SELECT universe_id, snapshot_id, normalized_query, normalized_scope_path,
+             retrieval_bound, ranking_schema_version, ranking_policy_version,
+             counts_json, created_at, expires_at
+      FROM ranked_docs_universes
+      WHERE universe_id = ? AND snapshot_id = ?
+    `).get(input.universe_id, snapshotId) as RankedDocsUniverseRow | undefined;
+    if (row === undefined) return null;
+    const hits = this.db.prepare(`
+      SELECT hit_json FROM ranked_docs_universe_hits
+      WHERE universe_id = ?
+      ORDER BY position ASC
+    `).all(input.universe_id) as Array<{ hit_json: string }>;
+    const parsedCounts = docsRankingCountReceiptSchema.parse({
+      ...(JSON.parse(row.counts_json) as object),
+      returned_page_documents_count: 0
+    });
+    if (hits.length !== parsedCounts.ranked_candidate_universe_count) {
+      throw new Error("Persisted ranked documentation universe cardinality is inconsistent.");
+    }
+    const { returned_page_documents_count: _returnedPageCount, ...counts } = parsedCounts;
+    return {
+      universe_id: row.universe_id,
+      identity: {
+        snapshot_id: String(row.snapshot_id),
+        normalized_query: row.normalized_query,
+        ...(row.normalized_scope_path === null ? {} : { normalized_scope_path: row.normalized_scope_path }),
+        retrieval_bound: row.retrieval_bound as 500,
+        ranking_schema_version: row.ranking_schema_version as 1,
+        ranking_policy_version: row.ranking_policy_version as "authority-aware-v1"
+      },
+      hits: hits.map(({ hit_json: hitJson }) =>
+        rankedDocsSearchHitSchema.parse(JSON.parse(hitJson) as RankedDocsSearchHit)),
+      counts,
+      created_at: row.created_at,
+      expires_at: row.expires_at
+    };
+  }
+
+  public async delete(input: { universe_id: string }): Promise<void> {
+    const remove = this.db.transaction(() => {
+      this.db.prepare("DELETE FROM ranked_docs_universe_hits WHERE universe_id = ?").run(input.universe_id);
+      this.db.prepare("DELETE FROM ranked_docs_universes WHERE universe_id = ?").run(input.universe_id);
+    });
+    remove.immediate();
+  }
+
+  public async purgeExpired(input: { now_iso8601: string }): Promise<number> {
+    requireCanonicalUtcIso8601(input.now_iso8601, "now_iso8601");
+    const expired = this.db.prepare(`
+      SELECT universe_id FROM ranked_docs_universes
+      WHERE expires_at <= ?
+      ORDER BY expires_at ASC, universe_id ASC
+    `).all(input.now_iso8601) as Array<{ universe_id: string }>;
+    if (expired.length === 0) return 0;
+    const purge = this.db.transaction(() => {
+      const ids = expired.map(({ universe_id }) => universe_id);
+      const placeholders = sqlPlaceholders(ids.length);
+      this.db.prepare(`DELETE FROM ranked_docs_universe_hits WHERE universe_id IN (${placeholders})`).run(...ids);
+      this.db.prepare(`DELETE FROM ranked_docs_universes WHERE universe_id IN (${placeholders})`).run(...ids);
+    });
+    purge.immediate();
+    return expired.length;
   }
 
   public async getState(input: { repo_root: string; snapshot_id?: string }): Promise<DocsIndexState> {
@@ -2287,6 +2566,14 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     return row?.publication_state === "published" ? row.id : null;
   }
 
+  private requirePublishedSnapshotId(snapshotId: string): number {
+    const resolved = this.resolvePublishedSnapshotId(snapshotId);
+    if (resolved === null) {
+      throw new DocsRankingUnavailableError(`Published graph snapshot is unavailable: ${snapshotId}`);
+    }
+    return resolved;
+  }
+
   private getDocumentationConcernAvailability(snapshotId: string):
     | {
         status: "ready";
@@ -2521,6 +2808,13 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       return;
     }
     const placeholders = sqlPlaceholders(snapshotIds.length);
+    this.db.prepare(`
+      DELETE FROM ranked_docs_universe_hits
+      WHERE universe_id IN (
+        SELECT universe_id FROM ranked_docs_universes WHERE snapshot_id IN (${placeholders})
+      )
+    `).run(...snapshotIds);
+    this.db.prepare(`DELETE FROM ranked_docs_universes WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
     this.db.prepare(`DELETE FROM documentation_concern_owners WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
     this.db.prepare(`DELETE FROM documentation_concern_terms WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
     this.db.prepare(`DELETE FROM documentation_concerns WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
@@ -2706,6 +3000,23 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     };
   }
 
+  private mapDocsRankingCandidate(input: {
+    row: DocsSearchRow;
+    query: string;
+    lexicalScore?: number;
+  }): DocsRankingCandidate {
+    const hit = this.mapDocsSearchRow({ row: input.row, query: input.query, includeSnippets: false });
+    return {
+      stable_document_id: hit.path,
+      hit: input.lexicalScore === undefined
+        ? { ...hit, evidence_kinds: ["docs"] }
+        : hit,
+      ...(input.lexicalScore === undefined ? {} : { lexical_score: input.lexicalScore }),
+      title_heading_text: `${input.row.title}\n${input.row.headings_text}`,
+      body_text: input.row.selected_text
+    };
+  }
+
   private parseNumericId(value: string): number | null {
     if (!/^-?\d+$/.test(value)) {
       return null;
@@ -2865,6 +3176,27 @@ function normalizeDocsScopePath(value: string | undefined): string | undefined {
   return normalized;
 }
 
+function assertNormalizedDocsScopePath(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  if (
+    value.length === 0 ||
+    value === "." ||
+    value.startsWith("/") ||
+    value.startsWith("./") ||
+    value.startsWith("../") ||
+    value.endsWith("/") ||
+    value.includes("\\") ||
+    value.split("/").some((segment) => segment.length === 0 || segment === "." || segment === "..")
+  ) {
+    throw new TypeError("normalized_scope_path must be a canonical repo-relative POSIX path.");
+  }
+  return value;
+}
+
+function escapeSqlLike(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("%", "\\%").replaceAll("_", "\\_");
+}
+
 function sqlPlaceholders(count: number): string {
   return Array.from({ length: count }, () => "?").join(", ");
 }
@@ -2875,6 +3207,14 @@ function boundedDocumentationConcernRowLimit(value: number | undefined): number 
     throw new RangeError("Documentation concern row limit must be an integer from 1 to 501.");
   }
   return limit;
+}
+
+function requireCanonicalUtcIso8601(value: string, field: string): number {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString() !== value) {
+    throw new TypeError(`${field} must be a canonical UTC ISO-8601 timestamp.`);
+  }
+  return timestamp;
 }
 
 function slugifyDocsHeading(value: string): string {
@@ -3096,6 +3436,29 @@ function migrate(db: Database.Database): void {
       )
     );
 
+    CREATE TABLE IF NOT EXISTS ranked_docs_universes (
+      universe_id TEXT PRIMARY KEY CHECK (length(universe_id) > 0),
+      snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
+      normalized_query TEXT NOT NULL CHECK (length(normalized_query) > 0),
+      normalized_scope_path TEXT,
+      retrieval_bound INTEGER NOT NULL CHECK (retrieval_bound = 500),
+      ranking_schema_version INTEGER NOT NULL CHECK (ranking_schema_version = 1),
+      ranking_policy_version TEXT NOT NULL CHECK (ranking_policy_version = 'authority-aware-v1'),
+      counts_json TEXT NOT NULL CHECK (length(counts_json) > 0),
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      CHECK (expires_at > created_at)
+    );
+
+    CREATE TABLE IF NOT EXISTS ranked_docs_universe_hits (
+      universe_id TEXT NOT NULL REFERENCES ranked_docs_universes(universe_id) ON DELETE CASCADE,
+      position INTEGER NOT NULL CHECK (position >= 0 AND position < 500),
+      stable_document_id TEXT NOT NULL CHECK (length(stable_document_id) > 0),
+      hit_json TEXT NOT NULL CHECK (length(hit_json) > 0),
+      PRIMARY KEY(universe_id, position),
+      UNIQUE(universe_id, stable_document_id)
+    );
+
     CREATE TABLE IF NOT EXISTS snapshot_index_coverage (
       id INTEGER PRIMARY KEY,
       snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
@@ -3150,6 +3513,12 @@ function migrate(db: Database.Database): void {
       ON documentation_concern_owners(snapshot_id, document_id);
     CREATE INDEX IF NOT EXISTS idx_documentation_concern_owners_snapshot_state
       ON documentation_concern_owners(snapshot_id, owner_state);
+    CREATE INDEX IF NOT EXISTS idx_ranked_docs_universes_snapshot
+      ON ranked_docs_universes(snapshot_id);
+    CREATE INDEX IF NOT EXISTS idx_ranked_docs_universes_expiry
+      ON ranked_docs_universes(expires_at, universe_id);
+    CREATE INDEX IF NOT EXISTS idx_ranked_docs_universe_hits_document
+      ON ranked_docs_universe_hits(universe_id, stable_document_id);
 
     INSERT OR IGNORE INTO schema_migrations(version) VALUES (${SCHEMA_VERSION});
   `);
@@ -3224,7 +3593,9 @@ function validateSchema(db: Database.Database): boolean {
     "documentation_concern_index_state",
     "documentation_concerns",
     "documentation_concern_terms",
-    "documentation_concern_owners"
+    "documentation_concern_owners",
+    "ranked_docs_universes",
+    "ranked_docs_universe_hits"
   ];
   const rows = db
     .prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'virtual table')")

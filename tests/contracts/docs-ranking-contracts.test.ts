@@ -267,6 +267,9 @@ describe("authority-aware docs ranking contracts", () => {
 
   it("keeps future candidate and frozen-universe ports separate from the legacy docs index", async () => {
     const candidatePort: DocsRankingCandidateQueryPort = {
+      async countSearchableDocuments() {
+        return { searchable_snapshot_documents_count: 1, searchable_scope_documents_count: 1 };
+      },
       async findFtsCandidates() { return { status: "exact", candidates: [] }; },
       async findMatchedOwnerCandidates() {
         return { status: "overflow", candidates: [], candidate_count_lower_bound: 501 };
@@ -287,6 +290,7 @@ describe("authority-aware docs ranking contracts", () => {
     expect(await candidatePort.findMatchedOwnerCandidates({
       snapshot_id: "snapshot-1",
       concern_keys: ["coding-agent-integrations"],
+      normalized_query: "sessionstart",
       max_rows: DOCS_RANKING_OVERFLOW_SENTINEL
     })).toEqual({ status: "overflow", candidates: [], candidate_count_lower_bound: 501 });
     expect(await universePort.get({ universe_id: "missing", snapshot_id: "snapshot-1" })).toBeNull();
@@ -297,11 +301,15 @@ describe("authority-aware docs ranking contracts", () => {
     expect(docsRankingCandidateSchema.parse({
       stable_document_id: hit.path,
       hit,
-      lexical_score: -2
+      lexical_score: -2,
+      title_heading_text: "Runtime design",
+      body_text: "SessionStart behavior"
     }).stable_document_id).toBe(hit.path);
     expect(docsRankingCandidateSchema.safeParse({
       stable_document_id: "docs/design/other.md",
-      hit
+      hit,
+      title_heading_text: "Runtime design",
+      body_text: "SessionStart behavior"
     }).success).toBe(false);
     expect(docsRankingCandidateQueryResultSchema.parse({
       status: "overflow",
