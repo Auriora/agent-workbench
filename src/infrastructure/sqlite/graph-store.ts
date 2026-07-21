@@ -938,8 +938,6 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         });
       }
 
-      this.db.prepare("DELETE FROM node_fts WHERE node_id NOT IN (SELECT id FROM nodes)").run();
-
       const insertEdge = this.db.prepare(`
         INSERT INTO edges (
           source_node_id,

@@ -1710,6 +1710,81 @@ describe("graph store", () => {
     }
   });
 
+  it("does not perform a repository-wide FTS orphan sweep for every file replacement", () => {
+    const source = fs.readFileSync(
+      path.resolve("src/infrastructure/sqlite/graph-store.ts"),
+      "utf8"
+    );
+
+    expect(source).not.toContain("DELETE FROM node_fts WHERE node_id NOT IN (SELECT id FROM nodes)");
+  });
+
+  it("keeps replacement cleanup scoped to the changed file across retained snapshots", async () => {
+    const store = openGraphStore(path.join(dir, "scoped-replace.sqlite"));
+    const retainedSnapshot = snapshotState("451");
+    const buildingSnapshot = snapshotState("452");
+
+    try {
+      await createBuildingSnapshot(store, { ...retainedSnapshot, freshness: "refreshing" });
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: retainedSnapshot.id,
+          source_path: "src/retained.py",
+          node_id: "retained-node",
+          name: "RetainedName"
+        }),
+        replace: true
+      });
+      await publishBuildingSnapshot(store, retainedSnapshot.id);
+
+      await createBuildingSnapshot(store, { ...buildingSnapshot, freshness: "refreshing" });
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: buildingSnapshot.id,
+          source_path: "src/unchanged.py",
+          node_id: "unchanged-node",
+          name: "UnchangedName"
+        }),
+        replace: true
+      });
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: buildingSnapshot.id,
+          source_path: "src/changed.py",
+          node_id: "stale-node",
+          name: "StaleName"
+        }),
+        replace: true
+      });
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: buildingSnapshot.id,
+          source_path: "src/changed.py",
+          node_id: "replacement-node",
+          name: "ReplacementName"
+        }),
+        replace: true
+      });
+      await publishBuildingSnapshot(store, buildingSnapshot.id);
+
+      expect(store.db.prepare(`
+        SELECT node_id
+        FROM node_fts
+        ORDER BY node_id
+      `).all()).toEqual([
+        { node_id: "replacement-node" },
+        { node_id: "retained-node" },
+        { node_id: "unchanged-node" }
+      ]);
+      expect(await store.searchNodes({
+        snapshot_id: buildingSnapshot.id,
+        query: "StaleName"
+      })).toEqual([]);
+    } finally {
+      store.close();
+    }
+  });
+
   it("cleans deleted and renamed file evidence through graph ports", async () => {
     const store = openGraphStore(path.join(dir, "cleanup.sqlite"));
     const snapshot = snapshotState("46");

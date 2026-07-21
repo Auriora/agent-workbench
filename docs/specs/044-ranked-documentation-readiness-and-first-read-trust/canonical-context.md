@@ -59,6 +59,7 @@ implementation slice.
 | removed Spec 043 package | Historical delivery scaffolding | Use the closure log and Git history only for audit. |
 | EB059 | Separate capacity/eviction decision | Do not fold into Spec 044. |
 | EB061 | Separate reference capability decision | Do not fold into Spec 044. |
+| EB062 | Separate node-FTS identity and storage repair | Do not fold into Spec 044. |
 
 ## Promotion Map
 

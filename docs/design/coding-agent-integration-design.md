@@ -1,9 +1,9 @@
 ---
 title: Coding agent integration design
 doc_type: design
-status: draft
+status: current
 owner: platform
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---

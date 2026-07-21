@@ -203,6 +203,7 @@ compatibility mode.
 | Ranking readiness and first-read truth | Status, orientation, docs recovery, tests | Ranked-universe capacity | EB059 | no |
 | Repository-real map validation | Production extractor regression | Generic docs lint framework redesign | backlog only if needed | no |
 | Reference capability disclosure | none | Dynamic-import/member-call policy | EB061 | no |
+| Node FTS batch identity | none | Duplicate node selection and FTS deduplication | EB062 | no |
 
 ## Validation Strategy
 

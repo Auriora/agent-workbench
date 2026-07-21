@@ -2209,6 +2209,30 @@ Do not promote an item when:
   support-versus-disclosure decision. Do not reopen Spec 042 or weaken its
   route-exhaustion and bounded-scan truthfulness guarantees.
 
+### EB062: Node FTS Batch Identity Deduplication
+
+- Priority: P2
+- Status: proposed; discovered during Spec 044 Phase 4 publication timeout RCA
+- Friction signal: after failed snapshots were pruned, the live graph store
+  retained 58,190 `node_fts` rows for 42,348 distinct node identities. An
+  extraction batch can upsert one node identity repeatedly into `nodes` while
+  appending every occurrence to contentless FTS, inflating search storage and
+  future rebuild work.
+- Runtime surface: graph extraction batch normalization, node persistence,
+  node FTS identity, and snapshot storage accounting.
+- Acceptance:
+  - Define one deterministic node record per node identity within an extraction
+    batch before both relational and FTS writes.
+  - Preserve the selected declaration metadata explicitly when duplicate
+    identities disagree; do not silently rely on SQLite upsert order.
+  - Prove node and `node_fts` cardinality agree for duplicate-ID fixtures,
+    replacement, failed-build retention, and snapshot pruning.
+  - Add bounded store telemetry or diagnostics only if an existing aggregate
+    surface owns it; do not expose raw symbol content.
+- Promotion target: direct graph-store/extraction repair under EB014 scale and
+  graph-store design. Create a focused spec only if duplicate selection policy
+  requires a new public semantic contract.
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |
@@ -2274,6 +2298,7 @@ Do not promote an item when:
 | Ranked documentation universe population and observability | EB059, under EB054 authority-aware docs ranking, EB009 telemetry, and EB036 daemon ownership. |
 | Ranked documentation readiness and first-read trust | EB060/Spec 044, under EB003, EB048, and EB054 without absorbing EB059 capacity policy. |
 | Parser-route coverage-domain disclosure | EB061, under EB053 and JS/TS capability truthfulness. |
+| Node FTS batch identity deduplication | EB062, under EB014 large-repository scale and graph-store storage invariants. |
 
 ## Immediate Next Specs
 

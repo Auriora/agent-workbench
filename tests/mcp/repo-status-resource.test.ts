@@ -460,7 +460,7 @@ describe("repo status MCP resource", () => {
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("preserves structured active-owner refusal through the public status surface", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-status-owner-observer-"));

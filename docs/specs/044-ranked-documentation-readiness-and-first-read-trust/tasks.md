@@ -154,7 +154,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
 
 ## Phase 4: Cross-Client Acceptance
 
-- [ ] T006 Prove published-snapshot and installed-client behavior.
+- [x] T006 Prove published-snapshot and installed-client behavior.
   - Depends on: T005
   - Requirements: Requirement 4 AC1-AC4, CP-001, SC-004
   - Files: daemon/MCP integration tests, `verification.md`, dogfood ledger
@@ -163,12 +163,27 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
     Code execute the pinned request and agree on the required fields.
   - Validation: focused tests, full CI gates, repo-local package install, client reload.
   - Evidence mode: validation
-  - Evidence: Pending.
-  - [ ] T006.1 Prove one published-snapshot status/orientation/docs-search chain
+  - Evidence: Phase 4 completed against published fresh snapshot
+    `1784667715173`. Codex `0.144.6` and Claude Code `2.1.216`, both using
+    runtime/provider plugin `0.6.1`, returned the same snapshot, reusable
+    orientation, no material blockers, `complete_ranked_universe`, and the
+    current/canonical coding-agent integration design from the exact pinned
+    request. The real-repository rebuild initially exposed a per-file global
+    FTS sweep that exhausted the unchanged 60-second worker deadline; scoped
+    cleanup repaired the root cause and the accepted rebuild published in
+    34.6 seconds.
+  - [x] T006.1 Prove one published-snapshot status/orientation/docs-search chain
     through daemon and MCP integration tests using the request and comparison
     contract in `verification.md#cross-client-acceptance-payload`.
-  - [ ] T006.2 Install and reload the repo-local package for Codex acceptance.
-  - [ ] T006.3 Install and reload the repo-local package for Claude Code acceptance.
+    - Evidence: `tests/mcp/daemon-docs-ranking-integration.test.ts` proves two
+      provider sessions share one daemon and ranking-ready published snapshot,
+      then compares the pinned result fields.
+  - [x] T006.2 Install and reload the repo-local package for Codex acceptance.
+    - Evidence: Repo-local Codex plugin and repaired package installed at
+      `0.6.1`; fresh app-server acceptance selected snapshot `1784667715173`.
+  - [x] T006.3 Install and reload the repo-local package for Claude Code acceptance.
+    - Evidence: Local Claude plugin and repaired package installed at `0.6.1`;
+      fresh Claude Code acceptance selected the same snapshot and fields.
 
 ## Phase 5: Promotion, Review, And Closure
 
@@ -184,8 +199,8 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
     evidence quality, task audit, closure risk and closure check.
   - Evidence mode: validation
   - Evidence: Pending.
-  - Scope boundary: Preserve EB059 and EB061 as separate backlog destinations; do
-    not implement them through this task.
+  - Scope boundary: Preserve EB059, EB061, and EB062 as separate backlog
+    destinations; do not implement them through this task.
   - [ ] T007.1 Promote accepted contracts and operational behavior to every
     durable target in `change-impact.md`.
   - [ ] T007.2 Run independent implementation review and all required gates,

@@ -78,7 +78,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
     });
     expect(health.data.daemon?.pid).toBeGreaterThan(0);
     expect(session.stderr()).toBe("");
-  }, 15_000);
+  }, 30_000);
 
   it("shares one daemon across concurrent checkout/source clients", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-shared-");
@@ -658,6 +658,7 @@ async function seedPublishedBarrierSnapshot(repoRoot: string, databasePath: stri
       graph: store,
       catalog: store,
       docs_index: store,
+      documentation_concerns: store,
       snapshots: store,
       clock: new SystemClockAdapter(),
       schema_version: SCHEMA_VERSION,

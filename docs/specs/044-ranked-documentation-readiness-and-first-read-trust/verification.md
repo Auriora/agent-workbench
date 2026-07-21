@@ -22,7 +22,7 @@ installed-runtime acceptance.
 | Gate 1: Worktree map recovery and repository-real regression | yes | passed | T001-T002: production extraction complete; focused suite 26/26 |
 | Gate 2: Snapshot-bound status readiness | yes | passed | T003: exhaustive readiness, trust, recovery, snapshot identity, and presentation-safety regressions pass |
 | Gate 3: Orientation and recovery agreement | yes | passed | T004-T005: exact-snapshot orientation trust, bounded refresh admission, and executable docs-search recovery agree |
-| Gate 4: Published snapshot and two-client acceptance | yes | pending | T006 |
+| Gate 4: Published snapshot and two-client acceptance | yes | passed | T006: snapshot `1784667715173`; Codex and Claude parity |
 | Gate 5: Full validation, promotion, and closure review | yes | pending | T007 |
 
 ## Validation Commands
@@ -31,11 +31,11 @@ installed-runtime acceptance.
 | --- | --- | --- | --- |
 | focused concern-routing and map-index tests | Production extractor and invalid owner behavior | pending | T001-T002 |
 | focused status, orientation, docs ranking, refresh, and MCP tests | Public readiness and recovery | passed for Phase 3 | T004-T005: 131/131 tests passed |
-| `pnpm typecheck` | TypeScript contracts and wiring | passed for Phase 3 | T004-T005 |
-| `pnpm test` | Full regression suite | passed for Phase 3 | T004-T005; Vitest exited successfully |
-| `pnpm run validate:plugin` | Packaged MCP/provider wiring | pending | T006-T007 |
-| `pnpm run validate:skills` | Packaged skill integrity | pending | T007 |
-| `pnpm run pack:dry-run` | Distribution contents | pending | T007 |
+| `pnpm typecheck` | TypeScript contracts and wiring | passed for Phase 4 | T006 |
+| `pnpm test` | Full regression suite | passed for Phase 4 | 99 files; 1050/1050 tests |
+| `pnpm run validate:plugin` | Packaged MCP/provider wiring | passed for Phase 4 | T006 |
+| `pnpm run validate:skills` | Packaged skill integrity | passed for Phase 4 | 6 owned files; no errors or warnings |
+| `pnpm run pack:dry-run` | Distribution contents | passed for Phase 4 | package `0.6.1`; 246 entries |
 | lifecycle lint, task audit, evidence quality, closure checks | Spec readiness and closure | pending | T001, T007 |
 
 ## Production Extractor Command
@@ -83,13 +83,13 @@ diagnostic, not parity fields.
 | Requirement 1 | AC1-AC6 | T001-T002: repository-real worktree map candidate complete with restored backlog owner; bounded metadata and invalid-owner regressions pass | revision-bound evidence follows the Phase 1 commit |
 | Requirement 2 | AC1-AC6 | T003: strict readiness receipt; one selected-snapshot state read; exhaustive persisted/unavailable/store-failure mapping; non-blocking `no_map`; docs-search identity guards; public redaction and 512-byte cap | installed-runtime publication remains T006, not a Requirement 2 implementation gap |
 | Requirement 3 | AC1-AC3 | T004-T005: blocked ranking evidence makes orientation non-reusable; only refresh recovery admits the coordinator; the callable status action returns the same snapshot/category/recovery | installed-client acceptance remains T006 |
-| Requirement 4 | pending | T006 | installed provider reload and convergence |
+| Requirement 4 | AC1-AC4 | T006: fresh ranking-ready snapshot `1784667715173`; exact pinned query; Codex/Claude snapshot and field parity | none identified |
 
 ## Correctness Property Coverage
 
 | Property | Covered by | Evidence | Residual risk |
 | --- | --- | --- | --- |
-| CP-001 | T003, T006 | status and docs-search regressions reject foreign snapshot state, terms, and owners before use | installed Codex/Claude agreement remains T006 |
+| CP-001 | T003, T006 | status and docs-search regressions reject foreign snapshot state, terms, and owners before use; both installed clients selected `1784667715173` across status, orientation, and search | none identified |
 | CP-002 | T004 | missing, foreign, invalid, and unavailable ranking receipts are non-reusable; ready complete/no-map receipts remain reusable | installed-client proof remains T006 |
 | CP-003 | T004-T005 | source/request/environment repair never admits refresh; failed dirty generations are observed without retry; recovery actions preserve the classified boundary | installed-client proof remains T006 |
 
@@ -114,7 +114,7 @@ diagnostic, not parity fields.
 | T003 | complete | strict readiness contract; exact-snapshot status and docs-search guards; orientation trust/refresh projection; public safety regression; focused 97/97; typecheck; full 1029/1029 | independent review found five issues; all were fixed and re-review cleared the slice |
 | T004 | complete | shared readiness classifier, truthful orientation blockers, refresh-only admission, failed-generation convergence; focused 131/131 and full suite pass | independent implementation review found no issues |
 | T005 | complete | docs-search action executed verbatim through MCP and matched status snapshot/category/recovery; frozen cursor continuation preserved | installed-client proof belongs to T006 |
-| T006 | pending | | cross-client acceptance |
+| T006 | complete | daemon-backed two-provider regression; repaired `0.6.1` package install; Codex `0.144.6` and Claude Code `2.1.216` accepted snapshot `1784667715173` and identical pinned result fields | global per-file FTS sweep removed after live rebuild timeout; duplicate same-ID FTS rows routed to EB062 |
 | T007 | pending | | promotion and closure |
 
 ## Evidence Log
@@ -133,11 +133,13 @@ diagnostic, not parity fields.
 | 2026-07-21 | Final `pnpm test` after provider-smoke budget correction | passed | 97 test files passed; 1029/1029 tests passed. |
 | 2026-07-21 | Spec 044 Phase 3 focused status, orientation, docs-ranking, recovery-chain, refresh-coordinator, and stdio suites; `pnpm typecheck`; `pnpm test`; `git diff --check` | passed | Focused run passed 8 files and 131/131 tests; typecheck, full Vitest suite, and diff check exited successfully. Cursor continuation was rechecked after moving readiness admission to initial searches only. |
 | 2026-07-21 | Independent Phase 3 implementation review across application, MCP, runtime, and test changes; reviewer reran 6 focused files, `pnpm typecheck`, and `git diff --check` | passed | Reviewer passed 104/104 tests and reported zero blockers, warnings, or suggestions; installed-client acceptance remains explicitly assigned to T006. |
+| 2026-07-21 | Phase 4 real-repository rebuild with the unchanged 60-second worker deadline | failed, repaired, then passed | Repeated pre-repair workers timed out after per-file `node_fts NOT IN` sweeps amplified retained snapshot cost. Scoped file/snapshot cleanup already preserved the invariant; after removal, snapshot `1784667715173` published fresh in 34.6 seconds and pruned failed builds. |
+| 2026-07-21 | Fresh Codex app-server and Claude Code clients executed the exact cross-client payload against installed runtime/plugin `0.6.1` | passed | Both selected snapshot `1784667715173`, reported reusable orientation with no blockers and `complete_ranked_universe`, and returned `docs/design/coding-agent-integration-design.md` as `current`/`canonical` with the coding-agent concern match. |
+| 2026-07-21 | Phase 4 focused graph-store and daemon ranking suites; daemon crash-recovery and status-refresh suites; `pnpm typecheck`; plugin, skills, package, and documentation gates; final serial `pnpm test` | passed | Focused acceptance passed 44/44; crash/status process suites passed 28/28; full suite passed 99 files and 1050/1050 tests. The crash fixture now seeds concern evidence so first-read ranking cannot start an unintended refresh, and real-process test budgets match their concurrent full-suite execution cost. |
 
 ## Residual Risks
 
-- Installed-provider acceptance requires reload after the repo-local package is rebuilt.
-- EB059 and EB061 remain intentionally outside this package.
+- EB059, EB061, and EB062 remain intentionally outside this package.
 
 ## Durable Promotion And Cleanup
 
@@ -147,8 +149,8 @@ diagnostic, not parity fields.
 | Publication/operations behavior | graph-store and runtime operations design | pending | T007 |
 | Map authoring rule | documentation map | complete for Phase 1 | file-only owner rule retained and backlog owner restored |
 | Repository-real extraction proof | `docs/reference/mvp-proof-matrix.md` | complete for Phase 1 | checked-in map and metadata-boundary gate added; final promotion review remains T007 |
-| Operational dogfood evidence | dogfood ledger | partial | initial reproduction added |
-| Follow-up capacity/reference work | EB059 and EB061 | complete routing | backlog |
+| Operational dogfood evidence | dogfood ledger | complete for Phase 4 | installed two-client acceptance and rebuild repair recorded |
+| Follow-up capacity/reference/storage work | EB059, EB061, and EB062 | complete routing | backlog |
 
 ### Spec Cleanup Decision
 

@@ -57,6 +57,7 @@ invalid concern map from passing closure.
 | ranking order/count/cursors | MCP surface and runtime contracts | Closed Spec 043 semantics remain accepted. |
 | universe capacity/eviction | EB059 | Separate product decision. |
 | JS/TS reference coverage | EB061 | Separate capability decision. |
+| duplicate node identities in FTS batches | EB062 | Separate graph-store/extraction repair. |
 
 ## Bug Fix Details
 
