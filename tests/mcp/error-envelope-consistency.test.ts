@@ -9,9 +9,11 @@ import type {
   ResponseMetadata,
   RuntimeError
 } from "../../src/contracts/index.js";
+import { ImpactStartNodeNotFoundError } from "../../src/application/use-cases/compute-impact.js";
 import { docsMapResource } from "../../src/interface-adapters/mcp/registries/resources/docs-map.js";
 import { docsOverviewResource } from "../../src/interface-adapters/mcp/registries/resources/docs-overview.js";
 import { integrationHealthResource } from "../../src/interface-adapters/mcp/registries/resources/integration-health.js";
+import { impactTool } from "../../src/interface-adapters/mcp/registries/tools/impact.js";
 import { applyWorkspaceEditTool } from "../../src/interface-adapters/mcp/registries/tools/apply-workspace-edit.js";
 import { contextForTaskTool } from "../../src/interface-adapters/mcp/registries/tools/context-for-task.js";
 import { docsSearchTool } from "../../src/interface-adapters/mcp/registries/tools/docs-search.js";
@@ -190,6 +192,53 @@ describe("MCP error envelope consistency", () => {
       verification_status: "blocked",
       retryable: true
     });
+  });
+
+  it("returns a non-retryable domain envelope for an unknown impact start node", async () => {
+    const registered = registerMcpTool(impactTool, {
+      computeImpact: () => {
+        throw new ImpactStartNodeNotFoundError(
+          "snapshot-1:src/service.ts:function:targetHandler",
+          "snapshot-1"
+        );
+      }
+    });
+
+    const parsed = parseMcpTextContent<ResponseEnvelope<{
+      affected_symbols: unknown[];
+      affected_files: unknown[];
+      next_actions: Array<{ tool: string; args?: unknown }>;
+    }>>(await registered.handler({
+      node_id: "snapshot-1:src/service.ts:function:targetHandler",
+      snapshot_id: "snapshot-1"
+    }));
+
+    expectError(parsed, {
+      code: "domain_error",
+      analysis_validity: "invalid",
+      freshness: "unknown",
+      verification_status: "blocked",
+      retryable: false
+    });
+    expect(parsed.data.affected_symbols).toEqual([]);
+    expect(parsed.data.affected_files).toEqual([]);
+    expect(parsed.data.next_actions).toEqual([
+      {
+        tool: "symbol_search",
+        args: {
+          query: "targetHandler",
+          exact: false,
+          max_results: 20,
+          snapshot_id: "snapshot-1"
+        }
+      }
+    ]);
+    expect(parsed.data.next_actions).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ tool: "verification_plan", args: { files: [] } })
+      ])
+    );
+    expect(parsed.errors[0]?.message).toContain("targetHandler");
   });
 
   it("classifies unexpected provider failures as internal errors", async () => {

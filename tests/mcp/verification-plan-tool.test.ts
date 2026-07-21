@@ -1572,11 +1572,13 @@ describe("verification_plan MCP tool", () => {
   });
 
   it("is registered by the composed server", () => {
-    const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
-      startupRefreshDelayMs: 60_000
-    });
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-verification-registration-"));
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, {
+        startupRefreshDelayMs: 60_000
+      });
 
-    expect(registeredToolNames(server)).toEqual([
+      expect(registeredToolNames(server)).toEqual([
       "apply_workspace_edit",
       "check_markdown_document",
       "check_markdown_set",
@@ -1593,8 +1595,11 @@ describe("verification_plan MCP tool", () => {
       "preview_workspace_edit",
       "symbol_search",
       "verification_plan"
-    ]);
-    expect(registeredToolNames(server)).not.toContain("static_feedback");
+      ]);
+      expect(registeredToolNames(server)).not.toContain("static_feedback");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 
   it("blocks composed-server validation workspace repo_root overrides in normal mode", async () => {

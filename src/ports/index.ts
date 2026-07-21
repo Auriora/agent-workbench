@@ -193,6 +193,7 @@ export interface FileCatalogScanPort {
     indexed_roots: readonly string[];
     skipped_roots: readonly string[];
     max_files: number;
+    priority_paths?: readonly string[];
   }): Promise<FileCatalogScanResult>;
 }
 

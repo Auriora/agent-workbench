@@ -562,6 +562,25 @@ return empty blocked graph evidence with `freshness: stale`; an unexpected
 `ENOENT` is classified as `stale_state`, while permission failures are
 `environment_unavailable`.
 
+After snapshot and publication validity succeeds, `impact` also validates that
+its requested start node exists in the selected graph. An unknown node retains
+the internal cause code `impact_start_node_not_found` and returns the public
+non-retryable `domain_error`, invalid analysis, blocked verification, empty
+impact evidence, and a callable same-snapshot `symbol_search` recovery action.
+It does not recommend validation for an empty file set. This
+case is distinct from a known node with no outgoing edges, which remains a valid
+low-confidence impact result containing the start symbol and file.
+
+`diagnostics_for_files` reconciles explicitly requested paths with scanner and
+shared path-policy exclusions before classifying them as missing. Secret and
+workspace-escape targets return non-retryable `workspace_safety_blocked` with
+invalid analysis and blocked verification, without invoking a diagnostics
+provider or emitting a follow-up for the refused path. Other excluded paths
+retain their bounded exclusion reason, while an absent safe path remains a
+non-blocking missing-path finding. Public requests accept at most 50 explicit
+files, keeping priority-path exclusion receipts within their bounded evidence
+budget.
+
 ## Attention Item Shape
 
 Attention is MVP-limited to blockers and warnings.
@@ -651,7 +670,8 @@ no semantic edges exist.
 
 When traversal stays within one file or finds no edges, `scope` must be
 `local_only` or `empty` and the reason must state that broad edit planning needs
-additional verification.
+additional verification. Empty traversal confidence applies only after the
+start node has been proven to exist in the selected snapshot.
 
 ## Edit Token Shape
 

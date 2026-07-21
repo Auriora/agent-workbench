@@ -71,9 +71,9 @@ client connection. Stale first reads and watcher events request this path
 automatically; the package does not expose a manual refresh command, retry
 loop, provider branch, or alternate indexer.
 
-This convergence behavior describes the current unreleased `0.6.0` package.
+This convergence behavior describes the current unreleased `0.6.1` package.
 The install command above intentionally remains on the latest released
-`0.5.2`; it does not obtain this behavior until v0.6.0 is published.
+`0.5.2`; it does not obtain this behavior until v0.6.1 is published.
 
 Snapshot replacement is transactional. Readers retain the prior published
 snapshot until the replacement's file, graph, unresolved-reference, docs,

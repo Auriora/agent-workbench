@@ -36,6 +36,8 @@ export type McpFailureEnvelopeInput<TRequest extends { repo_root?: string }> = {
   repoRoot: string;
   message: string;
   classification: McpFailureClass;
+  causeCode?: string;
+  cause?: unknown;
   args?: unknown;
   request?: TRequest;
 };
@@ -121,6 +123,8 @@ export function registerMcpToolWithEnvelope<
           repoRoot: rootDecision.request.repo_root,
           message: errorMessage(error, `${input.name} failed.`),
           classification,
+          causeCode: errorCode(error),
+          cause: error,
           args,
           request: rootDecision.request
         }));
@@ -151,6 +155,14 @@ export function classifyWorkspaceEditError(error: unknown): McpFailureClass {
 }
 
 export function classifyGraphQueryError(error: unknown): McpFailureClass {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "impact_start_node_not_found"
+  ) {
+    return "domain_error";
+  }
   const message = errorMessage(error, "").toLowerCase();
   if (message.includes("enoent") || message.includes("no such file or directory")) {
     return "stale_state";
@@ -248,4 +260,16 @@ function errorMessage(error: unknown, fallback: string): string {
     return error;
   }
   return fallback;
+}
+
+function errorCode(error: unknown): string | undefined {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+  ) {
+    return error.code;
+  }
+  return undefined;
 }

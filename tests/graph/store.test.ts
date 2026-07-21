@@ -939,6 +939,35 @@ describe("graph store", () => {
     }
   });
 
+  it("reconciles a positively orphaned build across a runtime upgrade with the same schema", async () => {
+    const store = openGraphStore(path.join(dir, "runtime-upgrade-orphan.sqlite"));
+    try {
+      await store.createBuildSnapshot({
+        snapshot: snapshotState("89"),
+        controller_generation: 8,
+        invalidation_generation: 1,
+        created_at: "2026-07-18T00:00:00.000Z"
+      });
+
+      await expect(store.reconcileOrphanedBuilds({
+        repo_root: "/tmp/repo",
+        current_owner: activeOwnerLease(10),
+        recovered_owners: [{ ...deadOwnerLease(8), runtime_identity: "prior-runtime:2" }],
+        updated_at: "2026-07-20T00:00:00.000Z"
+      })).resolves.toEqual({ outcome: "reconciled", snapshot_ids: ["89"] });
+      expect(store.db.prepare(`
+        SELECT publication_state, publication_updated_at
+        FROM snapshots
+        WHERE id = 89
+      `).get()).toEqual({
+        publication_state: "failed",
+        publication_updated_at: "2026-07-20T00:00:00.000Z"
+      });
+    } finally {
+      store.close();
+    }
+  });
+
   it("blocks orphan cleanup without exact positive dead-owner evidence", async () => {
     const store = openGraphStore(path.join(dir, "ambiguous-orphan.sqlite"));
     try {
@@ -961,7 +990,7 @@ describe("graph store", () => {
       await expect(store.reconcileOrphanedBuilds({
         repo_root: "/tmp/repo",
         current_owner: activeOwnerLease(10),
-        recovered_owners: [{ ...deadOwnerLease(8), runtime_identity: "other-runtime" }],
+        recovered_owners: [{ ...deadOwnerLease(8), schema_version: SCHEMA_VERSION + 1 }],
         updated_at: "2026-07-20T00:00:00.000Z"
       })).resolves.toMatchObject({ outcome: "blocked", reason: "ownership_ambiguous" });
       await expect(store.reconcileOrphanedBuilds({
@@ -1762,6 +1791,11 @@ describe("graph store", () => {
         optimized: true,
         vacuumed: true
       });
+      expect(store.db.prepare(`
+        SELECT name
+        FROM sqlite_master
+        WHERE type = 'index' AND name = 'idx_unresolved_refs_source_node_id'
+      `).get()).toEqual({ name: "idx_unresolved_refs_source_node_id" });
       expect((await store.listSnapshots({ repo_root: "/tmp/repo" })).map((snapshot) => snapshot.id)).toEqual([
         "4604",
         "4606"
@@ -1772,6 +1806,74 @@ describe("graph store", () => {
       });
       expect(countRows(store.db, "node_fts")).toBe(3);
       expect(countRows(store.db, "docs_fts")).toBe(3);
+    } finally {
+      store.close();
+    }
+  });
+
+  it("reports non-vacuum pruning truthfully and removes only deleted snapshot FTS rows", async () => {
+    const store = openGraphStore(path.join(dir, "snapshot-prune-without-vacuum.sqlite"));
+
+    try {
+      for (let index = 1; index <= 3; index += 1) {
+        const snapshot = {
+          ...snapshotState(String(4700 + index)),
+          created_at: `2026-05-08T00:01:0${index}.000Z`,
+          updated_at: `2026-05-08T00:01:0${index}.000Z`
+        };
+        await createBuildingSnapshot(store, { ...snapshot, freshness: "refreshing" });
+        await store.replaceSnapshotExtraction({
+          batch: extractionBatch({
+            snapshot_id: snapshot.id,
+            source_path: `src/retention_${index}.py`,
+            node_id: `retention-node-${index}`,
+            name: `RetentionSymbol${index}`
+          }),
+          replace: true
+        });
+        await store.replaceSnapshotDocs({
+          snapshot_id: snapshot.id,
+          repo_root: snapshot.repo_root,
+          documents: [
+            {
+              path: `docs/retention_${index}.md`,
+              title: `Retention doc ${index}`,
+              headings: [{ id: `retention-${index}`, text: `Retention ${index}`, depth: 1, line: 1 }],
+              selected_text: `Retention documentation ${index}`,
+              content_hash: `retention-doc-hash-${index}`,
+              byte_count: 25,
+              indexed_at: "2026-05-08T00:00:00.000Z",
+              truncated: false
+            }
+          ]
+        });
+        await publishBuildingSnapshot(store, snapshot.id);
+      }
+
+      const result = await store.pruneRepositorySnapshots({
+        repo_root: "/tmp/repo",
+        retain_latest_snapshots: 1,
+        retain_latest_fresh_snapshots: 0,
+        vacuum: false
+      });
+
+      expect(result).toEqual({
+        repo_root: "/tmp/repo",
+        deleted_snapshots: 2,
+        retained_snapshot_ids: ["4703"],
+        optimized: false,
+        vacuumed: false
+      });
+      expect(store.db.prepare(`
+        SELECT node_fts.node_id
+        FROM node_fts
+        ORDER BY node_fts.node_id
+      `).all()).toEqual([{ node_id: "retention-node-3" }]);
+      expect(store.db.prepare(`
+        SELECT docs_fts.path
+        FROM docs_fts
+        ORDER BY docs_fts.path
+      `).all()).toEqual([{ path: "docs/retention_3.md" }]);
     } finally {
       store.close();
     }

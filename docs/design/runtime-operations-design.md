@@ -209,6 +209,17 @@ Positive dead-owner recovery atomically reclaims the repository lease and marks
 matching orphaned `building` snapshots `failed` and invisible. Recovery retains
 a bounded owner chain and structured `orphaned_build` evidence. It never unlinks
 a live socket or treats an inconclusive process check as permission to clean up.
+An installed runtime upgrade may reconcile a positively dead prior-runtime
+owner when the repository and graph schema still match and every building
+snapshot names an exact recovered owner generation. A schema mismatch remains
+ambiguous and blocks startup rather than mutating the derived store.
+Snapshot retention on the interactive publication path deletes only retired
+snapshots and their exact FTS rows. Full-index rebuilding, FTS optimization, and
+database `VACUUM` are explicit maintenance concerns because they can outlive
+the worker deadline and otherwise delay status, publication, and client
+recovery behind repository-wide derived-storage work. Every foreign-key child
+used by retention cleanup is indexed so deleting nodes does not repeatedly scan
+the unresolved-reference universe.
 Startup, shutdown, timeout, crash replacement, and failed publication unwind
 worker, writer, activity, graph-store, socket, metadata, WAL/SHM, and child
 resources exactly once along the applicable drain or dead-owner path.

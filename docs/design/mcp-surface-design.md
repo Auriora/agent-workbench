@@ -852,6 +852,13 @@ Post-closure dogfood caveats from large mixed-language repositories:
   when the field is path-typed. Workspace safety path containment remains the
   authority for reads and writes. The delivery record is
   [Spec closure log](../history/spec-closure-log.md).
+- Done: apply one symbol-reference sanitizer to `signature`, `docstring`, and
+  `source_section.text` across `symbol_search`, `find_references`, `impact`, and
+  `context_for_task`. Presentation never mutates stored graph evidence or typed
+  repo-relative path fields.
+- Done: distinguish an unknown `impact` start node from a known node with an
+  empty traversal. Snapshot/publication failures retain precedence; a missing
+  node returns a typed domain failure and routes recovery to `symbol_search`.
 - Done: improve exact-first symbol filtering for caller-supplied symbols before
   broad fuzzy fallback. Exact mode now applies language filters before deciding
   whether exact evidence exists and treats SAM logical IDs and Lambda handler

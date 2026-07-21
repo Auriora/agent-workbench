@@ -15,7 +15,6 @@ export type StartupGraphRefreshExecutorOptions = {
   max_files: number;
   retain_latest_snapshots: number;
   retain_latest_fresh_snapshots: number;
-  vacuum: boolean;
   controller_generation: number;
   worker_factory?: (input: { workerData: Record<string, unknown> }) => Worker;
 };
@@ -39,7 +38,6 @@ export class StartupGraphRefreshExecutor implements RefreshExecutorPort {
           maxFiles: this.options.max_files,
           retainLatestSnapshots: this.options.retain_latest_snapshots,
           retainLatestFreshSnapshots: this.options.retain_latest_fresh_snapshots,
-          vacuum: this.options.vacuum,
           controllerGeneration: this.options.controller_generation,
           invalidationGeneration: input.generation
     };

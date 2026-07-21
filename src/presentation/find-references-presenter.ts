@@ -15,6 +15,7 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
+import { sanitizeSymbolReference } from "./redaction.js";
 
 export function buildFindReferencesEnvelope(
   result: FindReferencesUseCaseResult,
@@ -23,6 +24,9 @@ export function buildFindReferencesEnvelope(
   return makeTrustedEnvelope({
     data: findReferencesResultSchema.parse({
       ...result.references,
+      target: result.references.target === undefined
+        ? undefined
+        : sanitizeSymbolReference(result.references.target),
       next_actions: presentNextActions(result.references.next_actions, context)
     }),
     meta: result.meta,

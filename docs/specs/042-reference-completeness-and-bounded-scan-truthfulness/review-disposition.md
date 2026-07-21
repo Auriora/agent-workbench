@@ -43,7 +43,7 @@ All implementation tasks remain pending.
 | A09 | Unsupported and policy-excluded paths were not clearly outside scope. | resolved | AC1.6 and Declared Lexical Evidence Universe define explicit exclusion classes and bounded reason counts. |
 | A10 | Parser-route boundary coverage was incomplete. | resolved | T003 and V002 require zero, exact-limit, and limit-plus-one fixtures for each parser route. |
 | A11 | Multi-page incoming, outgoing, and unresolved behavior was not acceptance-tested. | resolved | AC4.8, T003, and `tests/graph/reference-completeness.test.ts` require all three multi-page cases without lexical fallback. |
-| A12 | Installed-package validation had vague commands and no expected version. | resolved | V010-V012 are exact commands with expected version `0.6.0`; the installed smoke contract enumerates artifacts and failure conditions. |
+| A12 | Installed-package validation had vague commands and no expected version. | resolved | V010-V012 are exact commands with expected version `0.6.1`; the installed smoke contract enumerates artifacts and failure conditions. |
 | A13 | Provider-labelled MCP sessions could be mistaken for real Codex/Claude plugin loading. | resolved | V010 is explicitly insufficient; V011 and V012 require real CLIs and a receipt with `real_agent_cli_executed: true`. |
 | A14 | Lifecycle lint, Markdown/link, promotion, closure, and archive checks were bundled or absent. | resolved | V013-V018 and T011-T013 define separate gates and dependencies. |
 | A15 | The original six tasks were too broad to execute and review safely. | resolved | `tasks.md` now has thirteen contract, fixture, parser, scanner, pagination, presentation, validation, provider-smoke, review, promotion, and closure slices. |

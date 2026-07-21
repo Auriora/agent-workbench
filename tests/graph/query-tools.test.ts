@@ -7,7 +7,10 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { computeImpact } from "../../src/application/use-cases/compute-impact.js";
+import {
+  computeImpact,
+  ImpactStartNodeNotFoundError
+} from "../../src/application/use-cases/compute-impact.js";
 import { findReferences } from "../../src/application/use-cases/find-references.js";
 import { getTaskContext } from "../../src/application/use-cases/get-task-context.js";
 import { indexRepositoryGraph } from "../../src/application/use-cases/index-repository-graph.js";
@@ -1130,10 +1133,6 @@ describe("graph query use cases", () => {
     fs.writeFileSync(path.join(repoRoot, "target.py"), "def target() -> str:\n    return 'ok'\n");
     const fixture = await indexedFixture(repoRoot, "209");
     try {
-      const target = await fixture.store.findNodesByQualifiedName({
-        snapshot_id: "209",
-        qualified_name: "target"
-      });
       const snapshotValidity = {
         snapshot_id: "209",
         state: "stale" as const,
@@ -1154,7 +1153,7 @@ describe("graph query use cases", () => {
         default_repo_root: repoRoot
       });
       const impact = await computeImpact({
-        request: { node_id: target[0]?.id ?? "", max_depth: 1, max_nodes: 5, direction: "both" },
+        request: { node_id: "does/not/exist", max_depth: 1, max_nodes: 5, direction: "both" },
         graph: fixture.store,
         snapshots: fixture.store,
         catalog: fixture.store,
@@ -1367,6 +1366,32 @@ describe("graph query use cases", () => {
     }
   });
 
+  it("rejects an unknown impact start node before graph traversal", async () => {
+    const fixture = await indexedFixture("tests/fixtures/fixture-basic-python", "214");
+    try {
+      await expect(computeImpact({
+        request: {
+          node_id: "does/not/exist",
+          max_depth: 1,
+          max_nodes: 5,
+          direction: "both"
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        workspace: fixture.workspace,
+        default_repo_root: fixture.repoRoot
+      })).rejects.toMatchObject({
+        name: "ImpactStartNodeNotFoundError",
+        code: "impact_start_node_not_found",
+        nodeId: "does/not/exist",
+        snapshotId: "214"
+      } satisfies Partial<ImpactStartNodeNotFoundError>);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
   it("returns blocked metadata instead of scanning when no snapshot exists", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-basic-python");
     const store = openGraphStore(path.join(dir, "empty.sqlite"));
@@ -1532,6 +1557,22 @@ describe("graph query use cases", () => {
         })
       );
       expect(impact.impact.edge_count).toBe(0);
+      expect(impact.impact.affected_symbols).toEqual([
+        expect.objectContaining({ node_id: nodeId, name: "mustExecute" })
+      ]);
+      expect(impact.impact.affected_files).toEqual([
+        expect.objectContaining({ path: "src/App/DocumentObject.cpp" })
+      ]);
+      expect(impact.impact.next_actions).toEqual([
+        expect.objectContaining({
+          tool: "verification_plan",
+          args: expect.objectContaining({
+            files: expect.arrayContaining([
+              impact.impact.affected_files[0]?.path
+            ])
+          })
+        })
+      ]);
     } finally {
       fixture.store.close();
     }

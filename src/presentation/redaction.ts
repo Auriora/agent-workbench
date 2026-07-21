@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import {
+  sourceSectionSchema,
+  symbolReferenceSchema,
+  type SymbolReference
+} from "../contracts/index.js";
+
 export type PresentationRedactionContext = "source" | "path" | "message";
 
 export type PresentationRedactionKind =
@@ -101,6 +107,49 @@ export function redactPresentationText(
     return redactPresentationValue(redacted, { context }).value;
   }
   return redacted;
+}
+
+/**
+ * Sanitizes every free-text field exposed by a public symbol reference while
+ * preserving its typed, repository-relative path and graph identity fields.
+ * The input is never mutated, so graph storage remains an internal concern.
+ */
+export function sanitizeSymbolReference(input: SymbolReference): SymbolReference {
+  return symbolReferenceSchema.parse({
+    node_id: input.node_id,
+    kind: input.kind,
+    name: input.name,
+    qualified_name: input.qualified_name,
+    path: input.path,
+    language: input.language,
+    source_range: {
+      start_line: input.source_range.start_line,
+      start_column: input.source_range.start_column,
+      end_line: input.source_range.end_line,
+      end_column: input.source_range.end_column
+    },
+    signature: redactOptionalSymbolText(input.signature),
+    docstring: redactOptionalSymbolText(input.docstring),
+    capability_level: input.capability_level,
+    evidence_kinds: input.evidence_kinds,
+    source_section: input.source_section === undefined
+      ? undefined
+      : sourceSectionSchema.parse({
+          path: input.source_section.path,
+          start_line: input.source_section.start_line,
+          end_line: input.source_section.end_line,
+          byte_count: input.source_section.byte_count,
+          truncated: input.source_section.truncated,
+          caveat: input.source_section.caveat,
+          text: redactPresentationText(input.source_section.text, { context: "source" })
+        })
+  });
+}
+
+function redactOptionalSymbolText(value: string | undefined): string | undefined {
+  return value === undefined
+    ? undefined
+    : redactPresentationText(value, { context: "source" });
 }
 
 function redactSecretLikeText(value: string): string {

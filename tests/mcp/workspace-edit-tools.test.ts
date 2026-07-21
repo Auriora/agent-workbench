@@ -363,11 +363,13 @@ describe("workspace edit MCP tools", () => {
   });
 
   it("is registered by the composed server", () => {
-    const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
-      startupRefreshDelayMs: 60_000
-    });
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-edit-registration-"));
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, {
+        startupRefreshDelayMs: 60_000
+      });
 
-    expect(registeredToolNames(server)).toEqual([
+      expect(registeredToolNames(server)).toEqual([
       "apply_workspace_edit",
       "check_markdown_document",
       "check_markdown_set",
@@ -384,7 +386,10 @@ describe("workspace edit MCP tools", () => {
       "preview_workspace_edit",
       "symbol_search",
       "verification_plan"
-    ]);
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 });
 

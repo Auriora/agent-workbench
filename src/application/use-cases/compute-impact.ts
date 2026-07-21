@@ -31,6 +31,18 @@ export type ComputeImpactResult = {
   meta: ResponseMetadata;
 };
 
+export class ImpactStartNodeNotFoundError extends Error {
+  public readonly code = "impact_start_node_not_found";
+
+  public constructor(
+    public readonly nodeId: string,
+    public readonly snapshotId: string
+  ) {
+    super(`Impact start node '${nodeId}' was not found in snapshot '${snapshotId}'.`);
+    this.name = "ImpactStartNodeNotFoundError";
+  }
+}
+
 export async function computeImpact(input: {
   request: ImpactRequest;
   graph: GraphQueryPort;
@@ -103,6 +115,14 @@ export async function computeImpact(input: {
       },
       meta: snapshotValidityMeta({ meta: resolved.meta, validity: snapshotValidity })
     };
+  }
+
+  const startNode = await input.graph.getNode({
+    snapshot_id: resolved.snapshot_id,
+    node_id: input.request.node_id
+  });
+  if (startNode === null) {
+    throw new ImpactStartNodeNotFoundError(input.request.node_id, resolved.snapshot_id);
   }
 
   const traversal = await input.graph.traverse({

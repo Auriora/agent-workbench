@@ -117,7 +117,7 @@ export type DiagnosticFinding = z.infer<typeof diagnosticFindingSchema>;
 export const diagnosticsForFilesRequestSchema = z
   .object({
     repo_root: z.string().optional(),
-    files: z.array(z.string()).default([]),
+    files: z.array(z.string()).max(50).default([]),
     max_files: z.number().int().positive().max(50).default(20)
   })
   .strict();

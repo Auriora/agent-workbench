@@ -25,7 +25,7 @@ import {
 
 const diagnosticsForFilesRawShape = {
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
-  files: z.array(z.string()).default([]).describe("Repo-relative files to check with configured diagnostics providers; pass changed or suspicious files explicitly."),
+  files: z.array(z.string()).max(50).default([]).describe("Up to 50 repo-relative files to check with configured diagnostics providers; pass changed or suspicious files explicitly."),
   max_files: z.number().int().positive().max(50).default(20).describe("Maximum files to check before truncating diagnostics work.")
 };
 
@@ -41,7 +41,7 @@ export const diagnosticsForFilesTool: McpToolDeclaration = {
     description: diagnosticsForFilesDescription,
     parameters: [
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
-      { name: "files", description: "Repo-relative changed or suspicious files to check explicitly.", required: false },
+      { name: "files", description: "Up to 50 repo-relative changed or suspicious files to check explicitly.", required: false },
       { name: "max_files", description: "Maximum files to check before truncating diagnostics work.", required: false }
     ],
     returns: "ResponseEnvelope<DiagnosticsForFiles>"

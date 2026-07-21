@@ -56,7 +56,7 @@ Each version or dated entry should include:
 - The graph schema now records publication lifecycle. Migration preserves
   legacy non-refreshing snapshots as published and makes legacy refreshing
   snapshots failed and invisible.
-- The unreleased `0.6.0` runtime uses `graph-v2.sqlite`. After repository-owner
+- The unreleased `0.6.1` runtime uses `graph-v2.sqlite`. After repository-owner
   admission it preserves `graph-v1.sqlite.pre-v2` and atomically guards the old
   `graph.sqlite` path, so the actual released v0.5.2 adapter blocks instead of
   opening a behaviorally incompatible store.

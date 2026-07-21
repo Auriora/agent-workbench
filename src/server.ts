@@ -558,7 +558,6 @@ export async function createRepositoryRefreshController(input: {
       max_files: input.maxFiles,
       retain_latest_snapshots: DEFAULT_STARTUP_WARMUP_RETAIN_LATEST_SNAPSHOTS,
       retain_latest_fresh_snapshots: DEFAULT_STARTUP_WARMUP_RETAIN_LATEST_FRESH_SNAPSHOTS,
-      vacuum: true,
       controller_generation: input.controllerGeneration
     })
   });

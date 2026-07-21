@@ -5,11 +5,8 @@
 
 import {
   impactResultSchema,
-  sourceSectionSchema,
-  symbolReferenceSchema,
   type ImpactResult,
-  type ResponseEnvelope,
-  type SymbolReference
+  type ResponseEnvelope
 } from "../contracts/index.js";
 import type { ComputeImpactResult } from "../application/use-cases/compute-impact.js";
 import {
@@ -18,7 +15,7 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
-import { redactPresentationText } from "./redaction.js";
+import { sanitizeSymbolReference } from "./redaction.js";
 
 export function buildImpactEnvelope(
   result: ComputeImpactResult,
@@ -38,12 +35,15 @@ export function buildImpactEnvelope(
 export function buildInvalidImpactInputEnvelope(input: {
   repoRoot: string;
   message: string;
+  unknownNodeId?: string;
+  snapshotId?: string;
 }): ResponseEnvelope<ImpactResult> {
+  const unknownNode = input.unknownNodeId !== undefined;
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
-      snapshot_id: "",
-      start_node_ids: [],
+      snapshot_id: input.snapshotId ?? "",
+      start_node_ids: unknownNode ? [input.unknownNodeId!] : [],
       affected_symbols: [],
       affected_files: [],
       edge_count: 0,
@@ -52,10 +52,22 @@ export function buildInvalidImpactInputEnvelope(input: {
       confidence: {
         level: "low",
         scope: "empty",
-        reason: "Impact request input was invalid, so no graph evidence was computed.",
+        reason: unknownNode
+          ? "The requested impact start node was not present in the selected snapshot, so no graph evidence was computed."
+          : "Impact request input was invalid, so no graph evidence was computed.",
         evidence_kinds: []
       },
-      next_actions: []
+      next_actions: unknownNode
+        ? [{
+            tool: "symbol_search",
+            args: {
+              query: impactRecoveryQuery(input.unknownNodeId!),
+              exact: false,
+              max_results: 20,
+              ...(input.snapshotId === undefined ? {} : { snapshot_id: input.snapshotId })
+            }
+          }]
+        : []
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
     trust_policy: { surface_kind: "graph_impact_routing" },
@@ -63,14 +75,10 @@ export function buildInvalidImpactInputEnvelope(input: {
   });
 }
 
-function sanitizeSymbolReference(input: SymbolReference): SymbolReference {
-  return symbolReferenceSchema.parse({
-    ...input,
-    source_section: input.source_section === undefined
-      ? undefined
-      : sourceSectionSchema.parse({
-          ...input.source_section,
-          text: redactPresentationText(input.source_section.text, { context: "source" })
-        })
-  });
+function impactRecoveryQuery(nodeId: string): string {
+  const canonicalParts = nodeId.split(":");
+  if (canonicalParts.length >= 4) {
+    return canonicalParts.slice(3).join(":");
+  }
+  return nodeId.split(/[\\/]/u).filter(Boolean).at(-1) ?? nodeId;
 }

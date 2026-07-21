@@ -108,6 +108,32 @@ describe("diagnostics_for_files MCP tool", () => {
     ]);
   });
 
+  it("rejects more priority paths than the diagnostics receipt budget", async () => {
+    let providerCalled = false;
+    const registered = registerDiagnosticsTool({
+      diagnoseChangedFiles: () => {
+        providerCalled = true;
+        throw new Error("provider should not run");
+      }
+    });
+
+    const response = await registered.handler({
+      files: Array.from({ length: 51 }, (_, index) => `ignored/file-${index}.json`),
+      max_files: 50
+    });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string }>;
+    };
+
+    expect(providerCalled).toBe(false);
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors[0]?.code).toBe("invalid_input");
+  });
+
   it("returns a structured envelope when no diagnostics provider is configured", async () => {
     const registered = registerDiagnosticsTool({});
     const response = await registered.handler({
@@ -126,6 +152,66 @@ describe("diagnostics_for_files MCP tool", () => {
       expect.objectContaining({
         message: "diagnostics_for_files provider is not configured."
       })
+    ]);
+  });
+
+  it("presents workspace-safety diagnostics refusals as typed non-retryable errors", async () => {
+    const registered = registerDiagnosticsTool({
+      diagnoseChangedFiles: ({ request }: { request: DiagnosticsForFilesRequest }) => ({
+        diagnostics: {
+          repo_root: "/repo",
+          status: "blocked",
+          summary: "One diagnostics finding needs attention.",
+          checked_files: request.files,
+          findings: [
+            {
+              path: ".env",
+              severity: "blocker",
+              message: "Diagnostics target was refused by workspace safety policy (secret).",
+              category: "unsupported",
+              provider_id: "workspace",
+              capability_level: "unsupported",
+              evidence_kinds: [],
+              blocking: true
+            }
+          ],
+          provider_statuses: [],
+          next_actions: []
+        },
+        meta: {
+          ...meta(),
+          analysis_validity: "invalid",
+          verification_status: "blocked"
+        },
+        errors: [
+          {
+            code: "workspace_safety_blocked",
+            message: "One or more diagnostics targets were refused by workspace safety policy.",
+            retryable: false
+          }
+        ]
+      } satisfies DiagnoseChangedFilesResult)
+    });
+
+    const response = await registered.handler({ files: [".env"] });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: { next_actions: unknown[]; findings: Array<{ message: string }> };
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; retryable: boolean; message: string }>;
+    };
+
+    expect(parsed.data.next_actions).toEqual([]);
+    expect(parsed.data.findings[0]?.message).not.toContain("not found");
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([
+      {
+        code: "workspace_safety_blocked",
+        message: "One or more diagnostics targets were refused by workspace safety policy.",
+        retryable: false
+      }
     ]);
   });
 });

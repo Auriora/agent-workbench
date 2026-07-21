@@ -9,8 +9,6 @@ import {
   fileReferenceSchema,
   rankedSymbolCandidateSchema,
   skippedWorkSchema,
-  sourceSectionSchema,
-  symbolReferenceSchema,
   validationHintSchema,
   documentReferenceSchema,
   lifecycleEvidenceSchema,
@@ -27,7 +25,7 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
-import { redactPresentationText } from "./redaction.js";
+import { sanitizeSymbolReference } from "./redaction.js";
 
 export function buildTaskContextEnvelope(
   result: GetTaskContextResult,
@@ -188,52 +186,11 @@ function withoutServerOwnedArguments(args: Record<string, unknown>): Record<stri
   return publicArgs;
 }
 
-function sanitizeSourceSection(
-  input: NonNullable<
-    Exclude<
-      GetTaskContextResult["context"]["ranked_symbols"][number]["symbol"],
-      undefined
-    >["source_section"]
-  >
-) {
-  return sourceSectionSchema.parse({
-    path: input.path,
-    start_line: input.start_line,
-    end_line: input.end_line,
-    byte_count: input.byte_count,
-    truncated: input.truncated,
-    text: redactPresentationText(input.text, { context: "source" }),
-    caveat: input.caveat
-  });
-}
-
-function sanitizeSymbol(input: GetTaskContextResult["context"]["ranked_symbols"][number]["symbol"]) {
-  return symbolReferenceSchema.parse({
-    node_id: input.node_id,
-    kind: input.kind,
-    name: input.name,
-    qualified_name: input.qualified_name,
-    path: input.path,
-    language: input.language,
-    source_range: {
-      start_line: input.source_range.start_line,
-      start_column: input.source_range.start_column,
-      end_line: input.source_range.end_line,
-      end_column: input.source_range.end_column
-    },
-    signature: input.signature,
-    docstring: input.docstring,
-    capability_level: input.capability_level,
-    evidence_kinds: input.evidence_kinds,
-    source_section: input.source_section === undefined ? undefined : sanitizeSourceSection(input.source_section)
-  });
-}
-
 function sanitizeRankedSymbol(input: GetTaskContextResult["context"]["ranked_symbols"][number]) {
   return rankedSymbolCandidateSchema.parse({
     rank: input.rank,
     score: input.score,
-    symbol: sanitizeSymbol(input.symbol),
+    symbol: sanitizeSymbolReference(input.symbol),
     reason: input.reason
   });
 }

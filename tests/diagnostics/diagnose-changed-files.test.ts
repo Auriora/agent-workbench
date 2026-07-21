@@ -14,6 +14,7 @@ import {
 } from "../../src/presentation/diagnostics-presenter.js";
 
 const fixtureRoot = path.resolve("tests/fixtures/fixture-diagnostics-feedback");
+const workspaceSafetyFixtureRoot = path.resolve("tests/fixtures/fixture-workspace-safety");
 
 const jsonDiagnosticsProvider: DiagnosticsProviderPort = {
   provider_id: "json-syntax",
@@ -240,5 +241,202 @@ describe("diagnoseChangedFiles", () => {
       })
     ]);
     expect(result.diagnostics.findings[0]?.path).not.toContain(fixtureRoot);
+  });
+
+  it("reports an existing secret path as a workspace-safety refusal without invoking providers", async () => {
+    let providerCalled = false;
+    const provider: DiagnosticsProviderPort = {
+      provider_id: "must-not-run",
+      supports() {
+        providerCalled = true;
+        return true;
+      },
+      async diagnose() {
+        providerCalled = true;
+        throw new Error("provider should not run");
+      }
+    };
+
+    const result = await diagnoseChangedFiles({
+      request: {
+        repo_root: workspaceSafetyFixtureRoot,
+        files: [".env"],
+        max_files: 20
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      providers: [provider],
+      default_repo_root: "."
+    });
+
+    expect(providerCalled).toBe(false);
+    expect(result.diagnostics).toMatchObject({
+      status: "blocked",
+      next_actions: []
+    });
+    expect(result.diagnostics.findings).toEqual([
+      expect.objectContaining({
+        path: ".env",
+        message: expect.stringContaining("workspace safety policy (secret)"),
+        blocking: true
+      })
+    ]);
+    expect(result.diagnostics.findings[0]?.message).not.toContain("not found");
+    expect(result.meta).toMatchObject({
+      analysis_validity: "invalid",
+      verification_status: "blocked"
+    });
+    expect(result.errors).toEqual([
+      {
+        code: "workspace_safety_blocked",
+        message: "One or more diagnostics targets were refused by workspace safety policy.",
+        retryable: false
+      }
+    ]);
+  });
+
+  it("lets leaf secret policy override a non-safety ancestor exclusion", async () => {
+    let providerCalled = false;
+    const result = await diagnoseChangedFiles({
+      request: {
+        repo_root: workspaceSafetyFixtureRoot,
+        files: ["build/.env"],
+        max_files: 20
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      providers: [{
+        provider_id: "must-not-run",
+        supports() {
+          providerCalled = true;
+          return true;
+        },
+        async diagnose() {
+          providerCalled = true;
+          return { statuses: [], findings: [] };
+        }
+      }],
+      default_repo_root: "."
+    });
+
+    expect(providerCalled).toBe(false);
+    expect(result.diagnostics).toMatchObject({ status: "blocked", next_actions: [] });
+    expect(result.diagnostics.findings).toEqual([
+      expect.objectContaining({
+        path: "build/.env",
+        message: expect.stringContaining("workspace safety policy (secret)"),
+        blocking: true
+      })
+    ]);
+    expect(result.errors?.[0]?.code).toBe("workspace_safety_blocked");
+  });
+
+  it("suppresses all providers when any target is refused by workspace safety", async () => {
+    let providerCalled = false;
+    const result = await diagnoseChangedFiles({
+      request: {
+        repo_root: workspaceSafetyFixtureRoot,
+        files: [".env", "src/app.py"],
+        max_files: 20
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      providers: [{
+        provider_id: "must-not-run",
+        supports() {
+          providerCalled = true;
+          return true;
+        },
+        async diagnose() {
+          providerCalled = true;
+          return { statuses: [], findings: [] };
+        }
+      }],
+      default_repo_root: "."
+    });
+
+    expect(providerCalled).toBe(false);
+    expect(result.diagnostics.status).toBe("blocked");
+    expect(result.diagnostics.provider_statuses).toEqual([]);
+    expect(result.diagnostics.next_actions).toEqual([]);
+  });
+
+  it("preserves scanner-only exclusion detail for a requested path", async () => {
+    const result = await diagnoseChangedFiles({
+      request: {
+        repo_root: workspaceSafetyFixtureRoot,
+        files: ["reports/private.log"],
+        max_files: 20
+      },
+      scanner: {
+        async scan() {
+          return {
+            repo_root: workspaceSafetyFixtureRoot,
+            indexed_roots: ["."],
+            skipped_roots: [],
+            skipped_paths: [{
+              path: "reports/private.log",
+              reason: "gitignore" as const,
+              detail: "Exact requested path matched the repository ignore policy."
+            }],
+            files: [],
+            truncated: false
+          };
+        }
+      },
+      providers: [],
+      default_repo_root: "."
+    });
+
+    expect(result.diagnostics.findings).toEqual([
+      expect.objectContaining({
+        path: "reports/private.log",
+        message: expect.stringContaining("Exact requested path matched the repository ignore policy."),
+        blocking: false
+      })
+    ]);
+  });
+
+  it("preserves bounded scanner exclusion reasons instead of reporting excluded paths as missing", async () => {
+    const result = await diagnoseChangedFiles({
+      request: {
+        repo_root: workspaceSafetyFixtureRoot,
+        files: ["build/out.txt"],
+        max_files: 20
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      providers: [],
+      default_repo_root: "."
+    });
+
+    expect(result.diagnostics.findings).toEqual([
+      expect.objectContaining({
+        path: "build/out.txt",
+        message: expect.stringContaining("generated_or_vendor"),
+        blocking: false
+      })
+    ]);
+    expect(result.diagnostics.findings[0]?.message).not.toContain("not found");
+  });
+
+  it("retains non-blocking missing-path behavior for a genuinely absent safe path", async () => {
+    const result = await diagnoseChangedFiles({
+      request: {
+        repo_root: workspaceSafetyFixtureRoot,
+        files: ["src/absent.py"],
+        max_files: 20
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      providers: [],
+      default_repo_root: "."
+    });
+
+    expect(result.diagnostics).toMatchObject({ status: "needed" });
+    expect(result.diagnostics.findings).toEqual([
+      expect.objectContaining({
+        path: "src/absent.py",
+        message: "Requested diagnostics file was not found in the scanned repository.",
+        blocking: false
+      })
+    ]);
+    expect(result.meta.analysis_validity).toBe("valid");
+    expect(result.errors).toBeUndefined();
   });
 });

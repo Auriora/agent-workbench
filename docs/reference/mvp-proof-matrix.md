@@ -78,7 +78,10 @@ resource-backed discovery fixtures.
 | `symbol_search` | `fixture-go-service-repo`, `fixture-cmake-cpp-repo` | routing-only Go and C/C++ declarations | expected symbols found with `resource_backed` capability and heuristic evidence |
 | `find_references` | `fixture-basic-python` | references with confidence and unresolved caveats | expected references found; ambiguous refs labeled |
 | `impact` | `fixture-basic-python` | bounded file/symbol impact | traversal depth and result cap enforced |
+| `impact` | graph query and MCP error fixtures | unknown versus known-empty start-node behavior | an unknown published-snapshot node returns public `domain_error` with internal `impact_start_node_not_found` cause and callable same-snapshot symbol-search recovery; a known zero-edge node remains valid low-confidence evidence |
 | `impact` | `fixture-go-service-repo`, `fixture-cmake-cpp-repo` | missing semantic-edge behavior | impact remains low confidence with `empty` or `local_only` scope when no parser-backed edges exist |
+| public symbol presentation | `fixture-redaction-boundary` | shared redaction across signature, docstring, and source text | `symbol_search`, `find_references`, `impact`, and `context_for_task` redact protected values consistently without changing stored graph evidence or safe route text |
+| `diagnostics_for_files` | `fixture-workspace-safety` | secret, excluded, and truly missing requested paths | safety exclusions block before provider invocation; other exclusions keep their reason; only absent safe paths report missing |
 | `preview_workspace_edit` | `fixture-workspace-safety` | preview token, base hashes, affected files | no mutation before apply |
 | `apply_workspace_edit` | `fixture-workspace-safety` | drift check, path containment, result metadata | stale or unsafe edits rejected |
 | `verification_plan` | `fixture-basic-python` | planned diagnostics/tests with blocked states | plan names expected commands without executing by default |
@@ -168,6 +171,8 @@ measurements.
 | dead-owner orphan | cleanup requires positive death evidence, marks matching builds failed, and preserves bounded recovery history |
 | generated/vendor target | write is refused unless explicitly allowed |
 | possible secret | value is skipped or redacted from index/report output |
+| secret diagnostics target | request is blocked before provider invocation and no follow-up contains the refused path |
+| unknown impact node | invalid blocked domain response routes to `symbol_search`; it cannot masquerade as a valid empty traversal |
 
 ## Query Budget Evidence
 

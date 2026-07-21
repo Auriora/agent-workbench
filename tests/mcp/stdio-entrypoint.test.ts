@@ -9,6 +9,7 @@ import path from "node:path";
 import { PassThrough } from "node:stream";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
+  afterEach,
   describe,
   expect,
   it,
@@ -45,6 +46,14 @@ import { createAgentWorkbenchServer } from "../../src/server.js";
 import { resolveStdioLaunchConfig } from "../../src/mcp/stdio-launch.js";
 import { sha256Text } from "../../src/application/use-cases/preview-edit-token.js";
 import { holdExclusiveSqliteLockUntilReleased } from "../helpers/sqlite-lock.js";
+
+const temporaryFixtureRoots: string[] = [];
+
+afterEach(() => {
+  for (const root of temporaryFixtureRoots.splice(0)) {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
 
 type StdioMessage = {
   id?: number;
@@ -219,7 +228,11 @@ describe("stdio MCP entrypoint", () => {
   });
 
   it("connects over stdio and exposes repo resources", async () => {
-    const messages = await runStdioSmoke(path.resolve("tests/fixtures/fixture-mixed-language-platform"), [
+    const repoRoot = createCleanFixtureCopy({
+      prefix: "agent-workbench-mcp-smoke-",
+      sourceRoot: path.resolve("tests/fixtures/fixture-mixed-language-platform")
+    });
+    const messages = await runStdioSmoke(repoRoot, [
       {
         jsonrpc: "2.0",
         id: 1,
@@ -365,7 +378,7 @@ describe("stdio MCP entrypoint", () => {
     );
     expect(parsed.data).toEqual(
       expect.objectContaining({
-        repo_root: path.resolve("tests/fixtures/fixture-mixed-language-platform")
+        repo_root: repoRoot
       })
     );
     expect(["cold", "refreshing", "fresh", "partial"]).toContain(parsed.data.runtime_state);
@@ -449,7 +462,10 @@ describe("stdio MCP entrypoint", () => {
   });
 
   it("keeps the stdio server alive through initialize", async () => {
-    const repoRoot = path.resolve("tests/fixtures/fixture-mixed-language-platform");
+    const repoRoot = createCleanFixtureCopy({
+      prefix: "agent-workbench-mcp-alive-",
+      sourceRoot: path.resolve("tests/fixtures/fixture-mixed-language-platform")
+    });
     const session = await createStdioSession(repoRoot, {
       startupRefreshDelayMs: 60_000
     });
@@ -1603,16 +1619,21 @@ function normalizeFixturePaths<T>(value: T, sourceRoot: string, targetRoot: stri
 
 function createFixtureCopy(prefix: string): string {
   const destination = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  temporaryFixtureRoots.push(destination);
   fs.cpSync(
     path.resolve("tests/fixtures/fixture-mixed-language-platform"),
     destination,
-    { recursive: true }
+    {
+      recursive: true,
+      filter: (source) => path.basename(source) !== ".cache" && path.basename(source) !== "__pycache__"
+    }
   );
   return destination;
 }
 
 function createCleanFixtureCopy(input: { prefix: string; sourceRoot: string }): string {
   const destination = fs.mkdtempSync(path.join(os.tmpdir(), input.prefix));
+  temporaryFixtureRoots.push(destination);
   fs.cpSync(input.sourceRoot, destination, {
     recursive: true,
     filter: (source) => path.basename(source) !== ".cache" && path.basename(source) !== "__pycache__"

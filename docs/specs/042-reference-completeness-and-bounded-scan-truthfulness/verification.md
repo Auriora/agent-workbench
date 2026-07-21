@@ -60,9 +60,9 @@ completed authoring checks above.
 | V007 | `pnpm typecheck && pnpm test` | TypeScript integration and full regression suite | pending |
 | V008 | `pnpm exec vitest run tests/graph/reference-query-budget.test.ts` | deterministic clock proves file-admission time, file, declared-byte, and result bounds; actual-byte observation; atomic time overrun; and failed-candidate progress/accounting | pending |
 | V009 | `pnpm run validate:plugin && pnpm run validate:skills && pnpm run pack:dry-run` | packaged integration gates | pending |
-| V010 | `CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs` | pack/install `@auriora/agent-workbench@0.6.0`, verify installed bin and two provider-labelled sessions, then verify the structured cleanup receipt | pending; does not prove a real agent CLI loaded a plugin |
-| V011 | `node scripts/ci/installed-provider-plugin-smoke.mjs --provider codex --expected-version 0.6.0` | isolated real Codex plugin install/discovery and reference call | pending; intended script is delivered by T009 |
-| V012 | `node scripts/ci/installed-provider-plugin-smoke.mjs --provider claude --expected-version 0.6.0` | isolated real Claude plugin install/discovery and reference call | pending; intended script is delivered by T009 |
+| V010 | `CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs` | pack/install `@auriora/agent-workbench@0.6.1`, verify installed bin and two provider-labelled sessions, then verify the structured cleanup receipt | pending; does not prove a real agent CLI loaded a plugin |
+| V011 | `node scripts/ci/installed-provider-plugin-smoke.mjs --provider codex --expected-version 0.6.1` | isolated real Codex plugin install/discovery and reference call | pending; intended script is delivered by T009 |
+| V012 | `node scripts/ci/installed-provider-plugin-smoke.mjs --provider claude --expected-version 0.6.1` | isolated real Claude plugin install/discovery and reference call | pending; intended script is delivered by T009 |
 | V013 | MCP `lint_spec_package(repo_root=".", spec_path="docs/specs/042-reference-completeness-and-bounded-scan-truthfulness")` | dedicated lifecycle structure and traceability lint | pending |
 | V014 | MCP `check_markdown_set(paths=[all Spec 042 Markdown artifacts], required_frontmatter=["title","doc_type","status","owner","last_reviewed"])` | bounded Markdown structure and link validation | pending |
 | V015 | MCP `review_packet` plus the repository-local `$review-work-products` MoE, scoped to Spec 042 and its implementation/promotion diff | architecture/contracts, QA/trust, and lifecycle evidence review | pending |
@@ -78,10 +78,10 @@ uses the named real CLI to register and load its provider-specific plugin, and
 then calls Agent Workbench status plus the SessionStart reference fixture. It
 must assert:
 
-- npm identity `@auriora/agent-workbench` and expected version `0.6.0`;
+- npm identity `@auriora/agent-workbench` and expected version `0.6.1`;
 - provider plugin manifest and version, MCP launcher, SessionStart hook, and
   bundled `agent-workbench` skill originate under the isolated installed path;
-- runtime and provider-plugin identities both report `0.6.0`;
+- runtime and provider-plugin identities both report `0.6.1`;
 - the reference query is complete or its callable continuation concatenates to
   the expected ordered occurrences; and
 - the provider process is closed, daemon/socket and metadata are removed, the

@@ -148,9 +148,7 @@ describe("repo orientation golden responses", () => {
           unsupported: 0
         }
       },
-      skippedPaths: [
-        skippedPath(".cache")
-      ],
+      skippedPaths: undefined,
       overview: {
         summary: "Repository has 5 indexed file(s) across 5 language/category value(s).",
         platforms: ["docker", "github_actions", "node", "typescript"],

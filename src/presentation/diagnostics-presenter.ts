@@ -26,7 +26,8 @@ export function buildDiagnosticsForFilesEnvelope(
   return makeTrustedEnvelope({
     data: sanitizeDiagnosticsResult(result.diagnostics, context),
     meta: responseMetadataSchema.strip().parse(result.meta),
-    trust_policy: { surface_kind: "diagnostics_static" }
+    trust_policy: { surface_kind: result.errors?.length ? "generic_error" : "diagnostics_static" },
+    errors: result.errors
   });
 }
 

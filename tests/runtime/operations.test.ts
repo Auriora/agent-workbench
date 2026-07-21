@@ -74,7 +74,6 @@ function createProtocolExecutor(worker: ProtocolWorker): StartupGraphRefreshExec
     max_files: 1,
     retain_latest_snapshots: 1,
     retain_latest_fresh_snapshots: 1,
-    vacuum: false,
     controller_generation: 4,
     worker_factory: () => worker as unknown as Worker
   });

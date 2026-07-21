@@ -49,8 +49,8 @@ the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.5.2.tg
 
 The commands above install the latest released version, `0.5.2`. Daemon-owned
 refresh convergence and schema-isolated publication are implemented in the
-current unreleased `0.6.0` checkout; they are not available from that release
-URL until a v0.6.0 artifact is published.
+current unreleased `0.6.1` checkout; they are not available from that release
+URL until a v0.6.1 artifact is published.
 
 This builds the native modules in place and records a runtime-root pointer under
 the per-OS state directory (`%LOCALAPPDATA%\agent-workbench` on Windows,
@@ -68,6 +68,17 @@ awb package install-local
 The wrapper delegates to `scripts/install-agent-workbench-package.sh`, which
 packs the checkout, installs the tarball with `npm install -g`, and optionally
 registers the package-scoped Codex plugin.
+
+For Codex development directly from this checkout, materialize and register the
+repo-local plugin binding and install its SessionStart and post-edit hooks with:
+
+```bash
+scripts/install-agent-workbench-repo-local.sh
+```
+
+The generated marketplace is kept under `.cache/agent-workbench/`; the tracked
+plugin manifest remains portable. Re-run the command after checkout changes
+that affect the plugin or hooks, then start a new Codex session.
 
 ## 2a. Register the Claude Code plugin (verified, clone-free)
 
@@ -185,7 +196,7 @@ not authorization to add a second indexer, retry loop, or partial-result path.
 
 ## Upgrade, rollback, and schema compatibility
 
-The current unreleased 0.6.0 runtime adds schema-identity-v2 publication.
+The current unreleased 0.6.1 runtime adds schema-identity-v2 publication.
 It seeds `graph-v2.sqlite` from v0.5.2 `graph.sqlite` without modifying the
 source, then transactionally classifies non-refreshing snapshots as published
 and refreshing snapshots as failed. After owner admission and v2 readiness it
@@ -193,6 +204,12 @@ checkpoints v1, preserves `graph-v1.sqlite.pre-v2`, and atomically replaces
 `graph.sqlite` with a non-SQLite guard. The released v0.5.2 adapter then blocks
 with `SQLITE_NOTADB`; it cannot read or mutate v2. Failed seeding, migration, or
 retirement cleans its candidate and leaves a recoverable state.
+
+For upgrades that retain the same graph schema, stop the prior repository
+daemon before starting the new version. If that positively dead owner left a
+`building` snapshot, the replacement runtime marks it failed only when the
+repository, schema, and exact recovered owner generation match. A live owner,
+schema mismatch, or incomplete owner chain remains blocked.
 
 For rollback, restore a known complete pre-migration cache only after every MCP
 client and daemon or standalone owner has stopped. Do not copy

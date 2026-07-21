@@ -10,12 +10,14 @@ import type {
   DiagnosticsForFilesRequest,
   DiagnosticsForFilesResult,
   DiagnosticsProviderStatus,
-  ResponseMetadata
+  ResponseMetadata,
+  RuntimeError
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
-import { describeFileCapability } from "../../domain/policies/index.js";
+import { classifyPathPolicy, describeFileCapability } from "../../domain/policies/index.js";
 import type {
   DiagnosticsProviderPort,
+  FileCatalogSkippedPath,
   FileCatalogScanPort
 } from "../../ports/index.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
@@ -23,6 +25,7 @@ import { getCatalogRepoStatus } from "./get-repo-status.js";
 export type DiagnoseChangedFilesResult = {
   diagnostics: DiagnosticsForFilesResult;
   meta: ResponseMetadata;
+  errors?: RuntimeError[];
 };
 
 export async function diagnoseChangedFiles(input: {
@@ -54,21 +57,40 @@ export async function diagnoseChangedFiles(input: {
     repo_root: repoRoot,
     indexed_roots: ["."],
     skipped_roots: [],
-    max_files: 15000
+    max_files: 15000,
+    priority_paths: safeRequestedFiles
   });
   const filesByPath = new Map(scanned.files.map((file) => [file.path, file]));
+  const exclusionsByPath = reconcileRequestedExclusions({
+    requestedFiles: safeRequestedFiles,
+    filesByPath,
+    skippedPaths: scanned.skipped_paths ?? []
+  });
   const selectedFiles = safeRequestedFiles
+    .filter((filePath) => !exclusionsByPath.has(filePath))
     .map((filePath) => filesByPath.get(filePath))
     .filter((file): file is FileCatalogEntry => file !== undefined)
     .slice(0, input.request.max_files);
 
-  const providerResults = await collectProviderResults({
-    repoRoot: scanned.repo_root,
-    files: selectedFiles,
-    providers: input.providers
-  });
+  const workspaceSafetyBlocked =
+    unsafeFindings.length > 0 ||
+    Array.from(exclusionsByPath.values()).some(isWorkspaceSafetyExclusion);
+  const providerResults = workspaceSafetyBlocked
+    ? { findings: [], statuses: [] }
+    : await collectProviderResults({
+        repoRoot: scanned.repo_root,
+        files: selectedFiles,
+        providers: input.providers
+      });
+  const exclusionFindings = Array.from(exclusionsByPath.entries()).map(
+    ([filePath, exclusion]) => exclusionFinding(filePath, exclusion)
+  );
   const missingFindings = requestedFiles
-    .filter((filePath) => safeRequestedFiles.includes(filePath) && !filesByPath.has(filePath))
+    .filter((filePath) =>
+      safeRequestedFiles.includes(filePath) &&
+      !filesByPath.has(filePath) &&
+      !exclusionsByPath.has(filePath)
+    )
     .map((filePath): DiagnosticFinding => ({
       path: filePath,
       severity: "warning",
@@ -80,7 +102,12 @@ export async function diagnoseChangedFiles(input: {
       blocking: false,
       fix_hint: "Verify the repo-relative path before relying on diagnostics."
     }));
-  const findings = [...providerResults.findings, ...missingFindings, ...unsafeFindings].sort(compareFindings);
+  const findings = [
+    ...providerResults.findings,
+    ...exclusionFindings,
+    ...missingFindings,
+    ...unsafeFindings
+  ].sort(compareFindings);
   const blocked = findings.some((finding) => finding.blocking);
   const providerLimited = providerResults.statuses.some((status) => status.status === "failed");
   const status = getCatalogRepoStatus({
@@ -99,15 +126,17 @@ export async function diagnoseChangedFiles(input: {
     checked_files: requestedFiles,
     findings,
     provider_statuses: providerResults.statuses,
-    next_actions: [
-      {
-        tool: "verification_plan",
-        args: {
-          repo_root: scanned.repo_root,
-          changed_files: requestedFiles
-        }
-      }
-    ]
+    next_actions: workspaceSafetyBlocked
+      ? []
+      : [
+          {
+            tool: "verification_plan",
+            args: {
+              repo_root: scanned.repo_root,
+              changed_files: requestedFiles
+            }
+          }
+        ]
   };
 
   return {
@@ -115,14 +144,96 @@ export async function diagnoseChangedFiles(input: {
     meta: {
       ...status.meta,
       analysis_validity:
-        providerLimited && status.meta.analysis_validity === "valid" ? "partial" : status.meta.analysis_validity,
+        workspaceSafetyBlocked
+          ? "invalid"
+          : providerLimited && status.meta.analysis_validity === "valid"
+            ? "partial"
+            : status.meta.analysis_validity,
       verification_status: diagnostics.status,
       truncated: scanned.truncated || requestedFiles.length > input.request.max_files,
       budget: {
         row_limit: 15000
       }
-    }
+    },
+    ...(workspaceSafetyBlocked
+      ? {
+          errors: [
+            {
+              code: "workspace_safety_blocked",
+              message: "One or more diagnostics targets were refused by workspace safety policy.",
+              retryable: false
+            }
+          ]
+        }
+      : {})
   };
+}
+
+function reconcileRequestedExclusions(input: {
+  requestedFiles: readonly string[];
+  filesByPath: ReadonlyMap<string, FileCatalogEntry>;
+  skippedPaths: readonly FileCatalogSkippedPath[];
+}): Map<string, FileCatalogSkippedPath> {
+  const result = new Map<string, FileCatalogSkippedPath>();
+  for (const filePath of input.requestedFiles) {
+    if (input.filesByPath.has(filePath)) continue;
+    const policy = classifyPathPolicy({ relativePath: filePath, isDirectory: false });
+    if (policy.reason === "secret") {
+      result.set(filePath, {
+        path: filePath,
+        reason: policy.reason,
+        detail: `Shared path policy classified the requested diagnostics path as ${policy.reason}.`
+      });
+      continue;
+    }
+
+    const scannerExclusion = input.skippedPaths
+      .filter((skipped) => pathContains(skipped.path, filePath))
+      .sort((left, right) => right.path.length - left.path.length)[0];
+    if (scannerExclusion !== undefined) {
+      result.set(filePath, scannerExclusion);
+      continue;
+    }
+
+    // The shared policy remains authoritative when bounded scanner evidence is
+    // capped before it can name an explicitly requested path.
+    if (policy.reason !== "source") {
+      result.set(filePath, {
+        path: filePath,
+        reason: policy.reason,
+        detail: `Shared path policy classified the requested diagnostics path as ${policy.reason}.`
+      });
+    }
+  }
+  return result;
+}
+
+function pathContains(skippedPath: string, requestedPath: string): boolean {
+  const normalizedSkipped = normalizeRepoPath(skippedPath).replace(/\/+$/u, "");
+  return requestedPath === normalizedSkipped || requestedPath.startsWith(`${normalizedSkipped}/`);
+}
+
+function exclusionFinding(filePath: string, exclusion: FileCatalogSkippedPath): DiagnosticFinding {
+  const workspaceSafety = isWorkspaceSafetyExclusion(exclusion);
+  return {
+    path: filePath,
+    severity: workspaceSafety ? "blocker" : "warning",
+    message: workspaceSafety
+      ? `Diagnostics target was refused by workspace safety policy (${exclusion.reason}).`
+      : `Diagnostics target was excluded from the repository scan (${exclusion.reason}): ${exclusion.detail}`,
+    category: "unsupported",
+    provider_id: "workspace",
+    capability_level: "unsupported",
+    evidence_kinds: [],
+    blocking: workspaceSafety,
+    fix_hint: workspaceSafety
+      ? "Do not request diagnostics for secret-like or workspace-escaping files."
+      : `Account for the ${exclusion.reason} exclusion before relying on diagnostics.`
+  };
+}
+
+function isWorkspaceSafetyExclusion(exclusion: FileCatalogSkippedPath): boolean {
+  return exclusion.reason === "secret" || exclusion.reason === "workspace_escape";
 }
 
 async function collectProviderResults(input: {

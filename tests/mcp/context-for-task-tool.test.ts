@@ -1727,10 +1727,15 @@ describe("context_for_task MCP tool", () => {
   });
 
   it("is registered by the composed server", () => {
-    const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
-      startupRefreshDelayMs: 60_000
-    });
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-context-registration-"));
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, {
+        startupRefreshDelayMs: 60_000
+      });
 
-    expect(registeredToolNames(server)).toContain("context_for_task");
+      expect(registeredToolNames(server)).toContain("context_for_task");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 });

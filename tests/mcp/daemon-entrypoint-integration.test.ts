@@ -273,7 +273,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
     expect(replacement.stderr()).toBe("");
   }, 15_000);
 
-  it("reconciles a crashed owner's orphan build before admitting replacement work", async () => {
+  it("reconciles a crashed prior-runtime owner's compatible orphan build before replacement work", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-orphan-");
     const databasePath = graphStorePath(repoRoot);
     const store = openGraphStore(databasePath);
@@ -290,7 +290,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
     }
     fs.writeFileSync(repositoryOwnershipPath(databasePath), `${JSON.stringify({
       repo_root: repoRoot,
-      runtime_identity: `${AGENT_WORKBENCH_RUNTIME_VERSION}:${SCHEMA_VERSION}`,
+      runtime_identity: `0.6.0:${SCHEMA_VERSION}`,
       schema_version: SCHEMA_VERSION,
       owner_id: "crashed-daemon",
       owner_pid: 999999999,
@@ -330,6 +330,15 @@ describe("daemon-backed stdio entrypoint integration", () => {
     } finally {
       reopened.close();
     }
+    const replacementOwner = JSON.parse(
+      fs.readFileSync(repositoryOwnershipPath(databasePath), "utf8")
+    ) as Record<string, unknown>;
+    expect(replacementOwner).toMatchObject({
+      runtime_identity: `${AGENT_WORKBENCH_RUNTIME_VERSION}:${SCHEMA_VERSION}`,
+      schema_version: SCHEMA_VERSION,
+      state: "active"
+    });
+    expect(replacementOwner).not.toHaveProperty("recovered_owners");
   }, 15_000);
 
   it.each([
@@ -610,7 +619,7 @@ function createCleanFixtureCopy(prefix: string): string {
   const destination = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   fs.cpSync(path.resolve("tests/fixtures/fixture-basic-python"), destination, {
     recursive: true,
-    filter: (source) => !source.includes(`${path.sep}.cache${path.sep}`)
+    filter: (source) => path.basename(source) !== ".cache" && path.basename(source) !== "__pycache__"
   });
   tempRoots.push(destination);
   return destination;

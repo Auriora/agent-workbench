@@ -36,6 +36,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     indexed_roots: readonly string[];
     skipped_roots: readonly string[];
     max_files: number;
+    priority_paths?: readonly string[];
   }): Promise<FileCatalogScanResult> {
     const repoRoot = path.resolve(input.repo_root);
     const indexedRoots = input.indexed_roots.length > 0 ? input.indexed_roots : ["."];
@@ -43,7 +44,22 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     const skippedPaths: FileCatalogSkippedPath[] = [];
     const skippedRoots = new Set(input.skipped_roots);
     const gitignoreRules = readRootIgnoreRules(repoRoot);
+    const recordSkippedPath = skippedPathRecorder(skippedPaths);
     let truncated = false;
+
+    for (const requestedPath of input.priority_paths ?? []) {
+      const relativePath = normalizeCatalogPath(requestedPath).replace(/^\.\/+/, "");
+      const reason = catalogSkipReason({
+        relativePath,
+        isDirectory: false,
+        skippedRoots: input.skipped_roots,
+        gitignoreRules,
+        hasNestedGitRepository: false
+      });
+      if (reason !== null) {
+        recordSkippedPath({ path: relativePath, reason, detail: catalogSkipDetail(reason) });
+      }
+    }
 
     for (const indexedRoot of indexedRoots) {
       if (truncated) {
@@ -65,7 +81,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
           recordSkippedRoot: (root) => {
             skippedRoots.add(root);
           },
-          recordSkippedPath: skippedPathRecorder(skippedPaths),
+          recordSkippedPath,
           maxFiles: input.max_files,
           entries,
           setTruncated: () => {
@@ -84,7 +100,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
         recordSkippedRoot: (root) => {
           skippedRoots.add(root);
         },
-        recordSkippedPath: skippedPathRecorder(skippedPaths),
+        recordSkippedPath,
         maxFiles: input.max_files,
         entries,
         setTruncated: () => {

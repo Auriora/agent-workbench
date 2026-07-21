@@ -125,6 +125,18 @@ redacted in presentation output. The stricter workspace path resolver remains
 the authority for reads, writes, symlink handling, generated/vendor write
 refusal, and workspace-escape blocking.
 
+Public symbol references apply that presentation policy consistently to every
+free-text evidence field: `signature`, `docstring`, and
+`source_section.text`. `symbol_search`, `find_references`, `impact`, and
+`context_for_task` use the same sanitizer, while stored graph evidence and typed
+repo-relative path fields remain unchanged.
+
+Requested diagnostics paths are classified before provider invocation or a
+true-missing finding is constructed. Secret and workspace-escape exclusions
+return a blocked workspace-safety response without a follow-up containing the
+refused target. Other bounded exclusions retain their path-policy reason;
+`not_found` is reserved for an absent path that is otherwise safe and in scope.
+
 ## Generated Writes
 
 - Runtime caches should live under generated cache roots such as `.cache/`.

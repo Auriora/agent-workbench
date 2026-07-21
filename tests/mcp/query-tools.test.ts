@@ -239,6 +239,8 @@ describe("graph query MCP tools", () => {
                 end_line: 3,
                 end_column: 1
               },
+              signature: "handler(path='../outside/secrets.txt', route='/api/orders', token='TOKEN=abc123')",
+              docstring: "Reads C:\\Users\\example\\secret.txt and /home/example/.ssh/id_rsa",
               capability_level: "partial_semantic",
               evidence_kinds: ["parser"],
               source_section: {
@@ -262,11 +264,18 @@ describe("graph query MCP tools", () => {
       data: SearchSymbolsResult["symbols"];
     };
     const text = parsed.data.symbols[0]?.source_section?.text ?? "";
+    const symbol = parsed.data.symbols[0];
 
     expect(text).toContain("/api/orders");
     expect(text).toContain("TOKEN=[REDACTED]");
     expect(text).toContain("[REDACTED_ABSOLUTE_PATH]");
     expect(text).not.toContain("/home/example");
+    expect(symbol?.signature).toContain("[REDACTED_WORKSPACE_ESCAPE]");
+    expect(symbol?.signature).toContain("/api/orders");
+    expect(symbol?.signature).toContain("TOKEN=[REDACTED]");
+    expect(symbol?.docstring).toContain("[REDACTED_ABSOLUTE_PATH]");
+    expect(JSON.stringify(symbol)).not.toContain("../outside/secrets.txt");
+    expect(JSON.stringify(symbol)).not.toContain("C:\\Users\\example\\secret.txt");
   });
 
   it("uses the injected find_references provider", async () => {
@@ -275,6 +284,7 @@ describe("graph query MCP tools", () => {
         references: {
           repo_root: "/fixture",
           snapshot_id: "1",
+          target: unsafeSymbolReference(),
           references: [
             {
               source_node_id: "a",
@@ -300,6 +310,9 @@ describe("graph query MCP tools", () => {
       meta: { trust?: { safe_to_use_for: string[]; not_safe_to_use_for: string[] } };
     };
     expect(parsed.data.references[0]).toMatchObject({ status: "resolved" });
+    expect(parsed.data.target?.signature).toContain("[REDACTED_WORKSPACE_ESCAPE]");
+    expect(parsed.data.target?.docstring).toContain("[REDACTED_ABSOLUTE_PATH]");
+    expect(JSON.stringify(parsed.data.target)).not.toContain("../outside/secrets.txt");
     expect(parsed.meta.trust).toMatchObject({
       safe_to_use_for: expect.arrayContaining(["navigation", "next_read_selection"]),
       not_safe_to_use_for: expect.arrayContaining(["whole_program_impact_claim"])
@@ -313,8 +326,15 @@ describe("graph query MCP tools", () => {
           repo_root: "/fixture",
           snapshot_id: "1",
           start_node_ids: ["a"],
-          affected_symbols: [],
-          affected_files: [],
+          affected_symbols: [unsafeSymbolReference()],
+          affected_files: [{
+            path: "src/routes/orders.ts",
+            language: "typescript",
+            exists: true,
+            capability_level: "partial_semantic",
+            evidence_kinds: ["parser"],
+            reason: "Contains the affected symbol."
+          }],
           edge_count: 0,
           reached_depth: 0,
           traversal_truncated: false,
@@ -336,6 +356,12 @@ describe("graph query MCP tools", () => {
       data: ComputeImpactResult["impact"];
     };
     expect(parsed.data.start_node_ids).toEqual(["a"]);
+    expect(parsed.data.affected_symbols[0]?.path).toBe("src/routes/orders.ts");
+    expect(parsed.data.affected_symbols[0]?.signature).toContain("[REDACTED_WORKSPACE_ESCAPE]");
+    expect(parsed.data.affected_symbols[0]?.docstring).toContain("[REDACTED_ABSOLUTE_PATH]");
+    expect(parsed.data.affected_symbols[0]?.source_section?.text).toContain("TOKEN=[REDACTED]");
+    expect(parsed.data.affected_symbols[0]?.source_section?.text).toContain("/api/orders");
+    expect(JSON.stringify(parsed.data.affected_symbols[0])).not.toContain("abc123");
   });
 
   it("returns structured invalid input before provider execution", async () => {
@@ -519,11 +545,13 @@ describe("graph query MCP tools", () => {
   });
 
   it("is registered by the composed server", () => {
-    const server = createAgentWorkbenchServer("tests/fixtures/fixture-mixed-language-platform", {
-      startupRefreshDelayMs: 60_000
-    });
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-query-registration-"));
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, {
+        startupRefreshDelayMs: 60_000
+      });
 
-    expect(registeredToolNames(server)).toEqual([
+      expect(registeredToolNames(server)).toEqual([
       "apply_workspace_edit",
       "check_markdown_document",
       "check_markdown_set",
@@ -540,7 +568,10 @@ describe("graph query MCP tools", () => {
       "preview_workspace_edit",
       "symbol_search",
       "verification_plan"
-    ]);
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 });
 
@@ -558,6 +589,30 @@ function meta() {
     evidence_kinds: ["parser" as const],
     verification_status: "needed" as const,
     truncated: false
+  };
+}
+
+function unsafeSymbolReference() {
+  return {
+    node_id: "unsafe-symbol",
+    kind: "function",
+    name: "handler",
+    qualified_name: "orders.handler",
+    path: "src/routes/orders.ts",
+    language: "typescript",
+    source_range: { start_line: 1, start_column: 0, end_line: 3, end_column: 1 },
+    signature: "handler(path='../outside/secrets.txt', route='/api/orders', token='TOKEN=abc123')",
+    docstring: "Reads /home/example/.ssh/id_rsa and C:\\Users\\example\\secret.txt",
+    capability_level: "partial_semantic" as const,
+    evidence_kinds: ["parser" as const],
+    source_section: {
+      path: "src/routes/orders.ts",
+      start_line: 1,
+      end_line: 3,
+      byte_count: 120,
+      truncated: false,
+      text: "route = '/api/orders'\nkey = 'TOKEN=abc123'\npath = '../outside/secrets.txt'"
+    }
   };
 }
 

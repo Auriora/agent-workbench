@@ -145,6 +145,13 @@ instead of implying validation coverage. The composed server currently includes
 a JSON syntax diagnostics provider; additional providers must use the same
 language-neutral contract.
 
+Requested files are reconciled with scanner exclusions and the shared path
+policy before providers run or missing-file findings are created. Secret and
+workspace-escape paths are blocked with `workspace_safety_blocked`, are not sent
+to providers, and do not produce follow-up actions containing the refused path.
+Other excluded paths keep their bounded exclusion reason. Only an absent path
+that is otherwise safe and in scope is reported as missing.
+
 Post-edit feedback is an internal application and hook-facing path, not a
 separate public MCP tool. It combines diagnostics findings, edit-risk signals,
 validation status, quiet visible messages, and next actions toward

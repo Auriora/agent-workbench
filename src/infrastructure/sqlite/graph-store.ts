@@ -1218,7 +1218,6 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         input.current_owner.repo_root !== input.repo_root ||
         input.recovered_owners.some((owner) =>
           owner.repo_root !== input.current_owner.repo_root ||
-          owner.runtime_identity !== input.current_owner.runtime_identity ||
           owner.schema_version !== input.current_owner.schema_version
         ) ||
         rows.some((row) => !input.recovered_owners?.some(
@@ -1530,12 +1529,11 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     if (deleteIds.length > 0) {
       const tx = this.db.transaction(() => {
         this.deleteSnapshotData(deleteIds);
-        this.rebuildNodeFts();
       });
       tx();
     }
 
-    const optimized = deleteIds.length > 0;
+    const optimized = input.vacuum && deleteIds.length > 0;
     if (optimized) {
       this.optimizeStorage();
     }
@@ -2155,6 +2153,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       .prepare(`DELETE FROM unresolved_refs WHERE file_id IN (SELECT id FROM files WHERE snapshot_id IN (${placeholders}))`)
       .run(...snapshotIds);
     this.db
+      .prepare(`DELETE FROM node_fts WHERE node_id IN (SELECT id FROM nodes WHERE file_id IN (SELECT id FROM files WHERE snapshot_id IN (${placeholders})))`)
+      .run(...snapshotIds);
+    this.db
       .prepare(`DELETE FROM nodes WHERE file_id IN (SELECT id FROM files WHERE snapshot_id IN (${placeholders}))`)
       .run(...snapshotIds);
     this.db.prepare(`DELETE FROM files WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
@@ -2641,6 +2642,7 @@ function migrate(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_edges_target ON edges(target_node_id);
     CREATE INDEX IF NOT EXISTS idx_edges_file_id ON edges(file_id);
     CREATE INDEX IF NOT EXISTS idx_unresolved_refs_file_id ON unresolved_refs(file_id);
+    CREATE INDEX IF NOT EXISTS idx_unresolved_refs_source_node_id ON unresolved_refs(source_node_id);
     CREATE INDEX IF NOT EXISTS idx_files_snapshot_path ON files(snapshot_id, path);
     CREATE INDEX IF NOT EXISTS idx_docs_documents_snapshot_path ON docs_documents(snapshot_id, path);
     CREATE INDEX IF NOT EXISTS idx_docs_headings_document ON docs_headings(document_id, line);

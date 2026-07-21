@@ -56,13 +56,31 @@ export const impactTool: McpToolDeclaration = {
       schema: impactRequestSchema,
       invalidInputMessage: "Invalid impact arguments.",
       getProvider: (registryContext) => registryContext.computeImpact,
-      buildFailureEnvelope: (input) => classifiedFailureEnvelope(
-        buildInvalidImpactInputEnvelope({ repoRoot: input.repoRoot, message: input.message }),
-        input
-      ),
+      buildFailureEnvelope: (input) => {
+        const missingNode = impactMissingNode(input.cause);
+        return classifiedFailureEnvelope(buildInvalidImpactInputEnvelope({
+          repoRoot: input.repoRoot,
+          message: input.message,
+          unknownNodeId: input.causeCode === "impact_start_node_not_found"
+            ? missingNode?.nodeId ?? input.request?.node_id
+            : undefined,
+          snapshotId: input.causeCode === "impact_start_node_not_found"
+            ? missingNode?.snapshotId ?? input.request?.snapshot_id
+            : undefined
+        }), input);
+      },
       invoke: ({ provider, request }) => provider({ request }),
       present: buildImpactEnvelope,
       classifyError: classifyGraphQueryError
     });
   }
 };
+
+function impactMissingNode(error: unknown): { nodeId: string; snapshotId: string } | undefined {
+  if (typeof error !== "object" || error === null) return undefined;
+  const candidate = error as { code?: unknown; nodeId?: unknown; snapshotId?: unknown };
+  return candidate.code === "impact_start_node_not_found" &&
+    typeof candidate.nodeId === "string" && typeof candidate.snapshotId === "string"
+    ? { nodeId: candidate.nodeId, snapshotId: candidate.snapshotId }
+    : undefined;
+}

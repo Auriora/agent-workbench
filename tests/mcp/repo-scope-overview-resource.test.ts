@@ -545,21 +545,24 @@ describe("repo overview MCP resource", () => {
 
 describe("repo scope and overview composed server resources", () => {
   it("represents mixed-language and platform scope from the default composed server", async () => {
-    const server = createAgentWorkbenchServer(
-      "tests/fixtures/fixture-mixed-language-platform",
-      { startupRefreshDelayMs: 60_000 }
-    );
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-scope-server-"));
+    fs.cpSync(path.resolve("tests/fixtures/fixture-mixed-language-platform"), repoRoot, {
+      recursive: true,
+      filter: (source) => path.basename(source) !== ".cache" && path.basename(source) !== "__pycache__"
+    });
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, { startupRefreshDelayMs: 60_000 });
 
-    const scopeResponse = await getRegisteredResource(server, "repo:///scope").readCallback({});
-    const overviewResponse = await getRegisteredResource(server, "repo:///overview").readCallback({});
-    const scope = JSON.parse(scopeResponse.contents[0]?.text ?? "{}") as {
-      data: GetRepoScopeResult["scope"];
-    };
-    const overview = JSON.parse(overviewResponse.contents[0]?.text ?? "{}") as {
-      data: GetRepoOverviewResult["overview"];
-    };
+      const scopeResponse = await getRegisteredResource(server, "repo:///scope").readCallback({});
+      const overviewResponse = await getRegisteredResource(server, "repo:///overview").readCallback({});
+      const scope = JSON.parse(scopeResponse.contents[0]?.text ?? "{}") as {
+        data: GetRepoScopeResult["scope"];
+      };
+      const overview = JSON.parse(overviewResponse.contents[0]?.text ?? "{}") as {
+        data: GetRepoOverviewResult["overview"];
+      };
 
-    expect(scope.data.languages).toEqual(["infrastructure", "json", "python", "typescript", "yaml"]);
+      expect(scope.data.languages).toEqual(["infrastructure", "json", "python", "typescript", "yaml"]);
     expect(scope.data.file_counts).toMatchObject({
       infrastructure: 1,
       json: 1,
@@ -587,7 +590,7 @@ describe("repo scope and overview composed server resources", () => {
         expect.objectContaining({ command: "pnpm test" })
       ])
     );
-    expect(overview.data.recommended_first_calls).toEqual(
+      expect(overview.data.recommended_first_calls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           tool: "read_resource",
@@ -608,7 +611,10 @@ describe("repo scope and overview composed server resources", () => {
           tool: "verification_plan"
         })
       ])
-    );
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 
   it("reports Go source coverage and skips Go cache roots", async () => {

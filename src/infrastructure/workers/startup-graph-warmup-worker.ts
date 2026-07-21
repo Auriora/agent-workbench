@@ -32,7 +32,6 @@ type StartupGraphWarmupWorkerData = {
   maxFiles: number;
   retainLatestSnapshots: number;
   retainLatestFreshSnapshots: number;
-  vacuum: boolean;
   controllerGeneration: number;
   invalidationGeneration: number;
 };
@@ -83,7 +82,7 @@ try {
     repo_root: input.repoRoot,
     retain_latest_snapshots: input.retainLatestSnapshots,
     retain_latest_fresh_snapshots: input.retainLatestFreshSnapshots,
-    vacuum: input.vacuum
+    vacuum: false
   });
   if (crashBarrierProbe?.barrier === "prepublication") {
     await pauseAtCrashBarrier(crashBarrierProbe, "prepublication");

@@ -157,7 +157,7 @@ T008 + T010 -> T011 -> T012 -> T013
   - Files: `scripts/ci/installed-provider-plugin-smoke.mjs`,
     `tests/integration/installed-provider-plugin-smoke.test.ts`,
     `verification.md`
-  - Acceptance: Isolated Codex and Claude commands install the packed `0.6.0`
+  - Acceptance: Isolated Codex and Claude commands install the packed `0.6.1`
     artifact, verify provider plugin manifests, MCP launcher, skill/hook files,
     reported runtime/provider-plugin version, and a reference query, then prove
     client processes, daemon/socket metadata, install roots, and temporary

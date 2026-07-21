@@ -3,7 +3,7 @@ title: Agent Workbench backlog
 doc_type: backlog
 status: draft
 owner: platform
-last_reviewed: 2026-07-12
+last_reviewed: 2026-07-20
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -1923,6 +1923,176 @@ Do not promote an item when:
   [Runtime contracts](../reference/runtime-contracts.md), and the
   [Documentation map](../reference/documentation-map.md).
 
+### EB055: Public Symbol Redaction Parity
+
+- Priority: P0
+- Status: delivered as a direct regression repair on 2026-07-20; source and
+  fixture-backed tests are complete, and installed-runtime acceptance was
+  confirmed in Claude Code on 2026-07-21; pending commit/release flow
+- Friction signal: Claude Code and Codex independently queried runtime `0.6.0`
+  against `fixture-redaction-boundary`. In the same `symbol_search` response,
+  `source_section.text` replaced a workspace-escape or host-path value with a
+  redaction marker while `signature` returned the classified value verbatim.
+  Codex also observed the raw signature through `context_for_task`, and the
+  same incomplete symbol sanitizer is used by `impact`.
+- Runtime surface: symbol-reference presentation for `symbol_search`,
+  `context_for_task`, and `impact`; shared presentation redaction; redaction
+  fixtures and MCP envelopes.
+- Acceptance:
+  - One shared symbol-reference presentation sanitizer SHALL cover
+    `signature`, `docstring`, and `source_section.text` on every public surface.
+  - A value classified as a workspace escape, Unix or Windows host path,
+    token-like secret, or other protected source content SHALL never appear raw
+    in one symbol field while another field reports its redaction marker.
+  - Corresponding fields SHALL use consistent redaction classification while
+    ordinary route strings and safe repo-relative evidence remain readable.
+  - Presentation redaction SHALL NOT mutate stored graph evidence or replace
+    typed repo-relative path fields.
+- Validation:
+  - Extend `tests/presentation/redaction-boundary.test.ts` across signature,
+    docstring, and source-section cases.
+  - Extend `tests/mcp/query-tools.test.ts` and task-context/impact coverage so
+    all three public surfaces reject raw protected fixture values.
+- Promotion target: direct repair against the accepted workspace-safety and
+  MCP-surface contracts delivered by closed Spec 007. Create a new spec only if
+  implementation requires new public redaction vocabulary rather than complete
+  use of the existing policy.
+- Delivery evidence: `src/presentation/redaction.ts` now owns shared symbol
+  sanitization used by every public symbol presenter, including the optional
+  `find_references` target. Presentation and MCP tests cover
+  traversal-like values, Unix and Windows host paths, token-like content, safe
+  route strings, and unchanged stored graph evidence. Durable behavior is owned
+  by the workspace-safety contract and MCP surface design.
+
+### EB056: Impact Start-Node Truthfulness
+
+- Priority: P1
+- Status: delivered as a direct regression repair on 2026-07-20; source and
+  fixture-backed tests are complete, and installed-runtime acceptance was
+  confirmed in Claude Code on 2026-07-21; pending commit/release flow
+- Friction signal: Claude Code and Codex both passed a fabricated node ID to
+  `impact`. Runtime `0.6.0` returned `analysis_validity: valid`, no errors, and
+  the same low/empty confidence reason used for a real symbol with no graph
+  edges. A real terminal node remains distinguishable through its returned
+  symbol/file, but the trust channel does not distinguish invalid input from a
+  known empty blast radius and the fabricated case recommends
+  `verification_plan` with no files.
+- Runtime surface: `computeImpact`, graph target lookup, impact presentation,
+  MCP error classification, recovery actions, and trust metadata.
+- Acceptance:
+  - After snapshot/publication validity succeeds and before traversal, `impact`
+    SHALL prove the requested start node exists in the selected snapshot.
+  - An unknown node SHALL return a non-retryable typed domain error with invalid
+    analysis, blocked verification, empty impact evidence, and a callable
+    `symbol_search` recovery action. It SHALL NOT recommend validation over an
+    empty file set.
+  - A known zero-edge node SHALL remain a valid low-confidence result containing
+    its start symbol/file and a targeted validation action.
+  - Stale, invalid, or unpublished snapshot failures SHALL retain precedence
+    over node-existence classification.
+- Validation:
+  - Add known-empty versus unknown-node cases to
+    `tests/graph/query-tools.test.ts`.
+  - Add public envelope and recovery-action proof to
+    `tests/mcp/query-tools.test.ts` or
+    `tests/mcp/error-envelope-consistency.test.ts`.
+- Promotion target: direct repair under EB038 and the accepted runtime/graph
+  contracts. Create a new spec only if the existing domain-error vocabulary
+  cannot represent an unknown published-snapshot node truthfully.
+- Delivery evidence: `computeImpact` proves start-node existence after snapshot
+  validity and before traversal; MCP failure classification preserves the typed
+  domain code and presents an exact `symbol_search` recovery action. Graph and
+  envelope tests distinguish unknown, known-empty, and stale-snapshot cases.
+
+### EB057: Diagnostics Exclusion Truthfulness
+
+- Priority: P1
+- Status: delivered as a direct regression repair on 2026-07-20; source and
+  fixture-backed tests are complete, and installed-runtime acceptance was
+  confirmed in Claude Code on 2026-07-21; pending commit/release flow
+- Friction signal: Claude Code and Codex both requested diagnostics for the
+  existing `tests/fixtures/fixture-workspace-safety/.env`. The scanner correctly
+  classified the path as secret, but `diagnostics_for_files` discarded that
+  evidence and returned a non-blocking `not found` warning with valid analysis
+  plus a follow-up containing the refused path.
+- Runtime surface: `diagnoseChangedFiles`, shared path policy, catalog skipped
+  evidence, diagnostics presentation, provider invocation, and MCP trust/error
+  envelopes.
+- Acceptance:
+  - Requested diagnostics paths SHALL be reconciled with shared path-policy and
+    scanner exclusion evidence before a true-missing finding is constructed.
+  - An existing secret path SHALL return non-retryable
+    `workspace_safety_blocked`, invalid analysis, and blocked verification; it
+    SHALL NOT invoke a diagnostics provider, say the file is missing, or emit a
+    follow-up containing the refused path.
+  - A truly absent safe path SHALL retain the current non-blocking missing-path
+    behavior.
+  - Generated/vendor, configured, ignored, and other excluded paths SHALL keep
+    their actual bounded reason instead of masquerading as missing.
+- Validation:
+  - Add secret, excluded, genuinely missing, and provider-not-called cases to
+    `tests/diagnostics/diagnose-changed-files.test.ts`.
+  - Add public trust/error consistency coverage to
+    `tests/mcp/diagnostics-for-files-tool.test.ts` and
+    `tests/mcp/error-envelope-consistency.test.ts`.
+- Promotion target: direct repair under EB005, EB038, and EB039 plus the
+  workspace-safety contract. Create a new spec only if implementation requires
+  a new public exclusion or refusal vocabulary.
+- Delivery evidence: diagnostics request reconciliation now preserves scanner
+  and shared path-policy classifications before provider dispatch. Use-case and
+  MCP tests prove secret blocking, provider suppression, exact exclusion
+  reasons, and the distinct safe missing-path behavior.
+
+### EB058: Same-Schema Runtime Upgrade Orphan Recovery
+
+- Priority: P0
+- Status: delivered as a direct regression repair on 2026-07-20; source,
+  fixture-backed tests, and repo-local runtime initialization are complete
+- Friction signal: after the repo-local runtime advanced from `0.6.0` to
+  `0.6.1`, both Codex and Claude Code closed the MCP connection before the
+  initialize response. The prior daemon was positively dead, but its owner and
+  `building` snapshot named runtime identity `0.6.0:2`; orphan reconciliation
+  required identity equality with `0.6.1:2` and therefore rejected an otherwise
+  exact same-repository, same-schema recovery chain as ambiguous.
+  Live recovery then exposed a second startup-path defect: snapshot retention,
+  full-FTS rebuilding, and `VACUUM` ran inside the bounded refresh worker. On
+  the repository cache that work outlived the 60-second deadline, consumed a
+  worker thread, left the target `building`, and serialized status diagnostics
+  behind settlement.
+- Runtime surface: per-repository daemon admission, repository ownership,
+  orphaned graph builds, same-schema upgrades, and MCP initialize readiness.
+- Acceptance:
+  - A replacement runtime SHALL reconcile a positively dead prior-runtime
+    owner when repository identity and schema match and every orphaned build
+    names an exact recovered owner generation.
+  - Runtime-version inequality alone SHALL NOT make a same-schema positive
+    dead-owner chain ambiguous.
+  - A live or inconclusive owner, repository mismatch, schema mismatch, or
+    incomplete generation chain SHALL remain blocked without mutating the
+    derived store.
+  - Recovery SHALL mark matching orphaned builds failed, preserve the last
+    published snapshot, install the current active owner without retaining a
+    stale recovered-owner chain, and allow MCP initialize to complete.
+  - Interactive refresh retention SHALL delete only retired snapshot rows and
+    their exact FTS evidence. It SHALL NOT rebuild or optimize the full FTS
+    universe or compact the database on the publication path; status and
+    diagnostics SHALL remain responsive while refresh is active.
+- Validation:
+  - Graph-store tests cover compatible cross-runtime recovery plus incompatible
+    schema and incomplete-chain refusal.
+  - Daemon-entrypoint integration starts from a prior-version owner record and
+    proves terminal orphan disposition, current ownership, and initialize
+    success.
+  - Live process/thread and publication evidence proves the prior refresh was
+    spending its deadline in derived-store maintenance; the replacement runtime
+    publishes without scheduling those maintenance operations.
+  - Repo-local Codex and Claude launchers share the corrected `0.6.1` runtime;
+    an exact cached-launcher initialize request returns server version `0.6.1`.
+- Promotion target: direct repair under EB036 daemon ownership and EB052 refresh
+  convergence. Durable behavior is owned by the runtime operations design and
+  install runbook; create a new spec only if cross-schema migration recovery is
+  introduced.
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |
@@ -1981,10 +2151,19 @@ Do not promote an item when:
 | Daemon-owned refresh convergence | EB052, under EB003 first-read reliability, with EB036 daemon ownership and EB051 snapshot validity as prerequisites. |
 | Reference completeness and bounded-scan truthfulness | EB053, under EB010 navigation quality and EB023 trust calibration. |
 | Authority-aware documentation intent ranking and count semantics | EB054, under EB018 stale-doc filtering, EB032 ranking explanations, and documentation governance. |
+| Public symbol redaction parity | EB055, under workspace safety and the closed Spec 007 redaction boundary. |
+| Impact start-node truthfulness | EB056, under EB038 error-envelope consistency and graph trust semantics. |
+| Diagnostics exclusion truthfulness | EB057, under EB005 diagnostics, EB038 error envelopes, and EB039 shared path policy. |
+| Same-schema runtime upgrade orphan recovery | EB058, under EB036 daemon ownership and EB052 refresh convergence. |
 
 ## Immediate Next Specs
 
-- Specs 042 and 043 are active from the runtime `0.6.0` healthy dogfood
-  evidence. Implement them independently: EB053 owns reference completeness;
-  EB054 owns documentation authority ranking and count semantics. EB014 remains
-  the separate candidate for large-repository completion scale and progress.
+- Complete the normal commit/release flow for the delivered EB055, EB056,
+  EB057, and EB058 direct repairs without folding them into active spec scope;
+  installed-runtime acceptance is already recorded for EB055 through EB057.
+- Resume active Specs 042 and 043: EB053 owns reference completeness; EB054
+  owns documentation authority ranking and count semantics. Implement Spec 042
+  first because incomplete reference results carry the higher truthfulness risk,
+  then complete Spec 043 authority-aware documentation routing.
+  EB014 remains the separate candidate for large-repository completion scale
+  and progress.
