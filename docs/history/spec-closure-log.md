@@ -467,6 +467,34 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-07-21 - 043-authority-aware-documentation-intent-ranking-and-count-semantics
+
+- **Spec:** `docs/specs/043-authority-aware-documentation-intent-ranking-and-count-semantics/`
+- **Title:** Authority-aware documentation intent ranking and count semantics requirements
+- **Final spec commit:** `15d0565`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/reference/documentation-map.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/backlog/README.md`
+  - `docs/reference/agent-readable-changelog.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Typecheck, all 97 test files and 994 tests, plugin
+  validation, six skill validations, and the 245-entry package dry run passed.
+  The isolated packed `0.6.1` smoke recorded exact artifact hashes, rank/count
+  oracles, Codex and Claude Code provider identities, and complete cleanup on
+  success and injected failure. Lifecycle lint returned zero diagnostics,
+  closure readiness returned zero blockers, and closure risk review returned
+  zero findings.
+- **Residual risks:**
+  - Repository-wide ranked-universe capacity, eviction, cursor-staleness, and
+    detailed observability remain separately owned by EB059.
+- **Follow-up:** EB059 ranked documentation universe population and observability.
+
 ### 2026-07-21 - 042-reference-completeness-and-bounded-scan-truthfulness
 
 - **Spec:** `docs/specs/042-reference-completeness-and-bounded-scan-truthfulness/`
