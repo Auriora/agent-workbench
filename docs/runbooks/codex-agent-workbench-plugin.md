@@ -155,9 +155,8 @@ The plugin should not create a host-level Agent Workbench MCP block in
 
 ## Refresh Ownership And Diagnosis
 
-This section describes the current unreleased `0.6.1` implementation. The
-latest released `0.5.2` package does not yet contain daemon-owned refresh
-convergence.
+This section describes the released `0.6.2` implementation, including
+daemon-owned refresh convergence.
 
 The Codex connection does not own a private refresh coordinator. Every MCP
 connection for the same canonical repository uses one daemon-owned controller,

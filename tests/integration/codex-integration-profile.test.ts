@@ -987,7 +987,7 @@ describe("Codex plugin artifacts", () => {
       registry: "ghcr.io",
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile: "packaging/agent-workbench/Containerfile",
-      release_status: "unreleased",
+      release_status: "released",
       install_command: latestReleasedInstallCommand,
       npm_bin: "packaging/agent-workbench/mcp-bin.mjs"
     });

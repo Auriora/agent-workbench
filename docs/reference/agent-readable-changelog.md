@@ -28,8 +28,9 @@ Each version or dated entry should include:
 
 ## 2026-07-21: Snapshot-Bound Documentation Readiness
 
-This entry describes the current unreleased repository-local `0.6.1` build.
-Published-install availability remains governed by the normal release flow.
+This entry describes behavior released in `0.6.2`. The installed-client
+acceptance below used the final `0.6.1` repository-local candidate before the
+release version was synchronized.
 
 ### Agent-Visible Changes
 
@@ -197,7 +198,7 @@ Published-install availability remains governed by the normal release flow.
 - The graph schema now records publication lifecycle. Migration preserves
   legacy non-refreshing snapshots as published and makes legacy refreshing
   snapshots failed and invisible.
-- The unreleased `0.6.1` runtime uses `graph-v2.sqlite`. After repository-owner
+- The `0.6.2` runtime uses `graph-v2.sqlite`. After repository-owner
   admission it preserves `graph-v1.sqlite.pre-v2` and atomically guards the old
   `graph.sqlite` path, so the actual released v0.5.2 adapter blocks instead of
   opening a behaviorally incompatible store.

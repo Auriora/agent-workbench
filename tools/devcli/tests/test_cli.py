@@ -239,14 +239,43 @@ class CliTests(unittest.TestCase):
                     "packaging/agent-workbench/package-manifest.json",
                     {
                         "version": "0.3.0",
+                        "release_status": "unreleased",
+                        "latest_released_version": "0.2.0",
                         "install_command": "old",
                         "codex": {"plugin_install_model": "old"},
                     },
                 ),
-                ("packaging/agent-workbench/npm-package.json", {"install_command": "old"}),
+                (
+                    "packaging/agent-workbench/npm-package.json",
+                    {
+                        "release_status": "unreleased",
+                        "latest_released_version": "0.2.0",
+                        "install_command": "old",
+                    },
+                ),
                 (".well-known/mcp/server-card.json", {"version": "0.3.0"}),
                 ("plugins/agent-workbench/.codex-plugin/plugin.json", {"version": "0.3.0"}),
                 ("plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json", {"version": "0.3.0"}),
+                (
+                    "plugins/agent-workbench/.mcp.json",
+                    {
+                        "mcpServers": {
+                            "agent-workbench": {
+                                "env": {"AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION": "0.3.0"}
+                            }
+                        }
+                    },
+                ),
+                (
+                    "plugins/agent-workbench/claude-plugin/.mcp.json",
+                    {
+                        "mcpServers": {
+                            "agent-workbench": {
+                                "env": {"AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION": "0.3.0"}
+                            }
+                        }
+                    },
+                ),
             ]:
                 (root / relative).write_text(json.dumps(payload) + "\n", encoding="utf-8")
             for relative in [
@@ -256,7 +285,8 @@ class CliTests(unittest.TestCase):
                 "plugins/agent-workbench/README.md",
             ]:
                 (root / relative).write_text(
-                    "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz\n",
+                    "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.3.0/auriora-agent-workbench-0.3.0.tgz\n"
+                    "The released v0.5.2 adapter remains the compatibility baseline.\n",
                     encoding="utf-8",
                 )
 
@@ -276,9 +306,26 @@ class CliTests(unittest.TestCase):
             )
             self.assertEqual(package["version"], "0.4.0")
             self.assertEqual(manifest["version"], "0.4.0")
+            self.assertEqual(manifest["release_status"], "released")
+            self.assertEqual(manifest["latest_released_version"], "0.4.0")
             self.assertNotIn("version", npm_contract)
+            self.assertEqual(npm_contract["release_status"], "released")
+            self.assertEqual(npm_contract["latest_released_version"], "0.4.0")
+            for relative in [
+                "plugins/agent-workbench/.mcp.json",
+                "plugins/agent-workbench/claude-plugin/.mcp.json",
+            ]:
+                mcp = json.loads((root / relative).read_text(encoding="utf-8"))
+                self.assertEqual(
+                    mcp["mcpServers"]["agent-workbench"]["env"][
+                        "AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION"
+                    ],
+                    "0.4.0",
+                )
             self.assertIn("v0.4.0/auriora-agent-workbench-0.4.0.tgz", manifest["install_command"])
-            self.assertIn("v0.4.0/auriora-agent-workbench-0.4.0.tgz", (root / "README.md").read_text(encoding="utf-8"))
+            readme = (root / "README.md").read_text(encoding="utf-8")
+            self.assertIn("v0.4.0/auriora-agent-workbench-0.4.0.tgz", readme)
+            self.assertIn("The released v0.5.2 adapter remains the compatibility baseline.", readme)
 
     def test_verify_release_artifacts_requires_matching_metadata_and_release_note(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -295,6 +342,27 @@ class CliTests(unittest.TestCase):
 
             with self.assertRaisesRegex(ValueError, "Missing release notes"):
                 verify_release_artifacts(root, "0.4.0")
+
+    def test_verify_release_artifacts_rejects_stale_provider_and_release_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self._make_release_artifacts_fixture(Path(tmp))
+            mcp_path = root / "plugins/agent-workbench/.mcp.json"
+            mcp = json.loads(mcp_path.read_text(encoding="utf-8"))
+            mcp["mcpServers"]["agent-workbench"]["env"][
+                "AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION"
+            ] = "0.3.0"
+            mcp_path.write_text(json.dumps(mcp) + "\n", encoding="utf-8")
+            manifest_path = root / "packaging/agent-workbench/package-manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["release_status"] = "unreleased"
+            manifest_path.write_text(json.dumps(manifest) + "\n", encoding="utf-8")
+
+            with self.assertRaises(ValueError) as raised:
+                verify_release_artifacts(root, "0.4.0")
+
+            message = str(raised.exception)
+            self.assertIn("AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION", message)
+            self.assertIn("release_status", message)
 
     def test_release_trigger_command_dry_run_checks_artifacts_and_pushes_tag(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -568,14 +636,43 @@ class CliTests(unittest.TestCase):
                 "packaging/agent-workbench/package-manifest.json",
                 {
                     "version": "0.4.0",
+                    "release_status": "released",
+                    "latest_released_version": "0.4.0",
                     "install_command": install_command,
                     "codex": {"plugin_install_model": install_command},
                 },
             ),
-            ("packaging/agent-workbench/npm-package.json", {"install_command": install_command}),
+            (
+                "packaging/agent-workbench/npm-package.json",
+                {
+                    "release_status": "released",
+                    "latest_released_version": "0.4.0",
+                    "install_command": install_command,
+                },
+            ),
             (".well-known/mcp/server-card.json", {"version": "0.4.0"}),
             ("plugins/agent-workbench/.codex-plugin/plugin.json", {"version": "0.4.0"}),
             ("plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json", {"version": "0.4.0"}),
+            (
+                "plugins/agent-workbench/.mcp.json",
+                {
+                    "mcpServers": {
+                        "agent-workbench": {
+                            "env": {"AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION": "0.4.0"}
+                        }
+                    }
+                },
+            ),
+            (
+                "plugins/agent-workbench/claude-plugin/.mcp.json",
+                {
+                    "mcpServers": {
+                        "agent-workbench": {
+                            "env": {"AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION": "0.4.0"}
+                        }
+                    }
+                },
+            ),
         ]:
             (root / relative).write_text(json.dumps(payload) + "\n", encoding="utf-8")
         (root / "docs/release-notes/v0.4.0.md").write_text(

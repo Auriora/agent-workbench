@@ -36,12 +36,27 @@ VERSION_JSON_POINTERS = (
     (".well-known/mcp/server-card.json", ("version",)),
     ("plugins/agent-workbench/.codex-plugin/plugin.json", ("version",)),
     ("plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json", ("version",)),
+    (
+        "plugins/agent-workbench/.mcp.json",
+        ("mcpServers", "agent-workbench", "env", "AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION"),
+    ),
+    (
+        "plugins/agent-workbench/claude-plugin/.mcp.json",
+        ("mcpServers", "agent-workbench", "env", "AGENT_WORKBENCH_PROVIDER_PLUGIN_VERSION"),
+    ),
 )
 
 INSTALL_COMMAND_JSON_POINTERS = (
     ("packaging/agent-workbench/package-manifest.json", ("install_command",)),
     ("packaging/agent-workbench/package-manifest.json", ("codex", "plugin_install_model")),
     ("packaging/agent-workbench/npm-package.json", ("install_command",)),
+)
+
+RELEASE_STATE_JSON_POINTERS = (
+    ("packaging/agent-workbench/package-manifest.json", ("release_status",), "released"),
+    ("packaging/agent-workbench/package-manifest.json", ("latest_released_version",), None),
+    ("packaging/agent-workbench/npm-package.json", ("release_status",), "released"),
+    ("packaging/agent-workbench/npm-package.json", ("latest_released_version",), None),
 )
 
 CURRENT_DOC_PATHS = (
@@ -235,6 +250,14 @@ def verify_release_artifacts(root: Path, version: str) -> Path:
                 f"{relative}#/{'/'.join(pointer)} does not match the v{normalized} install command."
             )
 
+    for relative, pointer, fixed_value in RELEASE_STATE_JSON_POINTERS:
+        expected = normalized if fixed_value is None else fixed_value
+        value = _get_json_pointer(_read_json(root / relative), pointer)
+        if value != expected:
+            failures.append(
+                f"{relative}#/{'/'.join(pointer)} is {value!r}; expected {expected!r}."
+            )
+
     notes_path = root / "docs" / "release-notes" / f"v{normalized}.md"
     if not notes_path.exists():
         failures.append(f"Missing release notes: {notes_path.relative_to(root)}.")
@@ -267,12 +290,25 @@ def update_release_version(root: Path, version: str) -> list[Path]:
             _write_json(path, data)
             changed.append(path)
 
+    for relative, pointer, fixed_value in RELEASE_STATE_JSON_POINTERS:
+        path = root / relative
+        data = _read_json(path)
+        value = normalized if fixed_value is None else fixed_value
+        if _set_json_pointer(data, pointer, value):
+            _write_json(path, data)
+            changed.append(path)
+
     for relative in CURRENT_DOC_PATHS:
         path = root / relative
         text = path.read_text(encoding="utf-8")
-        updated = text
-        for pattern, replacement in replacements.items():
-            updated = pattern.sub(replacement, updated)
+        updated_lines: list[str] = []
+        for line in text.splitlines(keepends=True):
+            updated_line = line
+            if "npm install" in line or "npm.cmd install" in line:
+                for pattern, replacement in replacements.items():
+                    updated_line = pattern.sub(replacement, updated_line)
+            updated_lines.append(updated_line)
+        updated = "".join(updated_lines)
         if updated != text:
             path.write_text(updated, encoding="utf-8")
             changed.append(path)

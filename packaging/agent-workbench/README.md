@@ -71,9 +71,8 @@ client connection. Stale first reads and watcher events request this path
 automatically; the package does not expose a manual refresh command, retry
 loop, provider branch, or alternate indexer.
 
-This convergence behavior describes the current unreleased `0.6.1` package.
-The install command above intentionally remains on the latest released
-`0.5.2`; it does not obtain this behavior until v0.6.2 is published.
+This convergence behavior is included in release `0.6.2` and in the install
+command above.
 
 Snapshot replacement is transactional. Readers retain the prior published
 snapshot until the replacement's file, graph, unresolved-reference, docs,
@@ -82,10 +81,10 @@ orphaned builds remain invisible. Publication is separate from freshness and
 coverage, so a published watcher-clean snapshot may still report bounded
 partial evidence-class coverage.
 
-Schema identity v2 seeds `graph-v2.sqlite` without mutating v0.6.2
+Schema identity v2 seeds `graph-v2.sqlite` without mutating v0.5.2
 `graph.sqlite`, then classifies legacy non-refreshing rows as published and
 legacy refreshing rows as failed. After owner admission, it preserves
-`graph-v1.sqlite.pre-v2` and atomically guards `graph.sqlite`; the actual v0.6.2
+`graph-v1.sqlite.pre-v2` and atomically guards `graph.sqlite`; the actual v0.5.2
 adapter blocks on that non-SQLite guard. Rollback is not an in-place downgrade:
 stop every owner, then restore a known complete pre-migration cache or move the
 whole generated `.cache/agent-workbench` directory to a recoverable backup

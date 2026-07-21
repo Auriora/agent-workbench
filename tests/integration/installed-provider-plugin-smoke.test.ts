@@ -10,6 +10,9 @@ import path from "node:path";
 
 const repoRoot = path.resolve(".");
 const script = path.join(repoRoot, "scripts", "ci", "installed-provider-plugin-smoke.mjs");
+const packageVersion = (JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")) as {
+  version: string;
+}).version;
 let fakeRoot: string;
 let fakeBin: string;
 
@@ -32,7 +35,7 @@ describe("installed provider plugin smoke", () => {
       const stdout = execFileSync(process.execPath, [
         script,
         "--provider", provider,
-        "--expected-version", "0.6.1"
+        "--expected-version", packageVersion
       ], {
         cwd: repoRoot,
         env: {
@@ -47,16 +50,16 @@ describe("installed provider plugin smoke", () => {
       expect(receipt).toMatchObject({
         ok: true,
         provider,
-        expected_version: "0.6.1",
+        expected_version: packageVersion,
         real_agent_cli_executed: true,
         package: {
           name: "@auriora/agent-workbench",
-          observed_version: "0.6.1"
+          observed_version: packageVersion
         },
-        plugin: { observed_version: "0.6.1" },
+        plugin: { observed_version: packageVersion },
         runtime: {
-          observed_version: "0.6.1",
-          provider_plugin_version: "0.6.1",
+          observed_version: packageVersion,
+          provider_plugin_version: packageVersion,
           provider: provider === "claude" ? "claude_code" : "codex"
         },
         reference: {
@@ -101,7 +104,7 @@ describe("installed provider plugin smoke", () => {
     const result = spawnSync(process.execPath, [
       script,
       "--provider", "codex",
-      "--expected-version", "0.6.1"
+      "--expected-version", packageVersion
     ], {
       cwd: repoRoot,
       env: {
@@ -226,7 +229,7 @@ describe("installed provider plugin smoke", () => {
 });
 
 function runFixture(provider: "codex" | "claude", scenario?: string, extraEnv: NodeJS.ProcessEnv = {}) {
-  return spawnSync(process.execPath, [script, "--provider", provider, "--expected-version", "0.6.1"], {
+  return spawnSync(process.execPath, [script, "--provider", provider, "--expected-version", packageVersion], {
     cwd: repoRoot,
     env: {
       ...process.env,
@@ -249,14 +252,14 @@ import readline from "node:readline";
 const command = ${JSON.stringify(commandName)};
 const args = process.argv.slice(2);
 const repo = process.env.AWB_FAKE_REPO_ROOT;
-const version = "0.6.1";
+const version = ${JSON.stringify(packageVersion)};
 const exact = (expected) => JSON.stringify(args) === JSON.stringify(expected);
 const failArgv = () => { process.stderr.write("unexpected argv: " + JSON.stringify(args)); process.exit(93); };
 if (command === "npm") {
   if (args[0] === "pack") {
     if (args.length !== 4 || args[1] !== "--json" || args[2] !== "--pack-destination") failArgv();
     const root = args[args.indexOf("--pack-destination") + 1];
-    const filename = "auriora-agent-workbench-0.6.1.tgz";
+    const filename = "auriora-agent-workbench-" + version + ".tgz";
     fs.writeFileSync(path.join(root, filename), "fixture");
     process.stdout.write(JSON.stringify([{ filename }]) + "\\n");
   } else if (args[0] === "install") {

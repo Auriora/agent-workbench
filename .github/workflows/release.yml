@@ -131,16 +131,22 @@ jobs:
       - name: Build release tarball
         run: npm_config_cache=/tmp/agent-workbench-npm-cache npm pack
 
+      - name: Render GitHub release notes
+        env:
+          NOTES: ${{ steps.release.outputs.notes }}
+          GITHUB_RELEASE_NOTES: ${{ runner.temp }}/agent-workbench-github-release-notes.md
+        run: node scripts/ci/render-github-release-notes.mjs "${NOTES}" "${GITHUB_RELEASE_NOTES}"
+
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.release.outputs.tag }}
-          NOTES: ${{ steps.release.outputs.notes }}
+          GITHUB_RELEASE_NOTES: ${{ runner.temp }}/agent-workbench-github-release-notes.md
           TARBALL: ${{ steps.release.outputs.tarball }}
         run: |
           if gh release view "${TAG}" >/dev/null 2>&1; then
-            gh release edit "${TAG}" --title "${TAG}" --notes-file "${NOTES}"
+            gh release edit "${TAG}" --title "${TAG}" --notes-file "${GITHUB_RELEASE_NOTES}"
             gh release upload "${TAG}" "${TARBALL}" --clobber
           else
-            gh release create "${TAG}" "${TARBALL}" --title "${TAG}" --notes-file "${NOTES}"
+            gh release create "${TAG}" "${TARBALL}" --title "${TAG}" --notes-file "${GITHUB_RELEASE_NOTES}"
           fi
