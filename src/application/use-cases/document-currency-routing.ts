@@ -27,6 +27,7 @@ import {
 
 const DOCUMENTATION_MAP_PATH = "docs/reference/documentation-map.md";
 const MAX_DOCUMENTATION_CONCERN_SOURCE_BYTES = 120_000;
+export const MAX_DOCUMENTATION_OWNER_METADATA_BYTES = 16_384;
 
 export type DocumentationConcernIndexEvidence = {
   state: DocumentationConcernIndexStateValue;
@@ -93,25 +94,21 @@ export async function extractDocumentationConcernIndex(input: {
       continue;
     }
     if (!stat.is_file) return invalidConcernIndex(`Mapped owner is not a file: ${mappedPath}.`, contentHash);
-    if (stat.size_bytes > MAX_DOCUMENTATION_CONCERN_SOURCE_BYTES) {
-      return invalidConcernIndex(
-        `Mapped owner ${mappedPath} exceeds the ${MAX_DOCUMENTATION_CONCERN_SOURCE_BYTES}-byte concern-index limit.`,
-        contentHash
-      );
-    }
     let content: string;
     try {
       content = input.content_by_path?.get(mappedPath) ?? await input.workspace.readText({ path: mappedPath });
     } catch (error) {
       return invalidConcernIndex(`Owner read failed for ${mappedPath}: ${safeErrorMessage(error)}`, contentHash);
     }
-    if (Buffer.byteLength(content) > MAX_DOCUMENTATION_CONCERN_SOURCE_BYTES) {
-      return invalidConcernIndex(
-        `Mapped owner ${mappedPath} exceeds the ${MAX_DOCUMENTATION_CONCERN_SOURCE_BYTES}-byte concern-index limit after read.`,
-        contentHash
-      );
-    }
-    const classified = classifyDocumentationConcernOwner({ mapped_owner_path: mappedPath, content });
+    const bounded = boundedDocumentationOwnerClassificationContent({
+      mapped_owner_path: mappedPath,
+      content
+    });
+    if ("invalid" in bounded) return invalidConcernIndex(bounded.failure_reason, contentHash);
+    const classified = classifyDocumentationConcernOwner({
+      mapped_owner_path: mappedPath,
+      content: bounded.content
+    });
     if ("invalid" in classified) return invalidConcernIndex(classified.failure_reason, contentHash);
     ownerEvidenceByPath.set(mappedPath, {
       mapped_owner_path: mappedPath,
@@ -131,6 +128,86 @@ export async function extractDocumentationConcernIndex(input: {
     terms: parsed.terms,
     owners: parsed.owners.map((owner) => ({ ...owner, ...ownerEvidenceByPath.get(owner.mapped_owner_path)! })),
     document_content_by_path: documentContentByPath
+  };
+}
+
+export function boundedDocumentationOwnerClassificationContent(input: {
+  mapped_owner_path: string;
+  content: string;
+}): { content: string } | { invalid: true; failure_reason: string } {
+  const bounded = utf8Prefix(input.content, MAX_DOCUMENTATION_OWNER_METADATA_BYTES);
+  const boundedPrefix = bounded.content;
+  const firstLineEnd = boundedPrefix.indexOf("\n");
+  const firstLine = (firstLineEnd < 0 ? boundedPrefix : boundedPrefix.slice(0, firstLineEnd))
+    .replace(/\r$/u, "");
+
+  if (firstLine !== "---") {
+    // The domain parser accepts whitespace around delimiters for general
+    // Markdown classification. Concern-owner metadata is intentionally
+    // stricter: only an exact first-line delimiter starts metadata.
+    return {
+      content: firstLine.trim() === "---"
+        ? `\n${utf8Prefix(input.content, MAX_DOCUMENTATION_OWNER_METADATA_BYTES - 1).content}`
+        : boundedPrefix
+    };
+  }
+
+  const closingDelimiterEnd = findClosingFrontmatterDelimiterEnd(boundedPrefix, firstLineEnd);
+  if (closingDelimiterEnd === undefined) {
+    return bounded.truncated
+      ? oversizedOwnerMetadata(input.mapped_owner_path)
+      : { content: boundedPrefix };
+  }
+  return { content: boundedPrefix };
+}
+
+function findClosingFrontmatterDelimiterEnd(content: string, firstLineEnd: number): number | undefined {
+  if (firstLineEnd < 0) return undefined;
+  let lineStart = firstLineEnd + 1;
+  while (lineStart <= content.length) {
+    const lineEnd = content.indexOf("\n", lineStart);
+    const rawLine = content.slice(lineStart, lineEnd < 0 ? content.length : lineEnd);
+    const line = rawLine.replace(/\r$/u, "");
+    if (line === "---") return lineStart + 3;
+    if (lineEnd < 0) return undefined;
+    lineStart = lineEnd + 1;
+  }
+  return undefined;
+}
+
+function utf8Prefix(content: string, maxBytes: number): { content: string; truncated: boolean } {
+  let byteCount = 0;
+  let codeUnitEnd = 0;
+  while (codeUnitEnd < content.length) {
+    const codePoint = content.codePointAt(codeUnitEnd);
+    if (codePoint === undefined) break;
+    const codePointBytes = utf8CodePointBytes(codePoint);
+    if (byteCount + codePointBytes > maxBytes) {
+      return { content: content.slice(0, codeUnitEnd), truncated: true };
+    }
+    byteCount += codePointBytes;
+    codeUnitEnd += codePoint > 0xffff ? 2 : 1;
+    if (byteCount === maxBytes) {
+      return {
+        content: content.slice(0, codeUnitEnd),
+        truncated: codeUnitEnd < content.length
+      };
+    }
+  }
+  return { content, truncated: false };
+}
+
+function utf8CodePointBytes(codePoint: number): number {
+  if (codePoint <= 0x7f) return 1;
+  if (codePoint <= 0x7ff) return 2;
+  if (codePoint <= 0xffff) return 3;
+  return 4;
+}
+
+function oversizedOwnerMetadata(mappedOwnerPath: string): { invalid: true; failure_reason: string } {
+  return {
+    invalid: true,
+    failure_reason: `frontmatter_metadata_too_large: Frontmatter in ${mappedOwnerPath} exceeds the ${MAX_DOCUMENTATION_OWNER_METADATA_BYTES}-byte metadata limit.`
   };
 }
 

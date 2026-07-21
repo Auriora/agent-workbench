@@ -39,6 +39,7 @@ uses them.
 | Product narrative and source-project rationale | [Agent IDE restart concept](../design/agent-ide-restart-concept.md) |  | Narrative only; not the contract source of truth. |
 | System shape and component boundaries | [System architecture](../architecture/system-architecture.md) |  | Keep high-level and avoid schema detail. |
 | Product principles and VMOST | [Agent Workbench principles](../requirements/agent-workbench-principles.md) |  | Owns the project vision, mission, objectives, strategy, tactics, scope rules, governance relationship, and guiding principles for building an IDE for coding agents. |
+| Product backlog | [Agent Workbench backlog](../backlog/README.md) |  | Owns principle-derived backlog items, promotion rules, sequencing, acceptance criteria, and evidence requirements before work becomes an active implementation spec. |
 | Layered implementation architecture | [Layered runtime architecture](../design/layered-runtime-architecture.md) |  | Owns dependency direction, source layout, ports, presenters, policies, boundary-test rules, and current ownership decisions for Markdown helpers, response metadata policy, and telemetry recorder abstractions. |
 | Accepted target requirements | [Runtime requirements](../requirements/runtime-requirements.md) |  | Requirements are target-state until implementation evidence exists. |
 | Runtime response envelope, enums, and MCP contract rules | [Runtime contracts](runtime-contracts.md) | runtime contracts; response envelope; MCP contract | Single source for capability, trust, freshness, evidence, attention, edit-token, and error-shape vocabulary. |
@@ -94,14 +95,6 @@ uses them.
 | MCP error envelope consistency delivery record | [Spec closure log](../history/spec-closure-log.md) |  | Closed Spec 030 delivery evidence. Current MCP failure-class vocabulary lives in [Runtime contracts](runtime-contracts.md), shared handler-wrapper expectations live in [MCP surface design](../design/mcp-surface-design.md), and representative registry behavior is covered by MCP error-envelope tests. |
 | Cross-platform packaging delivery record | [Spec closure log](../history/spec-closure-log.md) |  | Closed Spec 033 delivery evidence. Current npm package install, platform matrix, plugin launch, hook, and native dependency guidance lives in [Codex Agent Workbench plugin runbook](../runbooks/codex-agent-workbench-plugin.md), [packaging README](../../packaging/agent-workbench/README.md), and [Native dependency setup](../runbooks/native-dependency-setup.md). Remaining launcher and native-install work is routed to the backlog. |
 | MVP proof gates and fixtures | [MVP proof matrix](mvp-proof-matrix.md) |  | Owns fixture, budget, degraded-mode, and acceptance evidence. |
-
-The [Agent Workbench backlog](../backlog/README.md) remains the durable owner of
-principle-derived backlog items, promotion rules, sequencing, acceptance
-criteria, and evidence requirements. It is temporarily navigation-only in this
-map because the production concern classifier currently rejects mapped owner
-files over 120,000 bytes. Active Spec 044 must restore its machine-readable
-canonical-owner entry through bounded metadata classification before closure;
-raising an arbitrary whole-file limit is not the accepted repair.
 
 The `docs/adr/` collection, navigable from
 [ADR 0001](../adr/0001-local-first-repo-runtime.md), is not one canonical owner

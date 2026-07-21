@@ -7,7 +7,11 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { extractDocumentationConcernIndex } from "../../src/application/use-cases/document-currency-routing.js";
+import {
+  boundedDocumentationOwnerClassificationContent,
+  extractDocumentationConcernIndex,
+  MAX_DOCUMENTATION_OWNER_METADATA_BYTES
+} from "../../src/application/use-cases/document-currency-routing.js";
 import {
   normalizeDocumentationConcern,
   parseDocumentationConcernMap,
@@ -245,6 +249,19 @@ describe("documentation concern routing fixture", () => {
       .every(({ owner_state }) => owner_state === "valid")).toBe(true);
   });
 
+  it("extracts the checked-in repository documentation map through the production use case", async () => {
+    const evidence = await extractDocumentationConcernIndex({
+      workspace: new WorkspaceFileAdapter({ repoRoot: path.resolve(".") })
+    });
+
+    expect(evidence.state).toBe("complete");
+    expect(evidence.failure_reason).toBeUndefined();
+    expect(evidence.owners).toContainEqual(expect.objectContaining({
+      mapped_owner_path: "docs/backlog/README.md",
+      owner_state: "draft"
+    }));
+  });
+
   it("invalidates empty explicit terms and repository-escaping owner links with zero rows", () => {
     const emptyTerm = parseDocumentationConcernMap({
       map_path: "docs/reference/documentation-map.md",
@@ -311,6 +328,24 @@ describe("documentation concern routing fixture", () => {
     }
   });
 
+  it("rejects a directory owner with the exact bounded production reason", async () => {
+    const map = concernMap("owner.md");
+    const workspace = boundedWorkspace({
+      stat: async ({ path: requestedPath }) => ({
+        exists: true,
+        is_file: requestedPath === "docs/reference/documentation-map.md",
+        size_bytes: requestedPath === "docs/reference/documentation-map.md" ? Buffer.byteLength(map) : 0,
+        mtime_ms: 0
+      }),
+      readText: async () => map
+    });
+
+    await expect(extractDocumentationConcernIndex({ workspace })).resolves.toMatchObject({
+      state: "invalid",
+      failure_reason: "Mapped owner is not a file: docs/reference/owner.md."
+    });
+  });
+
   it("rejects an oversized documentation map before reading it", async () => {
     const readText = vi.fn<WorkspaceFilePort["readText"]>();
     const workspace = boundedWorkspace({
@@ -325,12 +360,21 @@ describe("documentation concern routing fixture", () => {
     expect(readText).not.toHaveBeenCalled();
   });
 
-  it("rejects an oversized mapped owner before reading the owner", async () => {
-    const map = [
-      "| Concern | Canonical owner |",
-      "| --- | --- |",
-      "| Runtime | [Owner](owner.md) |"
-    ].join("\n");
+  it("classifies an owner with a body larger than 120000 bytes from bounded valid frontmatter", async () => {
+    const owner = "---\nstatus: current\n---\n" + "x".repeat(120_001);
+    const { evidence, readText } = await extractSingleOwner(owner);
+
+    expect(evidence).toMatchObject({
+      state: "complete",
+      owners: [expect.objectContaining({ owner_state: "valid" })]
+    });
+    expect(readText).toHaveBeenCalledTimes(2);
+  });
+
+  it("classifies already-indexed large-owner content through the same bounded metadata path", async () => {
+    const map = concernMap("owner.md");
+    const ownerPath = "docs/reference/owner.md";
+    const owner = "---\nstatus: current\n---\n" + "x".repeat(120_001);
     const readText = vi.fn<WorkspaceFilePort["readText"]>(async ({ path: requestedPath }) => {
       if (requestedPath === "docs/reference/documentation-map.md") return map;
       throw new Error(`Unexpected read: ${requestedPath}`);
@@ -339,18 +383,22 @@ describe("documentation concern routing fixture", () => {
       stat: async ({ path: requestedPath }) => ({
         exists: true,
         is_file: true,
-        size_bytes: requestedPath === "docs/reference/documentation-map.md" ? Buffer.byteLength(map) : 120_001,
+        size_bytes: requestedPath === "docs/reference/documentation-map.md"
+          ? Buffer.byteLength(map)
+          : Buffer.byteLength(owner),
         mtime_ms: 0
       }),
       readText
     });
 
-    await expect(extractDocumentationConcernIndex({ workspace })).resolves.toMatchObject({
-      state: "invalid",
-      failure_reason: expect.stringContaining("docs/reference/owner.md exceeds the 120000-byte concern-index limit")
+    await expect(extractDocumentationConcernIndex({
+      workspace,
+      content_by_path: new Map([[ownerPath, owner]])
+    })).resolves.toMatchObject({
+      state: "complete",
+      owners: [expect.objectContaining({ owner_state: "valid" })]
     });
     expect(readText).toHaveBeenCalledTimes(1);
-    expect(readText).toHaveBeenCalledWith({ path: "docs/reference/documentation-map.md" });
   });
 
   it("rejects map content that exceeds the byte ceiling after stat", async () => {
@@ -366,32 +414,161 @@ describe("documentation concern routing fixture", () => {
     });
   });
 
-  it("rejects oversized cached owner content even when stat reports a smaller file", async () => {
-    const map = [
-      "| Concern | Canonical owner |",
-      "| --- | --- |",
-      "| Runtime | [Owner](owner.md) |"
-    ].join("\n");
-    const ownerPath = "docs/reference/owner.md";
-    const workspace = boundedWorkspace({
-      stat: async ({ path: requestedPath }) => ({
-        exists: true,
-        is_file: true,
-        size_bytes: requestedPath.endsWith("documentation-map.md") ? Buffer.byteLength(map) : 1,
-        mtime_ms: 0
-      }),
-      readText: async () => map
-    });
+  it.each([
+    ["immediately before", MAX_DOCUMENTATION_OWNER_METADATA_BYTES - 1],
+    ["at", MAX_DOCUMENTATION_OWNER_METADATA_BYTES]
+  ])("accepts a closing frontmatter delimiter ending %s the metadata bound", async (_label, closingEnd) => {
+    const { evidence } = await extractSingleOwner(frontmatterClosingAt(closingEnd));
 
-    await expect(extractDocumentationConcernIndex({
-      workspace,
-      content_by_path: new Map([[ownerPath, "x".repeat(120_001)]])
-    })).resolves.toMatchObject({
-      state: "invalid",
-      failure_reason: expect.stringContaining("after read")
+    expect(evidence).toMatchObject({
+      state: "complete",
+      owners: [expect.objectContaining({ owner_state: "valid" })]
     });
   });
+
+  it.each([
+    ["crossing", MAX_DOCUMENTATION_OWNER_METADATA_BYTES + 2],
+    ["after", MAX_DOCUMENTATION_OWNER_METADATA_BYTES + 64]
+  ])("rejects a closing frontmatter delimiter %s the metadata bound", async (_label, closingEnd) => {
+    const { evidence } = await extractSingleOwner(frontmatterClosingAt(closingEnd));
+
+    expect(evidence).toMatchObject({
+      state: "invalid",
+      failure_reason: expect.stringContaining("frontmatter_metadata_too_large")
+    });
+  });
+
+  it("treats a non-exact first-line delimiter as absent frontmatter", async () => {
+    const { evidence } = await extractSingleOwner([
+      " ---",
+      "canonical_owner: docs/reference/different.md",
+      "---"
+    ].join("\n"));
+
+    expect(evidence).toMatchObject({
+      state: "complete",
+      owners: [expect.objectContaining({ owner_state: "valid" })]
+    });
+    expect(evidence.owners[0]?.declared_canonical_owner).toBeUndefined();
+
+    const bounded = boundedDocumentationOwnerClassificationContent({
+      mapped_owner_path: "docs/reference/owner.md",
+      content: ` ---\n${"x".repeat(20_000)}`
+    });
+    if ("invalid" in bounded) throw new Error(bounded.failure_reason);
+    expect(Buffer.byteLength(bounded.content, "utf8")).toBeLessThanOrEqual(MAX_DOCUMENTATION_OWNER_METADATA_BYTES);
+  });
+
+  it("classifies an ordinary owner with no frontmatter as valid", async () => {
+    const { evidence } = await extractSingleOwner("# Runtime owner\n\nCurrent design guidance.\n");
+
+    expect(evidence).toMatchObject({
+      state: "complete",
+      owners: [expect.objectContaining({
+        mapped_owner_path: "docs/reference/owner.md",
+        owner_state: "valid"
+      })]
+    });
+  });
+
+  it("keeps short unterminated frontmatter distinct from oversized metadata", async () => {
+    const { evidence } = await extractSingleOwner("---\nstatus: current");
+
+    expect(evidence).toMatchObject({
+      state: "invalid",
+      failure_reason: "Malformed frontmatter in docs/reference/owner.md."
+    });
+  });
+
+  it("returns a bounded typed reason for unterminated oversized frontmatter", async () => {
+    const { evidence } = await extractSingleOwner("---\nstatus: current\n" + "x".repeat(20_000));
+
+    expect(evidence).toMatchObject({
+      state: "invalid",
+      failure_reason: expect.stringContaining("frontmatter_metadata_too_large")
+    });
+    expect(Buffer.byteLength(evidence.failure_reason ?? "", "utf8")).toBeLessThanOrEqual(500);
+  });
+
+  it("does not split a multibyte code point at the admitted-prefix edge", () => {
+    const beforeEdge = "x".repeat(MAX_DOCUMENTATION_OWNER_METADATA_BYTES - 1);
+    const bounded = boundedDocumentationOwnerClassificationContent({
+      mapped_owner_path: "docs/reference/owner.md",
+      content: `${beforeEdge}éafter`
+    });
+
+    expect(bounded).toEqual({ content: beforeEdge });
+    if ("invalid" in bounded) throw new Error(bounded.failure_reason);
+    expect(Buffer.byteLength(bounded.content, "utf8")).toBeLessThanOrEqual(MAX_DOCUMENTATION_OWNER_METADATA_BYTES);
+    expect(bounded.content).not.toContain("�");
+
+    const completeAstral = boundedDocumentationOwnerClassificationContent({
+      mapped_owner_path: "docs/reference/owner.md",
+      content: `${"x".repeat(MAX_DOCUMENTATION_OWNER_METADATA_BYTES - 4)}😀tail`
+    });
+    expect(completeAstral).toEqual({
+      content: `${"x".repeat(MAX_DOCUMENTATION_OWNER_METADATA_BYTES - 4)}😀`
+    });
+
+    const splitAstral = boundedDocumentationOwnerClassificationContent({
+      mapped_owner_path: "docs/reference/owner.md",
+      content: `${"x".repeat(MAX_DOCUMENTATION_OWNER_METADATA_BYTES - 3)}😀tail`
+    });
+    expect(splitAstral).toEqual({
+      content: "x".repeat(MAX_DOCUMENTATION_OWNER_METADATA_BYTES - 3)
+    });
+  });
+
+  it("bounds classification independently of an arbitrarily long owner tail", () => {
+    const admitted = "x".repeat(MAX_DOCUMENTATION_OWNER_METADATA_BYTES);
+    const bounded = boundedDocumentationOwnerClassificationContent({
+      mapped_owner_path: "docs/reference/owner.md",
+      content: admitted + "uninspected-tail".repeat(100_000)
+    });
+
+    expect(bounded).toEqual({ content: admitted });
+  });
 });
+
+async function extractSingleOwner(owner: string): Promise<{
+  evidence: Awaited<ReturnType<typeof extractDocumentationConcernIndex>>;
+  readText: ReturnType<typeof vi.fn>;
+}> {
+  const map = concernMap("owner.md");
+  const readText = vi.fn<WorkspaceFilePort["readText"]>(async ({ path: requestedPath }) => {
+    if (requestedPath === "docs/reference/documentation-map.md") return map;
+    if (requestedPath === "docs/reference/owner.md") return owner;
+    throw new Error(`Unexpected read: ${requestedPath}`);
+  });
+  const workspace = boundedWorkspace({
+    stat: async ({ path: requestedPath }) => ({
+      exists: true,
+      is_file: true,
+      size_bytes: requestedPath === "docs/reference/documentation-map.md"
+        ? Buffer.byteLength(map)
+        : Buffer.byteLength(owner),
+      mtime_ms: 0
+    }),
+    readText
+  });
+  return { evidence: await extractDocumentationConcernIndex({ workspace }), readText };
+}
+
+function concernMap(ownerDestination: string): string {
+  return [
+    "| Concern | Canonical owner |",
+    "| --- | --- |",
+    `| Runtime | [Owner](${ownerDestination}) |`
+  ].join("\n");
+}
+
+function frontmatterClosingAt(closingEndByte: number): string {
+  const opening = "---\nstatus: current\n";
+  const suffix = "\n---\nbody";
+  const fillerLength = closingEndByte - Buffer.byteLength(opening) - Buffer.byteLength("\n---");
+  if (fillerLength < 0) throw new Error("Closing delimiter offset is too small for fixture.");
+  return opening + "x".repeat(fillerLength) + suffix;
+}
 
 function boundedWorkspace(input: {
   stat: WorkspaceFilePort["stat"];

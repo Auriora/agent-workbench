@@ -47,28 +47,61 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
       exposes no workspace watcher, so direct worktree extraction is the
       bounded Phase 1 proof.
 
-- [ ] T002 Add the repository-real concern-map regression and phase checkpoint.
+- [x] T002 Add the repository-real concern-map regression and phase checkpoint.
   - Depends on: T001
   - Requirements: Requirement 1 AC1-AC6, SC-001
   - Files: `tests/docs/documentation-concern-routing.test.ts` or one focused
     repository-contract test and `docs/reference/mvp-proof-matrix.md`
-  - Acceptance: The checked-in map is passed through the production extractor;
-    a directory-owner fixture fails with the exact bounded reason.
+  - Acceptance: The repository-real map candidate is passed through the
+    production extractor; a directory-owner fixture fails with the exact
+    bounded reason.
   - Validation: focused Vitest, Markdown checks, `git diff --check`.
-  - Evidence mode: validation
-  - Evidence: Pending.
-  - [ ] T002.1 Add a test that extracts the checked-in map through the
+  - Evidence mode: command
+  - Evidence: Phase 1 complete: production extraction of the restored
+    repository-real worktree candidate returned complete with 59 concerns, 73
+    terms, and 61 owners, including the backlog as draft. Focused concern
+    routing passed 26/26; typecheck, docs metadata, Markdown non-table checks,
+    and diff check passed. One earlier full run had an intermittent daemon
+    freshness failure whose exact suite passed 15/15 without establishing root
+    cause; the final full rerun passed all 1006 tests.
+  - [x] T002.1 Add a test that extracts the repository-real map through the
     production use case.
-  - [ ] T002.2 Add a fixture proving directory owners fail with the bounded
+    - Evidence: Production extractor regression against the repository-real
+      worktree candidate returned complete with 59 concerns, 73 terms, 61
+      owners, no failure reason, and `docs/backlog/README.md` classified draft.
+    - Evidence mode: command
+  - [x] T002.2 Add a fixture proving directory owners fail with the bounded
     `Mapped owner is not a file` reason.
-  - [ ] T002.3 Implement bounded metadata classification for already-indexed
+    - Evidence: Focused Vitest proves a directory owner returns the exact
+      bounded reason `Mapped owner is not a file: docs/reference/owner.md.`
+    - Evidence mode: command
+  - [x] T002.3 Implement bounded metadata classification for already-indexed
     large owners with the normative 16,384-byte protocol, without raising the
     whole-file limit or adding a second read route.
-  - [ ] T002.4 Restore the product backlog canonical-owner row and prove both
+    - Evidence: `src/application/use-cases/document-currency-routing.ts` admits
+      only `MAX_DOCUMENTATION_OWNER_METADATA_BYTES` (16,384) through
+      `utf8Prefix` before classification; focused Vitest passed 26/26 boundary
+      and large-owner tests.
+    - Evidence mode: command
+  - [x] T002.4 Restore the product backlog canonical-owner row and prove both
     its owner state and the complete concern index.
-  - [ ] T002.5 Run and record focused validation.
-  - [ ] T002.6 Promote the repository-real proof gate to
+    - Evidence: `docs/reference/documentation-map.md` restores Product backlog
+      as a canonical owner; production extraction classified
+      `docs/backlog/README.md` as draft within a complete concern index.
+    - Evidence mode: command
+  - [x] T002.5 Run and record focused validation.
+    - Evidence: Focused Vitest passed 26/26; `pnpm typecheck` passed; docs link
+      metadata passed 2/2; Markdown checks had no non-table findings; and
+      `git diff --check` passed. An earlier full run reached 1004/1005 with one
+      intermittent daemon freshness failure; its exact suite passed 15/15, and
+      the final full `pnpm test` rerun passed 1006/1006.
+    - Evidence mode: command
+  - [x] T002.6 Promote the repository-real proof gate to
     `docs/reference/mvp-proof-matrix.md`.
+    - Evidence: `docs/reference/mvp-proof-matrix.md` now records the
+      repository-real map fixture and documentation concern extraction pass gate, including
+      large-owner and metadata-boundary evidence.
+    - Evidence mode: artifact
 
 ## Phase 2: Snapshot-Bound Readiness Contract
 

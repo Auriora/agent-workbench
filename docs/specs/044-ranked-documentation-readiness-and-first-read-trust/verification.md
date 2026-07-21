@@ -19,7 +19,7 @@ installed-runtime acceptance.
 
 | Gate | Required? | Status | Evidence |
 | --- | --- | --- | --- |
-| Gate 1: Worktree map recovery and repository-real regression | yes | pending | T001-T002 |
+| Gate 1: Worktree map recovery and repository-real regression | yes | passed | T001-T002: production extraction complete; focused suite 26/26 |
 | Gate 2: Snapshot-bound status readiness | yes | pending | T003 |
 | Gate 3: Orientation and recovery agreement | yes | pending | T004-T005 |
 | Gate 4: Published snapshot and two-client acceptance | yes | pending | T006 |
@@ -80,7 +80,7 @@ diagnostic, not parity fields.
 
 | Requirement | Acceptance criteria covered | Evidence | Residual risk |
 | --- | --- | --- | --- |
-| Requirement 1 | pending | T001-T002 | backlog ownership is navigation-only until bounded classification and CI guard land |
+| Requirement 1 | AC1-AC6 | T001-T002: repository-real worktree map candidate complete with restored backlog owner; bounded metadata and invalid-owner regressions pass | revision-bound evidence follows the Phase 1 commit |
 | Requirement 2 | pending | T003 | status hot-path/store failure behavior |
 | Requirement 3 | pending | T004-T005 | refresh/source-repair classification |
 | Requirement 4 | pending | T006 | installed provider reload and convergence |
@@ -110,7 +110,7 @@ diagnostic, not parity fields.
 | Task ID | Status | Evidence | Notes |
 | --- | --- | --- | --- |
 | T001 | complete | map/ledger edits and revision-bound extractor result | live publication deliberately moves to T006 after implementation |
-| T002 | pending | | repository-real regression |
+| T002 | complete | production extraction 59 concerns/73 terms/61 owners; focused suite 26/26; typecheck and docs checks passed | repository-real regression and bounded metadata classification |
 | T003 | pending | | status readiness |
 | T004 | pending | | orientation |
 | T005 | pending | | recovery action |
@@ -123,6 +123,10 @@ diagnostic, not parity fields.
 | --- | --- | --- | --- |
 | 2026-07-21 | Codex and Claude live queries on snapshot `1784657587477`; read-only concern-state inspection | failed as expected before repair | `docs_search` blocked; orientation falsely reusable; persisted reason named `docs/adr` directory |
 | 2026-07-21 | Exact production-extractor command above against `HEAD a95d3d6` plus the displayed worktree map repair | passed after recovery edits | 58 concerns, 72 terms, 60 owners; no failure reason. Initial retry exposed the separate 120,000-byte backlog-owner limit now assigned to T002. |
+| 2026-07-21 | Spec 044 Phase 1 production extractor against the restored repository-real worktree map candidate | passed | `complete`; 59 concerns, 73 terms, 61 owners; `docs/backlog/README.md` classified `draft`; no failure reason. Revision-bound evidence awaits the Phase 1 commit. |
+| 2026-07-21 | `pnpm exec vitest run tests/docs/documentation-concern-routing.test.ts`; `pnpm typecheck`; docs link/frontmatter test; Markdown set check; `git diff --check` | passed | 26/26 focused tests and 2/2 docs tests; no non-table Markdown findings. |
+| 2026-07-21 | `pnpm test`, followed by exact daemon-suite rerun | partial full-suite environment evidence | Full suite reached 1004/1005; one daemon refresh case observed stale instead of fresh outside the changed file set. `tests/mcp/daemon-entrypoint-integration.test.ts` then passed 15/15 in isolation, proving intermittence but not root cause. The failure remains recorded rather than treated as a clean full-suite pass. |
+| 2026-07-21 | Final `pnpm test` after bounded-iterator correction | passed | 97 test files passed; 1006/1006 tests passed. This supplies clean full-suite Phase 1 evidence while preserving the earlier intermittent observation above. |
 
 ## Residual Risks
 
@@ -137,8 +141,8 @@ diagnostic, not parity fields.
 | --- | --- | --- | --- |
 | Readiness and recovery contracts | runtime contracts and MCP surface design | pending | T007 |
 | Publication/operations behavior | graph-store and runtime operations design | pending | T007 |
-| Map authoring rule | documentation map | partial | immediate repair text added |
-| Repository-real extraction proof | `docs/reference/mvp-proof-matrix.md` | pending | T002 and T007 |
+| Map authoring rule | documentation map | complete for Phase 1 | file-only owner rule retained and backlog owner restored |
+| Repository-real extraction proof | `docs/reference/mvp-proof-matrix.md` | complete for Phase 1 | checked-in map and metadata-boundary gate added; final promotion review remains T007 |
 | Operational dogfood evidence | dogfood ledger | partial | initial reproduction added |
 | Follow-up capacity/reference work | EB059 and EB061 | complete routing | backlog |
 

@@ -47,6 +47,7 @@ must appear in status, scope, and context with explicit capability metadata.
 | `fixture-runtime-boundaries` | Prove runtime context, registries, argument parsing, and OTEL boundaries | malformed MCP inputs, registry entries, runtime context fields, OTEL span/metric assertions |
 | `fixture-agent-integration-profile` | Prove common integration contract shape | Codex, Claude Code, Kiro, Augment, Gemini, and Junie target surfaces; unsupported-surface reasons; MCP binding metadata |
 | `fixture-markdown-quality` | Prove post-MVP Markdown quality contract shape | skipped heading levels, inconsistent numbering, ambiguous nested lists, wide tables, frontmatter violations, broken links, unchanged documents |
+| checked-in documentation map | Prove repository-real concern extraction and canonical-owner admission | production `documentation-map.md`, a valid owner larger than 120,000 bytes, directory-owner refusal, and bounded frontmatter boundary cases |
 | `fixture-go-service-repo` | Prove first-slice Go routing evidence | `.go` source files, `.gocache` skip behavior, `go.mod`, `Makefile`, package/function/type/method declarations, low-confidence impact when edges are absent |
 | `fixture-cmake-cpp-repo` | Prove first-slice C/C++ and CMake routing evidence | C++ source/header files, `.pyi` stubs, local `CMakeLists.txt`, CMake targets, classes/methods/includes, incidental `package.json` that must not dominate validation planning |
 
@@ -94,6 +95,7 @@ resource-backed discovery fixtures.
 | OTEL instrumentation | `fixture-runtime-boundaries` | dispatch, use-case, graph/query, worker, cache, presentation spans or metrics | operational telemetry exists without durable usage records |
 | Integration profile contract | `fixture-agent-integration-profile` | target agents, MCP bindings, artifacts, unsupported surfaces, provenance | executable behavior remains MCP-first and vendor emitters stay outside core runtime |
 | Markdown quality contract | `fixture-markdown-quality` | finding shape, formatter plan shape, source ranges, preview/apply safety metadata | executable tools remain post-MVP unless explicitly promoted |
+| documentation concern extraction | checked-in map plus focused owner fixtures | production extractor output, exact invalid-owner reason, and 16,384-byte metadata-boundary evidence | checked-in map returns `complete`; directory owners fail; valid large owners are admitted without raising the whole-file limit; oversized or unterminated metadata fails truthfully |
 
 ## Refresh Convergence Proof Boundary
 
