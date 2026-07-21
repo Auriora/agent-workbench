@@ -40,17 +40,17 @@ the npm registry). Install the release tarball directly by URL — npm builds th
 native modules and runs the package's `postinstall` the same as any package:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.2/auriora-agent-workbench-0.6.2.tgz
 ```
 
 For a different version, take the tarball URL from the matching release on
 <https://github.com/Auriora/agent-workbench/releases>. Offline/air-gapped: download
-the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.5.2.tgz`.
+the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.6.2.tgz`.
 
 The commands above install the latest released version, `0.5.2`. Daemon-owned
 refresh convergence and schema-isolated publication are implemented in the
 current unreleased `0.6.1` checkout; they are not available from that release
-URL until a v0.6.1 artifact is published.
+URL until a v0.6.2 artifact is published.
 
 This builds the native modules in place and records a runtime-root pointer under
 the per-OS state directory (`%LOCALAPPDATA%\agent-workbench` on Windows,
@@ -92,7 +92,7 @@ name `agent-workbench-local`).
 PKG="$(npm root -g)/@auriora/agent-workbench"
 claude plugin marketplace add "$PKG/plugins/agent-workbench"
 claude plugin install agent-workbench@agent-workbench-local --scope user
-claude plugin list   # -> agent-workbench@agent-workbench-local  v0.5.2  enabled
+claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.2  enabled
 ```
 
 **Windows (PowerShell):**
@@ -101,7 +101,7 @@ claude plugin list   # -> agent-workbench@agent-workbench-local  v0.5.2  enabled
 $pkg = "$(npm root -g)\@auriora\agent-workbench"
 claude plugin marketplace add "$pkg\plugins\agent-workbench"
 claude plugin install agent-workbench@agent-workbench-local --scope user
-claude plugin list   # -> agent-workbench@agent-workbench-local  v0.5.2  enabled
+claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.2  enabled
 ```
 
 Start a new Claude Code session so the skill, hooks, and MCP server are
@@ -134,7 +134,7 @@ The npm package ships a package-scoped Codex marketplace
 PKG="$(npm root -g)/@auriora/agent-workbench"
 codex plugin marketplace add "$PKG/plugins/agent-workbench"
 codex plugin add agent-workbench@agent-workbench-local
-codex plugin list   # -> agent-workbench@agent-workbench-local  v0.5.2  installed, enabled
+codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.2  installed, enabled
 ```
 
 **Windows (PowerShell):**
@@ -143,7 +143,7 @@ codex plugin list   # -> agent-workbench@agent-workbench-local  v0.5.2  installe
 $pkg = "$(npm root -g)\@auriora\agent-workbench"
 codex plugin marketplace add "$pkg\plugins\agent-workbench"
 codex plugin add agent-workbench@agent-workbench-local
-codex plugin list   # -> agent-workbench@agent-workbench-local  v0.5.2  installed, enabled
+codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.2  installed, enabled
 ```
 
 Start a new Codex session so the skill, hooks, and MCP server are discovered. See
@@ -197,11 +197,11 @@ not authorization to add a second indexer, retry loop, or partial-result path.
 ## Upgrade, rollback, and schema compatibility
 
 The current unreleased 0.6.1 runtime adds schema-identity-v2 publication.
-It seeds `graph-v2.sqlite` from v0.5.2 `graph.sqlite` without modifying the
+It seeds `graph-v2.sqlite` from v0.6.2 `graph.sqlite` without modifying the
 source, then transactionally classifies non-refreshing snapshots as published
 and refreshing snapshots as failed. After owner admission and v2 readiness it
 checkpoints v1, preserves `graph-v1.sqlite.pre-v2`, and atomically replaces
-`graph.sqlite` with a non-SQLite guard. The released v0.5.2 adapter then blocks
+`graph.sqlite` with a non-SQLite guard. The released v0.6.2 adapter then blocks
 with `SQLITE_NOTADB`; it cannot read or mutate v2. Failed seeding, migration, or
 retirement cleans its candidate and leaves a recoverable state.
 

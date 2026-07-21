@@ -7,7 +7,7 @@
   "distribution_url": "https://github.com/Auriora/agent-workbench/releases",
   "version_source": "package.json#/version",
   "plugin_version_source": "plugins/agent-workbench/.codex-plugin/plugin.json#/version",
-  "install_command": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz",
+  "install_command": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.2/auriora-agent-workbench-0.6.2.tgz",
   "pack_command": "npm pack",
   "payload_root": "plugins/agent-workbench",
   "bin": "packaging/agent-workbench/mcp-bin.mjs",

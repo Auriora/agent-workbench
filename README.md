@@ -36,25 +36,25 @@ policy allowing the `npm.ps1` shim.
 
 ### macOS And Linux
 
-With `nvm` installed, install Node.js 22 and the v0.5.2 runtime:
+With `nvm` installed, install Node.js 22 and the v0.6.2 runtime:
 
 ```bash
 nvm install 22
 nvm use 22
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.2/auriora-agent-workbench-0.6.2.tgz
 ```
 
 For Node.js 24:
 
 ```bash
-CXXFLAGS="-std=c++20" npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz
+CXXFLAGS="-std=c++20" npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.2/auriora-agent-workbench-0.6.2.tgz
 ```
 
 For an offline installation, download the release asset and install it from the
 directory containing the file:
 
 ```bash
-npm install -g ./auriora-agent-workbench-0.5.2.tgz
+npm install -g ./auriora-agent-workbench-0.6.2.tgz
 ```
 
 ### Windows PowerShell
@@ -65,7 +65,7 @@ workload, then open a new PowerShell window and install the runtime:
 ```powershell
 node --version
 npm.cmd --version
-npm.cmd install --global "https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz"
+npm.cmd install --global "https://github.com/Auriora/agent-workbench/releases/download/v0.6.2/auriora-agent-workbench-0.6.2.tgz"
 ```
 
 For Node.js 24, append the MSVC C++20 flag after package-supplied compiler
@@ -76,7 +76,7 @@ options, then remove it from the current PowerShell session. Use `_CL_`, not
 ```powershell
 Remove-Item Env:CL -ErrorAction SilentlyContinue
 $env:_CL_ = "/std:c++20"
-npm.cmd install --global "https://github.com/Auriora/agent-workbench/releases/download/v0.5.2/auriora-agent-workbench-0.5.2.tgz"
+npm.cmd install --global "https://github.com/Auriora/agent-workbench/releases/download/v0.6.2/auriora-agent-workbench-0.6.2.tgz"
 Remove-Item Env:_CL_ -ErrorAction SilentlyContinue
 ```
 
@@ -84,7 +84,7 @@ For an offline installation, download the release asset and install it from the
 directory containing the file:
 
 ```powershell
-npm.cmd install --global ".\auriora-agent-workbench-0.5.2.tgz"
+npm.cmd install --global ".\auriora-agent-workbench-0.6.2.tgz"
 ```
 
 ### Codex
