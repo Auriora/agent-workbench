@@ -102,6 +102,15 @@ repository orientation. Synchronized pending content changes remain reusable;
 degraded, overflowed, failed, or unavailable watcher state and changed or
 unknown scope/ignore-rule synchronisation block orientation reuse.
 
+Orientation also consumes the selected snapshot's `documentation_ranking`
+receipt from status. Missing or foreign-snapshot readiness, and readiness in
+`invalid` or `unavailable`, are material capability blockers and make
+`orientation_reusable` false. Ranking recovery contributes to
+`refresh_required` only when its recovery is `refresh`; `source_repair`,
+`request_repair`, and `environment_repair` remain explicit non-refresh
+boundaries. A ready receipt with `authority_map: absent` stays reusable with
+partial trust and an `authority_map_absent` caveat.
+
 ## Capability Levels
 
 Use these values only:
@@ -374,10 +383,38 @@ relevant validation.
 
 ## Ranked Documentation Search Contract
 
+### Snapshot-Bound Ranking Readiness
+
+`repo:///status` exposes one `documentation_ranking` receipt derived from the
+same selected `snapshot_id` used by the rest of status. The receipt is a strict
+union:
+
+- `ready` has `recovery: none` and `authority_map: present | absent`;
+- `invalid` has `recovery: source_repair`, `authority_map: unknown`, and a
+  bounded reason; and
+- `unavailable` has `recovery: refresh | request_repair |
+  environment_repair`, `authority_map: unknown`, and a bounded reason.
+
+Public reasons pass through the shared presentation redactor before they are
+truncated to at most 512 UTF-8 bytes. Snapshot mismatch or concern-store failure
+cannot borrow another snapshot's evidence: they produce unavailable readiness
+with `environment_repair` and invalid-environment trust. Persisted invalid
+repository policy produces `source_repair`; missing/incompatible publication
+state produces `refresh`; a nonexistent requested snapshot produces
+`request_repair`.
+
+Status, orientation, and the first page of `docs_search` independently read or
+project this same-snapshot receipt and must agree on its category and recovery.
+Only `ready` can enter the ranked route. `ready` with an absent map remains a
+complete relevance-ranked universe without owner-intent evidence and carries a
+must-verify caveat. Other readiness states return `ranking_unavailable`, zero
+hits, and the callable `repo:///status` action rather than a fallback search.
+
 `docs_search` uses ranking contract version `1`, ranking schema version `1`,
 policy `authority-aware-v1`, candidate limit `500`, and overflow sentinel `501`.
-It returns one of four shapes: a complete frozen-universe page, candidate
-overflow, ranking/cursor unavailable, or snapshot-selection unavailable. Every
+It returns one of five shapes: a complete frozen-universe page, candidate
+overflow, ranking/cursor unavailable, mid-route ranking-environment
+unavailable, or snapshot-selection unavailable. Every
 shape includes the normalized query, policy identities, warnings, callable next
 action entries when recovery is needed, and trust state. Snapshot-backed shapes
 include `snapshot_id`; the
@@ -490,12 +527,16 @@ Blocked variants are exhaustive:
 | `ranked_universe_expired` | `blocked_cursor_stale` | required | restart the same search without the cursor |
 | `ranking_cursor_invalid` | `blocked_cursor_invalid` | required | restart the same search without the cursor |
 | `ranking_unavailable` | `blocked_ranking_unavailable` | required | inspect `repo:///status` before retrying |
+| `ranking_environment_unavailable` | `blocked_ranking_environment_unavailable` | required | no automatic action; retry only after the environment/store boundary is healthy |
 | `selected_snapshot_unavailable` | `blocked_snapshot_unavailable` | absent | inspect `repo:///status` and follow coordinated refresh guidance |
 
 All blocked variants have zero hits and `truncated: false`. Overflow includes
 the canonical overflow receipt and compatibility count aliases, but no cursor.
 The remaining unavailable variants do not fabricate counts, cursor, universe,
-or snapshot evidence they cannot prove. Ranking never falls back to broad
+or snapshot evidence they cannot prove. Mid-route environment unavailability
+has `analysis_validity: invalid_due_to_environment`, unknown freshness, and
+zero actions; it does not point to status when status may
+still report the earlier ready receipt. Ranking never falls back to broad
 Markdown scanning or an older schema.
 
 Each universe is individually limited to 500 hits and 15 minutes. EB059 owns

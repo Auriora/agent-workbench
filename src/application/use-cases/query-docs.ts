@@ -69,6 +69,7 @@ import {
 import { capNextActions } from "./response-metadata.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 import { readDocumentationRankingReadiness } from "./documentation-ranking-readiness.js";
+import type { DocumentationRankingReadiness } from "./documentation-ranking-readiness.js";
 
 const DOC_ROW_LIMIT = 15000;
 const DIRECT_READ_CAVEAT = "Docs search is routing evidence; use docs_read_section for precise claims.";
@@ -98,6 +99,14 @@ export type DocsOutlineUseCaseResult = {
 export type DocsReadSectionUseCaseResult = {
   read: DocsReadSectionResult;
   meta: ResponseMetadata;
+};
+
+/**
+ * Carries the snapshot-bound ranking readiness to the presentation boundary.
+ * The receipt is presentation metadata, not part of the public ranked result.
+ */
+export type RankedDocsSearchUseCaseResult = RankedDocsSearchResult & {
+  documentation_ranking_readiness: DocumentationRankingReadiness;
 };
 
 export async function getDocsOverview(input: {
@@ -298,7 +307,7 @@ export async function searchRankedDocs(input: {
   default_repo_root: string;
   now_iso8601: string;
   universe_id: string;
-}): Promise<RankedDocsSearchResult> {
+}): Promise<RankedDocsSearchResult | RankedDocsSearchUseCaseResult> {
   const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
   const normalizedQuery = normalizeDocumentationConcern(input.request.query);
   if (normalizedQuery.length === 0) {
@@ -352,7 +361,7 @@ export async function searchRankedDocs(input: {
     if (decoded.payload.next_position >= universe.hits.length) {
       return rankingUnavailable(base, "ranking_cursor_invalid");
     }
-    return rankedPageResult({
+    return withDocumentationRankingReadiness(rankedPageResult({
       base,
       universe,
       position: decoded.payload.next_position,
@@ -360,7 +369,7 @@ export async function searchRankedDocs(input: {
       cursorCodec: input.ranking_cursor_codec,
       includeSnippets: input.request.include_snippets,
       counts: { ...universe.counts, returned_page_documents_count: 0 }
-    });
+    }), admittedUniverseReadiness(universe));
   }
 
   const readiness = await readDocumentationRankingReadiness({
@@ -418,7 +427,7 @@ export async function searchRankedDocs(input: {
     const ftsCount = fts.status === "exact" ? fts.candidates.length : undefined;
     const ownerCount = matchedOwners.status === "exact" ? matchedOwners.candidates.length : undefined;
     if (fts.status === "overflow" || matchedOwners.status === "overflow") {
-      return rankedOverflowResult({
+      return await rankedOverflowResult({
         base,
         docsIndex: input.docs_index,
         candidates: input.ranking_candidates,
@@ -434,7 +443,7 @@ export async function searchRankedDocs(input: {
       if (!union.has(candidate.stable_document_id)) union.set(candidate.stable_document_id, candidate);
     }
     if (union.size > DOCS_RANKING_CANDIDATE_LIMIT) {
-      return rankedOverflowResult({
+      return await rankedOverflowResult({
         base,
         docsIndex: input.docs_index,
         candidates: input.ranking_candidates,
@@ -481,6 +490,7 @@ export async function searchRankedDocs(input: {
     const universe = {
       universe_id: input.universe_id,
       identity,
+      admitted_authority_map: readiness.authority_map_absent ? "absent" as const : "present" as const,
       hits: ranked,
       counts: storedCounts,
       created_at: input.now_iso8601,
@@ -488,7 +498,7 @@ export async function searchRankedDocs(input: {
     };
     await input.ranked_universes.purgeExpired({ now_iso8601: input.now_iso8601 });
     await input.ranked_universes.put({ universe });
-    return rankedPageResult({
+    return withDocumentationRankingReadiness(rankedPageResult({
       base,
       universe,
       position: 0,
@@ -496,8 +506,11 @@ export async function searchRankedDocs(input: {
       cursorCodec: input.ranking_cursor_codec,
       includeSnippets: input.request.include_snippets,
       counts
-    });
+    }), readiness);
   } catch (error) {
+    if (error instanceof DocsRankingUnavailableError) {
+      return rankingEnvironmentUnavailable(base);
+    }
     throw error;
   }
 }
@@ -1298,6 +1311,18 @@ function rankingUnavailable(
   };
 }
 
+function rankingEnvironmentUnavailable(base: RankedResultBase): RankedDocsSearchResult {
+  return {
+    ...base,
+    status: "blocked",
+    trust_state: "blocked_ranking_environment_unavailable",
+    blocker: "ranking_environment_unavailable",
+    hits: [],
+    next_actions: [],
+    truncated: false
+  };
+}
+
 function rankedUniverseIdentity(input: {
   snapshotId: string;
   normalizedQuery: string;
@@ -1495,6 +1520,33 @@ function rankedPageResult(input: {
         }
       : {}),
     truncated: hasMore
+  };
+}
+
+function withDocumentationRankingReadiness(
+  result: RankedDocsSearchResult,
+  readiness: DocumentationRankingReadiness
+): RankedDocsSearchUseCaseResult {
+  return {
+    ...result,
+    documentation_ranking_readiness: readiness
+  };
+}
+
+function admittedUniverseReadiness(
+  universe: RankedDocsUniverseRecord
+): DocumentationRankingReadiness {
+  const authorityMapAbsent = universe.admitted_authority_map === "absent";
+  return {
+    receipt: {
+      snapshot_id: universe.identity.snapshot_id,
+      state: "ready",
+      recovery: "none",
+      authority_map: universe.admitted_authority_map
+    },
+    ...(authorityMapAbsent ? { analysis_validity: "partial" as const } : {}),
+    blocked: false,
+    authority_map_absent: authorityMapAbsent
   };
 }
 

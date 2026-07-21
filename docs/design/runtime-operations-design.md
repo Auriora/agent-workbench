@@ -59,12 +59,14 @@ bind repo
 -> validate latest snapshot
 -> scan docs/config priority set and compute document identities
 -> refresh docs FTS for Markdown path/title/headings/selected text
+-> extract and validate the documentation concern index
 -> scan scoped graph seed files and compute identities
 -> enqueue changed files for extraction
 -> run tree-sitter extraction workers
 -> ingest extraction batches through graph ports
 -> resolve references
 -> refresh FTS
+-> persist concern state, terms, and owner evidence for the target snapshot
 -> publish watcher-clean snapshot
 -> expose fresh status
 ```
@@ -140,6 +142,16 @@ must keep those coverage classes separate. Direct docs overview, map, outline,
 and read-section surfaces may still perform bounded scanner/read work because
 those surfaces provide direct documentation evidence rather than search
 acceleration.
+
+Ranked documentation readiness is a separate, snapshot-bound capability check.
+A visible graph may be fresh while its concern index is invalid or unavailable;
+status and orientation must then lower trust rather than describe the ranked
+route as healthy. `complete` and `no_map` concern states are ready. Invalid
+repository-authored map or owner evidence requires source repair. Missing or
+incompatible unpublished evidence is refreshable, while request-identity and
+store/environment failures are not. Only refreshable readiness enters the
+existing coordinator; no status read, orientation read, or search failure
+creates a retry loop.
 
 A future CLI may expose an explicit prewarm entry point so clients can prepare
 repo caches before interactive agent work starts.
@@ -220,6 +232,13 @@ the worker deadline and otherwise delay status, publication, and client
 recovery behind repository-wide derived-storage work. Every foreign-key child
 used by retention cleanup is indexed so deleting nodes does not repeatedly scan
 the unresolved-reference universe.
+First insertion of a file performs no node-FTS cleanup because stale rows
+cannot exist; even a file-identity predicate scans the unindexed FTS identity
+column. True same-snapshot replacement retains file/snapshot-scoped cleanup,
+and the removed repository-wide exclusion sweep must not return. These
+constraints preserve removal correctness without repeating global work for
+every newly indexed file. Duplicate same-identity node-FTS rows remain
+the separate EB062 identity/storage decision.
 Startup, shutdown, timeout, crash replacement, and failed publication unwind
 worker, writer, activity, graph-store, socket, metadata, WAL/SHM, and child
 resources exactly once along the applicable drain or dead-owner path.

@@ -590,6 +590,20 @@ export const rankedDocsSearchUnavailableResultSchema = z
   });
 export type RankedDocsSearchUnavailableResult = z.infer<typeof rankedDocsSearchUnavailableResultSchema>;
 
+export const rankedDocsSearchEnvironmentUnavailableResultSchema = z
+  .object({
+    ...rankedDocsSearchSnapshotShape,
+    status: z.literal("blocked"),
+    trust_state: z.literal("blocked_ranking_environment_unavailable"),
+    blocker: z.literal("ranking_environment_unavailable"),
+    hits: z.array(rankedDocsSearchHitSchema).length(0),
+    truncated: z.literal(false)
+  })
+  .strict();
+export type RankedDocsSearchEnvironmentUnavailableResult = z.infer<
+  typeof rankedDocsSearchEnvironmentUnavailableResultSchema
+>;
+
 export const rankedDocsSearchSelectionUnavailableResultSchema = z
   .object({
     ...rankedDocsSearchCommonShape,
@@ -608,6 +622,7 @@ export const rankedDocsSearchResultSchema = z.union([
   rankedDocsSearchSuccessResultSchema,
   rankedDocsSearchOverflowResultSchema,
   rankedDocsSearchUnavailableResultSchema,
+  rankedDocsSearchEnvironmentUnavailableResultSchema,
   rankedDocsSearchSelectionUnavailableResultSchema
 ]);
 export type RankedDocsSearchResult = z.infer<typeof rankedDocsSearchResultSchema>;

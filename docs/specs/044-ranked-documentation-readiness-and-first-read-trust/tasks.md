@@ -187,18 +187,20 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
 
 ## Phase 5: Promotion, Review, And Closure
 
-- [ ] T007 Promote durable behavior, address review, and close the spec.
+- [~] T007 Promote durable behavior, address review, and close the spec.
   - Depends on: T006
-  - Requirements: all
+  - Requirements: Requirement 1 AC1-AC6; Requirement 2 AC1-AC6;
+    Requirement 3 AC1-AC3; Requirement 4 AC1-AC4; CP-001-CP-003
   - Files: durable targets named in `change-impact.md`, `verification.md`,
     backlog and closure records
   - Acceptance: All requirements/properties have evidence; durable docs match
-    behavior; EB059 and EB061 remain separately routed; lifecycle closure has
-    no blockers.
+    behavior; EB059, EB061, and EB062 remain separately routed; lifecycle
+    closure has no blockers.
   - Validation: full suite, plugin/skills/package gates, lifecycle lint,
     evidence quality, task audit, closure risk and closure check.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Phase 5 started after Phase 4 commit `963066b`; lifecycle
+    inventory is healthy and identifies T007 as the sole dependency-ready task.
   - Scope boundary: Preserve EB059, EB061, and EB062 as separate backlog
     destinations; do not implement them through this task.
   - [ ] T007.1 Promote accepted contracts and operational behavior to every

@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FileIdentityAdapter,
   WorkspaceFileAdapter,
@@ -39,6 +39,37 @@ describe("workspace file adapter", () => {
     await workspaceFileAdapter.writeText({ path: "src/app.py", content: "print('ok')\n" });
     const value = await workspaceFileAdapter.readText({ path: "src/app.py" });
     expect(value).toBe("print('ok')\n");
+  });
+
+  it("reads only the requested text prefix", async () => {
+    const prefix = "---\nstatus: current\n---\n";
+    const tail = "tail-marker".repeat(100_000);
+    await workspaceFileAdapter.writeText({ path: "src/large.md", content: prefix + tail });
+
+    const maxBytes = Buffer.byteLength(prefix);
+    const handle = await fs.promises.open(path.join(repoRoot, "src", "large.md"), "r");
+    const read = vi.spyOn(handle, "read");
+    const open = vi.spyOn(fs.promises, "open").mockResolvedValue(handle);
+    let value: string;
+    try {
+      value = await workspaceFileAdapter.readTextPrefix({ path: "src/large.md", max_bytes: maxBytes });
+    } finally {
+      open.mockRestore();
+    }
+
+    expect(value).toBe(prefix);
+    expect(Buffer.byteLength(value)).toBe(maxBytes);
+    expect(value).not.toContain("tail-marker");
+    expect(read).toHaveBeenCalledExactlyOnceWith(expect.any(Buffer), 0, maxBytes, 0);
+  });
+
+  it("does not inflate an incomplete UTF-8 code point beyond the requested byte bound", async () => {
+    await workspaceFileAdapter.writeText({ path: "src/multibyte.md", content: "é-tail" });
+
+    const value = await workspaceFileAdapter.readTextPrefix({ path: "src/multibyte.md", max_bytes: 1 });
+
+    expect(value).toBe("");
+    expect(Buffer.byteLength(value)).toBeLessThanOrEqual(1);
   });
 
   it("writes and reads binary payloads", async () => {

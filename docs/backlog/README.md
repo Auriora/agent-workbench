@@ -2233,6 +2233,33 @@ Do not promote an item when:
   graph-store design. Create a focused spec only if duplicate selection policy
   requires a new public semantic contract.
 
+### EB063: Shared MCP Failure-Message Redaction
+
+- Priority: P1
+- Status: proposed; discovered during Spec 044 Phase 5 operations/security review
+- Friction signal: ranked-documentation readiness reasons and the new
+  mid-route environment blocker are bounded and redacted, but the generic MCP
+  failure wrapper copies an arbitrary provider exception message directly into
+  `errors[].message`. A provider or store exception can therefore expose an
+  absolute host path or secret-like fragment even when its surface-specific
+  data presenter is safe.
+- Runtime surface: shared MCP failure classification, presentation redaction,
+  error-envelope consistency, and cross-surface trust metadata.
+- Acceptance:
+  - Every generic MCP failure message SHALL pass through the shared public
+    presentation redactor before entering `errors[]` or public data.
+  - Redaction SHALL preserve typed failure class, cause code, retryability, and
+    actionable bounded context without echoing workspace escapes, host paths,
+    or secret-like values.
+  - Representative docs, graph, diagnostics, and workspace-edit provider
+    failures SHALL have golden parity tests at the shared wrapper boundary.
+  - Surface-specific typed domain messages may remain more precise only when
+    their schemas and tests prove equivalent safety; no per-tool hidden
+    fallback redactors.
+- Promotion target: direct shared-envelope repair under EB038 error-envelope
+  consistency and the workspace-safety contract; create a spec only if public
+  error vocabulary or compatibility must change.
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |

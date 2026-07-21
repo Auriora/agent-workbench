@@ -57,10 +57,12 @@ docs_search(snapshot)
 
 - `document-currency-routing.ts`: remain the production validation authority.
   Resolve owner content through `content_by_path` when the graph indexer has
-  already loaded it, otherwise through the existing `WorkspaceFilePort.readText`.
-  In both cases admit only the 16,384-byte metadata prefix to owner
-  classification. This slice changes the classification boundary, not the
-  workspace I/O port, and does not raise the whole-owner ceiling.
+  already loaded its bounded docs prefix; otherwise use the containment-checked
+  `WorkspaceFilePort.readTextPrefix`. Oversized docs reads stop at 120,000
+  bytes, direct owner reads stop at 16,384 bytes, and classification admits only
+  the 16,384-byte metadata prefix. Persist actual owner byte count and
+  truncation when indexed content came from a prefix; never fall back to
+  `readText` or raise a whole-owner ceiling.
 - `get-repo-status.ts`: accept bounded concern readiness for the selected snapshot.
 - runtime status/orientation contracts: add explicit ranking-readiness evidence
   and decouple `orientation_reusable` from `refresh_required`.

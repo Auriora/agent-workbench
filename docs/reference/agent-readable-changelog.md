@@ -26,6 +26,59 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
+## 2026-07-21: Snapshot-Bound Documentation Readiness
+
+This entry describes the current unreleased repository-local `0.6.1` build.
+Published-install availability remains governed by the normal release flow.
+
+### Agent-Visible Changes
+
+- `repo:///status` now reports documentation-ranking readiness for its selected
+  snapshot. `repo:///orientation` treats invalid or unavailable ranking
+  evidence as a material blocker instead of presenting a fresh graph as fully
+  reusable.
+- `docs_search`, status, and orientation agree on the same snapshot readiness.
+  The emitted status action explains whether recovery requires refresh, source
+  repair, request repair, or environment repair.
+- A repository without a documentation map remains searchable with partial
+  authority trust; invalid map or owner policy blocks ranking without a broad
+  Markdown fallback.
+
+### Contract Changes
+
+- The additive `documentation_ranking` receipt uses strict `ready`, `invalid`,
+  and `unavailable` variants with recovery and authority-map evidence. Public
+  reasons are redacted and capped at 512 UTF-8 bytes.
+- Only `recovery: refresh` contributes ranking work to `refresh_required` and
+  the existing coordinator. Source, request, and environment repair never
+  become refresh-only loops.
+- Initial ranked search requires same-snapshot concern readiness. Frozen cursor
+  continuations retain the already admitted universe.
+- If concern terms or owners become unavailable after readiness admission, the
+  ranked route blocks as `ranking_environment_unavailable` with no misleading
+  status action or fallback result.
+
+### Required Agent Behavior Changes
+
+- Read `documentation_ranking` alongside graph freshness before relying on
+  authority-aware documentation search.
+- Follow the recovery category reported by status. Repair invalid repository
+  policy when it says `source_repair`; do not repeatedly refresh unchanged
+  invalid input.
+
+### Migration Notes
+
+- The unreleased repository-local runtime and provider plugin `0.6.1` passed
+  real Codex CLI `0.144.6` and Claude
+  Code `2.1.216` acceptance with the identical SessionStart-governance request
+  on published snapshot `1784667715173`. Both returned reusable orientation and
+  the current canonical coding-agent integration design from a complete ranked
+  universe.
+- Real-repository publication removed repeated cleanup work from first
+  insertion of each file while retaining file/snapshot-scoped cleanup for true
+  replacement. Duplicate same-identity FTS rows are unchanged and remain
+  governed by EB062.
+
 ## 2026-07-21: Authority-Aware Documentation Discovery
 
 ### Agent-Visible Changes

@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { indexRepositoryGraph } from "../../src/application/use-cases/index-repository-graph.js";
 import type { ClockPort, DocumentationConcernIndexPort } from "../../src/ports/index.js";
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../../src/infrastructure/extraction/index.js";
@@ -82,6 +82,45 @@ describe("documentation map indexing", () => {
     }
   });
 
+  it("bounds a large mapped owner through the full graph build and publishes truthful truncation", async () => {
+    const fixture = createFixture();
+    const store = openGraphStore(path.join(fixture.temp_root, "bounded-owner.sqlite"));
+    const ownerPath = "docs/reference/large-owner.md";
+    const ownerContent = "---\nstatus: current\n---\n# Large owner\n" + "tail-marker\n".repeat(20_000);
+    fs.writeFileSync(path.join(fixture.repo_root, ownerPath), ownerContent);
+    fs.writeFileSync(path.join(fixture.repo_root, "docs/reference/documentation-map.md"), [
+      "| Concern | Canonical owner | Intent terms |",
+      "| --- | --- | --- |",
+      "| Runtime | [Large owner](large-owner.md) | runtime contract |"
+    ].join("\n"));
+    const workspace = new WorkspaceFileAdapter({ repoRoot: fixture.repo_root });
+    const readText = vi.spyOn(workspace, "readText");
+    const readTextPrefix = vi.spyOn(workspace, "readTextPrefix");
+    try {
+      await indexFixture({ root: fixture.repo_root, store, snapshotId: "9404", workspace });
+
+      expect(readText.mock.calls.some(([input]) => input.path === ownerPath)).toBe(false);
+      expect(readTextPrefix).toHaveBeenCalledWith({ path: ownerPath, max_bytes: 120_000 });
+      const published = store.db.prepare(`
+        SELECT byte_count, selected_text_truncated
+        FROM docs_documents
+        WHERE snapshot_id = ? AND path = ?
+      `).get(9404, ownerPath) as { byte_count: number; selected_text_truncated: number } | undefined;
+      expect(published).toEqual({
+        byte_count: Buffer.byteLength(ownerContent),
+        selected_text_truncated: 1
+      });
+      const owners = await store.listDocumentationConcernOwners({ snapshot_id: "9404", max_rows: 501 });
+      expect(owners).toMatchObject({
+        status: "ready",
+        rows: [expect.objectContaining({ mapped_owner_path: ownerPath, owner_state: "valid" })]
+      });
+    } finally {
+      store.close();
+      fixture.dispose();
+    }
+  });
+
   it("publishes malformed map evidence as invalid zero rows but fails the build on persistence errors", async () => {
     const fixture = createFixture();
     fs.writeFileSync(path.join(fixture.repo_root, "docs/reference/documentation-map.md"), [
@@ -148,11 +187,12 @@ async function indexFixture(input: {
   snapshotId: string;
   maxFiles?: number;
   concerns?: DocumentationConcernIndexPort;
+  workspace?: WorkspaceFileAdapter;
 }) {
   return indexRepositoryGraph({
     repo_root: input.root,
     scanner: new FileCatalogScannerAdapter(),
-    workspace: new WorkspaceFileAdapter({ repoRoot: input.root }),
+    workspace: input.workspace ?? new WorkspaceFileAdapter({ repoRoot: input.root }),
     extractors: new ExtractorRegistryAdapter(),
     resource_extractor: new ResourceExtractorAdapter(),
     graph: input.store,

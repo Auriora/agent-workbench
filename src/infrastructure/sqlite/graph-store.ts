@@ -186,6 +186,7 @@ type RankedDocsUniverseRow = {
   retrieval_bound: number;
   ranking_schema_version: number;
   ranking_policy_version: string;
+  admitted_authority_map: "present" | "absent";
   counts_json: string;
   created_at: string;
   expires_at: string;
@@ -819,6 +820,13 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     const snapshotId = this.requireBuildingSnapshotId(input.batch.snapshot_id);
 
     const tx = this.db.transaction(() => {
+      const selectFile = this.db.prepare("SELECT id FROM files WHERE snapshot_id = @snapshotId AND path = @path");
+      const fileIdentity = {
+        snapshotId,
+        path: input.batch.source_path
+      };
+      const existingFileRow = selectFile.get(fileIdentity) as { id: number } | undefined;
+
       const upsertFile = this.db.prepare(`
         INSERT INTO files (snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at, indexing_error)
         VALUES (@snapshotId, @path, @language, @contentHash, @sizeBytes, @mtimeMs, @indexedAt, NULL)
@@ -841,12 +849,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         indexedAt: input.batch.file_identity.indexed_at ?? null
       });
 
-      const fileRow = this.db
-        .prepare("SELECT id FROM files WHERE snapshot_id = @snapshotId AND path = @path")
-        .get({
-          snapshotId,
-          path: input.batch.source_path
-        }) as { id: number } | undefined;
+      const fileRow = existingFileRow ?? (selectFile.get(fileIdentity) as { id: number } | undefined);
 
       if (!fileRow) {
         throw new Error(`Failed to create file identity for ${input.batch.source_path}`);
@@ -854,7 +857,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
 
       const fileId = fileRow.id;
 
-      if (input.replace) {
+      if (input.replace && existingFileRow) {
         this.clearFileRecords({ snapshotId, filePath: input.batch.source_path, fileId });
       }
 
@@ -2189,8 +2192,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         INSERT INTO ranked_docs_universes (
           universe_id, snapshot_id, normalized_query, normalized_scope_path,
           retrieval_bound, ranking_schema_version, ranking_policy_version,
-          counts_json, created_at, expires_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          admitted_authority_map, counts_json, created_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         universe.universe_id,
         snapshotId,
@@ -2199,6 +2202,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         universe.identity.retrieval_bound,
         universe.identity.ranking_schema_version,
         universe.identity.ranking_policy_version,
+        universe.admitted_authority_map,
         JSON.stringify(storedCounts),
         universe.created_at,
         universe.expires_at
@@ -2224,7 +2228,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     const row = this.db.prepare(`
       SELECT universe_id, snapshot_id, normalized_query, normalized_scope_path,
              retrieval_bound, ranking_schema_version, ranking_policy_version,
-             counts_json, created_at, expires_at
+             admitted_authority_map, counts_json, created_at, expires_at
       FROM ranked_docs_universes
       WHERE universe_id = ? AND snapshot_id = ?
     `).get(input.universe_id, snapshotId) as RankedDocsUniverseRow | undefined;
@@ -2252,6 +2256,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         ranking_schema_version: row.ranking_schema_version as 1,
         ranking_policy_version: row.ranking_policy_version as "authority-aware-v1"
       },
+      admitted_authority_map: row.admitted_authority_map,
       hits: hits.map(({ hit_json: hitJson }) =>
         rankedDocsSearchHitSchema.parse(JSON.parse(hitJson) as RankedDocsSearchHit)),
       counts,
@@ -3442,6 +3447,7 @@ function migrate(db: Database.Database): void {
       retrieval_bound INTEGER NOT NULL CHECK (retrieval_bound = 500),
       ranking_schema_version INTEGER NOT NULL CHECK (ranking_schema_version = 1),
       ranking_policy_version TEXT NOT NULL CHECK (ranking_policy_version = 'authority-aware-v1'),
+      admitted_authority_map TEXT NOT NULL CHECK (admitted_authority_map IN ('present', 'absent')),
       counts_json TEXT NOT NULL CHECK (length(counts_json) > 0),
       created_at TEXT NOT NULL,
       expires_at TEXT NOT NULL,
@@ -3521,6 +3527,16 @@ function migrate(db: Database.Database): void {
     INSERT OR IGNORE INTO schema_migrations(version) VALUES (${SCHEMA_VERSION});
   `);
     const snapshotColumns = tableColumns(db, "snapshots");
+    const rankedUniverseColumns = tableColumns(db, "ranked_docs_universes");
+    if (!rankedUniverseColumns.has("admitted_authority_map")) {
+      db.exec(`
+        DELETE FROM ranked_docs_universe_hits;
+        DELETE FROM ranked_docs_universes;
+        ALTER TABLE ranked_docs_universes
+          ADD COLUMN admitted_authority_map TEXT NOT NULL DEFAULT 'present'
+          CHECK (admitted_authority_map IN ('present', 'absent'));
+      `);
+    }
     if (!snapshotColumns.has("publication_state")) {
       db.exec("ALTER TABLE snapshots ADD COLUMN publication_state TEXT NOT NULL DEFAULT 'published'");
     }

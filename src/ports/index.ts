@@ -264,6 +264,7 @@ export interface FileIdentityPort {
 
 export interface WorkspaceFilePort {
   readText(input: { path: string }): Promise<string>;
+  readTextPrefix?(input: { path: string; max_bytes: number }): Promise<string>;
   readBinary(input: { path: string }): Promise<Uint8Array>;
   writeText(input: {
     path: string;
@@ -561,6 +562,7 @@ export type RankedDocsUniverseIdentity = Omit<
 export type RankedDocsUniverseRecord = {
   universe_id: string;
   identity: RankedDocsUniverseIdentity;
+  admitted_authority_map: "present" | "absent";
   hits: readonly RankedDocsSearchHit[];
   counts: Omit<DocsRankingCountReceipt, "returned_page_documents_count">;
   created_at: string;

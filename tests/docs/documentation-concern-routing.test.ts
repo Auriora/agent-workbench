@@ -360,15 +360,75 @@ describe("documentation concern routing fixture", () => {
     expect(readText).not.toHaveBeenCalled();
   });
 
+  it("blocks owner classification when bounded workspace reads are unavailable", async () => {
+    const map = concernMap("owner.md");
+    const readText = vi.fn<WorkspaceFilePort["readText"]>(async () => map);
+    const workspace: WorkspaceFilePort = {
+      stat: async ({ path: requestedPath }) => ({
+        exists: true,
+        is_file: true,
+        size_bytes: requestedPath === "docs/reference/documentation-map.md" ? Buffer.byteLength(map) : 10,
+        mtime_ms: 0
+      }),
+      readText,
+      readBinary: async () => new Uint8Array(),
+      writeText: async () => undefined,
+      writeBinary: async () => undefined,
+      ensureDirectory: async () => undefined,
+      deletePath: async () => undefined
+    };
+
+    await expect(extractDocumentationConcernIndex({ workspace })).resolves.toMatchObject({
+      state: "invalid",
+      failure_reason: expect.stringContaining("bounded workspace reads are unavailable")
+    });
+    expect(readText).toHaveBeenCalledExactlyOnceWith({ path: "docs/reference/documentation-map.md" });
+  });
+
   it("classifies an owner with a body larger than 120000 bytes from bounded valid frontmatter", async () => {
     const owner = "---\nstatus: current\n---\n" + "x".repeat(120_001);
-    const { evidence, readText } = await extractSingleOwner(owner);
+    const { evidence, readText, readTextPrefix } = await extractSingleOwner(owner);
 
     expect(evidence).toMatchObject({
       state: "complete",
       owners: [expect.objectContaining({ owner_state: "valid" })]
     });
-    expect(readText).toHaveBeenCalledTimes(2);
+    expect(readText).toHaveBeenCalledTimes(1);
+    expect(readTextPrefix).toHaveBeenCalledExactlyOnceWith({
+      path: "docs/reference/owner.md",
+      max_bytes: MAX_DOCUMENTATION_OWNER_METADATA_BYTES
+    });
+  });
+
+  it("uses the production bounded reader and ignores an arbitrarily large owner tail", async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "awb-concern-bounded-owner-"));
+    const ownerPrefix = "---\nstatus: current\n---\n# Owner\n";
+    try {
+      fs.mkdirSync(path.join(tempRoot, "docs", "reference"), { recursive: true });
+      fs.writeFileSync(
+        path.join(tempRoot, "docs", "reference", "documentation-map.md"),
+        concernMap("owner.md")
+      );
+      fs.writeFileSync(
+        path.join(tempRoot, "docs", "reference", "owner.md"),
+        ownerPrefix + "tail-content-that-must-not-be-read\n".repeat(100_000)
+      );
+      const workspace = new WorkspaceFileAdapter({ repoRoot: tempRoot });
+      const readText = vi.spyOn(workspace, "readText");
+      const readTextPrefix = vi.spyOn(workspace, "readTextPrefix");
+
+      await expect(extractDocumentationConcernIndex({ workspace })).resolves.toMatchObject({
+        state: "complete",
+        owners: [expect.objectContaining({ owner_state: "valid" })]
+      });
+      expect(readText).toHaveBeenCalledExactlyOnceWith({ path: "docs/reference/documentation-map.md" });
+      expect(readTextPrefix).toHaveBeenCalledExactlyOnceWith({
+        path: "docs/reference/owner.md",
+        max_bytes: MAX_DOCUMENTATION_OWNER_METADATA_BYTES
+      });
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
   });
 
   it("classifies already-indexed large-owner content through the same bounded metadata path", async () => {
@@ -533,12 +593,18 @@ describe("documentation concern routing fixture", () => {
 async function extractSingleOwner(owner: string): Promise<{
   evidence: Awaited<ReturnType<typeof extractDocumentationConcernIndex>>;
   readText: ReturnType<typeof vi.fn>;
+  readTextPrefix: ReturnType<typeof vi.fn>;
 }> {
   const map = concernMap("owner.md");
   const readText = vi.fn<WorkspaceFilePort["readText"]>(async ({ path: requestedPath }) => {
     if (requestedPath === "docs/reference/documentation-map.md") return map;
-    if (requestedPath === "docs/reference/owner.md") return owner;
     throw new Error(`Unexpected read: ${requestedPath}`);
+  });
+  const readTextPrefix = vi.fn<NonNullable<WorkspaceFilePort["readTextPrefix"]>>(async ({ path: requestedPath, max_bytes }) => {
+    if (requestedPath === "docs/reference/owner.md") {
+      return Buffer.from(owner).subarray(0, max_bytes).toString("utf8");
+    }
+    throw new Error(`Unexpected bounded read: ${requestedPath}`);
   });
   const workspace = boundedWorkspace({
     stat: async ({ path: requestedPath }) => ({
@@ -549,9 +615,10 @@ async function extractSingleOwner(owner: string): Promise<{
         : Buffer.byteLength(owner),
       mtime_ms: 0
     }),
-    readText
+    readText,
+    readTextPrefix
   });
-  return { evidence: await extractDocumentationConcernIndex({ workspace }), readText };
+  return { evidence: await extractDocumentationConcernIndex({ workspace }), readText, readTextPrefix };
 }
 
 function concernMap(ownerDestination: string): string {
@@ -573,10 +640,15 @@ function frontmatterClosingAt(closingEndByte: number): string {
 function boundedWorkspace(input: {
   stat: WorkspaceFilePort["stat"];
   readText: WorkspaceFilePort["readText"];
+  readTextPrefix?: NonNullable<WorkspaceFilePort["readTextPrefix"]>;
 }): WorkspaceFilePort {
   return {
     stat: input.stat,
     readText: input.readText,
+    readTextPrefix: input.readTextPrefix ?? (async ({ path: requestedPath, max_bytes }) => {
+      const content = await input.readText({ path: requestedPath });
+      return Buffer.from(content).subarray(0, max_bytes).toString("utf8");
+    }),
     readBinary: async () => new Uint8Array(),
     writeText: async () => undefined,
     writeBinary: async () => undefined,

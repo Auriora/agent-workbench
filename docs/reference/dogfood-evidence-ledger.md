@@ -55,6 +55,29 @@ include secrets, customer data, full transcripts, or unredacted command output.
 | 2026-07-21 | Agent Workbench repository after Specs 042 and 043 closure | TypeScript/JavaScript/Markdown/SQLite | Claude Code and Codex | Installed-runtime regression check of parser references, ranked documentation search, and first-read trust | `repo:///orientation`, `repo:///status`, `symbol_search`, `find_references`, `docs_search`, persisted documentation-concern state | Both clients confirmed five real parser import/export references with route-exhaustion evidence and no prior lexical noise. Both also reproduced `blocked_ranking_unavailable` on the same published fresh snapshot that orientation described as reusable with no material blockers. Persisted state localized the first ranking failure to `Mapped owner is not a file: docs/adr.` Production extraction after removing that directory row exposed a second blocker: the valid canonical backlog owner exceeded the 120,000-byte whole-owner classification limit. Removing the invalid ADR directory owner and temporarily moving the valid oversized backlog owner to explicit navigation-only evidence made production extraction complete with 58 concerns, 72 terms, and 60 owners; live snapshot proof remains pending implementation and reload. | Direct source, Git blame, production extractor execution, and read-only SQLite inspection proved that a directory link added during Spec 043 promotion invalidated the concern index, large-owner classification was not growth-safe, and status exposed neither failure | Parser-route exhaustion and typed ranking failure avoided false reference hits and success-shaped ranked output | Parser coverage did not disclose unsupported dynamic-import member calls and presented empty inspected-language metadata; the ranking recovery action pointed to a status receipt that omitted the concern-index blocker; the valid backlog owner is temporarily absent from machine-readable concern ownership | EB060/Spec 044 ranked documentation readiness, bounded large-owner metadata, and first-read trust; EB061 parser-route coverage-domain disclosure. EB059 remains limited to ranked-universe population, eviction, cursor, and telemetry policy |
 | 2026-07-21 | Agent Workbench repository after Spec 044 Phase 4 install | TypeScript/JavaScript/Markdown/SQLite/plugin packaging | Codex and Claude Code | Published-snapshot and identical-request installed-client acceptance | `repo:///status`, `repo:///orientation`, `integration:///health/agent-workbench`, `docs_search`, repo-local installers | After a root-cause graph-store repair, snapshot `1784667715173` published fresh with ranking ready. Codex `0.144.6` and Claude Code `2.1.216`, both on runtime/plugin `0.6.1`, selected that snapshot and returned reusable orientation, no material blockers, `complete_ranked_universe`, and the current/canonical coding-agent integration design for the exact SessionStart query. | Read-only SQLite timing and source inspection localized repeated 60-second worker timeouts before client acceptance | The acceptance chain prevented a stale installed runtime, draft owner metadata, or blocked ranking route from being reported as Phase 4 success | Per-file global FTS orphan sweeps made retained failed snapshots progressively more expensive; repeated node IDs within a batch still append duplicate `node_fts` rows | EB060/Spec 044 Phase 4 removed the global sweep and added daemon/two-provider regression coverage; EB062 owns batch-level node FTS deduplication |
 
+### 2026-07-21 installed ranked-search parity receipt
+
+The Spec 044 acceptance used a fresh Codex app-server session and a fresh
+Claude Code non-interactive session. Each client discovered and invoked the
+repository-local plugin rather than relying on a provider-labelled direct
+daemon invocation. The bounded receipt below preserves comparison fields; raw
+client transcripts and timing are intentionally not retained.
+
+| Field | Codex | Claude Code |
+| --- | --- | --- |
+| Client provenance | Codex CLI `0.144.6`, fresh app-server session, repository-local plugin | Claude Code `2.1.216`, fresh non-interactive session, repository-local plugin |
+| Runtime / provider plugin | `0.6.1` / `0.6.1` | `0.6.1` / `0.6.1` |
+| Request | `{"repo_root":"/home/bcherrington/Projects/Auriora/agent-workbench","query":"rule governing SessionStart behavior","max_results":10,"include_snippets":true}` | identical |
+| Selected snapshot | `1784667715173` | `1784667715173` |
+| Ranking readiness / recovery | ready / none | ready / none |
+| Authority map / orientation | present / reusable, no material blockers | present / reusable, no material blockers |
+| Search trust | `complete_ranked_universe` | `complete_ranked_universe` |
+| Governing result | `docs/design/coding-agent-integration-design.md`; `current`; `canonical`; coding-agent concern match | identical |
+
+This snapshot identity is historical evidence, not a durable value that future
+acceptance runs must reproduce. Future runs must instead prove that both
+clients agree on the same currently published snapshot.
+
 ## Maintenance Notes
 
 - Add entries when a coding agent uses Agent Workbench on a real repository or

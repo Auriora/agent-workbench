@@ -7,6 +7,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { searchRankedDocs } from "../../src/application/use-cases/query-docs.js";
+import { buildRankedDocsSearchEnvelope } from "../../src/presentation/docs-presenter.js";
 import {
   DOCS_RANKING_CANDIDATE_LIMIT,
   DOCS_RANKING_CONTRACT_VERSION,
@@ -25,6 +26,7 @@ import type {
   RankedDocsUniversePort,
   RankedDocsUniverseRecord
 } from "../../src/ports/index.js";
+import { DocsRankingUnavailableError } from "../../src/ports/index.js";
 
 const FIXTURE_ROOT = path.resolve("tests/fixtures/fixture-docs-authority-ranking");
 
@@ -201,6 +203,44 @@ describe("documentation ranked-universe boundary fixture", () => {
       });
     });
   }
+
+  it("contains a post-readiness overflow receipt failure as a typed environment blocker", async () => {
+    const scenario = readOracle().scenarios.filter(isOverflow)[0]!;
+    const sources = overflowSources(scenario);
+    const candidates = candidateQueryHarness(scenario, sources);
+    const dependencies = rankingDependencies({ candidates });
+    const result = await searchDocsWithRankingDependencies({
+      request: {
+        repo_root: "/fixture-docs-authority-ranking",
+        query: scenario.id,
+        max_results: 10,
+        include_snippets: false
+      },
+      docs_index: legacyOverflowIndex(scenario),
+      documentation_concerns: noConcernIndex(),
+      ranking_candidates: {
+        ...dependencies.ranking_candidates,
+        async countSearchableDocuments() {
+          throw new DocsRankingUnavailableError("Overflow count receipt became unavailable.");
+        }
+      },
+      ranking_cursor_codec: dependencies.ranking_cursor_codec,
+      ranked_universes: dependencies.ranked_universes,
+      selected_snapshot_id: "snapshot-043",
+      default_repo_root: ".",
+      now_iso8601: "2026-07-21T12:00:00.000Z",
+      universe_id: "universe-overflow-environment-failure"
+    });
+
+    expect(result).toMatchObject({
+      status: "blocked",
+      trust_state: "blocked_ranking_environment_unavailable",
+      blocker: "ranking_environment_unavailable",
+      hits: [],
+      next_actions: [],
+      truncated: false
+    });
+  });
 
   for (const candidateCount of [0, 499, 500]) {
     it(`candidate budget completes a distinct union of ${candidateCount}`, async () => {
@@ -414,21 +454,21 @@ describe("documentation ranked-universe boundary fixture", () => {
         }
       };
 
-      if (mismatchAt === "state") {
-        const result = await runPagedSearch(harness, "frozen query");
-        expect(result).toMatchObject({
-          status: "blocked",
-          blocker: "ranking_unavailable",
-          trust_state: "blocked_ranking_unavailable",
-          hits: []
-        });
-      } else {
-        await expect(runPagedSearch(harness, "frozen query")).rejects.toThrow(
-          mismatchAt === "terms"
-            ? "Documentation ranking terms became unavailable after readiness was established."
-            : "Documentation ranking owners became unavailable after readiness was established."
-        );
-      }
+      const result = await runPagedSearch(harness, "frozen query");
+      expect(result).toMatchObject(mismatchAt === "state"
+        ? {
+            status: "blocked",
+            blocker: "ranking_unavailable",
+            trust_state: "blocked_ranking_unavailable",
+            hits: []
+          }
+        : {
+            status: "blocked",
+            blocker: "ranking_environment_unavailable",
+            trust_state: "blocked_ranking_environment_unavailable",
+            hits: [],
+            next_actions: []
+          });
       expect(calls).toEqual(
         mismatchAt === "state" ? ["state"] : mismatchAt === "terms" ? ["state", "terms"] : ["state", "terms", "owners"]
       );
@@ -437,14 +477,49 @@ describe("documentation ranked-universe boundary fixture", () => {
   );
 
   it("keeps a same-snapshot no-map state usable", async () => {
-    const harness = rankedUniverseProofHarness({ paths: [] });
+    const harness = rankedUniverseProofHarness({ paths: ["docs/no-map.md"] });
     const calls: string[] = [];
     harness.documentation_concerns = noConcernIndex(calls);
     const result = await runPagedSearch(harness, "frozen query");
 
-    expect(result.status).toBe("not_applicable");
+    expect(result.status).toBe("done");
+    const envelope = buildRankedDocsSearchEnvelope(result);
+    expect(envelope.data).toMatchObject({
+      status: "done",
+      trust_state: "complete_ranked_universe",
+      hits: [{ path: "docs/no-map.md" }]
+    });
+    expect(envelope.meta).toMatchObject({
+      analysis_validity: "partial",
+      verification_status: "done",
+      caveats: [{
+        kind: "authority_map_absent",
+        severity: "warning",
+        evidence_kinds: ["docs"]
+      }]
+    });
     expect(calls).toEqual(["state", "terms", "owners"]);
     expect(harness.candidate_calls.map(({ source }) => source)).toEqual(["fts", "owner"]);
+  });
+
+  it("preserves no-map trust on a frozen continuation page without rebuilding ranking evidence", async () => {
+    const harness = rankedUniverseProofHarness({
+      paths: ["docs/no-map-a.md", "docs/no-map-b.md", "docs/no-map-c.md"]
+    });
+    const calls: string[] = [];
+    harness.documentation_concerns = noConcernIndex(calls);
+    const first = await runPagedSearch(harness, "frozen query", undefined, 2);
+    if (first.status === "blocked") throw new Error("Expected a usable no-map first page.");
+    const continuation = await runPagedSearch(harness, "frozen query", first.cursor, 2);
+    const envelope = buildRankedDocsSearchEnvelope(continuation);
+
+    expect(envelope.data).toMatchObject({ status: "done", trust_state: "complete_ranked_universe" });
+    expect(envelope.meta).toMatchObject({
+      analysis_validity: "partial",
+      caveats: [{ kind: "authority_map_absent", severity: "warning" }]
+    });
+    expect(harness.candidate_calls.map(({ source }) => source)).toEqual(["fts", "owner"]);
+    expect(calls).toEqual(["state", "terms", "owners"]);
   });
 
   it("resolves a late term across more than 501 terms and loads only its owners from a larger global relation set", async () => {

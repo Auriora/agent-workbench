@@ -33,6 +33,22 @@ export class WorkspaceFileAdapter implements WorkspaceFilePort {
     return fs.promises.readFile(decision.absolutePath, "utf8");
   }
 
+  public async readTextPrefix(input: { path: string; max_bytes: number }): Promise<string> {
+    if (!Number.isSafeInteger(input.max_bytes) || input.max_bytes <= 0) {
+      throw new Error("Bounded text reads require a positive safe-integer max_bytes value.");
+    }
+    const decision = this.safety.resolveWorkspacePath(input.path);
+    assertAllowedDecision(decision);
+    const handle = await fs.promises.open(decision.absolutePath, "r");
+    try {
+      const buffer = Buffer.alloc(input.max_bytes);
+      const { bytesRead } = await handle.read(buffer, 0, input.max_bytes, 0);
+      return utf8Prefix(buffer.subarray(0, bytesRead).toString("utf8"), input.max_bytes);
+    } finally {
+      await handle.close();
+    }
+  }
+
   public async readBinary(input: { path: string }): Promise<Uint8Array> {
     const decision = this.safety.resolveWorkspacePath(input.path);
     assertAllowedDecision(decision);
@@ -112,4 +128,19 @@ export class WorkspaceFileAdapter implements WorkspaceFilePort {
       throw normalizeDecisionError("Generated or vendor paths are read-only by default.");
     }
   }
+}
+
+function utf8Prefix(value: string, maxBytes: number): string {
+  let bytes = 0;
+  let end = 0;
+  while (end < value.length) {
+    const codePoint = value.codePointAt(end);
+    if (codePoint === undefined) break;
+    const character = String.fromCodePoint(codePoint);
+    const characterBytes = Buffer.byteLength(character);
+    if (bytes + characterBytes > maxBytes) break;
+    bytes += characterBytes;
+    end += character.length;
+  }
+  return value.slice(0, end);
 }

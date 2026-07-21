@@ -37,7 +37,11 @@ export type DocumentationConcernIndexEvidence = {
   concerns: DocumentationConcernWrite[];
   terms: DocumentationConcernTermWrite[];
   owners: DocumentationConcernOwnerWrite[];
-  document_content_by_path: ReadonlyMap<string, string>;
+  document_content_by_path: ReadonlyMap<string, {
+    content: string;
+    byte_count: number;
+    truncated: boolean;
+  }>;
 };
 
 export async function extractDocumentationConcernIndex(input: {
@@ -81,7 +85,15 @@ export async function extractDocumentationConcernIndex(input: {
   }
 
   const ownerEvidenceByPath = new Map<string, Omit<DocumentationConcernOwnerWrite, "concern_key" | "source_line">>();
-  const documentContentByPath = new Map<string, string>([[DOCUMENTATION_MAP_PATH, mapContent]]);
+  const documentContentByPath: Map<string, {
+    content: string;
+    byte_count: number;
+    truncated: boolean;
+  }> = new Map([[DOCUMENTATION_MAP_PATH, {
+    content: mapContent,
+    byte_count: mapStat.size_bytes,
+    truncated: false
+  }]]);
   for (const mappedPath of [...new Set(parsed.owners.map(({ mapped_owner_path }) => mapped_owner_path))].sort()) {
     let stat: Awaited<ReturnType<WorkspaceFilePort["stat"]>>;
     try {
@@ -95,14 +107,30 @@ export async function extractDocumentationConcernIndex(input: {
     }
     if (!stat.is_file) return invalidConcernIndex(`Mapped owner is not a file: ${mappedPath}.`, contentHash);
     let content: string;
+    const indexedContent = input.content_by_path?.get(mappedPath);
     try {
-      content = input.content_by_path?.get(mappedPath) ?? await input.workspace.readText({ path: mappedPath });
+      if (indexedContent !== undefined) {
+        content = indexedContent;
+      } else {
+        const boundedReader = input.workspace.readTextPrefix;
+        if (boundedReader === undefined) {
+          return invalidConcernIndex(
+            `Owner read failed for ${mappedPath}: bounded workspace reads are unavailable.`,
+            contentHash
+          );
+        }
+        content = await boundedReader.call(input.workspace, {
+          path: mappedPath,
+          max_bytes: MAX_DOCUMENTATION_OWNER_METADATA_BYTES
+        });
+      }
     } catch (error) {
       return invalidConcernIndex(`Owner read failed for ${mappedPath}: ${safeErrorMessage(error)}`, contentHash);
     }
     const bounded = boundedDocumentationOwnerClassificationContent({
       mapped_owner_path: mappedPath,
-      content
+      content,
+      content_truncated: indexedContent === undefined && stat.size_bytes > MAX_DOCUMENTATION_OWNER_METADATA_BYTES
     });
     if ("invalid" in bounded) return invalidConcernIndex(bounded.failure_reason, contentHash);
     const classified = classifyDocumentationConcernOwner({
@@ -117,7 +145,15 @@ export async function extractDocumentationConcernIndex(input: {
       superseded_by: classified.superseded_by,
       declared_canonical_owner: classified.declared_canonical_owner
     });
-    documentContentByPath.set(mappedPath, content);
+    // Keep exact-map owners in the docs publication set even when the bounded
+    // catalog scan did not admit them. When no indexed content exists this is
+    // the same bounded prefix used for owner classification, never a second
+    // unbounded workspace read.
+    documentContentByPath.set(mappedPath, {
+      content,
+      byte_count: stat.size_bytes,
+      truncated: indexedContent === undefined && stat.size_bytes > Buffer.byteLength(content)
+    });
   }
 
   return {
@@ -134,6 +170,7 @@ export async function extractDocumentationConcernIndex(input: {
 export function boundedDocumentationOwnerClassificationContent(input: {
   mapped_owner_path: string;
   content: string;
+  content_truncated?: boolean;
 }): { content: string } | { invalid: true; failure_reason: string } {
   const bounded = utf8Prefix(input.content, MAX_DOCUMENTATION_OWNER_METADATA_BYTES);
   const boundedPrefix = bounded.content;
@@ -154,7 +191,7 @@ export function boundedDocumentationOwnerClassificationContent(input: {
 
   const closingDelimiterEnd = findClosingFrontmatterDelimiterEnd(boundedPrefix, firstLineEnd);
   if (closingDelimiterEnd === undefined) {
-    return bounded.truncated
+    return bounded.truncated || input.content_truncated === true
       ? oversizedOwnerMetadata(input.mapped_owner_path)
       : { content: boundedPrefix };
   }

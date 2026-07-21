@@ -156,7 +156,8 @@ export async function buildRepositoryGraph(
       continue;
     }
 
-    if (file.file_identity.size_bytes > MAX_TEXT_EXTRACTION_BYTES) {
+    if (file.file_identity.size_bytes > MAX_TEXT_EXTRACTION_BYTES ||
+      (isDocumentationIndexPath(file.path) && file.file_identity.size_bytes > MAX_DOCS_INDEX_BYTES)) {
       unsupportedFiles += 1;
       await input.catalog.upsertEntry({
         snapshot_id: snapshotId,
@@ -212,7 +213,10 @@ export async function buildRepositoryGraph(
     });
     for (const [index, file] of docsFiles.entries()) {
       await yieldToEventLoop(index);
-      const content = await input.workspace.readText({ path: file.path });
+      const content = file.file_identity.size_bytes > MAX_DOCS_INDEX_BYTES
+        ? await readBoundedDocsContent({ workspace: input.workspace, path: file.path })
+        : await input.workspace.readText({ path: file.path });
+      const contentTruncated = file.file_identity.size_bytes > Buffer.byteLength(content);
       markdownContentByPath.set(file.path, content);
       const headings = parseMarkdownHeadings(content);
       const selected = selectedMarkdownText({
@@ -227,7 +231,7 @@ export async function buildRepositoryGraph(
         content_hash: file.file_identity.content_hash,
         byte_count: file.file_identity.size_bytes,
         indexed_at: now,
-        truncated: selected.truncated
+        truncated: selected.truncated || contentTruncated
       });
     }
   }
@@ -241,8 +245,9 @@ export async function buildRepositoryGraph(
       workspace: input.workspace,
       content_by_path: markdownContentByPath
     });
-    for (const [documentPath, content] of concernIndex.document_content_by_path) {
+    for (const [documentPath, documentContent] of concernIndex.document_content_by_path) {
       if (documents.some((document) => document.path === documentPath)) continue;
+      const { content } = documentContent;
       const headings = parseMarkdownHeadings(content);
       const selected = selectedMarkdownText({ content, max_bytes: MAX_DOCS_INDEX_BYTES });
       documents.push({
@@ -251,9 +256,9 @@ export async function buildRepositoryGraph(
         headings,
         selected_text: selected.text,
         content_hash: createHash("sha256").update(content).digest("hex"),
-        byte_count: Buffer.byteLength(content),
+        byte_count: documentContent.byte_count,
         indexed_at: now,
-        truncated: selected.truncated
+        truncated: selected.truncated || documentContent.truncated
       });
     }
     documents.sort(compareDocsIndexDocuments);
@@ -324,6 +329,29 @@ export async function buildRepositoryGraph(
     truncated: scanned.truncated,
     coverage
   };
+}
+
+async function readBoundedDocsContent(input: {
+  workspace: WorkspaceFilePort;
+  path: string;
+}): Promise<string> {
+  const boundedReader = input.workspace.readTextPrefix;
+  if (boundedReader === undefined) {
+    throw new Error(`Bounded workspace reads are required to index oversized documentation: ${input.path}.`);
+  }
+  return boundedReader.call(input.workspace, {
+    path: input.path,
+    max_bytes: MAX_DOCS_INDEX_BYTES
+  });
+}
+
+function isDocumentationIndexPath(filePath: string): boolean {
+  const normalized = filePath.replaceAll("\\", "/").replace(/^\.\//u, "");
+  return normalized === "AGENTS.md" ||
+    normalized === "README.md" ||
+    normalized.startsWith("docs/") ||
+    normalized.startsWith("doc/") ||
+    normalized.startsWith("documentation/");
 }
 
 /** Standalone indexing entry point that explicitly publishes a successful build. */

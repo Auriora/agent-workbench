@@ -158,6 +158,15 @@ invalid concern index blocks authority-aware ranking without publishing a mixed
 or guessed ownership state. Only coordinated schema-v3 builds create concern
 evidence; migration does not synthesize it for older snapshots.
 
+The status hot path reads concern-index state by the already selected visible
+snapshot ID. It performs a constant-count indexed read and never scans the
+documentation catalog, map, terms, or owners. The public readiness classifier
+maps `complete` and `no_map` to ready, persisted invalid evidence to source
+repair, missing/incompatible publication evidence to refresh, an unknown
+requested snapshot to request repair, and store failure or snapshot mismatch to
+environment repair. Status, orientation, and initial ranked search therefore
+cannot join concern evidence from different snapshots.
+
 Post-MVP tables such as `tests`, `attention_items`, `usage_events`, and report
 caches should be added only when a concrete query requires relational storage.
 
@@ -211,6 +220,10 @@ coverage.
   derived evidence tied to snapshot freshness.
 - Metadata fields must be typed JSON with schema-versioned interpretation.
 - FTS rows are refreshed in the same transaction as node writes when possible.
+- First insertion of a file performs no node-FTS cleanup because stale rows
+  cannot exist. A true same-snapshot file replacement removes node FTS through
+  file/snapshot-scoped row cleanup. It does not run a snapshot-wide `NOT IN`
+  sweep after each file.
 - Evidence writes are accepted only for `building` snapshots. Published,
   superseded, and failed rows are terminal and immutable.
 - Retention and pruning preserve the previously selected publication while a
@@ -365,8 +378,12 @@ metadata. Missing file identity or Git history evidence is optional enrichment
 loss, not a docs-search failure.
 
 The documentation map is read exactly during coordinated indexing,
-independently of a truncated broad docs scan, with a 120,000-byte limit applied
-before and after each map or mapped-owner read. Links resolve relative to the
+independently of a truncated broad docs scan, within its 120,000-byte contract.
+An oversized owner already admitted to docs indexing uses that route's
+120,000-byte prefix; an exact-map owner outside the scan uses a direct
+16,384-byte prefix. Owner-state classification examines no more than 16,384
+bytes in either case, and prefixed docs retain actual byte count plus
+truncation. Links resolve relative to the
 map, must remain repository-contained, and may name several owners. Concern
 labels and semicolon-delimited intent terms use the shared Unicode NFKC,
 lowercase, punctuation/symbol/separator-to-space, whitespace-collapse
@@ -440,6 +457,20 @@ hits and 15 minutes. A repository-wide live-universe population cap,
 deterministic capacity eviction, cursor behavior after capacity eviction, and
 the remaining freeze/page/eviction metrics are intentionally not implied here;
 they remain the separately governed EB059 storage and observability decision.
+
+Concern-index observability reports the selected snapshot, persisted state,
+bounded failure reason, and public recovery classification. A publication is
+ranking-ready only when that same snapshot has `complete` or `no_map` concern
+state. This capability receipt is independent of graph freshness and remains
+visible through status and orientation. Oversized Markdown admitted by docs
+indexing is read through its existing 120,000-byte prefix boundary, and owner
+classification examines at most the first 16,384 bytes. An exact-map owner
+outside that docs scan uses a direct containment-checked 16,384-byte prefix
+read. Neither path materializes an arbitrary owner body or falls back to an
+unbounded read. Published docs records retain the owner's actual byte count and
+report truncation when content came from a prefix. Node-FTS duplicate identity and
+deduplication policy are not implied by the scoped cleanup rule and remain
+owned by EB062.
 
 ## Tradeoffs And Constraints
 

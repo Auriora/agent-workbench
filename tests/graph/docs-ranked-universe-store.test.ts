@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { SnapshotState } from "../../src/domain/models/runtime.js";
 import type { RankedDocsUniverseRecord } from "../../src/ports/index.js";
@@ -258,6 +259,47 @@ describe("ranked documentation universe store", () => {
     }
   });
 
+  it("atomically purges legacy universes and child hits before adding admission trust", async () => {
+    const databasePath = path.join(directory, "legacy-universe.sqlite");
+    const initial = openGraphStore(databasePath, { enforceForeignKeys: false });
+    try {
+      await createBuildingSnapshot(initial, "5110");
+      await writeDocuments(initial, "5110", 2);
+      await publishSnapshot(initial, "5110");
+      await initial.put({ universe: rankedUniverse("5110", "legacy-universe-5110") });
+    } finally {
+      initial.close();
+    }
+
+    const legacy = new Database(databasePath);
+    try {
+      legacy.pragma("foreign_keys = OFF");
+      legacy.exec("ALTER TABLE ranked_docs_universes DROP COLUMN admitted_authority_map");
+      expect(legacy.prepare("SELECT COUNT(*) AS count FROM ranked_docs_universes").get()).toEqual({ count: 1 });
+      expect(legacy.prepare("SELECT COUNT(*) AS count FROM ranked_docs_universe_hits").get()).toEqual({ count: 2 });
+    } finally {
+      legacy.close();
+    }
+
+    const migrated = openGraphStore(databasePath, { enforceForeignKeys: false });
+    try {
+      expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM ranked_docs_universes").get()).toEqual({ count: 0 });
+      expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM ranked_docs_universe_hits").get()).toEqual({ count: 0 });
+      expect(migrated.db.prepare("PRAGMA table_info(ranked_docs_universes)").all())
+        .toContainEqual(expect.objectContaining({ name: "admitted_authority_map", notnull: 1 }));
+    } finally {
+      migrated.close();
+    }
+
+    const reopened = openGraphStore(databasePath, { enforceForeignKeys: false });
+    try {
+      expect(reopened.db.prepare("SELECT COUNT(*) AS count FROM ranked_docs_universes").get()).toEqual({ count: 0 });
+      expect(reopened.db.prepare("SELECT COUNT(*) AS count FROM ranked_docs_universe_hits").get()).toEqual({ count: 0 });
+    } finally {
+      reopened.close();
+    }
+  });
+
   it("rejects a persisted header whose valid counts disagree with its item cardinality", async () => {
     const store = openGraphStore(path.join(directory, "cardinality.sqlite"));
     try {
@@ -463,6 +505,7 @@ function rankedUniverse(snapshotId: string, universeId: string): RankedDocsUnive
   }));
   return {
     universe_id: universeId,
+    admitted_authority_map: "absent",
     identity: {
       snapshot_id: snapshotId,
       normalized_query: "sessionstart",

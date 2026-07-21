@@ -205,6 +205,16 @@ errors or useful-looking partial evidence.
 warm-up state, including queued work counts and indexing blockers where
 available.
 
+Graph freshness alone is not a complete first-read trust receipt.
+`repo:///status` also exposes snapshot-bound documentation-ranking readiness;
+`repo:///orientation` projects that exact receipt into material blockers,
+analysis validity, reuse, and refresh guidance. Invalid repository-authored
+concern policy requires source repair and does not advertise refresh. Missing
+or incompatible snapshot concern evidence may advertise coordinated refresh;
+request and environment failures retain their own repair categories. A ready
+snapshot with no documentation map remains reusable with a bounded
+authority-map caveat.
+
 Status and integration health consume the daemon controller's one awaited
 diagnostics receipt. They expose canonical execution, invalidation, publication,
 visible/target snapshot, activity, worker-termination, freshness, and bounded
@@ -477,7 +487,10 @@ If no valid snapshot can be selected for a valid request, `docs_search` returns
 the snapshot-less `selected_snapshot_unavailable` blocker and a
 `repo:///status` action; it never fabricates snapshot identity. An unavailable
 or incompatible concern/ranking index returns `ranking_unavailable` and the
-same status route. An expired/missing frozen universe returns
+same status route. If same-snapshot terms or owners become unavailable after
+readiness admission, the route returns `ranking_environment_unavailable` with
+environment-invalid trust, zero hits/actions, and no fabricated recovery; a
+status read may still hold the earlier ready receipt. An expired/missing frozen universe returns
 `ranked_universe_expired`; a tampered or identity-mismatched cursor returns
 `ranking_cursor_invalid`. Both cursor failures provide a callable cursor-free
 `docs_search` restart action rather than rebuilding implicitly. These blocked
@@ -490,6 +503,14 @@ Markdown scanning or presents sparse evidence as absence. Standard trust
 metadata keeps ranked routing safe for navigation and next-read selection, not
 for precise claims, implementation completion, closure, or safe mutation; a
 direct section read and relevant validation remain required.
+
+For an initial ranked search, readiness is admitted only from the selected
+published snapshot's concern-index state. `docs_search`, `repo:///status`, and
+`repo:///orientation` must report the same snapshot, readiness category, and
+recovery boundary. The `ranking_unavailable` status action is executable as
+emitted and explains that same evidence; it is not a retry instruction. Frozen
+cursor continuations retain their original snapshot and ranked universe rather
+than re-admitting against newer readiness state.
 
 Each frozen universe is bounded to 500 hits and 15 minutes. The separate EB059
 decision owns a repository-wide live-universe population cap, deterministic

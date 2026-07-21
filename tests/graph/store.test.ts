@@ -1719,6 +1719,58 @@ describe("graph store", () => {
     expect(source).not.toContain("DELETE FROM node_fts WHERE node_id NOT IN (SELECT id FROM nodes)");
   });
 
+  it("skips FTS cleanup for first insertion and runs it for a true file replacement", async () => {
+    const store = openGraphStore(path.join(dir, "first-insert-cleanup.sqlite"));
+    const snapshot = snapshotState("450");
+    const originalPrepare = store.db.prepare.bind(store.db);
+    const ftsCleanupStatements: string[] = [];
+    const prepareSpy = vi.spyOn(store.db, "prepare").mockImplementation(((source: string) => {
+      if (source.startsWith("DELETE FROM node_fts WHERE node_id IN")) {
+        ftsCleanupStatements.push(source);
+      }
+      return originalPrepare(source);
+    }) as typeof store.db.prepare);
+
+    try {
+      await createBuildingSnapshot(store, { ...snapshot, freshness: "refreshing" });
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: snapshot.id,
+          source_path: "src/service.py",
+          node_id: "first-node",
+          name: "FirstName"
+        }),
+        replace: true
+      });
+
+      expect(ftsCleanupStatements).toHaveLength(0);
+
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: snapshot.id,
+          source_path: "src/service.py",
+          node_id: "replacement-node",
+          name: "ReplacementName"
+        }),
+        replace: true
+      });
+
+      expect(ftsCleanupStatements).toHaveLength(1);
+      expect(store.db.prepare(`
+        SELECT nodes.id, nodes.name
+        FROM nodes
+        INNER JOIN files ON files.id = nodes.file_id
+        WHERE files.snapshot_id = @snapshotId AND files.path = @path
+        ORDER BY nodes.id
+      `).all({ snapshotId: snapshot.id, path: "src/service.py" })).toEqual([
+        { id: "replacement-node", name: "ReplacementName" }
+      ]);
+    } finally {
+      prepareSpy.mockRestore();
+      store.close();
+    }
+  });
+
   it("keeps replacement cleanup scoped to the changed file across retained snapshots", async () => {
     const store = openGraphStore(path.join(dir, "scoped-replace.sqlite"));
     const retainedSnapshot = snapshotState("451");

@@ -179,6 +179,68 @@ describe("docs_search status recovery chain", () => {
     });
     expect(JSON.stringify({ searchEnvelope, statusEnvelope })).not.toMatch(/private\.sqlite|token=secret/);
   });
+
+  it.each(["terms", "owners"] as const)(
+    "returns the ranked environment-unavailable contract when %s evidence changes after readiness",
+    async (mismatchAt) => {
+      const concerns: DocumentationConcernIndexPort = {
+        async replaceSnapshotDocumentationConcerns() {},
+        async getDocumentationConcernIndexState({ snapshot_id }) {
+          return { status: "ready", snapshot_id, state: "complete" };
+        },
+        async listDocumentationConcernTerms({ snapshot_id }) {
+          return {
+            status: "ready",
+            snapshot_id: mismatchAt === "terms" ? "/home/example/private.sqlite token=secret" : snapshot_id,
+            rows: [{ concern_key: "runtime", normalized_term: "runtime", token_count: 1 }]
+          };
+        },
+        async listDocumentationConcernOwners({ snapshot_id }) {
+          return {
+            status: "ready",
+            snapshot_id: mismatchAt === "owners" ? "/home/example/private.sqlite token=secret" : snapshot_id,
+            rows: []
+          };
+        }
+      };
+      const search = registerMcpTool(docsSearchTool, {
+        repoRoot: "/repo",
+        searchRankedDocs: ({ request }) => searchRankedDocs({
+          request,
+          selected_snapshot_id: "snapshot-stable",
+          docs_index: blockedAfterReadiness("docs index"),
+          documentation_concerns: concerns,
+          ranking_candidates: blockedAfterReadiness("ranking candidates"),
+          ranking_cursor_codec: createDocsRankingCursorCodec({ key: Buffer.alloc(32, 6) }),
+          ranked_universes: blockedAfterReadiness("ranked universes"),
+          default_repo_root: "/repo",
+          now_iso8601: "2026-07-21T12:00:00.000Z",
+          universe_id: "unreachable"
+        })
+      });
+
+      const envelope = JSON.parse((await search.handler({ query: "runtime" })).content[0]!.text);
+
+      expect(envelope).toMatchObject({
+        data: {
+          ranking_contract_version: 1,
+          snapshot_id: "snapshot-stable",
+          status: "blocked",
+          blocker: "ranking_environment_unavailable",
+          trust_state: "blocked_ranking_environment_unavailable",
+          hits: [],
+          next_actions: [],
+          truncated: false
+        },
+        meta: {
+          analysis_validity: "invalid_due_to_environment",
+          verification_status: "blocked"
+        }
+      });
+      expect(envelope.errors).toEqual([]);
+      expect(JSON.stringify(envelope)).not.toMatch(/private\.sqlite|token=secret/);
+    }
+  );
 });
 
 function concernPort(

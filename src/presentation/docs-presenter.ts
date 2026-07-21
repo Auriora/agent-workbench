@@ -46,6 +46,8 @@ import type {
   DocsReadSectionUseCaseResult,
   DocsSearchUseCaseResult
 } from "../application/use-cases/query-docs.js";
+import type { RankedDocsSearchUseCaseResult } from "../application/use-cases/query-docs.js";
+import { mergeDocumentationRankingTrust } from "../application/use-cases/documentation-ranking-readiness.js";
 import type { CurrentDocsForTaskUseCaseResult } from "../application/use-cases/current-docs-for-task.js";
 import {
   buildResponseMeta,
@@ -90,50 +92,59 @@ export function buildDocsSearchEnvelope(
 }
 
 export function buildRankedDocsSearchEnvelope(
-  result: RankedDocsSearchResult,
+  result: RankedDocsSearchResult | RankedDocsSearchUseCaseResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<RankedDocsSearchResult> {
-  const data = sanitizeRankedDocsSearch(result, context);
+  const readiness = "documentation_ranking_readiness" in result
+    ? result.documentation_ranking_readiness
+    : undefined;
+  const { documentation_ranking_readiness: _readiness, ...publicResult } = result as RankedDocsSearchUseCaseResult;
+  const data = sanitizeRankedDocsSearch(publicResult as RankedDocsSearchResult, context);
   const coverageState = "counts" in data
     ? data.counts.priority_scan_coverage_state ?? data.docs_index_state ?? "unknown"
     : "unknown";
   const blocked = data.status === "blocked";
+  const environmentBlocked = data.trust_state === "blocked_ranking_environment_unavailable";
   const countReceipt = "counts" in data ? data.counts : undefined;
+  const meta = {
+    ...buildResponseMeta({
+      analysis_validity: environmentBlocked
+        ? "invalid_due_to_environment"
+        : blocked ? "invalid" : coverageState === "complete" ? "valid" : "partial",
+      freshness: data.trust_state === "blocked_cursor_stale"
+        ? "stale"
+        : data.trust_state === "blocked_ranking_unavailable" ||
+            environmentBlocked ||
+            data.trust_state === "blocked_snapshot_unavailable"
+          ? "unknown"
+          : "fresh",
+      scope: {
+        repo_root: data.repo_root,
+        indexed_roots: ["."],
+        skipped_roots: [],
+        languages: ["markdown"]
+      },
+      capability_level: blocked ? "unsupported" : "resource_backed",
+      evidence_kinds: blocked ? [] : ["docs", "fts"],
+      verification_status: blocked ? "blocked" : data.status,
+      truncated: data.truncated,
+      budget: { row_limit: 500 }
+    }),
+    ...(countReceipt === undefined ? {} : {
+      index_coverage: [{
+        evidence_class: "docs" as const,
+        state: coverageState,
+        indexed_files: countReceipt.priority_scan_indexed_markdown_files_count,
+        eligible_files_seen: countReceipt.priority_scan_eligible_markdown_files_count,
+        scan_truncated: countReceipt.priority_scan_truncated,
+        indexed_roots: ["AGENTS.md", "README.md", "docs", "doc", "documentation"],
+        reason: countReceipt.priority_scan_coverage_note
+      }]
+    })
+  };
   return makeTrustedEnvelope({
     data,
-    meta: {
-      ...buildResponseMeta({
-        analysis_validity: blocked ? "invalid" : coverageState === "complete" ? "valid" : "partial",
-        freshness: data.trust_state === "blocked_cursor_stale"
-          ? "stale"
-          : data.trust_state === "blocked_ranking_unavailable" ||
-              data.trust_state === "blocked_snapshot_unavailable"
-            ? "unknown"
-            : "fresh",
-        scope: {
-          repo_root: data.repo_root,
-          indexed_roots: ["."],
-          skipped_roots: [],
-          languages: ["markdown"]
-        },
-        capability_level: blocked ? "unsupported" : "resource_backed",
-        evidence_kinds: blocked ? [] : ["docs", "fts"],
-        verification_status: blocked ? "blocked" : data.status,
-        truncated: data.truncated,
-        budget: { row_limit: 500 }
-      }),
-      ...(countReceipt === undefined ? {} : {
-        index_coverage: [{
-          evidence_class: "docs" as const,
-          state: coverageState,
-          indexed_files: countReceipt.priority_scan_indexed_markdown_files_count,
-          eligible_files_seen: countReceipt.priority_scan_eligible_markdown_files_count,
-          scan_truncated: countReceipt.priority_scan_truncated,
-          indexed_roots: ["AGENTS.md", "README.md", "docs", "doc", "documentation"],
-          reason: countReceipt.priority_scan_coverage_note
-        }]
-      })
-    },
+    meta: readiness === undefined ? meta : mergeDocumentationRankingTrust(meta, readiness),
     trust_policy: { surface_kind: "docs_routing" }
   });
 }
