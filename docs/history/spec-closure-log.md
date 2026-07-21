@@ -467,6 +467,32 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-07-21 - 042-reference-completeness-and-bounded-scan-truthfulness
+
+- **Spec:** `docs/specs/042-reference-completeness-and-bounded-scan-truthfulness/`
+- **Title:** Reference completeness and bounded-scan truthfulness requirements
+- **Final spec commit:** `2c236a4`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/mcp-surface-design.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/design/language-adapter-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/reference/mvp-proof-matrix.md`
+  - `docs/runbooks/codex-agent-workbench-plugin.md`
+  - `docs/reference/agent-readable-changelog.md`
+  - `docs/backlog/README.md`
+  - `docs/reference/dogfood-evidence-ledger.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Typecheck and all 887 tests passed; package and
+  installed-provider gates passed; post-promotion review reported zero findings;
+  the lifecycle closure check returned ready with zero blockers.
+- **Residual risks:**
+  - none
+- **Follow-up:** none
+
 ### 2026-07-20 - 041-daemon-owned-refresh-convergence
 
 - **Spec:** `docs/specs/041-daemon-owned-refresh-convergence/`

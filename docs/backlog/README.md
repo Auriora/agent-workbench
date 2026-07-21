@@ -1814,7 +1814,7 @@ Do not promote an item when:
 ### EB053: Reference Completeness And Bounded-Scan Truthfulness
 
 - Priority: P0
-- Status: delivered by Spec 042; closure reconciliation in progress
+- Status: closed by Spec 042
 - Friction signal: a healthy runtime `0.6.0` Claude Code rerun asked
   `find_references` for consumers of `buildSessionStartContext`. The response
   returned nine low-confidence `bounded_lexical_identifier_scan` hits and did
@@ -1867,8 +1867,8 @@ Do not promote an item when:
   [Graph store design](../design/graph-store-design.md),
   [Language adapter design](../design/language-adapter-design.md), the
   [MVP proof matrix](../reference/mvp-proof-matrix.md), and the
-  [plugin runbook](../runbooks/codex-agent-workbench-plugin.md). T013 will add
-  the closure proof to the [spec closure log](../history/spec-closure-log.md).
+  [plugin runbook](../runbooks/codex-agent-workbench-plugin.md). Closure proof
+  is recorded in the [spec closure log](../history/spec-closure-log.md).
 
 ### EB054: Authority-Aware Documentation Intent Ranking And Count Semantics
 
@@ -2162,9 +2162,8 @@ Do not promote an item when:
 - Complete the normal commit/release flow for the delivered EB055, EB056,
   EB057, and EB058 direct repairs without folding them into active spec scope;
   installed-runtime acceptance is already recorded for EB055 through EB057.
-- Resume active Specs 042 and 043: EB053 owns reference completeness; EB054
-  owns documentation authority ranking and count semantics. Implement Spec 042
-  first because incomplete reference results carry the higher truthfulness risk,
-  then complete Spec 043 authority-aware documentation routing.
+- Resume active Spec 043: EB054 owns documentation authority ranking and count
+  semantics. EB053/Spec 042 is closed with durable reference-completeness
+  contracts and evidence.
   EB014 remains the separate candidate for large-repository completion scale
   and progress.
