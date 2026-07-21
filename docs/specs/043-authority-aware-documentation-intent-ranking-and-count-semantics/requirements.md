@@ -112,9 +112,10 @@ frozen ranked-universe repository do not yet exist.
 4. **AC2.4:** One concern MAY have multiple owners and one owner MAY govern
    multiple concerns; the index SHALL preserve the complete one-to-many rows
    rather than silently choose one.
-5. **AC2.5:** Owner evidence SHALL be extracted, migrated/backfilled, stored,
-   and published with the selected graph snapshot; queries SHALL not broadly
-   read the map from the workspace.
+5. **AC2.5:** Owner evidence SHALL be extracted during a coordinated current-
+   schema rebuild, stored, and published with the selected graph snapshot;
+   store migration SHALL NOT synthesize evidence for older snapshots, and
+   queries SHALL not broadly read the map from the workspace.
 6. **AC2.6:** Owner states SHALL map exhaustively and deterministically to
    ranking tiers and caveats: `valid` and `draft` are valid-owner states;
    `missing`, `archived`, `superseded`, and `conflicting` are invalid-owner

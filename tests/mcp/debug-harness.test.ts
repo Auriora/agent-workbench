@@ -29,6 +29,7 @@ import {
   mcpResources,
   mcpTools
 } from "../../src/interface-adapters/mcp/registries/index.js";
+import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
 
 describe("repo-local MCP debug harness", () => {
   it("is exposed only through package scripts", () => {
@@ -177,7 +178,24 @@ describe("repo-local MCP debug harness", () => {
 
   it("plans and runs the MCP tool sweep across every registered resource and tool", async () => {
     const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep", String(Date.now()));
-    const targetRepo = path.resolve("tests/fixtures/fixture-mcp-tool-sweep");
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-tool-sweep-sandbox-concerns-"));
+    const targetRepo = path.join(tempRoot, "repo");
+    fs.cpSync(path.resolve("tests/fixtures/fixture-mcp-tool-sweep"), targetRepo, { recursive: true });
+    const documentationRoot = path.join(targetRepo, "docs", "reference");
+    fs.mkdirSync(documentationRoot, { recursive: true });
+    fs.writeFileSync(path.join(documentationRoot, "documentation-map.md"), [
+      "| Concern | Canonical owner | Intent terms |",
+      "| --- | --- | --- |",
+      "| Debug runtime | [Runtime owner](runtime-owner.md) | tool sweep |"
+    ].join("\n"));
+    fs.writeFileSync(path.join(documentationRoot, "runtime-owner.md"), [
+      "---",
+      "status: current",
+      "canonical_owner: docs/reference/runtime-owner.md",
+      "---",
+      "",
+      "# Runtime owner"
+    ].join("\n"));
     const before = fileContentSnapshot(targetRepo);
     try {
       const config = resolveToolSweepConfig({
@@ -210,9 +228,24 @@ describe("repo-local MCP debug harness", () => {
       expect(resultsBySurface.get("tool:apply_workspace_edit")).toMatchObject({
         status: "ok"
       });
+      const databasePath = fs.readdirSync(outputDir)
+        .filter((entry) => entry.endsWith(".sqlite"))
+        .map((entry) => path.join(outputDir, entry))[0];
+      expect(databasePath).toBeDefined();
+      const graphStore = openGraphStore(databasePath!);
+      try {
+        const snapshots = await graphStore.listSnapshots({ repo_root: targetRepo });
+        expect(snapshots[0]).toMatchObject({ schema_version: SCHEMA_VERSION });
+        await expect(graphStore.getDocumentationConcernIndexState({
+          snapshot_id: snapshots[0]?.id ?? ""
+        })).resolves.toMatchObject({ status: "ready", state: "complete" });
+      } finally {
+        graphStore.close();
+      }
       expect(fileContentSnapshot(targetRepo)).toEqual(before);
     } finally {
       fs.rmSync(outputDir, { recursive: true, force: true });
+      fs.rmSync(tempRoot, { recursive: true, force: true });
     }
   });
 

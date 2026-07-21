@@ -63,27 +63,41 @@ one ranking change.
   - Evidence mode: command
   - Evidence: Phase 1 fixture and red-proof delivery complete: compact 13-document authority fixture; normalization, concern-routing, ranking, count/filter, 0/499/500/501 and cursor/expiry oracles; 15 ordinary fixture tests plus 9 expected-failure proofs passed. Combined Phase 1 focused suite passed 43 ordinary tests plus 9 expected failures; pnpm typecheck and git diff --check passed. Independent review blockers were corrected by scenario-specific candidate identities and complete source preconditions.
 
-  - Status: Phase 1 complete; T003 remains the next implementation task.
+  - Status: Phase 1 complete; Phase 2 is recorded below.
 ## Phase 2: Snapshot Ownership
 
-- [ ] T003 Extract and publish documentation-map ownership with graph snapshots.
+- [x] T003 Extract and publish documentation-map ownership with graph snapshots.
   - Depends on: T002
-  - Requirements: Requirement 1, Requirement 2; CP-002-CP-003, CP-008
-  - Acceptance criteria: AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.8,
-    AC1.9, AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6
+  - Requirements: Requirement 1, Requirement 2; CP-002
+  - Acceptance criteria: AC1.1, AC2.1, AC2.4, AC2.5
   - Files: `src/application/use-cases/index-repository-graph.ts`,
     `src/application/use-cases/document-currency-routing.ts`,
-    `src/infrastructure/sqlite/graph-store.ts`, `src/ports/index.ts`,
+    `src/debug/mcp-tool-sweep.ts`,
+    `src/domain/policies/document-concern.ts`,
+    `src/domain/policies/index.ts`,
+    `src/infrastructure/filesystem/workspace-file.ts`,
+    `src/infrastructure/sqlite/graph-store.ts`,
+    `src/infrastructure/sqlite/graph-store-location.ts`,
+    `src/infrastructure/workers/startup-graph-warmup-worker.ts`,
+    `src/ports/index.ts`,
+    `tests/docs/documentation-concern-routing.test.ts`,
+    `tests/graph/extraction-pipeline.test.ts`,
     `tests/graph/documentation-map-indexing.test.ts`,
-    `tests/graph/documentation-owner-publication.test.ts`
+    `tests/graph/documentation-owner-publication.test.ts`,
+    `tests/graph/store.test.ts`, `tests/mcp/debug-harness.test.ts`,
+    `tests/mcp/repo-status-resource.test.ts`, and
+    `tests/mcp/stdio-entrypoint.test.ts`
   - Acceptance: Shared normalization and exact term extraction populate
     concern/term/owner relations; one-to-many ownership is lossless; schema
-    migration, incompatible-old-snapshot handling, coordinated backfill, atomic
-    publication, failed-build isolation, and exhaustive owner-state-to-tier/
-    caveat cases pass. Query-time broad map reads are absent.
+    v2-to-v3 store migration, incompatible-old-snapshot handling, coordinated
+    current-snapshot rebuild, atomic publication, failed-build isolation, and
+    exhaustive extracted and persisted owner-state classification pass.
+    Query-time broad map reads are absent; ranking-tier and caveat mapping
+    remains owned by T004.
   - Evidence mode: command
-  - Evidence: Pending.
+  - Evidence: Delivered graph identity/schema v3, migration-before-publication with rollback-safe failure cleanup, bounded exact documentation-map and owner extraction, snapshot-scoped concern/term/owner state, production startup/debug wiring, and resolved independent review findings. V002 passed 11 tests; V006 passed 50 tests; V007 passed 6 tests; production-path integration passed 51 tests; pnpm typecheck passed; full suite passed 94 files with 933 tests plus 8 expected failures; git diff --check passed.
 
+  - Status: Phase 2 complete; T004 is next.
 ## Phase 3: Pure Ranking And Frozen Pagination
 
 - [ ] T004 Implement pure concern resolution and deterministic ranking policy.

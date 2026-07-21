@@ -8,8 +8,9 @@ import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 
-export const GRAPH_STORE_IDENTITY_VERSION = 2;
+export const GRAPH_STORE_IDENTITY_VERSION = 3;
 export const GRAPH_STORE_FILE_NAME = `graph-v${GRAPH_STORE_IDENTITY_VERSION}.sqlite`;
+export const PREVIOUS_GRAPH_STORE_FILE_NAME = "graph-v2.sqlite";
 export const LEGACY_GRAPH_STORE_FILE_NAME = "graph.sqlite";
 export const LEGACY_GRAPH_STORE_BACKUP_FILE_NAME = "graph-v1.sqlite.pre-v2";
 const LEGACY_GRAPH_STORE_BLOCKER = Buffer.from(
@@ -23,13 +24,18 @@ export function graphStorePath(repoRoot: string): string {
   return path.join(cacheDir, GRAPH_STORE_FILE_NAME);
 }
 
-export function seedVersionedGraphStore(databasePath: string): void {
+export function seedVersionedGraphStore(
+  databasePath: string,
+  prepareCandidate: (candidatePath: string) => void
+): void {
   if (path.basename(databasePath) !== GRAPH_STORE_FILE_NAME || fs.existsSync(databasePath)) {
     return;
   }
 
+  const previousPath = path.join(path.dirname(databasePath), PREVIOUS_GRAPH_STORE_FILE_NAME);
   const legacyPath = path.join(path.dirname(databasePath), LEGACY_GRAPH_STORE_FILE_NAME);
-  if (!fs.existsSync(legacyPath)) {
+  const sourcePath = fs.existsSync(previousPath) ? previousPath : legacyPath;
+  if (!fs.existsSync(sourcePath)) {
     return;
   }
 
@@ -37,8 +43,21 @@ export function seedVersionedGraphStore(databasePath: string): void {
     path.dirname(databasePath),
     `.${GRAPH_STORE_FILE_NAME}.seed-${process.pid}-${randomUUID()}`
   );
-  const legacy = new Database(legacyPath, { readonly: true, fileMustExist: true });
+  const sourceIsPreviousVersion = sourcePath === previousPath;
+  const legacy = new Database(sourcePath, sourceIsPreviousVersion
+    ? { fileMustExist: true }
+    : { readonly: true, fileMustExist: true });
   try {
+    if (sourceIsPreviousVersion) {
+      const checkpoint = legacy.pragma("wal_checkpoint(TRUNCATE)") as Array<{
+        busy: number;
+        log: number;
+        checkpointed: number;
+      }>;
+      if (checkpoint.some((entry) => entry.busy !== 0 || entry.log !== entry.checkpointed)) {
+        throw new Error("Graph v2 store seeding is blocked by active SQLite ownership.");
+      }
+    }
     try {
       legacy.prepare("VACUUM INTO ?").run(temporaryPath);
     } catch (error) {
@@ -49,6 +68,7 @@ export function seedVersionedGraphStore(databasePath: string): void {
     legacy.close();
   }
   try {
+    prepareCandidate(temporaryPath);
     fsyncFile(temporaryPath);
     try {
       fs.linkSync(temporaryPath, databasePath);
@@ -59,6 +79,8 @@ export function seedVersionedGraphStore(databasePath: string): void {
     }
   } finally {
     fs.rmSync(temporaryPath, { force: true });
+    fs.rmSync(`${temporaryPath}-wal`, { force: true });
+    fs.rmSync(`${temporaryPath}-shm`, { force: true });
   }
 }
 

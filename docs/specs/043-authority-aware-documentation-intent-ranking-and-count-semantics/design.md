@@ -54,7 +54,7 @@ may be truthful, but their labels omit universe and filter basis.
 | Requirement | Design coverage | Validation |
 | --- | --- | --- |
 | Requirement 1 | concern normalization/resolution; relevance bands; rank tuple and reasons | concern and ranking policy tests |
-| Requirement 2 | extraction, schema, migration/backfill, publication, one-to-many ownership | graph publication and ownership fixtures |
+| Requirement 2 | extraction, schema, v2-to-v3 migration, current-snapshot rebuild, publication, one-to-many ownership | graph publication and ownership fixtures |
 | Requirement 3 | 500+sentinel retrieval; persisted complete universe; bound cursor | boundary and property tests |
 | Requirement 4 | preserved aggregate score; lexical score; tuple; exact count/filter fields | contract, consumer, and presentation tests |
 
@@ -74,17 +74,52 @@ flow below fixes the dependency direction.
 The documentation map remains canonical. Its owner registry is extended with an
 explicit `Intent terms` column (or an equivalently structured field selected in
 the durable promotion). Each cell is a semicolon-delimited list. The concern
-label itself is always an indexed phrase; intent terms add exact aliases. Empty
-terms, normalized duplicates, and owner links escaping the repository are
-rejected during publication. No synonym generation is allowed.
+label itself is always an indexed phrase; intent terms add exact aliases. A
+missing or blank intent cell is valid, while an empty element inside a non-empty
+semicolon list and owner links escaping the repository invalidate concern-index
+publication. Normalized duplicates collapse deterministically. No synonym
+generation is allowed.
 
 The owner relation is one-to-many in both directions:
 
 ```text
-documentation_concern(concern_key, label, normalized_label)
-documentation_concern_term(concern_key, normalized_term, token_count)
-documentation_concern_owner(concern_key, document_id, owner_state)
+documentation_concern(snapshot_id, concern_key, label, normalized_label)
+documentation_concern_term(
+  snapshot_id,
+  concern_key,
+  normalized_term,
+  token_count
+)
+documentation_concern_owner(
+  snapshot_id,
+  concern_key,
+  owner_path,
+  document_id?,
+  owner_state,
+  declared_canonical_owner?,
+  superseded_by?,
+  source_line
+)
+documentation_concern_index_state(
+  snapshot_id,
+  state: complete | no_map | invalid,
+  source_path?,
+  source_content_hash?,
+  failure_reason?
+)
 ```
+
+`concern_key` is the normalized label tokens joined with `-`. Two source rows
+that derive the same key are the same normalized concern and deterministically
+merge their terms and owner rows. Contradiction is owner-document evidence, not
+a duplicate-label condition: a mapped repository-present document conflicts
+only when its normalized `canonical_owner` frontmatter names another path. The
+concern index stores an explicit snapshot-scoped `complete`, `no_map`, or
+`invalid` state so a repository without a map cannot be confused with an old
+snapshot that lacks concern evidence or a map that could not be trusted.
+All concern, term, and owner primary/foreign keys include `snapshot_id`.
+Duplicate owner links collapse by `(snapshot_id, concern_key, owner_path)` and
+retain the lowest source line as deterministic provenance.
 
 Primary/foreign keys and deterministic sorted insertion make duplicate rows
 impossible. Public status remains independently derived from document metadata.
@@ -283,7 +318,7 @@ temporary additive aliases and their documented legacy meanings do not change.
 ```text
 index-repository-graph
   -> parse documentation map and owner documents
-  -> migrate/backfill concern/term/owner rows
+  -> write concern/term/owner rows for the current v3 build
   -> publish graph snapshot atomically
 
 query-docs
@@ -309,12 +344,72 @@ names only where those choices do not change this behavior.
 
 ## Schema, Migration, And Publication
 
-The graph schema version increments. Migration creates the three concern tables
-and frozen-universe tables/indexes. Existing snapshots are backfilled only by a
-coordinated rebuild; a snapshot lacking the new schema is incompatible with the
-new ranking policy and returns structured unavailable evidence. Publication
-tests prove documents, FTS rows, concern ownership, and schema version become
-visible atomically. Failed extraction/build never publishes a mixed snapshot.
+The graph store identity and schema version increment from v2 to v3. When v3 is
+absent and v2 exists, startup must checkpoint v2 and atomically clone it into a
+temporary v3 candidate; a busy/incomplete checkpoint or clone/publish failure
+blocks startup without touching either canonical file. The cloned store is then
+migrated transactionally. V2 remains intact as rollback evidence and is not
+retired by this slice. If v2 is absent, the existing direct-upgrade seed from
+`graph.sqlite` remains valid; if no prior store exists, v3 starts empty. An
+existing v3 file is never overwritten or replaced from an older identity, and
+a corrupt or partial v3 fails explicitly without fallback.
+
+Existing snapshots keep their v2 schema identity and receive no synthetic
+concern rows. Only a coordinated v3 rebuild writes the explicit
+concern-index state and makes authority-aware ranking usable. Migration creates
+the concern tables/indexes; frozen-universe storage follows in T005. A snapshot
+with an older schema or without an explicit concern-index state is incompatible
+with the new ranking policy and returns structured unavailable evidence rather
+than `no_match`.
+
+The normalized concern label is always an implicit term. A map without an
+`Intent terms` column, including the repository's current durable map, is valid
+and indexes label-only terms until T009 promotes explicit aliases. A missing or
+blank `Intent terms` cell adds no aliases; an empty element inside a non-empty
+semicolon list is malformed.
+
+Strict build-time map extraction reads every link in the owner cell. It rejects
+an empty normalized label, a malformed explicit semicolon list, and an absolute
+or repository-escaping owner target. Inline Markdown destinations support both
+ordinary whitespace-free paths and CommonMark angle-bracket paths containing
+spaces. Malformed map evidence publishes an
+`invalid` concern-index state with zero concern rows, blocking authority-aware
+ranking while allowing the otherwise complete graph/docs snapshot to remain
+available. Persistence or publication failures still fail the target build and
+preserve the prior publication.
+
+Map discovery does not infer absence from the bounded docs scan. The indexer
+calls `WorkspaceFilePort.stat` for the exact
+`docs/reference/documentation-map.md` path. Only a definitive missing result
+publishes `no_map`; an existing non-file, inaccessible read, or other discovery
+failure publishes `invalid` with bounded reason evidence. A present map is read
+exactly during indexing even if the docs scan is truncated.
+
+Exact map and mapped-owner discovery remains byte-bounded even when the catalog
+scan is truncated. Each source must be a regular file no larger than 120,000
+bytes. Its exact `stat` check occurs before `readText`, and the retrieved byte
+length is checked again to cover cached content or a concurrent file change.
+An oversized source publishes feature-local `invalid` state with a bounded
+reason; sources already over the limit at `stat` are not read.
+
+Map links resolve relative to the map document, convert to canonical
+repo-relative POSIX paths, and must remain workspace-contained. Frontmatter
+`canonical_owner` and `superseded_by` values are repo-relative paths; normalize
+`./` and separators, reject absolute/escaping/malformed values, and retain a
+well-formed path even when the replacement document is absent. Invalid
+frontmatter path evidence makes the concern index `invalid` rather than guessing
+an owner state.
+
+Owner-state precedence is `missing`, `conflicting`, `superseded`, `archived`,
+`draft`, then `valid`. Archived, historical, legacy, template, and sample
+documents use the non-governing `archived` owner state while their public
+document status remains independent. Multiple mapped owners alone never create
+a conflict.
+
+Publication tests prove documents, FTS rows, concern ownership, concern-index
+state, and schema version become visible atomically through the existing
+building-to-published snapshot fence. Failed extraction/build never publishes a
+mixed snapshot.
 
 ## Failure And Trust Behavior
 

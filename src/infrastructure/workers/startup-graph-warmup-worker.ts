@@ -69,6 +69,7 @@ try {
     graph: workerGraphStore,
     catalog: workerGraphStore,
     docs_index: workerGraphStore,
+    documentation_concerns: workerGraphStore,
     snapshots: workerGraphStore,
     clock: new SystemClockAdapter(),
     schema_version: SCHEMA_VERSION,

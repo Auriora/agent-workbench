@@ -31,6 +31,13 @@ import {
   extractMarkdownFrontmatterSignals
 } from "../../domain/policies/index.js";
 import type {
+  DocumentationConcernIndexPort,
+  DocumentationConcernIndexState,
+  DocumentationConcernIndexUnavailable,
+  DocumentationConcernOwnerWrite,
+  DocumentationConcernRowsResult,
+  DocumentationConcernTermWrite,
+  DocumentationConcernWrite,
   DocsIndexDocumentWrite,
   DocsIndexPort,
   DocsIndexSearchRequest,
@@ -188,7 +195,8 @@ export interface GraphStore
     SnapshotBuildPort,
     FileCatalogPort,
     SnapshotPathInventoryPort,
-    DocsIndexPort {
+    DocsIndexPort,
+    DocumentationConcernIndexPort {
   db: Database.Database;
   close(): void;
   validateSchema(): boolean;
@@ -1802,6 +1810,205 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     tx();
   }
 
+  public async replaceSnapshotDocumentationConcerns(input: {
+    snapshot_id: string;
+    state: "complete" | "no_map" | "invalid";
+    source_path?: string;
+    source_content_hash?: string;
+    failure_reason?: string;
+    concerns: readonly DocumentationConcernWrite[];
+    terms: readonly DocumentationConcernTermWrite[];
+    owners: readonly DocumentationConcernOwnerWrite[];
+  }): Promise<void> {
+    const snapshotId = this.requireBuildingSnapshotId(input.snapshot_id);
+    if (input.state !== "complete" && (
+      input.concerns.length > 0 ||
+      input.terms.length > 0 ||
+      input.owners.length > 0
+    )) {
+      throw new Error(`Documentation concern index state ${input.state} cannot publish concern rows.`);
+    }
+    const replace = this.db.transaction(() => {
+      this.db.prepare("DELETE FROM documentation_concern_owners WHERE snapshot_id = ?").run(snapshotId);
+      this.db.prepare("DELETE FROM documentation_concern_terms WHERE snapshot_id = ?").run(snapshotId);
+      this.db.prepare("DELETE FROM documentation_concerns WHERE snapshot_id = ?").run(snapshotId);
+      this.db.prepare("DELETE FROM documentation_concern_index_state WHERE snapshot_id = ?").run(snapshotId);
+
+      this.db.prepare(`
+        INSERT INTO documentation_concern_index_state (
+          snapshot_id, state, source_path, source_content_hash, failure_reason
+        ) VALUES (?, ?, ?, ?, ?)
+      `).run(
+        snapshotId,
+        input.state,
+        input.source_path ?? null,
+        input.source_content_hash ?? null,
+        input.failure_reason ?? null
+      );
+
+      const insertConcern = this.db.prepare(`
+        INSERT INTO documentation_concerns (
+          snapshot_id, concern_key, label, normalized_label
+        ) VALUES (?, ?, ?, ?)
+      `);
+      for (const concern of input.concerns) {
+        insertConcern.run(snapshotId, concern.concern_key, concern.label, concern.normalized_label);
+      }
+
+      const insertTerm = this.db.prepare(`
+        INSERT INTO documentation_concern_terms (
+          snapshot_id, concern_key, normalized_term, token_count
+        ) VALUES (?, ?, ?, ?)
+      `);
+      for (const term of input.terms) {
+        insertTerm.run(snapshotId, term.concern_key, term.normalized_term, term.token_count);
+      }
+
+      const insertOwner = this.db.prepare(`
+        INSERT INTO documentation_concern_owners (
+          snapshot_id,
+          concern_key,
+          mapped_owner_path,
+          document_id,
+          owner_state,
+          source_line,
+          superseded_by,
+          declared_canonical_owner
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const owners = new Map<string, DocumentationConcernOwnerWrite>();
+      for (const owner of input.owners) {
+        const key = `${owner.concern_key}\u0000${owner.mapped_owner_path}`;
+        const existing = owners.get(key);
+        if (existing !== undefined && (
+          existing.document_id !== owner.document_id ||
+          existing.owner_state !== owner.owner_state ||
+          existing.superseded_by !== owner.superseded_by ||
+          existing.declared_canonical_owner !== owner.declared_canonical_owner
+        )) {
+          throw new Error(
+            `Contradictory documentation owner rows for ${owner.concern_key}:${owner.mapped_owner_path}.`
+          );
+        }
+        owners.set(key, existing === undefined || owner.source_line < existing.source_line ? owner : existing);
+      }
+      for (const owner of [...owners.values()].sort((left, right) =>
+        left.concern_key.localeCompare(right.concern_key) ||
+        left.mapped_owner_path.localeCompare(right.mapped_owner_path) ||
+        left.source_line - right.source_line
+      )) {
+        insertOwner.run(
+          snapshotId,
+          owner.concern_key,
+          owner.mapped_owner_path,
+          owner.document_id ?? null,
+          owner.owner_state,
+          owner.source_line,
+          owner.superseded_by ?? null,
+          owner.declared_canonical_owner ?? null
+        );
+      }
+    });
+    replace.immediate();
+  }
+
+  public async getDocumentationConcernIndexState(input: {
+    snapshot_id: string;
+  }): Promise<DocumentationConcernIndexState> {
+    const availability = this.getDocumentationConcernAvailability(input.snapshot_id);
+    if (availability.status === "unavailable") {
+      if (availability.reason === "concern_index_invalid") {
+        return {
+          status: "ready",
+          snapshot_id: input.snapshot_id,
+          state: "invalid",
+          source_path: availability.source_path,
+          source_content_hash: availability.source_content_hash,
+          failure_reason: availability.failure_reason
+        };
+      }
+      return availability;
+    }
+    return availability.state;
+  }
+
+  public async listDocumentationConcernTerms(input: {
+    snapshot_id: string;
+    max_rows?: number;
+  }): Promise<DocumentationConcernRowsResult<DocumentationConcernTermWrite>> {
+    const availability = this.getDocumentationConcernAvailability(input.snapshot_id);
+    if (availability.status === "unavailable") {
+      return availability;
+    }
+    const maxRows = boundedDocumentationConcernRowLimit(input.max_rows);
+    const rows = this.db.prepare(`
+      SELECT concern_key, normalized_term, token_count
+      FROM documentation_concern_terms
+      WHERE snapshot_id = ?
+      ORDER BY concern_key ASC, token_count DESC, normalized_term ASC
+      LIMIT ?
+    `).all(availability.snapshotId, maxRows) as DocumentationConcernTermWrite[];
+    return { status: "ready", snapshot_id: input.snapshot_id, rows };
+  }
+
+  public async listDocumentationConcernOwners(input: {
+    snapshot_id: string;
+    concern_keys?: readonly string[];
+    max_rows?: number;
+  }): Promise<DocumentationConcernRowsResult<DocumentationConcernOwnerWrite>> {
+    const availability = this.getDocumentationConcernAvailability(input.snapshot_id);
+    if (availability.status === "unavailable") {
+      return availability;
+    }
+    const maxRows = boundedDocumentationConcernRowLimit(input.max_rows);
+    const concernKeys = [...new Set(input.concern_keys ?? [])].sort();
+    if (input.concern_keys !== undefined && concernKeys.length === 0) {
+      return { status: "ready", snapshot_id: input.snapshot_id, rows: [] };
+    }
+    const filters = concernKeys.length === 0
+      ? ""
+      : ` AND concern_key IN (${sqlPlaceholders(concernKeys.length)})`;
+    const rows = this.db.prepare(`
+      SELECT
+        concern_key,
+        mapped_owner_path,
+        document_id,
+        owner_state,
+        source_line,
+        superseded_by,
+        declared_canonical_owner
+      FROM documentation_concern_owners
+      WHERE snapshot_id = ?${filters}
+      ORDER BY concern_key ASC, mapped_owner_path ASC, source_line ASC
+      LIMIT ?
+    `).all(
+      availability.snapshotId,
+      ...concernKeys,
+      maxRows
+    ) as Array<{
+      concern_key: string;
+      mapped_owner_path: string;
+      document_id: string | null;
+      owner_state: DocumentationConcernOwnerWrite["owner_state"];
+      source_line: number;
+      superseded_by: string | null;
+      declared_canonical_owner: string | null;
+    }>;
+    return {
+      status: "ready",
+      snapshot_id: input.snapshot_id,
+      rows: rows.map((row) => ({
+        concern_key: row.concern_key,
+        mapped_owner_path: row.mapped_owner_path,
+        document_id: row.document_id ?? undefined,
+        owner_state: row.owner_state,
+        source_line: row.source_line,
+        superseded_by: row.superseded_by ?? undefined,
+        declared_canonical_owner: row.declared_canonical_owner ?? undefined
+      }))
+    };
+  }
+
   public async getState(input: { repo_root: string; snapshot_id?: string }): Promise<DocsIndexState> {
     const snapshot = await this.getSnapshot(input);
     if (snapshot === null) {
@@ -2080,6 +2287,73 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     return row?.publication_state === "published" ? row.id : null;
   }
 
+  private getDocumentationConcernAvailability(snapshotId: string):
+    | {
+        status: "ready";
+        snapshotId: number;
+        state: Exclude<DocumentationConcernIndexState, DocumentationConcernIndexUnavailable>;
+      }
+    | DocumentationConcernIndexUnavailable {
+    const numericId = this.parseNumericId(snapshotId);
+    if (numericId === null) {
+      return { status: "unavailable", snapshot_id: snapshotId, reason: "snapshot_not_found" };
+    }
+    const snapshot = this.getSnapshotRowById(numericId);
+    if (snapshot === undefined) {
+      return { status: "unavailable", snapshot_id: snapshotId, reason: "snapshot_not_found" };
+    }
+    if (snapshot.publication_state !== "published") {
+      return { status: "unavailable", snapshot_id: snapshotId, reason: "snapshot_not_published" };
+    }
+    if (snapshot.schema_version !== SCHEMA_VERSION) {
+      return {
+        status: "unavailable",
+        snapshot_id: snapshotId,
+        reason: "snapshot_schema_incompatible",
+        observed_schema_version: snapshot.schema_version,
+        required_schema_version: SCHEMA_VERSION
+      };
+    }
+    const state = this.db.prepare(`
+      SELECT state, source_path, source_content_hash, failure_reason
+      FROM documentation_concern_index_state
+      WHERE snapshot_id = ?
+    `).get(numericId) as {
+      state: "complete" | "no_map" | "invalid";
+      source_path: string | null;
+      source_content_hash: string | null;
+      failure_reason: string | null;
+    } | undefined;
+    if (state === undefined) {
+      return {
+        status: "unavailable",
+        snapshot_id: snapshotId,
+        reason: "concern_index_state_missing"
+      };
+    }
+    if (state.state === "invalid") {
+      return {
+        status: "unavailable",
+        snapshot_id: snapshotId,
+        reason: "concern_index_invalid",
+        source_path: state.source_path ?? undefined,
+        source_content_hash: state.source_content_hash ?? undefined,
+        failure_reason: state.failure_reason ?? "Documentation concern index publication failed."
+      };
+    }
+    return {
+      status: "ready",
+      snapshotId: numericId,
+      state: {
+        status: "ready",
+        snapshot_id: snapshotId,
+        state: state.state,
+        source_path: state.source_path ?? undefined,
+        source_content_hash: state.source_content_hash ?? undefined
+      }
+    };
+  }
+
   private requireBuildingSnapshotId(snapshotId: string): number {
     const byId = this.parseNumericId(snapshotId);
     const row = byId === null ? undefined : this.getSnapshotRowById(byId);
@@ -2247,6 +2521,10 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       return;
     }
     const placeholders = sqlPlaceholders(snapshotIds.length);
+    this.db.prepare(`DELETE FROM documentation_concern_owners WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
+    this.db.prepare(`DELETE FROM documentation_concern_terms WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
+    this.db.prepare(`DELETE FROM documentation_concerns WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
+    this.db.prepare(`DELETE FROM documentation_concern_index_state WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
     this.db
       .prepare(`DELETE FROM docs_fts WHERE rowid IN (SELECT id FROM docs_documents WHERE snapshot_id IN (${placeholders}))`)
       .run(...snapshotIds);
@@ -2591,6 +2869,14 @@ function sqlPlaceholders(count: number): string {
   return Array.from({ length: count }, () => "?").join(", ");
 }
 
+function boundedDocumentationConcernRowLimit(value: number | undefined): number {
+  const limit = value ?? 501;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 501) {
+    throw new RangeError("Documentation concern row limit must be an integer from 1 to 501.");
+  }
+  return limit;
+}
+
 function slugifyDocsHeading(value: string): string {
   const slug = value
     .trim()
@@ -2603,7 +2889,34 @@ function slugifyDocsHeading(value: string): string {
 }
 
 export function openGraphStore(databasePath: string, options: GraphStoreOptions = {}): GraphStore {
-  seedVersionedGraphStore(databasePath);
+  seedVersionedGraphStore(databasePath, (candidatePath) => {
+    const candidate = new SqliteGraphStoreAdapter(candidatePath, options);
+    try {
+      if (!candidate.validateSchema()) {
+        throw new Error("Graph v3 seed candidate failed schema validation.");
+      }
+      const marker = candidate.db.prepare(
+        "SELECT MAX(version) AS version FROM schema_migrations"
+      ).get() as { version: number | null };
+      if (marker.version !== SCHEMA_VERSION) {
+        throw new Error("Graph v3 seed candidate has an incompatible schema identity.");
+      }
+      const integrity = candidate.db.pragma("quick_check") as Array<{ quick_check: string }>;
+      if (integrity.length !== 1 || integrity[0]?.quick_check !== "ok") {
+        throw new Error("Graph v3 seed candidate failed SQLite integrity validation.");
+      }
+      const checkpoint = candidate.db.pragma("wal_checkpoint(TRUNCATE)") as Array<{
+        busy: number;
+        log: number;
+        checkpointed: number;
+      }>;
+      if (checkpoint.some((entry) => entry.busy !== 0 || entry.log !== entry.checkpointed)) {
+        throw new Error("Graph v3 seed candidate checkpoint did not converge.");
+      }
+    } finally {
+      candidate.close();
+    }
+  });
   return new SqliteGraphStoreAdapter(databasePath, options);
 }
 
@@ -2710,6 +3023,79 @@ function migrate(db: Database.Database): void {
       UNIQUE(snapshot_id, path)
     );
 
+    CREATE TABLE IF NOT EXISTS documentation_concern_index_state (
+      snapshot_id INTEGER PRIMARY KEY REFERENCES snapshots(id) ON DELETE CASCADE,
+      state TEXT NOT NULL CHECK (state IN ('complete', 'no_map', 'invalid')),
+      source_path TEXT,
+      source_content_hash TEXT,
+      failure_reason TEXT CHECK (failure_reason IS NULL OR length(failure_reason) <= 1024),
+      CHECK (
+        (state = 'no_map' AND source_path IS NULL AND source_content_hash IS NULL)
+        OR
+        (state = 'complete' AND source_path IS NOT NULL AND source_content_hash IS NOT NULL)
+        OR
+        (state = 'invalid')
+      ),
+      CHECK (
+        (state = 'invalid' AND failure_reason IS NOT NULL)
+        OR
+        (state <> 'invalid' AND failure_reason IS NULL)
+      )
+    );
+
+    CREATE TABLE IF NOT EXISTS documentation_concerns (
+      snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
+      concern_key TEXT NOT NULL CHECK (length(concern_key) > 0),
+      label TEXT NOT NULL CHECK (length(label) > 0),
+      normalized_label TEXT NOT NULL CHECK (length(normalized_label) > 0),
+      PRIMARY KEY(snapshot_id, concern_key)
+    );
+
+    CREATE TABLE IF NOT EXISTS documentation_concern_terms (
+      snapshot_id INTEGER NOT NULL,
+      concern_key TEXT NOT NULL,
+      normalized_term TEXT NOT NULL CHECK (length(normalized_term) > 0),
+      token_count INTEGER NOT NULL CHECK (token_count > 0),
+      PRIMARY KEY(snapshot_id, concern_key, normalized_term),
+      FOREIGN KEY(snapshot_id, concern_key)
+        REFERENCES documentation_concerns(snapshot_id, concern_key) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS documentation_concern_owners (
+      snapshot_id INTEGER NOT NULL,
+      concern_key TEXT NOT NULL,
+      mapped_owner_path TEXT NOT NULL CHECK (length(mapped_owner_path) > 0),
+      document_id TEXT,
+      owner_state TEXT NOT NULL CHECK (
+        owner_state IN ('valid', 'draft', 'missing', 'archived', 'superseded', 'conflicting')
+      ),
+      source_line INTEGER NOT NULL CHECK (source_line > 0),
+      superseded_by TEXT,
+      declared_canonical_owner TEXT,
+      PRIMARY KEY(snapshot_id, concern_key, mapped_owner_path),
+      FOREIGN KEY(snapshot_id, concern_key)
+        REFERENCES documentation_concerns(snapshot_id, concern_key) ON DELETE CASCADE,
+      FOREIGN KEY(snapshot_id, document_id)
+        REFERENCES docs_documents(snapshot_id, path),
+      CHECK (
+        (owner_state = 'missing' AND document_id IS NULL)
+        OR
+        (owner_state <> 'missing' AND document_id = mapped_owner_path)
+      ),
+      CHECK (
+        (owner_state = 'superseded' AND superseded_by IS NOT NULL)
+        OR
+        (owner_state <> 'superseded' AND superseded_by IS NULL)
+      ),
+      CHECK (
+        (owner_state = 'conflicting'
+          AND declared_canonical_owner IS NOT NULL
+          AND declared_canonical_owner <> mapped_owner_path)
+        OR
+        (owner_state <> 'conflicting' AND declared_canonical_owner IS NULL)
+      )
+    );
+
     CREATE TABLE IF NOT EXISTS snapshot_index_coverage (
       id INTEGER PRIMARY KEY,
       snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
@@ -2756,6 +3142,14 @@ function migrate(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_docs_documents_snapshot_path ON docs_documents(snapshot_id, path);
     CREATE INDEX IF NOT EXISTS idx_docs_headings_document ON docs_headings(document_id, line);
     CREATE INDEX IF NOT EXISTS idx_snapshot_index_coverage_snapshot ON snapshot_index_coverage(snapshot_id);
+    CREATE INDEX IF NOT EXISTS idx_documentation_concern_terms_snapshot_term
+      ON documentation_concern_terms(snapshot_id, normalized_term);
+    CREATE INDEX IF NOT EXISTS idx_documentation_concern_owners_snapshot_concern
+      ON documentation_concern_owners(snapshot_id, concern_key);
+    CREATE INDEX IF NOT EXISTS idx_documentation_concern_owners_snapshot_document
+      ON documentation_concern_owners(snapshot_id, document_id);
+    CREATE INDEX IF NOT EXISTS idx_documentation_concern_owners_snapshot_state
+      ON documentation_concern_owners(snapshot_id, owner_state);
 
     INSERT OR IGNORE INTO schema_migrations(version) VALUES (${SCHEMA_VERSION});
   `);
@@ -2826,7 +3220,11 @@ function validateSchema(db: Database.Database): boolean {
     "docs_documents",
     "docs_headings",
     "docs_fts",
-    "snapshot_index_coverage"
+    "snapshot_index_coverage",
+    "documentation_concern_index_state",
+    "documentation_concerns",
+    "documentation_concern_terms",
+    "documentation_concern_owners"
   ];
   const rows = db
     .prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'virtual table')")

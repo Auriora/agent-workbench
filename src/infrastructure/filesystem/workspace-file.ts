@@ -65,14 +65,7 @@ export class WorkspaceFileAdapter implements WorkspaceFilePort {
     mtime_ms: number;
   }> {
     const decision = this.safety.resolveWorkspacePath(input.path);
-    if (!decision.allowed) {
-      return {
-        exists: false,
-        is_file: false,
-        size_bytes: 0,
-        mtime_ms: 0
-      };
-    }
+    assertAllowedDecision(decision);
 
     try {
       const stat = await fs.promises.stat(decision.absolutePath);

@@ -43,6 +43,7 @@ import type {
   DiagnosticsProviderStatus,
   DocsDocument,
   DocsHeading,
+  DocumentationConcernOwnerState,
   DocsRankingCursorPayload,
   DocsRankingCandidateQueryResult,
   DocsSearchHit,
@@ -424,6 +425,92 @@ export interface DocsIndexPort {
   }): Promise<void>;
   search(input: DocsIndexSearchRequest): Promise<DocsIndexSearchResult>;
   getState(input: { repo_root: string; snapshot_id?: string }): Promise<DocsIndexState>;
+}
+
+export type DocumentationConcernIndexStateValue = "complete" | "no_map" | "invalid";
+
+export type DocumentationConcernWrite = {
+  concern_key: string;
+  label: string;
+  normalized_label: string;
+};
+
+export type DocumentationConcernTermWrite = {
+  concern_key: string;
+  normalized_term: string;
+  token_count: number;
+};
+
+export type DocumentationConcernOwnerWrite = {
+  concern_key: string;
+  mapped_owner_path: string;
+  document_id?: string;
+  owner_state: DocumentationConcernOwnerState;
+  source_line: number;
+  superseded_by?: string;
+  declared_canonical_owner?: string;
+};
+
+export type DocumentationConcernIndexUnavailable = {
+  status: "unavailable";
+  snapshot_id: string;
+  reason:
+    | "snapshot_not_found"
+    | "snapshot_not_published"
+    | "snapshot_schema_incompatible"
+    | "concern_index_state_missing"
+    | "concern_index_invalid";
+  failure_reason?: string;
+  source_path?: string;
+  source_content_hash?: string;
+  observed_schema_version?: number;
+  required_schema_version?: number;
+};
+
+export type DocumentationConcernIndexReady = {
+  status: "ready";
+  snapshot_id: string;
+  state: DocumentationConcernIndexStateValue;
+  source_path?: string;
+  source_content_hash?: string;
+  failure_reason?: string;
+};
+
+export type DocumentationConcernIndexState =
+  | DocumentationConcernIndexReady
+  | DocumentationConcernIndexUnavailable;
+
+export type DocumentationConcernRowsResult<T> =
+  | {
+      status: "ready";
+      snapshot_id: string;
+      rows: readonly T[];
+    }
+  | DocumentationConcernIndexUnavailable;
+
+export interface DocumentationConcernIndexPort {
+  replaceSnapshotDocumentationConcerns(input: {
+    snapshot_id: string;
+    state: DocumentationConcernIndexStateValue;
+    source_path?: string;
+    source_content_hash?: string;
+    failure_reason?: string;
+    concerns: readonly DocumentationConcernWrite[];
+    terms: readonly DocumentationConcernTermWrite[];
+    owners: readonly DocumentationConcernOwnerWrite[];
+  }): Promise<void>;
+  getDocumentationConcernIndexState(input: {
+    snapshot_id: string;
+  }): Promise<DocumentationConcernIndexState>;
+  listDocumentationConcernTerms(input: {
+    snapshot_id: string;
+    max_rows?: number;
+  }): Promise<DocumentationConcernRowsResult<DocumentationConcernTermWrite>>;
+  listDocumentationConcernOwners(input: {
+    snapshot_id: string;
+    concern_keys?: readonly string[];
+    max_rows?: number;
+  }): Promise<DocumentationConcernRowsResult<DocumentationConcernOwnerWrite>>;
 }
 
 export interface DocsRankingCandidateQueryPort {

@@ -13,6 +13,7 @@ import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
 import { InMemoryRuntimeOperationsAdapter } from "../../src/infrastructure/runtime/index.js";
 import { FileRepositoryOwnershipAdapter } from "../../src/infrastructure/runtime/repository-ownership.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
+import { GRAPH_STORE_FILE_NAME } from "../../src/infrastructure/sqlite/graph-store-location.js";
 import {
   createAgentWorkbenchServer,
   repositoryOwnershipPath
@@ -728,7 +729,7 @@ async function seedPublishedEntry(
 function graphStorePath(repoRoot: string): string {
   const cacheDir = path.join(repoRoot, ".cache", "agent-workbench");
   fs.mkdirSync(cacheDir, { recursive: true });
-  return path.join(cacheDir, "graph-v2.sqlite");
+  return path.join(cacheDir, GRAPH_STORE_FILE_NAME);
 }
 
 function testSnapshot(id: string, repoRoot: string) {

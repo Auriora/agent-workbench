@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { createHash } from "node:crypto";
+
 import type {
   ExtractionBatch,
   FileCatalogEntry,
@@ -13,6 +15,8 @@ import type {
 import type { SnapshotState } from "../../domain/models/runtime.js";
 import type {
   ClockPort,
+  DocumentationConcernIndexPort,
+  DocsIndexDocumentWrite,
   DocsIndexPort,
   ExtractorPort,
   ExtractorRegistryPort,
@@ -34,6 +38,7 @@ import {
   parseMarkdownHeadings,
   selectedMarkdownText
 } from "./markdown-docs.js";
+import { extractDocumentationConcernIndex } from "./document-currency-routing.js";
 
 const MAX_TEXT_EXTRACTION_BYTES = 2_000_000;
 const MAX_DOCS_INDEX_BYTES = 120_000;
@@ -68,6 +73,7 @@ export type BuildRepositoryGraphInput = {
   graph: GraphWritePort;
   catalog: FileCatalogPort;
   docs_index?: DocsIndexPort;
+  documentation_concerns?: DocumentationConcernIndexPort;
   snapshots: SnapshotPort & SnapshotPublicationPort & SnapshotBuildPort;
   clock: ClockPort;
   schema_version: number;
@@ -197,12 +203,9 @@ export async function buildRepositoryGraph(
         max_files: input.max_files ?? 2000
       });
 
+  const markdownContentByPath = new Map<string, string>();
+  const documents: DocsIndexDocumentWrite[] = [];
   if (input.docs_index !== undefined) {
-    const coverage = buildIndexCoverage({
-      graphScan: scanned,
-      docsScan
-    });
-    const documents = [];
     const docsFiles = mergeDocsIndexFiles({
       graphFiles: scanned.files,
       docsFiles: docsScan?.files ?? []
@@ -210,6 +213,7 @@ export async function buildRepositoryGraph(
     for (const [index, file] of docsFiles.entries()) {
       await yieldToEventLoop(index);
       const content = await input.workspace.readText({ path: file.path });
+      markdownContentByPath.set(file.path, content);
       const headings = parseMarkdownHeadings(content);
       const selected = selectedMarkdownText({
         content,
@@ -226,11 +230,49 @@ export async function buildRepositoryGraph(
         truncated: selected.truncated
       });
     }
+  }
+
+  let concernIndex: Awaited<ReturnType<typeof extractDocumentationConcernIndex>> | undefined;
+  if (input.documentation_concerns !== undefined) {
+    if (input.docs_index === undefined) {
+      throw new Error("Documentation concern indexing requires the snapshot docs index.");
+    }
+    concernIndex = await extractDocumentationConcernIndex({
+      workspace: input.workspace,
+      content_by_path: markdownContentByPath
+    });
+    for (const [documentPath, content] of concernIndex.document_content_by_path) {
+      if (documents.some((document) => document.path === documentPath)) continue;
+      const headings = parseMarkdownHeadings(content);
+      const selected = selectedMarkdownText({ content, max_bytes: MAX_DOCS_INDEX_BYTES });
+      documents.push({
+        path: documentPath,
+        title: headings[0]?.text ?? markdownTitleFromPath(documentPath),
+        headings,
+        selected_text: selected.text,
+        content_hash: createHash("sha256").update(content).digest("hex"),
+        byte_count: Buffer.byteLength(content),
+        indexed_at: now,
+        truncated: selected.truncated
+      });
+    }
+    documents.sort(compareDocsIndexDocuments);
+  }
+
+  if (input.docs_index !== undefined) {
     await input.docs_index.replaceSnapshotDocs({
       snapshot_id: snapshotId,
       repo_root: scanned.repo_root,
       documents,
-      coverage
+      coverage: buildIndexCoverage({ graphScan: scanned, docsScan })
+    });
+  }
+
+  if (input.documentation_concerns !== undefined && concernIndex !== undefined) {
+    const { document_content_by_path: _documentContentByPath, ...persistedConcernIndex } = concernIndex;
+    await input.documentation_concerns.replaceSnapshotDocumentationConcerns({
+      snapshot_id: snapshotId,
+      ...persistedConcernIndex
     });
   }
 
@@ -373,6 +415,13 @@ function mergeDocsIndexFiles(input: {
 }
 
 function compareDocsIndexFiles(left: FileCatalogEntry, right: FileCatalogEntry): number {
+  return docsIndexRank(right.path) - docsIndexRank(left.path) || left.path.localeCompare(right.path);
+}
+
+function compareDocsIndexDocuments(
+  left: DocsIndexDocumentWrite,
+  right: DocsIndexDocumentWrite
+): number {
   return docsIndexRank(right.path) - docsIndexRank(left.path) || left.path.localeCompare(right.path);
 }
 
@@ -575,6 +624,7 @@ export async function warmupRepositoryGraph(input: {
   graph: GraphWritePort;
   catalog: FileCatalogPort;
   docs_index?: DocsIndexPort;
+  documentation_concerns: DocumentationConcernIndexPort;
   snapshots: SnapshotPort & SnapshotPublicationPort & SnapshotBuildPort;
   warmups: WarmupCoordinatorPort;
   clock: ClockPort;
@@ -608,6 +658,7 @@ export async function warmupRepositoryGraph(input: {
       graph: input.graph,
       catalog: input.catalog,
       docs_index: input.docs_index,
+      documentation_concerns: input.documentation_concerns,
       snapshots: input.snapshots,
       clock: input.clock,
       schema_version: input.schema_version,

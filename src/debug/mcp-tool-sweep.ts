@@ -451,6 +451,7 @@ async function warmGraph(input: { repoRoot: string; runtime: RepoRuntime }): Pro
     graph: input.runtime.graph,
     catalog: input.runtime.graph,
     docs_index: input.runtime.graph,
+    documentation_concerns: input.runtime.graph,
     snapshots: input.runtime.graph,
     clock: input.runtime.clock,
     schema_version: SCHEMA_VERSION,

@@ -4,9 +4,16 @@
  */
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { extractDocumentationMapOwners } from "../../src/application/use-cases/markdown-docs.js";
+import { describe, expect, it, vi } from "vitest";
+import { extractDocumentationConcernIndex } from "../../src/application/use-cases/document-currency-routing.js";
+import {
+  normalizeDocumentationConcern,
+  parseDocumentationConcernMap
+} from "../../src/domain/policies/index.js";
+import { WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
+import type { WorkspaceFilePort } from "../../src/ports/index.js";
 
 const FIXTURE_ROOT = path.resolve("tests/fixtures/fixture-docs-authority-ranking");
 
@@ -32,6 +39,7 @@ describe("documentation concern routing fixture", () => {
 
     for (const example of oracle.normalization) {
       expect(referenceNormalize(example.input)).toBe(example.normalized);
+      expect(normalizeDocumentationConcern(example.input)).toBe(example.normalized);
     }
     for (const example of oracle.queries) {
       expect(referenceNormalize(example.query).split(" ")).toEqual(example.normalized_tokens);
@@ -80,26 +88,226 @@ describe("documentation concern routing fixture", () => {
     );
   });
 
-  it.fails("T003 red proof: extracts every valid owner link from a multi-owner map row", () => {
-    const owners = extractDocumentationMapOwners({
-      mapPath: "docs/reference/documentation-map.md",
+  it("extracts every valid owner link and deterministic implicit/explicit terms", () => {
+    const parsed = parseDocumentationConcernMap({
+      map_path: "docs/reference/documentation-map.md",
       content: readText("docs/reference/documentation-map.md")
     });
+    expect(parsed.status).toBe("complete");
+    if (parsed.status !== "complete") throw new Error(parsed.failure_reason);
 
-    expect(owners.filter(({ concern }) => concern === "Shared governance")).toEqual([
+    expect(parsed.owners.filter(({ concern_key }) => concern_key === "shared-governance")).toEqual([
       {
-        concern: "Shared governance",
-        owner_path: "docs/reference/runtime-contracts.md",
-        source_path: "docs/reference/documentation-map.md"
+        concern_key: "shared-governance",
+        mapped_owner_path: "docs/design/graph-store-design.md",
+        source_line: 14
       },
       {
-        concern: "Shared governance",
-        owner_path: "docs/design/graph-store-design.md",
-        source_path: "docs/reference/documentation-map.md"
+        concern_key: "shared-governance",
+        mapped_owner_path: "docs/reference/runtime-contracts.md",
+        source_line: 14
       }
     ]);
+    expect(parsed.owners.filter(({ mapped_owner_path }) =>
+      mapped_owner_path === "docs/reference/runtime-contracts.md")).toHaveLength(4);
+    expect(parsed.terms.filter(({ concern_key }) => concern_key === "coding-agent-integrations"))
+      .toEqual(expect.arrayContaining([
+        { concern_key: "coding-agent-integrations", normalized_term: "coding agent integrations", token_count: 3 },
+        { concern_key: "coding-agent-integrations", normalized_term: "sessionstart", token_count: 1 },
+        { concern_key: "coding-agent-integrations", normalized_term: "agent hooks", token_count: 2 }
+      ]));
+  });
+
+  it("classifies the complete owner-state fixture without treating multiple owners as conflict", async () => {
+    const evidence = await extractDocumentationConcernIndex({
+      workspace: new WorkspaceFileAdapter({ repoRoot: FIXTURE_ROOT })
+    });
+
+    expect(evidence.state).toBe("complete");
+    expect(evidence.failure_reason).toBeUndefined();
+    const byPath = new Map(evidence.owners.map((owner) => [owner.mapped_owner_path, owner]));
+    expect(byPath.get("docs/design/coding-agent-integration-design.md")).toMatchObject({ owner_state: "valid" });
+    expect(byPath.get("docs/drafts/draft-owner.md")).toMatchObject({ owner_state: "draft" });
+    const missingOwner = byPath.get("docs/missing/missing-owner.md");
+    expect(missingOwner).toMatchObject({ owner_state: "missing" });
+    expect(missingOwner).not.toHaveProperty("document_id");
+    expect(byPath.get("docs/history/archived-owner.md")).toMatchObject({ owner_state: "archived" });
+    expect(byPath.get("docs/design/superseded-owner.md")).toMatchObject({
+      owner_state: "superseded",
+      superseded_by: "docs/design/current-owner.md"
+    });
+    expect(byPath.get("docs/design/conflicting-owner.md")).toMatchObject({
+      owner_state: "conflicting",
+      declared_canonical_owner: "docs/design/current-owner.md"
+    });
+    expect(evidence.owners.filter(({ concern_key }) => concern_key === "shared-governance"))
+      .toHaveLength(2);
+    expect(evidence.owners.filter(({ concern_key }) => concern_key === "shared-governance")
+      .every(({ owner_state }) => owner_state === "valid")).toBe(true);
+  });
+
+  it("invalidates empty explicit terms and repository-escaping owner links with zero rows", () => {
+    const emptyTerm = parseDocumentationConcernMap({
+      map_path: "docs/reference/documentation-map.md",
+      content: [
+        "| Concern | Canonical owner | Intent terms |",
+        "| --- | --- | --- |",
+        "| Runtime | [Runtime](runtime-contracts.md) | runtime;;contract |"
+      ].join("\n")
+    });
+    const escapingOwner = parseDocumentationConcernMap({
+      map_path: "docs/reference/documentation-map.md",
+      content: [
+        "| Concern | Canonical owner |",
+        "| --- | --- |",
+        "| Runtime | [Outside](../../../outside.md) |"
+      ].join("\n")
+    });
+
+    expect(emptyTerm).toMatchObject({ status: "invalid", failure_reason: expect.stringContaining("empty element") });
+    expect(escapingOwner).toMatchObject({ status: "invalid", failure_reason: expect.stringContaining("escapes") });
+  });
+
+  it("accepts a CommonMark angle-bracket owner destination containing spaces", () => {
+    const parsed = parseDocumentationConcernMap({
+      map_path: "docs/reference/documentation-map.md",
+      content: [
+        "| Concern | Canonical owner |",
+        "| --- | --- |",
+        "| Runtime | [Runtime owner](<runtime owner.md>) |"
+      ].join("\n")
+    });
+
+    expect(parsed).toMatchObject({
+      status: "complete",
+      owners: [{ mapped_owner_path: "docs/reference/runtime owner.md" }]
+    });
+  });
+
+  it("reports a safety-denied mapped owner as invalid rather than missing", async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "awb-concern-safety-"));
+    const repoRoot = path.join(tempRoot, "repo");
+    const outsideOwner = path.join(tempRoot, "outside-owner.md");
+    try {
+      fs.mkdirSync(path.join(repoRoot, "docs", "reference"), { recursive: true });
+      fs.writeFileSync(outsideOwner, "# Outside owner\n");
+      fs.symlinkSync(outsideOwner, path.join(repoRoot, "docs", "reference", "owner.md"));
+      fs.writeFileSync(path.join(repoRoot, "docs", "reference", "documentation-map.md"), [
+        "| Concern | Canonical owner |",
+        "| --- | --- |",
+        "| Runtime | [Owner](owner.md) |"
+      ].join("\n"));
+
+      const evidence = await extractDocumentationConcernIndex({
+        workspace: new WorkspaceFileAdapter({ repoRoot })
+      });
+
+      expect(evidence).toMatchObject({
+        state: "invalid",
+        failure_reason: expect.stringContaining("Owner discovery failed")
+      });
+      expect(evidence.owners).toEqual([]);
+    } finally {
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects an oversized documentation map before reading it", async () => {
+    const readText = vi.fn<WorkspaceFilePort["readText"]>();
+    const workspace = boundedWorkspace({
+      stat: async () => ({ exists: true, is_file: true, size_bytes: 120_001, mtime_ms: 0 }),
+      readText
+    });
+
+    await expect(extractDocumentationConcernIndex({ workspace })).resolves.toMatchObject({
+      state: "invalid",
+      failure_reason: expect.stringContaining("120000-byte concern-index limit")
+    });
+    expect(readText).not.toHaveBeenCalled();
+  });
+
+  it("rejects an oversized mapped owner before reading the owner", async () => {
+    const map = [
+      "| Concern | Canonical owner |",
+      "| --- | --- |",
+      "| Runtime | [Owner](owner.md) |"
+    ].join("\n");
+    const readText = vi.fn<WorkspaceFilePort["readText"]>(async ({ path: requestedPath }) => {
+      if (requestedPath === "docs/reference/documentation-map.md") return map;
+      throw new Error(`Unexpected read: ${requestedPath}`);
+    });
+    const workspace = boundedWorkspace({
+      stat: async ({ path: requestedPath }) => ({
+        exists: true,
+        is_file: true,
+        size_bytes: requestedPath === "docs/reference/documentation-map.md" ? Buffer.byteLength(map) : 120_001,
+        mtime_ms: 0
+      }),
+      readText
+    });
+
+    await expect(extractDocumentationConcernIndex({ workspace })).resolves.toMatchObject({
+      state: "invalid",
+      failure_reason: expect.stringContaining("docs/reference/owner.md exceeds the 120000-byte concern-index limit")
+    });
+    expect(readText).toHaveBeenCalledTimes(1);
+    expect(readText).toHaveBeenCalledWith({ path: "docs/reference/documentation-map.md" });
+  });
+
+  it("rejects map content that exceeds the byte ceiling after stat", async () => {
+    const oversizedMap = "x".repeat(120_001);
+    const workspace = boundedWorkspace({
+      stat: async () => ({ exists: true, is_file: true, size_bytes: 1, mtime_ms: 0 }),
+      readText: async () => oversizedMap
+    });
+
+    await expect(extractDocumentationConcernIndex({ workspace })).resolves.toMatchObject({
+      state: "invalid",
+      failure_reason: expect.stringContaining("after read")
+    });
+  });
+
+  it("rejects oversized cached owner content even when stat reports a smaller file", async () => {
+    const map = [
+      "| Concern | Canonical owner |",
+      "| --- | --- |",
+      "| Runtime | [Owner](owner.md) |"
+    ].join("\n");
+    const ownerPath = "docs/reference/owner.md";
+    const workspace = boundedWorkspace({
+      stat: async ({ path: requestedPath }) => ({
+        exists: true,
+        is_file: true,
+        size_bytes: requestedPath.endsWith("documentation-map.md") ? Buffer.byteLength(map) : 1,
+        mtime_ms: 0
+      }),
+      readText: async () => map
+    });
+
+    await expect(extractDocumentationConcernIndex({
+      workspace,
+      content_by_path: new Map([[ownerPath, "x".repeat(120_001)]])
+    })).resolves.toMatchObject({
+      state: "invalid",
+      failure_reason: expect.stringContaining("after read")
+    });
   });
 });
+
+function boundedWorkspace(input: {
+  stat: WorkspaceFilePort["stat"];
+  readText: WorkspaceFilePort["readText"];
+}): WorkspaceFilePort {
+  return {
+    stat: input.stat,
+    readText: input.readText,
+    readBinary: async () => new Uint8Array(),
+    writeText: async () => undefined,
+    writeBinary: async () => undefined,
+    ensureDirectory: async () => undefined,
+    deletePath: async () => undefined
+  };
+}
 
 function referenceNormalize(value: string): string {
   return value

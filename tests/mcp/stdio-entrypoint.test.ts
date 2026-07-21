@@ -33,6 +33,7 @@ import {
   WorkspaceSafetyAdapter
 } from "../../src/infrastructure/filesystem/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
+import { GRAPH_STORE_FILE_NAME } from "../../src/infrastructure/sqlite/graph-store-location.js";
 import { createReferenceCursorCodec } from "../../src/infrastructure/runtime/index.js";
 import { buildApplyWorkspaceEditEnvelope, buildPreviewWorkspaceEditEnvelope } from "../../src/presentation/workspace-edit-presenter.js";
 import { buildFindReferencesEnvelope } from "../../src/presentation/find-references-presenter.js";
@@ -720,6 +721,21 @@ describe("stdio MCP entrypoint", () => {
       prefix: "agent-workbench-mcp-bounded-warmup-",
       sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
     });
+    const documentationRoot = path.join(fixtureRoot, "docs", "reference");
+    fs.mkdirSync(documentationRoot, { recursive: true });
+    fs.writeFileSync(path.join(documentationRoot, "documentation-map.md"), [
+      "| Concern | Canonical owner | Intent terms |",
+      "| --- | --- | --- |",
+      "| Startup runtime | [Runtime owner](runtime-owner.md) | startup warmup |"
+    ].join("\n"));
+    fs.writeFileSync(path.join(documentationRoot, "runtime-owner.md"), [
+      "---",
+      "status: current",
+      "canonical_owner: docs/reference/runtime-owner.md",
+      "---",
+      "",
+      "# Runtime owner"
+    ].join("\n"));
     const session = await createStdioSession(fixtureRoot, {
       startupRefreshDelayMs: 0,
       startupWarmupMaxFiles: 1
@@ -755,6 +771,21 @@ describe("stdio MCP entrypoint", () => {
           max_rows: 10
         });
         expect(files).toHaveLength(1);
+        await expect(graphStore.getDocumentationConcernIndexState({
+          snapshot_id: status.data.snapshot_id ?? ""
+        })).resolves.toMatchObject({ status: "ready", state: "complete" });
+        const owners = await graphStore.listDocumentationConcernOwners({
+          snapshot_id: status.data.snapshot_id ?? "",
+          max_rows: 10
+        });
+        expect(owners).toMatchObject({
+          status: "ready",
+          rows: [expect.objectContaining({
+            concern_key: "startup-runtime",
+            mapped_owner_path: "docs/reference/runtime-owner.md",
+            owner_state: "valid"
+          })]
+        });
       } finally {
         graphStore.close();
       }
@@ -1589,7 +1620,7 @@ async function buildExpectedVerificationPlanEnvelope(input: { fixtureRoot: strin
 function graphStorePath(repoRoot: string): string {
   const cacheDir = path.join(repoRoot, ".cache", "agent-workbench");
   fs.mkdirSync(cacheDir, { recursive: true });
-  return path.join(cacheDir, "graph-v2.sqlite");
+  return path.join(cacheDir, GRAPH_STORE_FILE_NAME);
 }
 
 function normalizeFixturePaths<T>(value: T, sourceRoot: string, targetRoot: string): T {

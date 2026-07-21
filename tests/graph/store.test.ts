@@ -20,6 +20,7 @@ import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/
 import {
   GRAPH_STORE_FILE_NAME,
   LEGACY_GRAPH_STORE_BACKUP_FILE_NAME,
+  PREVIOUS_GRAPH_STORE_FILE_NAME,
   graphStorePath,
   retireLegacyGraphStore
 } from "../../src/infrastructure/sqlite/graph-store-location.js";
@@ -59,6 +60,159 @@ describe("graph store", () => {
       expect(snapshotColumns.map((column) => column.name)).toContain("publication_state");
     } finally {
       store.close();
+    }
+  });
+
+  it("seeds graph v3 transactionally from v2 while retaining rollback evidence and old snapshot identity", () => {
+    const repoRoot = path.join(dir, "v3-seed-repo");
+    const cacheDirectory = path.join(repoRoot, ".cache", "agent-workbench");
+    fs.mkdirSync(cacheDirectory, { recursive: true });
+    const v2Path = path.join(cacheDirectory, PREVIOUS_GRAPH_STORE_FILE_NAME);
+    const v2 = new Database(v2Path);
+    try {
+      v2.exec(`
+        CREATE TABLE schema_migrations (
+          version INTEGER PRIMARY KEY,
+          applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE snapshots (
+          id INTEGER PRIMARY KEY,
+          repo_identity TEXT NOT NULL,
+          config_identity TEXT NOT NULL,
+          freshness TEXT NOT NULL,
+          schema_version INTEGER NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          publication_state TEXT NOT NULL DEFAULT 'published',
+          controller_generation INTEGER NOT NULL DEFAULT 0,
+          invalidation_generation INTEGER NOT NULL DEFAULT 0,
+          publication_updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO schema_migrations(version) VALUES (2);
+        INSERT INTO snapshots(
+          id, repo_identity, config_identity, freshness, schema_version, created_at,
+          publication_state, publication_updated_at
+        ) VALUES (
+          4300, '${repoRoot.replaceAll("'", "''")}', 'default', 'fresh', 2,
+          '2026-07-20T00:00:00.000Z', 'published', '2026-07-20T00:00:00.000Z'
+        );
+      `);
+    } finally {
+      v2.close();
+    }
+
+    const v3Path = graphStorePath(repoRoot);
+    const originalLink = fs.linkSync;
+    let preparedCandidateObserved = false;
+    const link = vi.spyOn(fs, "linkSync").mockImplementation((source, target) => {
+      if (target === v3Path) {
+        const candidate = new Database(fs.realpathSync(source), { readonly: true, fileMustExist: true });
+        try {
+          expect(candidate.prepare("SELECT MAX(version) AS version FROM schema_migrations").get())
+            .toEqual({ version: 3 });
+          expect(candidate.prepare(`
+            SELECT name FROM sqlite_master
+            WHERE type = 'table' AND name = 'documentation_concern_index_state'
+          `).get()).toEqual({ name: "documentation_concern_index_state" });
+          preparedCandidateObserved = true;
+        } finally {
+          candidate.close();
+        }
+      }
+      return originalLink(source, target);
+    });
+    let store: ReturnType<typeof openGraphStore> | undefined;
+    try {
+      store = openGraphStore(v3Path);
+      expect(path.basename(v3Path)).toBe(GRAPH_STORE_FILE_NAME);
+      expect(store.validateSchema()).toBe(true);
+      expect(store.db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get())
+        .toEqual({ version: 3 });
+      expect(store.db.prepare("SELECT schema_version FROM snapshots WHERE id = 4300").get())
+        .toEqual({ schema_version: 2 });
+      expect(store.db.prepare("SELECT COUNT(*) AS count FROM documentation_concern_index_state").get())
+        .toEqual({ count: 0 });
+    } finally {
+      store?.close();
+      link.mockRestore();
+    }
+    expect(preparedCandidateObserved).toBe(true);
+
+    expect(fs.existsSync(v2Path)).toBe(true);
+    const rollback = new Database(v2Path, { readonly: true, fileMustExist: true });
+    try {
+      expect(rollback.prepare("SELECT MAX(version) AS version FROM schema_migrations").get())
+        .toEqual({ version: 2 });
+      expect(rollback.prepare(`
+        SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'documentation_concerns'
+      `).get()).toBeUndefined();
+      expect(rollback.prepare("SELECT schema_version FROM snapshots WHERE id = 4300").get())
+        .toEqual({ schema_version: 2 });
+    } finally {
+      rollback.close();
+    }
+  });
+
+  it("does not publish a canonical v3 when candidate migration fails and remains retryable", () => {
+    const repoRoot = path.join(dir, "failed-v3-candidate-repo");
+    const cacheDirectory = path.join(repoRoot, ".cache", "agent-workbench");
+    fs.mkdirSync(cacheDirectory, { recursive: true });
+    const v2Path = path.join(cacheDirectory, PREVIOUS_GRAPH_STORE_FILE_NAME);
+    const v2 = new Database(v2Path);
+    try {
+      v2.exec(`
+        CREATE TABLE schema_migrations (
+          version INTEGER PRIMARY KEY,
+          applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE snapshots (
+          id INTEGER PRIMARY KEY,
+          repo_identity TEXT NOT NULL,
+          config_identity TEXT NOT NULL,
+          freshness TEXT NOT NULL,
+          schema_version INTEGER NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          publication_state TEXT NOT NULL DEFAULT 'published',
+          controller_generation INTEGER NOT NULL DEFAULT 0,
+          invalidation_generation INTEGER NOT NULL DEFAULT 0,
+          publication_updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO schema_migrations(version) VALUES (2);
+        CREATE TRIGGER reject_v3_candidate_migration
+        BEFORE INSERT ON schema_migrations
+        WHEN NEW.version = 3
+        BEGIN
+          SELECT RAISE(ABORT, 'induced v3 candidate migration failure');
+        END;
+      `);
+    } finally {
+      v2.close();
+    }
+
+    const v3Path = graphStorePath(repoRoot);
+    expect(() => openGraphStore(v3Path)).toThrow("induced v3 candidate migration failure");
+    expect(fs.existsSync(v3Path)).toBe(false);
+    expect(fs.readdirSync(cacheDirectory).filter((entry) => entry.includes(".seed-"))).toEqual([]);
+
+    const unchanged = new Database(v2Path);
+    try {
+      expect(unchanged.prepare("SELECT MAX(version) AS version FROM schema_migrations").get())
+        .toEqual({ version: 2 });
+      expect(unchanged.prepare(`
+        SELECT name FROM sqlite_master
+        WHERE type = 'table' AND name = 'documentation_concern_index_state'
+      `).get()).toBeUndefined();
+      unchanged.exec("DROP TRIGGER reject_v3_candidate_migration");
+    } finally {
+      unchanged.close();
+    }
+
+    const retried = openGraphStore(v3Path);
+    try {
+      expect(retried.validateSchema()).toBe(true);
+      expect(retried.db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get())
+        .toEqual({ version: 3 });
+    } finally {
+      retried.close();
     }
   });
 
