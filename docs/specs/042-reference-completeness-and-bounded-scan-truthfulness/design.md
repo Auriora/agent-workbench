@@ -217,10 +217,18 @@ these exact rules:
 | policy exclusions | carried bounded reason counts plus new exclusions | unchanged by result replay | outside the completeness denominator |
 | searchable candidates classified | one for each searchable entry inspected or conclusively classified unresolved | unchanged by result replay | advances catalog progress but does not imply inspection |
 
-A replay of the same cursor recomputes the identical page receipt; it does not
-accumulate against server-side session state. Advancing with the returned next
-cursor incorporates that page's sequence totals exactly once. Duplicate cursor
-submission therefore repeats a page idempotently rather than double-counting it.
+A replay of the same cursor does not accumulate against server-side session
+state. When both executions remain within the live deadline and stop on the
+same structural file/byte/result bound, the same ordered evidence, structural
+progress, and non-time accounting recompute. Observed elapsed accounting and
+the opaque cursor token that authenticates it may differ. A live time-admission boundary is
+intentionally not presented as replay-idempotent: scheduling or IO
+latency may stop a replay at a different safe file boundary. Each replay still
+preserves authenticated prior progress and deterministic catalog/occurrence
+order, reports exact accounting for work it admitted, remains partial when the
+catalog is not exhausted, and cannot skip prior work or claim absence.
+Advancing with the returned next cursor incorporates that page's sequence
+totals exactly once.
 
 ### Lexical Output Unit
 
@@ -323,8 +331,10 @@ is introduced.
 - `docs/design/graph-store-design.md`
 - `docs/design/language-adapter-design.md`
 - `docs/reference/mvp-proof-matrix.md`
+- `docs/runbooks/codex-agent-workbench-plugin.md`
 - `docs/backlog/README.md` EB053
 - `docs/reference/agent-readable-changelog.md`
+- `docs/reference/dogfood-evidence-ledger.md`
 
 ## Decisions Fixed For Implementation
 

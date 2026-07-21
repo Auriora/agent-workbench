@@ -222,7 +222,7 @@ describe("installed provider plugin smoke", () => {
       expect(receipt.cleanup.provider_process_closed).toBe(true);
       expect(receipt.cleanup.temporary_roots_removed).toBe(true);
     }
-  });
+  }, 15_000);
 });
 
 function runFixture(provider: "codex" | "claude", scenario?: string, extraEnv: NodeJS.ProcessEnv = {}) {

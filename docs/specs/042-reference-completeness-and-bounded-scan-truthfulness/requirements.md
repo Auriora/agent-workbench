@@ -61,6 +61,7 @@ visible as partial evidence rather than false absence.
 | Graph/catalog design | clarify | `docs/design/graph-store-design.md` | Define deterministic catalog pagination used by lexical reference routing. |
 | Language capability | clarify | `docs/design/language-adapter-design.md` | Define lexical occurrence evidence separately from semantic references. |
 | Proof boundary | update | `docs/reference/mvp-proof-matrix.md` | Record bounded completeness and continuation proof. |
+| Provider proof guidance | update | `docs/runbooks/codex-agent-workbench-plugin.md` | Distinguish package/provider-labelled evidence from real Codex and Claude plugin proof. |
 | Backlog | close after proof | `docs/backlog/README.md` EB053 | Preserve the dogfood reproduction and final disposition. |
 
 ## Requirements
@@ -119,11 +120,21 @@ visible as partial evidence rather than false absence.
    cursor MAY page occurrences from an already selected atomic file, but SHALL
    not claim additional files inspected or advance catalog progress.
 7. **AC2.7:** Replaying the same request and cursor against the same published
-   snapshot and cursor-key epoch SHALL yield the same ordered page, accounting
-   receipt, and next cursor. Changed file identity, target, bounds, snapshot,
-   cursor payload, or authentication tag SHALL fail explicitly rather than
-   silently restarting or skipping work. A daemon restart that rotates the
-   cursor key SHALL return structured `cursor_expired`, never page-one replay.
+   snapshot and cursor-key epoch SHALL preserve authenticated prior progress,
+   catalog order, occurrence order, and exact accounting for the work actually
+   admitted. When replay executions both remain within the live admission
+   deadline and stop on a structural file, byte, or result bound, they SHALL
+   yield the same ordered occurrence page, structural progress, and non-time
+   accounting. Observed `elapsed_admission_ms` and an opaque cursor token that
+   authenticates that elapsed receipt MAY differ. A live
+   time-admission boundary MAY stop at a different safe file
+   boundary as scheduling or IO latency changes; either result SHALL remain
+   partial/truncated, report its observed elapsed accounting and `time` stop
+   when applicable, and SHALL NOT skip prior work or claim completeness.
+   Changed file identity, target, bounds, snapshot, cursor payload, or
+   authentication tag SHALL fail explicitly rather than silently restarting or
+   skipping work. A daemon restart that rotates the cursor key SHALL return
+   structured `cursor_expired`, never page-one replay.
 8. **AC2.8:** An oversized, missing, unreadable, or changed searchable catalog
    entry SHALL be fully classified as unresolved and SHALL advance lexical
    `after_path`. It SHALL increment unresolved/classified counters, SHALL NOT
@@ -208,9 +219,15 @@ visible as partial evidence rather than false absence.
 - **CP-007:** For any valid sequence of scan and result cursors, concatenating
   pages produces the same ordered occurrence multiset as a sufficiently
   budgeted complete scan, with neither duplicates nor omissions.
-- **CP-008:** Replaying any valid cursor is deterministic, and changing any
-  cursor-bound identity component, accumulated counter, ordinal, route state,
-  or authentication tag is rejected. A cursor from a prior key epoch expires.
+- **CP-008:** Replaying any valid cursor preserves authenticated progress,
+  deterministic catalog/occurrence order, and exact accounting for admitted
+  work. Structural-bound replays preserve ordered evidence, structural
+  progress, and non-time accounting; elapsed accounting and opaque cursor-token
+  equality are not promised. A live time-bound replay
+  may stop at a different safe file boundary but remains truthful partial
+  evidence. Changing any cursor-bound identity component, accumulated counter,
+  ordinal, route state, or authentication tag is rejected. A cursor from a
+  prior key epoch expires.
 - **CP-009:** A complete absence claim is impossible while the sequence receipt
   records any uninspected searchable candidate.
 - **CP-010:** Parser pages are the stable concatenation of the disjoint

@@ -3,7 +3,7 @@ title: MCP surface design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -315,6 +315,36 @@ and version remain a separate observed artifact identity.
 
 Drift checking is part of `apply_workspace_edit`; it is not a separate MVP
 tool.
+
+### Reference Completeness And Continuation
+
+`find_references` keeps parser/graph evidence primary. Parser-backed outgoing,
+incoming, and unresolved routes are disjoint, drain in that order, and use a
+limit-plus-one probe plus one authenticated composite continuation. Complete
+parser evidence requires all three routes to be exhausted.
+
+When parser evidence is absent, the bounded lexical route scans the ordered
+policy-eligible catalog rather than one fixed first window. It either exhausts
+that declared evidence universe or returns partial/truncated evidence with an
+opaque callable continuation. Searchable missing, unreadable, oversized, or
+changed candidates remain unresolved and prevent complete absence; explicit
+secret, generated/vendor, unsupported, configured-skip, and unsafe-path policy
+exclusions remain outside the universe and are summarized by bounded reason
+counts.
+
+Files are atomic scan units. Declared bytes are checked before admission,
+actual bytes and elapsed time are observed after the admitted read, and no new
+file starts at or after the monotonic deadline. Structural file/byte/result
+stops preserve ordered evidence, structural progress, and non-time accounting
+when both executions remain inside that deadline. Elapsed accounting and the
+opaque cursor token that authenticates it may differ. A
+live time stop may vary with scheduling or IO latency, but it must retain
+authenticated prior progress, exact admitted-work accounting, partial trust,
+and a safe continuation; it can never imply absence.
+
+An unknown target is invalid blocked evidence with a non-retryable typed error
+and same-snapshot `symbol_search` recovery. No-coverage or stale results are
+never presented with valid analysis metadata.
 
 `context_for_task` is a bounded router over indexed evidence. It must not run
 full topology, diagnostics execution, broad docs reports, or high-cardinality

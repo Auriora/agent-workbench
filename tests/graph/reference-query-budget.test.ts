@@ -124,6 +124,112 @@ describe("reference query budgets", () => {
     });
   });
 
+  it("keeps live time-bound replay truthful when scheduling changes the safe stop boundary", async () => {
+    const fixture = fixtureFor([
+      ["src/a.ts", TARGET_NAME],
+      ["src/b.ts", TARGET_NAME],
+      ["src/c.ts", TARGET_NAME]
+    ]);
+    const bounded = limits({ max_files: 1, time_ms: 10 });
+    const first = await runQuery(fixture, 10, {
+      limits: bounded,
+      clock: sequenceClock([0, 0, 0, 0, 0])
+    });
+    expect(first.references.cursor).toEqual(expect.any(String));
+
+    fixture.workspace.readPaths.length = 0;
+    const fastReplay = await runQuery(fixture, 10, {
+      cursor: first.references.cursor,
+      limits: bounded,
+      clock: sequenceClock([0, 0, 0, 0, 0])
+    });
+    const fastReads = [...fixture.workspace.readPaths];
+
+    fixture.workspace.readPaths.length = 0;
+    const deadlineReplay = await runQuery(fixture, 10, {
+      cursor: first.references.cursor,
+      limits: bounded,
+      clock: sequenceClock([0, 10, 10])
+    });
+
+    expect(fastReads).toEqual(["src/b.ts"]);
+    expect(fixture.workspace.readPaths).toEqual([]);
+    expect(coverage(fastReplay)).toMatchObject({
+      state: "partial",
+      stop_reason: "file",
+      catalog_exhausted: false
+    });
+    expect(coverage(deadlineReplay)).toMatchObject({
+      state: "partial",
+      stop_reason: "time",
+      catalog_exhausted: false,
+      page: { file_read_attempts: 0, unique_files_inspected: 0 },
+      matched_so_far: 1
+    });
+    expect(coverage(fastReplay).matched_so_far).toBe(2);
+    const fastCursor = fixture.cursorCodec.decode(fastReplay.references.cursor!);
+    const deadlineCursor = fixture.cursorCodec.decode(deadlineReplay.references.cursor!);
+    expect(fastCursor.ok).toBe(true);
+    expect(deadlineCursor.ok).toBe(true);
+    if (!fastCursor.ok || !deadlineCursor.ok) throw new Error("Expected valid replay cursors.");
+    expect(fastCursor.payload).toMatchObject({
+      kind: "lexical_scan",
+      after_path: "src/b.ts",
+      totals: { matched_so_far: 2, searchable_candidates_classified: 2 }
+    });
+    expect(deadlineCursor.payload).toMatchObject({
+      kind: "lexical_scan",
+      after_path: "src/a.ts",
+      totals: { matched_so_far: 1, searchable_candidates_classified: 1 }
+    });
+
+    fixture.workspace.readPaths.length = 0;
+    const quickStructuralReplay = await runQuery(fixture, 10, {
+      cursor: first.references.cursor,
+      limits: bounded,
+      clock: sequenceClock([0, 0, 0, 1, 1])
+    });
+    fixture.workspace.readPaths.length = 0;
+    const slowerStructuralReplay = await runQuery(fixture, 10, {
+      cursor: first.references.cursor,
+      limits: bounded,
+      clock: sequenceClock([0, 0, 0, 5, 5])
+    });
+    const quickCoverage = coverage(quickStructuralReplay);
+    const slowerCoverage = coverage(slowerStructuralReplay);
+    expect(quickStructuralReplay.references.references).toEqual(
+      slowerStructuralReplay.references.references
+    );
+    expect(quickCoverage.page.elapsed_admission_ms).toBe(1);
+    expect(slowerCoverage.page.elapsed_admission_ms).toBe(5);
+    expect({ ...quickCoverage.page, elapsed_admission_ms: 0 }).toEqual({
+      ...slowerCoverage.page,
+      elapsed_admission_ms: 0
+    });
+    expect(quickCoverage.matched_so_far).toBe(slowerCoverage.matched_so_far);
+    expect(quickCoverage.searchable_candidates_classified).toEqual(
+      slowerCoverage.searchable_candidates_classified
+    );
+    const quickCursor = fixture.cursorCodec.decode(quickStructuralReplay.references.cursor!);
+    const slowerCursor = fixture.cursorCodec.decode(slowerStructuralReplay.references.cursor!);
+    expect(quickCursor.ok).toBe(true);
+    expect(slowerCursor.ok).toBe(true);
+    if (!quickCursor.ok || !slowerCursor.ok) throw new Error("Expected valid structural replay cursors.");
+    expect(quickCursor.payload).toMatchObject({
+      after_path: "src/b.ts",
+      totals: { matched_so_far: 2, searchable_candidates_classified: 2 }
+    });
+    expect(slowerCursor.payload).toMatchObject({
+      after_path: "src/b.ts",
+      totals: { matched_so_far: 2, searchable_candidates_classified: 2 }
+    });
+    expect(quickStructuralReplay.references.cursor).not.toBe(slowerStructuralReplay.references.cursor);
+    expect(fastReplay.meta.analysis_validity).toBe("partial");
+    expect(deadlineReplay.meta.analysis_validity).toBe("partial");
+    expect(fastReplay.meta.truncated).toBe(true);
+    expect(deadlineReplay.meta.truncated).toBe(true);
+  });
+
   it("enforces the per-page searchable-file limit independently of catalog page size", async () => {
     const fixture = fixtureFor([
       ["src/a.ts", TARGET_NAME],

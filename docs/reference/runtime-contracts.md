@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -653,6 +653,49 @@ evidence in the same reference-hit shape. Every hit includes `evidence_kinds`:
 
 Lexical hits are routing evidence only. Agents must directly verify source
 before treating them as semantic references.
+
+### Reference Coverage And Count Basis
+
+Evidence-backed `find_references` results include a bounded coverage receipt:
+
+- `state` is `complete` or `partial`, and `route` is `parser` or `lexical`;
+- parser coverage reports independent outgoing, incoming, and unresolved route
+  exhaustion, while lexical coverage reports catalog exhaustion;
+- `page` and `sequence` account unique inspected files, read attempts, replay
+  reads, declared bytes admitted, actual bytes observed, elapsed admission
+  time, and occurrences;
+- `searchable_candidates_classified`, `policy_exclusions`, and
+  `unresolved_searchable_candidates` separate inspected/failed evidence from
+  paths outside the declared universe;
+- `languages_inspected` comes only from uniquely inspected files; and
+- `stop_reason` plus optional `continuation_kind` explains whether source
+  exhaustion, file/byte/result/time bounds, policy, or failure stopped work.
+
+`page_matches` counts only the current page, `matched_so_far` is the
+authenticated sequence total, and `complete_matches` exists only after source
+exhaustion. The additive `result_count_basis` is `page_matches`,
+`matched_so_far`, or `complete_matches` and must agree with `result_count` and
+the receipt. A complete result has valid untruncated metadata, zero unresolved
+searchable candidates, no continuation, and a complete total. Partial or
+legacy-unverified evidence is non-valid and blocked or truncated; it never
+supports an absence claim.
+
+Reference cursors are versioned, HMAC-SHA-256 authenticated, bounded to 16,384
+characters, bound to snapshot, target, request bounds, accumulated counts, and
+daemon key epoch, and verified before payload use. Lexical scan progress is the
+last fully inspected or classified `after_path`; result cursors may replay one
+fully scanned atomic file by occurrence ordinal without advancing catalog
+progress. Parser cursors bind route offsets/exhaustion. Tampering is
+`invalid_cursor`, while a prior daemon key epoch is `cursor_expired`; neither
+restarts at page one.
+
+Live time is an admission boundary, not a deterministic duration guarantee.
+Replays that both remain within the deadline and stop structurally preserve
+ordered evidence, structural progress, and non-time accounting; elapsed
+accounting and opaque cursor-token equality are not guaranteed. A replay that
+reaches the live deadline may stop at a different
+safe file boundary, but it retains authenticated prior progress, reports exact
+admitted-work accounting, and remains partial.
 
 Routing-only language extractors, such as the first-slice Go and C/C++ paths,
 may return symbols with `capability_level: "resource_backed"` and

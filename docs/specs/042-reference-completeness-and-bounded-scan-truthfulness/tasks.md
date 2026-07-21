@@ -118,14 +118,20 @@ T008 + T010 -> T011 -> T012 -> T013
     one atomic file without
     advancing catalog progress or unique coverage. Seeded property cases prove
     concatenation equals a complete scan, stable ordering, no duplicates, and
-    deterministic replay; identity, ordinal, counter, route-state, and tag
-    tampering are rejected, and a prior-daemon key epoch returns
-    `cursor_expired` without restarting.
+    structurally bounded ordered-evidence, progress, and non-time-accounting
+    stability without requiring elapsed-accounting or opaque-token equality;
+    live time-bound replay may stop at
+    a different safe file boundary while remaining truthful partial evidence.
+    Identity, ordinal, counter, route-state, and tag tampering are rejected, and
+    a prior-daemon key epoch returns `cursor_expired` without restarting.
   - Evidence mode: implementation
   - Evidence: V006 passed on 2026-07-21 (one file, 22 tests). Seeded and named
-    cases prove concatenation, order, replay stability, exact scan/result
-    accounting, authenticated identity mismatch and tamper rejection,
-    changed/deleted result replay blocking, and key-epoch expiry.
+    cases prove concatenation, order, structural-bound evidence/progress and
+    non-time-accounting stability, exact
+    scan/result accounting, authenticated identity mismatch and tamper
+    rejection, changed/deleted result replay blocking, and key-epoch expiry.
+    V008's Phase 4 regression separately proves that scheduling-dependent live
+    time stops remain partial, accounted, and non-complete.
 
 - [x] T006 Integrate canonical accounting and MCP presentation.
   - Depends on: T005
@@ -191,7 +197,7 @@ T008 + T010 -> T011 -> T012 -> T013
     roots were removed. The test distinguishes real CLI execution from
     provider-labelled MCP sessions.
   - Evidence mode: implementation
-  - Evidence: Implemented isolated installed-provider verification with direct Codex app-server JSON-RPC evidence and Claude stream-json correlation. Focused coverage passes 37/37 plus node syntax, typecheck, and whitespace checks; it proves exact installed artifacts and versions, fresh snapshot convergence, exact 12-occurrence/zero-based-column oracle, callable continuation handling, bounded provider discovery, credential isolation/redaction, protocol failures, and process/daemon/socket/install cleanup. Live V011 and V012 passed against Codex CLI 0.144.6 and Claude Code 2.1.216 with package/runtime/plugin 0.6.1; final gate evidence is recorded under T010.
+  - Evidence: Implemented isolated installed-provider verification with direct Codex app-server JSON-RPC evidence and Claude stream-json correlation. Focused coverage passes 37/37 plus node syntax, typecheck, and whitespace checks; it proves exact installed artifacts and versions, fresh snapshot convergence, exact 12-occurrence one-based-line/zero-based-column oracle, callable continuation handling, bounded provider discovery, credential isolation/redaction, protocol failures, and process/daemon/socket/install cleanup. Live V011 and V012 passed against Codex CLI 0.144.6 and Claude Code 2.1.216 with package/runtime/plugin 0.6.1; final gate evidence is recorded under T010.
 
 - [x] T010 Run repository and installed-package gates.
   - Depends on: T009
@@ -204,11 +210,11 @@ T008 + T010 -> T011 -> T012 -> T013
     provider-plugin smokes. Any unavailable client is a blocking unrun gate,
     not a package-smoke substitute.
   - Evidence mode: validation
-  - Evidence: V007 passed typecheck and 88 files/884 tests. V009 passed plugin validation, six owned skill checks, and the 242-entry package dry-run. V010 passed installed package 0.6.1 convergence, queries, and cleanup. Final V011 and V012 passed against real Codex CLI 0.144.6 and Claude Code 2.1.216: both installed the packed 0.6.1 plugin, reported runtime/provider-plugin 0.6.1, returned the exact 12-reference zero-based occurrence oracle, and passed all nine cleanup checks. The provider harness passes 37/37 focused tests, node syntax, typecheck, and whitespace validation.
+  - Evidence: V007 passed typecheck and 88 files/884 tests. V009 passed plugin validation, six owned skill checks, and the 242-entry package dry-run. V010 passed installed package 0.6.1 convergence, queries, and cleanup. Final V011 and V012 passed against real Codex CLI 0.144.6 and Claude Code 2.1.216: both installed the packed 0.6.1 plugin, reported runtime/provider-plugin 0.6.1, returned the exact 12-reference one-based-line/zero-based-column occurrence oracle, and passed all nine cleanup checks. The provider harness passes 37/37 focused tests, node syntax, typecheck, and whitespace validation.
 
 ## Phase 4: Review, Promotion, And Closure
 
-- [ ] T011 Run lifecycle lint, Markdown/link validation, and expert review.
+- [x] T011 Run lifecycle lint, Markdown/link validation, and expert review.
   - Depends on: T008, T010
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
     CP-001, CP-002, CP-003, CP-004, CP-005, CP-006, CP-007, CP-008, CP-009,
@@ -217,24 +223,27 @@ T008 + T010 -> T011 -> T012 -> T013
     `review-disposition.md`
   - Acceptance: Dedicated lifecycle package lint, bounded Markdown/link check,
     task-state/evidence audit, and fresh post-implementation architecture,
-    contracts, QA, and trust reviews pass. The completed authoring review is
-    retained as separate evidence, every new finding has an explicit resolved,
-    accepted, or routed disposition, and blockers are zero before promotion.
+    contracts, QA, trust, and lifecycle/spec reviews pass. T011 reviews the
+    implemented work and active spec package only; the completed promotion diff
+    is reviewed later under T012/V016. The completed authoring review is retained
+    as separate evidence, every new finding has an explicit resolved, accepted,
+    or routed disposition, and blockers are zero before promotion.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: V013 lifecycle lint passed with zero diagnostics. V014 checked all eight spec artifacts individually: zero skipped/errors, 223 table-readability advisories only, none truncated. V015 fresh architecture, requirements/QA, lifecycle/evidence, and security/operations review resolved six blockers and four warnings with zero remaining. Post-remediation typecheck and full Vitest passed with 88 files and 887 tests.
 
-- [ ] T012 Promote durable behavior and review the promotion diff.
+- [x] T012 Promote durable behavior and review the promotion diff.
   - Depends on: T011
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4
   - Files: all durable promotion targets, `traceability.md`, `verification.md`,
     EB053
   - Acceptance: Lasting contract/design/proof text is promoted, the scoped Git
-    diff between spec claims and each canonical owner is reviewed, EB053 is
-    reconciled, and no current behavior remains spec-only.
+    diff between spec claims and each canonical owner receives fresh expert and
+    evidence review, every resulting finding is disposed, EB053 is reconciled,
+    and no current behavior remains spec-only.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Promoted all nine durable owners and reconciled EB053 delivery state. V016 post-promotion architecture/contracts, QA/trust, and lifecycle/evidence reviews resolved four blockers with zero remaining blockers or warnings. pnpm typecheck, 16 focused reference-budget tests, durable-doc checks, and git diff --check passed; no current behavior remains spec-only.
 
-- [ ] T013 Close and archive with dedicated lifecycle gates.
+- [x] T013 Close and archive with dedicated lifecycle gates.
   - Depends on: T012
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4
   - Files: `docs/history/spec-closure-log.md`,
@@ -244,7 +253,7 @@ T008 + T010 -> T011 -> T012 -> T013
     archive-index validation passes after the chosen package disposition, and
     no unresolved partial evidence is hidden by archive status.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: All four must-have requirements are reconciled complete with no residual destination; T001-T012 and V001-V016 are complete; all nine durable owners are promoted. V017 then passed ready with zero blockers and zero lifecycle diagnostics. Final package lint is clean, all eight spec documents were checked with zero skips and only pre-existing table-readability advisories, and the removed-package/archive action is prepared for V018.
 
 ## Execution Rules
 

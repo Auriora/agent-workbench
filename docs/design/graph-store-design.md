@@ -3,7 +3,7 @@ title: Graph store design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -138,6 +138,26 @@ transition to `published`.
 
 Post-MVP tables such as `tests`, `attention_items`, `usage_events`, and report
 caches should be added only when a concrete query requires relational storage.
+
+## Reference Query Pagination
+
+Parser reference paging uses limit-plus-one probes over three disjoint routes:
+outgoing edges, incoming edges, then unresolved references. One authenticated
+composite cursor carries per-route offsets and exhaustion. Complete evidence
+requires all three routes to be exhausted; an exact query-limit page is not
+proof of exhaustion.
+
+Incoming and outgoing edge paging deduplicate before `LIMIT/OFFSET` using one
+canonical edge identity: source node, target node, kind, full source range,
+provenance, and persisted metadata. Exact duplicates consume one slot, while
+distinct call sites, kinds, or metadata remain separate deterministic rows.
+
+Lexical continuation uses the existing ordered file catalog and an exclusive
+repo-relative `after_path`. The catalog boundary is scan progress only after a
+candidate has been fully inspected, explicitly excluded by policy, or fully
+classified as unresolved. Result pagination for multiple occurrences in one
+atomic file is separate and does not advance catalog progress or unique-file
+coverage.
 
 ## Schema Invariants
 

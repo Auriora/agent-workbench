@@ -3,7 +3,7 @@ title: MVP proof matrix
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -67,6 +67,7 @@ resource-backed discovery fixtures.
 | snapshot publication | graph-store fixtures plus tagged v0.5.2 adapter probe | versioned v1 seed, owner-gated rollback artifact and atomic legacy guard, transactional migration, generation-fenced publication, explicit unpublished reads, partial coverage, retention, reopen | actual v0.5.2 blocks on the guard; only published v2 rows are selectable; prior publication survives every pre-publication failure |
 | crash and owner recovery | daemon and graph-store fixtures | positive death, bounded recovery chain, orphan disposition, five real process barriers, exact cleanup | orphan builds remain invisible and one later request converges without overlapping workers |
 | installed package convergence | isolated packed install | installed bin realpath, two labelled clients, one daemon, worker delta, replacement snapshot, exact surviving/deleted evidence, cleanup | proves installed-bin MCP behavior; provider labels are not real Codex or Claude CLI execution proof |
+| installed provider plugins | isolated packed install plus real Codex and Claude Code CLIs | installed manifests/launchers/hooks/skill provenance, runtime/plugin version, direct MCP evidence, exact SessionStart oracle, process/daemon/socket/install cleanup | both named CLIs load the packed `0.6.1` plugin, call its MCP surface, return the exact twelve unresolved occurrences, and pass all nine cleanup checks |
 | `repo:///scope` | all fixtures | indexed roots, skipped roots, generated/vendor caveats | path scope matches fixture expectations |
 | `repo:///scope` | `fixture-mixed-language-platform` | language/platform ids and unsupported/resource-backed areas | mixed repo scope is represented without Python-specific assumptions |
 | `repo:///overview` | `fixture-basic-python` | compact repo summary and language coverage | no source dump, no broad report |
@@ -77,6 +78,7 @@ resource-backed discovery fixtures.
 | `symbol_search` | `fixture-basic-python` | exact and fuzzy symbol lookup | expected symbols found under row/time budget |
 | `symbol_search` | `fixture-go-service-repo`, `fixture-cmake-cpp-repo` | routing-only Go and C/C++ declarations | expected symbols found with `resource_backed` capability and heuristic evidence |
 | `find_references` | `fixture-basic-python` | references with confidence and unresolved caveats | expected references found; ambiguous refs labeled |
+| `find_references` bounded completeness | `fixture-reference-completeness` | parser route exhaustion, ordered catalog continuation, exact count basis, candidate classification, authenticated cursors, and complete/partial trust | complete scan returns the exact twelve JS/TS occurrences; smaller budgets expose callable continuation; missing/changed/unreadable/oversized candidates prevent complete absence while policy exclusions stay outside the universe |
 | `impact` | `fixture-basic-python` | bounded file/symbol impact | traversal depth and result cap enforced |
 | `impact` | graph query and MCP error fixtures | unknown versus known-empty start-node behavior | an unknown published-snapshot node returns public `domain_error` with internal `impact_start_node_not_found` cause and callable same-snapshot symbol-search recovery; a known zero-edge node remains valid low-confidence evidence |
 | `impact` | `fixture-go-service-repo`, `fixture-cmake-cpp-repo` | missing semantic-edge behavior | impact remains low confidence with `empty` or `local_only` scope when no parser-backed edges exist |

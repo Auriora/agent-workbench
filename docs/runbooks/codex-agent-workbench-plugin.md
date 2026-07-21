@@ -3,7 +3,7 @@ title: Codex Agent Workbench plugin and MCP setup
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -222,10 +222,16 @@ Keep these claims separate when reporting plugin verification:
   or invoked either plugin.
 - Real Codex proof requires a newly started Codex CLI session to discover the
   installed plugin and successfully call its Agent Workbench MCP surface.
+- Real Claude proof requires a newly started Claude Code session to load the
+  installed plugin and successfully call its Agent Workbench MCP surface.
 
-The installed-package CI smoke deliberately records that last limitation. A
-live CLI receipt must be recorded separately rather than inferred from provider
-labels.
+The installed-package CI smoke deliberately records that limitation. The
+separate installed-provider smoke packs and installs the checkout into isolated
+roots, runs each named real CLI, verifies installed artifact provenance and
+runtime/provider-plugin version, executes the exact SessionStart reference
+oracle, and requires process, daemon, socket, metadata, plugin, marketplace,
+install, client-state, and temporary-root cleanup. A live CLI receipt must be
+recorded separately rather than inferred from provider labels.
 
 ## MCP Discoverability Metadata
 

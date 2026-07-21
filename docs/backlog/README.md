@@ -3,7 +3,7 @@ title: Agent Workbench backlog
 doc_type: backlog
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -1814,7 +1814,7 @@ Do not promote an item when:
 ### EB053: Reference Completeness And Bounded-Scan Truthfulness
 
 - Priority: P0
-- Status: active Spec 042
+- Status: delivered by Spec 042; closure reconciliation in progress
 - Friction signal: a healthy runtime `0.6.0` Claude Code rerun asked
   `find_references` for consumers of `buildSessionStartContext`. The response
   returned nine low-confidence `bounded_lexical_identifier_scan` hits and did
@@ -1861,13 +1861,14 @@ Do not promote an item when:
     twins and `tests/integration/codex-integration-profile.test.ts` references.
   - Query-budget tests proving deterministic pagination, bounded file and byte
     reads, stable deduplication, and honest trust metadata.
-- Promotion target: active
-  [Spec 042 requirements](../specs/042-reference-completeness-and-bounded-scan-truthfulness/requirements.md)
-  with durable destinations in [MCP surface design](../design/mcp-surface-design.md),
-  [Runtime contracts](../reference/runtime-contracts.md), and
-  [Graph store design](../design/graph-store-design.md), plus
-  [Language adapter design](../design/language-adapter-design.md) and the
-  [MVP proof matrix](../reference/mvp-proof-matrix.md).
+- Promotion target: Spec 042 delivery is complete and current behavior lives in
+  [MCP surface design](../design/mcp-surface-design.md),
+  [Runtime contracts](../reference/runtime-contracts.md),
+  [Graph store design](../design/graph-store-design.md),
+  [Language adapter design](../design/language-adapter-design.md), the
+  [MVP proof matrix](../reference/mvp-proof-matrix.md), and the
+  [plugin runbook](../runbooks/codex-agent-workbench-plugin.md). T013 will add
+  the closure proof to the [spec closure log](../history/spec-closure-log.md).
 
 ### EB054: Authority-Aware Documentation Intent Ranking And Count Semantics
 

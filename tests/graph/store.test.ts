@@ -1985,7 +1985,21 @@ describe("graph store", () => {
         file_path: "src/source-b.py",
         edges: [
           edge("incoming-b-1", "source-b", "target-a"),
-          edge("incoming-b-duplicate", "source-b", "target-a")
+          edge("incoming-b-duplicate", "source-b", "target-a"),
+          edge("outgoing-b-1", "source-b", "target-b"),
+          edge("outgoing-b-duplicate", "source-b", "target-b"),
+          {
+            ...edge("outgoing-b-distinct-range", "source-b", "target-b"),
+            source_range: { start_line: 3, start_column: 4, end_line: 3, end_column: 12 }
+          },
+          {
+            ...edge("outgoing-b-distinct-kind", "source-b", "target-b"),
+            kind: "import"
+          },
+          {
+            ...edge("outgoing-b-distinct-metadata", "source-b", "target-b"),
+            metadata: { reference_name: "target-b", variant: "secondary" }
+          }
         ]
       });
       await publishBuildingSnapshot(store, snapshot.id);
@@ -2008,6 +2022,16 @@ describe("graph store", () => {
         max_rows: 1,
         offset: 2
       })).resolves.toEqual([]);
+
+      const sourceBOutgoing = await store.getReferences({
+        snapshot_id: snapshot.id,
+        node_id: "source-b",
+        max_rows: 10
+      });
+      expect(sourceBOutgoing).toHaveLength(5);
+      expect(sourceBOutgoing.filter((reference) => reference.target_node_id === "target-a")).toHaveLength(1);
+      expect(sourceBOutgoing.filter((reference) => reference.target_node_id === "target-b")).toHaveLength(4);
+      expect(new Set(sourceBOutgoing.map((reference) => reference.edge_id)).size).toBe(5);
 
       await expect(store.getIncomingEdges({
         snapshot_id: snapshot.id,

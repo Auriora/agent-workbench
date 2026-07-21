@@ -3,7 +3,7 @@ title: Language adapter design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-07
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -245,6 +245,22 @@ identity, confidence, and fixture-backed promotion gates for those edges.
 
 Reference resolution remains outside these roles so every language feeds a
 common resolver and confidence policy.
+
+## Lexical Reference Occurrences
+
+Lexical reference scanning is a bounded routing capability used only when the
+selected parser/graph routes return no evidence. It emits one low-confidence
+unresolved `ReferenceHit` per identifier occurrence, ordered by repo-relative
+path, one-based line, and zero-based column. Multiple occurrences on one line
+remain distinct. Lexical hits retain `text_fallback` and `heuristic` evidence;
+they are never promoted to semantic consumers by count or completeness alone.
+
+The scanner may inspect JavaScript, TypeScript, and other explicitly supported
+searchable catalog languages, but coverage languages are derived only from
+files actually inspected. Unsupported, generated/vendor, secret, configured
+skip, and unsafe-path entries are policy exclusions. A searchable file that is
+missing, unreadable, oversized, or changed remains unresolved evidence and
+prevents a complete absence claim.
 
 ## Markdown Document Quality
 

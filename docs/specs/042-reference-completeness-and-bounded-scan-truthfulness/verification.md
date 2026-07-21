@@ -44,10 +44,11 @@ completed authoring checks above.
 | Focused and full automated tests pass | yes | passed for Phase 3 | V001-V008; final V007 passed with 88 files and 884 tests |
 | Plugin, skill, and package gates pass | yes | passed | V009-V010; six skills, 242 package entries, package convergence/query/cleanup receipt |
 | Installed Codex and Claude plugin smokes pass | yes | passed | V011-V012; real Codex CLI `0.144.6` and Claude Code `2.1.216`, exact twelve-reference oracle, package/runtime/plugin `0.6.1`, and all nine cleanup checks |
-| Fresh lifecycle package lint and Markdown/link checks pass | yes | pending | Must rerun after implementation evidence and task-state changes. |
+| Fresh lifecycle package lint and Markdown/link checks pass | yes | passed for T011 | V013: zero diagnostics; V014: eight documents checked individually, zero skipped/errors, 223 table-readability advisories only, none truncated |
 | Durable documentation promoted | yes | pending | |
-| Fresh implementation and promotion expert review findings disposed | yes | pending | T011/V015; authoring review is recorded separately above. |
-| Promotion diff, closure, and archive gates pass | yes | pending | |
+| Fresh implementation and active-spec expert review findings disposed | yes | passed | T011/V015; six blockers and four warnings resolved, zero remaining; authoring and earlier implementation reviews remain separate in `review-disposition.md`. |
+| Post-promotion expert and diff-review findings disposed | yes | pending | T012/V016 after durable promotion is complete. |
+| Closure and archive gates pass | yes | pending | |
 
 ## Validation Commands
 
@@ -60,16 +61,16 @@ completed authoring checks above.
 | V005 | `pnpm exec vitest run tests/integration/reference-session-start.test.ts` | exact twelve-occurrence reproduction, missing row 101, same-line occurrence, and failed/policy-excluded candidate cases | passed 2026-07-21: 1 file, 7 tests |
 | V006 | `pnpm exec vitest run tests/graph/reference-pagination.property.test.ts` | seeded concatenation/order properties; authenticated scan/result/composite cursor replay; tampered ordinal/counter/route/tag rejection; key-epoch restart expiry | passed 2026-07-21: 1 file, 22 tests |
 | V007 | `pnpm typecheck && pnpm test` | TypeScript integration and full regression suite | passed 2026-07-21: typecheck; 88 files, 884 tests |
-| V008 | `pnpm exec vitest run tests/graph/reference-query-budget.test.ts` | deterministic clock proves file-admission time, file, declared-byte, and result bounds; actual-byte observation; atomic time overrun; and failed-candidate progress/accounting | passed 2026-07-21: 1 file, 15 tests |
+| V008 | `pnpm exec vitest run tests/graph/reference-query-budget.test.ts` | controlled clocks prove file-admission time, file, declared-byte, and result bounds; actual-byte observation; atomic time overrun; failed-candidate progress/accounting; live-time boundary variation; and structural replay stability excluding elapsed accounting and opaque-token equality | passed 2026-07-21: 1 file, 16 tests |
 | V009 | `pnpm run validate:plugin && pnpm run validate:skills && pnpm run pack:dry-run` | packaged integration gates | passed 2026-07-21: plugin validation; six owned skills with zero findings; 242-entry `0.6.1` package |
 | V010 | `CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs` | pack/install `@auriora/agent-workbench@0.6.1`, verify installed bin and two provider-labelled sessions, then verify the structured cleanup receipt | passed 2026-07-21: fresh replacement snapshot, queries, and all cleanup checks; correctly records that no real agent CLI executed |
-| V011 | `node scripts/ci/installed-provider-plugin-smoke.mjs --provider codex --expected-version 0.6.1` | isolated real Codex plugin install/discovery and reference call | passed 2026-07-21: Codex CLI `0.144.6`; direct app-server discovery/resource/tool protocol; exact twelve zero-based occurrences; package/runtime/plugin `0.6.1`; all nine cleanup checks |
-| V012 | `node scripts/ci/installed-provider-plugin-smoke.mjs --provider claude --expected-version 0.6.1` | isolated real Claude plugin install/discovery and reference call | passed 2026-07-21 after host reauthentication: Claude Code `2.1.216`; bounded ToolSearch discovery; provider-qualified resource/tool correlation; exact twelve zero-based occurrences; package/runtime/plugin `0.6.1`; all nine cleanup checks |
-| V013 | MCP `lint_spec_package(repo_root=".", spec_path="docs/specs/042-reference-completeness-and-bounded-scan-truthfulness")` | dedicated lifecycle structure and traceability lint | pending |
-| V014 | MCP `check_markdown_set(paths=[all Spec 042 Markdown artifacts], required_frontmatter=["title","doc_type","status","owner","last_reviewed"])` | bounded Markdown structure and link validation | pending |
-| V015 | MCP `review_packet` plus the repository-local `$review-work-products` MoE, scoped to Spec 042 and its implementation/promotion diff | architecture/contracts, QA/trust, and lifecycle evidence review | pending |
-| V016 | `git diff --check && git diff -- docs/design/mcp-surface-design.md docs/design/graph-store-design.md docs/design/language-adapter-design.md docs/reference/runtime-contracts.md docs/reference/mvp-proof-matrix.md docs/reference/agent-readable-changelog.md docs/backlog/README.md` | whitespace safety and explicit promotion-diff review | pending |
-| V017 | MCP `closure_check(repo_root=".", spec_path="docs/specs/042-reference-completeness-and-bounded-scan-truthfulness")` | dedicated closure gate | pending |
+| V011 | `node scripts/ci/installed-provider-plugin-smoke.mjs --provider codex --expected-version 0.6.1` | isolated real Codex plugin install/discovery and reference call | passed 2026-07-21: Codex CLI `0.144.6`; direct app-server discovery/resource/tool protocol; exact twelve one-based-line/zero-based-column occurrences; package/runtime/plugin `0.6.1`; all nine cleanup checks |
+| V012 | `node scripts/ci/installed-provider-plugin-smoke.mjs --provider claude --expected-version 0.6.1` | isolated real Claude plugin install/discovery and reference call | passed 2026-07-21 after host reauthentication: Claude Code `2.1.216`; bounded ToolSearch discovery; provider-qualified resource/tool correlation; exact twelve one-based-line/zero-based-column occurrences; package/runtime/plugin `0.6.1`; all nine cleanup checks |
+| V013 | MCP `lint_spec_package(repo_root=".", spec_path="docs/specs/042-reference-completeness-and-bounded-scan-truthfulness")` | dedicated lifecycle structure and traceability lint | passed 2026-07-21: zero errors, warnings, or informational diagnostics |
+| V014 | MCP `check_markdown_set(paths=[all Spec 042 Markdown artifacts], required_frontmatter=["title","doc_type","status","owner","last_reviewed"])` | bounded Markdown structure and link validation | passed 2026-07-21 through eight individual bounded calls: eight checked, zero skipped/errors; 223 table-readability advisories only, none truncated |
+| V015 | MCP `review_packet` plus the repository-local `$review-work-products` MoE, scoped to Spec 042 and its implementation diff | architecture/contracts, QA/trust, and lifecycle evidence review before promotion | passed 2026-07-21 after remediation and re-review: architecture, requirements/QA, lifecycle/evidence, and security/operations covered; six blockers and four warnings resolved; zero remaining |
+| V016 | `git diff --check`; scoped Git diff for `docs/design/mcp-surface-design.md`, `docs/design/graph-store-design.md`, `docs/design/language-adapter-design.md`, `docs/reference/runtime-contracts.md`, `docs/reference/mvp-proof-matrix.md`, `docs/runbooks/codex-agent-workbench-plugin.md`, `docs/reference/agent-readable-changelog.md`, `docs/reference/dogfood-evidence-ledger.md`, and `docs/backlog/README.md`; MCP `review_packet` plus repository-local `$review-work-products` review of that completed promotion diff | whitespace safety, explicit promotion-diff review, and post-promotion finding disposition | passed 2026-07-21 after remediation and re-review: three promotion blockers plus one vacuous-test blocker resolved; architecture/contracts, QA/trust, and lifecycle/evidence reviewers report zero remaining blockers or warnings; typecheck, 16 focused budget tests, and whitespace checks pass |
+| V017 | MCP `closure_check(repo_root=".", spec_path="docs/specs/042-reference-completeness-and-bounded-scan-truthfulness")` | dedicated closure gate | passed 2026-07-21: ready true, zero blockers, all four must-have requirements complete with no residual destination, lifecycle lint zero diagnostics |
 | V018 | MCP `archive_index(repo_root=".")` after closure metadata and package disposition | closure-log/archive-index consistency | pending |
 
 ## Installed Provider Smoke Contract
@@ -131,7 +132,7 @@ CLIs, respectively.
 | T008 | complete | Phase 3 V001-V006/V008 rerun: 50, 35, 38, 16, 7, 22, and 15 tests | focused validation, including exact query-budget proof |
 | T009 | complete | 37 focused tests; V011-V012 real-provider passes | direct Codex app-server and Claude stream-json installed-provider harness |
 | T010 | complete | V007 and V009-V012 passed | repository, package, and both real-provider gates passed |
-| T011 | pending | none | lifecycle lint and expert review |
+| T011 | complete | V013-V015; `review-disposition.md` Phase 4 section | lifecycle/Markdown gates and fresh implementation/spec review passed with zero remaining findings |
 | T012 | pending | none | promotion and diff review |
 | T013 | pending | none | closure and archive gates |
 
@@ -152,11 +153,14 @@ CLIs, respectively.
 | 2026-07-21 | Phase 2 MoE remediation | architecture, requirements/QA, and security/operations review; fifteen deduplicated findings reconciled in `review-disposition.md` | stat/read failure isolation, classification deadlines, live read policy, replay failure, duplicate identities, cursor bounds, validity, recovery, and missing proof cases resolved |
 | 2026-07-21 | Phase 2 checkpoint | `pnpm typecheck`; full `pnpm test`; lifecycle package lint; task-state audit; `git diff --check` | typecheck passed; 87 files/848 tests passed; lifecycle lint zero diagnostics; task audit zero errors/warnings with eight advisory infos on future broad tasks; whitespace scan passed |
 | 2026-07-21 | Phase 3 T008 | Fresh execution of V001-V006 and V008 from the committed Phase 2 baseline | all seven gates passed with 50, 35, 38, 16, 7, 22, and 15 tests; V008 proves monotonic file-admission timing, file/declared-byte/result limits, actual-byte observation, and classified-failure progress without fallback |
-| 2026-07-21 | Phase 3 T009 | installed-provider harness, independent review remediation, Codex app-server protocol correction, and 37 focused tests | direct raw Codex MCP responses replace model-mediated evidence; exact oracle, discovery, correlation, cleanup, and credential boundaries pass |
+| 2026-07-21 | Phase 3 T009 | installed-provider harness, independent review remediation, Codex app-server protocol correction, and 37 focused tests | four blockers and three warnings are reconciled in `review-disposition.md`; direct raw Codex MCP responses, exact oracle, provider correlation, cleanup, credential, provenance, protocol, and unregistration boundaries pass |
 | 2026-07-21 | Phase 3 V007/V009-V011 | full typecheck/tests, package gates, package convergence smoke, and real Codex installed-provider smoke | 88 files/884 tests; six skills; 242 package entries; package and Codex receipts passed with complete cleanup |
 | 2026-07-21 | Phase 3 V012 | isolated Claude Code `2.1.216` install/discovery after host reauthentication | bounded discovery and provider-qualified correlation returned the exact twelve-reference oracle with package/runtime/plugin `0.6.1`; all nine cleanup checks passed |
 | 2026-07-21 | Phase 3 checkpoint | V007 and V009-V012 plus final 37-test provider-harness rerun, typecheck, syntax, and whitespace checks | T008-T010 complete; repository, package, and real Codex/Claude installed-provider evidence passed |
-| pending | Phase 4 delivery | V013-V018 | durable promotion, final review, and closure remain pending |
+| 2026-07-21 | Phase 4 T011 review | independent architecture, requirements/QA, and lifecycle/evidence reviews plus sequential security/operations pass; V013-V015 | six blockers and four warnings resolved in `review-disposition.md`; lifecycle lint zero diagnostics; eight Markdown artifacts checked with no skipped documents or errors; T011 ready for promotion |
+| 2026-07-21 | Phase 4 T012 promotion | nine durable owners plus V016 post-promotion MoE review | replay and coordinate claims corrected; premature closure removed; vacuous ordered-evidence assertion repaired; typecheck, 16 focused budget tests, docs checks, and whitespace checks passed; three reviewers report zero remaining findings |
+| 2026-07-21 | Phase 4 T013 closure readiness | V017 plus final package lint and Markdown check | closure ready with zero blockers; lint zero diagnostics; all eight spec documents checked with zero skips and only the pre-existing table-readability advisories; removal/archive action is ready |
+| pending | Phase 4 archive reconciliation | V018 | archive records, package removal, and cleanup-hash resolution remain pending |
 
 ## Residual Risks
 
@@ -175,18 +179,20 @@ CLIs, respectively.
 
 | Spec content | Durable destination | Status | Evidence |
 | --- | --- | --- | --- |
-| reference completeness and continuation | MCP surface design | pending | |
-| count, coverage, and trust contracts | runtime contracts | pending | |
-| catalog pagination role | graph store design | pending | |
-| lexical occurrence semantics | language adapter design | pending | |
-| bounded reference proof | MVP proof matrix | pending | |
-| delivered defect and user-visible change | EB053; agent-readable changelog | pending | |
+| reference completeness and continuation | MCP surface design | promoted | V016 reviewed scoped promotion diff |
+| count, coverage, and trust contracts | runtime contracts | promoted | V016 reviewed scoped promotion diff |
+| catalog pagination role | graph store design | promoted | V016 reviewed scoped promotion diff |
+| lexical occurrence semantics | language adapter design | promoted | V016 reviewed scoped promotion diff and coordinate convention |
+| bounded reference proof | MVP proof matrix | promoted | V016 reviewed scoped promotion diff |
+| real Codex and Claude installed-provider proof | plugin runbook; MVP proof matrix | promoted | V011-V012 and V016 |
+| delivered defect and user-visible change | EB053; agent-readable changelog | promoted | EB053 delivery complete; closure remains T013 |
+| dated dogfood delivery evidence | dogfood evidence ledger | promoted | V016 removed premature closure wording |
 
 ## Ship Or Closure Risk
 
 - **Risk level:** high
 - **Breaking change:** additive contract/cursor semantics with compatibility risk
-- **Blast radius checked:** no
+- **Blast radius checked:** yes; implementation/spec MoE and focused/full regression evidence cover graph storage, contracts, presentation, bounded queries, and installed providers
 - **Rollback path:** retain current graph-first route; do not retain false-complete lexical behavior
 - **Requires human review:** yes
 - **Release notes needed:** yes
@@ -194,11 +200,10 @@ CLIs, respectively.
 
 ## Readiness Decision
 
-- **Ready to implement:** Phase 3 is complete; Phase 4 review, promotion, and
-  closure remains next.
-- **Ready for promotion:** no
-- **Ready for release:** no
-- **Ready for closure:** no
+- **Ready to implement:** implementation and pre-promotion review are complete.
+- **Ready for promotion:** yes; T012/V016 is next.
+- **Ready for release:** yes, subject to the normal release workflow
+- **Ready for closure:** yes; V017 passed and the removed-package action is next
 
 ## Related Artifacts
 

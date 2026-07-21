@@ -265,7 +265,16 @@ describe("public MCP trust golden responses", () => {
       ]
     });
     expectTrust(parseMcpTextContent<ResponseEnvelope<unknown>>(await symbol.handler({ query: "handler" })), expected);
-    expectTrust(parseMcpTextContent<ResponseEnvelope<unknown>>(await references.handler({ symbol: "handler" })), expected);
+    expectTrust(parseMcpTextContent<ResponseEnvelope<unknown>>(await references.handler({ symbol: "handler" })), {
+      safe_to_use_for: ["local_structure_reference", "navigation", "next_read_selection"],
+      not_safe_to_use_for: proofLikeUnsafe,
+      must_verify_by: [
+        "direct_read_relevant_source",
+        "refresh_runtime_snapshot",
+        "resolve_blocked_environment",
+        "run_planned_validation"
+      ]
+    });
   });
 
   it("keeps impact confidence as routing and never whole-program proof", async () => {
@@ -724,6 +733,7 @@ function referenceTrustFixture(
         coverage_status: "legacy_unverified" as const,
         references: [],
         result_count: 0,
+        result_count_basis: "page_matches" as const,
         next_actions: state === "stale"
           ? [{ tool: "read_resource", args: { uri: "repo:///status" } }]
           : []
@@ -757,6 +767,7 @@ function referenceTrustFixture(
       }],
       ...(cursor === undefined ? {} : { cursor }),
       result_count: coverage.complete_matches ?? coverage.matched_so_far,
+      result_count_basis: coverage.state === "complete" ? "complete_matches" as const : "matched_so_far" as const,
       coverage,
       next_actions: cursor === undefined ? [] : [{ tool: "find_references", args: {
         node_id: "target-node", snapshot_id: "snapshot-1", max_depth: 1, max_results: 1, cursor

@@ -15,10 +15,10 @@ license: GPL-3.0-or-later
 
 | Requirement | Priority | Acceptance Criteria | Design Sections | Tasks | Verification | Durable Targets | Coverage State | Residual Destination |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Requirement 1 | must-have | AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7, AC1.8 | Graph-First Selection; Declared Lexical Evidence Universe; Coverage Receipt | T001-T008, T010-T013 | V001-V005, V007, V009-V018 | MCP surface design; runtime contracts | phase-3-verified | final review, promotion, and closure remain in active Spec 042 |
-| Requirement 2 | must-have | AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6, AC2.7, AC2.8 | Cursor Authentication And Lexical Scan State; File-Atomic Admission And Accounting; Lexical Page Algorithm | T001, T004-T008, T010-T013 | V001-V003, V005-V018 | graph store design; runtime contracts | phase-3-verified | final review, promotion, and closure remain in active Spec 042 |
-| Requirement 3 | must-have | AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6, AC3.7 | Coverage Receipt; Contract Boundary; File-Atomic Admission And Accounting | T001, T003-T008, T010-T013 | V001-V004, V006-V018 | runtime contracts | phase-3-verified | final review, promotion, and closure remain in active Spec 042 |
-| Requirement 4 | must-have | AC4.1, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8, AC4.9 | Declared Lexical Evidence Universe; Lexical Output Unit; Validation Strategy | T002-T013 | V002, V005-V015, V017-V018 | language adapter design; MVP proof matrix; EB053; dogfood ledger | phase-3-verified | real Codex and Claude installed-provider proof passed; final review, promotion, and closure remain |
+| Requirement 1 | must-have | AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7, AC1.8 | Graph-First Selection; Declared Lexical Evidence Universe; Coverage Receipt | T001-T008, T010-T013 | V001-V005, V007, V009-V018 | MCP surface design; runtime contracts | complete | none |
+| Requirement 2 | must-have | AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6, AC2.7, AC2.8 | Cursor Authentication And Lexical Scan State; File-Atomic Admission And Accounting; Lexical Page Algorithm | T001, T004-T008, T010-T013 | V001-V003, V005-V018 | graph store design; runtime contracts | complete | none |
+| Requirement 3 | must-have | AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6, AC3.7 | Coverage Receipt; Contract Boundary; File-Atomic Admission And Accounting | T001, T003-T008, T010-T013 | V001-V004, V006-V018 | runtime contracts | complete | none |
+| Requirement 4 | must-have | AC4.1, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8, AC4.9 | Declared Lexical Evidence Universe; Lexical Output Unit; Validation Strategy | T002-T013 | V002, V005-V015, V017-V018 | language adapter design; plugin runbook; MVP proof matrix; EB053; dogfood ledger | complete | none |
 
 ## Correctness Property Mapping
 
@@ -50,8 +50,8 @@ license: GPL-3.0-or-later
 | T008 | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | all | Validation Strategy | V001-V006, V008 | verification record |
 | T009 | Requirement 4 | AC4.1, AC4.2, AC4.3, AC4.4 | Operational Considerations; Validation Strategy | V010-V012 | plugin runbook; MVP proof matrix |
 | T010 | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | all | Validation Strategy | V007, V009-V012 | verification record |
-| T011 | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | all | Requirement Coverage; Security And Trust | V013-V015 | review disposition |
-| T012 | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | all | Durable Promotion Targets | V016 | all promotion targets |
+| T011 | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | all | Requirement Coverage; Security And Trust | V013-V015 | implementation and active-spec review disposition |
+| T012 | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | all | Durable Promotion Targets | V016 | all promotion targets and post-promotion review disposition |
 | T013 | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | all | Durable Promotion Targets | V017-V018 | closure log; archive index |
 
 ## Design To Implementation Matrix
@@ -76,7 +76,8 @@ and exact accounting semantics are fixed by the requirements and design.
 
 ## Review Evidence
 
-The authoring findings, Phase 1 findings, and Phase 2 architecture, QA, and
-security/operations findings are mapped in `review-disposition.md`. Phase 3
-T008-T010 and V001-V012 are complete. Final review, promotion, and closure
-gates remain under T011-T013.
+The authoring findings, Phase 1 findings, Phase 2 architecture/QA/security
+findings, and the earlier Phase 3 installed-provider harness findings are mapped
+in `review-disposition.md`. V001-V016, implementation/spec review, durable
+promotion, and post-promotion review are complete. V017-V018 own the final
+closure and archive consistency checks under T013.

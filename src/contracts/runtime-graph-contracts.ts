@@ -494,6 +494,7 @@ const findReferencesResultBaseSchema = z
     references: z.array(referenceHitSchema),
     cursor: z.string().max(MAX_REFERENCE_CURSOR_LENGTH).optional(),
     result_count: z.number().int().nonnegative().optional(),
+    result_count_basis: z.enum(["page_matches", "matched_so_far", "complete_matches"]).optional(),
     next_actions: z.array(nextActionSchema)
   })
   .strict();
@@ -509,8 +510,42 @@ export const findReferencesResultSchema = z
     }).strict()
   ])
   .superRefine((value, context) => {
+    if ((value.result_count === undefined) !== (value.result_count_basis === undefined)) {
+      context.addIssue({
+        code: "custom",
+        message: "Reference result_count and result_count_basis must be returned together."
+      });
+    }
     if (value.coverage_status === "legacy_unverified") {
+      if (value.result_count_basis !== undefined && value.result_count_basis !== "page_matches") {
+        context.addIssue({
+          code: "custom",
+          message: "A reference result without coverage can count only matches on the current page."
+        });
+      }
+      if (value.result_count !== undefined && value.result_count !== value.references.length) {
+        context.addIssue({
+          code: "custom",
+          message: "A page-based reference result count must equal the number of returned references."
+        });
+      }
       return;
+    }
+    const expectedBasis = value.coverage.state === "complete" ? "complete_matches" : "matched_so_far";
+    const expectedCount = value.coverage.state === "complete"
+      ? value.coverage.complete_matches
+      : value.coverage.matched_so_far;
+    if (value.result_count_basis !== undefined && value.result_count_basis !== expectedBasis) {
+      context.addIssue({
+        code: "custom",
+        message: `Reference result_count_basis must be ${expectedBasis} for ${value.coverage.state} evidence.`
+      });
+    }
+    if (value.result_count !== undefined && value.result_count !== expectedCount) {
+      context.addIssue({
+        code: "custom",
+        message: "Reference result_count must agree with its declared coverage basis."
+      });
     }
     if (value.coverage.page_matches !== value.references.length) {
       context.addIssue({

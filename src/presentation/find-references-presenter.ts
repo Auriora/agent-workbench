@@ -43,7 +43,11 @@ function presentReferenceMetadata(
   meta: FindReferencesUseCaseResult["meta"]
 ): FindReferencesUseCaseResult["meta"] {
   if (result.coverage_status === "legacy_unverified") {
-    return meta;
+    return responseMetadataSchema.parse({
+      ...meta,
+      analysis_validity: meta.analysis_validity === "valid" ? "partial" : meta.analysis_validity,
+      verification_status: "blocked"
+    });
   }
 
   const coverage = result.coverage;

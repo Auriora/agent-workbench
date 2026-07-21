@@ -117,6 +117,8 @@ describe("reference completeness contracts", () => {
       snapshot_id: "snapshot-1",
       coverage_status: "evidence_backed",
       references: [referenceHit()],
+      result_count: 1,
+      result_count_basis: "complete_matches",
       coverage: completeLexicalCoverage(),
       next_actions: []
     };
@@ -132,8 +134,22 @@ describe("reference completeness contracts", () => {
       snapshot_id: "snapshot-1",
       coverage_status: "legacy_unverified",
       references: [],
+      result_count: 0,
+      result_count_basis: "page_matches",
       next_actions: []
     })).toMatchObject({ coverage_status: "legacy_unverified" });
+    expect(findReferencesResultSchema.safeParse({
+      ...result,
+      result_count_basis: "matched_so_far"
+    }).success).toBe(false);
+    expect(findReferencesResultSchema.safeParse({
+      ...result,
+      result_count: 0
+    }).success).toBe(false);
+    expect(findReferencesResultSchema.safeParse({
+      ...result,
+      result_count_basis: undefined
+    }).success).toBe(false);
     expect(findReferencesResultSchema.safeParse({
       ...result,
       references: []
@@ -151,6 +167,13 @@ describe("reference completeness contracts", () => {
       stop_reason: "result" as const,
       continuation_kind: "lexical_scan" as const
     };
+    expect(findReferencesResultSchema.parse({
+      ...result,
+      result_count: partialCoverage.matched_so_far,
+      result_count_basis: "matched_so_far",
+      coverage: partialCoverage,
+      cursor: "opaque"
+    })).toMatchObject({ result_count: 1, result_count_basis: "matched_so_far" });
     expect(responseMetadataSchema.safeParse(metadata({
       analysis_validity: "valid",
       truncated: false,

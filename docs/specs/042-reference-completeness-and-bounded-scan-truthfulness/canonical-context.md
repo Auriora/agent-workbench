@@ -119,7 +119,9 @@ claims to overstate current reference behavior.
 | catalog pagination behavior | `docs/design/graph-store-design.md` | yes |
 | lexical occurrence capability | `docs/design/language-adapter-design.md` | yes |
 | bounded reference proof | `docs/reference/mvp-proof-matrix.md` | yes |
+| real Codex and Claude installed-provider proof | `docs/runbooks/codex-agent-workbench-plugin.md`; `docs/reference/mvp-proof-matrix.md` | yes |
 | delivered defect disposition | `docs/backlog/README.md` EB053; agent-readable changelog | yes |
+| dated delivered dogfood outcome | `docs/reference/dogfood-evidence-ledger.md` | yes |
 
 ## Related Artifacts
 

@@ -58,6 +58,7 @@ candidate inspection explicit and continuable.
 | ordered catalog pagination | `docs/design/graph-store-design.md` | pagination and budget tests |
 | lexical occurrence semantics | `docs/design/language-adapter-design.md` | JS/TS occurrence fixture |
 | product proof boundary | `docs/reference/mvp-proof-matrix.md` | complete and partial SessionStart proof |
+| real provider installation proof | plugin runbook and `docs/reference/mvp-proof-matrix.md` | isolated real Codex and Claude CLI smokes |
 | delivered outcome | EB053 and agent-readable changelog | validation and installed smoke |
 
 ## Bug Fix Details

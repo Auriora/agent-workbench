@@ -90,9 +90,13 @@ export async function findReferences(input: {
         coverage_status: "legacy_unverified",
         references: [],
         result_count: 0,
+        result_count_basis: "page_matches",
         next_actions: capNextActions([])
       },
-      meta: resolved === null ? meta : publicationSelectionMeta({ selection: resolved, meta })
+      meta: nonValidReferenceMeta(
+        resolved === null ? meta : publicationSelectionMeta({ selection: resolved, meta }),
+        "partial"
+      )
     };
   }
   const snapshotValidity = validityForResolvedSnapshot(input.snapshot_validity, resolved.snapshot_id);
@@ -104,13 +108,17 @@ export async function findReferences(input: {
         coverage_status: "legacy_unverified",
         references: [],
         result_count: 0,
+        result_count_basis: "page_matches",
         next_actions: capReferenceNextActions([{
           tool: "read_resource",
           args: { uri: "repo:///status", repo_root: resolved.repo_root },
           reason: "Refresh or revalidate the repository snapshot before graph traversal."
         }], resolved.repo_root)
       },
-      meta: snapshotValidityMeta({ meta: resolved.meta, validity: snapshotValidity })
+      meta: nonValidReferenceMeta(
+        snapshotValidityMeta({ meta: resolved.meta, validity: snapshotValidity }),
+        "partial"
+      )
     };
   }
 
@@ -123,6 +131,18 @@ export async function findReferences(input: {
         max_rows: 2
       }))[0] ?? null;
   if (!target) {
+    const query = input.request.symbol ?? input.request.node_id ?? "";
+    const recovery = {
+      tool: "symbol_search",
+      args: {
+        query,
+        exact: false,
+        max_results: 20,
+        snapshot_id: resolved.snapshot_id,
+        repo_root: resolved.repo_root
+      },
+      reason: "Resolve a valid indexed graph node before requesting its references."
+    };
     return {
       references: {
         repo_root: resolved.repo_root,
@@ -130,12 +150,16 @@ export async function findReferences(input: {
         coverage_status: "legacy_unverified",
         references: [],
         result_count: 0,
-        next_actions: [{
-          tool: "symbol_search",
-          args: { query: input.request.symbol ?? input.request.node_id ?? "", repo_root: resolved.repo_root }
-        }]
+        result_count_basis: "page_matches",
+        next_actions: capReferenceNextActions([recovery], resolved.repo_root)
       },
-      meta: resolved.meta
+      meta: nonValidReferenceMeta(resolved.meta, "invalid"),
+      errors: [{
+        code: "reference_target_not_found",
+        message: `Reference target '${query}' was not found in snapshot '${resolved.snapshot_id}'.`,
+        retryable: false,
+        next_action: recovery
+      }]
     };
   }
 
@@ -255,6 +279,7 @@ function invalidCursorResult(
       coverage_status: "legacy_unverified",
       references: [],
       result_count: 0,
+      result_count_basis: "page_matches",
       next_actions: []
     },
     meta: {
@@ -788,6 +813,7 @@ function evidenceResult(
       references,
       cursor,
       result_count: effectiveCoverage.complete_matches ?? effectiveCoverage.matched_so_far,
+      result_count_basis: complete ? "complete_matches" : "matched_so_far",
       coverage: effectiveCoverage,
       next_actions: capReferenceNextActions(nextActions, input.repo_root)
     },
@@ -803,6 +829,17 @@ function evidenceResult(
       truncated: !complete,
       reference_coverage: effectiveCoverage
     }
+  };
+}
+
+function nonValidReferenceMeta(
+  meta: ResponseMetadata,
+  analysisValidity: "partial" | "invalid"
+): ResponseMetadata {
+  return {
+    ...meta,
+    analysis_validity: analysisValidity,
+    verification_status: "blocked"
   };
 }
 

@@ -3,7 +3,7 @@ title: Agent-readable changelog
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -25,6 +25,50 @@ Each version or dated entry should include:
 - Contract changes
 - Required agent behavior changes
 - Migration notes
+
+## 2026-07-21: Truthful Bounded Reference Completeness
+
+### Agent-Visible Changes
+
+- `find_references` now exhausts its selected parser routes or ordered lexical
+  catalog evidence, or returns explicit partial/truncated evidence with a
+  callable continuation.
+- Complete lexical evidence can reach the exact twelve SessionStart fixture
+  occurrences, including later TypeScript consumers. Lexical hits remain
+  unresolved low-confidence routing evidence rather than semantic callers.
+- Unknown targets and stale/no-coverage states are blocked non-valid evidence,
+  not successful empty reference results.
+
+### Contract Changes
+
+- Reference responses include page/sequence accounting, inspected languages,
+  candidate classification, stop reason, route/catalog exhaustion, and an
+  explicit `result_count_basis`.
+- Authenticated scan, result, and parser-composite cursors bind snapshot,
+  target, request bounds, progress, and accumulated counts. Daemon-key rotation
+  expires old cursors; tampering is invalid.
+- Structural-bound replays preserve ordered evidence, structural progress, and
+  non-time accounting when both executions remain within the live deadline;
+  elapsed accounting and opaque-token equality are excluded. A
+  scheduling-dependent time stop may vary only at a safe
+  accounted file boundary and remains partial.
+
+### Required Agent Behavior Changes
+
+- Treat `complete_matches` as a total only when coverage is complete. For
+  partial evidence, follow the emitted continuation and use `matched_so_far`
+  only as sequence progress.
+- Directly verify lexical hits before refactoring. Do not treat policy
+  exclusions as inspected files or unresolved searchable candidates as
+  evidence of absence.
+
+### Migration Notes
+
+- `result_count_basis` and coverage fields are additive. Consumers should read
+  the basis before interpreting `result_count`.
+- Real Codex CLI `0.144.6` and Claude Code `2.1.216` installed-provider smokes
+  passed against the packed `0.6.1` plugin with the exact reference oracle and
+  complete cleanup.
 
 ## 2026-07-20: Daemon-Owned Refresh Convergence
 

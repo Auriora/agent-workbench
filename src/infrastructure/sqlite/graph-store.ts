@@ -513,11 +513,25 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           SELECT e.id,
                  e.source_node_id,
                  e.target_node_id,
+                 e.kind,
+                 e.start_line,
+                 e.start_column,
+                 e.end_line,
+                 e.end_column,
                  e.provenance,
                  e.confidence,
+                 e.metadata_json,
                  t.path AS target_file_path,
                  ROW_NUMBER() OVER (
-                   PARTITION BY e.source_node_id, e.target_node_id, e.provenance
+                   PARTITION BY e.source_node_id,
+                                e.target_node_id,
+                                e.kind,
+                                coalesce(e.start_line, -1),
+                                coalesce(e.start_column, -1),
+                                coalesce(e.end_line, -1),
+                                coalesce(e.end_column, -1),
+                                e.provenance,
+                                e.metadata_json
                    ORDER BY e.id ASC
                  ) AS identity_rank
           FROM edges e
@@ -530,10 +544,20 @@ export class SqliteGraphStoreAdapter implements GraphStore {
             AND e.source_node_id = @nodeId
             AND e.target_node_id IS NOT NULL
         )
-        SELECT id, source_node_id, target_node_id, provenance, confidence, target_file_path
+        SELECT id, source_node_id, target_node_id, kind, start_line, start_column,
+               end_line, end_column, provenance, confidence, metadata_json,
+               target_file_path
         FROM ranked_references
         WHERE identity_rank = 1
-        ORDER BY source_node_id ASC, target_node_id ASC, provenance ASC, id ASC
+        ORDER BY source_node_id ASC,
+                 target_node_id ASC,
+                 coalesce(start_line, -1) ASC,
+                 coalesce(start_column, -1) ASC,
+                 coalesce(end_line, -1) ASC,
+                 coalesce(end_column, -1) ASC,
+                 kind ASC,
+                 provenance ASC,
+                 id ASC
         LIMIT @maxRows
         OFFSET @offset
       `

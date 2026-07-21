@@ -44,6 +44,7 @@ describe("find_references completeness presentation", () => {
       scope: { languages: ["typescript"] }
     });
     expect(result.data.cursor).toBeUndefined();
+    expect(result.data).toMatchObject({ result_count: 1, result_count_basis: "complete_matches" });
     expect(result.meta.trust?.safe_to_use_for).toContain("navigation");
     expect(responseEnvelopeSchema(findReferencesResultSchema).safeParse(result).success).toBe(true);
   });
@@ -64,6 +65,7 @@ describe("find_references completeness presentation", () => {
     expect(result.data).toMatchObject({
       cursor: "opaque-next-page",
       result_count: 1,
+      result_count_basis: "matched_so_far",
       coverage: {
         page_matches: 1,
         matched_so_far: 1
@@ -126,7 +128,7 @@ describe("find_references completeness presentation", () => {
     }));
 
     expect(result.meta).toMatchObject({
-      analysis_validity: "valid",
+      analysis_validity: "partial",
       freshness: "stale",
       verification_status: "blocked"
     });
@@ -139,6 +141,54 @@ describe("find_references completeness presentation", () => {
       expect.arrayContaining(["task_completion_claim", "whole_program_impact_claim"])
     );
     expect(result.meta.trust?.must_verify_by).toContain("refresh_runtime_snapshot");
+  });
+
+  it("rejects an unknown reference target with typed recovery instead of valid empty evidence", async () => {
+    const fixture = runtimeFixture({ targetFound: false });
+    const result = buildFindReferencesEnvelope(await findReferences({
+      request: { node_id: "does/not/exist", repo_root: "/repo", max_depth: 1, max_results: 5 },
+      graph: fixture.graph,
+      snapshots: fixture.snapshots,
+      catalog: fixture.catalog,
+      workspace_safety: permissiveWorkspaceSafety,
+      cursor_codec: createReferenceCursorCodec({ key: Buffer.alloc(32, 89), key_epoch: "unknown-target-test" }),
+      snapshot_validity: {
+        snapshot_id: "snapshot-1",
+        state: "valid",
+        complete: true,
+        checked_path_count: 1,
+        observed_path_count: 1,
+        missing_paths: [],
+        inaccessible_paths: [],
+        refresh_required: false
+      },
+      default_repo_root: "/repo"
+    }));
+
+    expect(result.data).toMatchObject({
+      coverage_status: "legacy_unverified",
+      references: [],
+      result_count: 0,
+      result_count_basis: "page_matches",
+      next_actions: [{
+        tool: "symbol_search",
+        args: {
+          query: "does/not/exist",
+          exact: false,
+          max_results: 20,
+          snapshot_id: "snapshot-1"
+        }
+      }]
+    });
+    expect(result.meta).toMatchObject({ analysis_validity: "invalid", verification_status: "blocked" });
+    expect(result.errors).toEqual([expect.objectContaining({
+      code: "reference_target_not_found",
+      retryable: false,
+      next_action: expect.objectContaining({ tool: "symbol_search" })
+    })]);
+    expect(result.meta.trust?.safe_to_use_for).toContain("navigation");
+    expect(result.meta.trust?.safe_to_use_for).not.toContain("local_structure_reference");
+    expect(result.meta.trust?.not_safe_to_use_for).toContain("task_completion_claim");
   });
 
   it("keeps invalid cursor input invalid and non-retryable", () => {
@@ -214,6 +264,7 @@ function evidenceBackedResult(
     references,
     ...(cursor === undefined ? {} : { cursor }),
     result_count: coverage.matched_so_far,
+    result_count_basis: coverage.state === "complete" ? "complete_matches" : "matched_so_far",
     coverage,
     next_actions: cursor === undefined
       ? []
@@ -338,7 +389,7 @@ function baseMeta(overrides: Partial<ResponseMetadata> = {}): ResponseMetadata {
   };
 }
 
-function runtimeFixture(): {
+function runtimeFixture(options: { targetFound?: boolean } = {}): {
   graph: GraphQueryPort;
   catalog: FileCatalogPort;
   snapshots: SnapshotPort & SnapshotPublicationPort;
@@ -373,8 +424,8 @@ function runtimeFixture(): {
   };
   return {
     graph: {
-      getNode: async () => target,
-      findNodesByName: async () => [target],
+      getNode: async () => options.targetFound === false ? null : target,
+      findNodesByName: async () => options.targetFound === false ? [] : [target],
       findNodesByQualifiedName: async () => [target],
       searchNodes: async () => [target],
       getNodesInRange: async () => [target],
