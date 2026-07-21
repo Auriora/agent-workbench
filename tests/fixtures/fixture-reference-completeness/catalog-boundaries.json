@@ -1,0 +1,29 @@
+{
+  "missing_after_row_100": {
+    "path": "catalog/102-missing-after-row-100.ts",
+    "catalog_row": 102,
+    "read_outcome": "missing"
+  },
+  "oversized": {
+    "path": "catalog/104-oversized-reference.ts",
+    "declared_size_bytes": 128001,
+    "classification": "searchable_unresolved"
+  },
+  "unreadable": {
+    "path": "catalog/105-unreadable-reference.ts",
+    "read_outcome": "read_failure",
+    "classification": "searchable_unresolved"
+  },
+  "changed": {
+    "path": "catalog/106-changed-reference.ts",
+    "indexed_content_hash": "pre-change-identity",
+    "observed_content_hash": "post-change-identity",
+    "classification": "searchable_unresolved"
+  },
+  "policy_excluded": {
+    "path": "generated/107-policy-excluded-reference.ts",
+    "indexed": false,
+    "reason": "generated_or_vendor",
+    "classification": "outside_evidence_universe"
+  }
+}

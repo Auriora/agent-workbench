@@ -695,6 +695,7 @@ describe("runtime contracts", () => {
       findReferencesResultSchema.parse({
         repo_root: "/repo",
         snapshot_id: "1",
+        coverage_status: "legacy_unverified",
         references: [
           {
             source_node_id: "a",

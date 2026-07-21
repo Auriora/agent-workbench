@@ -20,6 +20,7 @@ import {
   runtimeStatusCaveatSchema,
   verificationStatusSchema
 } from "./runtime-core-contracts.js";
+import { referenceCoverageReceiptSchema } from "./runtime-graph-contracts.js";
 
 export const scopeMetadataSchema = z.object({
   repo_root: z.string(),
@@ -120,19 +121,49 @@ export const trustCalibrationSchema = z
   });
 export type TrustCalibration = z.infer<typeof trustCalibrationSchema>;
 
-export const responseMetadataSchema = z.object({
-  analysis_validity: analysisValiditySchema,
-  freshness: freshnessSchema,
-  scope: scopeMetadataSchema,
-  capability_level: capabilityLevelSchema,
-  evidence_kinds: z.array(evidenceKindSchema),
-  verification_status: verificationStatusSchema,
-  truncated: z.boolean(),
-  budget: budgetMetadataSchema.optional(),
-  index_coverage: z.array(indexCoverageSchema).optional(),
-  caveats: z.array(runtimeStatusCaveatSchema).optional(),
-  trust: trustCalibrationSchema.optional()
-});
+export const responseMetadataSchema = z
+  .object({
+    analysis_validity: analysisValiditySchema,
+    freshness: freshnessSchema,
+    scope: scopeMetadataSchema,
+    capability_level: capabilityLevelSchema,
+    evidence_kinds: z.array(evidenceKindSchema),
+    verification_status: verificationStatusSchema,
+    truncated: z.boolean(),
+    budget: budgetMetadataSchema.optional(),
+    index_coverage: z.array(indexCoverageSchema).optional(),
+    reference_coverage: referenceCoverageReceiptSchema.optional(),
+    caveats: z.array(runtimeStatusCaveatSchema).optional(),
+    trust: trustCalibrationSchema.optional()
+  })
+  .superRefine((value, context) => {
+    const coverage = value.reference_coverage;
+    if (coverage === undefined) {
+      return;
+    }
+    const inspectedLanguages = [...new Set(coverage.languages_inspected)].sort();
+    const scopeLanguages = [...new Set(value.scope.languages)].sort();
+    if (scopeLanguages.length !== value.scope.languages.length ||
+        JSON.stringify(inspectedLanguages) !== JSON.stringify(scopeLanguages)) {
+      context.addIssue({
+        code: "custom",
+        message: "Reference scope languages must be derived from inspected files."
+      });
+    }
+    if (coverage.state === "complete") {
+      if (value.analysis_validity !== "valid" || value.truncated) {
+        context.addIssue({
+          code: "custom",
+          message: "Complete reference evidence requires valid, untruncated response metadata."
+        });
+      }
+    } else if (value.analysis_validity === "valid" || !value.truncated) {
+      context.addIssue({
+        code: "custom",
+        message: "Partial reference evidence requires partial or blocked, truncated metadata."
+      });
+    }
+  });
 export type ResponseMetadata = z.infer<typeof responseMetadataSchema>;
 
 export const attentionItemSchema = z.object({

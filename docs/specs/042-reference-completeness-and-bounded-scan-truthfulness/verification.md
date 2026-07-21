@@ -15,8 +15,9 @@ license: GPL-3.0-or-later
 
 This record covers Requirement 1, Requirement 2, Requirement 3, Requirement 4,
 CP-001, CP-002, CP-003, CP-004, CP-005, CP-006, CP-007, CP-008, CP-009,
-CP-010, CP-011, and T001-T013 for truthful bounded reference completeness. All
-implementation evidence is pending.
+CP-010, CP-011, and T001-T013 for truthful bounded reference completeness.
+Phase 1 contract and reproduction evidence is complete; route, scanner,
+presentation, installed-client, promotion, and closure evidence remains pending.
 
 ## Completed Authoring Gates
 
@@ -37,9 +38,9 @@ completed authoring checks above.
 
 | Gate | Required? | Status | Evidence |
 | --- | --- | --- | --- |
-| Contract and reproduction tests fail for intended pre-fix seam | yes | pending | |
+| Contract and reproduction tests characterize intended pre-fix seam | yes | passed for Phase 1 | V001; Phase 1 portions of V002 and V005 |
 | Parser-route and file-atomic pagination properties pass | yes | pending | |
-| Focused and full automated tests pass | yes | pending | |
+| Focused and full automated tests pass | yes | Phase 1 checkpoint passed | V001 and Phase 1 V002/V005; V007 checkpoint 84 files/786 tests/10 Phase 2 todos; final T010 rerun pending |
 | Plugin, skill, and package gates pass | yes | pending | |
 | Installed Codex and Claude plugin smokes pass | yes | pending | Must execute real CLIs; provider-labelled MCP sessions are insufficient. |
 | Fresh lifecycle package lint and Markdown/link checks pass | yes | pending | Must rerun after implementation evidence and task-state changes. |
@@ -51,13 +52,13 @@ completed authoring checks above.
 
 | ID | Command | Purpose | Result |
 | --- | --- | --- | --- |
-| V001 | `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts tests/contracts/response-metadata.test.ts tests/contracts/reference-completeness.test.ts` | result, evidence-universe, accounting, cursor, and trust contracts | pending |
-| V002 | `pnpm exec vitest run tests/graph/query-tools.test.ts tests/graph/reference-completeness.test.ts` | per-route limit probes; disjoint outgoing/incoming/unresolved ownership; fixed composite order and route transitions; file-atomic catalog pagination; all candidate and stop classes | pending |
+| V001 | `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts tests/contracts/response-metadata.test.ts tests/contracts/reference-completeness.test.ts` | result, evidence-universe, accounting, cursor, and trust contracts | passed 2026-07-21: 3 files, 49 tests |
+| V002 | `pnpm exec vitest run tests/graph/query-tools.test.ts tests/graph/reference-completeness.test.ts` | per-route limit probes; disjoint outgoing/incoming/unresolved ownership; fixed composite order and route transitions; file-atomic catalog pagination; all candidate and stop classes | Phase 1 fixture portion passed: 2 files, 30 tests, 5 explicit Phase 2 todos; full gate pending T003-T005 |
 | V003 | `pnpm exec vitest run tests/mcp/query-tools.test.ts tests/mcp/stdio-entrypoint.test.ts tests/mcp/reference-completeness.test.ts` | public MCP envelope, callable continuation, and exact page/sequence accounting | pending |
 | V004 | `pnpm exec vitest run tests/mcp/trust-golden.test.ts` | complete versus partial trust presentation | pending |
-| V005 | `pnpm exec vitest run tests/integration/reference-session-start.test.ts` | exact twelve-occurrence reproduction, missing row 101, same-line occurrence, and failed/policy-excluded candidate cases | pending |
+| V005 | `pnpm exec vitest run tests/integration/reference-session-start.test.ts` | exact twelve-occurrence reproduction, missing row 101, same-line occurrence, and failed/policy-excluded candidate cases | Phase 1 characterization passed: 3 tests, 5 explicit Phase 2 todos; full behavioral gate pending T004-T005 |
 | V006 | `pnpm exec vitest run tests/graph/reference-pagination.property.test.ts` | seeded concatenation/order properties; authenticated scan/result/composite cursor replay; tampered ordinal/counter/route/tag rejection; key-epoch restart expiry | pending |
-| V007 | `pnpm typecheck && pnpm test` | TypeScript integration and full regression suite | pending |
+| V007 | `pnpm typecheck && pnpm test` | TypeScript integration and full regression suite | Phase 1 checkpoint passed 2026-07-21: typecheck; 84 files, 786 tests, 10 Phase 2 todos; final T010 rerun pending |
 | V008 | `pnpm exec vitest run tests/graph/reference-query-budget.test.ts` | deterministic clock proves file-admission time, file, declared-byte, and result bounds; actual-byte observation; atomic time overrun; and failed-candidate progress/accounting | pending |
 | V009 | `pnpm run validate:plugin && pnpm run validate:skills && pnpm run pack:dry-run` | packaged integration gates | pending |
 | V010 | `CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs` | pack/install `@auriora/agent-workbench@0.6.1`, verify installed bin and two provider-labelled sessions, then verify the structured cleanup receipt | pending; does not prove a real agent CLI loaded a plugin |
@@ -98,10 +99,10 @@ Nothing in this draft claims V010-V012 have run.
 
 | Requirement | Acceptance criteria covered | Evidence | Residual risk |
 | --- | --- | --- | --- |
-| Requirement 1 | AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7, AC1.8 | pending V001-V005, V013-V015 | false completeness remains until implemented |
-| Requirement 2 | AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6, AC2.7, AC2.8 | pending V001-V003, V005-V008 | authenticated cursor and pagination remain unimplemented |
-| Requirement 3 | AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6, AC3.7 | pending V001, V003-V004, V006, V008 | accounting semantics remain unimplemented |
-| Requirement 4 | AC4.1, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8, AC4.9 | pending V002, V005-V012 | reproduction and boundary fixtures not yet implemented |
+| Requirement 1 | AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7, AC1.8 | V001 contract proof; pending V002-V005, V013-V015 | runtime still emits `legacy_unverified` until Phase 2 route implementation |
+| Requirement 2 | AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6, AC2.7, AC2.8 | V001 authenticated cursor and accounting contracts; pending V002-V003, V005-V008 | codec exists; route pagination is not implemented |
+| Requirement 3 | AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6, AC3.7 | V001 contract proof; pending V003-V004, V006, V008 | runtime presentation and accounting remain pending |
+| Requirement 4 | AC4.1, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8, AC4.9 | Phase 1 portions of V002/V005; pending full V002, V005-V012 | fixture and defect characterization exist; continuation/parser behavior remains pending |
 
 ## Agent Readiness Evidence
 
@@ -118,8 +119,8 @@ Nothing in this draft claims V010-V012 have run.
 
 | Task ID | Status | Evidence | Notes |
 | --- | --- | --- | --- |
-| T001 | pending | none | canonical contracts |
-| T002 | pending | none | named boundary fixtures |
+| T001 | complete | V001: 3 files/49 tests passed; typecheck and focused daemon launch passed | canonical contracts and daemon-scoped authenticated cursor lifetime |
+| T002 | complete | V002 Phase 1: 2 files/30 tests/5 todos; V005: 3 tests/5 todos | named boundary fixtures and passing false-complete characterization; todos belong to T003-T005 |
 | T003 | pending | none | parser-route completeness |
 | T004 | pending | none | file-atomic scanner |
 | T005 | pending | none | cursor and property behavior |
@@ -142,7 +143,10 @@ Nothing in this draft claims V010-V012 have run.
 | 2026-07-20 | authoring validation | lifecycle package lint: zero errors/warnings; bounded Markdown set: eight checked, zero skipped, 136 table-readability warnings only, not truncated; scoped `git diff --check`: pass | initial revised draft was structurally valid; final audit followed |
 | 2026-07-20 | final authoring audit | authenticated cursor lifecycle, failed-candidate progress, composite parser routing, actual-byte semantics, and staged review evidence were reconciled | authoring evidence only; fresh post-implementation review remains required |
 | 2026-07-20 | final authoring validation | lifecycle lint: zero errors/warnings/info; task audit: zero errors/warnings and nineteen advisory infos; Markdown set: eight checked, zero skipped, 154 table-readability warnings only, not truncated; whitespace scan: pass | revised draft is structurally valid; implementation gates remain pending |
-| pending | implementation | V001-V018 | no implementation evidence yet |
+| 2026-07-21 | Phase 1 T001 | V001 contract schemas and authenticated cursor codec; focused daemon composition checks; `pnpm typecheck` | V001 passed with three files and 49 tests; daemon test and typecheck passed; T001 complete |
+| 2026-07-21 | Phase 1 T002 | Compact SessionStart fixture, row-101 virtual catalog, boundary manifest, V002/V005 characterization | 9 early plus 3 late occurrences and same-line collapse reproduced; candidate configurations locked; T002 complete with Phase 2 behavior explicitly todo |
+| 2026-07-21 | Phase 1 checkpoint | `pnpm typecheck`; full `pnpm test`; lifecycle package lint; targeted daemon entrypoint rerun | typecheck passed; 84 files/786 tests passed with 10 Phase 2 todos; lifecycle lint zero diagnostics; daemon entrypoint 15/15 passed |
+| pending | Phase 2-4 implementation | remaining V002-V018 | route/scanner implementation, full verification, promotion, and closure remain pending |
 
 ## Residual Risks
 

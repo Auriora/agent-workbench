@@ -192,6 +192,7 @@ describe("public MCP trust golden responses", () => {
         references: {
           repo_root: request.repo_root ?? "/repo",
           snapshot_id: "snapshot-1",
+          coverage_status: "legacy_unverified",
           references: [],
           next_actions: []
         },

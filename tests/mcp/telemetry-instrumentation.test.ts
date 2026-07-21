@@ -441,6 +441,7 @@ describe("MCP telemetry instrumentation", () => {
                 references: {
                   repo_root: "/repo",
                   snapshot_id: "snapshot-id",
+                  coverage_status: "legacy_unverified",
                   references: [],
                   next_actions: []
                 },

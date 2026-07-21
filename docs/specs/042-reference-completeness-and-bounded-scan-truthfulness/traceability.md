@@ -15,10 +15,10 @@ license: GPL-3.0-or-later
 
 | Requirement | Priority | Acceptance Criteria | Design Sections | Tasks | Verification | Durable Targets | Coverage State | Residual Destination |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Requirement 1 | must-have | AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7, AC1.8 | Graph-First Selection; Declared Lexical Evidence Universe; Coverage Receipt | T001-T008, T010-T013 | V001-V005, V007, V013-V018 | MCP surface design; runtime contracts | not-covered | active Spec 042 |
-| Requirement 2 | must-have | AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6, AC2.7, AC2.8 | Cursor Authentication And Lexical Scan State; File-Atomic Admission And Accounting; Lexical Page Algorithm | T001, T004-T008, T010-T013 | V001-V003, V005-V008, V013-V018 | graph store design; runtime contracts | not-covered | active Spec 042 |
-| Requirement 3 | must-have | AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6, AC3.7 | Coverage Receipt; Contract Boundary; File-Atomic Admission And Accounting | T001, T003-T008, T010-T013 | V001-V004, V006-V008, V013-V018 | runtime contracts | not-covered | active Spec 042 |
-| Requirement 4 | must-have | AC4.1, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8, AC4.9 | Declared Lexical Evidence Universe; Lexical Output Unit; Validation Strategy | T002-T013 | V002, V005-V015, V017-V018 | language adapter design; MVP proof matrix; EB053; dogfood ledger | not-covered | active Spec 042 |
+| Requirement 1 | must-have | AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7, AC1.8 | Graph-First Selection; Declared Lexical Evidence Universe; Coverage Receipt | T001-T008, T010-T013 | V001-V005, V007, V013-V018 | MCP surface design; runtime contracts | contract-covered | runtime implementation remains in active Spec 042 |
+| Requirement 2 | must-have | AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6, AC2.7, AC2.8 | Cursor Authentication And Lexical Scan State; File-Atomic Admission And Accounting; Lexical Page Algorithm | T001, T004-T008, T010-T013 | V001-V003, V005-V008, V013-V018 | graph store design; runtime contracts | contract-covered | route pagination remains in active Spec 042 |
+| Requirement 3 | must-have | AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6, AC3.7 | Coverage Receipt; Contract Boundary; File-Atomic Admission And Accounting | T001, T003-T008, T010-T013 | V001-V004, V006-V008, V013-V018 | runtime contracts | contract-covered | presentation/accounting implementation remains in active Spec 042 |
+| Requirement 4 | must-have | AC4.1, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8, AC4.9 | Declared Lexical Evidence Universe; Lexical Output Unit; Validation Strategy | T002-T013 | V002, V005-V015, V017-V018 | language adapter design; MVP proof matrix; EB053; dogfood ledger | fixture-characterized | continuation/parser proof remains in active Spec 042 |
 
 ## Correctness Property Mapping
 
@@ -77,6 +77,6 @@ and exact accounting semantics are fixed by the requirements and design.
 ## Review Evidence
 
 The four blockers, sixteen additional authoring findings, and five final-audit
-findings are mapped in `review-disposition.md`. Their `resolved` state repairs
-this draft package only; all delivery coverage remains `not-covered` or
-`planned` until implementation and V001-V018 evidence exist.
+findings are mapped in `review-disposition.md`. Phase 1 adds contract and fixture
+coverage only; runtime delivery remains planned until T003-T010 and their
+verification gates complete.

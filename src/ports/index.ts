@@ -55,11 +55,22 @@ import type {
   RefreshDeadline,
   RefreshExecutionState,
   RefreshFailure,
+  ReferenceCursorPayload,
   SnapshotPublicationState,
   SnapshotRefreshDiagnosticsReceipt
 } from "../contracts/index.js";
 
 export type { SnapshotPublicationState } from "../contracts/index.js";
+
+export type ReferenceCursorDecodeResult =
+  | { ok: true; payload: ReferenceCursorPayload }
+  | { ok: false; code: "invalid_cursor" | "cursor_expired" };
+
+export interface ReferenceCursorCodecPort {
+  readonly key_epoch: string;
+  encode(payload: ReferenceCursorPayload): string;
+  decode(cursor: string): ReferenceCursorDecodeResult;
+}
 
 export interface GraphQueryPort {
   getNode(input: { snapshot_id: string; node_id: string }): Promise<GraphNode | null>;

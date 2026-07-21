@@ -42,6 +42,7 @@ export function buildInvalidFindReferencesInputEnvelope(input: {
     data: {
       repo_root: input.repoRoot,
       snapshot_id: "",
+      coverage_status: "legacy_unverified",
       references: [],
       next_actions: []
     },

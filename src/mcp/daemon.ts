@@ -31,6 +31,7 @@ import {
   FileRepositoryOwnershipAdapter,
   waitForControllerShutdownSafety
 } from "../infrastructure/runtime/repository-ownership.js";
+import { createReferenceCursorCodec } from "../infrastructure/runtime/index.js";
 import { RepositoryRefreshTriggerCoordinator } from "../application/use-cases/repository-refresh-triggers.js";
 import { FilesystemWorkspaceWatcherAdapter } from "../infrastructure/filesystem/index.js";
 import { SystemClockAdapter } from "../infrastructure/time/index.js";
@@ -416,6 +417,7 @@ export async function startAgentWorkbenchDaemon(input: {
     refreshDiagnostics: refreshController,
     refreshTriggers,
     graphStore: sharedGraphStore,
+    referenceCursorCodec: createReferenceCursorCodec(),
     pollWorkspaceWatcher: () => workspaceRefresh.poll(),
     registerDisposer(dispose) {
       sharedDisposers.add(dispose);

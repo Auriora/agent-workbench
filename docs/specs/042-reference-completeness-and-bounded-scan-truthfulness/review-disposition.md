@@ -51,6 +51,20 @@ All implementation tasks remain pending.
 
 ## Review Outcome
 
+### Phase 1 Implementation Review
+
+| ID | Finding | Disposition | Resolution evidence |
+| --- | --- | --- | --- |
+| P1-B01 | Coverage remained optional, so the reproduced false-complete result could omit the new receipt. | resolved | `findReferencesResultSchema` now requires either evidence-backed coverage or explicit `legacy_unverified`; current runtime emits the latter until Phase 2. Contract and reproduction tests reject omission. |
+| P1-B02 | Composite cursors accepted impossible route order, offset totals, and route-incompatible continuations. | resolved | Parser cursor refinements enforce outgoing/incoming/unresolved order and offset totals; coverage refinements bind continuation kind to route; negative V001 cases pass. |
+| P1-B03 | Accounting, reason categories, page/sequence classification, and language evidence allowed contradictions. | resolved | Contracts now separate policy-exclusion and unresolved-searchable reasons, carry page/sequence classified and reason counts, reconcile unique/replay attempts, and require deduplicated exact inspected-language scope. |
+| P1-B04 | Boundary files existed but their oversized, unreadable, changed, missing, and policy classifications were not asserted. | resolved | `catalog-boundaries.json` and the graph fixture test lock each configured boundary and row identity while Phase 2 behavior remains explicitly todo. |
+| P1-B05 | Verification still described all implementation and V001 evidence as pending. | resolved | Tasks, traceability, quality gates, validation results, requirement residuals, and the evidence log now distinguish completed Phase 1 from pending Phase 2-4 delivery. |
+
+Phase 2 todos are intentionally retained under T003-T005 and do not weaken the
+completed Phase 1 contract and reproduction boundary. The full T011 review
+remains required after runtime implementation and before promotion.
+
 ### Final Authoring Audit
 
 | ID | Finding | Disposition | Resolution evidence |

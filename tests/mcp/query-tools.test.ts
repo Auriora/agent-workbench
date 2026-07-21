@@ -284,6 +284,7 @@ describe("graph query MCP tools", () => {
         references: {
           repo_root: "/fixture",
           snapshot_id: "1",
+          coverage_status: "legacy_unverified",
           target: unsafeSymbolReference(),
           references: [
             {

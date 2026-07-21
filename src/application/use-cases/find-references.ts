@@ -13,6 +13,7 @@ import type {
 import type {
   FileCatalogPort,
   GraphQueryPort,
+  ReferenceCursorCodecPort,
   SnapshotPort,
   SnapshotPublicationPort,
   WorkspaceFilePort
@@ -43,6 +44,7 @@ export async function findReferences(input: {
   snapshots: SnapshotPort & SnapshotPublicationPort;
   catalog: FileCatalogPort;
   workspace?: WorkspaceFilePort;
+  cursor_codec?: ReferenceCursorCodecPort;
   snapshot_validity?: SnapshotValidityReceipt;
   selected_snapshot_id?: string | null;
   default_repo_root: string;
@@ -66,6 +68,7 @@ export async function findReferences(input: {
       references: {
         repo_root: repoRoot,
         snapshot_id: input.request.snapshot_id ?? "",
+        coverage_status: "legacy_unverified",
         references: [],
         result_count: 0,
         next_actions: capNextActions([])
@@ -79,6 +82,7 @@ export async function findReferences(input: {
       references: {
         repo_root: resolved.repo_root,
         snapshot_id: resolved.snapshot_id,
+        coverage_status: "legacy_unverified",
         references: [],
         result_count: 0,
         next_actions: capNextActions([{
@@ -104,6 +108,7 @@ export async function findReferences(input: {
       references: {
         repo_root: resolved.repo_root,
         snapshot_id: resolved.snapshot_id,
+        coverage_status: "legacy_unverified",
         references: [],
         result_count: 0,
         next_actions: [{ tool: "symbol_search", args: { query: input.request.symbol ?? input.request.node_id ?? "" } }]
@@ -125,6 +130,7 @@ export async function findReferences(input: {
       references: {
         repo_root: resolved.repo_root,
         snapshot_id: resolved.snapshot_id,
+        coverage_status: "legacy_unverified",
         target: await toSymbolReference({ node: target, source_byte_limit: 0 }),
         references: [],
         result_count: 0,
@@ -224,6 +230,7 @@ export async function findReferences(input: {
     references: {
       repo_root: resolved.repo_root,
       snapshot_id: resolved.snapshot_id,
+      coverage_status: "legacy_unverified",
       target: await toSymbolReference({
         node: target,
         workspace: input.workspace,

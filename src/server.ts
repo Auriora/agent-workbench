@@ -58,6 +58,7 @@ import {
   MarkdownStructureCheckerAdapter
 } from "./infrastructure/markdown/index.js";
 import {
+  createReferenceCursorCodec,
   InMemoryRuntimeOperationsAdapter,
   SnapshotRefreshController
 } from "./infrastructure/runtime/index.js";
@@ -91,6 +92,7 @@ import {
 import type { IntegrationLauncherIdentity } from "./contracts/index.js";
 import type {
   RepositoryOwnershipLease,
+  ReferenceCursorCodecPort,
   SnapshotPublicationPort,
   SnapshotRefreshAdmissionFailurePort,
   SnapshotRefreshControllerPort,
@@ -105,6 +107,7 @@ export type AgentWorkbenchSharedRepositoryServices = {
   refreshDiagnostics: SnapshotRefreshDiagnosticsPort;
   refreshTriggers: RepositoryRefreshTriggerPort;
   graphStore: () => Promise<GraphStore>;
+  referenceCursorCodec: ReferenceCursorCodecPort;
   pollWorkspaceWatcher(): Promise<WatcherFreshnessState | undefined>;
   registerDisposer(dispose: () => void | Promise<void>): () => void;
 };
@@ -125,6 +128,7 @@ export type AgentWorkbenchServerOptions = {
   startupWarmupMaxFiles?: number;
   rootAuthorityPolicy?: RootAuthorityPolicy;
   graphStore?: () => Promise<GraphStore>;
+  referenceCursorCodec?: ReferenceCursorCodecPort;
   daemonDiagnostics?: () => AgentWorkbenchDaemonHealthFacts;
   integrationIdentity?: IntegrationLauncherIdentity;
   workspaceWatcher?: Partial<WorkspaceWatcherConfig>;
@@ -157,6 +161,8 @@ export function createAgentWorkbenchServer(
   const databasePath = graphStorePath(absoluteRepoRoot);
   const graphStore = options.sharedRepositoryServices?.graphStore ??
     options.graphStore ?? createAsyncGraphStore(databasePath);
+  const referenceCursorCodec = options.sharedRepositoryServices?.referenceCursorCodec ??
+    options.referenceCursorCodec ?? createReferenceCursorCodec();
   const localRefreshAuthority = options.sharedRepositoryServices === undefined
     ? createStandaloneRefreshAuthority({
         repoRoot: absoluteRepoRoot,
@@ -419,6 +425,7 @@ export function createAgentWorkbenchServer(
         snapshots: store,
         catalog: store,
         workspace: workspaceForRepoRoot(request.repo_root),
+        cursor_codec: referenceCursorCodec,
         snapshot_validity: selected.validity,
         selected_snapshot_id: selected.snapshot_id,
         default_repo_root: absoluteRepoRoot

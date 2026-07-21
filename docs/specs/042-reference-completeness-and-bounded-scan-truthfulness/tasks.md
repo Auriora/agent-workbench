@@ -21,7 +21,7 @@ T008 + T010 -> T011 -> T012 -> T013
 
 ## Phase 1: Contract And Reproduction
 
-- [ ] T001 Lock route completeness, evidence-universe, accounting, cursor, and
+- [x] T001 Lock route completeness, evidence-universe, accounting, cursor, and
   trust contracts before implementation.
   - Depends on: none
   - Requirements: Requirement 1, Requirement 2, Requirement 3; CP-001, CP-002,
@@ -38,9 +38,15 @@ T008 + T010 -> T011 -> T012 -> T013
     after daemon key rotation, distinguish policy exclusions from fully
     classified unresolved candidates, and define every stop reason.
   - Evidence mode: contract
-  - Evidence: Pending.
+  - Evidence: V001 passed on 2026-07-21 (three contract files, 49 tests),
+    `pnpm typecheck` passed, and focused daemon-launch tests remained green.
+    Canonical schemas reject false completeness and contradictory accounting;
+    authenticated scan/result/composite cursors reject tampering and expire
+    across key epochs. Composition inspection proves the daemon constructs one
+    codec in shared repository services; cross-client cursor use remains a
+    Phase 2 behavioral assertion.
 
-- [ ] T002 Add reference-completeness boundary fixtures.
+- [x] T002 Add reference-completeness boundary fixtures.
   - Depends on: T001
   - Requirements: Requirement 4; CP-001, CP-002, CP-003, CP-006, CP-007,
     CP-008, CP-009, CP-011
@@ -53,7 +59,11 @@ T008 + T010 -> T011 -> T012 -> T013
     cases cover two same-line occurrences, a missing indexed candidate after
     row 100, oversized, unreadable, missing, changed, and policy-excluded paths.
   - Evidence mode: contract
-  - Evidence: Pending.
+  - Evidence: V002 Phase 1 fixture portion passed with two files, 30 tests, and
+    five explicit Phase 2 todos; V005 passed with three characterization tests
+    and five explicit Phase 2 todos. The fixture proves 9 early plus 3 row-101
+    occurrences, same-line collapse, and named missing, oversized, unreadable,
+    changed, and policy-excluded boundary configuration without shell search.
 
 ## Phase 2: Route And Scanner Implementation
 

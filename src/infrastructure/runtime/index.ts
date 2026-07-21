@@ -26,6 +26,9 @@ export {
   SystemRefreshDeadlineScheduler
 } from "./refresh-controller.js";
 export type { SnapshotRefreshControllerOptions } from "./refresh-controller.js";
+export {
+  createReferenceCursorCodec
+} from "./authenticated-reference-cursor.js";
 
 type CacheEntry = {
   namespace: string;
