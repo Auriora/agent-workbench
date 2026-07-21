@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/043-authority-aware-documentation-intent-ranking-and-count-semantics/`
 - **Title:** Authority-aware documentation intent ranking and count semantics requirements
 - **Final spec commit:** `15d0565`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `e0a2209`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/reference/documentation-map.md`
