@@ -4,6 +4,7 @@
  */
 
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { applyWorkspaceEdit } from "./application/use-cases/apply-workspace-edit.js";
 import {
   checkMarkdownDocument,
@@ -40,8 +41,9 @@ import {
   getDocsMap,
   getDocsOutline,
   getDocsOverview,
+  rankedDocsSnapshotUnavailable,
   readDocsSection,
-  searchDocs
+  searchRankedDocs
 } from "./application/use-cases/query-docs.js";
 import { searchSymbols } from "./application/use-cases/search-symbols.js";
 import { InMemoryEditPreviewStoreAdapter } from "./infrastructure/edit-preview-store/index.js";
@@ -58,6 +60,7 @@ import {
   MarkdownStructureCheckerAdapter
 } from "./infrastructure/markdown/index.js";
 import {
+  createDocsRankingCursorCodec,
   createReferenceCursorCodec,
   InMemoryRuntimeOperationsAdapter,
   SnapshotRefreshController
@@ -89,10 +92,12 @@ import {
   rootAuthorityPolicyFromEnv,
   type RootAuthorityPolicy
 } from "./interface-adapters/mcp/registries/root-authority.js";
-import type { IntegrationLauncherIdentity } from "./contracts/index.js";
+import type { IntegrationLauncherIdentity, RankedDocsSearchResult } from "./contracts/index.js";
 import type {
+  DocsRankingCursorCodecPort,
   RepositoryOwnershipLease,
   ReferenceCursorCodecPort,
+  TelemetryRecorderPort,
   SnapshotPublicationPort,
   SnapshotRefreshAdmissionFailurePort,
   SnapshotRefreshControllerPort,
@@ -108,6 +113,7 @@ export type AgentWorkbenchSharedRepositoryServices = {
   refreshTriggers: RepositoryRefreshTriggerPort;
   graphStore: () => Promise<GraphStore>;
   referenceCursorCodec: ReferenceCursorCodecPort;
+  docsRankingCursorCodec: DocsRankingCursorCodecPort;
   pollWorkspaceWatcher(): Promise<WatcherFreshnessState | undefined>;
   registerDisposer(dispose: () => void | Promise<void>): () => void;
 };
@@ -129,6 +135,8 @@ export type AgentWorkbenchServerOptions = {
   rootAuthorityPolicy?: RootAuthorityPolicy;
   graphStore?: () => Promise<GraphStore>;
   referenceCursorCodec?: ReferenceCursorCodecPort;
+  docsRankingCursorCodec?: DocsRankingCursorCodecPort;
+  telemetry?: TelemetryRecorderPort;
   daemonDiagnostics?: () => AgentWorkbenchDaemonHealthFacts;
   integrationIdentity?: IntegrationLauncherIdentity;
   workspaceWatcher?: Partial<WorkspaceWatcherConfig>;
@@ -163,6 +171,8 @@ export function createAgentWorkbenchServer(
     options.graphStore ?? createAsyncGraphStore(databasePath);
   const referenceCursorCodec = options.sharedRepositoryServices?.referenceCursorCodec ??
     options.referenceCursorCodec ?? createReferenceCursorCodec();
+  const docsRankingCursorCodec = options.sharedRepositoryServices?.docsRankingCursorCodec ??
+    options.docsRankingCursorCodec ?? createDocsRankingCursorCodec();
   const localRefreshAuthority = options.sharedRepositoryServices === undefined
     ? createStandaloneRefreshAuthority({
         repoRoot: absoluteRepoRoot,
@@ -187,7 +197,7 @@ export function createAgentWorkbenchServer(
       }
     });
   const warmupView = controllerWarmupView(refreshAuthority, absoluteRepoRoot, clock);
-  const telemetry = createTelemetryAdapter(telemetryConfigFromEnv());
+  const telemetry = options.telemetry ?? createTelemetryAdapter(telemetryConfigFromEnv());
   const workspaceWatcherConfig = resolveWorkspaceWatcherConfig(options.workspaceWatcher);
   const localWorkspaceRefresh = options.sharedRepositoryServices === undefined
     ? createRepositoryWorkspaceRefreshService({
@@ -316,19 +326,37 @@ export function createAgentWorkbenchServer(
         workspace: workspaceForRepoRoot(request.repo_root),
         default_repo_root: absoluteRepoRoot
       }),
-    searchDocs: async ({ request }) => {
+    searchRankedDocs: async ({ request }) => {
       const store = await graphStore();
       const selected = await selectValidatedSnapshot(
         request.repo_root ?? absoluteRepoRoot,
         store
       );
-      return searchDocs({
+      if (selected.snapshot_id === null || selected.snapshot_id === undefined ||
+          selected.validity === undefined || selected.validity.state !== "valid") {
+        const result = rankedDocsSnapshotUnavailable({
+          request,
+          default_repo_root: absoluteRepoRoot,
+          message: selected.validity?.reason ??
+            "A valid selected documentation snapshot is required before ranked search."
+        });
+        telemetry.record("docs.ranking.result", rankedDocsTelemetryAttributes(result));
+        return result;
+      }
+      const result = await searchRankedDocs({
         request,
         docs_index: store,
-        snapshot_validity: selected.validity,
+        documentation_concerns: store,
+        ranking_candidates: store,
+        ranking_cursor_codec: docsRankingCursorCodec,
+        ranked_universes: store,
         selected_snapshot_id: selected.snapshot_id,
-        default_repo_root: absoluteRepoRoot
+        default_repo_root: absoluteRepoRoot,
+        now_iso8601: clock.nowIso8601(),
+        universe_id: randomUUID()
       });
+      telemetry.record("docs.ranking.result", rankedDocsTelemetryAttributes(result));
+      return result;
     },
     getCurrentDocsForTask: ({ request }) =>
       getCurrentDocsForTask({
@@ -529,6 +557,41 @@ export function createAgentWorkbenchServer(
     return new WorkspaceSafetyAdapter({ repoRoot: repoRootForRequest(repoRoot) });
   }
 
+}
+
+export function rankedDocsTelemetryAttributes(result: RankedDocsSearchResult): Record<string, unknown> {
+  const counts = "counts" in result ? result.counts : undefined;
+  return {
+    outcome: result.trust_state,
+    status: result.status,
+    blocker: "blocker" in result ? result.blocker : undefined,
+    returned_page_documents_count: counts?.returned_page_documents_count ?? 0,
+    fts_candidate_documents_count: counts !== undefined && "fts_candidate_documents_count" in counts
+      ? counts.fts_candidate_documents_count
+      : undefined,
+    fts_candidate_count_lower_bound: counts !== undefined && "fts_candidate_count_lower_bound" in counts
+      ? counts.fts_candidate_count_lower_bound
+      : undefined,
+    matched_owner_candidate_documents_count:
+      counts !== undefined && "matched_owner_candidate_documents_count" in counts
+        ? counts.matched_owner_candidate_documents_count
+        : undefined,
+    matched_owner_candidate_count_lower_bound:
+      counts !== undefined && "matched_owner_candidate_count_lower_bound" in counts
+        ? counts.matched_owner_candidate_count_lower_bound
+        : undefined,
+    candidate_union_documents_count: counts !== undefined && "candidate_union_documents_count" in counts
+      ? counts.candidate_union_documents_count
+      : undefined,
+    candidate_union_count_lower_bound: counts !== undefined && "candidate_union_count_lower_bound" in counts
+      ? counts.candidate_union_count_lower_bound
+      : undefined,
+    ranked_candidate_universe_count: counts !== undefined && "ranked_candidate_universe_count" in counts
+      ? counts.ranked_candidate_universe_count
+      : undefined,
+    page_truncated: result.truncated,
+    has_cursor: "cursor" in result && result.cursor !== undefined
+  };
 }
 
 export function createAsyncGraphStore(databasePath: string): AsyncGraphStore {

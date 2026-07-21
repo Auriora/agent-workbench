@@ -48,6 +48,14 @@ describe("repo-local MCP debug harness", () => {
     expect(publicSurfaceNames).not.toContain("mcp_use_case");
   });
 
+  it("keeps ranked docs sweep on validated snapshots and one runtime-stable cursor codec", () => {
+    const source = fs.readFileSync("src/debug/mcp-tool-sweep.ts", "utf8");
+    expect(source).toContain("new SnapshotValidityService(");
+    expect(source).toContain("docsRankingCursorCodec: createDocsRankingCursorCodec()");
+    expect(source).toContain("ranking_cursor_codec: input.runtime.docsRankingCursorCodec");
+    expect(source).not.toContain("ranking_cursor_codec: createDocsRankingCursorCodec()");
+  });
+
   it("refuses to resolve outside this repository checkout", () => {
     expect(() =>
       resolveDebugMcpUseCaseConfig({

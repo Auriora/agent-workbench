@@ -119,10 +119,10 @@
     },
     {
       "name": "docs_search",
-      "description": "Use this to find canonical docs before adding or changing documentation, specs, contracts, or behavior. Prefer docs_scope or scope_path for active spec packages; results include bounded snippets and cursors for additional pages.",
+      "description": "Use this to find canonical docs through an authority-aware complete ranked universe frozen to the selected snapshot. Prefer docs_scope or scope_path to narrow the universe. Response order is canonical; legacy score is compatibility-only, lexical_score is FTS evidence, and cursors continue the same immutable order.",
       "capability_class": "read_only",
       "mutation_class": "none",
-      "budget_policy": "Bounded by optional scope_path, max_results, and snippet limits; scans Markdown docs without source mutation."
+      "budget_policy": "Bounded to at most 501 candidates per source; blocks incomplete unions above 500 and pages only a frozen ranked universe."
     },
     {
       "name": "docs_current_for_task",

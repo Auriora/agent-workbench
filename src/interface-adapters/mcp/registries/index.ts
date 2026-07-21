@@ -19,6 +19,7 @@ import type {
   DocsOverviewRequest,
   DocsReadSectionRequest,
   DocsSearchRequest,
+  RankedDocsSearchResult,
   FindReferencesRequest,
   ImpactRequest,
   IntegrationHealthRequest,
@@ -40,8 +41,7 @@ import type {
   DocsMapUseCaseResult,
   DocsOutlineUseCaseResult,
   DocsOverviewUseCaseResult,
-  DocsReadSectionUseCaseResult,
-  DocsSearchUseCaseResult
+  DocsReadSectionUseCaseResult
 } from "../../../application/use-cases/query-docs.js";
 import type { CurrentDocsForTaskUseCaseResult } from "../../../application/use-cases/current-docs-for-task.js";
 import type { FindReferencesUseCaseResult } from "../../../application/use-cases/find-references.js";
@@ -96,7 +96,7 @@ export type McpRegistryContext = {
   getRepoOverview?: (input: { repo_root: string }) => Promise<GetRepoOverviewResult> | GetRepoOverviewResult;
   getDocsOverview?: (input: { request: DocsOverviewRequest }) => Promise<DocsOverviewUseCaseResult> | DocsOverviewUseCaseResult;
   getDocsMap?: (input: { request: DocsMapRequest }) => Promise<DocsMapUseCaseResult> | DocsMapUseCaseResult;
-  searchDocs?: (input: { request: DocsSearchRequest }) => Promise<DocsSearchUseCaseResult> | DocsSearchUseCaseResult;
+  searchRankedDocs?: (input: { request: DocsSearchRequest }) => Promise<RankedDocsSearchResult> | RankedDocsSearchResult;
   getCurrentDocsForTask?: (input: { request: DocsCurrentForTaskRequest }) => Promise<CurrentDocsForTaskUseCaseResult> | CurrentDocsForTaskUseCaseResult;
   getDocsOutline?: (input: { request: DocsOutlineRequest }) => Promise<DocsOutlineUseCaseResult> | DocsOutlineUseCaseResult;
   readDocsSection?: (input: { request: DocsReadSectionRequest }) => Promise<DocsReadSectionUseCaseResult> | DocsReadSectionUseCaseResult;

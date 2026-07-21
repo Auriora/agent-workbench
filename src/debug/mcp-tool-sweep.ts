@@ -5,6 +5,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { pathToFileURL } from "node:url";
 import packageJson from "../../package.json" with { type: "json" };
 import { makeEnvelope, type ResponseEnvelope } from "../contracts/index.js";
@@ -27,7 +28,8 @@ import {
   getDocsOutline,
   getDocsOverview,
   readDocsSection,
-  searchDocs
+  rankedDocsSnapshotUnavailable,
+  searchRankedDocs
 } from "../application/use-cases/query-docs.js";
 import { searchSymbols } from "../application/use-cases/search-symbols.js";
 import {
@@ -50,7 +52,7 @@ import {
 } from "../infrastructure/filesystem/index.js";
 import { MarkdownParserAdapter, MarkdownStructureCheckerAdapter } from "../infrastructure/markdown/index.js";
 import { SCHEMA_VERSION, SqliteGraphStoreAdapter } from "../infrastructure/sqlite/index.js";
-import { createReferenceCursorCodec } from "../infrastructure/runtime/index.js";
+import { createDocsRankingCursorCodec, createReferenceCursorCodec } from "../infrastructure/runtime/index.js";
 import {
   JavaScriptTypeScriptTreeSitterExtractorAdapter,
   PythonParserAdapter,
@@ -66,7 +68,7 @@ import {
   buildCodexIntegrationProfileEnvelope,
   buildCurrentIntegrationProfileEnvelope
 } from "../presentation/integration-profile-presenter.js";
-import { buildDocsCurrentForTaskEnvelope, buildDocsMapEnvelope, buildDocsOutlineEnvelope, buildDocsOverviewEnvelope, buildDocsReadSectionEnvelope, buildDocsSearchEnvelope } from "../presentation/docs-presenter.js";
+import { buildDocsCurrentForTaskEnvelope, buildDocsMapEnvelope, buildDocsOutlineEnvelope, buildDocsOverviewEnvelope, buildDocsReadSectionEnvelope, buildRankedDocsSearchEnvelope } from "../presentation/docs-presenter.js";
 import { buildFindReferencesEnvelope } from "../presentation/find-references-presenter.js";
 import { buildImpactEnvelope } from "../presentation/impact-presenter.js";
 import { buildIntegrationHealthEnvelope } from "../presentation/integration-health-presenter.js";
@@ -153,6 +155,7 @@ type RepoRuntime = {
   parser: MarkdownParserAdapter;
   checker: MarkdownStructureCheckerAdapter;
   previewStore: InMemoryEditPreviewStoreAdapter;
+  docsRankingCursorCodec: ReturnType<typeof createDocsRankingCursorCodec>;
 };
 
 export function resolveToolSweepConfig(input: {
@@ -433,7 +436,8 @@ function createRepoRuntime(input: { repoRoot: string; outputDir: string }): Repo
     clock: new SystemClockAdapter(),
     parser: new MarkdownParserAdapter(),
     checker: new MarkdownStructureCheckerAdapter(),
-    previewStore: new InMemoryEditPreviewStoreAdapter()
+    previewStore: new InMemoryEditPreviewStoreAdapter(),
+    docsRankingCursorCodec: createDocsRankingCursorCodec()
   };
 }
 
@@ -595,10 +599,37 @@ async function callTool(input: {
     }));
   }
   if (input.toolName === "docs_search") {
-    return buildDocsSearchEnvelope(await searchDocs({
+    const selected = await input.runtime.graph.getLatestPublished({ repo_root: input.repoRoot });
+    if (selected.status !== "selected") {
+      return buildRankedDocsSearchEnvelope(rankedDocsSnapshotUnavailable({
+        request: { repo_root: input.repoRoot, query: "sweep", max_results: 5, include_snippets: true },
+        default_repo_root: input.repoRoot,
+        message: "MCP sweep requires a published docs snapshot."
+      }));
+    }
+    const validity = await new SnapshotValidityService(
+      input.runtime.graph,
+      new FilesystemSnapshotPathValidatorAdapter({ repoRoot: input.repoRoot }),
+      input.runtime.graph
+    ).validate({ snapshot: selected.snapshot, max_paths: DEFAULT_SNAPSHOT_VALIDITY_MAX_PATHS });
+    if (validity.state !== "valid") {
+      return buildRankedDocsSearchEnvelope(rankedDocsSnapshotUnavailable({
+        request: { repo_root: input.repoRoot, query: "sweep", max_results: 5, include_snippets: true },
+        default_repo_root: input.repoRoot,
+        message: validity.reason ?? "MCP sweep requires a valid published docs snapshot."
+      }));
+    }
+    return buildRankedDocsSearchEnvelope(await searchRankedDocs({
       request: { repo_root: input.repoRoot, query: "sweep", max_results: 5, include_snippets: true },
       docs_index: input.runtime.graph,
-      default_repo_root: input.repoRoot
+      documentation_concerns: input.runtime.graph,
+      ranking_candidates: input.runtime.graph,
+      ranking_cursor_codec: input.runtime.docsRankingCursorCodec,
+      ranked_universes: input.runtime.graph,
+      selected_snapshot_id: selected.snapshot.id,
+      default_repo_root: input.repoRoot,
+      now_iso8601: input.runtime.clock.nowIso8601(),
+      universe_id: randomUUID()
     }));
   }
   if (input.toolName === "docs_current_for_task") {

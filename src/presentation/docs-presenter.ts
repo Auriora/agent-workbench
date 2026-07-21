@@ -16,6 +16,8 @@ import type {
   DocsSearchHit,
   DocsSearchResult,
   DocsWarning,
+  RankedDocsSearchHit,
+  RankedDocsSearchResult,
   ResponseEnvelope
 } from "../contracts/index.js";
 import {
@@ -30,6 +32,8 @@ import {
   docsReadSectionResultSchema,
   docsSearchHitSchema,
   docsSearchResultSchema,
+  rankedDocsSearchHitSchema,
+  rankedDocsSearchResultSchema,
   docsWarningSchema,
   nextActionSchema,
   responseMetadataSchema,
@@ -44,6 +48,7 @@ import type {
 } from "../application/use-cases/query-docs.js";
 import type { CurrentDocsForTaskUseCaseResult } from "../application/use-cases/current-docs-for-task.js";
 import {
+  buildResponseMeta,
   invalidResponseMeta,
   makeTrustedEnvelope,
   presentNextActions,
@@ -80,6 +85,55 @@ export function buildDocsSearchEnvelope(
   return makeTrustedEnvelope({
     data: sanitizeDocsSearch(result.search, context),
     meta: responseMetadataSchema.strip().parse(result.meta),
+    trust_policy: { surface_kind: "docs_routing" }
+  });
+}
+
+export function buildRankedDocsSearchEnvelope(
+  result: RankedDocsSearchResult,
+  context: PresentationSessionContext = {}
+): ResponseEnvelope<RankedDocsSearchResult> {
+  const data = sanitizeRankedDocsSearch(result, context);
+  const coverageState = "counts" in data
+    ? data.counts.priority_scan_coverage_state ?? data.docs_index_state ?? "unknown"
+    : "unknown";
+  const blocked = data.status === "blocked";
+  const countReceipt = "counts" in data ? data.counts : undefined;
+  return makeTrustedEnvelope({
+    data,
+    meta: {
+      ...buildResponseMeta({
+        analysis_validity: blocked ? "invalid" : coverageState === "complete" ? "valid" : "partial",
+        freshness: data.trust_state === "blocked_cursor_stale"
+          ? "stale"
+          : data.trust_state === "blocked_ranking_unavailable" ||
+              data.trust_state === "blocked_snapshot_unavailable"
+            ? "unknown"
+            : "fresh",
+        scope: {
+          repo_root: data.repo_root,
+          indexed_roots: ["."],
+          skipped_roots: [],
+          languages: ["markdown"]
+        },
+        capability_level: blocked ? "unsupported" : "resource_backed",
+        evidence_kinds: blocked ? [] : ["docs", "fts"],
+        verification_status: blocked ? "blocked" : data.status,
+        truncated: data.truncated,
+        budget: { row_limit: 500 }
+      }),
+      ...(countReceipt === undefined ? {} : {
+        index_coverage: [{
+          evidence_class: "docs" as const,
+          state: coverageState,
+          indexed_files: countReceipt.priority_scan_indexed_markdown_files_count,
+          eligible_files_seen: countReceipt.priority_scan_eligible_markdown_files_count,
+          scan_truncated: countReceipt.priority_scan_truncated,
+          indexed_roots: ["AGENTS.md", "README.md", "docs", "doc", "documentation"],
+          reason: countReceipt.priority_scan_coverage_note
+        }]
+      })
+    },
     trust_policy: { surface_kind: "docs_routing" }
   });
 }
@@ -342,6 +396,89 @@ function sanitizeDocsSearch(
   });
 }
 
+function sanitizeRankedDocsSearch(
+  input: RankedDocsSearchResult,
+  context: PresentationSessionContext
+): RankedDocsSearchResult {
+  const parsed = rankedDocsSearchResultSchema.parse(input);
+  const coverageNote = "counts" in parsed
+    ? parsed.counts.priority_scan_coverage_note ?? parsed.coverage_note
+    : undefined;
+  const sanitizedCoverageNote = coverageNote === undefined
+    ? undefined
+    : redactPresentationText(coverageNote, { context: "source" });
+  return rankedDocsSearchResultSchema.parse({
+    ...parsed,
+    query: redactPresentationText(parsed.query, { context: "source" }),
+    normalized_query: redactPresentationText(parsed.normalized_query, { context: "source" }),
+    normalized_scope_path: parsed.normalized_scope_path === undefined
+      ? undefined
+      : redactPresentationText(parsed.normalized_scope_path, { context: "source" }),
+    hits: parsed.hits.map(sanitizeRankedSearchHit),
+    warnings: parsed.warnings.map(sanitizeWarning),
+    next_actions: presentNextActions(parsed.next_actions, context).map((action) => nextActionSchema.parse({
+      ...action,
+      args: sanitizeNextActionArgs(action.args),
+      reason: action.reason === undefined
+        ? undefined
+        : redactPresentationText(action.reason, { context: "message" }),
+      expected_evidence: action.expected_evidence === undefined
+        ? undefined
+        : redactPresentationText(action.expected_evidence, { context: "message" })
+    })),
+    ...("counts" in parsed ? {
+      counts: {
+        ...parsed.counts,
+        ...(sanitizedCoverageNote === undefined ? {} : { priority_scan_coverage_note: sanitizedCoverageNote })
+      },
+      coverage_note: sanitizedCoverageNote
+    } : {})
+  });
+}
+
+function sanitizeNextActionArgs(value: unknown): unknown {
+  if (typeof value === "string") {
+    return redactPresentationText(value, { context: "source" });
+  }
+  if (Array.isArray(value)) {
+    return value.map(sanitizeNextActionArgs);
+  }
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, sanitizeNextActionArgs(item)]));
+  }
+  return value;
+}
+
+function sanitizeRankedSearchHit(input: RankedDocsSearchHit): RankedDocsSearchHit {
+  const parsed = rankedDocsSearchHitSchema.parse(input);
+  return rankedDocsSearchHitSchema.parse({
+    ...parsed,
+    title: redactPresentationText(parsed.title, { context: "source" }),
+    heading: parsed.heading === undefined
+      ? undefined
+      : redactPresentationText(parsed.heading, { context: "source" }),
+    snippet: parsed.snippet === undefined
+      ? undefined
+      : redactPresentationText(parsed.snippet, { context: "source" }),
+    direct_read_caveat: redactPresentationText(parsed.direct_read_caveat, { context: "source" }),
+    authority_caveat: parsed.authority_caveat === undefined
+      ? undefined
+      : redactPresentationText(parsed.authority_caveat, { context: "source" }),
+    canonical_owner: parsed.canonical_owner === undefined
+      ? undefined
+      : redactPresentationText(parsed.canonical_owner, { context: "source" }),
+    superseded_by: parsed.superseded_by === undefined
+      ? undefined
+      : redactPresentationText(parsed.superseded_by, { context: "source" }),
+    currency_caveats: parsed.currency_caveats?.map((caveat) =>
+      redactPresentationText(caveat, { context: "source" })
+    ),
+    ranking_reasons: parsed.ranking_reasons.map((reason) =>
+      redactPresentationText(reason, { context: "source" })
+    )
+  });
+}
+
 function sanitizeDocsCurrentForTask(
   input: DocsCurrentForTaskResult,
   context: PresentationSessionContext
@@ -485,7 +622,7 @@ function sanitizeWarning(input: DocsWarning): DocsWarning {
   return docsWarningSchema.parse({
     path: input.path === undefined ? undefined : normalizeRepoPath(input.path),
     reason: input.reason,
-    message: input.message
+    message: redactPresentationText(input.message, { context: "message" })
   });
 }
 

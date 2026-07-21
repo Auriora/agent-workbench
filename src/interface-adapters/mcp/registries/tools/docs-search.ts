@@ -10,7 +10,7 @@ import {
   type DocsSearchRequest
 } from "../../../../contracts/index.js";
 import {
-  buildDocsSearchEnvelope,
+  buildRankedDocsSearchEnvelope,
   buildInvalidDocsSearchInputEnvelope
 } from "../../../../presentation/docs-presenter.js";
 import {
@@ -29,7 +29,7 @@ const docsSearchRawShape = {
   cursor: z.string().optional().describe("Opaque cursor returned by a previous truncated docs search page.")
 };
 
-const docsSearchDescription = "Use this to find canonical docs before adding or changing documentation, specs, contracts, or behavior. Prefer docs_scope or scope_path for active spec packages; results include bounded snippets and cursors for additional pages.";
+const docsSearchDescription = "Use this to find canonical docs through an authority-aware complete ranked universe frozen to the selected snapshot. Prefer docs_scope or scope_path to narrow the universe. Response order is canonical; legacy score is compatibility-only, lexical_score is FTS evidence, and cursors continue the same immutable order.";
 
 export const docsSearchTool: McpToolDeclaration = {
   kind: "tool",
@@ -37,7 +37,7 @@ export const docsSearchTool: McpToolDeclaration = {
   metadata: {
     capability_class: "read_only",
     mutation_class: "none",
-    budget_policy: "Bounded by optional scope_path, max_results, and snippet limits; scans Markdown docs without source mutation.",
+    budget_policy: "Bounded to at most 501 candidates per source; blocks incomplete unions above 500 and pages only a frozen ranked universe.",
     description: docsSearchDescription,
     parameters: [
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
@@ -47,7 +47,7 @@ export const docsSearchTool: McpToolDeclaration = {
       { name: "include_snippets", description: "Whether to include bounded snippets when safe.", required: false },
       { name: "cursor", description: "Opaque cursor returned by a previous truncated docs search page.", required: false }
     ],
-    returns: "ResponseEnvelope<DocsSearchResult>"
+    returns: "ResponseEnvelope<RankedDocsSearchResult>"
   },
   register(server: McpServer, context) {
     registerMcpToolWithEnvelope({
@@ -58,7 +58,7 @@ export const docsSearchTool: McpToolDeclaration = {
       rawShape: docsSearchRawShape,
       schema: docsSearchRequestSchema,
       invalidInputMessage: "Invalid docs_search arguments.",
-      getProvider: (registryContext) => registryContext.searchDocs,
+      getProvider: (registryContext) => registryContext.searchRankedDocs,
       buildFailureEnvelope: (input) => classifiedFailureEnvelope(
         buildInvalidDocsSearchInputEnvelope({
           repoRoot: input.repoRoot,
@@ -73,7 +73,7 @@ export const docsSearchTool: McpToolDeclaration = {
           registryContext.docsSessionScope
         )
       }),
-      present: buildDocsSearchEnvelope
+      present: buildRankedDocsSearchEnvelope
     });
   }
 };

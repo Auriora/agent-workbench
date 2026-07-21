@@ -51,7 +51,8 @@ describe("ranked documentation universe store", () => {
         ]);
         expect(scoped.candidates[0]).toMatchObject({
           title_heading_text: expect.stringContaining("SessionStart"),
-          body_text: expect.stringContaining("SessionStart")
+          body_text: expect.stringContaining("SessionStart"),
+          hit: { snippet: expect.stringContaining("SessionStart") }
         });
         const legacy = await store.search({
           repo_root: REPO_ROOT,
@@ -479,7 +480,9 @@ function rankedUniverse(snapshotId: string, universeId: string): RankedDocsUnive
       ranked_candidate_universe_count: 2,
       priority_scan_eligible_markdown_files_count: 2,
       priority_scan_indexed_markdown_files_count: 2,
-      priority_scan_skipped_markdown_files_count: 0,
+    priority_scan_skipped_markdown_files_count: 0,
+    priority_scan_coverage_state: "complete",
+    priority_scan_truncated: false,
       searchable_filter_basis: "merged_graph_and_priority_markdown",
       scope_filter_basis: "repo_root",
       query_filter_basis: {

@@ -40,6 +40,9 @@ universe, stable ranking and pagination, and unambiguous count receipt.
 - Replace SQLite FTS, add embeddings, or add a second search implementation.
 - Continue from, or present results from, a candidate universe larger than the
   supported 500-candidate bound.
+- Choose a repository-wide cap or eviction policy for concurrently live ranked
+  universes; the current slice retains the 15-minute expiry and routes that
+  separate storage-policy decision to EB059.
 
 ## Durable Source Baseline
 
@@ -151,7 +154,10 @@ frozen ranked-universe repository do not yet exist.
    omissions.
 6. **AC3.6:** A missing/expired universe or changed snapshot, query, scope,
    bound, schema, or policy SHALL reject the cursor with structured stale or
-   invalid evidence rather than rebuild or restart it.
+   invalid evidence rather than rebuild or restart it. If no valid snapshot can
+   be selected for an otherwise valid request, the public result SHALL use a
+   snapshot-less `selected_snapshot_unavailable` blocker and SHALL NOT fabricate
+   snapshot identity.
 
 ### Requirement 4: Explicit Ranking Compatibility And Counts
 
@@ -187,11 +193,16 @@ frozen ranked-universe repository do not yet exist.
    universe and one keyed filter basis.
 6. **AC4.6:** Documents indexed outside priority roots SHALL increase the
    searchable snapshot/scope counts but SHALL NOT inflate priority-scan counts.
-7. **AC4.7:** Partial/skipped priority scans SHALL preserve explicit coverage
-   state independently of the complete ranked candidate universe.
+7. **AC4.7:** Partial/skipped priority scans SHALL preserve mandatory coverage
+   state and truncation receipts independently of the complete ranked candidate
+   universe.
 8. **AC4.8:** Existing ambiguous count fields and aggregate `score` SHALL remain
    additive deprecated aliases during this slice, with consumer contract tests,
-   deprecation notes, and no silent meaning change.
+   deprecation notes, and no silent meaning change. Success and overflow SHALL
+   emit the legacy page count/basis, searchable snapshot count, and priority-scan
+   coverage aliases. The existing `include_snippets` request SHALL remain
+   effective on first and continuation pages without changing frozen order or
+   re-querying candidates.
 
 ## Concrete Intent Examples
 

@@ -2094,6 +2094,37 @@ Do not promote an item when:
   install runbook; create a new spec only if cross-schema migration recovery is
   introduced.
 
+### EB059: Ranked Documentation Universe Population And Observability
+
+- Priority: P1
+- Status: proposed; discovered during Spec 043 Phase 4 independent operational
+  review and intentionally excluded from T006 pending a normative storage policy
+- Friction signal: Spec 043 bounds every frozen documentation universe to 500
+  hits and 15 minutes, but concurrent first-page searches can create an
+  unbounded number of still-live universe rows. Phase 4 telemetry records safe
+  aggregate candidate counts and terminal blockers, but not matched-concern
+  totals, freeze duration, first-page versus continuation reads, eviction, or
+  live-population pressure.
+- Runtime surface: ranked documentation universe persistence, cursor lifetime,
+  daemon-shared query state, and aggregate-only operational telemetry.
+- Acceptance:
+  - Choose and document the maximum live universes per repository or snapshot;
+    do not introduce an implicit or environment-dependent limit.
+  - Define deterministic eviction scope and order. The implementation review
+    recommends `expires_at ASC`, `created_at ASC`, then `universe_id ASC` after
+    the normative cap is chosen.
+  - Decide whether capacity eviction may invalidate an otherwise-live cursor and
+    map that outcome explicitly to structured stale evidence.
+  - Emit bounded metrics for live population, eviction, matched-concern count,
+    freeze duration, and first-page/continuation reads without recording raw
+    query text.
+  - Add concurrency, boundary, deterministic eviction, cursor-staleness, and
+    telemetry tests against the persisted store and daemon-shared runtime.
+- Promotion target: create a focused persistence/operations spec because the
+  cap and cursor-eviction semantics are product decisions; promote the result to
+  graph-store design, MCP surface design, runtime contracts, and operator
+  observability guidance.
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |
@@ -2156,6 +2187,7 @@ Do not promote an item when:
 | Impact start-node truthfulness | EB056, under EB038 error-envelope consistency and graph trust semantics. |
 | Diagnostics exclusion truthfulness | EB057, under EB005 diagnostics, EB038 error envelopes, and EB039 shared path policy. |
 | Same-schema runtime upgrade orphan recovery | EB058, under EB036 daemon ownership and EB052 refresh convergence. |
+| Ranked documentation universe population and observability | EB059, under EB054 authority-aware docs ranking, EB009 telemetry, and EB036 daemon ownership. |
 
 ## Immediate Next Specs
 
@@ -2165,5 +2197,8 @@ Do not promote an item when:
 - Resume active Spec 043: EB054 owns documentation authority ranking and count
   semantics. EB053/Spec 042 is closed with durable reference-completeness
   contracts and evidence.
+- After Spec 043, promote EB059 only after choosing the live-universe cap and
+  cursor-eviction semantics; do not fold an arbitrary capacity constant into
+  T006.
   EB014 remains the separate candidate for large-repository completion scale
   and progress.

@@ -3005,7 +3005,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     query: string;
     lexicalScore?: number;
   }): DocsRankingCandidate {
-    const hit = this.mapDocsSearchRow({ row: input.row, query: input.query, includeSnippets: false });
+    const hit = this.mapDocsSearchRow({ row: input.row, query: input.query, includeSnippets: true });
     return {
       stable_document_id: hit.path,
       hit: input.lexicalScore === undefined

@@ -353,6 +353,9 @@ const docsCountReceiptBaseShape = {
   priority_scan_eligible_markdown_files_count: z.number().int().nonnegative(),
   priority_scan_indexed_markdown_files_count: z.number().int().nonnegative(),
   priority_scan_skipped_markdown_files_count: z.number().int().nonnegative(),
+  priority_scan_coverage_state: evidenceCoverageStateSchema,
+  priority_scan_truncated: z.boolean(),
+  priority_scan_coverage_note: z.string().optional(),
   searchable_filter_basis: z.literal("merged_graph_and_priority_markdown"),
   scope_filter_basis: z.enum(["repo_root", "normalized_scope_path"]),
   query_filter_basis: docsQueryFilterBasisSchema,
@@ -445,10 +448,9 @@ export const docsRankingCursorPayloadSchema = z
   .strict();
 export type DocsRankingCursorPayload = z.infer<typeof docsRankingCursorPayloadSchema>;
 
-const rankedDocsSearchResultBaseShape = {
+const rankedDocsSearchCommonShape = {
   ranking_contract_version: z.literal(DOCS_RANKING_CONTRACT_VERSION),
   repo_root: z.string(),
-  snapshot_id: z.string().min(1),
   query: z.string().min(1),
   normalized_query: z.string().min(1),
   normalized_scope_path: z.string().min(1).optional(),
@@ -458,9 +460,24 @@ const rankedDocsSearchResultBaseShape = {
   next_actions: z.array(nextActionSchema)
 };
 
+const rankedDocsSearchSnapshotShape = {
+  ...rankedDocsSearchCommonShape,
+  snapshot_id: z.string().min(1)
+};
+
+const rankedDocsCompatibilityShape = {
+  result_count: z.number().int().nonnegative(),
+  result_count_basis: z.literal("page"),
+  indexed_docs_count: z.number().int().nonnegative(),
+  docs_index_state: evidenceCoverageStateSchema,
+  docs_scan_truncated: z.boolean(),
+  coverage_note: z.string().optional()
+};
+
 export const rankedDocsSearchSuccessResultSchema = z
   .object({
-    ...rankedDocsSearchResultBaseShape,
+    ...rankedDocsSearchSnapshotShape,
+    ...rankedDocsCompatibilityShape,
     status: z.enum(["done", "not_applicable"]),
     trust_state: z.literal("complete_ranked_universe"),
     universe_id: z.string().min(1),
@@ -474,6 +491,16 @@ export const rankedDocsSearchSuccessResultSchema = z
     if (value.counts.returned_page_documents_count !== value.hits.length) {
       context.addIssue({ code: "custom", message: "Returned page count must equal the number of ranked hits." });
     }
+    if (value.result_count !== value.hits.length) {
+      context.addIssue({ code: "custom", message: "Deprecated result_count must retain current-page meaning." });
+    }
+    if (value.indexed_docs_count !== value.counts.searchable_snapshot_documents_count) {
+      context.addIssue({ code: "custom", message: "Deprecated indexed_docs_count must retain searchable-snapshot meaning." });
+    }
+    if (value.counts.priority_scan_coverage_note !== undefined && value.coverage_note !== undefined &&
+        value.counts.priority_scan_coverage_note !== value.coverage_note) {
+      context.addIssue({ code: "custom", message: "Deprecated coverage_note must equal the canonical priority scan coverage note." });
+    }
     if ((value.cursor !== undefined) !== value.truncated) {
       context.addIssue({ code: "custom", message: "A complete ranked result is truncated exactly when a cursor is present." });
     }
@@ -485,7 +512,8 @@ export type RankedDocsSearchSuccessResult = z.infer<typeof rankedDocsSearchSucce
 
 export const rankedDocsSearchOverflowResultSchema = z
   .object({
-    ...rankedDocsSearchResultBaseShape,
+    ...rankedDocsSearchSnapshotShape,
+    ...rankedDocsCompatibilityShape,
     status: z.literal("blocked"),
     trust_state: z.literal("blocked_candidate_overflow"),
     blocker: z.literal("candidate_universe_exceeds_limit"),
@@ -493,12 +521,24 @@ export const rankedDocsSearchOverflowResultSchema = z
     counts: docsRankingOverflowCountReceiptSchema,
     truncated: z.literal(false)
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.result_count !== 0) {
+      context.addIssue({ code: "custom", message: "Blocked overflow result_count must be zero." });
+    }
+    if (value.indexed_docs_count !== value.counts.searchable_snapshot_documents_count) {
+      context.addIssue({ code: "custom", message: "Deprecated indexed_docs_count must retain searchable-snapshot meaning." });
+    }
+    if (value.counts.priority_scan_coverage_note !== undefined && value.coverage_note !== undefined &&
+        value.counts.priority_scan_coverage_note !== value.coverage_note) {
+      context.addIssue({ code: "custom", message: "Deprecated coverage_note must equal the canonical priority scan coverage note." });
+    }
+  });
 export type RankedDocsSearchOverflowResult = z.infer<typeof rankedDocsSearchOverflowResultSchema>;
 
 export const rankedDocsSearchUnavailableResultSchema = z
   .object({
-    ...rankedDocsSearchResultBaseShape,
+    ...rankedDocsSearchSnapshotShape,
     status: z.literal("blocked"),
     trust_state: z.enum(["blocked_cursor_stale", "blocked_cursor_invalid", "blocked_ranking_unavailable"]),
     blocker: z.enum(["ranked_universe_expired", "ranking_cursor_invalid", "ranking_unavailable"]),
@@ -518,10 +558,25 @@ export const rankedDocsSearchUnavailableResultSchema = z
   });
 export type RankedDocsSearchUnavailableResult = z.infer<typeof rankedDocsSearchUnavailableResultSchema>;
 
+export const rankedDocsSearchSelectionUnavailableResultSchema = z
+  .object({
+    ...rankedDocsSearchCommonShape,
+    status: z.literal("blocked"),
+    trust_state: z.literal("blocked_snapshot_unavailable"),
+    blocker: z.literal("selected_snapshot_unavailable"),
+    hits: z.array(rankedDocsSearchHitSchema).length(0),
+    truncated: z.literal(false)
+  })
+  .strict();
+export type RankedDocsSearchSelectionUnavailableResult = z.infer<
+  typeof rankedDocsSearchSelectionUnavailableResultSchema
+>;
+
 export const rankedDocsSearchResultSchema = z.union([
   rankedDocsSearchSuccessResultSchema,
   rankedDocsSearchOverflowResultSchema,
-  rankedDocsSearchUnavailableResultSchema
+  rankedDocsSearchUnavailableResultSchema,
+  rankedDocsSearchSelectionUnavailableResultSchema
 ]);
 export type RankedDocsSearchResult = z.infer<typeof rankedDocsSearchResultSchema>;
 

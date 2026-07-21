@@ -195,6 +195,10 @@ describe("documentation ranked-universe boundary fixture", () => {
         }
       });
       expect("cursor" in result).toBe(false);
+      expect(result.next_actions[0]).toMatchObject({
+        tool: "docs_search",
+        args: { scope_path: "docs" }
+      });
     });
   }
 
@@ -242,6 +246,28 @@ describe("documentation ranked-universe boundary fixture", () => {
     );
   });
 
+  it("applies include_snippets independently on first and continuation pages without requerying", async () => {
+    const includedFirstHarness = rankedUniverseProofHarness();
+    const includedFirst = await runPagedSearch(includedFirstHarness, "frozen query", undefined, 2, true);
+    if (includedFirst.status === "blocked") throw new Error("Expected complete first page.");
+    expect(includedFirst.hits.every((hit) => hit.snippet !== undefined)).toBe(true);
+    const excludedContinuation = await runPagedSearch(
+      includedFirstHarness, "frozen query", includedFirst.cursor, 2, false
+    );
+    expect(excludedContinuation.hits.every((hit) => hit.snippet === undefined)).toBe(true);
+    expect(includedFirstHarness.candidate_calls).toHaveLength(2);
+
+    const excludedFirstHarness = rankedUniverseProofHarness();
+    const excludedFirst = await runPagedSearch(excludedFirstHarness, "frozen query", undefined, 2, false);
+    if (excludedFirst.status === "blocked") throw new Error("Expected complete first page.");
+    expect(excludedFirst.hits.every((hit) => hit.snippet === undefined)).toBe(true);
+    const includedContinuation = await runPagedSearch(
+      excludedFirstHarness, "frozen query", excludedFirst.cursor, 2, true
+    );
+    expect(includedContinuation.hits.every((hit) => hit.snippet !== undefined)).toBe(true);
+    expect(excludedFirstHarness.candidate_calls).toHaveLength(2);
+  });
+
   it("rejects a cursor when normalized query identity changes", async () => {
     const harness = rankedUniverseProofHarness();
     const first = await runPagedSearch(harness, "frozen query");
@@ -274,6 +300,7 @@ describe("documentation ranked-universe boundary fixture", () => {
       });
       const result = await runPagedSearch(harness, "frozen query", cursor);
       expect(result).toMatchObject({ status: "blocked", blocker: "ranking_cursor_invalid", hits: [] });
+      expect(result.next_actions[0]).toMatchObject({ tool: "docs_search", args: { query: "frozen query" } });
       expect(harness.universe_calls).toEqual([]);
       expect(harness.candidate_calls).toEqual([]);
       expect(harness.concern_calls).toEqual([]);
@@ -295,7 +322,24 @@ describe("documentation ranked-universe boundary fixture", () => {
       status: "blocked",
       hits: []
     });
+    expect(expired.next_actions[0]).toMatchObject({ tool: "docs_search", args: { query: "frozen query" } });
     expect("cursor" in expired).toBe(false);
+  });
+
+  it("routes unavailable ranking evidence through repository status", async () => {
+    const harness = rankedUniverseProofHarness();
+    harness.documentation_concerns = {
+      ...noConcernIndex(),
+      async getDocumentationConcernIndexState({ snapshot_id }) {
+        return { status: "ready", snapshot_id, state: "invalid", failure_reason: "map invalid" };
+      }
+    };
+    const result = await runPagedSearch(harness, "frozen query");
+    expect(result).toMatchObject({
+      status: "blocked",
+      trust_state: "blocked_ranking_unavailable",
+      next_actions: [{ tool: "read_resource", args: { uri: "repo:///status" } }]
+    });
   });
 
   it("resolves a late term across more than 501 terms and loads only its owners from a larger global relation set", async () => {
@@ -687,14 +731,15 @@ async function runPagedSearch(
   harness: RankedUniverseHarness,
   query: string,
   cursor?: string,
-  pageSize = 2
+  pageSize = 2,
+  includeSnippets = false
 ) {
   return searchDocsWithRankingDependencies({
     request: {
       repo_root: "/fixture-docs-authority-ranking",
       query,
       max_results: pageSize,
-      include_snippets: false,
+      include_snippets: includeSnippets,
       cursor
     },
     docs_index: harness.docs_index,
@@ -757,6 +802,7 @@ function docsHit(hitPath: string): DocsSearchHit {
   return {
     path: hitPath,
     title: path.basename(hitPath, ".md"),
+    snippet: `Bounded snippet for ${hitPath}.`,
     score: 1,
     evidence_kinds: ["docs", "fts"],
     direct_read_caveat: "Fixture routing evidence.",

@@ -16,6 +16,7 @@ import type {
   DocsOverviewRequest,
   DocsReadSectionRequest,
   DocsSearchRequest,
+  RankedDocsSearchResult,
   ResponseMetadata
 } from "../../src/contracts/index.js";
 import type {
@@ -167,14 +168,36 @@ describe("docs MCP tools", () => {
       });
 
     try {
-      const server = createAgentWorkbenchServer(repoRoot, { startupRefreshDelayMs: 60_000 });
+      const telemetryRecords: Array<{ name: string; properties?: Record<string, unknown> }> = [];
+      const server = createAgentWorkbenchServer(repoRoot, {
+        startupRefreshDelayMs: 60_000,
+        telemetry: {
+          record(name, properties) { telemetryRecords.push({ name, properties }); },
+          recordError() {},
+          flush() {},
+          shutdown() {}
+        }
+      });
       const result = parseMcpTextContent<{
-        data: DocsSearchUseCaseResult["search"];
-        meta: DocsSearchUseCaseResult["meta"];
+        data: RankedDocsSearchResult;
+        meta: ResponseMetadata;
       }>(await getRegisteredTool(server, "docs_search").handler({ query: "warm" }));
 
-      expect(result.data).toMatchObject({ status: "blocked", hits: [], result_count: 0 });
+      expect(result.data).toMatchObject({
+        status: "blocked",
+        trust_state: "blocked_snapshot_unavailable",
+        blocker: "selected_snapshot_unavailable",
+        hits: [],
+        next_actions: [{ tool: "read_resource", args: { uri: "repo:///status" } }]
+      });
+      expect(result.data).not.toHaveProperty("snapshot_id");
       expect(result.meta).toMatchObject({ freshness: "unknown", verification_status: "blocked" });
+      const rankedTelemetry = telemetryRecords.filter(({ name }) => name === "docs.ranking.result");
+      expect(rankedTelemetry).toEqual([{
+        name: "docs.ranking.result",
+        properties: expect.objectContaining({ outcome: "blocked_snapshot_unavailable", status: "blocked" })
+      }]);
+      expect(rankedTelemetry[0]?.properties).not.toHaveProperty("query");
     } finally {
       snapshotSpy.mockRestore();
       fs.rmSync(repoRoot, { recursive: true, force: true });
@@ -218,12 +241,19 @@ describe("docs MCP tools", () => {
     try {
       const server = createAgentWorkbenchServer(repoRoot, { startupRefreshDelayMs: 60_000 });
       const result = parseMcpTextContent<{
-        data: DocsSearchUseCaseResult["search"];
+        data: RankedDocsSearchResult;
       }>(await getRegisteredTool(server, "docs_search").handler({ query: "selection" }));
 
       expect(result.data.hits).toEqual([
         expect.objectContaining({ path: "docs/guide.md", title: "Alpha Guide" })
       ]);
+      expect(result.data).toMatchObject({
+        trust_state: "complete_ranked_universe",
+        snapshot_id: "1000",
+        result_count: 1,
+        result_count_basis: "page",
+        indexed_docs_count: 1
+      });
     } finally {
       validateSpy.mockRestore();
       fs.rmSync(repoRoot, { recursive: true, force: true });
@@ -233,7 +263,7 @@ describe("docs MCP tools", () => {
   it("uses the injected docs_search provider with default repo root", async () => {
     let parsedRequest: DocsSearchRequest | undefined;
     const registered = registerTool(docsSearchTool, {
-      searchDocs: ({ request }) => {
+      searchRankedDocs: ({ request }) => {
         parsedRequest = request;
         return searchResult(request.repo_root ?? "/missing", request.query);
       }
@@ -303,7 +333,7 @@ describe("docs MCP tools", () => {
     const scope = registerTool(docsScopeTool, { docsSessionScope });
     const search = registerTool(docsSearchTool, {
       docsSessionScope,
-      searchDocs: ({ request }) => {
+      searchRankedDocs: ({ request }) => {
         searchRequest = request;
         return searchResult(request.repo_root ?? "/missing", request.query);
       }
@@ -411,7 +441,7 @@ describe("docs MCP tools", () => {
   it("returns structured invalid input before docs tool providers run", async () => {
     let providerCalled = false;
     const registered = registerTool(docsSearchTool, {
-      searchDocs: () => {
+      searchRankedDocs: () => {
         providerCalled = true;
         throw new Error("provider should not run");
       }
@@ -641,29 +671,79 @@ function mapResult(repoRoot: string): DocsMapUseCaseResult {
   };
 }
 
-function searchResult(repoRoot: string, query: string): DocsSearchUseCaseResult {
+function searchResult(repoRoot: string, query: string): RankedDocsSearchResult {
   return {
-    search: {
-      repo_root: repoRoot,
-      query,
-      status: "done",
-      hits: [
-        {
+    ranking_contract_version: 1,
+    repo_root: repoRoot,
+    snapshot_id: "snapshot-test",
+    query,
+    normalized_query: query,
+    ranking_schema_version: 1,
+    ranking_policy_version: "authority-aware-v1",
+    status: "done",
+    trust_state: "complete_ranked_universe",
+    universe_id: "universe-test",
+    hits: [{
           path: "docs/guide.md",
           title: "Guide",
           heading_id: "setup",
           heading: "Setup",
           snippet: "Setup instructions.",
           score: 10,
+          lexical_score: 1,
           evidence_kinds: ["docs"],
-          direct_read_caveat: "Docs search is routing evidence; use docs_read_section for precise claims."
-        }
-      ],
-      warnings: [],
-      truncated: false,
-      next_actions: []
+          direct_read_caveat: "Docs search is routing evidence; use docs_read_section for precise claims.",
+          authority: "canonical",
+          currency_state: "current",
+          currency_caveats: [],
+          candidate_source: "fts",
+          concern_match_state: "no_match",
+          matched_concerns: [],
+          governing_owner_tier: "non_owner",
+          final_rank_components: {
+            relevance_band: "all_query_tokens_title_or_heading",
+            governing_owner_tier: "non_owner",
+            authority_tier: "canonical",
+            currency_tier: "current",
+            lexical_score: 1,
+            normalized_path: "docs/guide.md",
+            stable_document_id: "docs/guide.md"
+          },
+          ranking_policy_version: "authority-aware-v1",
+          ranking_reasons: ["Fixture ranked result."]
+    }],
+    counts: {
+      searchable_snapshot_documents_count: 1,
+      searchable_scope_documents_count: 1,
+      fts_candidate_documents_count: 1,
+      matched_owner_candidate_documents_count: 0,
+      candidate_union_documents_count: 1,
+      ranked_candidate_universe_count: 1,
+      returned_page_documents_count: 1,
+      priority_scan_eligible_markdown_files_count: 1,
+      priority_scan_indexed_markdown_files_count: 1,
+      priority_scan_skipped_markdown_files_count: 0,
+      priority_scan_coverage_state: "complete",
+      priority_scan_truncated: false,
+      searchable_filter_basis: "merged_graph_and_priority_markdown",
+      scope_filter_basis: "repo_root",
+      query_filter_basis: {
+        fts_candidate_documents_count: "normalized_fts_match_within_scope",
+        matched_owner_candidate_documents_count: "exact_matched_concern_owners_within_scope",
+        candidate_union_documents_count: "distinct_fts_and_exact_owner_union_within_scope",
+        ranked_candidate_universe_count: "distinct_fts_and_exact_owner_union_within_scope"
+      },
+      page_filter_basis: "frozen_universe_position_and_requested_page_size",
+      priority_scan_filter_basis: "configured_priority_roots"
     },
-    meta: meta(repoRoot)
+    result_count: 1,
+    result_count_basis: "page",
+    indexed_docs_count: 1,
+    docs_index_state: "complete",
+    docs_scan_truncated: false,
+    warnings: [],
+    truncated: false,
+    next_actions: []
   };
 }
 
@@ -863,6 +943,13 @@ async function seedDocsSnapshot(
       indexed_at: indexedAt,
       truncated: false
     }]
+  });
+  await store.replaceSnapshotDocumentationConcerns({
+    snapshot_id: snapshotId,
+    state: "no_map",
+    concerns: [],
+    terms: [],
+    owners: []
   });
   await store.markSnapshotFreshness({ snapshot_id: snapshotId, freshness: "fresh" });
   await store.transitionBuild({

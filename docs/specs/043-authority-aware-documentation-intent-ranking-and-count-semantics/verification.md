@@ -44,15 +44,15 @@ promotion, release, and closure evidence remains pending.
 
 | ID | Command or tool | Purpose | Result |
 | --- | --- | --- | --- |
-| V001 | `pnpm exec vitest run tests/contracts/docs-ranking-contracts.test.ts` | concern/rank/cursor/count/trust contracts, legacy aggregate score, and lexical-score consumers | passed: 11 contract tests |
+| V001 | `pnpm exec vitest run tests/contracts/docs-ranking-contracts.test.ts` | concern/rank/cursor/count/trust contracts, legacy aggregate score, and lexical-score consumers | passed: 12 contract tests |
 | V002 | `pnpm exec vitest run tests/docs/documentation-concern-routing.test.ts` | normalization, exact phrase/token, SessionStart, multi/no-match/tie behavior, and matched-owner admission | passed: 14 tests |
 | V003 | `pnpm exec vitest run tests/docs/docs-ranking-policy.test.ts` | relevance bands including `intent_owner_match`, exhaustive owner tiers/caveats, tuple/reasons, and both score semantics | passed: 12 tests |
-| V004 | `pnpm exec vitest run tests/presentation/docs-ranking-presenter.test.ts tests/mcp/docs-ranking-tool.test.ts` | public order, candidate/page counts and filter bases, aliases, blockers, trust | pending |
-| V005 | `pnpm exec vitest run tests/docs/docs-ranking-pagination.test.ts tests/graph/docs-ranked-universe-store.test.ts` | seeded property tests and persisted-universe proofs for FTS/owner union, total order, cursor binding, page equivalence, duplicates, and 0/499/500/501 | passed: 31 tests |
+| V004 | `pnpm exec vitest run tests/presentation/docs-ranking-presenter.test.ts tests/mcp/docs-ranking-tool.test.ts tests/mcp/docs-surfaces.test.ts` | public order, candidate/page counts and filter bases, aliases, blockers, trust, redaction, and production server wiring | passed: 40 tests |
+| V005 | `pnpm exec vitest run tests/docs/docs-ranking-pagination.test.ts tests/graph/docs-ranked-universe-store.test.ts` | seeded property tests and persisted-universe proofs for FTS/owner union, total order, cursor binding, page equivalence, duplicates, snippets, and 0/499/500/501 | passed: 33 tests |
 | V006 | `pnpm exec vitest run tests/graph/documentation-map-indexing.test.ts tests/graph/documentation-owner-publication.test.ts tests/graph/store.test.ts` | v2-to-v3 schema/store migration, current-snapshot rebuild, incompatible-old-snapshot handling, one-to-many extraction, and atomic publication | passed: 50 tests |
 | V007 | `pnpm exec vitest run tests/architecture/layer-boundaries.test.ts` | SQLite/application/domain/presentation/adapter boundaries | passed: 6 tests |
 | V008 | `pnpm exec vitest run tests/docs/docs-ranking-pagination.test.ts --testNamePattern='candidate budget'` | deterministic 499/500/501 distinct-union budget gate, including independently bounded FTS and owner-query sentinels plus owner-only union overflow | passed: 6 selected tests; 16 skipped by the required pattern |
-| V009 | `pnpm typecheck && pnpm test` | TypeScript and full regression suite | passed at Phase 3 checkpoint: typecheck; 95 files, 966 tests |
+| V009 | `pnpm typecheck && pnpm test` | TypeScript and full regression suite | passed at Phase 4 checkpoint: typecheck; 97 files, 994 tests |
 | V010 | `pnpm run validate:plugin && pnpm run validate:skills && pnpm run pack:dry-run` | integration/package contents | pending |
 | V011 | `node scripts/ci/installed-package-mcp-smoke.mjs` | exact packed/installed artifact and dual-provider candidate-union/ranking/count smoke | pending |
 | V012 | MCP `lint_spec_package(repo_root=".", spec_path="docs/specs/043-authority-aware-documentation-intent-ranking-and-count-semantics")` | dedicated lifecycle structure/traceability lint | pending |
@@ -114,10 +114,10 @@ claim that real Codex or Claude CLIs loaded the plugin.
 
 | Requirement | Acceptance criteria | Planned evidence | Current residual |
 | --- | --- | --- | --- |
-| Requirement 1 | AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7, AC1.8, AC1.9 | V001-V005, V007-V016 | snapshot extraction, exact resolution, ranking, and complete candidate admission delivered; public presentation remains T006 |
-| Requirement 2 | AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6 | V001-V004, V006-V016 | snapshot ownership and pure owner-tier/caveat behavior delivered; public caveat presentation remains T006 |
-| Requirement 3 | AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6 | V001, V004-V005, V008-V016 | bounded complete frozen universe and cursor identity behavior delivered; public tool mapping remains T006 |
-| Requirement 4 | AC4.1, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8 | V001, V003-V005, V007-V016 | internal score, tuple, count, and filter behavior delivered; public presentation remains T006 |
+| Requirement 1 | AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7, AC1.8, AC1.9 | V001-V005, V007-V016 | snapshot extraction, exact resolution, ranking, complete candidate admission, and public ordered presentation delivered; final validation/installation/promotion remain T007-T009 |
+| Requirement 2 | AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6 | V001-V004, V006-V016 | snapshot ownership and public exhaustive owner-tier/caveat presentation delivered; final lifecycle gates remain |
+| Requirement 3 | AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6 | V001, V004-V005, V008-V016 | bounded complete frozen universe, authenticated continuation, snippet projection, and structured snapshot/cursor unavailability delivered |
+| Requirement 4 | AC4.1, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8 | V001, V003-V005, V007-V016 | score, tuple, mandatory count/filter/coverage receipts, compatibility aliases, redaction, and public trust presentation delivered |
 
 ## Review Disposition
 
@@ -164,6 +164,17 @@ or closure evidence.
 | F3 | returned-page count lacked a named filter basis | `page_filter_basis: frozen_universe_position_and_requested_page_size` is mandatory | AC4.5; Count And Filter Receipt; T001/T006; V001/V004 |
 | F4 | owner states did not map exhaustively to tiers/caveats | every state has an explicit persisted classification in T003 and an explicit tier/caveat rule owned by T004/T006 | AC2.6; Concern Ownership Index; T004/T006; V002-V004 |
 
+### Phase 4 Independent Review
+
+| ID | Finding | Resolution in this revision | Delivery proof |
+| --- | --- | --- | --- |
+| P4-1 | public ranked route still used legacy ordering/provider and lacked production cursor wiring | one `searchRankedDocs` provider, order-preserving presenter, authenticated daemon-shared ranked cursor, and one-GraphStore production path | V004, V007; architecture re-review ready |
+| P4-2 | snippets and snapshot-unavailable failures broke public compatibility/trust | bounded snippets stay frozen and project per page; valid requests without a selected snapshot return a typed snapshot-less blocker | AC3.6, AC4.8; V001, V004-V005 |
+| P4-3 | compatibility and coverage receipts were optional or ambiguously redacted | success/overflow require aliases and coverage; canonical/alias note equality and one sanitized presentation value are enforced | V001, V004 |
+| P4-4 | owner states, draft labels, one-to-many evidence, and bounded caveats lacked public proof | exhaustive state matrix, draft status/caveat, multi-owner/multi-concern, and ten archived-owner compression tests pass | V004; QA re-review ready |
+| P4-5 | ranked path, coverage, query identity, and recovery actions had field-specific redaction/trust gaps | defensive path redaction, recursive safe action arguments, stale freshness, callable recovery, validated debug path, and query-free aggregate telemetry | V004; operations re-review ready |
+| P4-6 | repository-wide live-universe capacity and detailed observability had no normative policy | explicitly excluded from T006 and routed to EB059 with cap, eviction, cursor-staleness, concurrency, and metrics acceptance | requirements non-goal; design operational boundary; EB059 |
+
 ## Task Evidence
 
 | Task | Status | Evidence | Notes |
@@ -173,7 +184,7 @@ or closure evidence.
 | T003 | complete | V002: 11 tests; V006: 50 tests; V007: 6 tests; production-path integration: 51 tests; V009 checkpoint: typecheck and 94-file full suite | v3 migration-before-publication, bounded exact extraction, snapshot-scoped concern/term/owner state, startup/debug wiring, and independent review findings resolved |
 | T004 | complete | V002: 14 tests; V003: 12 tests; V007: 6 tests; typecheck; 95-file/966-test full suite; independent review | pure exact resolver and authority-aware ranker, exhaustive tuple/source/owner semantics, legacy-score compatibility, and ordinal Unicode-safe identity ordering |
 | T005 | complete | V001: 11 tests; V005: 31 tests; V006: 50 tests; V007: 6 tests; V008: 6 selected tests; typecheck; 95-file/966-test full suite; independent review | complete concern evidence, bounded FTS/owner union, immutable SQLite universes, frozen continuation, literal scope, canonical expiry, and cardinality/identity rejection |
-| T006 | pending | none | presentation/trust not implemented |
+| T006 | complete | V001: 12; V004: 40; V005: 33; V006: 50; V007: 6; typecheck; full suite 994; three-role independent review ready | single ranked public route, daemon-shared authenticated cursor, frozen snippet projection, mandatory receipts/aliases, structured failures/recovery, complete redaction/trust, aggregate telemetry, and production/debug wiring |
 | T007 | pending | none | final cross-phase implementation validation pending |
 | T008 | pending | none | installed artifact not exercised for Spec 043 |
 | T009 | pending | none | promotion/expert gates not run against implementation |
@@ -192,7 +203,8 @@ or closure evidence.
 | 2026-07-21 | Phase 1 implementation | T001-T002 delivered additive runtime contracts and ports plus a 13-document fixture, ranking/count oracles, and executable red proofs; focused suite passed 43 ordinary tests plus 9 expected failures | independent review found and verified corrections for the complete source/band matrix, non-empty reasons, exact-or-overflow port invariants, scenario-specific 501 source identities, frozen-page equivalence, cursor identity, and expiry |
 | 2026-07-21 | Phase 2 snapshot ownership | T003 delivered graph identity/schema v3; atomic v2 clone, migration, validation, and publication; bounded exact map/owner extraction; explicit complete/no-map/invalid snapshot state; one-to-many rows; startup/debug wiring; V002 11 tests, V006 50 tests, V007 6 tests, production integration 51 tests, typecheck, full suite 933 passed plus 8 expected failures | independent review blockers and additional findings resolved: no premature v3 publication, no masked safety denial, invalid provenance retained, non-complete rows refused, byte bounds rechecked, CommonMark angle destinations accepted, row limits bounded, and T003 traceability narrowed truthfully |
 | 2026-07-21 | Phase 3 ranking and frozen pagination | T004-T005 delivered pure exact concern resolution, complete authority-aware tuple ranking, separately bounded 501-row candidate sources, stable-ID union, immutable SQLite universes, and stored-state-only continuation; V001 11 tests, V002 14, V003 12, V005 31, V006 50, V007 6, V008 6 selected, typecheck, and full suite 95 files/966 tests | independent review found and verified repairs for legacy-score sign, universe cardinality, canonical expiry, complete concern relations, literal SQL scope, ordinal Unicode ordering, cursor identity breadth, executable 0/499/500/501 gates, and production comparator coverage |
-| pending | remaining production implementation | T006-T008 and V004/V010-V011 gates | public presentation, production cursor/server wiring, final validation, and installed-artifact evidence remain pending |
+| 2026-07-21 | Phase 4 presentation and trust | T006 delivered the single ranked MCP route, immutable ordered presentation, daemon-shared authenticated cursor, snapshot-less selection blocker, mandatory canonical/compatibility receipts, frozen snippet projection, exhaustive owner/caveat proof, consistent redaction, recovery actions, validated debug behavior, and aggregate query-free telemetry; V001 12, V004 40, V005 33, V006 50, V007 6, typecheck, full suite 994 | architecture, QA, and security/operations re-reviews all returned ready; repository-wide universe population/eviction and remaining detailed metrics routed to EB059 |
+| pending | remaining production validation and installation | T007-T008 and V010-V011 gates | package/plugin validation and installed-artifact evidence remain pending |
 | pending | promotion/closure | V012-V019 | no durable promotion or closure evidence yet |
 
 ## Durable Promotion And Cleanup
@@ -209,16 +221,17 @@ or closure evidence.
 
 - Explicit intent terms require governed documentation-map maintenance; missing
   terms truthfully yield no owner boost rather than inferred recovery.
-- Persisted ranked universes have bounded snapshot storage, canonical expiry,
-  immutable cardinality, and cleanup proof; production concurrency remains a
-  later validation concern.
+- Each persisted ranked universe has at most 500 hits, immutable cardinality,
+  canonical 15-minute expiry, and cleanup proof. EB059 owns the separate
+  repository-wide live-population cap, deterministic eviction, cursor-staleness
+  semantics, concurrency proof, and remaining detailed metrics.
 - Blocking queries above 500 candidates favors correctness but requires clear
   narrowing guidance and production evidence that the bound is practical.
 - Additive compatibility fields increase payload size until legacy aliases can
   be removed through a separately governed deprecation.
-- Snapshot ownership, pure ranking, and frozen-pagination behavior are proved
-  through T005; presentation, installed-artifact, promotion, and closure
-  behavior remains unproved until T006-T010 and the remaining gates complete.
+- Snapshot ownership, ranking, frozen pagination, presentation, and public trust
+  behavior are proved through T006; installed-artifact, promotion, and closure
+  behavior remains unproved until T007-T010 and the remaining gates complete.
 
 ## Readiness Decision
 
@@ -227,8 +240,8 @@ or closure evidence.
   promoted-document gates.
 - **Ready to implement:** yes; the post-revision authoring review found no
   remaining blocking requirement, design, or traceability gap.
-- **Ready to validate implementation:** partially; T001-T005 are complete and
-  T006 public presentation and production wiring remains pending.
+- **Ready to validate implementation:** yes; T001-T006 are complete and Phase 5
+  validation/installation begins at T007.
 - **Ready for promotion/release/closure/archive:** no.
 - **Risk:** medium-high; schema, ranking, cursor, and public contract change.
 - **Rollback boundary:** do not publish mixed schema/policy or partial overflow

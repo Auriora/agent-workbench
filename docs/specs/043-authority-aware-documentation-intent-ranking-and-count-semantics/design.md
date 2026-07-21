@@ -284,6 +284,11 @@ rerank. Missing/expired records return structured stale evidence. A changed
 identity returns invalid input. A large page and concatenated small pages slice
 the same stored list and must therefore be identical.
 
+The frozen hit record retains the existing bounded snippet. `include_snippets`
+is a page-projection choice applied after slicing the frozen universe, so a
+caller may include or omit snippets on first and continuation pages without
+changing candidate admission, order, cursor identity, or stored evidence.
+
 ## Count And Filter Receipt
 
 | Field | Universe | Filter basis |
@@ -312,6 +317,10 @@ zero hits, no cursor, and no ranked-universe count; either source sentinel also
 requires the union lower bound.
 Priority coverage state remains independent. Existing ambiguous fields remain
 temporary additive aliases and their documented legacy meanings do not change.
+Coverage state and truncation are mandatory on complete and overflow count
+receipts. Success and overflow also require the deprecated page count/basis,
+searchable snapshot count, and priority-scan coverage aliases; an unavailable
+result with no count universe does not fabricate them.
 
 ## Component Flow
 
@@ -417,6 +426,9 @@ mixed snapshot.
 - Invalid owner evidence remains visible as governance inconsistency.
 - Distinct FTS-plus-owner candidate overflow blocks with no hits/cursor.
 - Missing/expired frozen universe rejects continuation without rebuilding.
+- Failure to select a valid snapshot for a valid request returns a snapshot-less
+  `selected_snapshot_unavailable` ranked variant with bounded status guidance;
+  it never fabricates a snapshot ID or falls back to legacy search.
 - Snapshot/path validity remains governed by existing freshness checks.
 - Ranking and count receipts flow through trust metadata; a response never
   claims complete rank when no complete universe was frozen.
@@ -425,10 +437,13 @@ mixed snapshot.
 
 ## Operational Considerations
 
-- Index extraction and ranked-universe persistence are bounded and observable.
-- Metrics record FTS, owner, and distinct-union candidate counts, overflow,
-  concern matches, freeze duration, page reads, expiry, and invalid cursors
-  without storing raw sensitive query text in logs.
+- Index extraction and each ranked universe are bounded to 500 hits with a
+  15-minute expiry. A repository-wide live-universe cap and eviction semantics
+  are a separate storage-policy decision routed to EB059.
+- This slice records aggregate FTS, owner, and distinct-union counts, result
+  outcome, overflow, expiry, and invalid-cursor state without raw query text.
+  EB059 owns the remaining matched-concern, freeze-duration, page-read, eviction,
+  and live-population observability contract.
 - Ranking-policy changes invalidate old cursors intentionally.
 - Query-budget tests cover 0, 499, 500, and 501 candidates.
 

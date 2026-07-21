@@ -29,6 +29,7 @@ export type { SnapshotRefreshControllerOptions } from "./refresh-controller.js";
 export {
   createReferenceCursorCodec
 } from "./authenticated-reference-cursor.js";
+export { createDocsRankingCursorCodec } from "./authenticated-docs-ranking-cursor.js";
 
 type CacheEntry = {
   namespace: string;

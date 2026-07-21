@@ -81,6 +81,13 @@ between intended ranking behavior and the currently shipped docs search.
 - Preserve legacy aggregate `score`, add `lexical_score` for the final tuple,
   expose final components, bind cursors to frozen ranking identity, and name
   candidate, page, and priority-scan count/filter bases explicitly.
+- Preserve bounded snippets inside the frozen universe and apply
+  `include_snippets` only to each returned page without re-querying or reranking.
+- Require success/overflow compatibility and coverage receipts; represent a
+  valid request with no selectable snapshot through a snapshot-less structured
+  blocker rather than fabricated identity or legacy fallback.
+- Treat the current 500-hit/15-minute per-universe bound separately from the
+  repository-wide live-population and eviction policy routed to EB059.
 
 ## Promotion Map
 

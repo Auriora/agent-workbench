@@ -175,6 +175,46 @@ describe("authority-aware docs ranking contracts", () => {
       ranked: 501,
       page: 10
     })).success).toBe(false);
+    for (const required of ["priority_scan_coverage_state", "priority_scan_truncated"] as const) {
+      const { [required]: _omitted, ...incomplete } = successCounts({
+        fts: 1, owners: 0, union: 1, ranked: 1, page: 1
+      });
+      expect(docsRankingCountReceiptSchema.safeParse(incomplete).success).toBe(false);
+    }
+  });
+
+  it("requires every success compatibility alias and accepts snapshot-less selection unavailability", () => {
+    const governing = ftsHit({ path: "docs/design/governing.md", score: 1, lexicalScore: 1 });
+    const complete = {
+      ...resultBase(), status: "done" as const, trust_state: "complete_ranked_universe" as const,
+      universe_id: "docs-universe-1", hits: [governing],
+      counts: successCounts({ fts: 1, owners: 0, union: 1, ranked: 1, page: 1 }),
+      ...compatibilityAliases(1), truncated: false
+    };
+    for (const required of [
+      "result_count", "result_count_basis", "indexed_docs_count", "docs_index_state", "docs_scan_truncated"
+    ] as const) {
+      const { [required]: _omitted, ...incomplete } = complete;
+      expect(rankedDocsSearchResultSchema.safeParse(incomplete).success).toBe(false);
+    }
+    expect(rankedDocsSearchResultSchema.safeParse({
+      ...complete,
+      counts: { ...complete.counts, priority_scan_coverage_note: "canonical note" },
+      coverage_note: "different alias note"
+    }).success).toBe(false);
+    const { snapshot_id: _snapshot, ...common } = resultBase();
+    expect(rankedDocsSearchResultSchema.parse({
+      ...common,
+      status: "blocked",
+      trust_state: "blocked_snapshot_unavailable",
+      blocker: "selected_snapshot_unavailable",
+      hits: [],
+      warnings: [{ reason: "missing", message: "No valid selected snapshot." }],
+      next_actions: [{
+        tool: "read_resource", args: { uri: "repo:///status" }, reason: "Inspect status."
+      }],
+      truncated: false
+    })).not.toHaveProperty("snapshot_id");
   });
 
   it("locks exact-versus-501 overflow exclusivity for both sources and the union", () => {
@@ -183,6 +223,10 @@ describe("authority-aware docs ranking contracts", () => {
       matched_owner_candidate_documents_count: 4
     });
     expect(docsRankingOverflowCountReceiptSchema.parse(ftsOverflow)).toEqual(ftsOverflow);
+    for (const required of ["priority_scan_coverage_state", "priority_scan_truncated"] as const) {
+      const { [required]: _omitted, ...incomplete } = ftsOverflow;
+      expect(docsRankingOverflowCountReceiptSchema.safeParse(incomplete).success).toBe(false);
+    }
 
     const ownerOverflow = overflowCounts({
       fts_candidate_documents_count: 4,
@@ -204,17 +248,30 @@ describe("authority-aware docs ranking contracts", () => {
       candidate_union_documents_count: 500
     }).success).toBe(false);
 
-    const blocked = rankedDocsSearchResultSchema.parse({
+    const blockedInput = {
       ...resultBase(),
-      status: "blocked",
-      trust_state: "blocked_candidate_overflow",
-      blocker: "candidate_universe_exceeds_limit",
+      status: "blocked" as const,
+      trust_state: "blocked_candidate_overflow" as const,
+      blocker: "candidate_universe_exceeds_limit" as const,
       hits: [],
       counts: ownerOverflow,
+      ...compatibilityAliases(0),
       truncated: false
-    });
+    };
+    const blocked = rankedDocsSearchResultSchema.parse(blockedInput);
     expect(blocked).not.toHaveProperty("cursor");
     expect(blocked).not.toHaveProperty("universe_id");
+    for (const required of [
+      "result_count", "result_count_basis", "indexed_docs_count", "docs_index_state", "docs_scan_truncated"
+    ] as const) {
+      const { [required]: _omitted, ...incomplete } = blockedInput;
+      expect(rankedDocsSearchResultSchema.safeParse(incomplete).success).toBe(false);
+    }
+    expect(rankedDocsSearchResultSchema.safeParse({
+      ...blockedInput,
+      counts: { ...blockedInput.counts, priority_scan_coverage_note: "canonical note" },
+      coverage_note: "different alias note"
+    }).success).toBe(false);
   });
 
   it("binds cursor identity to the frozen universe and all ranking inputs", () => {
@@ -255,6 +312,7 @@ describe("authority-aware docs ranking contracts", () => {
       universe_id: "docs-universe-1",
       hits: [governing, lexical],
       counts: successCounts({ fts: 2, owners: 0, union: 2, ranked: 2, page: 2 }),
+      ...compatibilityAliases(2),
       truncated: false
     });
 
@@ -442,6 +500,8 @@ function countBase() {
     priority_scan_eligible_markdown_files_count: 40,
     priority_scan_indexed_markdown_files_count: 39,
     priority_scan_skipped_markdown_files_count: 1,
+    priority_scan_coverage_state: "partial",
+    priority_scan_truncated: false,
     searchable_filter_basis: "merged_graph_and_priority_markdown",
     scope_filter_basis: "repo_root",
     query_filter_basis: queryFilterBasis(),
@@ -482,6 +542,16 @@ function resultBase() {
     warnings: [],
     next_actions: []
   } as const;
+}
+
+function compatibilityAliases(page: number) {
+  return {
+    result_count: page,
+    result_count_basis: "page" as const,
+    indexed_docs_count: 600,
+    docs_index_state: "partial" as const,
+    docs_scan_truncated: false
+  };
 }
 
 describe("concern match spans", () => {

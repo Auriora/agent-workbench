@@ -22,6 +22,8 @@ import type {
   DocsRankingCountReceipt,
   IndexCoverage,
   RankedDocsSearchResult,
+  RankedDocsSearchHit,
+  RankedDocsSearchSelectionUnavailableResult,
   ResponseMetadata,
   SourceSection
 } from "../../contracts/index.js";
@@ -355,6 +357,7 @@ export async function searchRankedDocs(input: {
       position: decoded.payload.next_position,
       pageSize: input.request.max_results,
       cursorCodec: input.ranking_cursor_codec,
+      includeSnippets: input.request.include_snippets,
       counts: { ...universe.counts, returned_page_documents_count: 0 }
     });
   }
@@ -484,6 +487,7 @@ export async function searchRankedDocs(input: {
       position: 0,
       pageSize: input.request.max_results,
       cursorCodec: input.ranking_cursor_codec,
+      includeSnippets: input.request.include_snippets,
       counts
     });
   } catch (error) {
@@ -492,6 +496,43 @@ export async function searchRankedDocs(input: {
     }
     throw error;
   }
+}
+
+export function rankedDocsSnapshotUnavailable(input: {
+  request: DocsSearchRequest;
+  default_repo_root: string;
+  message: string;
+}): RankedDocsSearchSelectionUnavailableResult {
+  const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
+  const normalizedQuery = normalizeDocumentationConcern(input.request.query);
+  if (normalizedQuery.length === 0) {
+    throw new TypeError("Ranked documentation query must contain at least one normalized token.");
+  }
+  const normalizedScopePath = normalizeRankedDocsScopePath(input.request.scope_path);
+  return {
+    ranking_contract_version: DOCS_RANKING_CONTRACT_VERSION,
+    repo_root: repoRoot,
+    query: input.request.query,
+    normalized_query: normalizedQuery,
+    ...(normalizedScopePath === undefined ? {} : { normalized_scope_path: normalizedScopePath }),
+    ranking_schema_version: DOCS_RANKING_SCHEMA_VERSION,
+    ranking_policy_version: DOCS_RANKING_POLICY_VERSION,
+    status: "blocked",
+    trust_state: "blocked_snapshot_unavailable",
+    blocker: "selected_snapshot_unavailable",
+    hits: [],
+    warnings: [{ reason: "missing", message: boundedRankedMessage(input.message) }],
+    next_actions: capNextActions([{
+      tool: "read_resource",
+      args: { uri: "repo:///status" },
+      reason: "Inspect snapshot validity and run the advertised coordinated refresh action before retrying docs_search."
+    }]),
+    truncated: false
+  };
+}
+
+function boundedRankedMessage(message: string): string {
+  return message.length <= 500 ? message : `${message.slice(0, 480)} [truncated]`;
 }
 
 export async function getDocsOutline(input: {
@@ -1235,6 +1276,20 @@ function rankingUnavailable(
     trust_state: trustState,
     blocker,
     hits: [],
+    next_actions: capNextActions([blocker === "ranking_unavailable"
+      ? {
+          tool: "read_resource",
+          args: { uri: "repo:///status" },
+          reason: "Inspect ranked documentation index availability before retrying."
+        }
+      : {
+          tool: "docs_search",
+          args: {
+            query: base.query,
+            ...(base.normalized_scope_path === undefined ? {} : { scope_path: base.normalized_scope_path })
+          },
+          reason: "Restart the ranked search safely without the expired or invalid cursor."
+        }]),
     truncated: false
   };
 }
@@ -1303,6 +1358,11 @@ async function rankedCounts(input: {
     priority_scan_eligible_markdown_files_count: eligible,
     priority_scan_indexed_markdown_files_count: indexed,
     priority_scan_skipped_markdown_files_count: Math.max(0, eligible - indexed),
+    priority_scan_coverage_state: docsCoverage?.state ?? state.coverage_state ?? "unknown",
+    priority_scan_truncated: docsCoverage?.scan_truncated ?? state.docs_scan_truncated ?? false,
+    ...(docsCoverage?.reason === undefined && state.reason === undefined
+      ? {}
+      : { priority_scan_coverage_note: docsCoverage?.reason ?? state.reason }),
     searchable_filter_basis: "merged_graph_and_priority_markdown",
     scope_filter_basis: input.normalizedScopePath === undefined ? "repo_root" : "normalized_scope_path",
     query_filter_basis: {
@@ -1355,6 +1415,11 @@ async function rankedOverflowResult(input: {
       priority_scan_eligible_markdown_files_count: eligible,
       priority_scan_indexed_markdown_files_count: indexed,
       priority_scan_skipped_markdown_files_count: Math.max(0, eligible - indexed),
+      priority_scan_coverage_state: docsCoverage?.state ?? state.coverage_state ?? "unknown",
+      priority_scan_truncated: docsCoverage?.scan_truncated ?? state.docs_scan_truncated ?? false,
+      ...(docsCoverage?.reason === undefined && state.reason === undefined
+        ? {}
+        : { priority_scan_coverage_note: docsCoverage?.reason ?? state.reason }),
       searchable_filter_basis: "merged_graph_and_priority_markdown",
       scope_filter_basis: input.normalizedScopePath === undefined ? "repo_root" : "normalized_scope_path",
       query_filter_basis: {
@@ -1366,6 +1431,22 @@ async function rankedOverflowResult(input: {
       page_filter_basis: "frozen_universe_position_and_requested_page_size",
       priority_scan_filter_basis: "configured_priority_roots"
     },
+    result_count: 0,
+    result_count_basis: "page",
+    indexed_docs_count: searchable.searchable_snapshot_documents_count,
+    docs_index_state: docsCoverage?.state ?? state.coverage_state ?? "unknown",
+    docs_scan_truncated: docsCoverage?.scan_truncated ?? state.docs_scan_truncated ?? false,
+    ...(docsCoverage?.reason === undefined && state.reason === undefined
+      ? {}
+      : { coverage_note: docsCoverage?.reason ?? state.reason }),
+    next_actions: capNextActions([{
+      tool: "docs_search",
+      args: {
+        query: input.base.query,
+        scope_path: input.normalizedScopePath ?? "docs"
+      },
+      reason: "Retry within a narrower documentation scope; narrow the query further if the scoped union still exceeds 500."
+    }]),
     truncated: false
   };
 }
@@ -1376,9 +1457,12 @@ function rankedPageResult(input: {
   position: number;
   pageSize: number;
   cursorCodec: DocsRankingCursorCodecPort;
+  includeSnippets: boolean;
   counts: DocsRankingCountReceipt;
 }): RankedDocsSearchResult {
-  const hits = input.universe.hits.slice(input.position, input.position + input.pageSize);
+  const hits = input.universe.hits
+    .slice(input.position, input.position + input.pageSize)
+    .map((hit) => input.includeSnippets ? hit : withoutSnippet(hit));
   const nextPosition = input.position + hits.length;
   const hasMore = nextPosition < input.universe.hits.length;
   return {
@@ -1388,6 +1472,14 @@ function rankedPageResult(input: {
     universe_id: input.universe.universe_id,
     hits: [...hits],
     counts: { ...input.counts, returned_page_documents_count: hits.length },
+    result_count: hits.length,
+    result_count_basis: "page",
+    indexed_docs_count: input.counts.searchable_snapshot_documents_count,
+    docs_index_state: input.counts.priority_scan_coverage_state,
+    docs_scan_truncated: input.counts.priority_scan_truncated,
+    ...(input.counts.priority_scan_coverage_note === undefined
+      ? {}
+      : { coverage_note: input.counts.priority_scan_coverage_note }),
     ...(hasMore
       ? {
           cursor: input.cursorCodec.encode({
@@ -1400,6 +1492,11 @@ function rankedPageResult(input: {
       : {}),
     truncated: hasMore
   };
+}
+
+function withoutSnippet(hit: RankedDocsSearchHit): RankedDocsSearchHit {
+  const { snippet: _snippet, ...without } = hit;
+  return without;
 }
 
 function normalizeRankedDocsScopePath(value: string | undefined): string | undefined {

@@ -144,25 +144,33 @@ one ranking change.
   - Status: Phase 3 complete; T006 public presentation and production wiring is next.
 ## Phase 4: Presentation And Trust
 
-- [ ] T006 Present rank, compatibility, counts, filters, and trust receipts.
+- [x] T006 Present rank, compatibility, counts, filters, and trust receipts.
   - Depends on: T005
-  - Requirements: Requirement 2, Requirement 4; CP-002, CP-006-CP-008
+  - Requirements: Requirement 2, Requirement 3, Requirement 4; CP-002,
+    CP-004, CP-006-CP-008
   - Acceptance criteria: AC2.1, AC2.2, AC2.3, AC2.4, AC2.6, AC4.1,
-    AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8
+    AC3.6, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8
   - Files: `src/presentation/docs-presenter.ts`,
     `src/application/use-cases/query-docs.ts`,
     `src/contracts/runtime-docs-contracts.ts`,
+    `src/infrastructure/runtime/authenticated-docs-ranking-cursor.ts`,
+    `src/infrastructure/sqlite/graph-store.ts`, `src/server.ts`,
+    `src/mcp/daemon.ts`, `src/debug/mcp-tool-sweep.ts`,
+    `src/interface-adapters/mcp/registries/index.ts`,
     `src/interface-adapters/mcp/registries/tools/docs-search.ts`,
+    `.well-known/mcp/server-card.json`,
     `tests/presentation/docs-ranking-presenter.test.ts`,
-    `tests/mcp/docs-ranking-tool.test.ts`
+    `tests/mcp/docs-ranking-tool.test.ts`, and production-path regression tests
   - Acceptance: Presenter preserves final order, legacy aggregate `score`, and
     `lexical_score`; emits exact tuple/reasons/source-count/page-filter names and
     compatibility aliases; compresses caveats; and returns structured
-    overflow/expired/unavailable trust without ranking logic in presenter or
-    thin MCP adapter.
+    overflow/expired/snapshot-unavailable trust; frozen pages preserve optional
+    snippets; authenticated cursors survive daemon-client reconnects; and no
+    ranking logic moves into the presenter or thin MCP adapter.
   - Evidence mode: command
-  - Evidence: Pending.
+  - Evidence: Implemented the single authority-aware ranked docs_search route with order-preserving presentation, daemon-shared authenticated cursors, frozen per-page snippet projection, mandatory canonical and compatibility receipts, typed snapshot/cursor/overflow failures, complete public redaction and recovery, aggregate query-free telemetry, and production/debug wiring. V001 passed 12/12; V004 40/40; V005 33/33; V006 50/50; V007 6/6; typecheck and full suite 97 files/994 tests passed; git diff --check passed. Independent architecture, QA, and security/operations re-reviews returned ready. Repository-wide live-universe capacity/eviction and remaining detailed observability are explicitly routed to EB059.
 
+  - Status: Phase 4 complete; T007 final cross-phase validation is next.
 ## Phase 5: Verification, Installation, And Lifecycle
 
 - [ ] T007 Run focused, property, full, architecture, and budget validation.
