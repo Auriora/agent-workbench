@@ -2265,6 +2265,79 @@ Do not promote an item when:
   consistency and the workspace-safety contract; create a spec only if public
   error vocabulary or compatibility must change.
 
+### EB064: Production Documentation Corpus Isolation And Governing-Owner Priority
+
+- Priority: P1
+- Status: proposed; discovered during Codex dogfood on installed runtime
+  `0.6.1` against fresh snapshot `1784672461549`
+- Friction signal: `docs_search` returned `complete_ranked_universe` for
+  `rule governing SessionStart behavior`, but ranked the draft/supporting
+  dogfood ledger and backlog ahead of the current/canonical governing owner at
+  rank 3. In the same session, `docs_current_for_task` admitted test-fixture
+  documentation into the repository's canonical results, where fixture
+  documents occupied three of the first four positions. Authority metadata is
+  present, but production-corpus eligibility and governing-owner precedence do
+  not yet protect first-page routing from fixture and mention-heavy evidence.
+- Runtime surface: documentation catalog inclusion policy, documentation-map
+  ownership, `docs_search`, `docs_current_for_task`, authority-aware ranking,
+  corpus counters, and ranked-universe trust.
+- Acceptance:
+  - Define one explicit production-document eligibility policy shared by
+    `docs_search` and `docs_current_for_task`. Documentation below fixture roots
+    SHALL be excluded when indexing the containing product repository, while
+    remaining eligible when that fixture is itself the selected repository
+    root; do not add a query-time filename heuristic.
+  - A current/canonical documentation-map owner that governs the requested
+    concern SHALL rank ahead of draft/supporting documents that merely contain
+    stronger lexical mentions. Supporting evidence may remain discoverable
+    after the governing owner and SHALL retain its authority/status labels.
+  - Complete ranked-universe receipts and documentation counters SHALL describe
+    the same eligible corpus. Policy exclusions SHALL be bounded and
+    attributable without leaking fixture content.
+  - Add a production-repository regression proving no fixture document appears
+    in `docs_current_for_task`, plus the exact SessionStart intent regression
+    proving the current/canonical coding-agent integration owner ranks before
+    the dogfood ledger and backlog.
+  - Add a fixture-root regression proving the same fixture documentation is
+    indexed normally when the fixture root is opened as the repository, so
+    corpus isolation cannot erase fixture-backed documentation tests.
+- Promotion target: promote corpus isolation and governing-owner priority
+  together into one focused documentation-ranking spec under EB018, EB054, and
+  EB060. Promote the accepted policy to the documentation map, MCP surface
+  design, runtime contracts, graph-store design, and proof matrix; do not fold
+  EB059 universe-capacity policy into that spec.
+
+### EB065: Validation-Plan Skipped-Path Payload Compaction
+
+- Priority: P2
+- Status: proposed; discovered during Codex dogfood on installed runtime
+  `0.6.1`
+- Friction signal: `verification_plan` correctly selected and ordered all five
+  repository CI gates, but wrapped the useful plan in roughly 50 individual
+  `skipped_paths` records. `context_for_task` already demonstrates the desired
+  bounded pattern by grouping skipped paths into a count and representative
+  sample.
+- Runtime surface: validation-plan presentation, skipped-path reason taxonomy,
+  response budgets, truncation metadata, and MCP payload consistency.
+- Acceptance:
+  - Group skipped paths by stable reason with an exact count and a deterministic
+    bounded representative sample; do not emit one public record per generated,
+    vendor, cache, or archive path.
+  - Preserve individually actionable requested-path exclusions and material
+    validation blockers even when routine skipped paths are summarized.
+  - Report whether samples were truncated and prove grouped counts equal the
+    underlying classification decisions without exposing unbounded path lists.
+  - Add a generated/vendor-heavy fixture regression that returns all expected
+    repository-specific validation commands, including the five Agent
+    Workbench CI gates, within the response budget and with deterministic
+    skipped-path summaries.
+  - Add presenter parity coverage so `verification_plan` and
+    `context_for_task` use compatible bounded summary semantics rather than
+    separate ad hoc shapes.
+- Promotion target: schedule as an independent EB004 validation-planning and
+  EB009 payload-observability repair. Create a spec only if compacting the
+  public shape requires a compatibility or schema-version decision.
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |
@@ -2332,9 +2405,18 @@ Do not promote an item when:
 | Parser-route coverage-domain disclosure | EB061, under EB053 and JS/TS capability truthfulness. |
 | Node FTS batch identity deduplication | EB062, under EB014 large-repository scale and graph-store storage invariants. |
 | Shared MCP failure-message redaction | EB063, under EB038 error-envelope consistency and workspace safety. |
+| Production documentation corpus isolation and governing-owner priority | EB064, under EB018 stale-doc filtering, EB054 authority-aware ranking, and EB060 first-read trust. |
+| Validation-plan skipped-path payload compaction | EB065, under EB004 validation planning and EB009 bounded observability. |
 
 ## Immediate Next Specs
 
+- Promote EB064 next as one focused documentation-ranking spec. Establish
+  production-versus-fixture corpus eligibility before further ranking tuning,
+  then prove the governing SessionStart owner precedes draft/supporting mention
+  evidence on a complete ranked universe.
+- Schedule EB065 independently as a bounded validation-plan presentation repair;
+  it must preserve the five-gate plan and material exclusions while compressing
+  routine skipped paths.
 - Complete the normal commit/release flow for the delivered EB055, EB056,
   EB057, and EB058 direct repairs without folding them into active spec scope;
   installed-runtime acceptance is already recorded for EB055 through EB057.
