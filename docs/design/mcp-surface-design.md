@@ -413,16 +413,56 @@ should replicate their useful behavior through this runtime's schemas rather
 than duplicating predecessor tool names or backend payloads.
 
 `docs_search` searches documentation through the warm SQLite FTS-backed docs
-index populated during repository warm-up. It searches repo-relative path,
-title, headings, and bounded selected body text, then applies deterministic
-phrase, title, path, heading, body, and generic path/category scoring. It
-returns ranked hits with `docs` and `fts` evidence labels, scores, optional
-bounded snippets, optional heading evidence, `result_count`, `result_count_basis`,
-docs-index coverage metadata, truncation metadata, an opaque continuation
-cursor when more results exist, and a direct-read caveat. `result_count` is a
-page count unless `result_count_basis` states otherwise. Search results are
-routing evidence only; agents must use `docs_read_section` before making precise
-documentation claims.
+index populated during repository warm-up. It is one authority-aware ranked
+route, not an FTS route followed by an optional fallback. Coordinated indexing
+publishes the documentation map's normalized concern labels, explicit intent
+terms, and one-to-many owner evidence with the selected graph snapshot. Queries
+normalize by Unicode NFKC, lowercase, punctuation/symbol/separator-to-space
+conversion, and whitespace collapse. A multi-token term matches only an exact
+contiguous normalized phrase; a single-token term matches only an equal query
+token. Every remaining normalized query token participates; there is no hidden
+stopword list or minimum token length. All matched concerns are retained and
+their evidence orders by longest phrase, normalized concern key, and normalized
+owner path. The runtime never invents synonyms or broad-reads the map on the
+query path.
+
+The application requests two same-snapshot candidate sources: up to 501 ordered
+FTS candidates without page offset and up to 501 distinct repository-present,
+in-scope owners of the exact matched concerns. It deduplicates the sources by
+canonical repo-relative POSIX document ID. Source row 501 or distinct-union row
+501 returns `candidate_universe_exceeds_limit`, zero hits, no cursor, and a
+callable narrower-scope `docs_search` action. No partial page is emitted from an
+incomplete universe.
+
+A complete union of at most 500 documents is ordered by one deterministic
+tuple: relevance band, governing-owner tier, authority, currency, optional raw
+lexical score, normalized path, then stable document ID. Relevance is
+established before ownership or authority, so a governing owner can reorder a
+comparably relevant set but an irrelevant canonical document cannot outrank an
+exact relevant result solely through authority. Valid and draft mapped owners
+receive the valid-owner tier while retaining truthful status; missing,
+archived, superseded, and conflicting owners retain bounded governance caveats
+and receive no valid-owner promotion. Multiple owners are valid by themselves;
+conflict requires a mapped document whose `canonical_owner` names another path.
+
+Before returning page one, the route persists the complete ordered universe and
+its count receipt for 15 minutes. The cursor authenticates universe ID, next
+position, snapshot, normalized query, optional normalized scope, bound 500,
+ranking schema, and ranking-policy version. Continuations slice only that
+stored universe: they never re-query FTS, broad-read owners, rerank, restart at
+page one, or rebuild missing state. Concatenated pages therefore equal one
+sufficiently large page over the same universe without duplicates or omissions.
+`include_snippets` is a post-slice projection on both first and continuation
+pages and cannot change admission, order, identity, or cursor validity.
+
+Successful results expose ranked hits, matched concern and owner evidence,
+ranking reasons/components, named count and filter bases, priority-scan coverage,
+optional bounded snippets/headings, an optional cursor, and a direct-read
+caveat. Deprecated `score`, `result_count`, `result_count_basis`,
+`indexed_docs_count`, and docs-coverage aliases keep their shipped meanings;
+agents use response order/final rank components and the canonical count receipt
+for new behavior. Search results remain routing evidence only, so agents must
+use `docs_read_section` before making precise documentation claims.
 Callers may pass `scope_path` to constrain results to one repo-relative
 documentation subtree. For spec implementation work, pass the active spec
 package path, such as `docs/specs/NNN-short-name`, so `docs_search` only
@@ -433,16 +473,29 @@ the current MCP server session. The default applies to `docs_search`,
 `scope_path`; an explicit per-call `scope_path` takes precedence, and
 `docs_scope` can clear the session default.
 
-If the docs FTS index is cold, stale, invalid, or unavailable, `docs_search`
-returns a compact structured blocked response naming the missing evidence. It
-must not silently fall back to broad Markdown scanning. This visible failure is
-intentional so warm-up, schema, or storage issues are fixed rather than hidden.
-If the docs FTS index is usable but partial or refreshing, `docs_search` may
-return hits with `analysis_validity: partial`, `freshness: refreshing`, and
-index coverage metadata. Those responses must include a next action that routes
-the agent toward direct documentation inventory or reads, such as a
-`read_resource` action for `repo:///docs/map` or `docs_read_section`, instead
-of implying that sparse search results prove absence.
+If no valid snapshot can be selected for a valid request, `docs_search` returns
+the snapshot-less `selected_snapshot_unavailable` blocker and a
+`repo:///status` action; it never fabricates snapshot identity. An unavailable
+or incompatible concern/ranking index returns `ranking_unavailable` and the
+same status route. An expired/missing frozen universe returns
+`ranked_universe_expired`; a tampered or identity-mismatched cursor returns
+`ranking_cursor_invalid`. Both cursor failures provide a callable cursor-free
+`docs_search` restart action rather than rebuilding implicitly. These blocked
+variants carry zero hits, explicit trust downgrade, and no success-shaped count
+or cursor evidence that the unavailable variant cannot prove.
+
+Cold, stale, invalid, refreshing, incomplete, overflow, cursor, and selection
+failures remain structured and visible. The route never falls back to broad
+Markdown scanning or presents sparse evidence as absence. Standard trust
+metadata keeps ranked routing safe for navigation and next-read selection, not
+for precise claims, implementation completion, closure, or safe mutation; a
+direct section read and relevant validation remain required.
+
+Each frozen universe is bounded to 500 hits and 15 minutes. The separate EB059
+decision owns a repository-wide live-universe population cap, deterministic
+capacity eviction, cursor semantics after such eviction, and remaining detailed
+freeze/page/eviction metrics; this surface does not hide an arbitrary cap or
+implicit eviction policy.
 
 `docs_outline` reads a bounded heading outline for one repo-relative Markdown
 document and returns stable heading identifiers. `docs_read_section` reads one

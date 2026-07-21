@@ -1873,7 +1873,7 @@ Do not promote an item when:
 ### EB054: Authority-Aware Documentation Intent Ranking And Count Semantics
 
 - Priority: P1
-- Status: active Spec 043
+- Status: closed through Spec 043 on 2026-07-21
 - Friction signal: a healthy runtime `0.6.0` documentation-intent query for the
   rule governing SessionStart behavior returned a draft supporting install
   guide as the top result with roughly three times the score of later hits,
@@ -1917,9 +1917,9 @@ Do not promote an item when:
     authority and explicit governance caveats.
   - Stable multi-page ranking tests plus global, scoped, merged-scan, and
     partial-priority-scan count contracts.
-- Promotion target: active
-  [Spec 043 requirements](../specs/043-authority-aware-documentation-intent-ranking-and-count-semantics/requirements.md)
-  with durable destinations in [MCP surface design](../design/mcp-surface-design.md),
+- Promotion target: delivered through Spec 043, with closure proof in the
+  [spec closure log](../history/spec-closure-log.md) and durable contracts in
+  [MCP surface design](../design/mcp-surface-design.md),
   [Graph store design](../design/graph-store-design.md),
   [Runtime contracts](../reference/runtime-contracts.md), and the
   [Documentation map](../reference/documentation-map.md).
@@ -2194,11 +2194,10 @@ Do not promote an item when:
 - Complete the normal commit/release flow for the delivered EB055, EB056,
   EB057, and EB058 direct repairs without folding them into active spec scope;
   installed-runtime acceptance is already recorded for EB055 through EB057.
-- Resume active Spec 043: EB054 owns documentation authority ranking and count
-  semantics. EB053/Spec 042 is closed with durable reference-completeness
-  contracts and evidence.
-- After Spec 043, promote EB059 only after choosing the live-universe cap and
+- EB053/Spec 042 and EB054/Spec 043 are closed with durable reference and
+  authority-aware documentation-discovery contracts and evidence.
+- Promote EB059 only after choosing the live-universe cap and
   cursor-eviction semantics; do not fold an arbitrary capacity constant into
-  T006.
+  the closed Spec 043 scope.
   EB014 remains the separate candidate for large-repository completion scale
   and progress.

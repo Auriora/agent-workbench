@@ -263,14 +263,22 @@ publication states are exactly `building`, `published`, `superseded`, and
 `failed`; publication is independent of `fresh`, `stale`, or `cold` graph
 freshness and of evidence-class coverage.
 
-Schema identity v2 stores current evidence in `graph-v2.sqlite`. Owner-gated
-legacy retirement preserves `graph-v1.sqlite.pre-v2` and atomically replaces
-the former `graph.sqlite` with a non-SQLite guard. A v0.5.2 adapter must fail
-with an incompatible-store error at that canonical path; it must never read or
-mutate the v2 publication store. Fresh repositories need no retirement
-artifacts, and v1 without a backup is valid before retirement. Inconsistent
-sets—such as a guard without its backup or a conflicting backup—block startup
-rather than selecting another path.
+Schema identity v3 stores current evidence in `graph-v3.sqlite`. When v3 is
+absent, startup may checkpoint and atomically clone the complete
+`graph-v2.sqlite` into a temporary v3 candidate, migrate and validate it, then
+claim the v3 path. Existing snapshot rows retain their recorded v2 schema
+identity and receive no synthetic concern evidence; authority-aware ranking
+requires a coordinated current-schema rebuild. Failed or incompatible
+migration blocks without overwriting v2 or an existing v3 store.
+
+The earlier owner-gated legacy retirement preserves
+`graph-v1.sqlite.pre-v2` and atomically replaces the former `graph.sqlite` with
+a non-SQLite guard. A v0.5.2 adapter must fail with an incompatible-store error
+at that canonical path; it must never read or mutate the versioned publication
+stores. Fresh repositories need no retirement artifacts, and v1 without a
+backup is valid before retirement. Inconsistent sets—such as a guard without
+its backup or a conflicting backup—block startup rather than selecting another
+path.
 
 `planned` and `running` hold the controller activity lease. `complete` names a
 `published` target that is also the visible snapshot, has matching started and
@@ -363,6 +371,137 @@ or document-currency signal.
 canonical, supporting, non-authoritative, and unknown docs. The result is
 repository routing evidence; precise claims still require direct reads and
 relevant validation.
+
+## Ranked Documentation Search Contract
+
+`docs_search` uses ranking contract version `1`, ranking schema version `1`,
+policy `authority-aware-v1`, candidate limit `500`, and overflow sentinel `501`.
+It returns one of four shapes: a complete frozen-universe page, candidate
+overflow, ranking/cursor unavailable, or snapshot-selection unavailable. Every
+shape includes the normalized query, policy identities, warnings, callable next
+action entries when recovery is needed, and trust state. Snapshot-backed shapes
+include `snapshot_id`; the
+`selected_snapshot_unavailable` shape deliberately does not.
+
+### Concern And Owner Evidence
+
+The concern index has snapshot state `complete`, `no_map`, or `invalid`.
+Concern labels are implicit terms and `Intent terms` cells supply only explicit
+semicolon-delimited aliases. Both index and query paths share Unicode NFKC,
+lowercase, punctuation/symbol/separator-to-space, whitespace-collapse
+normalization. Multi-token terms match contiguous normalized phrases;
+single-token terms match equal tokens, with no stopword or minimum-token-length
+filter. Matches sort by descending term token count, normalized concern key,
+and normalized owner path. `concern_match_state` is `matched` or `no_match`, and
+matched evidence includes:
+
+- `concern_key`, `normalized_term`, query token start/end, and `token_count`;
+- every related owner path, stable `document_id` when present, and owner state;
+- optional `superseded_by` for superseded owners; and
+- optional contradictory `declared_canonical_owner` for conflicting owners.
+
+Owner state is `valid`, `draft`, `missing`, `archived`, `superseded`, or
+`conflicting`. Valid and draft map to `valid_owner`; a draft keeps its draft
+status and direct-read caveat. Missing, archived, and superseded map to
+`invalid_owner`; conflicting maps to `invalid_conflicting_owner`. A document
+with no matched-owner relation is `non_owner`. Multiple mapped owners alone are
+not conflict evidence. A stable document ID is the same canonical repo-relative
+POSIX path as the hit.
+
+### Ranked Hit And Ordering
+
+`candidate_source` is `fts`, `matched_owner`, or `fts_and_matched_owner`.
+Every hit exposes a non-empty `ranking_reasons` array,
+`ranking_policy_version`, `governing_owner_tier`, matched concern evidence, and
+`final_rank_components` in this comparison order:
+
+1. `relevance_band`: `exact_document_phrase`,
+   `all_query_tokens_title_or_heading`, `all_query_tokens_body`,
+   `intent_owner_match`, or `partial_fts_match`;
+2. `governing_owner_tier`: `valid_owner`, `non_owner`, `invalid_owner`, or
+   `invalid_conflicting_owner`;
+3. truthful `authority_tier`;
+4. truthful `currency_tier`;
+5. optional `lexical_score`, present before absent and descending when present;
+6. `normalized_path`, ascending; and
+7. `stable_document_id`, ascending.
+
+Response order is authoritative. The numeric `score` field is a deprecated
+compatibility field retaining its shipped aggregate lexical/path/field/
+authority/currency meaning. It is not the final rank and its meaning does not
+change. `lexical_score` is the raw finite SQLite lexical score, is present for
+FTS-backed candidates, absent for owner-only candidates, and is the only numeric
+score component in the final tuple. Consumers must not re-sort by either
+numeric field alone.
+
+### Count And Filter Receipt
+
+Complete and overflow results name every count universe and basis:
+
+| Count | Required filter basis |
+| --- | --- |
+| `searchable_snapshot_documents_count` | `searchable_filter_basis: merged_graph_and_priority_markdown` |
+| `searchable_scope_documents_count` | `scope_filter_basis: repo_root` or `normalized_scope_path` |
+| `fts_candidate_documents_count` | `query_filter_basis.fts_candidate_documents_count: normalized_fts_match_within_scope` |
+| `matched_owner_candidate_documents_count` | `query_filter_basis.matched_owner_candidate_documents_count: exact_matched_concern_owners_within_scope` |
+| `candidate_union_documents_count` | `query_filter_basis.candidate_union_documents_count: distinct_fts_and_exact_owner_union_within_scope` |
+| `ranked_candidate_universe_count` | `query_filter_basis.ranked_candidate_universe_count: distinct_fts_and_exact_owner_union_within_scope` |
+| `returned_page_documents_count` | `page_filter_basis: frozen_universe_position_and_requested_page_size` |
+| `priority_scan_eligible_markdown_files_count` | `priority_scan_filter_basis: configured_priority_roots` |
+| `priority_scan_indexed_markdown_files_count` | `priority_scan_filter_basis: configured_priority_roots` |
+| `priority_scan_skipped_markdown_files_count` | `priority_scan_filter_basis: configured_priority_roots` plus bounded skip evidence |
+
+`query_filter_basis` is one strict keyed object, not one scalar used for several
+universes. Priority-scan coverage state, truncation, and optional note remain
+mandatory and independent of ranked-universe completeness. On a complete page,
+the ranked count equals the distinct union and returned count equals hit count.
+On overflow there is no ranked count; each source has exactly one exact count or
+literal-501 lower bound, `candidate_union_count_lower_bound` is 501, and the
+result has zero returned hits.
+
+The deprecated aliases remain additive during compatibility:
+
+- `result_count` retains current-page meaning and
+  `result_count_basis` remains `page`;
+- `indexed_docs_count` equals `searchable_snapshot_documents_count`; and
+- `docs_index_state`, `docs_scan_truncated`, and optional `coverage_note`
+  mirror canonical priority-scan coverage fields.
+
+### Frozen Cursor And Failure Variants
+
+A successful result has `trust_state: complete_ranked_universe`, a
+`universe_id`, hits, canonical counts, and an optional cursor. `status` is
+`not_applicable` only for an empty complete universe; otherwise it is `done`.
+`truncated` is true exactly when a continuation cursor exists. The authenticated
+cursor binds contract version, universe ID, next position, snapshot, normalized
+query, optional normalized scope, retrieval bound 500, ranking schema version,
+and ranking policy version. The universe is immutable and expires after 15
+minutes. Continuation reads stored hits only; they never rebuild or rerank.
+
+`include_snippets` controls page projection on first and continuation pages.
+Omitting snippets does not change the frozen universe, cursor identity, order,
+or other evidence.
+
+Blocked variants are exhaustive:
+
+| Blocker | Trust state | Snapshot | Recovery |
+| --- | --- | --- | --- |
+| `candidate_universe_exceeds_limit` | `blocked_candidate_overflow` | required | retry `docs_search` with a narrower scope/query |
+| `ranked_universe_expired` | `blocked_cursor_stale` | required | restart the same search without the cursor |
+| `ranking_cursor_invalid` | `blocked_cursor_invalid` | required | restart the same search without the cursor |
+| `ranking_unavailable` | `blocked_ranking_unavailable` | required | inspect `repo:///status` before retrying |
+| `selected_snapshot_unavailable` | `blocked_snapshot_unavailable` | absent | inspect `repo:///status` and follow coordinated refresh guidance |
+
+All blocked variants have zero hits and `truncated: false`. Overflow includes
+the canonical overflow receipt and compatibility count aliases, but no cursor.
+The remaining unavailable variants do not fabricate counts, cursor, universe,
+or snapshot evidence they cannot prove. Ranking never falls back to broad
+Markdown scanning or an older schema.
+
+Each universe is individually limited to 500 hits and 15 minutes. EB059 owns
+the separate repository-wide live-population cap, deterministic capacity
+eviction and resulting cursor semantics, plus remaining detailed operational
+metrics; no implicit capacity policy is part of this contract.
 
 ## Debug Sweep Result Quality
 

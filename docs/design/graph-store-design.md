@@ -110,13 +110,27 @@ watcher or scan event
   line number.
 - `docs_fts`: SQLite FTS5 virtual table over docs path, title, headings text,
   and bounded selected body text.
+- `documentation_concern_index_state`: one snapshot-scoped `complete`, `no_map`,
+  or `invalid` receipt with bounded source and failure evidence.
+- `documentation_concerns` and `documentation_concern_terms`: normalized concern
+  labels and exact explicit intent terms. The concern label is always an
+  implicit term; aliases are maintained in the documentation map and are never
+  inferred.
+- `documentation_concern_owners`: the complete one-to-many concern/owner
+  relation, stable document identity when present, source line, and the
+  exhaustive `valid`, `draft`, `missing`, `archived`, `superseded`, or
+  `conflicting` owner state.
+- `ranked_docs_universes` and `ranked_docs_universe_hits`: immutable ordered
+  documentation-search universes, their identity and count receipt, canonical
+  creation/expiry times, stable document IDs, and frozen hit evidence.
 
 ## Snapshot Publication
 
 Publication is independent of freshness and evidence-class coverage:
 
 - `building` accepts snapshot-local catalog, graph, unresolved-reference,
-  documentation, heading, FTS, and coverage writes but is not selectable;
+  documentation, heading, FTS, concern ownership, and coverage writes but is
+  not selectable;
 - `published` is visible after the one generation-fenced atomic transition;
 - `superseded` records an unpublished pass overtaken by a newer invalidation;
 - `failed` records an unpublished build or publication failure.
@@ -133,8 +147,16 @@ invalidation generations. Final transition compares those generations and the
 expected `building` state, so stale owners or passes cannot publish. If a newer
 generation arrives before publication, the pass becomes `superseded` and the
 controller runs one sequential catch-up. Required catalog, graph, unresolved
-reference, docs, heading, FTS, and coverage writes complete before the atomic
-transition to `published`.
+reference, docs, heading, FTS, concern-index state, concern/term/owner rows, and
+coverage writes complete before the atomic transition to `published`.
+
+Documentation concern publication is feature-local but atomic with the graph
+snapshot. A valid map publishes `complete`; a definitively absent map publishes
+`no_map`; malformed, inaccessible, oversized, escaping, or contradictory source
+evidence publishes `invalid` with zero concern rows and a bounded reason. An
+invalid concern index blocks authority-aware ranking without publishing a mixed
+or guessed ownership state. Only coordinated schema-v3 builds create concern
+evidence; migration does not synthesize it for older snapshots.
 
 Post-MVP tables such as `tests`, `attention_items`, `usage_events`, and report
 caches should be added only when a concrete query requires relational storage.
@@ -166,6 +188,17 @@ coverage.
   qualified name, and source range where available.
 - `files.path` is unique within a snapshot.
 - `docs_documents.path` is unique within a snapshot.
+- Concern, term, and owner identities include `snapshot_id`; duplicate concern
+  rows merge by normalized concern key and duplicate owner links collapse by
+  concern and canonical mapped-owner path while retaining the lowest source
+  line.
+- A mapped owner is `conflicting` only when its own normalized
+  `canonical_owner` names another path. Multiple mapped owners are valid and do
+  not by themselves create a conflict. Missing owners have no document ID;
+  present owners use their canonical repo-relative POSIX path as document ID.
+- Ranked-universe positions are unique, stable document IDs are unique within a
+  universe, persisted hit cardinality equals the frozen ranked count, and every
+  universe is bound to one published snapshot.
 - `nodes.file_id` references `files`.
 - `docs_headings.document_id` references `docs_documents`.
 - `edges.source_node_id` and `edges.target_node_id` reference `nodes` when both
@@ -232,6 +265,15 @@ MVP hot-path tools must publish and enforce draft budgets:
 Budget tests should use SQL tracing, query-plan assertions, row-count caps, or
 traversal-depth caps.
 
+The ranked documentation route performs two separately bounded source queries
+against one published snapshot: at most 501 ordered FTS candidates without page
+offset, and at most 501 distinct exact matched-owner documents in stable
+document-ID order. Row 501 is an overflow sentinel. When neither source
+overflows, the runtime forms one stable-ID-distinct union; a union above 500
+also blocks. Only a complete union of at most 500 documents may be ranked and
+persisted. Returned pages remain bounded to 50 hits and slice the stored
+universe rather than re-running either candidate query.
+
 ## Configuration Model
 
 | Config Source | Key Or Parameter | Applied By | Effect | Failure Mode |
@@ -277,6 +319,17 @@ traversal-depth caps.
 
 ### Publication Migration And Rollback
 
+The current schema identity is v3 at
+`.cache/agent-workbench/graph-v3.sqlite`. When v3 is absent and v2 is present,
+startup first checkpoints v2, atomically clones it to a temporary v3 candidate,
+migrates and validates the candidate, and only then claims the canonical v3
+path. Busy, partial, corrupt, or failed candidates block explicitly, clean their
+temporary artifacts, and leave v2 and any current published evidence untouched.
+Existing v2 snapshots keep their v2 identity and receive no synthetic concern
+rows; a coordinated v3 rebuild is required before authority-aware ranking can
+select concern evidence. An existing v3 store is never overwritten from an
+older identity, and there is no older-schema docs-ranking fallback.
+
 Schema identity v2 uses `.cache/agent-workbench/graph-v2.sqlite`; it never
 migrates the v0.5.2 `graph.sqlite` in place. On first v2 open, a transactionally
 consistent SQLite seed is created from v1 and claimed at the versioned path by
@@ -303,7 +356,7 @@ live guard in place. In-place downgrade or ad hoc deletion while an owner may
 be live is unsupported. Artifact size, copy duration, and progress at
 large-repository scale remain EB014 work.
 
-## Documentation Currency Evidence
+## Documentation Concern, Ranking, And Currency Evidence
 
 SQLite-backed `docs_search` remains an FTS routing surface. It joins indexed
 docs rows to file identity rows when available so search hits can expose
@@ -311,10 +364,41 @@ document currency labels, caveats, and `mtime_ms`-derived `modified_at`
 metadata. Missing file identity or Git history evidence is optional enrichment
 loss, not a docs-search failure.
 
-Search result counts describe the returned page unless a response explicitly
-states a stronger basis. Sparse FTS results are routing evidence over the
-indexed docs subset, not proof that unreturned repository documentation does not
-exist.
+The documentation map is read exactly during coordinated indexing,
+independently of a truncated broad docs scan, with a 120,000-byte limit applied
+before and after each map or mapped-owner read. Links resolve relative to the
+map, must remain repository-contained, and may name several owners. Concern
+labels and semicolon-delimited intent terms use the shared Unicode NFKC,
+lowercase, punctuation/symbol/separator-to-space, whitespace-collapse
+normalization. Query resolution is exact: multi-token terms match contiguous
+normalized phrases and single-token terms match equal query tokens. The runtime
+never derives synonyms or broad-reads the map during a query.
+
+Candidate retrieval unions bounded FTS evidence with every repository-present,
+in-scope owner of an exactly matched concern. SQLite supplies candidates and
+lexical evidence but does not assign authority or final rank. The application
+policy establishes relevance first, then governing-owner tier, authority,
+currency, optional lexical score, normalized path, and stable document ID.
+Invalid or non-governing owner states retain their caveats and never receive a
+valid-owner promotion.
+
+Before page one, the runtime persists the complete ordered hit set and count
+receipt in `ranked_docs_universes` and `ranked_docs_universe_hits`. Identity
+binds the snapshot, normalized query, normalized optional scope, retrieval bound
+500, ranking schema version 1, and policy `authority-aware-v1`. The universe
+expires after 15 minutes and never outlives its snapshot. Continuations load it
+by ID and position; missing, expired, cardinality-inconsistent, or
+identity-mismatched state blocks instead of rebuilding or restarting the search.
+Expired universes are purged before a new freeze and snapshot pruning cascades
+to their rows.
+
+Counts name distinct universes: searchable snapshot and scope documents, FTS
+candidates, matched-owner candidates, distinct candidate union, frozen ranked
+universe, returned page, and dedicated priority-scan eligible/indexed/skipped
+Markdown. Each count carries its exact searchable, scope, query, page, or
+priority-scan filter basis. Priority-scan coverage remains independent of the
+complete query universe. Compatibility page and indexed-document aliases retain
+their shipped meanings; they do not replace the canonical receipt.
 
 The graph store must not persist or infer documentation creation time from
 filesystem `ctime`. Local Git first/last touch evidence may be collected by a
@@ -348,6 +432,14 @@ depths, active worker counts, and query budget violations.
 It should also expose cache hit/miss counters where useful, stale row cleanup
 counts, watcher overflow recovery, FTS refresh failures, and blocked
 query-budget violations.
+
+Ranked documentation telemetry records aggregate FTS, matched-owner, and
+distinct-union counts plus outcome, overflow, expiry, and invalid-cursor state;
+it never records raw query text. Each universe is individually bounded to 500
+hits and 15 minutes. A repository-wide live-universe population cap,
+deterministic capacity eviction, cursor behavior after capacity eviction, and
+the remaining freeze/page/eviction metrics are intentionally not implied here;
+they remain the separately governed EB059 storage and observability decision.
 
 ## Tradeoffs And Constraints
 

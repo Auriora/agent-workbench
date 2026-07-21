@@ -22,30 +22,34 @@ universe is persisted before the presenter emits any page. Public receipts name
 ranking components, compatibility score semantics, count universes, and
 filters explicitly.
 
-## Current And Intended Ownership
+## Intake Baseline And Delivered Ownership
 
-| Responsibility | Current owner | Intended Spec 043 owner |
+The baseline column records the pre-implementation state used to diagnose the
+defect. The delivered column is current repository behavior after T001-T008.
+
+| Responsibility | Intake baseline | Delivered Spec 043 owner |
 | --- | --- | --- |
 | bounded docs FTS candidate retrieval | `src/infrastructure/sqlite/graph-store.ts` through `DocsIndexPort` | unchanged; retrieve up to 501 rows |
 | docs-search orchestration | `src/application/use-cases/query-docs.ts`, delegating search to `DocsIndexPort` | coordinate resolution, freeze, lookup, and presentation inputs |
 | documentation-map routing | `src/application/use-cases/document-currency-routing.ts` | indexing extraction delegates to a deterministic concern contract |
 | authority classification | `src/domain/policies/document-authority.ts` | unchanged input to ranking policy |
-| concern and final-rank policy | not currently present | pure application/domain modules; no SQLite or presenter policy |
-| frozen ranked universe | not currently present | a port with SQLite implementation bound to graph snapshot lifetime |
+| concern and final-rank policy | absent before Spec 043 | pure application/domain modules; no SQLite or presenter policy |
+| frozen ranked universe | absent before Spec 043 | a port with SQLite implementation bound to graph snapshot lifetime |
 | public docs result | contracts and `query-docs.ts`; MCP adapter remains thin | presenter/contract mapping only; no recomputation |
 
-The pure ranking policy is target state, not a claim about the shipped code.
+The delivered ownership column is current state. The intake baseline remains
+only as root-cause history and must not be read as current behavior.
 
-## Confirmed Root Cause
+## Confirmed Intake Root Cause
 
-Current docs ranking adds FTS, path, field, authority, and currency scores.
+Before Spec 043, docs ranking added FTS, path, field, authority, and currency scores.
 Canonical/current status contributes only a small increment, so a lexical score
 in the hundreds can dominate it. `docs_search` does not consume the
 documentation-map owner signal used by current-document routing. SQLite
 applies an offset and a bounded candidate limit before application handling,
 so the current cursor does not identify a frozen final order.
 
-`indexed_docs_count` describes merged searchable documents, while
+At intake, `indexed_docs_count` described merged searchable documents, while
 `index_coverage.docs.indexed_files` describes the dedicated priority scan. Both
 may be truthful, but their labels omit universe and filter basis.
 

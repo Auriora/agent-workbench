@@ -26,6 +26,50 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
+## 2026-07-21: Authority-Aware Documentation Discovery
+
+### Agent-Visible Changes
+
+- `docs_search` resolves exact documentation-intent terms against the
+  documentation map, admits both lexical and matched-owner candidates, and
+  ranks relevant governing owners ahead of supporting documents without
+  allowing irrelevant canonical documents to win on authority alone.
+- Results expose governing-owner state, ranking reasons, stable count universes,
+  and structured blockers when the snapshot, cursor, or bounded candidate
+  universe cannot support a truthful answer.
+- Pages are projections of one frozen ranked universe. Following the returned
+  cursor preserves the original snapshot, query, scope, policy, and order.
+
+### Contract Changes
+
+- The final rank tuple is versioned and deterministic. Legacy aggregate
+  `score` retains its previous meaning; optional `lexical_score` reports only
+  FTS evidence and is absent for owner-only candidates.
+- Searchable, scope, priority-scan, FTS-source, owner-source, and union counts
+  carry explicit bases. A distinct 501st union candidate blocks with zero hits
+  and no cursor instead of returning a partial universe.
+- Missing, conflicting, archived, and superseded governing owners never gain
+  authoritative status; their truthful state is retained with bounded caveats.
+
+### Required Agent Behavior Changes
+
+- Use the returned order and `ranking_reasons` for documentation-intent routing;
+  do not reinterpret authority labels as an unconditional status boost.
+- Treat a cursor as opaque and query-bound. Restart the search after expiry,
+  snapshot change, policy change, or identity mismatch.
+- Read each count's basis before comparing inventory totals, and narrow the
+  query or scope when the bounded-universe blocker is returned.
+
+### Migration Notes
+
+- Ranking, count-basis, candidate-source, coverage, and trust fields are
+  additive. Existing consumers may continue reading legacy `score`, while new
+  consumers should prefer the versioned tuple and named bases.
+- The current checkout's packed `0.6.1` artifact passed an isolated MCP smoke
+  for Codex and Claude Code provider identities, including frozen-page cursor
+  equivalence, fixed score/count oracles, and complete success/failure cleanup.
+  This is packed-artifact acceptance, not a release or user installation.
+
 ## 2026-07-21: Truthful Bounded Reference Completeness
 
 ### Agent-Visible Changes

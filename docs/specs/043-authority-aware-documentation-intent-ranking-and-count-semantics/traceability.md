@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: traceability
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -15,10 +15,10 @@ license: GPL-3.0-or-later
 
 | Requirement | Priority | Acceptance Criteria | Design Sections | Tasks | Verification | Durable Targets | Coverage State | Residual Destination |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Requirement 1 | must-have | AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7, AC1.8, AC1.9 | Concern Ownership Index; Ranking Model; Candidate Boundary | T001-T010 | V001-V019 | MCP surface design; documentation map | not-covered | active Spec 043 |
-| Requirement 2 | must-have | AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6 | Concern Ownership Index; Schema, Migration, And Publication; Failure And Trust Behavior | T001-T004, T006-T010 | V001-V004, V006-V019 | graph store design; documentation map | not-covered | active Spec 043 |
-| Requirement 3 | must-have | AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6 | Complete Frozen Pagination; Failure And Trust Behavior | T001-T002, T005-T010 | V001, V004-V005, V008-V019 | MCP surface design; runtime contracts | not-covered | active Spec 043 |
-| Requirement 4 | must-have | AC4.1, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8 | Deterministic Final Tuple; Count And Filter Receipt | T001-T002, T004-T010 | V001, V003-V019 | runtime contracts; graph store design | not-covered | active Spec 043 |
+| Requirement 1 | must-have | AC1.1, AC1.2, AC1.3, AC1.4, AC1.5, AC1.6, AC1.7, AC1.8, AC1.9 | Concern Ownership Index; Ranking Model; Candidate Boundary | T001-T010 | V001-V019 | MCP surface design; documentation map | covered | EB059 owns only repository-wide universe capacity/observability |
+| Requirement 2 | must-have | AC2.1, AC2.2, AC2.3, AC2.4, AC2.5, AC2.6 | Concern Ownership Index; Schema, Migration, And Publication; Failure And Trust Behavior | T001-T004, T006-T010 | V001-V004, V006-V019 | graph store design; documentation map | covered | none |
+| Requirement 3 | must-have | AC3.1, AC3.2, AC3.3, AC3.4, AC3.5, AC3.6 | Complete Frozen Pagination; Failure And Trust Behavior | T001-T002, T005-T010 | V001, V004-V005, V008-V019 | MCP surface design; runtime contracts | covered | EB059 owns capacity-eviction cursor semantics only |
+| Requirement 4 | must-have | AC4.1, AC4.2, AC4.3, AC4.4, AC4.5, AC4.6, AC4.7, AC4.8 | Deterministic Final Tuple; Count And Filter Receipt | T001-T002, T004-T010 | V001, V003-V019 | runtime contracts; graph store design | covered | none |
 
 ## Correctness Property Mapping
 

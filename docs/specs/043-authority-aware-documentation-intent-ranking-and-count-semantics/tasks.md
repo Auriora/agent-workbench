@@ -173,7 +173,7 @@ one ranking change.
   - Status: Phase 4 complete; T007 final cross-phase validation is next.
 ## Phase 5: Verification, Installation, And Lifecycle
 
-- [ ] T007 Run focused, property, full, architecture, and budget validation.
+- [x] T007 Run focused, property, full, architecture, and budget validation.
   - Depends on: T006
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
     CP-001-CP-008
@@ -186,9 +186,9 @@ one ranking change.
     tests, 499/500/501 budgets, architecture boundaries, typecheck, full suite,
     plugin/skill validation, and package dry-run.
   - Evidence mode: command
-  - Evidence: Pending.
+  - Evidence: V001-V010 passed on 2026-07-21: focused suites 12/14/12/40/33/50/6 tests; V008 6 selected with 18 skipped; typecheck and full suite 97 files/994 tests; plugin/package validation passed; 6 owned skills had 0 errors/warnings; npm 0.6.1 dry-run contained 245 entries. Property seeds and 0/499/500/501 boundary runs are recorded in verification.md.
 
-- [ ] T008 Prove the exact packed artifact through installed-package smoke.
+- [x] T008 Prove the exact packed artifact through installed-package smoke.
   - Depends on: T007
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
     SC-001-SC-004
@@ -206,9 +206,9 @@ one ranking change.
     counts, provider identities, and cleanup. It proves clients closed, daemon
     stopped, socket/metadata removed, and all temp roots removed on pass/fail.
   - Evidence mode: command
-  - Evidence: Pending.
+  - Evidence: V011 remediation passed. The exact 0.6.1 tarball and installed content have full SHA-256 receipts in verification.md. An allowlisted environment, exact legacy/lexical score values, all searchable/scope/priority/count/filter/coverage aliases, ranking/cursor/provider behavior, and five cleanup assertions passed. Injected post-launch/pre-health failure also cleaned every resource.
 
-- [ ] T009 Promote durable contracts and pass documentation/expert gates.
+- [x] T009 Promote durable contracts and pass documentation/expert gates.
   - Depends on: T008
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
     SC-004
@@ -223,9 +223,18 @@ one ranking change.
     concern schema, ranking, cursor, count, trust, and compatibility behavior is
     promoted; no current behavior remains spec-only.
   - Evidence mode: artifact
-  - Evidence: Pending.
+  - Evidence: V012 returned 0 diagnostics; V013 checked 11 Markdown documents
+    with no structural, frontmatter, or missing-file error; V014 reported 0
+    missing promotion targets. V015 re-ran 66 focused tests and recorded no
+    architecture-boundary finding after fixed score/count smoke assertions.
+    V016 recorded 0 blockers after environment allowlisting, non-vacuous
+    cleanup, and full artifact digests. Current contracts appear in
+    `docs/reference/documentation-map.md`, `docs/design/graph-store-design.md`,
+    `docs/design/mcp-surface-design.md`, and
+    `docs/reference/runtime-contracts.md`; EB059 names repository-wide universe
+    capacity and observability as separate scope.
 
-- [ ] T010 Reconcile closure and archive metadata.
+- [x] T010 Reconcile closure and archive metadata.
   - Depends on: T009
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
     SC-004
@@ -240,8 +249,14 @@ one ranking change.
     evidence or an owned non-blocking destination; implementation and cleanup
     commit identities are truthful before the package is archived/removed.
   - Evidence mode: artifact
-  - Evidence: Pending.
+  - Evidence: EB054 status reads `closed through Spec 043 on 2026-07-21` and
+    names four durable destinations; the 2026-07-21 changelog entry contains all
+    four required subsections; V017 returned `ready: true`, 0 blockers, and lint
+    counts `0/0/0`. EB059 names the only out-of-scope capacity/observability
+    work. V018-V019 and the real final/cleanup commit identities are written by
+    the guarded closure/archive workflow.
 
+  - Status: V017 ready; guarded closure/archive workflow in progress
 ## Execution Rules
 
 - Read the complete package and canonical context before implementation.
