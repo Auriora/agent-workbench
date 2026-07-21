@@ -2125,6 +2125,90 @@ Do not promote an item when:
   graph-store design, MCP surface design, runtime contracts, and operator
   observability guidance.
 
+### EB060: Ranked Documentation Readiness And First-Read Trust
+
+- Priority: P1
+- Status: promoted to active Spec 044 on 2026-07-21
+- Friction signal: after Spec 043 closed, Claude Code and Codex independently
+  called `docs_search` on runtime `0.6.1` against the same published fresh
+  snapshot. Both received `blocked_ranking_unavailable`, while
+  `repo:///orientation` reported `orientation_reusable: true`, no material
+  blockers, and docs evidence. Read-only persisted-state inspection showed the
+  concern index was present but invalid with `Mapped owner is not a file:
+  docs/adr.` A directory link added to the documentation-map canonical-owner
+  table during promotion violated the file-owner contract. Removing it exposed
+  a second deterministic blocker: the canonical backlog owner had grown beyond
+  the 120,000-byte whole-owner classification limit even though owner state is
+  derived from bounded frontmatter/status evidence. The recovery action pointed
+  to `repo:///status`, but status exposed neither concern-index readiness nor
+  either failure reason.
+- Runtime surface: documentation-map validation, concern-index publication,
+  `repo:///status`, `repo:///orientation`, `docs_search` recovery actions,
+  first-read trust, and real-repository closure validation.
+- Acceptance:
+  - The checked-in documentation map SHALL pass the same owner-resolution
+    validation used by snapshot indexing; a directory owner or other invalid
+    mapped target SHALL fail focused repository validation before promotion or
+    closure.
+  - Canonical owner classification SHALL read only the bounded metadata needed
+    for owner state. A large indexed Markdown owner SHALL NOT invalidate the
+    complete concern index solely because unrelated body content exceeds the
+    metadata bound, and the implementation SHALL NOT raise an arbitrary
+    whole-file ceiling as the repair.
+  - Status SHALL expose bounded documentation-ranking readiness for the visible
+    snapshot, distinguishing ready, invalid, and unavailable states and naming
+    a safe actionable reason when readiness is blocked.
+  - Orientation SHALL include required documentation-ranking invalidity in its
+    first-read trust decision. It SHALL NOT report reusable/no-blocker health
+    over a `docs_search` route that is deterministically blocked.
+  - `refresh_required` SHALL indicate only a condition that coordinated refresh
+    can clear. Invalid repository-authored ranking policy SHALL route to source
+    repair without creating a refresh loop.
+  - A `docs_search` `ranking_unavailable` recovery action SHALL lead to a status
+    receipt that explains the blocker and next repair or refresh boundary.
+  - A fixture-backed regression and a real-repository acceptance check SHALL
+    prove a published fresh snapshot has ready concern evidence and returns a
+    non-blocked authority-aware ranked result for the SessionStart intent query.
+- Promotion target: active
+  [Spec 044](../specs/044-ranked-documentation-readiness-and-first-read-trust/requirements.md)
+  under EB003 and EB048 first-read reliability, with EB054 ranking semantics
+  retained and EB059 capacity/eviction policy explicitly unchanged. Promote
+  accepted behavior to MCP surface design, runtime operations design, runtime
+  contracts, graph-store design, the documentation map, and validation guidance.
+
+### EB061: Parser-Route Coverage-Domain Disclosure
+
+- Priority: P1
+- Status: proposed; implementation awaits the support-versus-disclosure design
+  decision described below
+- Friction signal: runtime `0.6.1` correctly replaced noisy lexical
+  `find_references` results with five real parser import/export records and a
+  complete parser-route exhaustion receipt. Three developer-relevant calls in
+  a TypeScript integration test load the module through dynamic import and call
+  `sessionStart.buildSessionStartContext(...)`; those forms are outside the
+  indexed parser route. The response truthfully claims completion for the
+  selected route but exposes no supported-reference-form boundary,
+  `languages_inspected: []`, zero inspected files, and response metadata that
+  reports resource-backed config/docs evidence despite parser-backed hits.
+- Runtime surface: JS/TS reference extraction, parser-route coverage receipts,
+  response metadata, supported-form capability disclosure, and dynamic-import
+  member-call policy.
+- Acceptance:
+  - Parser-route completion SHALL name the indexed reference forms or an
+    equivalent bounded coverage-domain identifier so agents cannot interpret
+    route exhaustion as whole-program caller completeness.
+  - Parser-backed results SHALL retain parser capability/evidence metadata even
+    when no workspace files are reread during the query. Workspace scan
+    accounting and graph-evidence scope SHALL remain distinct.
+  - The design SHALL explicitly choose whether dynamic-import member calls are
+    unsupported-but-disclosed or promoted into the canonical JS/TS extractor;
+    no lexical or shell fallback may be added to mask the decision.
+  - Tests SHALL cover static import/export references, dynamic-import member
+    calls, empty parser routes, and metadata/coverage agreement.
+- Promotion target: create a focused follow-up spec only after the
+  support-versus-disclosure decision. Do not reopen Spec 042 or weaken its
+  route-exhaustion and bounded-scan truthfulness guarantees.
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |
@@ -2188,6 +2272,8 @@ Do not promote an item when:
 | Diagnostics exclusion truthfulness | EB057, under EB005 diagnostics, EB038 error envelopes, and EB039 shared path policy. |
 | Same-schema runtime upgrade orphan recovery | EB058, under EB036 daemon ownership and EB052 refresh convergence. |
 | Ranked documentation universe population and observability | EB059, under EB054 authority-aware docs ranking, EB009 telemetry, and EB036 daemon ownership. |
+| Ranked documentation readiness and first-read trust | EB060/Spec 044, under EB003, EB048, and EB054 without absorbing EB059 capacity policy. |
+| Parser-route coverage-domain disclosure | EB061, under EB053 and JS/TS capability truthfulness. |
 
 ## Immediate Next Specs
 
@@ -2196,8 +2282,14 @@ Do not promote an item when:
   installed-runtime acceptance is already recorded for EB055 through EB057.
 - EB053/Spec 042 and EB054/Spec 043 are closed with durable reference and
   authority-aware documentation-discovery contracts and evidence.
+- Complete EB060/Spec 044 before promoting EB059: a fresh snapshot must expose
+  ranked-documentation readiness and truthful first-read recovery before live
+  universe capacity policy is added.
 - Promote EB059 only after choosing the live-universe cap and
   cursor-eviction semantics; do not fold an arbitrary capacity constant into
   the closed Spec 043 scope.
   EB014 remains the separate candidate for large-repository completion scale
   and progress.
+- Keep EB061 in backlog until the parser capability decision chooses explicit
+  unsupported-form disclosure or canonical dynamic-import member-call
+  extraction.
