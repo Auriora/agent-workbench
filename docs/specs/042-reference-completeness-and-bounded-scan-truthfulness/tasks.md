@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: tasks
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -67,7 +67,7 @@ T008 + T010 -> T011 -> T012 -> T013
 
 ## Phase 2: Route And Scanner Implementation
 
-- [ ] T003 Make parser-route completeness explicit.
+- [x] T003 Make parser-route completeness explicit.
   - Depends on: T002
   - Requirements: Requirement 1, Requirement 3, Requirement 4; CP-001, CP-003,
     CP-005, CP-010
@@ -81,9 +81,13 @@ T008 + T010 -> T011 -> T012 -> T013
     ownership and stable cross-page transitions. Complete requires all routes
     exhausted, and lexical scanning never follows non-empty parser evidence.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: V002 passed on 2026-07-21 (two files, 35 tests). Every parser
+    page asserts the limit-plus-one request, all three routes in their fixed
+    order, offsets, exhaustion flags, cursor transition, and terminal
+    no-cursor state. Storage tests prove identity deduplication occurs before
+    deterministic `LIMIT/OFFSET` pagination.
 
-- [ ] T004 Implement file-atomic lexical scanning and evidence classification.
+- [x] T004 Implement file-atomic lexical scanning and evidence classification.
   - Depends on: T003
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4;
     CP-001, CP-003, CP-004, CP-005, CP-006, CP-009, CP-011
@@ -98,9 +102,12 @@ T008 + T010 -> T011 -> T012 -> T013
     classification but not unique inspection, and missing row 101 cannot yield
     valid absence.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: V002, V005, and V008 passed on 2026-07-21 (35, 7, and 15
+    tests). Named missing, stat/read failure, oversized, changed, unknown skip,
+    policy exclusion, read-policy refusal, time, file, byte, and result cases
+    prove atomic progress and exact failed-candidate versus exclusion accounting.
 
-- [ ] T005 Implement deterministic scan and result pagination.
+- [x] T005 Implement deterministic scan and result pagination.
   - Depends on: T004
   - Requirements: Requirement 2, Requirement 3, Requirement 4; CP-002, CP-003, CP-004,
     CP-006, CP-007, CP-008, CP-011
@@ -115,9 +122,12 @@ T008 + T010 -> T011 -> T012 -> T013
     tampering are rejected, and a prior-daemon key epoch returns
     `cursor_expired` without restarting.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: V006 passed on 2026-07-21 (one file, 22 tests). Seeded and named
+    cases prove concatenation, order, replay stability, exact scan/result
+    accounting, authenticated identity mismatch and tamper rejection,
+    changed/deleted result replay blocking, and key-epoch expiry.
 
-- [ ] T006 Integrate canonical accounting and MCP presentation.
+- [x] T006 Integrate canonical accounting and MCP presentation.
   - Depends on: T005
   - Requirements: Requirement 1, Requirement 2, Requirement 3; CP-001,
     CP-003, CP-004, CP-005, CP-009, CP-010, CP-011
@@ -131,9 +141,12 @@ T008 + T010 -> T011 -> T012 -> T013
     candidates reconcile exactly. Actual bytes are observed accounting rather
     than a claimed pre-read admission bound.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: V003 passed on 2026-07-21 (three files, 38 tests). A real mixed
+    scan/result sequence is presented through the public envelope and every
+    page/sequence counter, count, language, cursor, truncation, and coverage
+    field reconciles to independently calculated constants.
 
-- [ ] T007 Calibrate complete, partial, blocked, stale, and invalid trust.
+- [x] T007 Calibrate complete, partial, blocked, stale, and invalid trust.
   - Depends on: T006
   - Requirements: Requirement 1, Requirement 3; CP-001, CP-003, CP-005, CP-009
   - Files: canonical response metadata policy, presenter trust mapper,
@@ -144,7 +157,11 @@ T008 + T010 -> T011 -> T012 -> T013
     parser-pagination, and policy-exclusion envelopes have non-contradictory
     trust, caveat, truncation, and callable-next-action fields.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: V004 passed on 2026-07-21 (one file, 16 tests), with V003 proving
+    the exact presented continuation is callable through the registered MCP
+    tool. Feature-sensitive goldens cover complete, parser partial, lexical
+    partial, candidate blocked, policy excluded, stale, invalid-cursor, and
+    expired-cursor envelopes.
 
 ## Phase 3: Verification
 

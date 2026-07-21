@@ -429,7 +429,13 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     return rows.map((row) => this.mapGraphEdgeRow(row));
   }
 
-  public async getIncomingEdges(input: { snapshot_id: string; node_id: string; max_rows?: number }): Promise<
+  public async getIncomingEdges(input: {
+    snapshot_id: string;
+    node_id: string;
+    max_rows?: number;
+    offset?: number;
+    exclude_source_node_id?: string;
+  }): Promise<
     readonly GraphEdgeReadModel[]
   > {
     const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
@@ -440,20 +446,49 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     const rows = this.db
       .prepare(
         `
-        SELECT edges.*
-        FROM edges
-        INNER JOIN nodes ON nodes.id = edges.target_node_id
-        INNER JOIN files ON files.id = nodes.file_id
-        WHERE files.snapshot_id = @snapshotId
-          AND edges.target_node_id = @nodeId
-        ORDER BY edges.id ASC
+        WITH ranked_edges AS (
+          SELECT edges.*,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY edges.source_node_id,
+                                edges.target_node_id,
+                                edges.kind,
+                                coalesce(edges.start_line, -1),
+                                coalesce(edges.start_column, -1),
+                                coalesce(edges.end_line, -1),
+                                coalesce(edges.end_column, -1),
+                                edges.provenance,
+                                edges.metadata_json
+                   ORDER BY edges.id ASC
+                 ) AS identity_rank
+          FROM edges
+          INNER JOIN nodes ON nodes.id = edges.target_node_id
+          INNER JOIN files ON files.id = nodes.file_id
+          WHERE files.snapshot_id = @snapshotId
+            AND edges.target_node_id = @nodeId
+            AND (@excludeSourceNodeId IS NULL OR edges.source_node_id != @excludeSourceNodeId)
+        )
+        SELECT id, source_node_id, target_node_id, kind, start_line, start_column,
+               end_line, end_column, provenance, confidence, metadata_json
+        FROM ranked_edges
+        WHERE identity_rank = 1
+        ORDER BY source_node_id ASC,
+                 coalesce(start_line, -1) ASC,
+                 coalesce(start_column, -1) ASC,
+                 coalesce(end_line, -1) ASC,
+                 coalesce(end_column, -1) ASC,
+                 kind ASC,
+                 provenance ASC,
+                 id ASC
         LIMIT @maxRows
+        OFFSET @offset
       `
       )
       .all({
         snapshotId,
         nodeId: input.node_id,
-        maxRows: input.max_rows ?? 50
+        maxRows: input.max_rows ?? 50,
+        offset: input.offset ?? 0,
+        excludeSourceNodeId: input.exclude_source_node_id ?? null
       }) as EdgeRow[];
 
     return rows.map((row) => this.mapGraphEdgeRow(row));
@@ -464,6 +499,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     node_id: string;
     max_depth?: number;
     max_rows?: number;
+    offset?: number;
   }): Promise<readonly ResolvedReference[]> {
     const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
@@ -473,33 +509,43 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     const rows = this.db
       .prepare(
         `
-        SELECT e.id,
-               e.source_node_id,
-               e.target_node_id,
-               e.provenance,
-               e.confidence,
-               t.path AS target_file_path
-        FROM edges e
-        INNER JOIN nodes s ON s.id = e.source_node_id
-        INNER JOIN files sf ON sf.id = s.file_id
-        LEFT JOIN nodes t_node ON t_node.id = e.target_node_id
-        LEFT JOIN files t ON t.id = t_node.file_id
-        WHERE sf.snapshot_id = @snapshotId
-          AND e.source_node_id = @nodeId
-          AND e.target_node_id IS NOT NULL
-        ORDER BY e.id ASC
+        WITH ranked_references AS (
+          SELECT e.id,
+                 e.source_node_id,
+                 e.target_node_id,
+                 e.provenance,
+                 e.confidence,
+                 t.path AS target_file_path,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY e.source_node_id, e.target_node_id, e.provenance
+                   ORDER BY e.id ASC
+                 ) AS identity_rank
+          FROM edges e
+          INNER JOIN nodes s ON s.id = e.source_node_id
+          INNER JOIN files sf ON sf.id = s.file_id
+          INNER JOIN nodes t_node ON t_node.id = e.target_node_id
+          INNER JOIN files t ON t.id = t_node.file_id
+          WHERE sf.snapshot_id = @snapshotId
+            AND t.snapshot_id = @snapshotId
+            AND e.source_node_id = @nodeId
+            AND e.target_node_id IS NOT NULL
+        )
+        SELECT id, source_node_id, target_node_id, provenance, confidence, target_file_path
+        FROM ranked_references
+        WHERE identity_rank = 1
+        ORDER BY source_node_id ASC, target_node_id ASC, provenance ASC, id ASC
         LIMIT @maxRows
+        OFFSET @offset
       `
       )
       .all({
         snapshotId,
         nodeId: input.node_id,
-        maxRows: input.max_rows ?? 50
+        maxRows: input.max_rows ?? 50,
+        offset: input.offset ?? 0
       }) as ReferenceRow[];
 
-    return rows
-      .filter((row) => row.target_file_path !== null)
-      .map((row) => ({
+    return rows.map((row) => ({
         source_node_id: row.source_node_id,
         target_node_id: row.target_node_id ?? "",
         target_file_path: row.target_file_path as string,
@@ -513,6 +559,10 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     snapshot_id: string;
     file_path?: string;
     max_rows?: number;
+    offset?: number;
+    source_node_id?: string;
+    reference_name?: string;
+    qualified_reference_name?: string;
   }): Promise<readonly UnresolvedReferenceReadModel[]> {
     const snapshotId = this.resolvePublishedSnapshotId(input.snapshot_id);
     if (snapshotId == null) {
@@ -522,28 +572,63 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     const rows = this.db
       .prepare(
         `
-        SELECT ur.id,
-               ur.source_node_id,
-               ur.reference_name,
-               ur.reference_kind,
-               ur.start_line,
-               ur.start_column,
-               ur.end_line,
-               ur.end_column,
-               ur.candidate_metadata_json,
-               f.path AS source_file_path
-        FROM unresolved_refs ur
-        INNER JOIN files f ON f.id = ur.file_id
-        WHERE f.snapshot_id = @snapshotId
-          AND (@filePath IS NULL OR f.path = @filePath)
-        ORDER BY ur.id ASC
+        WITH ranked_references AS (
+          SELECT ur.id,
+                 ur.source_node_id,
+                 ur.reference_name,
+                 ur.reference_kind,
+                 ur.start_line,
+                 ur.start_column,
+                 ur.end_line,
+                 ur.end_column,
+                 ur.candidate_metadata_json,
+                 f.path AS source_file_path,
+                 ROW_NUMBER() OVER (
+                   PARTITION BY ur.source_node_id,
+                                ur.reference_name,
+                                ur.reference_kind,
+                                f.path,
+                                ur.start_line,
+                                ur.start_column,
+                                ur.end_line,
+                                ur.end_column
+                   ORDER BY ur.id ASC
+                 ) AS identity_rank
+          FROM unresolved_refs ur
+          INNER JOIN files f ON f.id = ur.file_id
+          WHERE f.snapshot_id = @snapshotId
+            AND (@filePath IS NULL OR f.path = @filePath)
+            AND (
+              @sourceNodeId IS NULL OR ur.source_node_id = @sourceNodeId OR
+              ur.reference_name = @referenceName OR ur.reference_name = @qualifiedReferenceName
+            )
+        )
+        SELECT id, source_node_id, reference_name, reference_kind, start_line,
+               start_column, end_line, end_column, candidate_metadata_json,
+               source_file_path
+        FROM ranked_references
+        WHERE identity_rank = 1
+        ORDER BY source_file_path ASC,
+                 start_line ASC,
+                 start_column ASC,
+                 end_line ASC,
+                 end_column ASC,
+                 source_node_id ASC,
+                 reference_name ASC,
+                 reference_kind ASC,
+                 id ASC
         LIMIT @maxRows
+        OFFSET @offset
       `
       )
       .all({
         snapshotId,
         filePath: input.file_path ?? null,
-        maxRows: input.max_rows ?? 50
+        maxRows: input.max_rows ?? 50,
+        offset: input.offset ?? 0,
+        sourceNodeId: input.source_node_id ?? null,
+        referenceName: input.reference_name ?? null,
+        qualifiedReferenceName: input.qualified_reference_name ?? null
       }) as UnresolvedRefRow[];
 
     return rows.map((row) => ({

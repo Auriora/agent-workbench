@@ -12,6 +12,8 @@ import {
 } from "./runtime-core-contracts.js";
 import { sourceSectionSchema } from "./runtime-docs-contracts.js";
 
+export const MAX_REFERENCE_CURSOR_LENGTH = 16_384;
+
 export const sourceRangeSchema = z
   .object({
     start_line: z.number().int().positive(),
@@ -72,7 +74,7 @@ export const findReferencesRequestSchema = z
     snapshot_id: z.string().optional(),
     max_depth: z.number().int().positive().max(5).default(1),
     max_results: z.number().int().positive().max(100).default(50),
-    cursor: z.string().optional()
+    cursor: z.string().max(MAX_REFERENCE_CURSOR_LENGTH).optional()
   })
   .strict()
   .refine((value) => value.node_id !== undefined || value.symbol !== undefined, {
@@ -490,7 +492,7 @@ const findReferencesResultBaseSchema = z
     snapshot_id: z.string(),
     target: symbolReferenceSchema.optional(),
     references: z.array(referenceHitSchema),
-    cursor: z.string().optional(),
+    cursor: z.string().max(MAX_REFERENCE_CURSOR_LENGTH).optional(),
     result_count: z.number().int().nonnegative().optional(),
     next_actions: z.array(nextActionSchema)
   })

@@ -5,6 +5,8 @@
 
 import { describe, expect, it } from "vitest";
 import type {
+  FindReferencesResult,
+  ReferenceCoverageReceipt,
   ResponseEnvelope,
   ResponseMetadata
 } from "../../src/contracts/index.js";
@@ -57,6 +59,47 @@ const failureVerify = [
 ];
 
 describe("public MCP trust golden responses", () => {
+  it.each([
+    "complete",
+    "parser_partial",
+    "lexical_partial",
+    "candidate_blocked",
+    "policy_excluded",
+    "stale",
+    "invalid_cursor",
+    "cursor_expired"
+  ] as const)("keeps find_references %s trust aligned with its public evidence state", async (state) => {
+    const registered = registerMcpTool(findReferencesTool, {
+      findReferences: () => referenceTrustFixture(state)
+    });
+    const envelope = parseMcpTextContent<ResponseEnvelope<FindReferencesResult>>(
+      await registered.handler({ node_id: "target-node" })
+    );
+
+    expect(envelope.meta.trust?.not_safe_to_use_for).toEqual(expect.arrayContaining(graphUnsafe));
+    if (state === "complete" || state === "policy_excluded") {
+      expect(envelope.meta).toMatchObject({ analysis_validity: "valid", freshness: "fresh", truncated: false });
+      expect(envelope.meta.trust?.safe_to_use_for).toEqual(
+        expect.arrayContaining(["local_structure_reference", "navigation", "next_read_selection"])
+      );
+    } else if (state === "parser_partial" || state === "lexical_partial") {
+      expect(envelope.meta).toMatchObject({ analysis_validity: "partial", truncated: true });
+      expect(envelope.data.cursor).toBe("opaque-continuation");
+      expect(envelope.meta.trust?.must_verify_by).toContain("refresh_runtime_snapshot");
+    } else if (state === "candidate_blocked") {
+      expect(envelope.meta).toMatchObject({ analysis_validity: "partial", verification_status: "blocked", truncated: true });
+      expect(envelope.meta.trust?.must_verify_by).toContain("resolve_blocked_environment");
+    } else if (state === "stale") {
+      expect(envelope.meta).toMatchObject({ freshness: "stale", verification_status: "blocked" });
+      expect(envelope.data.coverage_status).toBe("legacy_unverified");
+      expect(envelope.meta.trust?.must_verify_by).toContain("refresh_runtime_snapshot");
+    } else {
+      expect(envelope.meta).toMatchObject({ analysis_validity: "invalid", verification_status: "blocked" });
+      expect(envelope.errors).toEqual([expect.objectContaining({ code: state, retryable: false })]);
+      expect(envelope.meta.trust?.must_verify_by).toContain("resolve_blocked_environment");
+    }
+  });
+
   it("keeps repository and integration health as runtime routing evidence", async () => {
     const status = registerMcpResource(repoStatusResource, {
       repoRoot: "/repo",
@@ -659,5 +702,101 @@ function meta(input: {
     evidence_kinds: input.evidenceKinds,
     verification_status: input.verificationStatus,
     truncated: false
+  };
+}
+
+function referenceTrustFixture(
+  state: "complete" | "parser_partial" | "lexical_partial" | "candidate_blocked" |
+    "policy_excluded" | "stale" | "invalid_cursor" | "cursor_expired"
+) {
+  const base = meta({
+    repoRoot: "/repo",
+    capabilityLevel: "partial_semantic",
+    evidenceKinds: ["parser", "text_fallback", "heuristic"],
+    languages: state === "parser_partial" ? [] : ["typescript"],
+    verificationStatus: "needed"
+  });
+  if (state === "stale" || state === "invalid_cursor" || state === "cursor_expired") {
+    return {
+      references: {
+        repo_root: "/repo",
+        snapshot_id: "snapshot-1",
+        coverage_status: "legacy_unverified" as const,
+        references: [],
+        result_count: 0,
+        next_actions: state === "stale"
+          ? [{ tool: "read_resource", args: { uri: "repo:///status" } }]
+          : []
+      },
+      meta: {
+        ...base,
+        ...(state === "stale"
+          ? { freshness: "stale" as const, verification_status: "blocked" as const }
+          : { analysis_validity: "invalid" as const, verification_status: "blocked" as const })
+      },
+      ...(state === "stale" ? {} : {
+        errors: [{ code: state, message: `Fixture ${state}.`, retryable: false }]
+      })
+    };
+  }
+  const coverage = referenceTrustCoverage(state);
+  const cursor = state === "parser_partial" || state === "lexical_partial" ? "opaque-continuation" : undefined;
+  return {
+    references: {
+      repo_root: "/repo",
+      snapshot_id: "snapshot-1",
+      coverage_status: "evidence_backed" as const,
+      references: state === "candidate_blocked" || state === "policy_excluded" ? [] : [{
+        source_file_path: "src/use.ts",
+        reference_name: "target",
+        reference_kind: "lexical",
+        confidence: 0.2,
+        evidence_kinds: ["text_fallback" as const, "heuristic" as const],
+        provenance: "bounded_lexical_identifier_scan",
+        status: "unresolved" as const
+      }],
+      ...(cursor === undefined ? {} : { cursor }),
+      result_count: coverage.complete_matches ?? coverage.matched_so_far,
+      coverage,
+      next_actions: cursor === undefined ? [] : [{ tool: "find_references", args: {
+        node_id: "target-node", snapshot_id: "snapshot-1", max_depth: 1, max_results: 1, cursor
+      } }]
+    },
+    meta: base
+  };
+}
+
+function referenceTrustCoverage(
+  state: "complete" | "parser_partial" | "lexical_partial" | "candidate_blocked" | "policy_excluded"
+): ReferenceCoverageReceipt {
+  const zero = { unique_files_inspected: 0, file_read_attempts: 0, replay_reads: 0,
+    declared_bytes_admitted: 0, actual_bytes_observed: 0, elapsed_admission_ms: 0, occurrences: 0 };
+  if (state === "parser_partial") {
+    return {
+      state: "partial", route: "parser", route_exhaustion: { outgoing: false, incoming: false, unresolved: false },
+      page: { ...zero, occurrences: 1 }, sequence: { ...zero, occurrences: 1 },
+      searchable_candidates_classified: { page: 0, sequence: 0 }, languages_inspected: [],
+      page_matches: 1, matched_so_far: 1, policy_exclusions: { page: [], sequence: [] },
+      unresolved_searchable_candidates: { page: [], sequence: [] }, stop_reason: "result",
+      continuation_kind: "parser_composite"
+    };
+  }
+  const unresolved = state === "candidate_blocked" ? [{ reason: "missing" as const, count: 1 }] : [];
+  const exclusions = state === "policy_excluded" ? [{ reason: "generated_or_vendor" as const, count: 1 }] : [];
+  const isPartial = state === "lexical_partial" || state === "candidate_blocked";
+  const occurrences = state === "complete" || state === "lexical_partial" ? 1 : 0;
+  return {
+    state: isPartial ? "partial" : "complete",
+    route: "lexical",
+    catalog_exhausted: state !== "lexical_partial",
+    page: { ...zero, unique_files_inspected: occurrences, file_read_attempts: occurrences, occurrences },
+    sequence: { ...zero, unique_files_inspected: occurrences, file_read_attempts: occurrences, occurrences },
+    searchable_candidates_classified: { page: occurrences + unresolved.length, sequence: occurrences + unresolved.length },
+    languages_inspected: occurrences === 0 ? [] : ["typescript"], page_matches: occurrences, matched_so_far: occurrences,
+    ...(isPartial ? {} : { complete_matches: occurrences }),
+    policy_exclusions: { page: exclusions, sequence: exclusions },
+    unresolved_searchable_candidates: { page: unresolved, sequence: unresolved },
+    stop_reason: state === "lexical_partial" ? "result" : state === "candidate_blocked" ? "missing" : "catalog_exhausted",
+    ...(state === "lexical_partial" ? { continuation_kind: "lexical_scan" as const } : {})
   };
 }

@@ -1921,6 +1921,138 @@ describe("graph store", () => {
       store.close();
     }
   });
+
+  it("deduplicates parser reference identities before deterministic limit and offset paging", async () => {
+    const store = openGraphStore(path.join(dir, "reference-identity-pagination.sqlite"));
+    const snapshot = snapshotState("48");
+    const edge = (id: string, source: string, target: string) => ({
+      id,
+      source_node_id: source,
+      target_node_id: target,
+      kind: "call",
+      source_range: { start_line: 2, start_column: 4, end_line: 2, end_column: 12 },
+      provenance: "tree-sitter-python",
+      confidence: 0.9,
+      metadata: { reference_name: target }
+    });
+    const unresolved = (id: string, line: number) => ({
+      id,
+      source_node_id: "source-a",
+      source_file_path: "src/source-a.py",
+      reference_name: "Target",
+      reference_kind: "call",
+      source_range: { start_line: line, start_column: 2, end_line: line, end_column: 8 },
+      candidate_metadata: { resolution: "missing" }
+    });
+
+    try {
+      await createBuildingSnapshot(store, { ...snapshot, freshness: "refreshing" });
+      for (const [nodeId, sourcePath] of [
+        ["target-a", "src/target-a.py"],
+        ["target-b", "src/target-b.py"],
+        ["source-b", "src/source-b.py"]
+      ] as const) {
+        await store.replaceSnapshotExtraction({
+          batch: extractionBatch({ snapshot_id: snapshot.id, source_path: sourcePath, node_id: nodeId, name: nodeId }),
+          replace: true
+        });
+      }
+      const sourceBatch = extractionBatch({
+        snapshot_id: snapshot.id,
+        source_path: "src/source-a.py",
+        node_id: "source-a",
+        name: "source-a"
+      });
+      await store.replaceSnapshotExtraction({
+        batch: {
+          ...sourceBatch,
+          edges: [
+            edge("out-b-1", "source-a", "target-b"),
+            edge("out-b-duplicate", "source-a", "target-b"),
+            edge("out-a-1", "source-a", "target-a"),
+            edge("out-a-duplicate", "source-a", "target-a")
+          ],
+          unresolved_references: [
+            unresolved("unresolved-1", 1),
+            unresolved("unresolved-1-duplicate", 1),
+            unresolved("unresolved-2", 2)
+          ]
+        },
+        replace: true
+      });
+      await store.insertEdges({
+        snapshot_id: snapshot.id,
+        file_path: "src/source-b.py",
+        edges: [
+          edge("incoming-b-1", "source-b", "target-a"),
+          edge("incoming-b-duplicate", "source-b", "target-a")
+        ]
+      });
+      await publishBuildingSnapshot(store, snapshot.id);
+
+      await expect(store.getReferences({
+        snapshot_id: snapshot.id,
+        node_id: "source-a",
+        max_rows: 1,
+        offset: 0
+      })).resolves.toEqual([expect.objectContaining({ target_node_id: "target-a" })]);
+      await expect(store.getReferences({
+        snapshot_id: snapshot.id,
+        node_id: "source-a",
+        max_rows: 1,
+        offset: 1
+      })).resolves.toEqual([expect.objectContaining({ target_node_id: "target-b" })]);
+      await expect(store.getReferences({
+        snapshot_id: snapshot.id,
+        node_id: "source-a",
+        max_rows: 1,
+        offset: 2
+      })).resolves.toEqual([]);
+
+      await expect(store.getIncomingEdges({
+        snapshot_id: snapshot.id,
+        node_id: "target-a",
+        max_rows: 1,
+        offset: 0
+      })).resolves.toEqual([expect.objectContaining({ source_node_id: "source-a" })]);
+      await expect(store.getIncomingEdges({
+        snapshot_id: snapshot.id,
+        node_id: "target-a",
+        max_rows: 1,
+        offset: 1
+      })).resolves.toEqual([expect.objectContaining({ source_node_id: "source-b" })]);
+      await expect(store.getIncomingEdges({
+        snapshot_id: snapshot.id,
+        node_id: "target-a",
+        max_rows: 1,
+        offset: 2
+      })).resolves.toEqual([]);
+
+      await expect(store.getUnresolvedReferences({
+        snapshot_id: snapshot.id,
+        source_node_id: "source-a",
+        reference_name: "Target",
+        max_rows: 1,
+        offset: 0
+      })).resolves.toEqual([expect.objectContaining({ source_range: expect.objectContaining({ start_line: 1 }) })]);
+      await expect(store.getUnresolvedReferences({
+        snapshot_id: snapshot.id,
+        source_node_id: "source-a",
+        reference_name: "Target",
+        max_rows: 1,
+        offset: 1
+      })).resolves.toEqual([expect.objectContaining({ source_range: expect.objectContaining({ start_line: 2 }) })]);
+      await expect(store.getUnresolvedReferences({
+        snapshot_id: snapshot.id,
+        source_node_id: "source-a",
+        reference_name: "Target",
+        max_rows: 1,
+        offset: 2
+      })).resolves.toEqual([]);
+    } finally {
+      store.close();
+    }
+  });
 });
 
 function snapshotState(id: string): SnapshotState {

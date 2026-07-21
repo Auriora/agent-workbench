@@ -96,17 +96,28 @@ export interface GraphQueryPort {
     range: SourceRange;
   }): Promise<readonly GraphNode[]>;
   getOutgoingEdges(input: { snapshot_id: string; node_id: string; max_rows?: number }): Promise<readonly GraphEdge[]>;
-  getIncomingEdges(input: { snapshot_id: string; node_id: string; max_rows?: number }): Promise<readonly GraphEdge[]>;
+  getIncomingEdges(input: {
+    snapshot_id: string;
+    node_id: string;
+    max_rows?: number;
+    offset?: number;
+    exclude_source_node_id?: string;
+  }): Promise<readonly GraphEdge[]>;
   getReferences(input: {
     snapshot_id: string;
     node_id: string;
     max_depth?: number;
     max_rows?: number;
+    offset?: number;
   }): Promise<readonly ResolvedReference[]>;
   getUnresolvedReferences(input: {
     snapshot_id: string;
     file_path?: string;
     max_rows?: number;
+    offset?: number;
+    source_node_id?: string;
+    reference_name?: string;
+    qualified_reference_name?: string;
   }): Promise<readonly UnresolvedReference[]>;
   traverse(input: {
     snapshot_id: string;

@@ -5,6 +5,8 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  MAX_REFERENCE_CURSOR_LENGTH,
+  findReferencesRequestSchema,
   findReferencesResultSchema,
   lexicalResultCursorPayloadSchema,
   lexicalScanCursorPayloadSchema,
@@ -217,6 +219,14 @@ describe("authenticated reference cursor", () => {
     envelope.payload = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
     const tampered = Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url");
     expect(codec.decode(tampered)).toEqual({ ok: false, code: "invalid_cursor" });
+  });
+
+  it("rejects oversized opaque cursors before decode work", () => {
+    const oversized = "a".repeat(MAX_REFERENCE_CURSOR_LENGTH + 1);
+    const codec = createReferenceCursorCodec({ key: Buffer.alloc(32, 8), key_epoch: "epoch-1" });
+
+    expect(findReferencesRequestSchema.safeParse({ node_id: "target-1", cursor: oversized }).success).toBe(false);
+    expect(codec.decode(oversized)).toEqual({ ok: false, code: "invalid_cursor" });
   });
 
   it("rejects impossible parser route order, totals, and continuation kinds", () => {

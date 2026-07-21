@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: review-disposition
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-21
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -17,7 +17,8 @@ This record reconciles the earlier Spec 042 mixture-of-experts review. A
 `resolved` disposition means the draft requirements, design, tasks,
 traceability, and verification plan now answer the authoring finding. It does
 not claim implementation, runtime, validation, promotion, or closure evidence.
-All implementation tasks remain pending.
+Phase 2 implementation findings are recorded separately below. T003-T007 are
+complete; installed-client, promotion, and closure tasks remain open.
 
 ## Blockers
 
@@ -61,9 +62,36 @@ All implementation tasks remain pending.
 | P1-B04 | Boundary files existed but their oversized, unreadable, changed, missing, and policy classifications were not asserted. | resolved | `catalog-boundaries.json` and the graph fixture test lock each configured boundary and row identity while Phase 2 behavior remains explicitly todo. |
 | P1-B05 | Verification still described all implementation and V001 evidence as pending. | resolved | Tasks, traceability, quality gates, validation results, requirement residuals, and the evidence log now distinguish completed Phase 1 from pending Phase 2-4 delivery. |
 
-Phase 2 todos are intentionally retained under T003-T005 and do not weaken the
-completed Phase 1 contract and reproduction boundary. The full T011 review
-remains required after runtime implementation and before promotion.
+The Phase 1 todo markers under T003-T005 preserved the contract/reproduction
+boundary and were replaced by executable assertions during Phase 2. The full
+T011 review remains required before promotion.
+
+### Phase 2 Implementation Review
+
+Three independent reviewers covered code architecture, requirements/QA, and
+security/operations. The parent review deduplicated overlapping findings and
+verified each remediation with focused tests.
+
+| ID | Finding | Disposition | Resolution evidence |
+| --- | --- | --- | --- |
+| P2-B01 | Metadata/read access failures could escape the coverage receipt. | resolved | `inspectFile` classifies stat and read failures, advances once, and V008 proves later safe work and exact counters. |
+| P2-B02 | Policy and oversized classification could bypass the monotonic page deadline. | resolved | The deadline is checked before every catalog-entry classification; exclusion-heavy V008 coverage proves a scan cursor is returned. |
+| P2-B03 | Changed or missing result-cursor files could silently resume later catalog work. | resolved | Result replay now short-circuits with structured partial/blocked evidence; V006 covers changed and deleted replay sources. |
+| P2-B04 | Generic skip reasons and live workspace policy could move unsafe or failed candidates outside the wrong evidence universe. | resolved | Only explicit policy reasons are exclusions; unknown reasons are failed candidates, and a required live workspace-safety decision prevents reads of stale read-only catalog entries. |
+| P2-B05 | Duplicate parser identities could consume bounded page slots. | resolved | Filtered storage CTEs rank and deduplicate canonical identities before `LIMIT/OFFSET`; storage and V002 regressions prove page composition. |
+| P2-B06 | A candidate larger than the whole page byte budget could produce a non-progressing cursor. | resolved | Such a candidate is classified once as oversized and scan progress advances; V008 proves termination. |
+| P2-B07 | Completeness was possible without matching snapshot-validity evidence. | resolved | Missing validity evidence downgrades the receipt and blocks verification; stale preflight and debug sweep use real validity evidence. |
+| P2-B08 | Opaque cursor input had no allocation/authentication size bound. | resolved | Request/result schemas and the codec enforce a 16,384-character maximum before decode/HMAC work; V001 covers rejection. |
+| P2-B09 | Blocked evidence and continuations lacked proven callable recovery. | resolved | Blocked/no-evidence returns repository-status recovery; continuation actions retain query identity and V003 invokes the presented action verbatim through the registered MCP tool. |
+| P2-B10 | Parser tests did not prove intermediate limit-plus-one page states. | resolved | V002 asserts every call, row, offset, exhaustion flag, route transition, stop reason, cursor, and terminal state. |
+| P2-B11 | Failed-candidate progress was not proven across continuation boundaries. | resolved | V006 table-driven cases cover missing, read failure, oversized, and changed candidates across two pages with exact page/sequence counters. |
+| P2-B12 | Cursor negative coverage over-relied on bad-tag rejection. | resolved | V006 adds valid-HMAC snapshot, target, bounds, counter, and route mismatches plus changed/deleted result replay. |
+| P2-B13 | Public accounting tests compared receipts without independently reconciling all fields. | resolved | V003/V006 use a real mixed scan/result sequence and assert every page and sequence accounting field against fixed expected values. |
+| P2-B14 | No healthy complete query proved all twelve SessionStart occurrences. | resolved | V005 includes a 101-row healthy universe with exactly twelve lexical occurrences, complete validity, no cursor, and no truncation. |
+| P2-B15 | The trust-golden gate was not sensitive to reference completeness behavior. | resolved | V004 now covers complete, parser partial, lexical partial, candidate blocked, policy excluded, stale, invalid-cursor, and expired-cursor envelopes. |
+
+Phase 2 review blockers remaining: zero. Phase 2 is ready for its implemented
+gate; this does not satisfy T011's later full work-product/promotion review.
 
 ### Final Authoring Audit
 
@@ -83,8 +111,9 @@ remains required after runtime implementation and before promotion.
   post-revision lifecycle lint and the reconciled initial and final authoring
   reviews. V013 and the refreshed T011/V015 review remain final
   post-implementation gates.
-- Implementation, installed-client, promotion, closure, and archive evidence:
-  pending; no task is marked complete by this disposition.
+- Phase 2 implementation evidence: complete for T003-T007 and V001-V006/V008.
+- Installed-client, promotion, closure, and archive evidence: pending under
+  T008-T013; this disposition does not close those gates.
 
 ## Related Artifacts
 

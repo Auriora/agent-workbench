@@ -5,6 +5,7 @@
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import {
+  MAX_REFERENCE_CURSOR_LENGTH,
   referenceCursorPayloadSchema,
   type ReferenceCursorPayload
 } from "../../contracts/index.js";
@@ -41,7 +42,11 @@ export function createReferenceCursorCodec(input: {
         payload: encodedPayload,
         tag: sign(encodedPayload, keyEpoch, key)
       };
-      return Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url");
+      const cursor = Buffer.from(JSON.stringify(envelope), "utf8").toString("base64url");
+      if (cursor.length > MAX_REFERENCE_CURSOR_LENGTH) {
+        throw new Error("Reference cursor state exceeds the bounded opaque-token size.");
+      }
+      return cursor;
     },
     decode(cursor): ReferenceCursorDecodeResult {
       const envelope = parseEnvelope(cursor);
@@ -81,10 +86,14 @@ function sign(payload: string, keyEpoch: string, key: Buffer): string {
 }
 
 function parseEnvelope(cursor: string): CursorEnvelope | null {
+  if (cursor.length > MAX_REFERENCE_CURSOR_LENGTH) {
+    return null;
+  }
   try {
     const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as Partial<CursorEnvelope>;
     if (value.version !== 1 || typeof value.key_epoch !== "string" ||
-        typeof value.payload !== "string" || typeof value.tag !== "string") {
+        typeof value.payload !== "string" || value.payload.length > MAX_REFERENCE_CURSOR_LENGTH ||
+        typeof value.tag !== "string") {
       return null;
     }
     return value as CursorEnvelope;

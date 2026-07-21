@@ -33,6 +33,7 @@ import {
   WorkspaceSafetyAdapter
 } from "../../src/infrastructure/filesystem/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
+import { createReferenceCursorCodec } from "../../src/infrastructure/runtime/index.js";
 import { buildApplyWorkspaceEditEnvelope, buildPreviewWorkspaceEditEnvelope } from "../../src/presentation/workspace-edit-presenter.js";
 import { buildFindReferencesEnvelope } from "../../src/presentation/find-references-presenter.js";
 import { buildImpactEnvelope } from "../../src/presentation/impact-presenter.js";
@@ -1450,6 +1451,8 @@ async function buildPresenterGoldens(input: {
       snapshots: graphStore,
       catalog: graphStore,
       workspace,
+      workspace_safety: new WorkspaceSafetyAdapter({ repoRoot: fixtureRoot }),
+      cursor_codec: createReferenceCursorCodec({ key: Buffer.alloc(32, 64), key_epoch: "stdio-test" }),
       default_repo_root: fixtureRoot
     });
     const impactResult = await computeImpact({

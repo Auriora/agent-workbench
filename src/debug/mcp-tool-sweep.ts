@@ -30,6 +30,10 @@ import {
   searchDocs
 } from "../application/use-cases/query-docs.js";
 import { searchSymbols } from "../application/use-cases/search-symbols.js";
+import {
+  DEFAULT_SNAPSHOT_VALIDITY_MAX_PATHS,
+  SnapshotValidityService
+} from "../application/use-cases/validate-snapshot-paths.js";
 import { applyWorkspaceEdit } from "../application/use-cases/apply-workspace-edit.js";
 import { previewWorkspaceEdit } from "../application/use-cases/preview-workspace-edit.js";
 import { describeCodexIntegrationProfile } from "../application/use-cases/describe-codex-integration-profile.js";
@@ -40,11 +44,13 @@ import { InMemoryEditPreviewStoreAdapter } from "../infrastructure/edit-preview-
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../infrastructure/extraction/index.js";
 import {
   FileCatalogScannerAdapter,
+  FilesystemSnapshotPathValidatorAdapter,
   WorkspaceFileAdapter,
   WorkspaceSafetyAdapter
 } from "../infrastructure/filesystem/index.js";
 import { MarkdownParserAdapter, MarkdownStructureCheckerAdapter } from "../infrastructure/markdown/index.js";
 import { SCHEMA_VERSION, SqliteGraphStoreAdapter } from "../infrastructure/sqlite/index.js";
+import { createReferenceCursorCodec } from "../infrastructure/runtime/index.js";
 import {
   JavaScriptTypeScriptTreeSitterExtractorAdapter,
   PythonParserAdapter,
@@ -690,12 +696,23 @@ async function callTool(input: {
   }
   if (input.toolName === "find_references") {
     const symbol = await firstSymbol(input);
+    const snapshot = await input.runtime.graph.getSnapshot({ repo_root: input.repoRoot });
+    const snapshotValidity = snapshot === null
+      ? undefined
+      : await new SnapshotValidityService(
+          input.runtime.graph,
+          new FilesystemSnapshotPathValidatorAdapter({ repoRoot: input.repoRoot }),
+          input.runtime.graph
+        ).validate({ snapshot, max_paths: DEFAULT_SNAPSHOT_VALIDITY_MAX_PATHS });
     return buildFindReferencesEnvelope(await findReferences({
       request: { repo_root: input.repoRoot, ...(symbol ? { node_id: symbol.node_id } : { symbol: input.facts.symbol_query ?? "main" }), max_depth: 1, max_results: 10 },
       graph: input.runtime.graph,
       snapshots: input.runtime.graph,
       catalog: input.runtime.graph,
       workspace: input.runtime.workspace,
+      workspace_safety: new WorkspaceSafetyAdapter({ repoRoot: input.repoRoot }),
+      cursor_codec: createReferenceCursorCodec(),
+      snapshot_validity: snapshotValidity,
       default_repo_root: input.repoRoot
     }));
   }

@@ -11,7 +11,7 @@ import {
   computeImpact,
   ImpactStartNodeNotFoundError
 } from "../../src/application/use-cases/compute-impact.js";
-import { findReferences } from "../../src/application/use-cases/find-references.js";
+import { findReferences as executeFindReferences } from "../../src/application/use-cases/find-references.js";
 import { getTaskContext } from "../../src/application/use-cases/get-task-context.js";
 import { indexRepositoryGraph } from "../../src/application/use-cases/index-repository-graph.js";
 import { searchSymbols } from "../../src/application/use-cases/search-symbols.js";
@@ -19,6 +19,8 @@ import type { ClockPort } from "../../src/ports/index.js";
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../../src/infrastructure/extraction/index.js";
 import { FileCatalogScannerAdapter, WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
+import { createReferenceCursorCodec } from "../../src/infrastructure/runtime/index.js";
+import { permissiveWorkspaceSafety } from "../helpers/permissive-workspace-safety.js";
 import {
   CppDeclarationExtractorAdapter,
   GoDeclarationExtractorAdapter,
@@ -31,6 +33,23 @@ const clock: ClockPort = {
   nowIso8601: () => "2026-05-31T12:00:00.000Z",
   nowUnixMs: () => 201
 };
+
+const queryReferenceCursorCodec = createReferenceCursorCodec({
+  key: Buffer.alloc(32, 63),
+  key_epoch: "query-tools"
+});
+
+function findReferences(
+  input: Omit<Parameters<typeof executeFindReferences>[0], "cursor_codec" | "workspace_safety"> & {
+    cursor_codec?: Parameters<typeof executeFindReferences>[0]["cursor_codec"];
+  }
+) {
+  return executeFindReferences({
+    ...input,
+    workspace_safety: permissiveWorkspaceSafety,
+    cursor_codec: input.cursor_codec ?? queryReferenceCursorCodec
+  });
+}
 
 describe("graph query use cases", () => {
   let dir: string;
@@ -1109,17 +1128,29 @@ describe("graph query use cases", () => {
         default_repo_root: repoRoot
       });
 
-      expect(result.references.references).toEqual([]);
-      expect(result.references.result_count).toBe(0);
-      expect(result.meta).toMatchObject({
-        freshness: "stale",
-        verification_status: "blocked"
-      });
-      expect(result.references.next_actions).toEqual([
+      expect(result.references.references).toEqual([
         expect.objectContaining({
-          reason: expect.stringMatching(/refresh/i)
+          source_file_path: "target.py",
+          reference_name: "target",
+          provenance: "bounded_lexical_identifier_scan"
         })
       ]);
+      expect(result.references.result_count).toBe(1);
+      expect(result.references.coverage_status).toBe("evidence_backed");
+      if (result.references.coverage_status !== "evidence_backed") throw new Error("Expected evidence-backed result.");
+      expect(result.references.coverage).toMatchObject({
+        state: "partial",
+        catalog_exhausted: true,
+        unresolved_searchable_candidates: {
+          sequence: [{ reason: "missing", count: 1 }]
+        }
+      });
+      expect(result.meta).toMatchObject({
+        analysis_validity: "partial",
+        freshness: "stale",
+        verification_status: "blocked",
+        truncated: true
+      });
       expect(JSON.stringify(result)).not.toContain("ENOENT");
       expect(JSON.stringify(result)).not.toContain("no such file or directory");
     } finally {
@@ -1277,6 +1308,16 @@ describe("graph query use cases", () => {
         snapshots: fixture.store,
         catalog: fixture.store,
         workspace: fixture.workspace,
+        snapshot_validity: {
+          snapshot_id: "213",
+          state: "valid",
+          complete: true,
+          checked_path_count: 1,
+          observed_path_count: 1,
+          missing_paths: [],
+          inaccessible_paths: [],
+          refresh_required: false
+        },
         default_repo_root: repoRoot
       });
 

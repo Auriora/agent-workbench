@@ -4,10 +4,13 @@
  */
 
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { findReferences } from "../../src/application/use-cases/find-references.js";
 import type { FileCatalogEntry, GraphNode } from "../../src/domain/models/index.js";
+import { createReferenceCursorCodec } from "../../src/infrastructure/runtime/index.js";
+import { permissiveWorkspaceSafety } from "../helpers/permissive-workspace-safety.js";
 import type {
   FileCatalogPort,
   GraphQueryPort,
@@ -33,7 +36,52 @@ describe("SessionStart reference-completeness reproduction", () => {
     expect(countFixtureOccurrences([...hookPaths, consumerPath], TARGET_NAME)).toBe(12);
   });
 
-  it("characterizes the current false-complete first-window seam", async () => {
+  it("proves a healthy complete evidence universe contains all twelve lexical occurrences", async () => {
+    const catalog = createHealthyFixtureCatalog();
+    const result = await findReferences({
+      request: {
+        node_id: "fixture:codex-session-start",
+        repo_root: FIXTURE_ROOT,
+        max_depth: 1,
+        max_results: 20
+      },
+      graph: createEmptyReferenceGraph(TARGET_NAME, hookPaths[0]),
+      snapshots: createPublishedSnapshots(),
+      catalog,
+      workspace: new FixtureWorkspace(catalog),
+      workspace_safety: permissiveWorkspaceSafety,
+      cursor_codec: createReferenceCursorCodec({ key: Buffer.alloc(32, 74), key_epoch: "fixture-healthy" }),
+      reference_limits: {
+        max_files: 200,
+        max_declared_bytes: 1_000_000,
+        max_file_bytes: 128_000,
+        time_ms: 1_000
+      },
+      monotonic_now_ms: () => 0,
+      snapshot_validity: validSnapshotReceipt(101),
+      default_repo_root: FIXTURE_ROOT
+    });
+
+    expect(result.references.references).toHaveLength(12);
+    expect(result.references.references.filter((reference) => reference.source_file_path === consumerPath)).toHaveLength(3);
+    expect(result.references.references.every((reference) =>
+      reference.status === "unresolved" && reference.provenance === "bounded_lexical_identifier_scan"
+    )).toBe(true);
+    expect(result.references).toMatchObject({ result_count: 12, cursor: undefined });
+    expect(result.references.coverage_status).toBe("evidence_backed");
+    if (result.references.coverage_status !== "evidence_backed") throw new Error("Expected evidence-backed coverage.");
+    expect(result.references.coverage).toMatchObject({
+      state: "complete",
+      catalog_exhausted: true,
+      page_matches: 12,
+      matched_so_far: 12,
+      complete_matches: 12,
+      unresolved_searchable_candidates: { sequence: [] }
+    });
+    expect(result.meta).toMatchObject({ analysis_validity: "valid", truncated: false });
+  });
+
+  it("reaches the three TypeScript occurrences beyond the first catalog window", async () => {
     const catalog = createFixtureCatalog();
     const workspace = new FixtureWorkspace(catalog);
     const result = await findReferences({
@@ -47,26 +95,32 @@ describe("SessionStart reference-completeness reproduction", () => {
       snapshots: createPublishedSnapshots(),
       catalog,
       workspace,
+      workspace_safety: permissiveWorkspaceSafety,
+      cursor_codec: createReferenceCursorCodec({ key: Buffer.alloc(32, 76), key_epoch: "fixture-direct" }),
+      reference_limits: {
+        max_files: 200,
+        max_declared_bytes: 1_000_000,
+        max_file_bytes: 128_000,
+        time_ms: 1_000
+      },
+      monotonic_now_ms: () => 0,
       default_repo_root: FIXTURE_ROOT
     });
 
-    expect(result.references.references).toHaveLength(9);
+    expect(result.references.references).toHaveLength(12);
     expect(result.references.references.every((reference) => reference.status === "unresolved")).toBe(true);
     expect(result.references.references.every(
       (reference) => reference.provenance === "bounded_lexical_identifier_scan"
     )).toBe(true);
-    expect(result.references.references.some((reference) => reference.source_file_path === consumerPath)).toBe(false);
-
-    // Phase 1 intentionally records the defect without making normal CI red:
-    // unvisited row 101 is currently presented as a complete nine-result scan.
-    expect(result.references.result_count).toBe(9);
-    expect(result.references.coverage_status).toBe("legacy_unverified");
+    expect(result.references.references.filter((reference) => reference.source_file_path === consumerPath)).toHaveLength(3);
+    expect(result.references.result_count).toBe(12);
+    expect(result.references.coverage_status).toBe("evidence_backed");
     expect(result.references.cursor).toBeUndefined();
-    expect(result.meta.truncated).toBe(false);
-    expect(result.meta.analysis_validity).toBe("valid");
+    expect(result.meta.truncated).toBe(true);
+    expect(result.meta.analysis_validity).toBe("partial");
   });
 
-  it("characterizes the current same-line occurrence collapse", async () => {
+  it("keeps two same-line occurrences as distinct column records", async () => {
     const sameLinePath = "catalog/103-same-line-double.ts";
     const catalog = new DeterministicCatalog([catalogEntry(sameLinePath)]);
     const result = await findReferences({
@@ -80,23 +134,122 @@ describe("SessionStart reference-completeness reproduction", () => {
       snapshots: createPublishedSnapshots(),
       catalog,
       workspace: new FixtureWorkspace(catalog),
+      workspace_safety: permissiveWorkspaceSafety,
+      cursor_codec: createReferenceCursorCodec({ key: Buffer.alloc(32, 75), key_epoch: "fixture-same-line" }),
       default_repo_root: FIXTURE_ROOT
     });
 
     expect(countFixtureOccurrences([sameLinePath], "sameLineTarget")).toBe(2);
-    expect(result.references.references).toHaveLength(1);
-    expect(result.references.references[0]).toMatchObject({
-      source_file_path: sameLinePath,
-      source_range: { start_line: 3, start_column: 20 }
-    });
+    expect(result.references.references).toHaveLength(2);
+    expect(result.references.references.map((reference) => reference.source_range?.start_column)).toEqual([20, 58]);
   });
 
-  it.todo("Phase 2: a complete lexical sequence reaches all twelve ordered SessionStart occurrences");
-  it.todo("Phase 2: a smaller budget returns a callable continuation that reaches row 101");
-  it.todo("Phase 2: two same-line matches remain separate path/line/column occurrence records");
-  it.todo("Phase 2: missing, unreadable, oversized, and changed candidates prevent complete absence");
-  it.todo("Phase 2: generated policy exclusions remain outside the searchable evidence universe");
+  it("returns callable bounded continuations that reach row 101", async () => {
+    const fixture = evidenceFixture();
+    const references = [];
+    let cursor: string | undefined;
+    let sawContinuation = false;
+    for (let page = 0; page < 20; page += 1) {
+      const result = await evidenceQuery(fixture, cursor, { max_files: 10 });
+      references.push(...result.references.references);
+      cursor = result.references.cursor;
+      sawContinuation ||= cursor !== undefined;
+      if (cursor === undefined) break;
+    }
+
+    expect(sawContinuation).toBe(true);
+    expect(references.filter((reference) => reference.source_file_path === consumerPath)).toHaveLength(3);
+    expect(references.filter((reference) =>
+      hookPaths.includes(reference.source_file_path as typeof hookPaths[number]) ||
+      reference.source_file_path === consumerPath
+    )).toHaveLength(12);
+  });
+
+  it("keeps missing, unreadable, oversized, and changed candidates in partial evidence", async () => {
+    const fixture = evidenceFixture();
+    const result = await evidenceQuery(fixture, undefined, { max_files: 200 });
+
+    expect(result.references.coverage_status).toBe("evidence_backed");
+    if (result.references.coverage_status !== "evidence_backed") throw new Error("Expected evidence-backed result.");
+    expect(result.references.coverage).toMatchObject({
+      state: "partial",
+      catalog_exhausted: true,
+      unresolved_searchable_candidates: {
+        page: [
+          { reason: "missing", count: 1 },
+          { reason: "oversized", count: 1 },
+          { reason: "read_failure", count: 1 },
+          { reason: "changed", count: 1 }
+        ],
+        sequence: [
+          { reason: "missing", count: 1 },
+          { reason: "oversized", count: 1 },
+          { reason: "read_failure", count: 1 },
+          { reason: "changed", count: 1 }
+        ]
+      }
+    });
+    expect(result.references.coverage.complete_matches).toBeUndefined();
+    expect(result.meta).toMatchObject({ analysis_validity: "partial", truncated: true });
+  });
+
+  it("keeps generated policy exclusions outside the searchable evidence universe", async () => {
+    const fixture = evidenceFixture();
+    const result = await evidenceQuery(fixture, undefined, { max_files: 200 });
+
+    expect(result.references.coverage_status).toBe("evidence_backed");
+    if (result.references.coverage_status !== "evidence_backed") throw new Error("Expected evidence-backed result.");
+    expect(result.references.coverage.policy_exclusions).toEqual({
+      page: [{ reason: "generated_or_vendor", count: 1 }],
+      sequence: [{ reason: "generated_or_vendor", count: 1 }]
+    });
+    expect(result.references.coverage.unresolved_searchable_candidates.sequence).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ reason: "generated_or_vendor" })])
+    );
+    expect(result.references.coverage.searchable_candidates_classified.sequence).toBe(106);
+  });
 });
+
+function evidenceFixture() {
+  const catalog = createFixtureCatalog();
+  return {
+    catalog,
+    workspace: new FixtureWorkspace(catalog),
+    graph: createEmptyReferenceGraph(TARGET_NAME, hookPaths[0]),
+    snapshots: createPublishedSnapshots(),
+    codec: createReferenceCursorCodec({ key: Buffer.alloc(32, 77), key_epoch: "fixture-epoch" })
+  };
+}
+
+async function evidenceQuery(
+  fixture: ReturnType<typeof evidenceFixture>,
+  cursor: string | undefined,
+  limits: { max_files: number }
+) {
+  return findReferences({
+    request: {
+      node_id: "fixture:codex-session-start",
+      repo_root: FIXTURE_ROOT,
+      max_depth: 1,
+      max_results: 20,
+      cursor
+    },
+    graph: fixture.graph,
+    snapshots: fixture.snapshots,
+    catalog: fixture.catalog,
+    workspace: fixture.workspace,
+    workspace_safety: permissiveWorkspaceSafety,
+    cursor_codec: fixture.codec,
+    reference_limits: {
+      max_files: limits.max_files,
+      max_declared_bytes: 1_000_000,
+      max_file_bytes: 128_000,
+      time_ms: 1_000
+    },
+    monotonic_now_ms: () => 0,
+    default_repo_root: FIXTURE_ROOT
+  });
+}
 
 function countFixtureOccurrences(paths: readonly string[], identifier: string): number {
   const pattern = new RegExp(`\\b${identifier}\\b`, "gu");
@@ -130,11 +283,36 @@ function createFixtureCatalog(): DeterministicCatalog {
   return new DeterministicCatalog(entries);
 }
 
+function createHealthyFixtureCatalog(): DeterministicCatalog {
+  const entries: FileCatalogEntry[] = [
+    catalogEntry(hookPaths[0], "javascript"),
+    catalogEntry(hookPaths[1], "javascript")
+  ];
+  for (let row = 3; row <= 100; row += 1) {
+    entries.push(catalogEntry(`catalog/${String(row).padStart(3, "0")}-virtual-filler.txt`, "text", 0));
+  }
+  entries.push(catalogEntry(consumerPath, "typescript"));
+  return new DeterministicCatalog(entries);
+}
+
+function validSnapshotReceipt(pathCount: number) {
+  return {
+    snapshot_id: SNAPSHOT_ID,
+    state: "valid" as const,
+    complete: true,
+    checked_path_count: pathCount,
+    observed_path_count: pathCount,
+    missing_paths: [],
+    inaccessible_paths: [],
+    refresh_required: false
+  };
+}
+
 function catalogEntry(
   relativePath: string,
   language = "typescript",
   declaredSize?: number,
-  contentHash = `fixture:${relativePath}`
+  contentHash?: string
 ): FileCatalogEntry {
   const absolutePath = path.join(FIXTURE_ROOT, relativePath);
   const size = declaredSize ?? (fs.existsSync(absolutePath) ? fs.statSync(absolutePath).size : 0);
@@ -144,7 +322,9 @@ function catalogEntry(
     file_identity: {
       path: relativePath,
       language,
-      content_hash: contentHash,
+      content_hash: contentHash ?? `sha256:${createHash("sha256").update(
+        fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath) : Buffer.alloc(0)
+      ).digest("hex")}`,
       size_bytes: size,
       mtime_ms: 1,
       indexed_at: "2026-07-21T00:00:00.000Z"
@@ -205,6 +385,14 @@ class FixtureWorkspace implements WorkspaceFilePort {
       return { exists: false, is_file: false, size_bytes: 0, mtime_ms: 0 };
     }
     const entry = await this.catalog.getFile({ path: input.path });
+    if (input.path === "catalog/106-changed-reference.ts" && entry !== null) {
+      return {
+        exists: true,
+        is_file: true,
+        size_bytes: entry.file_identity.size_bytes + 1,
+        mtime_ms: entry.file_identity.mtime_ms
+      };
+    }
     return {
       exists: entry !== null,
       is_file: entry !== null,

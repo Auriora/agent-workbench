@@ -425,6 +425,7 @@ export function createAgentWorkbenchServer(
         snapshots: store,
         catalog: store,
         workspace: workspaceForRepoRoot(request.repo_root),
+        workspace_safety: safetyForRepoRoot(request.repo_root),
         cursor_codec: referenceCursorCodec,
         snapshot_validity: selected.validity,
         selected_snapshot_id: selected.snapshot_id,
