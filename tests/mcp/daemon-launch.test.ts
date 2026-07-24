@@ -22,7 +22,7 @@ import {
   startAgentWorkbenchDaemon,
   type StartedAgentWorkbenchDaemon
 } from "../../src/mcp/daemon.js";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { createPhase1DaemonLifetimeReproduction } from "../helpers/spec041-refresh-reproductions.js";
 import {
   FileRepositoryOwnershipAdapter,
@@ -1774,8 +1774,19 @@ describe("Agent Workbench daemon launcher", () => {
   });
 });
 
+const createdRepoRoots: string[] = [];
+
+afterEach(() => {
+  const uniqueRepoRoots = Array.from(new Set(createdRepoRoots.splice(0, createdRepoRoots.length)));
+  for (const repoRoot of uniqueRepoRoots) {
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+  }
+});
+
 function makeRepoRoot(prefix: string): string {
   const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  createdRepoRoots.push(repoRoot);
   fs.writeFileSync(path.join(repoRoot, "package.json"), "{}\n");
   return repoRoot;
 }
