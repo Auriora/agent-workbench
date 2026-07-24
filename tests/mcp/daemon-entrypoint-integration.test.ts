@@ -29,6 +29,7 @@ import {
   initializeSession,
   parseEnvelope,
   startEntryPointSession,
+  closeSessionsAndWaitForDaemons,
   type EntryPointSession,
   type McpMessage
 } from "../helpers/mcp-entrypoint-session.js";
@@ -38,10 +39,10 @@ const sessions: EntryPointSession[] = [];
 const tempRoots: string[] = [];
 
 afterEach(async () => {
-  await Promise.allSettled(sessions.splice(0).map((session) => session.close()));
-  for (const root of tempRoots.splice(0)) {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
+  await closeSessionsAndWaitForDaemons({
+    sessions: sessions.splice(0),
+    tempRoots: tempRoots.splice(0)
+  });
 });
 
 describe("daemon-backed stdio entrypoint integration", () => {
@@ -79,6 +80,26 @@ describe("daemon-backed stdio entrypoint integration", () => {
     expect(health.data.daemon?.pid).toBeGreaterThan(0);
     expect(session.stderr()).toBe("");
   }, 30_000);
+
+  it("rejects outstanding calls and future operations after unexpected child exit", async () => {
+    const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-child-exit-");
+    const session = trackSession(await startEntryPointSession(repoRoot));
+    await initializeSession(session);
+    session.child.stdout.pause();
+    const inFlight = session.call("resources/read", {
+      uri: "repo:///status"
+    });
+    session.child.kill("SIGKILL");
+
+    await expect(inFlight).rejects.toThrow(/MCP entrypoint child process exited unexpectedly/);
+    await expect(session.call("resources/read", {
+      uri: "repo:///status"
+    })).rejects.toThrow(/MCP entrypoint child process exited unexpectedly/);
+    expect(() => {
+      session.notify("resources/list");
+    }).toThrow(/MCP entrypoint child process exited unexpectedly/);
+    await session.close();
+  }, 15_000);
 
   it("shares one daemon across concurrent checkout/source clients", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-shared-");
@@ -137,6 +158,9 @@ describe("daemon-backed stdio entrypoint integration", () => {
     expect(before.data.snapshot_id).toEqual(expect.any(String));
     expect(before.data.freshness).toBe("fresh");
     const previousSnapshotId = before.data.snapshot_id as string;
+    const startupHealth = daemonRefreshHealth(await startupClient.call("resources/read", {
+      uri: "integration:///health/agent-workbench"
+    }));
 
     // Starting only after the first client's graph is fresh proves this is a
     // reused-daemon, non-startup connection rather than a startup race winner.
@@ -151,17 +175,23 @@ describe("daemon-backed stdio entrypoint integration", () => {
       freshness: "stale"
     });
 
-    let observed = admitted;
-    for (let attempt = 0; attempt < 40; attempt += 1) {
-      observed = repoStatus(await laterClient.call("resources/read", { uri: "repo:///status" }));
-      if (observed.data.snapshot_id !== previousSnapshotId && observed.data.freshness === "fresh") {
-        break;
-      }
-      await new Promise<void>((resolve) => setTimeout(resolve, 25));
-    }
+    const refreshed = await waitForRefreshCompletion(laterClient, {
+      previousSnapshotId,
+      controllerGeneration: startupHealth.controller_generation,
+      minimumDiagnosticRevision: startupHealth.diagnostic_revision,
+      minimumWorkerInvocations: startupHealth.worker_invocations,
+      requireFreshGraph: true,
+      requireConvergedGenerations: true,
+      requireNoActivityLease: true
+    });
+    const refreshedStatus = repoStatus(await laterClient.call("resources/read", { uri: "repo:///status" }));
 
-    expect(observed.data).toMatchObject({ freshness: "fresh" });
-    expect(observed.data.snapshot_id).not.toBe(previousSnapshotId);
+    expect(refreshedStatus.data).toMatchObject({
+      snapshot_id: refreshed.visible_snapshot_id,
+      freshness: "fresh"
+    });
+    expect(refreshed.target_snapshot_id).toBe(refreshed.visible_snapshot_id);
+    expect(refreshed.target_snapshot_id).not.toBe(previousSnapshotId);
   }, 20_000);
 
   it("keeps explicit Codex and Claude launcher identity isolated on one daemon", async () => {
@@ -254,7 +284,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
 
   it("replaces a crashed daemon that left stale metadata and socket state", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-crash-");
-    const first = trackSession(await startEntryPointSession(repoRoot, { idleGraceMs: 5000 }));
+    const first = trackSession(await startEntryPointSession(repoRoot, { idleGraceMs: 250 }));
     await initializeSession(first);
     const firstDaemon = daemonHealth(await first.call("resources/read", {
       uri: "integration:///health/agent-workbench"
@@ -300,7 +330,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
     })}\n`);
 
     const replacement = trackSession(await startEntryPointSession(repoRoot, {
-      idleGraceMs: 3000,
+      idleGraceMs: 250,
       startupRefreshDelayMs: 60_000
     }));
     await initializeSession(replacement);
@@ -356,7 +386,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
     const markerPath = path.join(probeRoot, `${barrier}.json`);
     const releasePath = path.join(probeRoot, `${barrier}.release`);
     const first = trackSession(await startEntryPointSession(repoRoot, {
-      idleGraceMs: 5000,
+      idleGraceMs: 250,
       startupRefreshDelayMs: 60_000,
       env: {
         NODE_ENV: "test",
@@ -464,7 +494,10 @@ describe("daemon-backed stdio entrypoint integration", () => {
         uri: "repo:///status"
       }));
       expect(successorAdmission.data).toMatchObject({ snapshot_id: "80", freshness: "stale" });
-      const completed = await waitForRefreshCompletion(replacement, marker.snapshot_id);
+      const completed = await waitForRefreshCompletion(replacement, {
+        previousSnapshotId: marker.snapshot_id,
+        minimumWorkerInvocations: recovered.worker_invocations
+      });
       expect(completed).toMatchObject({
         warmup_state: "complete",
         worker_invocations: 1,
@@ -516,7 +549,9 @@ describe("daemon-backed stdio entrypoint integration", () => {
     const session = trackSession(await startEntryPointSession(repoRoot, { idleGraceMs: 100 }));
 
     try {
-      await expect(initializeSession(session)).rejects.toThrow(/Timed out waiting for initialize/);
+      await expect(initializeSession(session)).rejects.toThrow(
+        /MCP entrypoint child process exited unexpectedly/
+      );
       const serialized = [
         session.stderr(),
         session.stdoutRemainder()
@@ -586,6 +621,11 @@ function refreshDiagnostics(message: McpMessage): {
   execution_state?: string;
   target_snapshot_id?: string;
   visible_snapshot_id?: string;
+  publication_state?: string;
+  graph_freshness?: string;
+  started_generation?: number;
+  requested_generation?: number;
+  activity_lease_held?: boolean;
 } {
   const envelope = parseEnvelope(message) as {
     data: {
@@ -595,6 +635,11 @@ function refreshDiagnostics(message: McpMessage): {
         warmup_state?: string;
         target_snapshot_id?: string;
         visible_snapshot_id?: string;
+        publication_state?: string;
+        graph_freshness?: string;
+        started_generation?: number;
+        requested_generation?: number;
+        activity_lease_held?: boolean;
       };
     };
   };
@@ -685,8 +730,14 @@ function daemonRefreshHealth(message: McpMessage): {
   controller_generation: number;
   warmup_state: string;
   worker_invocations: number;
+  diagnostic_revision: number;
   target_snapshot_id?: string;
   visible_snapshot_id?: string;
+  publication_state?: string;
+  graph_freshness?: "cold" | "stale" | "fresh";
+  started_generation?: number;
+  requested_generation?: number;
+  activity_lease_held?: boolean;
   last_failure?: { code: string; target_snapshot_id?: string };
 } {
   const envelope = parseEnvelope(message) as {
@@ -695,9 +746,15 @@ function daemonRefreshHealth(message: McpMessage): {
         pid: number;
         controller_generation: number;
         warmup_state: string;
+        diagnostic_revision: number;
         worker_invocations: number;
         target_snapshot_id?: string;
         visible_snapshot_id?: string;
+        publication_state?: string;
+        graph_freshness?: "cold" | "stale" | "fresh";
+        started_generation?: number;
+        requested_generation?: number;
+        activity_lease_held?: boolean;
         last_failure?: { code: string; target_snapshot_id?: string };
       };
     };
@@ -710,18 +767,56 @@ function daemonRefreshHealth(message: McpMessage): {
 
 async function waitForRefreshCompletion(
   session: EntryPointSession,
-  orphanSnapshotId: string
+  options: {
+    previousSnapshotId?: string;
+    controllerGeneration?: number;
+    minimumDiagnosticRevision?: number;
+    minimumWorkerInvocations?: number;
+    requireFreshGraph?: boolean;
+    requireConvergedGenerations?: boolean;
+    requireNoActivityLease?: boolean;
+  } | string
 ): Promise<ReturnType<typeof daemonRefreshHealth>> {
   let lastHealth: ReturnType<typeof daemonRefreshHealth> | undefined;
+  const expectation = typeof options === "string"
+    ? { previousSnapshotId: options }
+    : options;
+  const minimumWorkerInvocations = expectation.minimumWorkerInvocations ?? 0;
   for (let attempt = 0; attempt < 200; attempt += 1) {
     lastHealth = daemonRefreshHealth(await session.call("resources/read", {
       uri: "integration:///health/agent-workbench"
     }));
+    if (lastHealth.warmup_state === "failed") {
+      throw new Error(`Refresh failed during waitForRefreshCompletion: ${JSON.stringify(lastHealth)}`);
+    }
+    const sameController = expectation.controllerGeneration === undefined
+      || lastHealth.controller_generation === expectation.controllerGeneration;
+    const advancedDiagnostic = expectation.minimumDiagnosticRevision === undefined
+      || lastHealth.diagnostic_revision > expectation.minimumDiagnosticRevision;
+    const generationsConverged = expectation.requireConvergedGenerations !== true
+      || (lastHealth.started_generation !== undefined &&
+          lastHealth.requested_generation !== undefined &&
+          lastHealth.started_generation === lastHealth.requested_generation);
+    const noLease = expectation.requireNoActivityLease !== true || lastHealth.activity_lease_held === false;
+    const freshGraph = expectation.requireFreshGraph !== true
+      || lastHealth.graph_freshness === "fresh";
+    const targetVisible =
+      lastHealth.target_snapshot_id !== undefined &&
+      lastHealth.visible_snapshot_id === lastHealth.target_snapshot_id;
+
     if (
       lastHealth.warmup_state === "complete" &&
-      lastHealth.worker_invocations === 1 &&
+      lastHealth.worker_invocations > minimumWorkerInvocations &&
       lastHealth.target_snapshot_id !== undefined &&
-      lastHealth.target_snapshot_id !== orphanSnapshotId
+      lastHealth.target_snapshot_id !== expectation.previousSnapshotId &&
+      lastHealth.publication_state === "published" &&
+      sameController &&
+      advancedDiagnostic &&
+      generationsConverged &&
+      freshGraph &&
+      noLease &&
+      targetVisible &&
+      lastHealth.last_failure === undefined
     ) {
       return lastHealth;
     }

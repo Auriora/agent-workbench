@@ -12,6 +12,7 @@ import {
   initializeSession,
   parseEnvelope,
   startEntryPointSession,
+  closeSessionsAndWaitForDaemons,
   type EntryPointSession,
   type McpMessage
 } from "../helpers/mcp-entrypoint-session.js";
@@ -20,10 +21,10 @@ const sessions: EntryPointSession[] = [];
 const tempRoots: string[] = [];
 
 afterEach(async () => {
-  await Promise.allSettled(sessions.splice(0).map((session) => session.close()));
-  for (const root of tempRoots.splice(0)) {
-    fs.rmSync(root, { recursive: true, force: true });
-  }
+  await closeSessionsAndWaitForDaemons({
+    sessions: sessions.splice(0),
+    tempRoots: tempRoots.splice(0)
+  });
 });
 
 describe("daemon-backed documentation ranking integration", () => {
@@ -151,7 +152,7 @@ function startProviderSession(
   provider: "codex" | "claude_code"
 ): Promise<EntryPointSession> {
   return startEntryPointSession(repoRoot, {
-    idleGraceMs: 5_000,
+    idleGraceMs: 250,
     startupRefreshDelayMs: 0,
     env: {
       AGENT_WORKBENCH_PROVIDER: provider,

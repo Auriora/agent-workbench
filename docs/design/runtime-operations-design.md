@@ -3,7 +3,7 @@ title: Runtime operations design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-07-24
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -216,6 +216,34 @@ cleanup requires positive evidence. The launcher may remove stale socket
 metadata only when PID and socket evidence prove the owner is gone. Ambiguous
 evidence must produce a structured blocked state rather than destructive
 cleanup.
+
+The daemon metadata record is also the authoritative cold-start lifecycle
+receipt. It moves through `starting`, `ready`, or terminal `failed` state and
+identifies one launch attempt, daemon identity, process, endpoint, timestamps,
+and a bounded startup phase or safe failure code. Each transition is published
+atomically so concurrent launchers observe either the previous complete receipt
+or the next complete receipt, never a partially written record.
+
+The elected launcher observes its spawned process until readiness or terminal
+failure. Other launchers wait on the same receipt and must not spawn a
+competitor while the recorded starter is positively alive. Process exit and
+terminal failure fail immediately; ordinary progress never extends the one
+monotonic startup deadline. Reaching that deadline while ownership remains live
+preserves the `starting` receipt and does not authorize cleanup or a second
+startup path. Positive dead-process evidence permits guarded re-election within
+the caller's original deadline, including when a lock owner dies before
+publishing its first receipt or a previously ready daemon disappears before
+connection.
+
+`ready` is published only after repository ownership, graph-store opening,
+orphan reconciliation, controller construction, socket binding, and endpoint
+metadata publication succeed. Broad graph refresh remains asynchronous after
+the endpoint is ready. Binding early and queueing MCP traffic behind incomplete
+startup is not an alternate readiness route.
+
+Shutdown takes the same startup lock before removing canonical socket or
+metadata state. Cleanup is launch-token aware, so an old daemon cannot delete a
+replacement launch receipt that has already become authoritative.
 
 Positive dead-owner recovery atomically reclaims the repository lease and marks
 matching orphaned `building` snapshots `failed` and invisible. Recovery retains

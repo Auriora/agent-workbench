@@ -3,7 +3,19 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { createDaemonIdentity, daemonPaths } from "../../src/mcp/daemon.js";
+
+const ENTRYPOINT_SHUTDOWN_TIMEOUT_MS = 1_000;
+const STDERR_CAPTURE_BYTES = 4096;
+const CLOSE_RETRIES = 25;
+
+type PendingCall = {
+  resolve: (message: McpMessage) => void;
+  reject: (error: Error) => void;
+};
 
 export type McpMessage = {
   id?: number;
@@ -15,6 +27,7 @@ export type McpMessage = {
 };
 
 export type EntryPointSession = {
+  repoRoot: string;
   child: ChildProcessWithoutNullStreams;
   stderr: () => string;
   stdoutRemainder: () => string;
@@ -36,10 +49,11 @@ export async function startEntryPointSession(
     env?: NodeJS.ProcessEnv;
   } = {}
 ): Promise<EntryPointSession> {
+  const normalizedRepoRoot = path.resolve(repoRoot);
   const child = spawn(process.execPath, [
     "src/mcp/stdio-entrypoint.mjs",
     "--repo-root",
-    repoRoot
+    normalizedRepoRoot
   ], {
     cwd: options.cwd ?? process.cwd(),
     env: {
@@ -53,47 +67,102 @@ export async function startEntryPointSession(
       )
     }
   });
+
   let stdout = "";
   let stderr = "";
+  let terminalError: Error | null = null;
   let nextId = 1;
-  const pending = new Map<number, {
-    resolve: (message: McpMessage) => void;
-    reject: (error: Error) => void;
-  }>();
+  let closeRequested = false;
+  let closeResult: Promise<void> | null = null;
+  const pending = new Map<number, PendingCall>();
+
+  const boundedStderr = () => stderr.length <= STDERR_CAPTURE_BYTES
+    ? stderr
+    : `...[truncated]${stderr.slice(-STDERR_CAPTURE_BYTES)}`;
+  const terminalMessage = (code: number | null, signal: NodeJS.Signals | null) => closeRequested
+    ? `MCP entrypoint session intentionally closed before response.`
+    : `MCP entrypoint child process exited unexpectedly (code=${String(code)}, signal=${String(signal)}). ` +
+      `stderr=${boundedStderr()}`;
+  const unexpectedTerminalError = (code: number | null, signal: NodeJS.Signals | null) =>
+    new Error(terminalMessage(code, signal));
+  const requestedCloseError = () => new Error("MCP entrypoint session intentionally closed before response.");
+
+  const rejectPending = (error: Error) => {
+    for (const waiter of pending.values()) {
+      waiter.reject(error);
+    }
+    pending.clear();
+  };
+  const markTerminal = (error: Error) => {
+    if (terminalError !== null) {
+      return;
+    }
+    terminalError = error;
+    rejectPending(error);
+  };
+
+  const setExitHandlers = (): void => {
+    child.once("exit", (code, signal) => {
+      markTerminal(unexpectedTerminalError(code, signal));
+    });
+    child.once("error", (error) => {
+      markTerminal(new Error(`MCP entrypoint child process error before response: ${(error as Error).message}`));
+    });
+  };
+
+  setExitHandlers();
 
   child.stdout.setEncoding("utf8");
   child.stderr.setEncoding("utf8");
   child.stderr.on("data", (chunk: string) => {
     stderr += chunk;
+    if (stderr.length > STDERR_CAPTURE_BYTES) {
+      stderr = stderr.slice(-STDERR_CAPTURE_BYTES);
+    }
   });
   child.stdout.on("data", (chunk: string) => {
     stdout += chunk;
     const lines = stdout.split("\n");
     stdout = lines.pop() ?? "";
     for (const line of lines.filter(Boolean)) {
-      const parsed = JSON.parse(line) as McpMessage;
+      let parsed: McpMessage;
+      try {
+        parsed = JSON.parse(line) as McpMessage;
+      } catch (error) {
+        markTerminal(new Error(
+          `MCP entrypoint emitted malformed JSON: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        ));
+        continue;
+      }
       if (typeof parsed.id !== "number") {
         continue;
       }
       const waiter = pending.get(parsed.id);
-      if (waiter !== undefined) {
-        pending.delete(parsed.id);
-        waiter.resolve(parsed);
+      if (waiter === undefined) {
+        continue;
       }
+      pending.delete(parsed.id);
+      waiter.resolve(parsed);
     }
   });
 
   return {
+    repoRoot: normalizedRepoRoot,
     child,
     stderr: () => stderr,
     stdoutRemainder: () => stdout,
     call(method: string, params: Record<string, unknown> = {}, timeoutMs = 6000) {
+      if (terminalError !== null) {
+        return Promise.reject(terminalError);
+      }
       const id = nextId;
       nextId += 1;
       return new Promise((resolve, reject) => {
         const timeout = setTimeout(() => {
           pending.delete(id);
-          reject(new Error(`Timed out waiting for ${method} id=${id}: stderr=${stderr}`));
+          reject(new Error(`Timed out waiting for ${method} id=${id}: stderr=${boundedStderr()}`));
         }, timeoutMs);
         pending.set(id, {
           resolve: (message) => {
@@ -114,6 +183,9 @@ export async function startEntryPointSession(
       });
     },
     notify(method: string, params: Record<string, unknown> = {}) {
+      if (terminalError !== null) {
+        throw terminalError;
+      }
       child.stdin.write(`${JSON.stringify({
         jsonrpc: "2.0",
         method,
@@ -121,26 +193,154 @@ export async function startEntryPointSession(
       })}\n`);
     },
     async close() {
-      for (const waiter of pending.values()) {
-        waiter.reject(new Error("MCP entrypoint session closed before response."));
+      if (closeResult !== null) {
+        return closeResult;
       }
-      pending.clear();
+      if (terminalError !== null) {
+        return;
+      }
+      closeRequested = true;
+      rejectPending(requestedCloseError());
       if (child.exitCode !== null || child.signalCode !== null) {
         return;
       }
-      child.kill("SIGTERM");
-      await new Promise<void>((resolve) => {
-        const timeout = setTimeout(() => {
-          child.kill("SIGKILL");
-          resolve();
-        }, 1000);
-        child.once("exit", () => {
-          clearTimeout(timeout);
-          resolve();
+      closeResult = (async () => {
+        child.kill("SIGTERM");
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(() => {
+            child.kill("SIGKILL");
+            resolve();
+          }, ENTRYPOINT_SHUTDOWN_TIMEOUT_MS);
+          child.once("exit", () => {
+            clearTimeout(timeout);
+            resolve();
+          });
         });
-      });
+      })();
+      return closeResult;
     }
   };
+}
+
+type TeardownRecord = {
+  metadataPath: string;
+  socketPath: string;
+  startupLockPath: string;
+  pids: number[];
+};
+
+function readDaemonPid(metadataPath: string): number | undefined {
+  if (!fs.existsSync(metadataPath)) {
+    return;
+  }
+  try {
+    const candidate = JSON.parse(fs.readFileSync(metadataPath, "utf8")) as {
+      pid?: unknown;
+      owner_pid?: unknown;
+    };
+    return typeof candidate.pid === "number"
+      ? candidate.pid
+      : typeof candidate.owner_pid === "number"
+        ? candidate.owner_pid
+        : undefined;
+  } catch {
+    return;
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    const code = typeof error === "object" && error !== null &&
+    typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code?: string }).code
+      : undefined;
+    return code !== "ESRCH";
+  }
+}
+
+async function waitForDetachedDaemonRelease(
+  repoRoot: string,
+  record: TeardownRecord
+): Promise<void> {
+  for (let attempt = 0; attempt < CLOSE_RETRIES; attempt += 1) {
+    const metadataExists = fs.existsSync(record.metadataPath);
+    const socketExists = fs.existsSync(record.socketPath);
+    const startupLockExists = fs.existsSync(record.startupLockPath);
+    const pidsAlive = record.pids.some((pid) => isProcessAlive(pid));
+    if (!metadataExists && !socketExists && !startupLockExists && !pidsAlive) {
+      return;
+    }
+    if (attempt + 1 < CLOSE_RETRIES) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 200));
+      continue;
+    }
+    const activePids = record.pids.filter(isProcessAlive);
+    throw new Error(
+      `Timed out waiting for detached daemon teardown for ${repoRoot}. ` +
+      `metadata=${metadataExists}, socket=${socketExists}, startup_lock=${startupLockExists}, ` +
+      `active_pids=${JSON.stringify(activePids)}`
+    );
+  }
+}
+
+export async function closeSessionsAndWaitForDaemons({
+  sessions,
+  tempRoots
+}: {
+  sessions: EntryPointSession[];
+  tempRoots: string[];
+}): Promise<void> {
+  const repos = new Map<string, TeardownRecord>();
+  for (const session of sessions) {
+    const paths = daemonPaths(createDaemonIdentity(session.repoRoot));
+    const pids = new Set<number>();
+    if (typeof session.child.pid === "number") {
+      pids.add(session.child.pid);
+    }
+    const metadataPid = readDaemonPid(paths.metadataPath);
+    if (metadataPid !== undefined) {
+      pids.add(metadataPid);
+    }
+    const prior = repos.get(session.repoRoot);
+    if (prior === undefined) {
+      repos.set(session.repoRoot, {
+        metadataPath: paths.metadataPath,
+        socketPath: paths.socketPath,
+        startupLockPath: paths.startupLockPath,
+        pids: [...pids]
+      });
+      continue;
+    }
+    prior.pids.push(...[...pids].filter((pid) => !prior.pids.includes(pid)));
+  }
+
+  const closeResults = await Promise.allSettled(sessions.map((session) => session.close()));
+  const closeFailures = closeResults.filter((result) => result.status === "rejected");
+  const waitFailures: Error[] = [];
+  for (const [repoRoot, record] of repos.entries()) {
+    try {
+      await waitForDetachedDaemonRelease(repoRoot, record);
+    } catch (error) {
+      waitFailures.push(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+  if (closeFailures.length > 0 || waitFailures.length > 0) {
+    const failures = closeFailures
+      .map((failure, index) => `${index + 1}. close-${failure.status}: ` +
+        `${failure.status === "rejected" ? String(failure.reason) : ""}`)
+      .join("\n");
+    const teardownFailures = waitFailures.map((failure) => `- ${failure.message}`).join("\n");
+    throw new Error(
+      `EntryPoint session teardown not clean: ${closeFailures.length + waitFailures.length} failures\n${failures}` +
+        (teardownFailures ? `\n${teardownFailures}` : "")
+    );
+  }
+  for (const root of tempRoots) {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 }
 
 export async function initializeSession(session: EntryPointSession): Promise<void> {

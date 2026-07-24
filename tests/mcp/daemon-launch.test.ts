@@ -7,11 +7,13 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import type { ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
+import { EventEmitter } from "node:events";
 import {
   DAEMON_PROTOCOL_VERSION,
   classifyDaemonState,
   connectOrStartDaemon,
+  createDaemonMetadata,
   createDaemonStartupLock,
   createDaemonIdentity,
   daemonStartupRefreshDelayMsFromEnv,
@@ -470,6 +472,398 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
+  it("lets contenders wait on one in-flight launch and reuse a single spawn", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-starting-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    const daemons: StartedAgentWorkbenchDaemon[] = [];
+    let releaseStart: (() => void) | undefined;
+    const startGate = new Promise<void>((resolve) => { releaseStart = resolve; });
+    let starts = 0;
+
+    try {
+      const first = connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 1500,
+        spawnDaemon: () => {
+          starts += 1;
+          void startGate.then(async () => {
+            const daemon = await startAgentWorkbenchDaemon({
+              repoRoot,
+              idleGraceMs: 100,
+              serverOptions: { startupRefreshDelayMs: 60_000 }
+            });
+            daemons.push(daemon);
+          });
+          return fakeChildProcess();
+        }
+      });
+      await sleep(25);
+      let starting: unknown | undefined;
+      for (let attempt = 0; attempt < 25 && starting === undefined; attempt += 1) {
+        if (fs.existsSync(paths.metadataPath)) {
+          starting = safeReadJson(paths.metadataPath);
+          if (
+            typeof starting === "object" &&
+            starting !== null &&
+            (starting as { launchLifecycle?: { state?: string } }).launchLifecycle?.state === "starting"
+          ) {
+            break;
+          }
+        }
+        await sleep(20);
+      }
+      expect(starting).toBeDefined();
+
+      const second = connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 2000,
+        spawnDaemon: () => {
+          starts += 1;
+          return fakeChildProcess();
+        }
+      });
+      releaseStart?.();
+      const [firstSocket, secondSocket] = await Promise.all([first, second]);
+      firstSocket.destroy();
+      secondSocket.destroy();
+      expect(starts).toBe(1);
+      expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+      const finalMetadata = safeReadJson(paths.metadataPath) as { launchLifecycle?: { state?: string } };
+      expect(finalMetadata.launchLifecycle).toMatchObject({ state: "ready" });
+    } finally {
+      releaseStart?.();
+      await closeDaemons(daemons);
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not rewrite live startup evidence as terminal on caller timeout", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-timeout-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+
+    try {
+      await expect(connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 120,
+        spawnDaemon: () => {
+          return fakeChildProcess();
+        }
+      })).rejects.toThrow(/Timed out connecting to Agent Workbench daemon/);
+
+      const metadata = safeReadJson(paths.metadataPath) as {
+        launchLifecycle?: { state?: string; phase?: string; failureCode?: string };
+        pid?: number;
+      };
+      expect(metadata).toMatchObject({
+        launchLifecycle: {
+          state: "starting",
+          phase: "launching"
+        }
+      });
+      expect(typeof metadata.pid).toBe("number");
+      expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  });
+
+  it("reuses an existing legacy daemon metadata record without launch lifecycle state", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-legacy-metadata-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    const startedAt = "2026-07-05T00:00:00.000Z";
+    const metadata = {
+      identity,
+      pid: process.pid,
+      socketPath: paths.socketPath,
+      createdAt: startedAt
+    };
+
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+    if (process.platform !== "win32") {
+      fs.mkdirSync(paths.ipcDir, { recursive: true });
+    }
+    fs.writeFileSync(paths.metadataPath, `${JSON.stringify(metadata)}\n`);
+
+    const acceptedSockets = new Set<net.Socket>();
+    const server = net.createServer((socket) => {
+      acceptedSockets.add(socket);
+      socket.once("close", () => acceptedSockets.delete(socket));
+      socket.write(`${JSON.stringify({
+        protocol: "agent-workbench-daemon",
+        protocolVersion: DAEMON_PROTOCOL_VERSION,
+        identity
+      })}\n`);
+    });
+    await new Promise<void>((resolve) => {
+      server.listen(paths.socketPath, () => {
+        resolve();
+      });
+    });
+    let socket: net.Socket | undefined;
+    try {
+      socket = await connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 2000,
+        spawnDaemon: () => {
+          throw new Error("Legacy metadata should reuse existing daemon.");
+        }
+      });
+      socket.destroy();
+    } finally {
+      if (socket !== undefined) {
+        socket.destroy();
+      }
+      for (const acceptedSocket of acceptedSockets) {
+        acceptedSocket.destroy();
+      }
+      await new Promise<void>((resolve) => {
+        server.close(() => {
+          resolve();
+        });
+      });
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  });
+
+  it("re-elects startup when ready evidence disappears before socket connection", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-ready-race-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    const daemons: StartedAgentWorkbenchDaemon[] = [];
+    let starts = 0;
+
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+    if (process.platform !== "win32") {
+      fs.mkdirSync(paths.ipcDir, { recursive: true });
+    }
+    const startedAt = new Date().toISOString();
+    fs.writeFileSync(paths.socketPath, "not-a-socket\n");
+    fs.writeFileSync(paths.metadataPath, `${JSON.stringify({
+      ...createDaemonMetadata({
+        identity,
+        pid: process.pid,
+        socketPath: paths.socketPath,
+        launchToken: "vanished-ready-launch",
+        launchStartedAt: startedAt,
+        createdAt: startedAt,
+        updatedAt: startedAt,
+        phase: "ready"
+      }),
+      launchLifecycle: {
+        state: "ready",
+        phase: "ready",
+        launchToken: "vanished-ready-launch",
+        startedAt,
+        updatedAt: startedAt
+      }
+    })}\n`);
+
+    const removeVanishedReady = setTimeout(() => {
+      fs.rmSync(paths.metadataPath, { force: true });
+      fs.rmSync(paths.socketPath, { force: true });
+    }, 20);
+    try {
+      const socket = await connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 2000,
+        spawnDaemon: () => {
+          starts += 1;
+          void startAgentWorkbenchDaemon({
+            repoRoot,
+            idleGraceMs: 100,
+            serverOptions: { startupRefreshDelayMs: 60_000 }
+          }).then((daemon) => daemons.push(daemon));
+          return fakeChildProcess();
+        }
+      });
+      socket.destroy();
+      expect(starts).toBe(1);
+    } finally {
+      clearTimeout(removeVanishedReady);
+      await closeDaemons(daemons);
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  });
+
+  it("reclaims startup when the lock owner dies before publishing metadata", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-lock-owner-dies-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    const daemons: StartedAgentWorkbenchDaemon[] = [];
+    const lockOwner = spawn(process.execPath, ["-e", "setInterval(() => {}, 1000)"], {
+      stdio: "ignore"
+    });
+    let starts = 0;
+
+    try {
+      if (typeof lockOwner.pid !== "number") {
+        throw new Error("Test lock owner did not expose a pid.");
+      }
+      fs.mkdirSync(paths.metadataDir, { recursive: true });
+      if (process.platform !== "win32") {
+        fs.mkdirSync(paths.ipcDir, { recursive: true });
+      }
+      fs.writeFileSync(paths.startupLockPath, `${JSON.stringify({
+        pid: lockOwner.pid,
+        created_at: new Date().toISOString(),
+        token: "doomed-lock-owner"
+      })}\n`);
+
+      const connection = connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 2000,
+        spawnDaemon: () => {
+          starts += 1;
+          void startAgentWorkbenchDaemon({
+            repoRoot,
+            idleGraceMs: 100,
+            serverOptions: { startupRefreshDelayMs: 60_000 }
+          }).then((daemon) => daemons.push(daemon));
+          return fakeChildProcess();
+        }
+      });
+      await sleep(30);
+      const lockOwnerExit = new Promise<void>((resolve) => {
+        lockOwner.once("exit", () => resolve());
+      });
+      lockOwner.kill("SIGKILL");
+      await lockOwnerExit;
+
+      const socket = await connection;
+      socket.destroy();
+      expect(starts).toBe(1);
+    } finally {
+      if (lockOwner.exitCode === null && lockOwner.signalCode === null) {
+        lockOwner.kill("SIGKILL");
+      }
+      await closeDaemons(daemons);
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  });
+
+  it("allows a timed-out contender to be followed by a successful later contender", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-timeout-recovery-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    const daemons: StartedAgentWorkbenchDaemon[] = [];
+    let releaseStart: (() => void) | undefined;
+    const startGate = new Promise<void>((resolve) => { releaseStart = resolve; });
+    let starts = 0;
+    let launchChild: ChildProcess | undefined;
+
+    try {
+      const first = connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 120,
+        spawnDaemon: () => {
+          starts += 1;
+          void startGate.then(async () => {
+            const daemon = await startAgentWorkbenchDaemon({
+              repoRoot,
+              idleGraceMs: 100,
+              serverOptions: { startupRefreshDelayMs: 60_000 }
+            });
+            daemons.push(daemon);
+          });
+          launchChild = fakeChildProcess();
+          return launchChild;
+        }
+      });
+      const firstTimeout = expect(first).rejects.toThrow(
+        /Timed out connecting to Agent Workbench daemon/
+      );
+
+      await sleep(25);
+      let starting: unknown | undefined;
+      for (let attempt = 0; attempt < 25 && starting === undefined; attempt += 1) {
+        if (fs.existsSync(paths.metadataPath)) {
+          starting = safeReadJson(paths.metadataPath);
+          if (
+            typeof starting === "object" &&
+            starting !== null &&
+            (starting as { launchLifecycle?: { state?: string } }).launchLifecycle?.state === "starting"
+          ) {
+            break;
+          }
+        }
+        await sleep(20);
+      }
+      expect(starting).toBeDefined();
+
+      const second = connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 1500,
+        spawnDaemon: () => {
+          starts += 1;
+          return fakeChildProcess();
+        }
+      });
+
+      await firstTimeout;
+      releaseStart?.();
+
+      const secondSocket = await second;
+      secondSocket.destroy();
+
+      expect(starts).toBe(1);
+      await closeDaemons(daemons);
+      launchChild?.emit("exit", 0, null);
+      await sleep(20);
+      expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+      expect(fs.existsSync(paths.metadataPath)).toBe(false);
+    } finally {
+      releaseStart?.();
+      await closeDaemons(daemons);
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("records immediate child exit as terminal failure evidence", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-child-exit-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+
+    try {
+      await expect(connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 1500,
+        spawnDaemon: () => fakeChildProcess((child) => {
+          setTimeout(() => {
+            child.emit("exit", 1, null);
+          }, 5);
+        })
+      })).rejects.toThrow("daemon-child-exit-code-1");
+
+      const metadata = safeReadJson(paths.metadataPath) as {
+        launchLifecycle?: { state?: string; phase?: string; failureCode?: string };
+      };
+      expect(metadata).toMatchObject({
+        launchLifecycle: {
+          state: "failed",
+          phase: "terminal",
+          failureCode: "child_exit"
+        }
+      });
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  });
+
   it("does not unlink a healthy daemon socket when a second direct start loses ownership", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-second-start-");
     const first = await startAgentWorkbenchDaemon({
@@ -493,6 +887,43 @@ describe("Agent Workbench daemon launcher", () => {
     } finally {
       await first.close();
       fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not delete a replacement launch receipt during old-daemon shutdown", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-shutdown-replacement-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    const daemon = await startAgentWorkbenchDaemon({
+      repoRoot,
+      idleGraceMs: 3000,
+      serverOptions: { startupRefreshDelayMs: 60_000 }
+    });
+    const replacementStartedAt = new Date().toISOString();
+    const replacement = createDaemonMetadata({
+      identity,
+      pid: process.pid,
+      socketPath: paths.socketPath,
+      launchToken: "replacement-launch-token",
+      launchStartedAt: replacementStartedAt,
+      createdAt: replacementStartedAt,
+      updatedAt: replacementStartedAt,
+      phase: "launching"
+    });
+
+    try {
+      fs.writeFileSync(paths.metadataPath, `${JSON.stringify(replacement)}\n`);
+      await daemon.close();
+      expect(safeReadJson(paths.metadataPath)).toMatchObject({
+        launchLifecycle: {
+          launchToken: "replacement-launch-token",
+          state: "starting"
+        }
+      });
+    } finally {
+      await daemon.close();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
     }
   });
 
@@ -848,6 +1279,7 @@ describe("Agent Workbench daemon launcher", () => {
       expect(fs.readFileSync(paths.startupLockPath, "utf8")).toBe("not-json\n");
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
     }
   });
 
@@ -1010,6 +1442,117 @@ describe("Agent Workbench daemon launcher", () => {
           socketExists: () => true
         })
       ).toMatchObject({ state: "stale", reason: "identity_mismatch" });
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("validates strict launch-lifecycle invariants in metadata files", () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-lifecycle-invariants-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    const createdAt = "2026-07-05T00:00:00.000Z";
+    const launchLifecycleToken = "test-token";
+
+    try {
+      fs.mkdirSync(paths.metadataDir, { recursive: true });
+
+      fs.writeFileSync(
+        paths.metadataPath,
+        `${JSON.stringify({
+          identity,
+          pid: process.pid,
+          socketPath: paths.socketPath,
+          createdAt,
+          launchLifecycle: {
+            state: "starting",
+            phase: "ready",
+            launchToken: launchLifecycleToken,
+            startedAt: createdAt,
+            updatedAt: createdAt
+          }
+        })}\n`
+      );
+      expect(classifyDaemonState({
+        metadataPath: paths.metadataPath,
+        expectedIdentity: identity,
+        socketPath: paths.socketPath,
+        isProcessAlive: () => true,
+        socketExists: () => true
+      })).toEqual({ state: "blocked", reason: "ambiguous_metadata" });
+
+      fs.writeFileSync(
+        paths.metadataPath,
+        `${JSON.stringify({
+          identity,
+          pid: process.pid,
+          socketPath: paths.socketPath,
+          createdAt,
+          launchLifecycle: {
+            state: "ready",
+            phase: "launching",
+            launchToken: launchLifecycleToken,
+            startedAt: createdAt,
+            updatedAt: createdAt
+          }
+        })}\n`
+      );
+      expect(classifyDaemonState({
+        metadataPath: paths.metadataPath,
+        expectedIdentity: identity,
+        socketPath: paths.socketPath,
+        isProcessAlive: () => true,
+        socketExists: () => true
+      })).toEqual({ state: "blocked", reason: "ambiguous_metadata" });
+
+      fs.writeFileSync(
+        paths.metadataPath,
+        `${JSON.stringify({
+          identity,
+          pid: process.pid,
+          socketPath: paths.socketPath,
+          createdAt,
+          launchLifecycle: {
+            state: "failed",
+            phase: "terminal",
+            launchToken: launchLifecycleToken,
+            startedAt: createdAt,
+            updatedAt: createdAt
+          }
+        })}\n`
+      );
+      expect(classifyDaemonState({
+        metadataPath: paths.metadataPath,
+        expectedIdentity: identity,
+        socketPath: paths.socketPath,
+        isProcessAlive: () => true,
+        socketExists: () => true
+      })).toEqual({ state: "blocked", reason: "ambiguous_metadata" });
+
+      fs.writeFileSync(
+        paths.metadataPath,
+        `${JSON.stringify({
+          identity,
+          pid: process.pid,
+          socketPath: paths.socketPath,
+          createdAt,
+          launchLifecycle: {
+            state: "failed",
+            phase: "terminal",
+            launchToken: launchLifecycleToken,
+            startedAt: createdAt,
+            updatedAt: createdAt,
+            failureCode: "child_exit"
+          }
+        })}\n`
+      );
+      expect(classifyDaemonState({
+        metadataPath: paths.metadataPath,
+        expectedIdentity: identity,
+        socketPath: paths.socketPath,
+        isProcessAlive: () => true,
+        socketExists: () => true
+      })).toMatchObject({ state: "blocked", reason: "failed" });
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
@@ -1370,10 +1913,18 @@ function controlledDeferred<T>(): {
   return { promise, resolve };
 }
 
-function fakeChildProcess(): ChildProcess {
-  return {
-    unref: () => fakeChildProcess()
-  } as unknown as ChildProcess;
+function fakeChildProcess(onStart: (child: ChildProcess) => void = () => undefined): ChildProcess {
+  const child = new EventEmitter() as unknown as ChildProcess;
+  Object.assign(child, {
+    pid: process.pid,
+    unref: () => child
+  });
+  onStart(child);
+  return child;
+}
+
+function safeReadJson(filePath: string): unknown {
+  return JSON.parse(fs.readFileSync(filePath, "utf8")) as unknown;
 }
 
 async function closeDaemons(daemons: StartedAgentWorkbenchDaemon[]): Promise<void> {

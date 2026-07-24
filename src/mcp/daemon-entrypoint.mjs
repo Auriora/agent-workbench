@@ -12,7 +12,7 @@ try {
   await runDaemonFromEnv();
 } catch (error) {
   process.stderr.write(
-    `agent-workbench: daemon failed: ${error instanceof Error ? error.stack ?? error.message : String(error)}\n`
+    `agent-workbench: daemon failed: ${error instanceof Error ? error.message : String(error)}\n`
   );
   process.exitCode = 1;
 }

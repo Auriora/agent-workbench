@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-24
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -258,11 +258,34 @@ test control. The value is a nonnegative safe integer in milliseconds; zero is
 valid, malformed values refuse daemon startup, and the default is 1000. It is
 not a provider-specific mode or a second refresh path.
 
+Repo-local daemon metadata is a complete atomic lifecycle receipt with exactly
+one of these states:
+
+- `starting`: one identified process and launch attempt owns cold startup; a
+  bounded phase may explain which pre-listen boundary is active.
+- `ready`: ownership, store recovery, controller construction, socket binding,
+  and endpoint metadata publication completed for the recorded daemon identity.
+- `failed`: the identified launch attempt ended with a bounded safe failure
+  code and is not usable as a daemon endpoint.
+
+The receipt carries daemon identity, launch-attempt identity, PID, endpoint,
+creation and update times, and state-specific evidence. Concurrent launchers
+must not interpret PID existence, phase movement, or socket-file existence by
+itself as readiness. Lifecycle writes are atomic, and startup uses one
+monotonic absolute deadline that is not reset by progress. A positively live
+`starting` receipt prevents another spawn even after one caller reaches its
+deadline; only positive dead-process evidence permits guarded cleanup and
+re-election within the original deadline. Loss of a previously ready receipt
+also returns the caller to the same guarded election path. Shutdown cleanup
+holds startup exclusion and removes metadata only when its launch-attempt token
+still matches.
+
 Daemon or graph-store startup failures use existing envelope vocabulary:
 incompatible or missing daemon identity maps to `invalid_due_to_environment`;
 ambiguous owner state, malformed socket handshakes, blocked graph-store
 startup, and unavailable graph evidence map to `verification_status: blocked`.
-Raw SQLite lock text must not be emitted as non-JSON MCP output.
+Terminal startup receipts expose only bounded safe failure codes. Raw SQLite
+lock text must not be emitted as non-JSON MCP output.
 
 ### Refresh And Publication Vocabulary
 
@@ -313,6 +336,14 @@ generations, execution/publication/freshness states, activity lease and worker
 termination state, and optional structured failure. Invalid state combinations
 or inability to obtain this awaited receipt degrade top-level trust rather than
 being presented as healthy status.
+
+Tests and clients that must prove refresh completion establish a baseline
+receipt, then wait for an advanced diagnostic revision on the same controller
+generation. Completion requires `complete`, a `published` target equal to the
+visible snapshot, converged requested and started generations, `fresh` graph
+state, no activity lease, no retained failure, and safe worker termination.
+User-facing status may be asserted after that authority barrier; polling status
+alone is not refresh-completion proof.
 
 ## Evidence Semantics
 

@@ -9,6 +9,7 @@ import fs from "node:fs";
 import net, { type Server, type Socket } from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { createRootAuthorityPolicy } from "../interface-adapters/mcp/registries/root-authority.js";
 import type { IntegrationLauncherIdentity } from "../contracts/index.js";
@@ -46,11 +47,14 @@ import type {
 export const DAEMON_PROTOCOL_VERSION = 1;
 const DAEMON_METADATA_FILE = "daemon.json";
 const DAEMON_STARTUP_LOCK_FILE = "startup.lock";
-const DEFAULT_DAEMON_START_TIMEOUT_MS = 4000;
+const DEFAULT_DAEMON_START_TIMEOUT_MS = 10_000;
 const DEFAULT_DAEMON_HANDSHAKE_TIMEOUT_MS = 1000;
 const DEFAULT_DAEMON_IDLE_GRACE_MS = 30_000;
 const DEFAULT_DAEMON_STARTUP_REFRESH_DELAY_MS = 1000;
 const DAEMON_ENV_FLAG = "AGENT_WORKBENCH_DAEMON_PROCESS";
+const DAEMON_LAUNCH_TOKEN_ENV = "AGENT_WORKBENCH_DAEMON_LAUNCH_TOKEN";
+const DAEMON_METADATA_PATH_ENV = "AGENT_WORKBENCH_DAEMON_METADATA_PATH";
+const DAEMON_SOCKET_PATH_ENV = "AGENT_WORKBENCH_DAEMON_SOCKET_PATH";
 const DAEMON_IDLE_GRACE_ENV = "AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS";
 const DAEMON_STARTUP_REFRESH_DELAY_ENV = "AGENT_WORKBENCH_DAEMON_STARTUP_REFRESH_DELAY_MS";
 
@@ -67,13 +71,32 @@ export type AgentWorkbenchDaemonMetadata = {
   pid: number;
   socketPath: string;
   createdAt: string;
+  launchLifecycle?: {
+    state: "starting" | "ready" | "failed";
+    phase: "launching" | "ready" | "terminal";
+    launchToken: string;
+    startedAt: string;
+    updatedAt: string;
+    failureCode?: DaemonStartupFailureCode;
+  };
 };
+
+type LifecycleDaemonMetadata = AgentWorkbenchDaemonMetadata & {
+  launchLifecycle: NonNullable<AgentWorkbenchDaemonMetadata["launchLifecycle"]>;
+};
+
+export type DaemonStartupFailureCode =
+  | "child_error"
+  | "child_exit"
+  | "bootstrap_failed"
+  | "listen_failed"
+  | "metadata_write_failed";
 
 export type DaemonState =
   | { state: "absent"; reason: "missing" }
   | { state: "stale"; reason: "malformed_metadata" | "dead_process" | "missing_socket" | "identity_mismatch"; metadata?: AgentWorkbenchDaemonMetadata }
   | { state: "mismatched"; reason: "identity_mismatch"; metadata: AgentWorkbenchDaemonMetadata }
-  | { state: "blocked"; reason: "ambiguous_process" | "ambiguous_metadata"; metadata?: AgentWorkbenchDaemonMetadata }
+  | { state: "blocked"; reason: "ambiguous_process" | "ambiguous_metadata" | "starting" | "failed"; metadata?: AgentWorkbenchDaemonMetadata }
   | { state: "ready"; metadata: AgentWorkbenchDaemonMetadata };
 
 export type DaemonPaths = {
@@ -99,6 +122,7 @@ export type SpawnDaemonInput = {
   debugRepoRootOverride: boolean;
   metadataPath: string;
   socketPath: string;
+  launchToken: string;
   env: NodeJS.ProcessEnv;
 };
 
@@ -245,6 +269,17 @@ export function classifyDaemonState(input: {
       ? { state: "blocked", reason: "ambiguous_process", metadata }
       : { state: "stale", reason: "identity_mismatch", metadata };
   }
+  const lifecycle = resolveLifecycleState(metadata.launchLifecycle);
+  if (lifecycle === "starting") {
+    return processState
+      ? { state: "blocked", reason: "starting", metadata }
+      : { state: "stale", reason: "dead_process", metadata };
+  }
+  if (lifecycle === "failed") {
+    return processState
+      ? { state: "blocked", reason: "failed", metadata }
+      : { state: "stale", reason: "dead_process", metadata };
+  }
   if (!processState) {
     return { state: "stale", reason: "dead_process", metadata };
   }
@@ -264,7 +299,61 @@ export async function connectOrStartDaemon(
   const env = options.env ?? process.env;
   const spawnDaemon = options.spawnDaemon ?? spawnDaemonProcess;
   ensureDaemonDirectories(paths);
+  const timeoutMs = options.startTimeoutMs ?? DEFAULT_DAEMON_START_TIMEOUT_MS;
+  const deadlineMs = performance.now() + timeoutMs;
+  const handshakeTimeoutMs = options.handshakeTimeoutMs ?? DEFAULT_DAEMON_HANDSHAKE_TIMEOUT_MS;
+  const retryStartup = (): Promise<Socket> => {
+    const remainingMs = deadlineMs - performance.now();
+    if (remainingMs <= 0) {
+      throw new Error("Timed out connecting to Agent Workbench daemon before startup re-election.");
+    }
+    return connectOrStartDaemon({
+      ...options,
+      startTimeoutMs: remainingMs
+    });
+  };
   let startupLock: { release: () => void } | null = null;
+  let startupLockReleased = false;
+  let keepStartupLock = false;
+  let startingMetadata: LifecycleDaemonMetadata | undefined;
+  let startupFailure: { error: Error; code: DaemonStartupFailureCode } | undefined;
+
+  const releaseStartupLock = (): void => {
+    if (!startupLockReleased && startupLock !== null && !keepStartupLock) {
+      startupLockReleased = true;
+      startupLock.release();
+      startupLock = null;
+    }
+  };
+  const recordStartupFailure = (
+    reasonError: Error,
+    failureCode: DaemonStartupFailureCode
+  ): void => {
+    if (startupFailure !== undefined) {
+      return;
+    }
+    startupFailure = { error: reasonError, code: failureCode };
+    if (startingMetadata !== undefined) {
+      const failureMetadata = createDaemonMetadata({
+        identity,
+        pid: startingMetadata.pid,
+        socketPath: paths.socketPath,
+        launchToken: startingMetadata.launchLifecycle.launchToken,
+        launchStartedAt: startingMetadata.launchLifecycle.startedAt,
+        createdAt: startingMetadata.createdAt,
+        updatedAt: new Date().toISOString(),
+        phase: "terminal",
+        failureCode
+      });
+      try {
+        writeDaemonMetadata(paths.metadataPath, failureMetadata);
+      } catch {
+        // Startup failure metadata is best effort.
+      }
+    }
+    keepStartupLock = false;
+    releaseStartupLock();
+  };
 
   try {
     let state = classifyDaemonState({
@@ -274,6 +363,23 @@ export async function connectOrStartDaemon(
     });
 
     if (state.state === "blocked") {
+      if (state.reason === "starting") {
+        return await waitForDaemonConnection({
+          identity,
+          integrationIdentity: options.integrationIdentity,
+          socketPath: paths.socketPath,
+          metadataPath: paths.metadataPath,
+          startupLockPath: paths.startupLockPath,
+          timeoutMs,
+          deadlineMs,
+          handshakeTimeoutMs,
+          retryStartup
+        });
+      }
+      if (state.reason === "failed" && state.metadata !== undefined) {
+        throw startupFailureFromMetadata(state.metadata);
+      }
+      keepStartupLock = false;
       throw new Error(`Agent Workbench daemon is ${state.state}: ${state.reason}.`);
     }
 
@@ -283,36 +389,173 @@ export async function connectOrStartDaemon(
         throw new Error("Agent Workbench daemon is blocked: ambiguous startup ownership.");
       }
       startupLock = startupLockAdmission;
-      if (startupLock !== null) {
-        state = normalizeLaunchState(classifyDaemonState({
+      const haveStartupLock = startupLock !== null;
+      keepStartupLock = haveStartupLock;
+      if (!haveStartupLock) {
+        return await waitForDaemonConnection({
+          identity,
+          integrationIdentity: options.integrationIdentity,
+          socketPath: paths.socketPath,
           metadataPath: paths.metadataPath,
-          expectedIdentity: identity,
-          socketPath: paths.socketPath
-        }), paths);
-        if (state.state === "blocked") {
-          throw new Error(`Agent Workbench daemon is ${state.state}: ${state.reason}.`);
+          startupLockPath: paths.startupLockPath,
+          timeoutMs,
+          deadlineMs,
+          handshakeTimeoutMs,
+          retryStartup
+        });
+      }
+
+      state = normalizeLaunchState(classifyDaemonState({
+        metadataPath: paths.metadataPath,
+        expectedIdentity: identity,
+        socketPath: paths.socketPath
+      }), paths);
+      if (state.state === "blocked") {
+        if (state.reason === "starting") {
+          keepStartupLock = false;
+          releaseStartupLock();
+          return await waitForDaemonConnection({
+            identity,
+            integrationIdentity: options.integrationIdentity,
+            socketPath: paths.socketPath,
+            metadataPath: paths.metadataPath,
+            startupLockPath: paths.startupLockPath,
+            timeoutMs,
+            deadlineMs,
+            handshakeTimeoutMs,
+            retryStartup
+          });
         }
-        if (state.state === "absent") {
-          spawnDaemon({
+        if (state.reason === "failed" && state.metadata !== undefined) {
+          keepStartupLock = false;
+          throw startupFailureFromMetadata(state.metadata);
+        }
+        keepStartupLock = false;
+        throw new Error(`Agent Workbench daemon is ${state.state}: ${state.reason}.`);
+      }
+      if (state.state === "absent") {
+        const launchToken = crypto.randomUUID();
+        let launchProcess: ChildProcess;
+        try {
+          launchProcess = spawnDaemon({
             repoRoot,
             debugRepoRootOverride: options.debugRepoRootOverride,
             metadataPath: paths.metadataPath,
             socketPath: paths.socketPath,
+            launchToken,
             env
-          }).unref();
+          });
+        } catch (_error) {
+          releaseStartupLock();
+          throw new Error("Daemon start was blocked by spawn failure.");
+        }
+
+        if (typeof launchProcess.pid !== "number" || launchProcess.pid <= 0) {
+          releaseStartupLock();
+          throw new Error("Daemon launch did not expose a process identifier.");
+        }
+
+        let terminalCleanup = () => undefined;
+        const terminalPromise = new Promise<never>((_resolve, reject) => {
+          const onChildError = (error: Error): void => {
+            if (startupFailure !== undefined) {
+              return;
+            }
+            const reason = error instanceof Error ? error : new Error(String(error));
+            recordStartupFailure(reason, "child_error");
+            terminalCleanup();
+            reject(reason);
+          };
+          const onChildExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+            if (startupFailure !== undefined) {
+              return;
+            }
+            const reason = formatChildExitFailure(code, signal);
+            recordStartupFailure(reason, "child_exit");
+            terminalCleanup();
+            reject(reason);
+          };
+
+          launchProcess.once("error", onChildError);
+          launchProcess.once("exit", onChildExit);
+          terminalCleanup = () => {
+            launchProcess.off("error", onChildError);
+            launchProcess.off("exit", onChildExit);
+          };
+        });
+        void terminalPromise.catch(() => undefined);
+
+        const startedAt = new Date().toISOString();
+        startingMetadata = createDaemonMetadata({
+          identity,
+          pid: launchProcess.pid,
+          socketPath: paths.socketPath,
+          launchToken,
+          launchStartedAt: startedAt,
+          createdAt: startedAt,
+          failureCode: undefined,
+          phase: "launching",
+          updatedAt: startedAt
+        });
+        try {
+          writeDaemonMetadata(paths.metadataPath, startingMetadata);
+        } catch (error) {
+          recordStartupFailure(
+            error instanceof Error ? error : new Error(String(error)),
+            "metadata_write_failed"
+          );
+          releaseStartupLock();
+          throw error;
+        }
+
+        try {
+          const socket = await Promise.race([
+            waitForDaemonConnection({
+              identity,
+              integrationIdentity: options.integrationIdentity,
+              socketPath: paths.socketPath,
+              metadataPath: paths.metadataPath,
+              startupLockPath: paths.startupLockPath,
+              timeoutMs,
+              deadlineMs,
+              handshakeTimeoutMs,
+              retryStartup
+            }),
+            terminalPromise
+          ]);
+          terminalCleanup();
+          keepStartupLock = false;
+          releaseStartupLock();
+          launchProcess.unref?.();
+          return socket;
+        } catch (error) {
+          if (startupFailure !== undefined) {
+            terminalCleanup();
+            throw startupFailure.error;
+          }
+          terminalCleanup();
+          keepStartupLock = false;
+          releaseStartupLock();
+          launchProcess.unref?.();
+          throw error;
         }
       }
     }
 
+    keepStartupLock = false;
     return await waitForDaemonConnection({
       identity,
       integrationIdentity: options.integrationIdentity,
       socketPath: paths.socketPath,
-      timeoutMs: options.startTimeoutMs ?? DEFAULT_DAEMON_START_TIMEOUT_MS,
-      handshakeTimeoutMs: options.handshakeTimeoutMs ?? DEFAULT_DAEMON_HANDSHAKE_TIMEOUT_MS
+      metadataPath: paths.metadataPath,
+      startupLockPath: paths.startupLockPath,
+      timeoutMs,
+      deadlineMs,
+      handshakeTimeoutMs,
+      retryStartup
     });
   } finally {
-    startupLock?.release();
+    releaseStartupLock();
   }
 }
 
@@ -320,19 +563,29 @@ export async function startAgentWorkbenchDaemon(input: {
   repoRoot: string;
   debugRepoRootOverride?: boolean;
   idleGraceMs?: number;
+  launchToken?: string;
+  launchStartedAt?: string;
   serverOptions?: AgentWorkbenchServerOptions;
 }): Promise<StartedAgentWorkbenchDaemon> {
   const repoRoot = path.resolve(input.repoRoot);
   const identity = createDaemonIdentity(repoRoot);
   const paths = daemonPaths(identity);
   ensureDaemonDirectories(paths);
+  const launchToken = input.launchToken ??
+    process.env[DAEMON_LAUNCH_TOKEN_ENV] ??
+    crypto.randomUUID();
+  const startedAt = input.launchStartedAt ?? new Date().toISOString();
 
-  const metadata: AgentWorkbenchDaemonMetadata = {
+  let metadata = createDaemonMetadata({
     identity,
     pid: process.pid,
     socketPath: paths.socketPath,
-    createdAt: new Date().toISOString()
-  };
+    launchToken,
+    launchStartedAt: startedAt,
+    createdAt: startedAt,
+    updatedAt: startedAt,
+    phase: "launching"
+  });
   const connected = new Set<Socket>();
   const mcpServers = new Set<{ close: () => Promise<void> }>();
   const databasePath = graphStorePath(repoRoot);
@@ -469,20 +722,46 @@ export async function startAgentWorkbenchDaemon(input: {
     fs.rmSync(paths.socketPath, { force: true });
   }
 
+  let listenFailureCode: DaemonStartupFailureCode = "listen_failed";
   try {
+    writeDaemonMetadata(paths.metadataPath, metadata);
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);
       server.listen(paths.socketPath, () => {
         server.off("error", reject);
         try {
+          metadata = {
+            ...metadata,
+            launchLifecycle: {
+              ...metadata.launchLifecycle,
+              state: "ready",
+              phase: "ready",
+              updatedAt: new Date().toISOString()
+            }
+          };
           writeDaemonMetadata(paths.metadataPath, metadata);
           resolve();
         } catch (error) {
+          listenFailureCode = "metadata_write_failed";
           reject(error);
         }
       });
     });
   } catch (error) {
+    try {
+      writeDaemonMetadata(paths.metadataPath, {
+        ...metadata,
+        launchLifecycle: {
+          ...metadata.launchLifecycle,
+          state: "failed",
+          phase: "terminal",
+          updatedAt: new Date().toISOString(),
+          failureCode: listenFailureCode
+        }
+      });
+    } catch {
+      // Metadata is best effort for listen-stage terminal evidence.
+    }
     clearTimeout(startupTimer);
     await Promise.allSettled([...sharedDisposers].map((dispose) => Promise.resolve(dispose())));
     if (server.listening) {
@@ -490,7 +769,10 @@ export async function startAgentWorkbenchDaemon(input: {
     }
     await ownership.release({ lease: ownershipLease });
     await sharedGraphStore.close();
-    cleanupStaleDaemonState(undefined, paths);
+    removeCanonicalFile(paths.socketPath);
+    if (process.platform !== "win32") {
+      fsyncDirectory(paths.ipcDir);
+    }
     throw error;
   }
   lifetime.start();
@@ -501,19 +783,30 @@ export async function startAgentWorkbenchDaemon(input: {
   }
 
   async function closeDaemon(): Promise<void> {
+    const shutdownLockAdmission = acquireDaemonStartupLock(paths.startupLockPath);
+    const shutdownLock = shutdownLockAdmission !== null &&
+      shutdownLockAdmission !== "ambiguous"
+      ? shutdownLockAdmission
+      : undefined;
     clearTimeout(startupTimer);
-    lifetime.dispose();
-    for (const socket of connected) {
-      socket.destroy();
+    try {
+      lifetime.dispose();
+      for (const socket of connected) {
+        socket.destroy();
+      }
+      await Promise.allSettled([...mcpServers].map((mcpServer) => mcpServer.close()));
+      await Promise.allSettled([...sharedDisposers].map((dispose) => Promise.resolve(dispose())));
+      await startupRefreshPromise;
+      await waitForControllerShutdownSafety(refreshController);
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+      await ownership.release({ lease: ownershipLease });
+      await sharedGraphStore.close();
+      if (shutdownLock !== undefined) {
+        cleanupStaleDaemonState(metadata, paths);
+      }
+    } finally {
+      shutdownLock?.release();
     }
-    await Promise.allSettled([...mcpServers].map((mcpServer) => mcpServer.close()));
-    await Promise.allSettled([...sharedDisposers].map((dispose) => Promise.resolve(dispose())));
-    await startupRefreshPromise;
-    await waitForControllerShutdownSafety(refreshController);
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    await ownership.release({ lease: ownershipLease });
-    await sharedGraphStore.close();
-    cleanupStaleDaemonState(metadata, paths);
   }
 
   return {
@@ -529,14 +822,105 @@ export async function runDaemonFromEnv(env: NodeJS.ProcessEnv = process.env): Pr
   if (repoRoot === undefined || repoRoot.trim() === "") {
     throw new Error("AGENT_WORKBENCH_DAEMON_REPO_ROOT is required.");
   }
-  await startAgentWorkbenchDaemon({
-    repoRoot,
-    debugRepoRootOverride: env.AGENT_WORKBENCH_DAEMON_DEBUG_REPO_ROOT_OVERRIDE === "1",
-    idleGraceMs: readIdleGraceMs(env),
-    serverOptions: {
-      startupRefreshDelayMs: daemonStartupRefreshDelayMsFromEnv(env)
-    }
-  });
+  const identity = createDaemonIdentity(repoRoot);
+  const metadataPath = env[DAEMON_METADATA_PATH_ENV];
+  const socketPath = env[DAEMON_SOCKET_PATH_ENV];
+  const launchToken = env[DAEMON_LAUNCH_TOKEN_ENV];
+  const launchStartedAt = new Date().toISOString();
+  try {
+    await startAgentWorkbenchDaemon({
+      repoRoot,
+      debugRepoRootOverride: env.AGENT_WORKBENCH_DAEMON_DEBUG_REPO_ROOT_OVERRIDE === "1",
+      idleGraceMs: readIdleGraceMs(env),
+      launchToken,
+      launchStartedAt,
+      serverOptions: {
+        startupRefreshDelayMs: daemonStartupRefreshDelayMsFromEnv(env)
+      }
+    });
+  } catch (error) {
+    recordEntrypointDaemonFailure({
+      metadataPath,
+      socketPath,
+      launchToken,
+      identity,
+      launchStartedAt
+    });
+    throw error;
+  }
+}
+
+function recordEntrypointDaemonFailure(input: {
+  metadataPath: string | undefined;
+  socketPath: string | undefined;
+  launchToken: string | undefined;
+  identity: AgentWorkbenchDaemonIdentity;
+  launchStartedAt: string;
+}): void {
+  if (typeof input.metadataPath !== "string" || input.metadataPath.trim() === "") {
+    return;
+  }
+  const baselineMetadata = readDaemonMetadata(input.metadataPath);
+  if (
+    baselineMetadata !== undefined &&
+    baselineMetadata !== "malformed" &&
+    (
+      !daemonIdentityMatches(baselineMetadata.identity, input.identity) ||
+      baselineMetadata.launchLifecycle?.state === "ready" ||
+      baselineMetadata.launchLifecycle?.state === "failed" ||
+      (
+        input.launchToken !== undefined &&
+        baselineMetadata.launchLifecycle !== undefined &&
+        baselineMetadata.launchLifecycle.launchToken !== input.launchToken
+      )
+    )
+  ) {
+    return;
+  }
+  const launchToken = input.launchToken !== undefined && input.launchToken.length > 0
+    ? input.launchToken
+    : (baselineMetadata !== undefined &&
+      baselineMetadata !== "malformed" &&
+      baselineMetadata.launchLifecycle?.launchToken !== undefined
+      ? baselineMetadata.launchLifecycle.launchToken
+      : undefined);
+  const socketPath = input.socketPath !== undefined && input.socketPath.trim() !== ""
+    ? input.socketPath
+    : (baselineMetadata !== undefined &&
+      baselineMetadata !== "malformed"
+      ? baselineMetadata.socketPath
+      : undefined);
+
+  if (launchToken === undefined || socketPath === undefined) {
+    return;
+  }
+
+  const createdAt = baselineMetadata !== undefined &&
+    baselineMetadata !== "malformed" &&
+    typeof baselineMetadata.createdAt === "string"
+    ? baselineMetadata.createdAt
+    : input.launchStartedAt;
+  const resolvedLaunchStartedAt = baselineMetadata !== undefined &&
+    baselineMetadata !== "malformed" &&
+    baselineMetadata.launchLifecycle !== undefined
+    ? baselineMetadata.launchLifecycle.startedAt
+    : input.launchStartedAt;
+
+  try {
+    writeDaemonMetadata(input.metadataPath, createDaemonMetadata({
+      identity: input.identity,
+      pid: process.pid,
+      socketPath,
+      launchToken,
+      launchStartedAt: resolvedLaunchStartedAt,
+      createdAt,
+      updatedAt: new Date().toISOString(),
+      phase: "terminal",
+      failureCode: "bootstrap_failed"
+    }));
+  } catch {
+    // Entrypoint bootstrap failure evidence is best effort.
+  }
 }
 
 export function isDaemonProcess(env: NodeJS.ProcessEnv = process.env): boolean {
@@ -554,7 +938,8 @@ function spawnDaemonProcess(input: SpawnDaemonInput): ChildProcess {
       AGENT_WORKBENCH_DAEMON_REPO_ROOT: input.repoRoot,
       AGENT_WORKBENCH_DAEMON_DEBUG_REPO_ROOT_OVERRIDE: input.debugRepoRootOverride ? "1" : "0",
       AGENT_WORKBENCH_DAEMON_METADATA_PATH: input.metadataPath,
-      AGENT_WORKBENCH_DAEMON_SOCKET_PATH: input.socketPath
+      AGENT_WORKBENCH_DAEMON_SOCKET_PATH: input.socketPath,
+      [DAEMON_LAUNCH_TOKEN_ENV]: input.launchToken
     }
   });
 }
@@ -647,12 +1032,53 @@ async function waitForDaemonConnection(input: {
   identity: AgentWorkbenchDaemonIdentity;
   integrationIdentity?: IntegrationLauncherIdentity;
   socketPath: string;
+  metadataPath?: string;
+  startupLockPath?: string;
   timeoutMs: number;
   handshakeTimeoutMs: number;
+  deadlineMs?: number;
+  retryStartup?: () => Promise<Socket>;
 }): Promise<Socket> {
-  const startedAt = Date.now();
+  const deadlineMs = input.deadlineMs ?? (performance.now() + input.timeoutMs);
   let lastError: unknown;
-  while (Date.now() - startedAt <= input.timeoutMs) {
+  let observedReady = false;
+  while (performance.now() <= deadlineMs) {
+    if (input.metadataPath !== undefined) {
+      const metadata = readDaemonMetadata(input.metadataPath);
+      if (metadata !== undefined && metadata !== "malformed") {
+        const lifecycle = metadata.launchLifecycle;
+        if (lifecycle !== undefined && lifecycle.state === "failed") {
+          throw startupFailureFromMetadata(metadata);
+        }
+        if (resolveLifecycleState(lifecycle) === "ready") {
+          observedReady = true;
+        }
+        const state = classifyDaemonState({
+          metadataPath: input.metadataPath,
+          expectedIdentity: input.identity,
+          socketPath: input.socketPath
+        });
+        if (
+          input.retryStartup !== undefined &&
+          state.state === "stale"
+        ) {
+          return input.retryStartup();
+        }
+      } else if (
+        metadata === undefined &&
+        input.retryStartup !== undefined &&
+        (
+          observedReady ||
+          (
+            input.startupLockPath !== undefined &&
+            fs.existsSync(input.startupLockPath) &&
+            daemonStartupLockIsStale(input.startupLockPath) === true
+          )
+        )
+      ) {
+        return input.retryStartup();
+      }
+    }
     try {
       const socket = await connectSocket(input.socketPath, input.handshakeTimeoutMs);
       socket.write(`${JSON.stringify({
@@ -668,6 +1094,49 @@ async function waitForDaemonConnection(input: {
     }
   }
   throw new Error(`Timed out connecting to Agent Workbench daemon: ${String(lastError)}`);
+}
+
+function startupFailureFromMetadata(metadata: AgentWorkbenchDaemonMetadata): Error {
+  const failureCode = metadata.launchLifecycle?.failureCode;
+  const message = failureCode === undefined
+    ? "Agent Workbench daemon startup failed."
+    : `Agent Workbench daemon startup failed with code: ${failureCode}.`;
+  return new Error(message);
+}
+
+export function createDaemonMetadata(input: {
+  identity: AgentWorkbenchDaemonIdentity;
+  pid: number;
+  socketPath: string;
+  launchToken: string;
+  launchStartedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  phase: "launching" | "ready" | "terminal";
+  failureCode?: DaemonStartupFailureCode;
+}): LifecycleDaemonMetadata {
+  return {
+    identity: input.identity,
+    pid: input.pid,
+    socketPath: input.socketPath,
+    createdAt: input.createdAt,
+    launchLifecycle: {
+      state: input.failureCode === undefined ? "starting" : "failed",
+      phase: input.phase,
+      launchToken: input.launchToken,
+      startedAt: input.launchStartedAt,
+      updatedAt: input.updatedAt,
+      failureCode: input.failureCode
+    }
+  };
+}
+
+export function formatChildExitFailure(code: number | null, signal: NodeJS.Signals | null): Error {
+  if (code === 0) {
+    return new Error("daemon-child-exit-0");
+  }
+  const reason = code === null ? signal ?? "unknown" : `code-${code}`;
+  return new Error(`daemon-child-exit-${reason}`);
 }
 
 function connectSocket(socketPath: string, timeoutMs: number): Promise<Socket> {
@@ -706,10 +1175,55 @@ function readDaemonMetadata(metadataPath: string): AgentWorkbenchDaemonMetadata 
 
 function writeDaemonMetadata(metadataPath: string, metadata: AgentWorkbenchDaemonMetadata): void {
   fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
-  fs.writeFileSync(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
+  const serialized = `${JSON.stringify(metadata, null, 2)}\n`;
+  const tempPath = `${metadataPath}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`;
+  let fd: number | undefined;
+  let fdClosed = false;
+  try {
+    fd = fs.openSync(tempPath, "w", 0o600);
+    fs.writeFileSync(fd, serialized);
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fdClosed = true;
+    fs.renameSync(tempPath, metadataPath);
+    fsyncDirectory(path.dirname(metadataPath));
+  } finally {
+    if (!fdClosed && fd !== undefined) {
+      try { fs.closeSync(fd); } catch {}
+    }
+    fs.rmSync(tempPath, { force: true });
+  }
+}
+
+function fsyncDirectory(directoryPath: string): void {
+  let directoryFd: number | undefined;
+  try {
+    directoryFd = fs.openSync(directoryPath, "r");
+    fs.fsyncSync(directoryFd);
+  } catch {
+    // Optional durability hint for filesystem visibility in tests and non-windows
+    // environments; this path is best-effort and intentionally ignored when
+    // unavailable.
+  } finally {
+    if (directoryFd !== undefined) {
+      try { fs.closeSync(directoryFd); } catch {}
+    }
+  }
 }
 
 function cleanupStaleDaemonState(metadata: AgentWorkbenchDaemonMetadata | undefined, paths: DaemonPaths): void {
+  if (metadata !== undefined) {
+    const current = readDaemonMetadata(paths.metadataPath);
+    if (
+      current !== undefined &&
+      (
+        current === "malformed" ||
+        !sameDaemonLaunch(current, metadata)
+      )
+    ) {
+      return;
+    }
+  }
   removeCanonicalFile(paths.metadataPath);
   if (process.platform !== "win32") {
     removeCanonicalFile(paths.socketPath);
@@ -720,6 +1234,23 @@ function cleanupStaleDaemonState(metadata: AgentWorkbenchDaemonMetadata | undefi
       // be absent already; the socket unlink above is the required cleanup.
     }
   }
+}
+
+function sameDaemonLaunch(
+  current: AgentWorkbenchDaemonMetadata,
+  expected: AgentWorkbenchDaemonMetadata
+): boolean {
+  const currentToken = current.launchLifecycle?.launchToken;
+  const expectedToken = expected.launchLifecycle?.launchToken;
+  if (currentToken !== undefined || expectedToken !== undefined) {
+    return currentToken !== undefined && currentToken === expectedToken;
+  }
+  return (
+    current.pid === expected.pid &&
+    current.createdAt === expected.createdAt &&
+    current.socketPath === expected.socketPath &&
+    daemonIdentityMatches(current.identity, expected.identity)
+  );
 }
 
 function removeCanonicalFile(filePath: string): void {
@@ -883,6 +1414,16 @@ function isFileExistsError(error: unknown): boolean {
   );
 }
 
+function resolveLifecycleState(lifecycle: AgentWorkbenchDaemonMetadata["launchLifecycle"] | undefined): "ready" | "starting" | "failed" {
+  if (lifecycle === undefined) {
+    return "ready";
+  }
+  if (lifecycle.state === "failed" || lifecycle.state === "starting") {
+    return lifecycle.state;
+  }
+  return lifecycle.state;
+}
+
 function isProcessAlive(pid: number): boolean | "ambiguous" {
   try {
     process.kill(pid, 0);
@@ -984,7 +1525,47 @@ function isDaemonMetadata(value: unknown): value is AgentWorkbenchDaemonMetadata
     Number.isInteger(metadata.pid) &&
     metadata.pid > 0 &&
     typeof metadata.socketPath === "string" &&
-    typeof metadata.createdAt === "string"
+    typeof metadata.createdAt === "string" &&
+    (metadata.launchLifecycle === undefined || isDaemonLifecycle(metadata.launchLifecycle))
+  );
+}
+
+function isDaemonLifecycle(
+  value: unknown
+): value is AgentWorkbenchDaemonMetadata["launchLifecycle"] {
+  const lifecycle = value as AgentWorkbenchDaemonMetadata["launchLifecycle"];
+  if (typeof lifecycle !== "object" || lifecycle === null) {
+    return false;
+  }
+  if (
+    typeof lifecycle.launchToken !== "string" ||
+    lifecycle.launchToken.length === 0 ||
+    typeof lifecycle.startedAt !== "string" ||
+    !Number.isFinite(Date.parse(lifecycle.startedAt)) ||
+    typeof lifecycle.updatedAt !== "string" ||
+    !Number.isFinite(Date.parse(lifecycle.updatedAt))
+  ) {
+    return false;
+  }
+  if (lifecycle.state === "starting") {
+    return lifecycle.phase === "launching" && lifecycle.failureCode === undefined;
+  }
+  if (lifecycle.state === "ready") {
+    return lifecycle.phase === "ready" && lifecycle.failureCode === undefined;
+  }
+  if (lifecycle.state === "failed") {
+    return lifecycle.phase === "terminal" && isValidDaemonStartupFailureCode(lifecycle.failureCode);
+  }
+  return false;
+}
+
+function isValidDaemonStartupFailureCode(value: unknown): value is DaemonStartupFailureCode {
+  return (
+    value === "child_error" ||
+    value === "child_exit" ||
+    value === "bootstrap_failed" ||
+    value === "listen_failed" ||
+    value === "metadata_write_failed"
   );
 }
 

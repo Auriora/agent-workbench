@@ -3,7 +3,7 @@ title: MVP proof matrix
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-24
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -120,6 +120,17 @@ controller/execution/generation/snapshot agreement, worker invocation delta,
 exact surviving reference and docs hits, deleted-evidence absence, and cleanup
 of clients, daemon, socket, metadata, and temporary roots. A fresh final snapshot
 or an empty unblocked query alone is not sufficient proof.
+
+Checkout daemon integration also proves that concurrent cold-start clients
+observe one atomic `starting` to `ready` lifecycle, early child failure is
+reported without waiting for the socket deadline, and a live starter cannot be
+replaced merely because one caller times out. It also proves re-election when a
+lock owner dies before its first receipt, recovery when ready evidence vanishes
+before connection, and token-safe shutdown in the presence of a replacement
+receipt. Every daemon-backed fixture closes all clients and then positively
+observes daemon, socket, and metadata shutdown before deleting its repository
+root. Refresh convergence waits on the authoritative diagnostic transition
+before making one final public-status assertion.
 
 ## Capability Proof Status
 
