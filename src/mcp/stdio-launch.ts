@@ -4,6 +4,7 @@
  */
 
 import path from "node:path";
+import type { Socket } from "node:net";
 import type { Readable, Writable } from "node:stream";
 import type { IntegrationLauncherIdentity } from "../contracts/index.js";
 import {
@@ -50,7 +51,7 @@ export async function connectAgentWorkbenchStdio(
     stdout?: Writable;
     stderr?: Writable;
   } = {}
-): Promise<void> {
+): Promise<Socket> {
   const socket = await connectOrStartDaemon({
     repoRoot: config.repoRoot,
     debugRepoRootOverride: config.debugRepoRootOverride,
@@ -64,6 +65,7 @@ export async function connectAgentWorkbenchStdio(
   });
   stdin.pipe(socket);
   socket.pipe(stdout);
+  return socket;
 }
 
 export function resolveLauncherIdentity(

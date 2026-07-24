@@ -832,6 +832,237 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
+  it("accepts sockets during delayed bootstrap and defers clients until ready", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-timeout-recovery-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    const daemons: StartedAgentWorkbenchDaemon[] = [];
+    const releaseStart = controlledDeferred<void>();
+    let starts = 0;
+    let launchChild: ChildProcess | undefined;
+    const sessionCalls: Error[] = [];
+
+    try {
+      const first = connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 1000,
+        spawnDaemon: () => {
+          starts += 1;
+          void startAgentWorkbenchDaemon({
+            repoRoot,
+            idleGraceMs: 100,
+            serverOptions: { startupRefreshDelayMs: 60_000 },
+            testHooks: {
+              awaitBootstrap: releaseStart.promise
+            }
+          }).then((daemon) => daemons.push(daemon)).catch((error) => {
+            sessionCalls.push(error instanceof Error ? error : new Error(String(error)));
+          });
+          launchChild = fakeChildProcess();
+          return launchChild;
+        }
+      });
+      const second = connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 1000,
+        spawnDaemon: () => {
+          starts += 1;
+          return fakeChildProcess();
+        }
+      });
+
+      const starting = await (async () => {
+        let metadata: unknown | undefined;
+        for (let attempt = 0; attempt < 60 && metadata === undefined; attempt += 1) {
+          if (!fs.existsSync(paths.metadataPath)) {
+            await sleep(20);
+            continue;
+          }
+          metadata = safeReadJson(paths.metadataPath);
+          if (
+            typeof metadata === "object" && metadata !== null &&
+            (metadata as { launchLifecycle?: { state?: string } }).launchLifecycle?.state === "starting"
+          ) {
+            break;
+          }
+          await sleep(20);
+          metadata = undefined;
+        }
+        return metadata;
+      })();
+
+      expect(starting).toBeDefined();
+      expect(starts).toBe(1);
+
+      const rawSocket = await connectSocketEventually(paths.socketPath);
+      rawSocket.write(`${JSON.stringify({
+        protocol: "agent-workbench-daemon",
+        protocolVersion: DAEMON_PROTOCOL_VERSION,
+        identity
+      })}\n`);
+      const session = createSocketSession(rawSocket);
+      const initializeResult = session.call({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: { name: "agent-workbench-test", version: "0.1.0" }
+        }
+      });
+      let initializeSettled = false;
+      void initializeResult.then(() => {
+        initializeSettled = true;
+      });
+      await expect(Promise.race([
+        Promise.all([first, second]).then(() => true),
+        sleep(220).then(() => false)
+      ])).resolves.toBe(false);
+      expect(initializeSettled).toBe(false);
+
+      releaseStart.resolve(undefined);
+
+      const [firstSocket, secondSocket] = await Promise.all([first, second]);
+      const response = await initializeResult;
+      expect(response).toMatchObject({ id: 1, jsonrpc: "2.0", result: { protocolVersion: "2025-06-18" } });
+      rawSocket.destroy();
+      firstSocket.destroy();
+      secondSocket.destroy();
+
+      expect(starts).toBe(1);
+      expect(sessionCalls).toEqual([]);
+    } finally {
+      releaseStart.resolve(undefined);
+      await closeDaemons(daemons);
+      launchChild?.emit("exit", 0, null);
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps the caller startup deadline while bootstrap is stalled after listen", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-post-listen-timeout-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    const bootstrapGate = controlledDeferred<void>();
+    let daemonStart: Promise<StartedAgentWorkbenchDaemon> | undefined;
+
+    try {
+      const connection = connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 300,
+        spawnDaemon: () => {
+          daemonStart = startAgentWorkbenchDaemon({
+            repoRoot,
+            idleGraceMs: 100,
+            serverOptions: { startupRefreshDelayMs: 60_000 },
+            testHooks: {
+              awaitBootstrap: bootstrapGate.promise
+            }
+          });
+          void daemonStart.catch(() => undefined);
+          return fakeChildProcess();
+        }
+      });
+
+      await expect(connection).rejects.toThrow(/Timed out connecting to Agent Workbench daemon/);
+      expect(fs.existsSync(paths.socketPath)).toBe(process.platform !== "win32");
+      expect(safeReadJson(paths.metadataPath)).toMatchObject({
+        launchLifecycle: { state: "starting", phase: "launching" }
+      });
+
+      bootstrapGate.reject(new Error("release stalled bootstrap"));
+      await expect(daemonStart).rejects.toThrow("release stalled bootstrap");
+      expect(fs.existsSync(paths.socketPath)).toBe(false);
+    } finally {
+      bootstrapGate.reject(new Error("test cleanup"));
+      await daemonStart?.catch(() => undefined);
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  });
+
+  it("closes queued sockets and writes bootstrap failure evidence", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-bootstrap-failure-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    const daemons: StartedAgentWorkbenchDaemon[] = [];
+    const startFailures: Error[] = [];
+    let bootstrapFailure: ((error: Error) => void) | undefined;
+    const bootstrapGate = new Promise<void>((_resolve, reject) => {
+      bootstrapFailure = (error: Error) => reject(error);
+    });
+    let starts = 0;
+
+    try {
+      const connection = connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 2000,
+        spawnDaemon: () => {
+          starts += 1;
+          void startAgentWorkbenchDaemon({
+            repoRoot,
+            idleGraceMs: 100,
+            serverOptions: { startupRefreshDelayMs: 60_000 },
+            testHooks: {
+              awaitBootstrap: bootstrapGate
+            }
+          }).then((daemon) => daemons.push(daemon)).catch((error) => {
+            startFailures.push(error instanceof Error ? error : new Error(String(error)));
+          });
+          return fakeChildProcess();
+        }
+      });
+
+      let starting: unknown | undefined;
+      for (let attempt = 0; attempt < 60 && starting === undefined; attempt += 1) {
+        if (!fs.existsSync(paths.metadataPath)) {
+          await sleep(20);
+          continue;
+        }
+        starting = safeReadJson(paths.metadataPath);
+        if (
+          typeof starting === "object" &&
+          starting !== null &&
+          (starting as { launchLifecycle?: { state?: string } }).launchLifecycle?.state === "starting"
+        ) {
+          break;
+        }
+        starting = undefined;
+        await sleep(20);
+      }
+      expect(starting).toBeDefined();
+
+      const rawSocket = await connectSocketEventually(paths.socketPath);
+      const closed = new Promise<void>((resolve) => rawSocket.once("close", resolve));
+      bootstrapFailure?.(new Error("bootstrap failed"));
+      await expect(connection).rejects.toThrow("bootstrap_failed");
+      await closed;
+
+      const metadata = safeReadJson(paths.metadataPath) as {
+        launchLifecycle?: { state?: string; phase?: string; failureCode?: string };
+      };
+      expect(metadata).toMatchObject({
+        launchLifecycle: {
+          state: "failed",
+          phase: "terminal",
+          failureCode: "bootstrap_failed"
+        }
+      });
+      expect(fs.existsSync(paths.socketPath)).toBe(false);
+      expect(starts).toBe(1);
+      expect(fs.existsSync(path.join(repoRoot, ".cache", "agent-workbench", "refresh-owner.json"))).toBe(false);
+      expect(startFailures).toHaveLength(1);
+    } finally {
+      await closeDaemons(daemons);
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  });
+
   it("records immediate child exit as terminal failure evidence", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-child-exit-");
     const paths = daemonPaths(createDaemonIdentity(repoRoot));
@@ -1918,10 +2149,15 @@ function createShutdownController(initialState: "running") {
 function controlledDeferred<T>(): {
   promise: Promise<T>;
   resolve(value: T): void;
+  reject(reason?: unknown): void;
 } {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((promiseResolve) => { resolve = promiseResolve; });
-  return { promise, resolve };
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+  return { promise, resolve, reject };
 }
 
 function fakeChildProcess(onStart: (child: ChildProcess) => void = () => undefined): ChildProcess {
@@ -1944,6 +2180,24 @@ async function closeDaemons(daemons: StartedAgentWorkbenchDaemon[]): Promise<voi
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function connectSocketEventually(socketPath: string, timeoutMs = 1000): Promise<net.Socket> {
+  const deadline = Date.now() + timeoutMs;
+  let lastError: unknown;
+  while (Date.now() <= deadline) {
+    try {
+      return await new Promise<net.Socket>((resolve, reject) => {
+        const socket = net.createConnection(socketPath);
+        socket.once("connect", () => resolve(socket));
+        socket.once("error", reject);
+      });
+    } catch (error) {
+      lastError = error;
+      await sleep(10);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
 function createSocketSession(socket: net.Socket): {

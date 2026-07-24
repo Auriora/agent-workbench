@@ -5,6 +5,12 @@
 
 import { connectAgentWorkbenchStdio } from "./stdio-launch.js";
 
-await connectAgentWorkbenchStdio();
-process.stdin.resume();
-setInterval(() => {}, 2 ** 31 - 1);
+const socket = await connectAgentWorkbenchStdio();
+await new Promise<void>((resolve) => {
+  if (socket.destroyed) {
+    resolve();
+    return;
+  }
+  socket.once("close", resolve);
+});
+process.stdin.pause();

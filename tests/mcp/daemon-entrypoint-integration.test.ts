@@ -549,7 +549,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
     const session = trackSession(await startEntryPointSession(repoRoot, { idleGraceMs: 100 }));
 
     try {
-      await expect(initializeSession(session)).rejects.toThrow(
+      await expect(initializeSession(session, 30_000)).rejects.toThrow(
         /MCP entrypoint child process exited unexpectedly/
       );
       const serialized = [
@@ -558,11 +558,14 @@ describe("daemon-backed stdio entrypoint integration", () => {
       ].join("\n");
 
       expect(serialized).not.toMatch(/database is locked/i);
-      expect(serialized).toMatch(/Timed out connecting to Agent Workbench daemon/i);
+      expect(serialized).toMatch(
+        /Timed out connecting to Agent Workbench daemon|startup failed with code: bootstrap_failed/i
+      );
       expect(lock.released).toBe(false);
     } finally {
       lock.release();
       await lock.done;
+      fs.rmSync(daemonPaths(createDaemonIdentity(repoRoot)).metadataPath, { force: true });
     }
   }, 30_000);
 });

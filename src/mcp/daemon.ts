@@ -41,14 +41,17 @@ import { SocketServerTransport } from "./socket-transport.js";
 import type {
   SnapshotRefreshAdmissionFailurePort,
   SnapshotRefreshControllerPort,
-  SnapshotRefreshDiagnosticsPort
+  SnapshotRefreshDiagnosticsPort,
+  RepositoryOwnershipLease
 } from "../ports/index.js";
 
 export const DAEMON_PROTOCOL_VERSION = 1;
 const DAEMON_METADATA_FILE = "daemon.json";
 const DAEMON_STARTUP_LOCK_FILE = "startup.lock";
-const DEFAULT_DAEMON_START_TIMEOUT_MS = 10_000;
+const DEFAULT_DAEMON_START_TIMEOUT_MS = 25_000;
 const DEFAULT_DAEMON_HANDSHAKE_TIMEOUT_MS = 1000;
+const DEFAULT_DAEMON_PENDING_CLIENT_TIMEOUT_MS = 30_000;
+const MAX_PENDING_DAEMON_CLIENTS = 64;
 const DEFAULT_DAEMON_IDLE_GRACE_MS = 30_000;
 const DEFAULT_DAEMON_STARTUP_REFRESH_DELAY_MS = 1000;
 const DAEMON_ENV_FLAG = "AGENT_WORKBENCH_DAEMON_PROCESS";
@@ -206,6 +209,14 @@ type DaemonHandshake = {
   protocolVersion: number;
   identity: AgentWorkbenchDaemonIdentity;
   integrationIdentity?: IntegrationLauncherIdentity;
+};
+
+type DaemonTestHooks = {
+  /**
+   * Deterministic test seam for holding or failing heavyweight repository
+   * bootstrap after the daemon socket is listening.
+   */
+  awaitBootstrap?: Promise<void>;
 };
 
 export function createDaemonIdentity(repoRoot: string): AgentWorkbenchDaemonIdentity {
@@ -566,6 +577,7 @@ export async function startAgentWorkbenchDaemon(input: {
   launchToken?: string;
   launchStartedAt?: string;
   serverOptions?: AgentWorkbenchServerOptions;
+  testHooks?: DaemonTestHooks;
 }): Promise<StartedAgentWorkbenchDaemon> {
   const repoRoot = path.resolve(input.repoRoot);
   const identity = createDaemonIdentity(repoRoot);
@@ -592,6 +604,165 @@ export async function startAgentWorkbenchDaemon(input: {
   const sharedGraphStore = createAsyncGraphStore(databasePath);
   const ownerGeneration = Date.now();
   const ownership = new FileRepositoryOwnershipAdapter(repositoryOwnershipPath(databasePath));
+  let ownershipLease: (RepositoryOwnershipLease & { state: "active" }) | undefined;
+  let refreshController: SnapshotRefreshControllerPort &
+    SnapshotRefreshDiagnosticsPort & SnapshotRefreshAdmissionFailurePort;
+  let closePromise: Promise<void> | undefined;
+  let startupTimer: ReturnType<typeof setTimeout> | undefined;
+  let startupRefreshPromise: Promise<void> | undefined;
+  let readinessEstablished = false;
+  let sharedRepositoryServices: AgentWorkbenchSharedRepositoryServices | undefined;
+  let lifetime: DaemonRefreshLifetimeCoordinator | undefined;
+  const sharedDisposers = new Set<() => void | Promise<void>>();
+  const pendingSocketTimeouts = new Map<Socket, ReturnType<typeof setTimeout>>();
+
+  const closeSockets = (): void => {
+    for (const socket of [...pendingSockets]) {
+      removePendingSocket(socket);
+      socket.destroy();
+    }
+    for (const socket of connected) {
+      socket.destroy();
+    }
+  };
+
+  const removePendingSocket = (socket: Socket): void => {
+    pendingSockets.delete(socket);
+    const timeout = pendingSocketTimeouts.get(socket);
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+      pendingSocketTimeouts.delete(socket);
+    }
+  };
+
+  const markBootstrapFailure = (metadata: LifecycleDaemonMetadata): LifecycleDaemonMetadata => {
+    return {
+      ...metadata,
+      launchLifecycle: {
+        ...metadata.launchLifecycle,
+        state: "failed",
+        phase: "terminal",
+        updatedAt: new Date().toISOString(),
+        failureCode: "bootstrap_failed"
+      }
+    };
+  };
+
+  const rejectOrThrow = async (error: unknown, launchCode?: DaemonStartupFailureCode): Promise<never> => {
+    const reason = error instanceof Error ? error : new Error(String(error));
+    try {
+      if (launchCode === "listen_failed" || launchCode === "metadata_write_failed") {
+        writeDaemonMetadata(paths.metadataPath, {
+          ...metadata,
+          launchLifecycle: {
+            ...metadata.launchLifecycle,
+            state: "failed",
+            phase: "terminal",
+            updatedAt: new Date().toISOString(),
+            failureCode: launchCode
+          }
+        });
+      } else {
+        writeDaemonMetadata(paths.metadataPath, markBootstrapFailure(metadata));
+      }
+    } catch {
+      // Metadata terminal evidence is best effort.
+    }
+    if (startupTimer !== undefined) {
+      clearTimeout(startupTimer);
+      startupTimer = undefined;
+    }
+    closeSockets();
+    pendingSockets.clear();
+    await Promise.allSettled([...sharedDisposers].map((dispose) => Promise.resolve(dispose())));
+    if (startupRefreshPromise !== undefined) {
+      await startupRefreshPromise.catch(() => undefined);
+    }
+    if (refreshController !== undefined) {
+      await waitForControllerShutdownSafety(refreshController).catch(() => undefined);
+    }
+    lifetime?.dispose();
+    if (ownershipLease !== undefined) {
+      await ownership.release({ lease: ownershipLease }).catch(() => undefined);
+      ownershipLease = undefined;
+    }
+    if (server.listening) {
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => {
+          if (error !== undefined) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      }).catch(() => undefined);
+    }
+    await sharedGraphStore.close().catch(() => undefined);
+    removeCanonicalFile(paths.socketPath);
+    if (process.platform !== "win32") {
+      fsyncDirectory(paths.ipcDir);
+    }
+    throw reason;
+  };
+
+  const flushPendingSockets = (): void => {
+    if (!readinessEstablished || sharedRepositoryServices === undefined || lifetime === undefined) {
+      return;
+    }
+    const queue = Array.from(pendingSockets);
+    if (queue.length === 0) {
+      return;
+    }
+    for (const socket of queue) {
+      removePendingSocket(socket);
+      if (socket.destroyed) {
+        continue;
+      }
+      lifetime.clientConnected();
+      connected.add(socket);
+      socket.once("close", () => {
+        connected.delete(socket);
+        lifetime?.clientDisconnected();
+      });
+      void acceptDaemonClient({
+        socket,
+        identity,
+        repoRoot,
+        debugRepoRootOverride: input.debugRepoRootOverride === true,
+        serverOptions: input.serverOptions,
+        sharedRepositoryServices,
+        daemonDiagnostics: () => {
+          return {
+            pid: metadata.pid,
+            socket_path: metadata.socketPath,
+            repo_root: metadata.identity.repoRoot,
+            connected_clients: connected.size
+          };
+        },
+        mcpServers
+      });
+    }
+  };
+
+  const pendingSockets = new Set<Socket>();
+  const server = net.createServer((socket) => {
+    if (pendingSockets.size >= MAX_PENDING_DAEMON_CLIENTS) {
+      socket.destroy();
+      return;
+    }
+    pendingSockets.add(socket);
+    const timeout = setTimeout(() => {
+      removePendingSocket(socket);
+      socket.destroy();
+    }, DEFAULT_DAEMON_PENDING_CLIENT_TIMEOUT_MS);
+    timeout.unref?.();
+    pendingSocketTimeouts.set(socket, timeout);
+    socket.once("close", () => removePendingSocket(socket));
+    if (readinessEstablished) {
+      flushPendingSockets();
+    }
+  });
+
   const ownershipAdmission = await ownership.acquire({
     repo_root: repoRoot,
     runtime_identity: `${AGENT_WORKBENCH_RUNTIME_VERSION}:${SCHEMA_VERSION}`,
@@ -608,10 +779,34 @@ export async function startAgentWorkbenchDaemon(input: {
         : "Repository refresh ownership is ambiguous."
     );
   }
-  const ownershipLease = ownershipAdmission.lease;
-  let refreshController: SnapshotRefreshControllerPort &
-    SnapshotRefreshDiagnosticsPort & SnapshotRefreshAdmissionFailurePort;
+  ownershipLease = ownershipAdmission.lease;
+
+  let listenFailureCode: DaemonStartupFailureCode = "listen_failed";
   try {
+    if (process.platform !== "win32") {
+      fs.rmSync(paths.socketPath, { force: true });
+    }
+    listenFailureCode = "metadata_write_failed";
+    writeDaemonMetadata(paths.metadataPath, metadata);
+    listenFailureCode = "listen_failed";
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(paths.socketPath, () => {
+        server.off("error", reject);
+        resolve();
+      });
+    });
+  } catch (error) {
+    await rejectOrThrow(error, listenFailureCode);
+    throw error;
+  }
+
+  let bootstrapFailureCode: DaemonStartupFailureCode = "bootstrap_failed";
+  try {
+    if (input.testHooks?.awaitBootstrap !== undefined) {
+      await input.testHooks.awaitBootstrap;
+    }
+
     const store = await sharedGraphStore();
     retireLegacyGraphStore(databasePath);
     const orphanReconciliation = await store.reconcileOrphanedBuilds({
@@ -639,143 +834,71 @@ export async function startAgentWorkbenchDaemon(input: {
       });
     }
     await ownership.confirmRecovery({ lease: ownershipLease });
-  } catch (error) {
-    await ownership.release({ lease: ownershipLease });
-    await sharedGraphStore.close();
-    throw error;
-  }
-  const sharedDisposers = new Set<() => void | Promise<void>>();
-  const refreshTriggers = new RepositoryRefreshTriggerCoordinator({
-    repo_root: repoRoot,
-    controller: refreshController,
-    publications: createAsyncPublicationPort(sharedGraphStore),
-    snapshots: {
-      async markSnapshotFreshness(request) {
-        await (await sharedGraphStore()).markSnapshotFreshness(request);
+
+    const refreshTriggers = new RepositoryRefreshTriggerCoordinator({
+      repo_root: repoRoot,
+      controller: refreshController,
+      publications: createAsyncPublicationPort(sharedGraphStore),
+      snapshots: {
+        async markSnapshotFreshness(request) {
+          await (await sharedGraphStore()).markSnapshotFreshness(request);
+        }
       }
-    }
-  });
-  const workspaceRefresh = createRepositoryWorkspaceRefreshService({
-    repoRoot,
-    triggers: refreshTriggers,
-    watcher: new FilesystemWorkspaceWatcherAdapter(),
-    clock: new SystemClockAdapter(),
-    config: resolveWorkspaceWatcherConfig(input.serverOptions?.workspaceWatcher),
-    indexedRoots: input.serverOptions?.workspaceWatcherIndexedRoots ?? ["."],
-    skippedRoots: input.serverOptions?.workspaceWatcherSkippedRoots ?? []
-  });
-  sharedDisposers.add(() => workspaceRefresh.close());
-  const sharedRepositoryServices: AgentWorkbenchSharedRepositoryServices = {
-    refreshController,
-    refreshDiagnostics: refreshController,
-    refreshTriggers,
-    graphStore: sharedGraphStore,
-    referenceCursorCodec: createReferenceCursorCodec(),
-    docsRankingCursorCodec: createDocsRankingCursorCodec(),
-    pollWorkspaceWatcher: () => workspaceRefresh.poll(),
-    registerDisposer(dispose) {
-      sharedDisposers.add(dispose);
-      return () => sharedDisposers.delete(dispose);
-    }
-  };
-  let closePromise: Promise<void> | undefined;
-  const lifetime = new DaemonRefreshLifetimeCoordinator({
-    controller: refreshController,
-    connected_clients: () => connected.size,
-    idle_grace_ms: input.idleGraceMs ?? readIdleGraceMs(process.env),
-    close
-  });
-
-  const server = net.createServer((socket) => {
-    lifetime.clientConnected();
-    connected.add(socket);
-    socket.once("close", () => {
-      connected.delete(socket);
-      lifetime.clientDisconnected();
     });
-    void acceptDaemonClient({
-      socket,
-      identity,
+    const workspaceRefresh = createRepositoryWorkspaceRefreshService({
       repoRoot,
-      debugRepoRootOverride: input.debugRepoRootOverride === true,
-      serverOptions: input.serverOptions,
-      sharedRepositoryServices,
-      daemonDiagnostics: () => {
-        return {
-          pid: metadata.pid,
-          socket_path: metadata.socketPath,
-          repo_root: metadata.identity.repoRoot,
-          connected_clients: connected.size
-        };
-      },
-      mcpServers
+      triggers: refreshTriggers,
+      watcher: new FilesystemWorkspaceWatcherAdapter(),
+      clock: new SystemClockAdapter(),
+      config: resolveWorkspaceWatcherConfig(input.serverOptions?.workspaceWatcher),
+      indexedRoots: input.serverOptions?.workspaceWatcherIndexedRoots ?? ["."],
+      skippedRoots: input.serverOptions?.workspaceWatcherSkippedRoots ?? []
     });
-  });
-  let startupRefreshPromise: Promise<void> | undefined;
-  const startupTimer = setTimeout(() => {
-    startupRefreshPromise = refreshTriggers.startup({ source: "daemon-startup" })
-      .then(() => undefined, () => undefined);
-  }, input.serverOptions?.startupRefreshDelayMs ?? DEFAULT_DAEMON_STARTUP_REFRESH_DELAY_MS);
-  startupTimer.unref?.();
+    sharedDisposers.add(() => workspaceRefresh.close());
+    sharedRepositoryServices = {
+      refreshController,
+      refreshDiagnostics: refreshController,
+      refreshTriggers,
+      graphStore: sharedGraphStore,
+      referenceCursorCodec: createReferenceCursorCodec(),
+      docsRankingCursorCodec: createDocsRankingCursorCodec(),
+      pollWorkspaceWatcher: () => workspaceRefresh.poll(),
+      registerDisposer(dispose) {
+        sharedDisposers.add(dispose);
+        return () => sharedDisposers.delete(dispose);
+      }
+    };
+    startupTimer = setTimeout(() => {
+      startupRefreshPromise = refreshTriggers.startup({ source: "daemon-startup" })
+        .then(() => undefined, () => undefined);
+    }, input.serverOptions?.startupRefreshDelayMs ?? DEFAULT_DAEMON_STARTUP_REFRESH_DELAY_MS);
+    startupTimer.unref?.();
 
-  if (process.platform !== "win32") {
-    fs.rmSync(paths.socketPath, { force: true });
-  }
-
-  let listenFailureCode: DaemonStartupFailureCode = "listen_failed";
-  try {
+    metadata = {
+      ...metadata,
+      launchLifecycle: {
+        ...metadata.launchLifecycle,
+        state: "ready",
+        phase: "ready",
+        updatedAt: new Date().toISOString()
+      }
+    };
+    lifetime = new DaemonRefreshLifetimeCoordinator({
+      controller: refreshController,
+      connected_clients: () => connected.size,
+      idle_grace_ms: input.idleGraceMs ?? readIdleGraceMs(process.env),
+      close
+    });
+    bootstrapFailureCode = "metadata_write_failed";
     writeDaemonMetadata(paths.metadataPath, metadata);
-    await new Promise<void>((resolve, reject) => {
-      server.once("error", reject);
-      server.listen(paths.socketPath, () => {
-        server.off("error", reject);
-        try {
-          metadata = {
-            ...metadata,
-            launchLifecycle: {
-              ...metadata.launchLifecycle,
-              state: "ready",
-              phase: "ready",
-              updatedAt: new Date().toISOString()
-            }
-          };
-          writeDaemonMetadata(paths.metadataPath, metadata);
-          resolve();
-        } catch (error) {
-          listenFailureCode = "metadata_write_failed";
-          reject(error);
-        }
-      });
-    });
+    bootstrapFailureCode = "bootstrap_failed";
+    readinessEstablished = true;
+    flushPendingSockets();
+    lifetime.start();
   } catch (error) {
-    try {
-      writeDaemonMetadata(paths.metadataPath, {
-        ...metadata,
-        launchLifecycle: {
-          ...metadata.launchLifecycle,
-          state: "failed",
-          phase: "terminal",
-          updatedAt: new Date().toISOString(),
-          failureCode: listenFailureCode
-        }
-      });
-    } catch {
-      // Metadata is best effort for listen-stage terminal evidence.
-    }
-    clearTimeout(startupTimer);
-    await Promise.allSettled([...sharedDisposers].map((dispose) => Promise.resolve(dispose())));
-    if (server.listening) {
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-    }
-    await ownership.release({ lease: ownershipLease });
-    await sharedGraphStore.close();
-    removeCanonicalFile(paths.socketPath);
-    if (process.platform !== "win32") {
-      fsyncDirectory(paths.ipcDir);
-    }
+    await rejectOrThrow(error, bootstrapFailureCode);
     throw error;
   }
-  lifetime.start();
 
   function close(): Promise<void> {
     closePromise ??= closeDaemon();
@@ -788,18 +911,37 @@ export async function startAgentWorkbenchDaemon(input: {
       shutdownLockAdmission !== "ambiguous"
       ? shutdownLockAdmission
       : undefined;
-    clearTimeout(startupTimer);
     try {
-      lifetime.dispose();
-      for (const socket of connected) {
-        socket.destroy();
+      if (startupTimer !== undefined) {
+        clearTimeout(startupTimer);
+        startupTimer = undefined;
       }
+      lifetime?.dispose();
+      closeSockets();
+      pendingSockets.clear();
       await Promise.allSettled([...mcpServers].map((mcpServer) => mcpServer.close()));
       await Promise.allSettled([...sharedDisposers].map((dispose) => Promise.resolve(dispose())));
-      await startupRefreshPromise;
-      await waitForControllerShutdownSafety(refreshController);
-      await new Promise<void>((resolve) => server.close(() => resolve()));
-      await ownership.release({ lease: ownershipLease });
+      if (startupRefreshPromise !== undefined) {
+        await startupRefreshPromise;
+      }
+      if (refreshController !== undefined) {
+        await waitForControllerShutdownSafety(refreshController);
+      }
+      if (server.listening) {
+        await new Promise<void>((resolve, reject) => {
+          server.close((error) => {
+            if (error !== undefined) {
+              reject(error);
+              return;
+            }
+            resolve();
+          });
+        });
+      }
+      if (ownershipLease !== undefined) {
+        await ownership.release({ lease: ownershipLease });
+        ownershipLease = undefined;
+      }
       await sharedGraphStore.close();
       if (shutdownLock !== undefined) {
         cleanupStaleDaemonState(metadata, paths);
@@ -1040,18 +1182,22 @@ async function waitForDaemonConnection(input: {
   retryStartup?: () => Promise<Socket>;
 }): Promise<Socket> {
   const deadlineMs = input.deadlineMs ?? (performance.now() + input.timeoutMs);
-  let lastError: unknown;
+  let lastError: unknown = new Error("Daemon socket is listening but repository services are not ready.");
   let observedReady = false;
+  let pendingSocket: Socket | undefined;
   while (performance.now() <= deadlineMs) {
+    let readyForHandshake = input.metadataPath === undefined;
     if (input.metadataPath !== undefined) {
       const metadata = readDaemonMetadata(input.metadataPath);
       if (metadata !== undefined && metadata !== "malformed") {
         const lifecycle = metadata.launchLifecycle;
         if (lifecycle !== undefined && lifecycle.state === "failed") {
+          pendingSocket?.destroy();
           throw startupFailureFromMetadata(metadata);
         }
         if (resolveLifecycleState(lifecycle) === "ready") {
           observedReady = true;
+          readyForHandshake = true;
         }
         const state = classifyDaemonState({
           metadataPath: input.metadataPath,
@@ -1062,6 +1208,7 @@ async function waitForDaemonConnection(input: {
           input.retryStartup !== undefined &&
           state.state === "stale"
         ) {
+          pendingSocket?.destroy();
           return input.retryStartup();
         }
       } else if (
@@ -1076,23 +1223,33 @@ async function waitForDaemonConnection(input: {
           )
         )
       ) {
+        pendingSocket?.destroy();
         return input.retryStartup();
       }
     }
-    try {
-      const socket = await connectSocket(input.socketPath, input.handshakeTimeoutMs);
-      socket.write(`${JSON.stringify({
+
+    if (pendingSocket?.destroyed === true) {
+      pendingSocket = undefined;
+    }
+    if (pendingSocket === undefined) {
+      try {
+        pendingSocket = await connectSocket(input.socketPath, input.handshakeTimeoutMs);
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (pendingSocket !== undefined && readyForHandshake) {
+      pendingSocket.write(`${JSON.stringify({
         protocol: "agent-workbench-daemon",
         protocolVersion: DAEMON_PROTOCOL_VERSION,
         identity: input.identity,
         integrationIdentity: input.integrationIdentity
       } satisfies DaemonHandshake)}\n`);
-      return socket;
-    } catch (error) {
-      lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      return pendingSocket;
     }
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
+  pendingSocket?.destroy();
   throw new Error(`Timed out connecting to Agent Workbench daemon: ${String(lastError)}`);
 }
 

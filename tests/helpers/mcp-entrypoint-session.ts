@@ -343,7 +343,10 @@ export async function closeSessionsAndWaitForDaemons({
   }
 }
 
-export async function initializeSession(session: EntryPointSession): Promise<void> {
+export async function initializeSession(
+  session: EntryPointSession,
+  timeoutMs = 15_000
+): Promise<void> {
   await session.call("initialize", {
     protocolVersion: "2025-06-18",
     capabilities: {},
@@ -351,7 +354,7 @@ export async function initializeSession(session: EntryPointSession): Promise<voi
       name: "agent-workbench-entrypoint-test",
       version: "0.1.0"
     }
-  }, 15_000);
+  }, timeoutMs);
   session.notify("notifications/initialized", {});
 }
 
