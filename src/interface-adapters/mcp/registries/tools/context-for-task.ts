@@ -22,9 +22,9 @@ import type { McpToolDeclaration } from "../index.js";
 const contextForTaskRawShape = {
   task: z.string().min(1).describe("Describe the implementation, review, debugging, or planning task that needs repository context."),
   repo_root: z.string().optional().describe("Optional repository root. Defaults to the MCP server repo root."),
-  files: z.array(z.string()).default([]).describe("Known repo-relative files to seed routing; omit when the task starts from only a description."),
+  files: z.array(z.string()).default([]).describe("Known repo-relative files to seed ranked file evidence and narrow claims; omit when the task starts from only a description."),
   changed_files: z.array(z.string()).default([]).describe("Task-owned repo-relative edits, when known. Unrelated working-tree changes must not be included."),
-  symbols: z.array(z.string()).default([]).describe("Known symbols, types, functions, commands, or identifiers to seed graph and docs routing."),
+  symbols: z.array(z.string()).default([]).describe("Known symbols, types, functions, commands, or identifiers to seed ranked symbol evidence before direct reads."),
   intent: taskContextRequestSchema.shape.intent.describe("Explicit task intent. This takes precedence over task-text inference for validation guidance."),
   satisfied_actions: taskContextRequestSchema.shape.satisfied_actions.describe(
     "Previously completed suggested calls, identified by tool and arguments, so unchanged guidance can be omitted without session-global state."
@@ -36,7 +36,7 @@ const contextForTaskRawShape = {
   max_docs: z.number().int().positive().max(20).default(5).describe("Maximum governing documentation files to return for the task.")
 };
 
-const contextForTaskDescription = "Use this before broad file reads, edits, or code review. Provide the task plus any known files or symbols; it returns bounded routing evidence, likely files, governing docs, risks, and suggested next Agent Workbench calls without mutating files.";
+const contextForTaskDescription = "Use this before making repository claims not already verified in-session, including quick overviews. It returns ranked file and symbol evidence, governing docs with authority and currency, risks, suggested next Agent Workbench calls, and meta.trust claim boundaries without mutating files.";
 
 export const contextForTaskTool: McpToolDeclaration = {
   kind: "tool",
@@ -49,9 +49,9 @@ export const contextForTaskTool: McpToolDeclaration = {
     parameters: [
       { name: "task", description: "Implementation, review, debugging, or planning task that needs repository context.", required: true },
       { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
-      { name: "files", description: "Known repo-relative files to seed routing when available.", required: false },
+      { name: "files", description: "Known repo-relative files to seed ranked file evidence when available.", required: false },
       { name: "changed_files", description: "Task-owned changed files; exclude unrelated working-tree changes.", required: false },
-      { name: "symbols", description: "Known symbols, types, functions, commands, or identifiers to seed routing.", required: false },
+      { name: "symbols", description: "Known symbols, types, functions, commands, or identifiers to seed ranked symbol evidence.", required: false },
       { name: "intent", description: "Explicit read-only, edit, review, closure, or unknown task intent.", required: false },
       { name: "satisfied_actions", description: "Previously completed suggested calls to omit when their tool and arguments are unchanged.", required: false },
       { name: "lifecycle_context", description: "Optional caller-supplied spec-lifecycle-manager context.", required: false },

@@ -80,9 +80,9 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         surface: "skills",
         status: "available",
         artifact_path: "plugins/agent-workbench/skills/agent-workbench/SKILL.md",
-        purpose: "Workflow guidance for using the MCP runtime during coding tasks.",
+        purpose: "Workflow guidance for establishing authority, currency, ranked evidence, and claim boundaries before repository claims.",
         behavior: [
-          "Teaches status, context, targeted navigation, edit preview, and verification planning order."
+          "Teaches orientation, claim-focused context, targeted navigation, edit preview, and verification planning order."
         ],
         constraints: [
           "Skill text must not restate schemas or reimplement runtime logic."
@@ -167,7 +167,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         name: "context_for_task",
         kind: "tool",
         capability_class: "read_only",
-        description: "Configured task-context MCP workflow for status, files, docs, risks, and validation hints."
+        description: "Configured claim-focused MCP workflow for ranked file and symbol evidence, governing-document authority and currency, risks, validation hints, and explicit trust boundaries."
       },
       {
         name: "diagnostics_for_files",
@@ -292,17 +292,18 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       {
         name: "agent-workbench",
         path: "plugins/agent-workbench/skills/agent-workbench/SKILL.md",
-        purpose: "Use Agent Workbench as the MCP-backed IDE runtime for coding tasks.",
+        purpose: "Use Agent Workbench to establish authority, currency, ranked evidence, and claim boundaries before repository claims not already verified in-session.",
         workflow: [
-          "Read repo status, scope, and overview before trusting runtime results.",
-          "Gather task context before broad file reads.",
+          "Read repo:///orientation for a compact trust and freshness receipt.",
+          "Invoke context_for_task before repository claims that are not already verified in-session, including quick overviews.",
           "Pass authoritative spec-lifecycle-manager outputs into context_for_task.lifecycle_context when spec-driven work is active.",
-          "Use targeted symbol, reference, impact, edit, and verification surfaces for implementation work."
+          "Inspect documentation authority and currency, ranked file and symbol evidence, and meta.trust; perform the direct reads it requires."
         ],
         constraints: [
           "Do not bypass MCP schemas.",
           "Do not use Agent Workbench local spec routing for lifecycle authority, task-status changes, promotion, or closure.",
-          "Do not add fallback routes or alternate analyzers without spec-backed tests."
+          "Do not add fallback routes or alternate analyzers without spec-backed tests.",
+          "Claims about correctness are not complete without direct-read or executed validation evidence."
         ]
       }
     ],

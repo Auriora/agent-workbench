@@ -67,7 +67,7 @@ describe("agent CLI hook compatibility", () => {
     expect(parsed.hookSpecificOutput).toEqual({
       hookEventName: "SessionStart",
       additionalContext:
-        "For non-trivial repository investigation, change evidence, or validation planning, invoke the packaged Agent Workbench skill; skip it for trivial tasks."
+        "Before making a repository claim you have not verified in this session, including a quick overview, invoke the packaged Agent Workbench skill for read-only authority, freshness, and claim-boundary evidence; skip when the task needs no repository evidence."
     });
     expect(parsed.hookSpecificOutput?.additionalContext).not.toContain("repo:///");
     expect(parsed.hookSpecificOutput?.additionalContext).not.toContain("context_for_task");
@@ -152,7 +152,7 @@ describe("agent CLI hook compatibility", () => {
     expect(parsed.hookSpecificOutput).toEqual({
       hookEventName: "SessionStart",
       additionalContext:
-        "For non-trivial repository investigation, change evidence, or validation planning, invoke `/agent-workbench:agent-workbench`; skip it for trivial tasks."
+        "Before making a repository claim you have not verified in this session, including a quick overview, invoke `/agent-workbench:agent-workbench` for read-only authority, freshness, and claim-boundary evidence; skip when the task needs no repository evidence."
     });
     expect(parsed.hookSpecificOutput?.additionalContext).not.toContain("repo:///");
     expect(parsed.hookSpecificOutput?.additionalContext).not.toContain("context_for_task");
@@ -185,7 +185,7 @@ describe("agent CLI hook compatibility", () => {
     expect(result.status).toBe(0);
     expect(result.stderr).toBe("");
     expect(result.stdout.trim()).toBe(
-      "For non-trivial repository investigation, change evidence, or validation planning, invoke the packaged Agent Workbench skill; skip it for trivial tasks."
+      "Before making a repository claim you have not verified in this session, including a quick overview, invoke the packaged Agent Workbench skill for read-only authority, freshness, and claim-boundary evidence; skip when the task needs no repository evidence."
     );
     expect(result.stdout).not.toContain("repo:///");
     expect(result.stdout).not.toContain("context_for_task");

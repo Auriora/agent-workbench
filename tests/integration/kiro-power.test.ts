@@ -148,7 +148,7 @@ describe("Kiro Power artifacts", () => {
         { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
       )
     ).toBe(
-      "For non-trivial repository investigation, change evidence, or validation planning, invoke the packaged Agent Workbench skill; skip it for trivial tasks."
+      "Before making a repository claim you have not verified in this session, including a quick overview, invoke the packaged Agent Workbench skill for read-only authority, freshness, and claim-boundary evidence; skip when the task needs no repository evidence."
     );
     // Kiro adapters keep basic output as their local default, matching Codex's
     // quiet, action-gated default.
@@ -158,7 +158,7 @@ describe("Kiro Power artifacts", () => {
         {}
       )
     ).toBe(
-      "For non-trivial repository investigation, change evidence, or validation planning, invoke the packaged Agent Workbench skill; skip it for trivial tasks."
+      "Before making a repository claim you have not verified in this session, including a quick overview, invoke the packaged Agent Workbench skill for read-only authority, freshness, and claim-boundary evidence; skip when the task needs no repository evidence."
     );
     expect(
       sessionStart.buildKiroSessionStartContext(

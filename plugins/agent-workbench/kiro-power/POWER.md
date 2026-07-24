@@ -67,15 +67,18 @@ npm global prefix.
 
 ## Workflow
 
-Use Agent Workbench when repository context, impact, navigation, edit planning,
-or validation planning is unclear.
+Use Agent Workbench before making repository claims not already verified in the
+current session, including quick overviews. Skip this workflow only when the
+task requires no repository evidence.
 
-1. Read `repo:///status`, `repo:///scope`, and `repo:///overview` before relying
-   on runtime output.
-2. Use `context_for_task` before broad file reads.
-3. Use targeted symbol, reference, and impact surfaces for implementation work.
-4. Use preview/apply surfaces for workspace writes when available.
-5. Use `verification_plan` for validation planning and quiet post-edit static
+1. Read `repo:///orientation` for a compact trust and freshness receipt.
+2. Use `context_for_task` to identify authoritative and current documentation,
+   ranked file and symbol evidence, and explicit claim boundaries.
+3. Follow `meta.trust` and perform its required direct reads before making the
+   claim.
+4. Use targeted symbol, reference, and impact surfaces for implementation work.
+5. Use preview/apply surfaces for workspace writes when available.
+6. Use `verification_plan` for validation planning and quiet post-edit static
    feedback.
 
 ## Boundaries

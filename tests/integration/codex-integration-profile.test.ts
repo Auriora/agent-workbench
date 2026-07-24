@@ -97,8 +97,24 @@ describe("Codex integration profile", () => {
     );
     expect(profile.wrapper_surfaces).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ surface: "skills", status: "available" }),
+        expect.objectContaining({
+          surface: "skills",
+          status: "available",
+          purpose: expect.stringContaining("authority, currency, ranked evidence, and claim boundaries")
+        }),
         expect.objectContaining({ surface: "hooks", status: "available" })
+      ])
+    );
+    expect(profile.skills).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "agent-workbench",
+          purpose: expect.stringContaining("repository claims not already verified in-session"),
+          workflow: expect.arrayContaining([
+            expect.stringContaining("quick overviews"),
+            expect.stringContaining("meta.trust")
+          ])
+        })
       ])
     );
     expect(profile.hooks).toEqual(
@@ -116,7 +132,7 @@ describe("Codex integration profile", () => {
           name: "context_for_task",
           kind: "tool",
           capability_class: "read_only",
-          description: expect.stringContaining("Configured")
+          description: expect.stringContaining("governing-document authority and currency"),
         }),
         expect.objectContaining({
           name: "verification_plan",
@@ -871,7 +887,7 @@ describe("Codex plugin artifacts", () => {
       )).toBeUndefined();
     }
     expect(sessionContext).toBe(
-      "For non-trivial repository investigation, change evidence, or validation planning, invoke the packaged Agent Workbench skill; skip it for trivial tasks."
+      "Before making a repository claim you have not verified in this session, including a quick overview, invoke the packaged Agent Workbench skill for read-only authority, freshness, and claim-boundary evidence; skip when the task needs no repository evidence."
     );
     expect(sessionContext).not.toContain("repo:///");
     expect(sessionContext).not.toContain("context_for_task");

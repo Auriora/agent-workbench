@@ -133,8 +133,10 @@ the Agent Workbench MCP resources first:
 - `repo:///overview` for repository shape, key files, key docs, validation
   hints, and first-call guidance.
 
-For task work, call `context_for_task` before broad file reads and
-`verification_plan` before running validation commands. Read
+Before making a repository claim not already verified in the current session,
+including a quick overview, call `context_for_task` to identify authoritative
+and current documentation, ranked evidence, and explicit claim boundaries.
+Call `verification_plan` before running validation commands. Read
 `integration:///profiles/current` to confirm the effective provider for this
 connection and `integration:///profiles/codex` when checking the legacy Codex
 plugin, skill, hook, and MCP binding model. Read the static

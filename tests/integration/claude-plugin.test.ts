@@ -64,14 +64,14 @@ describe("Claude Code plugin artifacts", () => {
     expect(Object.keys(hooksConfig.hooks)).toEqual(["SessionStart", "PostToolUse"]);
     expect((hooksConfig.hooks.SessionStart as Array<{ matcher?: string }>)[0].matcher).toBe("startup");
     expect(claudeGuidance).toContain("`/agent-workbench:agent-workbench` skill");
-    expect(claudeGuidance).toContain("Skip this for trivial tasks");
+    expect(claudeGuidance).toContain("repository claim not already verified");
     expect(claudeGuidance).not.toContain("repo:///status");
     expect(claudeGuidance).not.toContain("context_for_task");
     expect(claudeGuidance).not.toContain("mcp__");
     const skillName = skill.match(/^name: (.+)$/m)?.[1];
     expect(skillName).toBe("agent-workbench");
     expect(`/agent-workbench:${skillName}`).toBe("/agent-workbench:agent-workbench");
-    expect(skill).toContain("description: Use Agent Workbench for non-trivial repository investigation");
+    expect(skill).toContain("description: Use Agent Workbench before making repository claims");
     expect(skill).toContain("repo:///orientation");
     expect(skill).toContain("Claude Code Integration");
     expect(skill).not.toContain("mcp__");
@@ -147,7 +147,7 @@ describe("Claude Code plugin artifacts", () => {
       { AGENT_WORKBENCH_HOOK_FEEDBACK: "basic" }
     );
     expect(sessionContext).toBe(
-      "For non-trivial repository investigation, change evidence, or validation planning, invoke `/agent-workbench:agent-workbench`; skip it for trivial tasks."
+      "Before making a repository claim you have not verified in this session, including a quick overview, invoke `/agent-workbench:agent-workbench` for read-only authority, freshness, and claim-boundary evidence; skip when the task needs no repository evidence."
     );
     expect(common.buildAdditionalContextOutput("SessionStart", sessionContext)).toMatchObject({
       hookSpecificOutput: {
@@ -313,7 +313,7 @@ describe("Claude Code plugin artifacts", () => {
       source: "startup"
     });
     expect(sessionOut).toContain("/agent-workbench:agent-workbench");
-    expect(sessionOut).toContain("non-trivial repository investigation");
+    expect(sessionOut).toContain("repository claim");
     expect(sessionOut).not.toContain("repo:///");
     expect(sessionOut).not.toContain("context_for_task");
 

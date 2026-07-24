@@ -358,7 +358,7 @@ describe("stdio MCP entrypoint", () => {
       data: { planned_commands: Array<{ display: string; execution: string }>; static_feedback?: unknown };
     };
 
-    expect(initialize.result.instructions).toContain("Use Agent Workbench before broad repository inspection");
+    expect(initialize.result.instructions).toContain("Use Agent Workbench before making repository claims not already verified in-session");
     expect(initialize.result.instructions).toContain("tool_search");
     expect(initialize.result.instructions).toContain("context_for_task");
     expect(initialize.result.instructions).toContain("verification_plan");
@@ -426,7 +426,7 @@ describe("stdio MCP entrypoint", () => {
     );
     const toolsByName = new Map(listedTools.result.tools.map((tool) => [tool.name, tool]));
     expect(toolsByName.get("context_for_task")?.description).toContain(
-      "Use this before broad file reads"
+      "Use this before making repository claims"
     );
     expect(toolsByName.get("verification_plan")?.description).toContain(
       "never executes commands"

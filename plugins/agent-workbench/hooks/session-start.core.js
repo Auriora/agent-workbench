@@ -26,5 +26,5 @@ export function buildSessionStartContext(
     return undefined;
   }
 
-  return `For non-trivial repository investigation, change evidence, or validation planning, invoke ${skillReference}; skip it for trivial tasks.`;
+  return `Before making a repository claim you have not verified in this session, including a quick overview, invoke ${skillReference} for read-only authority, freshness, and claim-boundary evidence; skip when the task needs no repository evidence.`;
 }

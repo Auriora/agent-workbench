@@ -1,6 +1,6 @@
 ---
 name: agent-workbench
-description: Use Agent Workbench as the MCP-backed IDE runtime for repository status, task context, targeted navigation, edit planning, and validation planning.
+description: Use Agent Workbench before making repository claims not verified in the current session. It returns authority and currency signals, ranked file, symbol, and documentation evidence, and explicit safe_to_use_for, not_safe_to_use_for, and must_verify_by boundaries for overviews, review, implementation, debugging, and validation planning.
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -14,6 +14,28 @@ Agent Workbench is the executable runtime. This skill only teaches the workflow.
 Do not duplicate MCP schemas, backend output, or runtime behavior in prompts or
 local scripts.
 
+## Why use it
+
+Direct file reads show what a file says. They do not establish whether it is
+canonical and current or which stronger claims it supports. Agent Workbench
+makes verified claims cheap by returning authority and currency signals, ranked
+file, symbol, and documentation evidence, and explicit trust boundaries. It
+does not make direct reads unnecessary; it tells you which reads and validation
+the claim still requires.
+
+Use this skill whenever a task requires a repository claim that is not already
+verified in the current session. Skip it only when the task requires no
+repository evidence.
+
+Every response's `meta.trust` states what its evidence supports:
+
+- `safe_to_use_for` lists the claims supported by the current evidence.
+- `not_safe_to_use_for` lists claims the response does not prove.
+- `must_verify_by` names the direct reads or validation needed before making a
+  stronger claim.
+
+Read these fields from the response; do not assume or hardcode their values.
+
 ## Default Workflow
 
 1. Read `repo:///orientation` for a compact trust and freshness receipt. Follow
@@ -23,10 +45,25 @@ local scripts.
    client, call tool discovery for `agent-workbench context_for_task
    verification_plan diagnostics_for_files docs_search`. Do not hardcode
    client-specific wrapper names.
-3. Use `context_for_task` before broad file reads.
-4. Use targeted symbol, reference, and impact surfaces for implementation work.
-5. Use preview/apply surfaces for workspace writes when available.
-6. Use `verification_plan` for validation planning and quiet post-edit static feedback.
+3. Use `context_for_task` before making a repository claim not already verified
+   in the current session, including a quick repository overview.
+4. Inspect governing-document authority and currency, ranked file and symbol
+   evidence, and `meta.trust`. Perform the direct reads it requires.
+5. Use targeted symbol, reference, and impact surfaces for implementation work.
+6. Use preview/apply surfaces for workspace writes when available.
+7. Use `verification_plan` for validation planning and quiet post-edit static
+   feedback.
+
+## Cheap-task example
+
+Even for `summarize this repo`:
+
+1. `repo:///orientation`
+2. `context_for_task` with `task: "summarize this repo"`
+3. Use governing-document authority and currency plus ranked file and symbol
+   evidence to select bounded reads.
+4. Read the selected evidence and follow `meta.trust` before making the summary's
+   claims.
 
 ## Spec Lifecycle Boundary
 

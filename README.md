@@ -193,17 +193,21 @@ covers runtime-path and native-module failures.
 
 ## How An Agent Should Use It
 
-A productive default workflow is:
+A productive in-session workflow for repository-facing claims is:
 
 ```text
 repo:///orientation
   -> context_for_task
-  -> targeted source, symbol, reference, or documentation evidence
+  -> ranked file, symbol, and documentation evidence
+  -> direct source reads when the ranked evidence points to a likely claim
   -> preview/apply a bounded edit when requested
   -> diagnostics_for_files
   -> verification_plan
   -> run the relevant checks and report the evidence
 ```
+
+For requests that do not depend on any repository claim, skip this flow and
+answer directly.
 
 The main capabilities are:
 
@@ -215,10 +219,12 @@ The main capabilities are:
 - workspace edit preview/apply with containment, token, and drift checks
 - integration profiles and health evidence for configured agent surfaces
 
-Use `context_for_task` before broad file reads. Prefer targeted symbol,
-reference, impact, and documentation tools when they answer the question. For
-writes, preview before applying when the surface is available, then use the
-verification plan to select checks; the agent must still execute those checks
+Use `context_for_task` before repository claims that are not already verified.
+Its authority, currency, ranked-evidence, and `meta.trust` fields establish
+which claims are supported and which require direct reads. Prefer targeted
+symbol, reference, impact, and documentation tools when they answer the
+question. For writes, preview before applying when the surface is available,
+then use the verification plan to select checks; the agent must still execute those checks
 before claiming validation is complete.
 
 ## Reading The Evidence

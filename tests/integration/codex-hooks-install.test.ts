@@ -113,7 +113,7 @@ describe("Codex hook installation", () => {
     expect(parsed.hookSpecificOutput).toEqual({
       hookEventName: "SessionStart",
       additionalContext:
-        "For non-trivial repository investigation, change evidence, or validation planning, invoke the packaged Agent Workbench skill; skip it for trivial tasks."
+        "Before making a repository claim you have not verified in this session, including a quick overview, invoke the packaged Agent Workbench skill for read-only authority, freshness, and claim-boundary evidence; skip when the task needs no repository evidence."
     });
     expect(parsed.hookSpecificOutput?.additionalContext).not.toContain("repo:///");
     expect(parsed.hookSpecificOutput?.additionalContext).not.toContain("context_for_task");

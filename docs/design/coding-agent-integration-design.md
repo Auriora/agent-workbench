@@ -3,7 +3,7 @@ title: Coding agent integration design
 doc_type: design
 status: current
 owner: platform
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-24
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -51,14 +51,14 @@ The runtime should expose:
 MCP remains an interface adapter. Application, domain, graph, extraction,
 cache, and validation code must not know which agent is connected.
 
-Packaged integrations use one conditional skill entry for non-trivial
-repository investigation, change evidence, or validation planning. A
-provider-specific SessionStart hook may advertise that skill with one concise
-conditional pointer, but it must not invoke Agent Workbench or duplicate the
-workflow automatically. The skill reads `repo:///orientation` first and follows
-detailed resource links only when the task needs them. Provider instruction
-files may point to that skill but must not duplicate the full workflow or
-introduce provider-specific runtime policy.
+Packaged integrations use one conditional skill entry before repository claims
+not already verified in-session, including quick overviews. A provider-specific
+SessionStart hook may advertise that skill with one concise conditional pointer,
+but it must not invoke Agent Workbench or duplicate the workflow automatically.
+The skill reads `repo:///orientation` first and then calls `context_for_task` to
+establish documentation authority and currency, ranked evidence, and explicit
+claim boundaries. Provider instruction files may point to that skill but must
+not duplicate the full workflow or introduce provider-specific runtime policy.
 
 `integration:///profiles/current` reports the effective provider for the MCP
 connection from explicit launcher evidence, or `unknown` when that evidence is
@@ -138,7 +138,8 @@ Agent skills are the best portable workflow packaging format after MCP. Skills
 should package reusable instructions, scripts, references, and examples for
 workflows such as:
 
-- using runtime context before broad file reads
+- establishing authority, currency, ranked evidence, and claim boundaries
+  before repository claims not already verified in-session
 - planning validation without silent success
 - reviewing an impact report
 - interpreting degraded capability metadata
@@ -218,8 +219,10 @@ Example hook intents:
 Session-start activation may emit one concise conditional pointer to the
 packaged skill when the client does not otherwise load plugin-root guidance in
 the active repository. It must not invoke MCP actions, list the complete
-workflow, or turn trivial tasks into Workbench tasks. The packaged skill remains
-the workflow authority.
+workflow, or duplicate analysis. The pointer itself does not invoke MCP actions
+or mutate the workspace. It is only needed when a repository claim is
+unverified in-session; tasks requiring no repository evidence should proceed
+without it. The packaged skill remains the workflow authority.
 
 Future hook and session-stop support may expose a read-only handoff packet with
 selected task, loaded context, changed files, validation status, stale-doc

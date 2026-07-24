@@ -7,10 +7,12 @@ SPDX-License-Identifier: GPL-3.0-or-later
 
 Read and follow `AGENTS.md` as the repository instructions for this project.
 
-For non-trivial repository investigation, change evidence, or validation
-planning, invoke `/agent-workbench:agent-workbench` when the Agent Workbench MCP
-server is available. Skip this for trivial tasks.
+Before making a repository claim not already verified in the current session,
+including a quick overview, invoke `/agent-workbench:agent-workbench` when the
+Agent Workbench MCP server is available. Skip it only when the task requires no
+repository evidence.
 
-The packaged skill owns the provider-neutral workflow, beginning with the
-compact `repo:///orientation` receipt. SessionStart only advertises that skill;
-it does not invoke Agent Workbench automatically.
+The packaged skill owns the provider-neutral workflow for authority, freshness,
+ranked evidence, and explicit claim boundaries, beginning with the compact
+`repo:///orientation` receipt. SessionStart only advertises that skill; it does
+not invoke Agent Workbench automatically.

@@ -70,7 +70,7 @@ describe("MCP registry metadata", () => {
       apply_workspace_edit: ["Use only after preview_workspace_edit", "mutates files only when"],
       check_markdown_document: ["Use this before committing", "without changing the file"],
       check_markdown_set: ["Use this before docs-wide commits", "without mutation"],
-      context_for_task: ["Use this before broad file reads", "routing evidence"],
+      context_for_task: ["Use this before making repository claims", "authority and currency"],
       diagnostics_for_files: ["Use this for cheap static diagnostics", "without running tests"],
       docs_current_for_task: ["Use this before updating or promoting documentation", "does not mutate files"],
       docs_outline: ["Use this after choosing a Markdown document", "before docs_read_section"],

@@ -98,7 +98,7 @@
   "tools": [
     {
       "name": "context_for_task",
-      "description": "Use this before broad file reads, edits, or code review. Provide the task plus any known files or symbols; it returns bounded routing evidence, likely files, governing docs, risks, and suggested next Agent Workbench calls without mutating files.",
+      "description": "Use this before making repository claims not already verified in-session, including quick overviews. It returns ranked file and symbol evidence, governing docs with authority and currency, risks, suggested next Agent Workbench calls, and meta.trust claim boundaries without mutating files.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded by max_files and max_docs; scans local file catalog only."
