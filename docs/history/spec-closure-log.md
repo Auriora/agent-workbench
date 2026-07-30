@@ -676,7 +676,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/045-stdio-bridge-resource-lifecycle/`
 - **Title:** Stdio bridge resource lifecycle
 - **Final spec commit:** `2b953c6`
-- **Closure cleanup commit:** `pending`
+- **Closure cleanup commit:** `f93c6a4`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/runtime-operations-design.md`
