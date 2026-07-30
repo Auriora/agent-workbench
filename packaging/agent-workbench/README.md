@@ -13,10 +13,10 @@ The supported distribution channel is the **GitHub release tarball** (package
 name `@auriora/agent-workbench`; it is **not** published to the npm registry). It
 is a normal npm package: installing the tarball builds the native modules and
 launches in place — there is no copy-to-prefix installer, no shell on the install
-or runtime path. The latest published baseline is `0.6.6`:
+or runtime path. The latest published baseline is `0.6.7`:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.6/auriora-agent-workbench-0.6.6.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.7/auriora-agent-workbench-0.6.7.tgz
 ```
 
 (See the runbook for source-vs-release wording and install-model details, and

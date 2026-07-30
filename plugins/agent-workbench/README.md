@@ -58,7 +58,7 @@ full native-build prerequisites and
 current release URL:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.6/auriora-agent-workbench-0.6.6.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.7/auriora-agent-workbench-0.6.7.tgz
 ```
 
 This README's Quick Start covers **Codex**. For **Claude Code**, skip to
