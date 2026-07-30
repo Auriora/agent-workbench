@@ -3,7 +3,7 @@ title: Spec closure log
 doc_type: history
 status: active
 owner: platform
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-30
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -636,3 +636,37 @@ historical audit explicitly needs the original scaffolding.
   - Valid-receipt caching remains prohibited until a material generation can
     detect deletions that predate watcher observation.
 - **Follow-up:** none
+
+### 2026-07-30 - 046-compiled-stdio-runtime
+
+- **Spec:** `docs/specs/046-compiled-stdio-runtime/`
+- **Title:** Compiled stdio runtime
+- **Final spec commit:** `77b0f55`
+- **Closure cleanup commit:** `pending`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/coding-agent-integration-design.md`
+  - `docs/design/runtime-operations-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/runbooks/codex-agent-workbench-plugin.md`
+  - `docs/runbooks/install-agent-workbench.md`
+  - `docs/release-notes/v0.6.7.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Typecheck, 52 daemon-launch tests, 18 real
+  daemon-entrypoint tests, the full serial suite with 103 files and 1,114
+  tests, plugin/package/skill validation, release-package and GHCR workflows,
+  and main CI passed. Independent architecture re-review found no blocker. The
+  exact published v0.6.7 tarball initialized with 16 tools as an observer while
+  a live v0.6.4 daemon retained the repository refresh lease unchanged.
+- **Residual risks:**
+  - Bridge cardinality remains provider-owned; each intentionally open agent
+    transport retains one lightweight bridge.
+  - Observer reads require a compatible published graph and report stale state
+    while an older retained owner has not refreshed the latest checkout.
+  - The separate cross-platform packaging workflow still invokes its MCP
+    launch smoke before building `dist`; this pre-existing workflow-ordering
+    defect is outside Spec 046 and did not affect the published package.
+- **Follow-up:** provider-side transport multiplexing only if a provider exposes
+  a supported shared-transport contract; cross-platform workflow build ordering
+  remains owned by the packaging workflow.
