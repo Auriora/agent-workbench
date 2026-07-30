@@ -74,15 +74,15 @@ not change the one-daemon-per-repository model.
 
 ## Staged Readiness
 
-- **Current stage:** implementation-ready after expert review
-- **Next stage:** implementation
-- **Ready to implement when:** the requirements, design, tasks, traceability,
-  and verification artifacts pass package lint and blocking MoE findings are
-  reconciled.
+- **Current stage:** closure-ready after implementation, release, and final
+  evidence reconciliation
+- **Next stage:** closure
+- **Ready to close when:** lifecycle closure checks pass after the design,
+  traceability, promotion, and current release evidence are reconciled.
 - **Design-first exception:** no
 - **Optional artifacts included:** `research.md`, `change-impact.md`,
   `traceability.md`, `verification.md`
-- **Downstream review needed:** design, tasks, verification
+- **Downstream review needed:** none
 
 ## Requirements
 
@@ -158,6 +158,11 @@ configuration migration.
    SHALL distinguish an unreleased worktree package from published release
    `0.6.2`.
 
+AC6 records the implementation-time source-wrapper and release baseline. The
+fix first shipped in `v0.6.3`; Spec 046 subsequently made
+`dist/mcp/stdio-entrypoint.mjs` the canonical distributed entrypoint, and the
+current released and installed package is `v0.6.7`.
+
 ### Requirement 4: Operational evidence and guidance
 
 **User Story:** As an operator, I want evidence-backed process guidance, so that
@@ -193,7 +198,9 @@ I can distinguish expected multi-repository/session processes from leaks.
 ## Technical Context
 
 - **Language/Version:** TypeScript ESM on Node.js 24
-- **Primary Dependencies:** Node streams and sockets, Vitest, tsx entrypoints
+- **Primary Dependencies:** Node streams and sockets and Vitest; source
+  execution used tsx during this slice, while Spec 046 later replaced the
+  distributed tsx path with compiled entrypoints
 - **Target Platform:** packaged Codex, Claude Code, and Kiro MCP integrations
 - **Constraints:** no hidden fallback path; preserve native parser and SQLite
   behavior in the daemon; keep MCP adapters thin

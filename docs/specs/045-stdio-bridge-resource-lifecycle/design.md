@@ -39,8 +39,8 @@ daemon server.
 |-------------|---------------------|-----------------|------------|
 | Requirement 1 | AC1-AC4 | Idempotent bridge-session teardown owned by stdin and socket events | stream unit tests and subprocess entrypoint tests |
 | Requirement 2 | AC1-AC4 | Lightweight client/protocol modules and transitive import boundary | architecture import-graph test |
-| Requirement 3 | AC1-AC4 | Existing daemon election algorithms retained and re-exported from stable surface | existing daemon launch/integration tests |
-| Requirement 4 | AC1-AC3 | Durable design and runbook promotion | Markdown checks and docs tests |
+| Requirement 3 | AC1-AC6 | Existing daemon election retained; bounded native-failure guidance and launch/package truth added | daemon launch/integration, profile, package, and installed-bin tests |
+| Requirement 4 | AC1-AC4 | Durable design/runbook promotion and consistent closure evidence | Markdown, evidence-quality, traceability, and closure checks |
 
 ## Correctness Property Coverage
 
@@ -49,6 +49,7 @@ daemon server.
 | CP-001 | Single guarded teardown function removes pipes/listeners and closes the opposite transport | table-driven event-order tests |
 | CP-002 | Existing atomic startup lock and metadata lifecycle move without semantic alteration | existing parallel-client tests |
 | CP-003 | Entrypoint dependency traversal rejects forbidden modules | architecture test resolving relative ESM imports |
+| CP-004 | Bounded startup diagnostics produce the same native rebuild guidance for launch owners and waiters and release the child stderr pipe | fake-child, real-child, waiter, and cleanup tests |
 
 ## High-Level Design
 
@@ -146,8 +147,9 @@ production connection shape.
 
 ### Canonical launch entrypoint
 
-`src/mcp/stdio-entrypoint.mjs` is the single distributed stdio launch
-entrypoint. It registers tsx and imports `src/mcp/stdio.ts`.
+For the implementation and initial `v0.6.3` release,
+`src/mcp/stdio-entrypoint.mjs` was the single distributed stdio launch
+entrypoint. It registered tsx and imported `src/mcp/stdio.ts`.
 
 - `package.json` `mcp`, `packaging/agent-workbench/mcp-bin.mjs`, and each plugin
   launcher resolve `stdio-entrypoint.mjs`.
@@ -156,6 +158,12 @@ entrypoint. It registers tsx and imports `src/mcp/stdio.ts`.
   `stdio.ts` launch to the canonical wrapper.
 - Validation must enumerate all of those launch artifacts so no shipped surface
   bypasses the lifecycle owner.
+
+Spec 046 subsequently compiled this same bridge/client boundary and made
+`dist/mcp/stdio-entrypoint.mjs` the canonical distributed entrypoint. The
+TypeScript source and source wrapper remain developer-authority inputs; this
+later packaging change does not alter Spec 045 transport ownership or the
+lightweight import boundary.
 
 ## Error Handling
 
@@ -186,14 +194,19 @@ handling.
 No metadata, protocol, configuration, or MCP contract migration is required.
 The optional startup failure hint is additive and does not change daemon
 identity or successful handshake shape.
-Installed packages receive the fix on the next release; already-running 0.6.2
-orphan bridges are not modified in place. Operators may terminate confirmed
-disconnected old bridges using the runbook after resolving exact PIDs.
+At implementation time, installed packages were to receive the fix in the next
+release; already-running 0.6.2 orphan bridges were not modified in place.
+Operators could terminate confirmed disconnected old bridges using the runbook
+after resolving exact PIDs.
 
-Until that release exists, package manifests identify the checkout as
+Before that release, package manifests identified the checkout as
 `unreleased` while retaining `latest_released_version: 0.6.2` and the published
 0.6.2 install command. Local installed-tarball smoke is candidate evidence, not
 evidence that the published 0.6.2 artifact contains the fix.
+
+The fix shipped in `v0.6.3` from implementation commit `c14bf60`. The current
+`v0.6.7` package includes it and uses the compiled distributed entrypoint
+introduced by Spec 046.
 
 ## Slice Boundary and Residual Architecture
 

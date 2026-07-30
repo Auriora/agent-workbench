@@ -14,7 +14,7 @@ last_reviewed: 2026-07-30
 ## Task Dependency Graph
 
 ```text
-T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
+T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
 ```
 
 ## Spec and review
@@ -76,10 +76,15 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
     `docs/runbooks/codex-agent-workbench-plugin.md`
   - Acceptance: durable docs describe current implemented behavior and process
     diagnosis without presenting variable RSS as an exact allocation.
-  - Evidence: Promoted the verified bridge ownership, dependency boundary,
-    canonical launcher, and process diagnosis into all three named durable
-    owners, including explicit guidance that bridge ownership, not RSS alone,
-    determines whether a process is orphaned.
+  - Evidence: Promoted runtime ownership and the lightweight dependency
+    boundary to `docs/design/runtime-operations-design.md` under `Runtime
+    Ownership`; promoted the canonical launcher, `StdioBridgeSession`, native
+    startup guidance, and provider-owned bridge cardinality to
+    `docs/design/coding-agent-integration-design.md`; and promoted exact
+    bridge/orphan diagnosis to `docs/runbooks/codex-agent-workbench-plugin.md`
+    under `Bridge process interpretation`. The 2026-07-30 Agent Workbench
+    Markdown set check completed with only non-blocking table-readability
+    warnings.
 
   - Evidence mode: implementation
 - [x] T005 Run final validation, implementation review, and scope
@@ -153,6 +158,27 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
     and read-only review confirmed the package-marketplace drift and missing
     real-child native regression were reconciled; remaining Markdown findings
     are non-blocking table readability warnings.
+
+- [x] T008 Reconcile final release, criterion mapping, and closure evidence.
+  - Depends on: T007
+  - Requirement: Requirement 4
+  - Related requirement: Requirement 3
+  - Files: `requirements.md`, `design.md`, `tasks.md`, `traceability.md`,
+    `verification.md`, release notes, package manifest, and durable promotion
+    targets.
+  - Acceptance: the historical `0.6.2` candidate evidence remains explicit;
+    delivery in `v0.6.3`, the Spec 046 compiled-entrypoint supersession, and the
+    current `v0.6.7` release/install state are recorded; every acceptance
+    criterion has named evidence; and T004 promotion evidence is concrete.
+  - Evidence mode: validation
+  - Evidence: Direct reads confirmed the three durable promotion sections,
+    `docs/release-notes/v0.6.3.md` attributes the lightweight bridge and
+    transport-lifetime fix to Specs 045/046, `git tag --contains c14bf60`
+    returned `v0.6.3` through `v0.6.7`, package metadata reports released
+    `0.6.7` with `dist/mcp/stdio-entrypoint.mjs`, and
+    `npm list -g @auriora/agent-workbench --depth=0` reported installed
+    `@auriora/agent-workbench@0.6.7`. Design, traceability, task, and
+    verification artifacts were reconciled before closure.
 
 ## Execution Rules
 

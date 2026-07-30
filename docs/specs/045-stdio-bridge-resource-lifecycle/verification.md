@@ -27,6 +27,7 @@ documentation, packaging, and expert review.
 | Plugin and package validation | yes | passed | plugin validation, package dry-run, source launcher smoke, and installed-package smoke passed |
 | Durable documentation promotion | yes | passed | all three canonical owners updated |
 | Implementation review and scope reconciliation | yes | passed | final read-only code and lifecycle review found no remaining blockers after evidence reconciliation |
+| Release and closure reconciliation | yes | passed | fix shipped in `v0.6.3`; current package and global install are `v0.6.7`; Spec 046 compiled-entrypoint supersession recorded |
 
 The earlier 2026-07-30 implementation review invalidated completion claims for
 Requirement 2 boundary completeness, Requirement 3 native-failure and package
@@ -43,7 +44,7 @@ reconciliation record.
 | `pnpm typecheck` | TypeScript contracts | passed |
 | `pnpm exec vitest run --maxWorkers=1 --reporter=dot` | full regression without concurrent resource-contention timeouts | passed; 102 files and 1,096 tests |
 | `pnpm validate:plugin` | packaged plugin launchers and manifests | passed |
-| `pnpm pack:dry-run` | npm package contents | passed; tarball `auriora-agent-workbench-0.6.2.tgz` built from an `unreleased` worktree candidate |
+| `pnpm pack:dry-run` | npm package contents at implementation time | passed; historical tarball `auriora-agent-workbench-0.6.2.tgz` built from an `unreleased` worktree candidate |
 | `CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs` | packs, installs, invokes the real installed bin, proves daemon sharing, and requires stdin EOF process exit | passed; installed tarball smoke and cleanup succeeded; provider-labelled sessions only, not live Codex/Claude plugin proof |
 | `node scripts/ci/mcp-launch-smoke.mjs` | plugin shim resolves the canonical wrapper and initializes | passed |
 | `git diff --check` | patch formatting | passed |
@@ -56,7 +57,7 @@ reconciliation record.
 | Requirement 1 / CP-001 | T003 lifecycle, subprocess, and installed-bin EOF tests | targeted and installed-package smoke passed | open clients intentionally remain connected by design |
 | Requirement 2 / CP-003 | T002 transitive import-boundary test | targeted and full regressions passed | exact RSS remains environment-specific |
 | Requirement 3 / CP-002 / CP-004 | existing and targeted daemon launch/integration, profile, source-launcher, and installed-package tests | targeted tests, full regression, source smoke, and installed-package smoke passed | live Codex/Claude CLI plugin proof remains outside this implementation scope |
-| Requirement 4 | T004 durable docs and Markdown/evidence checks | durable docs updated; evidence tables reconciled; Markdown warnings non-blocking | spec stays active until commit/closure is separately authorized |
+| Requirement 4 | T004/T008 durable docs, promotion proof, criterion mapping, and evidence checks | durable docs updated; evidence tables reconciled; Markdown warnings non-blocking | none |
 
 ## Agent Readiness Evidence
 
@@ -64,10 +65,10 @@ reconciliation record.
 |-------|----------|---------------|
 | Scope | `requirements.md` goals/non-goals and `design.md` slice boundary | none |
 | Context | direct source/docs reads, `research.md`, Agent Workbench routing | optional semantic enrichment is incomplete; direct reads govern |
-| Permissions | local source/tests/docs edits authorized; no release, install, commit, or process killing authorized | installed 0.6.2 remains unchanged |
+| Permissions | implementation-time scope excluded release/install/commit; closure is now explicitly authorized | no process killing or new release required |
 | Validation | Agent Workbench verification plan, commands above, and lifecycle lint before evidence reconciliation | Markdown set returned non-blocking readability warnings only |
 | Review | architecture, QA, and operations MoE before implementation; final code, lifecycle, and evidence review after | every finding was implemented or reconciled with direct evidence |
-| Closure | promote three durable owners; retain active until commit/closure is separately authorized | no closure claim in this task |
+| Closure | three durable owners promoted; current release/install and criterion evidence reconciled | remove active package and record final/cleanup commits |
 
 ## Task Evidence
 
@@ -80,6 +81,7 @@ reconciliation record.
 | T005 | complete | final full suite, plugin/package checks, Markdown review, and scope reconciliation recorded |
 | T006 | complete | native diagnostics, canonical profile, import boundary, package truth, and package-marketplace commands reconciled |
 | T007 | complete | validation rerun and evidence-table reconciliation completed |
+| T008 | complete | historical/current release state, criterion mapping, and concrete promotion evidence reconciled |
 
 ## Scope Reconciliation Before Closure
 
@@ -96,8 +98,9 @@ reconciliation record.
 |------|----------|--------|-------|
 | 2026-07-29 | `ps`, `/proc/<pid>/fd`, Unix-socket ownership, and parent-writer inspection grouped by resolved repository root | observed | Four daemons matched four active repository identities; 11 app-2 bridges had neither socket nor stdin writer; connected completed-session bridges retained a parent pipe writer. |
 | 2026-07-29 | Installed `/home/bcherrington/.config/nvm/versions/node/v24.8.0/lib/node_modules/@auriora/agent-workbench/src/mcp/stdio.ts` compared with checkout `src/mcp/stdio.ts` at `2f2c561` | observed | Installed 0.6.2 resumes stdin and installs an effectively infinite interval; checkout waits only for socket close. |
-| 2026-07-29 | Static import chain `src/mcp/stdio.ts` -> `src/mcp/stdio-launch.ts` -> `src/mcp/daemon.ts` -> `src/server.ts` and native/runtime imports | observed | Current bridge reaches combined daemon client/server and heavy repository graph. |
+| 2026-07-29 | Static import chain `src/mcp/stdio.ts` -> `src/mcp/stdio-launch.ts` -> `src/mcp/daemon.ts` -> `src/server.ts` and native/runtime imports | observed | The checkout at `2f2c561` reached the combined daemon client/server and heavy repository graph before the split. |
 | 2026-07-30 | lifecycle lint, 10-file/144-test target, typecheck, 102-file/1,096-test serial full suite, plugin validation, package dry-run, source launcher smoke, installed-package smoke, Markdown set review, and direct review | passed | Post-review validation succeeded. Markdown output is limited to non-blocking table readability warnings; installed-package smoke explicitly remains provider-labelled rather than live plugin proof. |
+| 2026-07-30 | `git tag --contains c14bf60`, package manifest/release-note reads, and `npm list -g @auriora/agent-workbench --depth=0` | passed | Fix first shipped in `v0.6.3`; current released manifest and global install are `0.6.7`; Spec 046 replaced the distributed source wrapper with the compiled `dist/mcp/stdio-entrypoint.mjs` without changing bridge ownership. |
 
 ## Residual Risks
 
@@ -119,9 +122,10 @@ reconciliation record.
 
 ### Spec Cleanup Decision
 
-- **Cleanup action:** keep active
-- **Reason:** lifecycle closure checks are ready, but closure was not requested.
-- **Implementation/spec commit:** `c14bf60`
+- **Cleanup action:** close after final lifecycle checks
+- **Reason:** T001-T008, durable promotion, release/install reconciliation,
+  criterion mapping, and independent review are complete.
+- **Implementation/spec commits:** `c14bf60`, `584e9de`, `e837430`
 - **Closure log path:** `docs/history/spec-closure-log.md`
 - **Closure log entry updated:** no
 - **Residual spec-only content:** implementation evidence until closure
@@ -137,14 +141,16 @@ reconciliation record.
   rollback shortcut. For source-only development, revert the module split,
   lifecycle owner, and canonical-launch changes together.
 - **Requires human review:** no; requested MoE review is the review gate
-- **Release notes needed:** yes at release time
+- **Release notes needed:** complete in `docs/release-notes/v0.6.3.md`; later
+  compiled-runtime delivery is recorded in `docs/release-notes/v0.6.7.md`
 - **Follow-up issue or spec needed:** no known follow-up
 
 ## Readiness Decision
 
 - **Ready for promotion:** yes
-- **Ready for release:** no
-- **Ready for closure:** yes, but not executed in this slice
+- **Ready for release:** yes; the fix shipped in `v0.6.3` and remains in
+  current `v0.6.7`
+- **Ready for closure:** yes
 
 ## Related Artifacts
 
