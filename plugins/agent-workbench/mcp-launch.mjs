@@ -19,16 +19,18 @@
 // package (it is NOT copied anywhere). `resolveRuntimeRoot` finds it from the
 // `AGENT_WORKBENCH_INSTALL_ROOT` override or the pointer file written by the
 // package's postinstall. The server is launched through
-// `src/mcp/stdio-entrypoint.mjs`, which registers tsx relative to its own file —
-// so no cwd juggling is needed to resolve the bare `tsx` specifier.
+// `dist/mcp/stdio-entrypoint.mjs`, which is the compiled distributed entrypoint.
 //
 //   - default AGENT_WORKBENCH_DEFAULT_REPO_ROOT to the launch cwd when unset
 //     (the Codex session workspace cwd, because .mcp.json must not override cwd);
 //   - pass through any extra argv.
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveRuntimeRoot } from "./install-root.mjs";
+
+const DISTRIBUTED_STDIN_ENTRYPOINT = path.join("dist", "mcp", "stdio-entrypoint.mjs");
 
 /**
  * Build the spawn plan for the MCP server from the current environment.
@@ -46,10 +48,10 @@ export function planLaunch(env = process.env, argv = process.argv.slice(2), cwd 
     throw new Error(
       "agent-workbench runtime not found. Install it from the GitHub release tarball " +
         "(npm install -g <url from https://github.com/Auriora/agent-workbench/releases>), " +
-        "or set AGENT_WORKBENCH_INSTALL_ROOT to a checkout that contains src/mcp/stdio-entrypoint.mjs."
+        "or set AGENT_WORKBENCH_INSTALL_ROOT to a checkout that contains dist/mcp/stdio-entrypoint.mjs."
     );
   }
-  const entry = path.join(root, "src", "mcp", "stdio-entrypoint.mjs");
+  const entry = path.join(root, DISTRIBUTED_STDIN_ENTRYPOINT);
 
   const childEnv = { ...env };
   if (!childEnv.AGENT_WORKBENCH_DEFAULT_REPO_ROOT && !hasRepoRootArg(argv)) {
@@ -87,6 +89,15 @@ function main() {
     plan = planLaunch();
   } catch (err) {
     process.stderr.write(`agent-workbench: ${err.message}\n`);
+    process.exit(1);
+    return;
+  }
+
+  if (!fs.existsSync(plan.args[0])) {
+    process.stderr.write(
+      `agent-workbench: missing distributed runtime entrypoint ${plan.args[0]}. ` +
+        "Run `node scripts/build-runtime.mjs` and install this package or plugin before launching."
+    );
     process.exit(1);
     return;
   }

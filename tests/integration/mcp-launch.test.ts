@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { spawnSync } from "node:child_process";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 // @ts-expect-error -- ESM .mjs shim imported into the TS test via esbuild.
@@ -22,16 +23,16 @@ import {
 describe("mcp-launch shim planLaunch (spec 033)", () => {
   const root = "/install/root";
   const baseEnv = { AGENT_WORKBENCH_INSTALL_ROOT: root };
-  const entry = path.join(root, "src", "mcp", "stdio-entrypoint.mjs");
+  const entry = path.join(root, "dist", "mcp", "stdio-entrypoint.mjs");
 
-  it("spawns node directly against <root>/src/mcp/stdio-entrypoint.mjs", () => {
+  it("spawns node directly against <root>/dist/mcp/stdio-entrypoint.mjs", () => {
     const plan = planLaunch(baseEnv, [], "/repo");
     expect(plan.command).toBe(process.execPath);
     expect(plan.args).toEqual([entry]);
     expect(plan.root).toBe(root);
   });
 
-  it("does not force a cwd or use --import tsx (the entrypoint self-resolves tsx)", () => {
+  it("does not force a cwd or use --import tsx", () => {
     const plan = planLaunch(baseEnv, [], "/repo");
     expect(plan.options.cwd).toBeUndefined();
     expect(plan.args).not.toContain("--import");
@@ -171,5 +172,34 @@ describe("installed Codex MCP config materialization", () => {
     });
     expect(path.isAbsolute(server.args[0])).toBe(true);
     expect(server.startup_timeout_sec).toBe(30.0);
+  });
+});
+
+describe("npm MCP bin failure handling", () => {
+  it("reports a missing compiled entrypoint without an uncaught stack", () => {
+    const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-bin-"));
+    try {
+      const binDir = path.join(packageRoot, "packaging", "agent-workbench");
+      fs.mkdirSync(binDir, { recursive: true });
+      const binPath = path.join(binDir, "mcp-bin.mjs");
+      fs.copyFileSync(
+        path.resolve("packaging", "agent-workbench", "mcp-bin.mjs"),
+        binPath
+      );
+
+      const result = spawnSync(process.execPath, [binPath], {
+        cwd: packageRoot,
+        encoding: "utf8"
+      });
+
+      expect(result.status).toBe(1);
+      expect(result.stderr).toMatch(
+        /^agent-workbench: missing compiled runtime entrypoint .+\n$/u
+      );
+      expect(result.stderr).not.toContain("at file:");
+      expect(result.stderr).not.toContain("Error:");
+    } finally {
+      fs.rmSync(packageRoot, { recursive: true, force: true });
+    }
   });
 });

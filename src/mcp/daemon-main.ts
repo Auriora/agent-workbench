@@ -4,12 +4,10 @@
  */
 
 import fs from "node:fs";
-import { register } from "tsx/esm/api";
-
-register({ parentURL: import.meta.url });
+import { runDaemonFromEnv } from "./daemon.js";
 
 try {
-  await import("./daemon-main.ts");
+  await runDaemonFromEnv();
 } catch (error) {
   fs.writeSync(
     2,

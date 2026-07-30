@@ -44,6 +44,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 if [[ -z "$stage_root" ]]; then
   stage_root="$repo_root/.cache/agent-workbench/codex-repo-local-marketplace"
 fi
+runtime_build_command=(node "$repo_root/scripts/build-runtime.mjs")
 
 run_codex() {
   if [[ -n "$codex_home" ]]; then
@@ -65,6 +66,7 @@ plugin_is_installed() {
 }
 
 if [[ "$dry_run" == true ]]; then
+  echo "dry-run: ${runtime_build_command[*]}"
   echo "dry-run: node $repo_root/scripts/materialize-codex-repo-plugin.mjs --repo-root $repo_root --stage-root $stage_root"
   if [[ -n "$codex_home" ]]; then
     echo "dry-run: node $repo_root/scripts/install-codex-hooks.mjs --package-root $repo_root --codex-home $codex_home --dry-run"
@@ -80,6 +82,11 @@ if [[ "$dry_run" == true ]]; then
     echo "dry-run: codex plugin add agent-workbench@agent-workbench-local"
   fi
   exit 0
+fi
+
+if ! "${runtime_build_command[@]}"; then
+  echo "install-agent-workbench-repo-local: runtime build failed; run this script from a source checkout with dependencies installed."
+  exit 1
 fi
 
 node "$repo_root/scripts/materialize-codex-repo-plugin.mjs" \

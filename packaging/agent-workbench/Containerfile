@@ -40,6 +40,7 @@ COPY scripts ./scripts
 RUN rm -rf src/debug docs/specs \
   && node -e 'const fs = require("node:fs"); const p = "package.json"; const j = JSON.parse(fs.readFileSync(p, "utf8")); for (const k of Object.keys(j.scripts ?? {})) { if (k.startsWith("debug:")) delete j.scripts[k]; } fs.writeFileSync(p, `${JSON.stringify(j, null, 2)}\n`);' \
   && pnpm install --frozen-lockfile \
+  && node scripts/build-runtime.mjs \
   && pnpm rebuild:native
 
-ENTRYPOINT ["node", "--import", "tsx", "/opt/agent-workbench/src/mcp/stdio.ts"]
+ENTRYPOINT ["node", "/opt/agent-workbench/dist/mcp/stdio-entrypoint.mjs"]

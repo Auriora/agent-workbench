@@ -33,6 +33,8 @@ export type EntryPointSession = {
   stdoutRemainder: () => string;
   call: (method: string, params?: Record<string, unknown>, timeoutMs?: number) => Promise<McpMessage>;
   notify: (method: string, params?: Record<string, unknown>) => void;
+  endInputAndWaitForExit: (timeoutMs?: number) => Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
+  waitForExit: (timeoutMs?: number) => Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
   close: () => Promise<void>;
 };
 
@@ -86,6 +88,22 @@ export async function startEntryPointSession(
   const unexpectedTerminalError = (code: number | null, signal: NodeJS.Signals | null) =>
     new Error(terminalMessage(code, signal));
   const requestedCloseError = () => new Error("MCP entrypoint session intentionally closed before response.");
+  const waitForExit = (timeoutMs = ENTRYPOINT_SHUTDOWN_TIMEOUT_MS) => {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      return Promise.resolve({ code: child.exitCode, signal: child.signalCode });
+    }
+    return new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        child.off("exit", onExit);
+        reject(new Error(`Timed out waiting for MCP entrypoint child to exit after ${timeoutMs}ms.`));
+      }, timeoutMs);
+      const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
+        clearTimeout(timeout);
+        resolve({ code, signal });
+      };
+      child.once("exit", onExit);
+    });
+  };
 
   const rejectPending = (error: Error) => {
     for (const waiter of pending.values()) {
@@ -192,6 +210,13 @@ export async function startEntryPointSession(
         params
       })}\n`);
     },
+    async endInputAndWaitForExit(timeoutMs = ENTRYPOINT_SHUTDOWN_TIMEOUT_MS) {
+      closeRequested = true;
+      rejectPending(requestedCloseError());
+      child.stdin.end();
+      return waitForExit(timeoutMs);
+    },
+    waitForExit,
     async close() {
       if (closeResult !== null) {
         return closeResult;

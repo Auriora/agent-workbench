@@ -3,7 +3,7 @@ title: Coding agent integration design
 doc_type: design
 status: current
 owner: platform
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-30
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -66,6 +66,25 @@ absent. MCP initialize metadata is retained separately as client-application
 identity and never overrides trusted launcher evidence. The shared daemon keeps
 repository state common while creating an isolated identity context for every
 accepted connection.
+
+`dist/mcp/stdio-entrypoint.mjs` is the canonical distributed stdio entrypoint.
+It is generated from the TypeScript source wrappers under `src/mcp/`, which
+remain developer-authority tools for direct source execution, tests, and local
+debugging. The distributed bridge creates one `StdioBridgeSession`, owned
+exclusively by `src/mcp/stdio-launch.ts`; package, plugin, and container
+launchers do not bypass it. One bridge is expected per open client or
+sub-agent connection, while one daemon is expected per repository. Retained
+open bridges remain provider-owned until controlling stdin or the daemon
+socket terminates, and task state is not a lifecycle signal. During cold
+launch, the bridge holds only a bounded, startup-only diagnostic pipe from the
+detached daemon. If native bindings cannot load, the launch owner and metadata
+waiters receive the same fixed `pnpm rebuild:native` guidance; raw daemon
+stderr is not exposed. The pipe is released after readiness or terminal
+failure, including after a bounded drain when child exit precedes stdio close.
+Codex agent-thread concurrency and nesting settings can multiply open or
+retained sub-agent connections. They are provider capacity controls rather than
+Agent Workbench daemon counts; the runtime minimizes each bridge but does not
+pool independent stdio streams or infer a fixed bridge cardinality.
 
 `integration:///health/agent-workbench` is the static runtime health surface.
 It reports only server-known configured, registered, advertised, unavailable,
@@ -171,14 +190,15 @@ The runtime must not make any plugin format the core abstraction.
 For Codex packaged installs, the npm package installs the runtime under the
 package install location and registers the Codex plugin through the personal
 marketplace. The Codex plugin packages skill guidance, quiet hooks, and MCP
-configuration; its MCP binding launches the installed package entrypoint, not
-runtime code copied into Codex's plugin cache. Plugin cache paths are never
-default repository roots. The source Codex plugin config uses
-`${PLUGIN_ROOT}/mcp-launch.mjs` only as package input; npm `postinstall`
-rewrites the installed config to an absolute shim path and does not set `cwd`.
-Codex's session cwd is therefore the analyzed repo root unless an explicit
-fixed target is supplied. Source or dependency changes require a rebuilt package
-install, plugin reinstall, and Codex restart.
+configuration; its MCP binding launches the installed compiled package
+entrypoint under `dist/mcp/stdio-entrypoint.mjs`, not runtime code copied into
+Codex's plugin cache. Plugin cache paths are never default repository roots.
+The source Codex plugin config uses `${PLUGIN_ROOT}/mcp-launch.mjs` only as
+package input; npm `postinstall` rewrites the installed config to an absolute
+shim path, records the runtime-root pointer for the installed package root,
+and does not set `cwd`. Codex's session cwd is therefore the analyzed repo
+root unless an explicit fixed target is supplied. Source or dependency changes
+require a rebuilt package install, plugin reinstall, and Codex restart.
 Operational setup lives in
 [Codex Agent Workbench plugin and MCP setup](../runbooks/codex-agent-workbench-plugin.md).
 

@@ -5,12 +5,11 @@
 
 import path from "node:path";
 import { z } from "zod";
+import { AGENT_WORKBENCH_DEBUG_REPO_ROOT_OVERRIDE_ENV } from "../../../contracts/launch-authority-contracts.js";
 import type {
   McpRegistryContext,
   McpSurfaceParameterMetadata
 } from "./index.js";
-
-export const DEBUG_REPO_ROOT_OVERRIDE_ENV = "AGENT_WORKBENCH_DEBUG_REPO_ROOT_OVERRIDE";
 
 export type RootAuthorityPolicy = {
   launchRoot: string;
@@ -46,7 +45,7 @@ export function rootAuthorityPolicyFromEnv(input: {
 }): RootAuthorityPolicy {
   return createRootAuthorityPolicy({
     launchRoot: input.launchRoot,
-    debugRepoRootOverride: input.env?.[DEBUG_REPO_ROOT_OVERRIDE_ENV] === "1"
+    debugRepoRootOverride: input.env?.[AGENT_WORKBENCH_DEBUG_REPO_ROOT_OVERRIDE_ENV] === "1"
   });
 }
 

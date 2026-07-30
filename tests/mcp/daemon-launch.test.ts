@@ -8,6 +8,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
+import { PassThrough } from "node:stream";
 import { EventEmitter } from "node:events";
 import {
   DAEMON_PROTOCOL_VERSION,
@@ -1063,6 +1064,209 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
+  it("maps native-module launch failures to a bounded actionable rebuild hint for owners and metadata waiters", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-native-module-hint-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    const childStderr = new PassThrough();
+    const leakSentinel = `raw-native-loader-noise-${"x".repeat(3_000)}`;
+    const nativeStderr = `${leakSentinel} ERR_DLOPEN: Module did not self-register.`;
+    let metadataWaiterSpawned = false;
+    let ownerError: Error | undefined;
+
+    try {
+      try {
+        await connectOrStartDaemon({
+          repoRoot,
+          debugRepoRootOverride: false,
+          startTimeoutMs: 1500,
+          spawnDaemon: () => fakeChildProcess((child) => {
+            setTimeout(() => {
+              child.emit("exit", 1, null);
+              setImmediate(() => childStderr.end(nativeStderr));
+            }, 5);
+          }, { stderr: childStderr })
+        });
+        throw new Error("expected launch to fail");
+      } catch (error) {
+        ownerError = error instanceof Error ? error : new Error(String(error));
+      }
+
+      expect(ownerError).toBeDefined();
+      const ownerMessage = ownerError!.message;
+      expect(ownerMessage).toContain("pnpm rebuild:native");
+      expect(ownerMessage).not.toContain(leakSentinel);
+      expect(ownerMessage.length).toBeLessThan(260);
+      expect(childStderr.destroyed).toBe(true);
+
+      const metadata = safeReadJson(paths.metadataPath) as {
+        launchLifecycle?: {
+          failureCode?: string;
+          state?: string;
+          phase?: string;
+          native_module_rebuild_required?: true;
+        };
+      };
+      expect(metadata).toMatchObject({
+        launchLifecycle: {
+          state: "failed",
+          phase: "terminal",
+          failureCode: "child_exit",
+          native_module_rebuild_required: true
+        }
+      });
+
+      await expect(connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 500,
+        spawnDaemon: () => {
+          metadataWaiterSpawned = true;
+          return fakeChildProcess();
+        }
+      })).rejects.toThrow(ownerMessage);
+      expect(metadataWaiterSpawned).toBe(false);
+    } finally {
+      childStderr.destroy();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves the native-module rebuild hint through a real child stderr and exit sequence", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-native-module-real-child-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    let spawnCount = 0;
+
+    try {
+      const spawnDaemon = () => {
+        spawnCount += 1;
+        return spawn(process.execPath, [
+          "--input-type=module",
+          "--eval",
+          [
+            "import fs from 'node:fs';",
+            "setTimeout(() => {",
+            "  fs.writeSync(2, 'agent-workbench: daemon failed: ERR_DLOPEN: Module did not self-register.\\n');",
+            "  process.exitCode = 1;",
+            "}, 75);"
+          ].join("")
+        ], {
+          stdio: ["ignore", "ignore", "pipe"]
+        });
+      };
+
+      const owner = connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 1500,
+        spawnDaemon
+      });
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      const waiter = connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 1500,
+        spawnDaemon
+      });
+      const [ownerResult, waiterResult] = await Promise.allSettled([owner, waiter]);
+
+      expect(spawnCount).toBe(1);
+      expect(ownerResult.status).toBe("rejected");
+      expect(waiterResult.status).toBe("rejected");
+      expect(ownerResult.status === "rejected" ? ownerResult.reason.message : "").toMatch(/pnpm rebuild:native/);
+      expect(waiterResult.status === "rejected" ? waiterResult.reason.message : "").toBe(
+        ownerResult.status === "rejected" ? ownerResult.reason.message : ""
+      );
+
+      const metadata = safeReadJson(paths.metadataPath) as {
+        launchLifecycle?: {
+          failureCode?: string;
+          state?: string;
+          phase?: string;
+          native_module_rebuild_required?: true;
+        };
+      };
+      expect(metadata).toMatchObject({
+        launchLifecycle: {
+          state: "failed",
+          phase: "terminal",
+          failureCode: "child_exit",
+          native_module_rebuild_required: true
+        }
+      });
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  });
+
+  it("maps native load failure from the real detached daemon entrypoint", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-real-native-module-hint-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    const loaderPath = path.resolve("tests/fixtures/native-module-load-failure-loader.mjs");
+
+    try {
+      await expect(connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 5000,
+        env: {
+          ...process.env,
+          NODE_OPTIONS: `--experimental-loader=${loaderPath}`
+        }
+      })).rejects.toThrow("pnpm rebuild:native");
+
+      expect(safeReadJson(paths.metadataPath)).toMatchObject({
+        launchLifecycle: {
+          state: "failed",
+          phase: "terminal",
+          failureCode: "child_exit",
+          native_module_rebuild_required: true
+        }
+      });
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  }, 10_000);
+
+  it("destroys startup stderr capture when launch completes", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-native-hint-cleanup-ready-");
+    const daemons: StartedAgentWorkbenchDaemon[] = [];
+    const childStderr = new PassThrough();
+    let launchChild: ChildProcess | undefined;
+
+    try {
+      const socket = await connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 5000,
+        spawnDaemon: () => {
+          const child = fakeChildProcess(() => {
+            // no-op startup process.
+          }, { stderr: childStderr });
+          launchChild = child;
+          void startAgentWorkbenchDaemon({
+            repoRoot,
+            idleGraceMs: 100,
+            serverOptions: { startupRefreshDelayMs: 60_000 }
+          }).then((daemon) => daemons.push(daemon));
+          return child;
+        }
+      });
+
+      socket.destroy();
+      expect(launchChild).toBeDefined();
+      expect(childStderr.destroyed).toBe(true);
+    } finally {
+      launchChild?.emit("exit", 0, null);
+      await closeDaemons(daemons);
+      childStderr.destroy();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(daemonPaths(createDaemonIdentity(repoRoot)).ipcDir, { recursive: true, force: true });
+    }
+  });
+
   it("records immediate child exit as terminal failure evidence", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-child-exit-");
     const paths = daemonPaths(createDaemonIdentity(repoRoot));
@@ -1080,7 +1284,7 @@ describe("Agent Workbench daemon launcher", () => {
       })).rejects.toThrow("daemon-child-exit-code-1");
 
       const metadata = safeReadJson(paths.metadataPath) as {
-        launchLifecycle?: { state?: string; phase?: string; failureCode?: string };
+        launchLifecycle?: { state?: string; phase?: string; failureCode?: string; native_module_rebuild_required?: true };
       };
       expect(metadata).toMatchObject({
         launchLifecycle: {
@@ -1089,6 +1293,7 @@ describe("Agent Workbench daemon launcher", () => {
           failureCode: "child_exit"
         }
       });
+      expect(metadata.launchLifecycle?.native_module_rebuild_required).toBeUndefined();
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
       fs.rmSync(paths.ipcDir, { recursive: true, force: true });
@@ -2160,11 +2365,15 @@ function controlledDeferred<T>(): {
   return { promise, resolve, reject };
 }
 
-function fakeChildProcess(onStart: (child: ChildProcess) => void = () => undefined): ChildProcess {
+function fakeChildProcess(
+  onStart: (child: ChildProcess) => void = () => undefined,
+  options: { stderr?: NodeJS.ReadableStream } = {}
+): ChildProcess {
   const child = new EventEmitter() as unknown as ChildProcess;
   Object.assign(child, {
     pid: process.pid,
-    unref: () => child
+    unref: () => child,
+    stderr: options.stderr
   });
   onStart(child);
   return child;

@@ -320,6 +320,11 @@ async function runSmoke() {
   });
 
   assertSessionsQuiet();
+  currentPhase = "bridge_lifecycle";
+  const bridgeLifecycle = {
+    codex: await codex.endInputAndWaitForExit(),
+    claude_code: await claude.endInputAndWaitForExit()
+  };
 
   return {
     schema_version: "2",
@@ -340,6 +345,10 @@ async function runSmoke() {
       { provider_label: "codex", kind: "provider_labelled_mcp_session" },
       { provider_label: "claude_code", kind: "provider_labelled_mcp_session" }
     ],
+    bridge_lifecycle: {
+      controlling_stdin_eof_exits_without_signal: true,
+      results: bridgeLifecycle
+    },
     real_agent_cli_executed: false,
     limitation: "Provider-labelled MCP sessions are not proof that Codex or Claude Code loaded the plugin.",
     daemon: {
@@ -722,6 +731,34 @@ function startInstalledSession(input) {
     },
     notify(method, params = {}) {
       child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method, params })}\n`);
+    },
+    async endInputAndWaitForExit(timeoutMs = 3_000) {
+      for (const waiter of pending.values()) {
+        waiter.reject(new Error("installed MCP session stdin ended before response"));
+      }
+      pending.clear();
+      child.stdin.end();
+      if (child.exitCode !== null || child.signalCode !== null) {
+        return { code: child.exitCode, signal: child.signalCode };
+      }
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          child.off("exit", onExit);
+          reject(new Error(`installed MCP session did not exit after stdin EOF within ${timeoutMs}ms`));
+        }, timeoutMs);
+        const onExit = (code, signal) => {
+          clearTimeout(timeout);
+          if (code !== 0 || signal !== null) {
+            reject(new Error(
+              `installed MCP session exited unexpectedly after stdin EOF ` +
+              `(code=${String(code)}, signal=${String(signal)}): ${boundedText(stderr)}`
+            ));
+            return;
+          }
+          resolve({ code, signal });
+        };
+        child.once("exit", onExit);
+      });
     },
     async close() {
       for (const waiter of pending.values()) {

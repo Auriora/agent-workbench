@@ -223,7 +223,7 @@ describe("stdio MCP entrypoint", () => {
   });
 
   it("is exposed through the package mcp script", () => {
-    expect(packageJson.scripts.mcp).toBe("node src/mcp/stdio-entrypoint.mjs");
+    expect(packageJson.scripts.mcp).toBe("node dist/mcp/stdio-entrypoint.mjs");
     expect(fs.existsSync(path.resolve("src/mcp/stdio.ts"))).toBe(true);
     expect(fs.existsSync(path.resolve("src/mcp/stdio-entrypoint.mjs"))).toBe(true);
     expect(fs.existsSync(path.resolve("src/mcp/stdio-launch.ts"))).toBe(true);

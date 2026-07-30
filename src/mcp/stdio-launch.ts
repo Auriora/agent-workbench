@@ -7,10 +7,8 @@ import path from "node:path";
 import type { Socket } from "node:net";
 import type { Readable, Writable } from "node:stream";
 import type { IntegrationLauncherIdentity } from "../contracts/index.js";
-import {
-  DEBUG_REPO_ROOT_OVERRIDE_ENV,
-} from "../interface-adapters/mcp/registries/root-authority.js";
-import { connectOrStartDaemon } from "./daemon.js";
+import { AGENT_WORKBENCH_DEBUG_REPO_ROOT_OVERRIDE_ENV } from "../contracts/launch-authority-contracts.js";
+import { connectOrStartDaemon } from "./daemon-client.js";
 
 export type StdioLaunchConfig = {
   repoRoot: string;
@@ -39,10 +37,22 @@ export function resolveStdioLaunchConfig(input: {
 
   return {
     repoRoot: path.resolve(cwd, repoRoot),
-    debugRepoRootOverride: env[DEBUG_REPO_ROOT_OVERRIDE_ENV] === "1",
+    debugRepoRootOverride: env[AGENT_WORKBENCH_DEBUG_REPO_ROOT_OVERRIDE_ENV] === "1",
     integrationIdentity: resolveLauncherIdentity(env)
   };
 }
+
+export type StdioBridgeSession = {
+  socket: Socket;
+  completed: Promise<void>;
+  close: () => void;
+};
+
+type StdioBridgeIo = {
+  stdin: Readable;
+  stdout: Writable;
+  stderr: Writable;
+};
 
 export async function connectAgentWorkbenchStdio(
   config: StdioLaunchConfig = resolveStdioLaunchConfig(),
@@ -51,7 +61,7 @@ export async function connectAgentWorkbenchStdio(
     stdout?: Writable;
     stderr?: Writable;
   } = {}
-): Promise<Socket> {
+): Promise<StdioBridgeSession> {
   const socket = await connectOrStartDaemon({
     repoRoot: config.repoRoot,
     debugRepoRootOverride: config.debugRepoRootOverride,
@@ -60,12 +70,86 @@ export async function connectAgentWorkbenchStdio(
   const stdin = io.stdin ?? process.stdin;
   const stdout = io.stdout ?? process.stdout;
   const stderr = io.stderr ?? process.stderr;
-  socket.on("error", (error) => {
-    stderr.write(`agent-workbench: daemon socket error: ${error.message}\n`);
+  return createStdioBridgeSession(socket, { stdin, stdout, stderr });
+}
+
+export function createStdioBridgeSession(
+  socket: Socket,
+  io: StdioBridgeIo
+): StdioBridgeSession {
+  let completedResolve!: () => void;
+  let completed = false;
+  let socketErrorReported = false;
+  const completedPromise = new Promise<void>((resolve) => {
+    completedResolve = resolve;
   });
-  stdin.pipe(socket);
-  socket.pipe(stdout);
-  return socket;
+
+  const removeBridgeListeners = (): void => {
+    io.stdin.removeListener("end", handleStdinTerminal);
+    io.stdin.removeListener("close", handleStdinTerminal);
+    io.stdin.removeListener("error", handleStdinError);
+    socket.removeListener("close", handleSocketClose);
+    socket.removeListener("error", handleSocketError);
+  };
+
+  const teardown = (owner: "stdin" | "socket-close" | "socket-error" | "manual"): void => {
+    if (completed) return;
+    completed = true;
+    removeBridgeListeners();
+    io.stdin.unpipe(socket);
+    socket.unpipe(io.stdout);
+    if (owner === "socket-close") {
+      io.stdin.pause();
+    } else {
+      if (owner === "socket-error" || owner === "manual") {
+        io.stdin.pause();
+      }
+      if (!socket.destroyed) socket.destroy();
+    }
+    completedResolve();
+  };
+
+  const handleSocketError = (error: Error): void => {
+    if (!socketErrorReported) {
+      socketErrorReported = true;
+      io.stderr.write(`agent-workbench: daemon socket error: ${error.message}\n`);
+    }
+    teardown("socket-error");
+  };
+
+  const handleStdinTerminal = (): void => {
+    teardown("stdin");
+  };
+
+  const handleStdinError = (error: Error): void => {
+    io.stderr.write(`agent-workbench: stdin error: ${error.message}\n`);
+    teardown("stdin");
+  };
+
+  const handleSocketClose = (): void => {
+    teardown("socket-close");
+  };
+
+  io.stdin.once("end", handleStdinTerminal);
+  io.stdin.once("close", handleStdinTerminal);
+  io.stdin.once("error", handleStdinError);
+  socket.once("error", handleSocketError);
+  socket.once("close", handleSocketClose);
+
+  if (socket.destroyed) {
+    handleSocketClose();
+  } else if (io.stdin.destroyed || io.stdin.readableEnded) {
+    handleStdinTerminal();
+  } else {
+    io.stdin.pipe(socket);
+    socket.pipe(io.stdout, { end: false });
+  }
+
+  return {
+    socket,
+    completed: completedPromise,
+    close: () => teardown("manual")
+  };
 }
 
 export function resolveLauncherIdentity(

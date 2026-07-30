@@ -4,10 +4,8 @@
  */
 
 import Database from "better-sqlite3";
-import {
-  GRAPH_STORE_IDENTITY_VERSION,
-  seedVersionedGraphStore
-} from "./graph-store-location.js";
+import { seedVersionedGraphStore } from "./graph-store-location.js";
+import { GRAPH_STORE_IDENTITY_VERSION } from "../../contracts/graph-store-identity-contracts.js";
 import type {
   ExtractionBatch,
   FileCatalogEntry,

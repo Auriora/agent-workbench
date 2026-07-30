@@ -47,9 +47,6 @@ importers:
       tree-sitter-typescript:
         specifier: ^0.23.2
         version: 0.23.2(tree-sitter@0.25.0)
-      tsx:
-        specifier: ^4.20.0
-        version: 4.21.0
       yaml:
         specifier: ^2.9.0
         version: 2.9.0
@@ -63,6 +60,12 @@ importers:
       '@types/node':
         specifier: ^24.0.0
         version: 24.12.3
+      esbuild:
+        specifier: ^0.27.7
+        version: 0.27.7
+      tsx:
+        specifier: ^4.20.0
+        version: 4.21.0
       typescript:
         specifier: ^5.9.0
         version: 5.9.3

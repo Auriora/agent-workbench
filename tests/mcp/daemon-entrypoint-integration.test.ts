@@ -101,6 +101,40 @@ describe("daemon-backed stdio entrypoint integration", () => {
     await session.close();
   }, 15_000);
 
+  it("exits cleanly when the controlling stdin reaches EOF", async () => {
+    const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-stdin-eof-");
+    const session = trackSession(await startEntryPointSession(repoRoot));
+    await initializeSession(session);
+
+    const result = await session.endInputAndWaitForExit(3_000);
+
+    expect(result).toEqual({ code: 0, signal: null });
+    expect(session.stderr()).toBe("");
+  }, 15_000);
+
+  it("exits cleanly when the connected daemon socket closes", async () => {
+    const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-daemon-close-");
+    const session = trackSession(await startEntryPointSession(repoRoot));
+    await initializeSession(session);
+    const health = parseEnvelope(await session.call("resources/read", {
+      uri: "integration:///health/agent-workbench"
+    })) as { data: { daemon?: { pid: number } } };
+    const daemonPid = health.data.daemon?.pid;
+    expect(daemonPid).toBeGreaterThan(0);
+
+    process.kill(daemonPid!, "SIGTERM");
+    const result = await session.waitForExit(3_000);
+    await waitForProcessExit(daemonPid!);
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.rmSync(paths.metadataPath, { force: true });
+    if (process.platform !== "win32") {
+      fs.rmSync(paths.socketPath, { force: true });
+    }
+
+    expect(result).toEqual({ code: 0, signal: null });
+    expect(session.stderr()).toBe("");
+  }, 15_000);
+
   it("shares one daemon across concurrent checkout/source clients", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-shared-");
     const first = trackSession(await startEntryPointSession(repoRoot));
@@ -559,7 +593,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
 
       expect(serialized).not.toMatch(/database is locked/i);
       expect(serialized).toMatch(
-        /Timed out connecting to Agent Workbench daemon|startup failed with code: bootstrap_failed/i
+        /Timed out connecting to Agent Workbench daemon|startup failed with code: bootstrap_failed|daemon-child-exit-code-1/i
       );
       expect(lock.released).toBe(false);
     } finally {

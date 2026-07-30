@@ -3,7 +3,7 @@ title: Runtime operations design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-24
+last_reviewed: 2026-07-29
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -23,6 +23,32 @@ coordination, worker isolation, SQLite concurrency, runtime ownership, and the
 runtime signals that observability should report. OpenTelemetry configuration,
 Jaeger export, repo-local debug harnesses, and profiling guidance are owned by
 [Observability and debugging design](observability-debugging-design.md).
+
+## Distributed Runtime Artifacts
+
+The TypeScript source tree under `src/` remains implementation authority and
+the place for developer-time wrappers, tests, and direct source execution.
+Distributed launches from npm packages, plugin installations, containers, and
+repo-local materialization use compiled ESM artifacts under `dist/mcp/`.
+
+The build and install lifecycle validates a deterministic receipt over the
+runtime source inputs, build-contract inputs, package version, esbuild version,
+entrypoints, and build options. Packaging and installation boundaries must fail
+closed if the compiled artifacts are missing, stale, or targeted at the wrong
+path. There is no source-wrapper fallback in a distributed launch path.
+
+On POSIX, the repo-local installer builds the runtime before it materializes
+the plugin/package payload. A failed build or receipt check stops registration
+before the local install is updated. Rollback and rematerialization therefore
+reinstall the package payload and refresh the materialized pointers together so
+cached launch data does not keep targeting stale output.
+
+Runtime-root pointers and explicit overrides resolve the installed package root
+that exposes the compiled entrypoints. A checkout override is a snapshot of the
+last successful repo-local build: rerun the repo-local installer after source
+changes so it rebuilds and validates the receipt before refreshing
+registration. Launch itself checks that the compiled entrypoint exists; it does
+not rehash the checkout on every stdio connection.
 
 ## Cache Architecture
 
@@ -169,6 +195,28 @@ Automatic and future explicit prewarm paths must not bypass normal scope,
 safety, parser, or cache invalidation rules.
 
 ## Runtime Ownership
+
+Each live MCP client session owns one lightweight stdio bridge, while all
+sessions for the same repository share one daemon. The bridge import graph
+excludes the daemon server, SQLite graph store, tree-sitter parsers, and MCP
+registries; daemon admission comes from the lightweight daemon-client module.
+Bridge lifetime is transport-owned and provider-owned: it remains alive while
+both controlling stdin and the daemon socket are open, and tears down
+idempotently when either terminates. It must not use a timer or resumed-stdin
+keepalive, and it must not infer abandonment from task completion or idle
+state. Cold-start diagnostics are also lifecycle-bound. The launch owner
+captures at most a bounded tail of detached-daemon stderr only until
+readiness or terminal failure, maps recognized native-loader failures to fixed
+rebuild guidance in startup metadata, and then closes the pipe. Concurrent
+waiters use that metadata rather than opening another diagnostic or daemon
+path.
+
+Provider agent-thread concurrency and nesting settings are multiplicative
+capacity inputs for bridge count. They do not change the one-daemon-per-repo
+ownership model. Independent stdio connections cannot be pooled inside the
+runtime without a provider-supported multiplexed transport, so resource
+verification records both per-bridge cost and the configured aggregate
+cardinality inputs.
 
 Only one runtime owns expensive warm-up and refresh work for a repo fingerprint
 at a time. The per-repo daemon constructs one refresh controller, one watcher

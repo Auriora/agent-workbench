@@ -10,4 +10,5 @@ __pycache__/
 .agents/
 .claude/
 .claude-plugin/
+dist/
 *.tgz

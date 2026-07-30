@@ -13,13 +13,17 @@ The supported distribution channel is the **GitHub release tarball** (package
 name `@auriora/agent-workbench`; it is **not** published to the npm registry). It
 is a normal npm package: installing the tarball builds the native modules and
 launches in place — there is no copy-to-prefix installer, no shell on the install
-or runtime path. Install it directly by release URL (see
-[the install guide](../../docs/runbooks/install-agent-workbench.md) for the
-current version):
+or runtime path. The current worktree is an unreleased candidate while the latest
+published baseline is `0.6.2`; use that release URL for tarball install until the next
+official release cut is published:
 
 ```bash
 npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.2/auriora-agent-workbench-0.6.2.tgz
 ```
+
+(See the runbook for source-vs-release wording and install-model details, and
+the install guide for when the published version changes:
+[the install guide](../../docs/runbooks/install-agent-workbench.md).)
 
 Checkout-only debug harnesses under `src/debug/`, `debug:*` package scripts,
 and active implementation specs under `docs/specs/` are removed from the
@@ -39,7 +43,7 @@ targets. The build needs **Python 3** and a **C/C++ toolchain**:
 - Windows: the MSVC C++ build tools ("Desktop development with C++").
 - On **Node 24** the tree-sitter core needs **C++20** (Node 24's V8/cppgc
   headers require it). Use **Node 22** (the supported floor), or rebuild with
-  `CXXFLAGS=-std=c++20` (`CL=/std:c++20` on Windows).
+  `CXXFLAGS=-std=c++20` (`_CL_=/std:c++20` on Windows).
 
 If that build fails, it is a local toolchain issue to resolve — not a packaging
 bug. The package surfaces an actionable hint in two places: a best-effort note
@@ -135,13 +139,14 @@ The GHCR image is a separate channel. Its build uses pnpm; the image entrypoint
 launches the MCP stdio server:
 
 ```bash
-node --import tsx /opt/agent-workbench/src/mcp/stdio.ts
+node /opt/agent-workbench/dist/mcp/stdio-entrypoint.mjs
 ```
 
 The container build runs:
 
 ```bash
 pnpm install --frozen-lockfile
+node scripts/build-runtime.mjs
 pnpm rebuild:native
 ```
 

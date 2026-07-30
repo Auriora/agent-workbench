@@ -114,7 +114,7 @@ describe("Kiro Power artifacts", () => {
     const prefix = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-kiro-prefix-"));
     const packageRoot = path.join(prefix, "lib", "node_modules", "@auriora", "agent-workbench");
     const launcher = path.join(packageRoot, "plugins", "agent-workbench", "mcp-launch.mjs");
-    const entrypoint = path.join(packageRoot, "src", "mcp", "stdio-entrypoint.mjs");
+    const entrypoint = path.join(packageRoot, "dist", "mcp", "stdio-entrypoint.mjs");
     try {
       fs.mkdirSync(path.dirname(launcher), { recursive: true });
       fs.mkdirSync(path.dirname(entrypoint), { recursive: true });

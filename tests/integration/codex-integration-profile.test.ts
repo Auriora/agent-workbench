@@ -207,8 +207,14 @@ describe("Codex integration profile", () => {
   it("documents plugin-owned runtime update semantics for source and dependency changes", () => {
     const profile = codexIntegrationProfileSchema.parse(describeCodexIntegrationProfile());
     const mcpSurface = profile.active_surfaces.find((entry) => entry.surface === "mcp");
-    const sourceDependencyArtifact = profile.artifacts.find(
+    const sourceExecutableArtifact = profile.artifacts.find(
       (artifact) => artifact.surface === "mcp" && artifact.path === "src/mcp/stdio.ts"
+    );
+    const sourceEntrypointArtifact = profile.artifacts.find(
+      (artifact) => artifact.surface === "mcp" && artifact.path === "src/mcp/stdio-entrypoint.mjs"
+    );
+    const distEntrypointArtifact = profile.artifacts.find(
+      (artifact) => artifact.surface === "mcp" && artifact.path === "dist/mcp/stdio-entrypoint.mjs"
     );
 
     expect(profile.runtime_source).toBe("repository_checkout");
@@ -235,6 +241,7 @@ describe("Codex integration profile", () => {
     expect(profile.install_package.installed_components).toEqual(
       expect.arrayContaining([
         "src",
+        "dist/mcp",
         "docs",
         "plugins/agent-workbench",
         "plugins/agent-workbench/hooks",
@@ -268,12 +275,26 @@ describe("Codex integration profile", () => {
         "Supports explicit repo roots through arguments or AGENT_WORKBENCH_DEFAULT_REPO_ROOT for fixed-target launches."
       ])
     );
-    expect(sourceDependencyArtifact).toMatchObject({
+    expect(sourceExecutableArtifact).toMatchObject({
       target_agent: "codex",
       surface: "mcp",
       status: "supported",
       provenance: "runtime_source",
       path: "src/mcp/stdio.ts"
+    });
+    expect(sourceEntrypointArtifact).toMatchObject({
+      target_agent: "codex",
+      surface: "mcp",
+      status: "supported",
+      provenance: "runtime_source",
+      path: "src/mcp/stdio-entrypoint.mjs"
+    });
+    expect(distEntrypointArtifact).toMatchObject({
+      target_agent: "codex",
+      surface: "mcp",
+      status: "supported",
+      provenance: "runtime_distribution",
+      path: "dist/mcp/stdio-entrypoint.mjs"
     });
   });
 
@@ -406,6 +427,10 @@ describe("Codex plugin artifacts", () => {
     expect(pluginRunbook).toContain("RCA checklist for this failure mode");
     expect(pluginRunbook).toContain("leaves `cwd` unset");
     expect(pluginRunbook).toContain("rejects a Codex MCP `cwd`");
+    expect(pluginRunbook).toMatch(
+      /npm install -g https:\/\/github\.com\/Auriora\/agent-workbench\/releases\/download\/v0\.6\.2\/auriora-agent-workbench-0\.6\.2\.tgz[\s\S]*codex plugin add agent-workbench@agent-workbench-local/
+    );
+    expect(pluginRunbook).toContain("codex plugin remove agent-workbench@agent-workbench-local");
     expect(hooksConfig.hooks).toEqual({});
     expect(JSON.stringify(hooksConfig)).not.toContain("${PLUGIN_ROOT}");
     expect(skill).toContain("Agent Workbench is the executable runtime.");
@@ -1003,9 +1028,23 @@ describe("Codex plugin artifacts", () => {
       registry: "ghcr.io",
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile: "packaging/agent-workbench/Containerfile",
-      release_status: "released",
-      install_command: latestReleasedInstallCommand,
-      npm_bin: "packaging/agent-workbench/mcp-bin.mjs"
+      release_status: "unreleased"
+    });
+    expect(manifest.latest_released_version).toBe("0.6.2");
+    expect(manifest.install_command).toBe(latestReleasedInstallCommand);
+    expect(manifest.npm_bin).toBe("packaging/agent-workbench/mcp-bin.mjs");
+    expect(manifest.codex.plugin_install_model).toBe(latestReleasedInstallCommand);
+
+    const npmPackageManifest = JSON.parse(fs.readFileSync(path.resolve("packaging/agent-workbench/npm-package.json"), "utf8")) as {
+      release_status: string;
+      latest_released_version: string;
+      install_command: string;
+    };
+
+    expect(npmPackageManifest).toMatchObject({
+      release_status: "unreleased",
+      latest_released_version: "0.6.2",
+      install_command: latestReleasedInstallCommand
     });
     // The container build still uses pnpm; the manifest's dependency_install
     // describes that build, not the npm consumer install.
@@ -1025,10 +1064,13 @@ describe("Codex plugin artifacts", () => {
       [...packageJson.pnpm.onlyBuiltDependencies].sort()
     );
     expect(manifest.dependency_install.native_build_tools).toEqual(["python3", "make", "c++"]);
-    expect(packageJson.dependencies).toHaveProperty("tsx");
+    expect(packageJson.dependencies).not.toHaveProperty("tsx");
+    expect(packageJson.devDependencies).toHaveProperty("tsx");
+    expect(packageJson.devDependencies).toHaveProperty("esbuild");
     expect(manifest.components).toEqual(
       expect.arrayContaining([
         "src",
+        "dist/mcp",
         "docs",
         "plugins/agent-workbench",
         "plugins/agent-workbench/hooks",
@@ -1054,7 +1096,7 @@ describe("Codex plugin artifacts", () => {
     expect(containerfile).toContain("COPY docs ./docs");
     expect(containerfile).toContain("COPY plugins ./plugins");
     expect(containerfile).toContain("pnpm install --frozen-lockfile");
-    expect(containerfile).toContain("/opt/agent-workbench/src/mcp/stdio.ts");
+    expect(containerfile).toContain("/opt/agent-workbench/dist/mcp/stdio-entrypoint.mjs");
     // Spec 033 (npm model): the package is launched in place — no copy-to-prefix
     // installer. The `agent-workbench-mcp` bin self-locates the runtime, and a
     // postinstall records the pointer the plugin launcher reads.
@@ -1105,6 +1147,26 @@ describe("Codex plugin artifacts", () => {
       expect(text, path.relative(pluginRoot, file)).not.toMatch(/src\/(?:application|domain|infrastructure|presentation|interface-adapters)/);
       expect(text, path.relative(pluginRoot, file)).not.toContain("tree-sitter");
       expect(text, path.relative(pluginRoot, file)).not.toContain("better-sqlite3");
+    }
+  });
+
+  it("keeps package install and recovery guidance on the package-scoped Codex marketplace", () => {
+    const runbook = fs.readFileSync(
+      path.resolve("docs/runbooks/codex-agent-workbench-plugin.md"),
+      "utf8"
+    );
+    const packageInstall = runbook.slice(
+      runbook.indexOf("## NPM Package Installation"),
+      runbook.indexOf("## Package Launch Model")
+    );
+    const troubleshooting = runbook.slice(
+      runbook.indexOf("## Troubleshooting"),
+      runbook.indexOf("## Kiro Power Packaging")
+    );
+
+    for (const packageSection of [packageInstall, troubleshooting]) {
+      expect(packageSection).toContain("agent-workbench@agent-workbench-local");
+      expect(packageSection).not.toContain("plugin add agent-workbench@auriora-local");
     }
   });
 });

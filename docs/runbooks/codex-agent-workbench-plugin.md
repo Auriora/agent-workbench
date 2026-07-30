@@ -3,7 +3,7 @@ title: Codex Agent Workbench plugin and MCP setup
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-30
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -17,7 +17,11 @@ Workbench from Codex without creating a second executable runtime path.
 
 ## Supported Model
 
-Agent Workbench has one executable Codex runtime path per packaged install:
+Agent Workbench has one executable Codex runtime path per packaged install.
+The current checkout is an unreleased package candidate; the latest released
+install payload remains `v0.6.2` until an official release cutover.
+
+- Use install URLs explicitly tied to the latest published release for live bootstrap.
 
 - The Codex plugin installs the `agent-workbench` skill.
 - The package installer writes quiet lifecycle hooks into
@@ -27,7 +31,8 @@ Agent Workbench has one executable Codex runtime path per packaged install:
   `.mcp.json`.
 - The plugin MCP server launches the npm-installed runtime in place through the
   portable `node`-based shim `plugins/agent-workbench/mcp-launch.mjs`, which
-  resolves the runtime root and starts the MCP stdio server.
+  resolves the runtime root and starts the compiled MCP stdio server from
+  `dist/mcp/stdio-entrypoint.mjs`.
 - The plugin must not launch runtime code from Codex's plugin cache path; the
   shim lives in the plugin but always delegates to the npm-installed runtime.
 
@@ -36,14 +41,20 @@ GHCR image is a separate container channel. Installing the npm package builds
 the native modules and records where the runtime lives; the plugin's `.mcp.json`
 then launches that same runtime through `mcp-launch.mjs`. This is not a second
 runtime implementation; the plugin MCP config launches the one MCP entrypoint
-installed by npm.
+installed by npm. The TypeScript source wrappers remain developer-authority
+tools for direct checkout execution and tests, but they are not the packaged
+launch target.
 
 Companion MCP servers, such as a spec lifecycle server for a separate docs
 repository, should also be configured as host-level Codex MCP entries. Keep
 their install and validation notes with the repository they target; the Agent
 Workbench plugin should not package or proxy those companion runtimes.
 
-This keeps source updates explicit:
+This keeps source updates explicit and keeps release state explicit:
+
+- `0.6.2` is the published install baseline until a new tagged release exists.
+- The candidate worktree can still be developed, validated, and verified without
+  changing install URLs.
 
 - Install a new package version with `npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz`.
 - Re-add `agent-workbench@<personal-marketplace>`.
@@ -156,6 +167,27 @@ The plugin should not create a host-level Agent Workbench MCP block in
 `.mcp.json` launching the npm-installed runtime through `mcp-launch.mjs`.
 
 ## Refresh Ownership And Diagnosis
+
+### Bridge process interpretation
+
+Expect one daemon per active repository and one stdio bridge per open client or
+sub-agent session. Four repository daemons can therefore be correct in a
+multi-repository workspace. A bridge with a live writer on file descriptor 0
+and a connected daemon socket is active; a bridge with neither is orphaned.
+
+Codex agent-thread concurrency and nesting configuration can increase the
+number of simultaneous or retained sub-agent MCP connections. Record those
+settings when interpreting process count; they are bridge-cardinality inputs,
+not evidence that Agent Workbench spawned additional repository daemons.
+
+Released version `0.6.2` used a resumed-stdin/timer keepalive and can leave such
+orphan bridges after the controlling client disappears. RSS and swap are useful
+diagnostics, but connection ownership determines whether a bridge is stale.
+
+Inspect an exact PID with `ls -l /proc/<pid>/fd/0` and correlate Unix sockets
+with `ss -xnp`. Only send `SIGTERM` to an exact, confirmed orphan bridge PID.
+Do not kill the shared repository daemon or delete runtime caches as bridge
+cleanup.
 
 This section describes the released `0.6.2` implementation, including
 daemon-owned refresh convergence.
@@ -274,14 +306,14 @@ C++ build tools (the "Desktop development with C++" workload).
 
 On **Node 24** the `tree-sitter` core needs **C++20** (Node 24's V8/cppgc
 headers require it). Use **Node 22** (the supported floor), or rebuild with
-`CXXFLAGS=-std=c++20` (`CL=/std:c++20` on Windows).
+`CXXFLAGS=-std=c++20` (`_CL_=/std:c++20` on Windows).
 
 The package's `postinstall` records a runtime-root pointer file under the per-OS
 state directory: `%LOCALAPPDATA%\agent-workbench` on Windows (falling back to
 `%USERPROFILE%\AppData\Local`), and `~/.local/share/agent-workbench` on
 Linux/macOS. The launch shim reads this pointer to find the runtime; nothing is
 copied to a prefix. Set `AGENT_WORKBENCH_INSTALL_ROOT` to override the runtime
-root (point it at a checkout containing `src/mcp/stdio-entrypoint.mjs`).
+root (point it at a checkout containing `dist/mcp/stdio-entrypoint.mjs`).
 
 **Native build prerequisite (Decision 1).** A C/C++ toolchain (and Python 3) is
 required to build native modules from source. This is bounded: of the native
@@ -307,11 +339,13 @@ contract lives at `packaging/agent-workbench/npm-package.json`. It is an
 ordinary npm package: `npm install` builds the native modules
 (`tree-sitter`, `better-sqlite3`) from source the normal way — there is no
 custom installer, no copy-to-prefix step, and no POSIX shell on the path.
+The installed candidate is unreleased metadata-wise; for now use the latest
+published release URL (`v0.6.2`) in install commands.
 
 Install or refresh the runtime with:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.2/auriora-agent-workbench-0.6.2.tgz
 ```
 
 This runs `scripts/postinstall.mjs`, which records the runtime-root pointer file
@@ -319,12 +353,13 @@ under the per-OS state directory so the plugins' launch shim can find the
 runtime in place. Then register the Codex plugin:
 
 ```bash
-codex plugin add agent-workbench@auriora-local
+codex plugin marketplace add "$(npm root -g)/@auriora/agent-workbench/plugins/agent-workbench"
+codex plugin add agent-workbench@agent-workbench-local
 ```
 
 If the native build fails, it is a local toolchain issue. Ensure Python 3 and a
 C/C++ toolchain are installed, then on Node 24 use Node 22 or rebuild with
-`CXXFLAGS=-std=c++20` (`CL=/std:c++20` on Windows). From a source checkout you
+`CXXFLAGS=-std=c++20` (`_CL_=/std:c++20` on Windows). From a source checkout you
 can rebuild with `pnpm rebuild:native` (or
 `npm rebuild tree-sitter better-sqlite3`).
 
@@ -354,7 +389,7 @@ Codex plugin registration and should be run dry first.
 
 `npm install` exposes the `agent-workbench-mcp` bin
 (`packaging/agent-workbench/mcp-bin.mjs`), which launches the MCP stdio server
-straight from where npm installed the package — no copy, no prefix. The Codex
+from the installed compiled `dist/mcp/` tree — no copy, no prefix. The Codex
 and Claude plugins launch the same runtime through the portable `node`-based
 shim `plugins/agent-workbench/mcp-launch.mjs`, referenced in `.mcp.json` as
 `{"command": "node", "args": ["/abs/pkg/plugins/agent-workbench/mcp-launch.mjs"]}`
@@ -365,8 +400,12 @@ after npm `postinstall` materializes the installed package. Claude uses
 
 The shim resolves the runtime root from `AGENT_WORKBENCH_INSTALL_ROOT` (an
 override that means "the runtime root, or a checkout containing
-`src/mcp/stdio-entrypoint.mjs`") or, failing that, by reading the pointer file
-written by `postinstall`. Nothing is copied to a prefix.
+`dist/mcp/stdio-entrypoint.mjs`") or, failing that, by reading the pointer file
+written by `postinstall`. Nothing is copied to a prefix, and missing or stale
+compiled artifacts never fall back to the source wrappers. Packaging and the
+repo-local installer rebuild and validate the receipt; the lightweight launch
+shim checks that the compiled entrypoint exists. Rerun the installer after
+checkout source changes instead of treating an existing `dist/` tree as current.
 
 ## GHCR Package Installation
 
@@ -387,12 +426,13 @@ pnpm rebuild:native
 ```
 
 Native module installation requires Python 3, `make`, and a C/C++ compiler.
-Runtime dependencies must stay under `dependencies` in `package.json`; do not
-leave launcher-required packages such as `tsx` in `devDependencies`. The image
-entrypoint launches the MCP stdio server directly:
+Runtime dependencies must stay under `dependencies` in `package.json`; keep
+developer-only source wrappers and launch helpers out of the distributed
+runtime path. The image entrypoint launches the canonical compiled MCP stdio
+wrapper:
 
 ```text
-node --import tsx /opt/agent-workbench/src/mcp/stdio.ts
+node /opt/agent-workbench/dist/mcp/stdio-entrypoint.mjs
 ```
 
 Build and publish use the package containerfile:
@@ -540,16 +580,18 @@ the personal marketplace:
 
 ```bash
 npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
-codex plugin add agent-workbench@auriora-local
+codex plugin marketplace add "$(npm root -g)/@auriora/agent-workbench/plugins/agent-workbench"
+codex plugin add agent-workbench@agent-workbench-local
 ```
 
 If the MCP server fails because the runtime cannot be found, the runtime-root
 pointer is missing. Reinstall the npm package so `postinstall` rewrites the
-pointer, or set the runtime-root override explicitly:
+pointer, or set the runtime-root override explicitly after rebuilding and
+validating a checkout with the repo-local installer:
 
 ```bash
 npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y.Z/auriora-agent-workbench-X.Y.Z.tgz
-# or point the shim at a checkout that contains src/mcp/stdio-entrypoint.mjs:
+# or point the shim at a checkout after the repo-local installer succeeds:
 export AGENT_WORKBENCH_INSTALL_ROOT="$HOME/Projects/agent-workbench"
 ```
 
@@ -572,8 +614,9 @@ RCA checklist for this failure mode:
   session repo root.
 - Correct contract: source `.mcp.json` uses `${PLUGIN_ROOT}/mcp-launch.mjs`
   only as package input; installed `.mcp.json` uses an absolute `mcp-launch.mjs`
-  shim path and leaves `cwd` unset. The shim resolves the installed runtime root
-  separately and forwards Codex's session cwd as the default repo root.
+  shim path and leaves `cwd` unset. The shim resolves the installed runtime
+  root separately, expects the compiled `dist/mcp/stdio-entrypoint.mjs`
+  artifact to exist, and forwards Codex's session cwd as the default repo root.
 - Regression gates: `pnpm run validate:plugin` rejects a Codex MCP `cwd`, and
   `tests/integration/codex-integration-profile.test.ts` plus
   `tests/integration/mcp-launch.test.ts` assert the path-source split.
@@ -606,14 +649,22 @@ after capture.
 To uninstall the Codex plugin, remove the plugin entry from Codex:
 
 ```bash
-codex plugin remove agent-workbench@auriora-local
+codex plugin remove agent-workbench@agent-workbench-local
 ```
+
+For a checkout-only development registration, use the separately named
+`agent-workbench@auriora-local` selector instead.
 
 To uninstall the runtime entirely:
 
 ```bash
 npm uninstall -g @auriora/agent-workbench
 ```
+
+Rollback and stale-path repair use reinstall plus rematerialization, not source
+wrapper fallback. If the cached pointer or installed plugin paths drift, rerun
+the package install and refresh the plugin registration so the shim points back
+at the current compiled payload.
 
 ## Kiro Power Packaging
 
@@ -649,8 +700,8 @@ npm install -g https://github.com/Auriora/agent-workbench/releases/download/vX.Y
 export AGENT_WORKBENCH_INSTALL_ROOT="$(npm root -g --prefix "$agent_workbench_prefix")/@auriora/agent-workbench"
 ```
 
-The environment variable names the package root containing `src/`, not the npm
-global prefix. The MCP binding launches
+The environment variable names the package root containing a compiled `dist/`
+tree, not the npm global prefix. The MCP binding launches
 `plugins/agent-workbench/mcp-launch.mjs` directly with `node`; it has no shell
 or implicit home-directory fallback.
 

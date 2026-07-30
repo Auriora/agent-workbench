@@ -275,6 +275,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
       release_workflow_path: ".github/workflows/release-ghcr.yml",
       installed_components: [
         "src",
+        "dist/mcp",
         "docs",
         "plugins/agent-workbench",
         "plugins/agent-workbench/hooks",
@@ -369,7 +370,25 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         status: "supported",
         provenance: "runtime_source",
         regeneration_safe: false,
-        notes: ["Canonical executable MCP entrypoint."]
+        notes: ["Implementation detail for the canonical entrypoint; kept for in-repo maintenance only."]
+      },
+      {
+        target_agent: "codex",
+        surface: "mcp",
+        path: "src/mcp/stdio-entrypoint.mjs",
+        status: "supported",
+        provenance: "runtime_source",
+        regeneration_safe: false,
+        notes: ["Source wrapper entrypoint kept for checkout maintenance and developer execution."]
+      },
+      {
+        target_agent: "codex",
+        surface: "mcp",
+        path: "dist/mcp/stdio-entrypoint.mjs",
+        status: "supported",
+        provenance: "runtime_distribution",
+        regeneration_safe: false,
+        notes: ["Distributed runtime entrypoint used by packaged launchers and installed surfaces."]
       },
       {
         target_agent: "codex",

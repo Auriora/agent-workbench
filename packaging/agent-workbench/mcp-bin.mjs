@@ -11,8 +11,8 @@
 // portable mcp-launch.mjs shim.
 //
 // The bin lives inside the package, so it self-locates the runtime by relative
-// path and imports the entrypoint in-process (the entrypoint registers tsx
-// relative to its own file and prints an actionable hint on native-load errors).
+// path and imports the compiled entrypoint in-process.
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -25,4 +25,22 @@ if (!process.env.AGENT_WORKBENCH_DEFAULT_REPO_ROOT) {
   process.env.AGENT_WORKBENCH_DEFAULT_REPO_ROOT = process.cwd();
 }
 
-await import(path.join(packageRoot, "src", "mcp", "stdio-entrypoint.mjs"));
+const entrypoint = path.join(packageRoot, "dist", "mcp", "stdio-entrypoint.mjs");
+if (!fs.existsSync(entrypoint)) {
+  process.stderr.write(
+    "agent-workbench: missing compiled runtime entrypoint at dist/mcp/stdio-entrypoint.mjs. " +
+      "Run `node scripts/build-runtime.mjs` and reinstall this package before launching.\n"
+  );
+  process.exit(1);
+}
+
+try {
+  await import(entrypoint);
+} catch (error) {
+  process.stderr.write(
+    `agent-workbench: compiled runtime failed to start: ${
+      error instanceof Error ? error.message : String(error)
+    }\n`
+  );
+  process.exit(1);
+}

@@ -16,7 +16,7 @@
 //   3. If the native modules npm just built are unloadable, print an actionable
 //      hint. This is a thin bonus: when tree-sitter itself fails to compile, npm
 //      aborts the dependency build *before* this parent postinstall runs, so the
-//      authoritative hint lives at server launch (src/mcp/stdio-entrypoint.mjs)
+//      authoritative hint lives at server launch (dist/mcp/stdio-entrypoint.mjs)
 //      and in the README prerequisites.
 import { createRequire } from "node:module";
 import fs from "node:fs";

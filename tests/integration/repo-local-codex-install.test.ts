@@ -77,6 +77,7 @@ describe("repo-local Codex plugin installation", () => {
     );
 
     expect(result.status).toBe(0);
+    expect(result.stdout).toContain(`dry-run: node ${repoRoot}/scripts/build-runtime.mjs`);
     expect(result.stdout).toContain("materialize-codex-repo-plugin.mjs");
     expect(result.stdout).toContain(
       "install-codex-hooks.mjs --package-root"
@@ -182,5 +183,73 @@ describe("repo-local Codex plugin installation", () => {
         ]
       })
     ]);
+  });
+
+  it("stops before materialization or registration when the runtime build fails", () => {
+    const testRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-build-failure-"));
+    temporaryRoots.push(testRoot);
+    const fixtureRepo = path.join(testRoot, "checkout");
+    const fixtureScripts = path.join(fixtureRepo, "scripts");
+    const fakeBin = path.join(testRoot, "bin");
+    const stageRoot = path.join(testRoot, "stage");
+    const commandLog = path.join(testRoot, "commands.log");
+    fs.mkdirSync(fixtureScripts, { recursive: true });
+    fs.mkdirSync(fakeBin, { recursive: true });
+    fs.copyFileSync(
+      path.join(repoRoot, "scripts", "install-agent-workbench-repo-local.sh"),
+      path.join(fixtureScripts, "install-agent-workbench-repo-local.sh")
+    );
+
+    const fakeNode = path.join(fakeBin, "node");
+    fs.writeFileSync(
+      fakeNode,
+      [
+        "#!/usr/bin/env bash",
+        "printf 'node %s\\n' \"$*\" >> \"$FAKE_COMMAND_LOG\"",
+        "exit 23"
+      ].join("\n"),
+      "utf8"
+    );
+    fs.chmodSync(fakeNode, 0o755);
+
+    const fakeCodex = path.join(fakeBin, "codex");
+    fs.writeFileSync(
+      fakeCodex,
+      [
+        "#!/usr/bin/env bash",
+        "printf 'codex %s\\n' \"$*\" >> \"$FAKE_COMMAND_LOG\"",
+        "exit 0"
+      ].join("\n"),
+      "utf8"
+    );
+    fs.chmodSync(fakeCodex, 0o755);
+
+    const result = spawnSync(
+      "bash",
+      [
+        path.join(fixtureScripts, "install-agent-workbench-repo-local.sh"),
+        "--stage-root",
+        stageRoot,
+        "--codex-home",
+        path.join(testRoot, "codex-home")
+      ],
+      {
+        cwd: fixtureRepo,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          PATH: `${fakeBin}${path.delimiter}${process.env.PATH ?? ""}`,
+          FAKE_COMMAND_LOG: commandLog
+        }
+      }
+    );
+
+    expect(result.status).toBe(1);
+    expect(result.stdout).toContain("runtime build failed");
+    expect(fs.readFileSync(commandLog, "utf8").trim()).toContain(
+      "scripts/build-runtime.mjs"
+    );
+    expect(fs.readFileSync(commandLog, "utf8")).not.toContain("codex ");
+    expect(fs.existsSync(stageRoot)).toBe(false);
   });
 });

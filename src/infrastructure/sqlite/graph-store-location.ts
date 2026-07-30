@@ -7,8 +7,8 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
+import { GRAPH_STORE_IDENTITY_VERSION } from "../../contracts/graph-store-identity-contracts.js";
 
-export const GRAPH_STORE_IDENTITY_VERSION = 3;
 export const GRAPH_STORE_FILE_NAME = `graph-v${GRAPH_STORE_IDENTITY_VERSION}.sqlite`;
 export const PREVIOUS_GRAPH_STORE_FILE_NAME = "graph-v2.sqlite";
 export const LEGACY_GRAPH_STORE_FILE_NAME = "graph.sqlite";

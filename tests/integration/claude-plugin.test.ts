@@ -127,7 +127,7 @@ describe("Claude Code plugin artifacts", () => {
     ).toThrow(/exactly one startup SessionStart/u);
 
     const wrongLauncher = structuredClone(mcpConfig);
-    wrongLauncher.mcpServers["agent-workbench"].args = ["src/mcp/stdio.ts"];
+    wrongLauncher.mcpServers["agent-workbench"].args = ["dist/mcp/stdio-entrypoint.mjs"];
     expect(
       () => validator.validateClaudePlugin(packageJson, manifest, wrongLauncher, hooksConfig)
     ).toThrow(/plugin-root shim/u);
@@ -284,7 +284,7 @@ describe("Claude Code plugin artifacts", () => {
       "/repo"
     );
     expect(plan.root).toBe("/install/root");
-    expect(plan.args).toEqual([path.join("/install/root", "src", "mcp", "stdio-entrypoint.mjs")]);
+    expect(plan.args).toEqual([path.join("/install/root", "dist", "mcp", "stdio-entrypoint.mjs")]);
     expect(plan.options.env.AGENT_WORKBENCH_DEFAULT_REPO_ROOT).toBe("/repo");
 
     fs.rmSync(stage, { recursive: true, force: true });

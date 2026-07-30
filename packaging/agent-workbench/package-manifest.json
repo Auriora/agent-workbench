@@ -1,7 +1,7 @@
 {
   "name": "agent-workbench",
   "version": "0.6.2",
-  "release_status": "released",
+  "release_status": "unreleased",
   "latest_released_version": "0.6.2",
   "registry": "ghcr.io",
   "distribution": {
@@ -13,7 +13,7 @@
   "containerfile": "packaging/agent-workbench/Containerfile",
   "install_command": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.2/auriora-agent-workbench-0.6.2.tgz",
   "npm_bin": "packaging/agent-workbench/mcp-bin.mjs",
-  "entrypoint": "node --import tsx /opt/agent-workbench/src/mcp/stdio.ts",
+  "entrypoint": "node /opt/agent-workbench/dist/mcp/stdio-entrypoint.mjs",
   "dependency_install": {
     "package_manager": "pnpm@10.18.1",
     "node": ">=22",
@@ -38,13 +38,14 @@
       "tree-sitter-javascript",
       "tree-sitter-python",
       "tree-sitter-typescript",
-      "tsx",
       "yaml",
       "zod"
     ],
     "dev_dependencies": [
       "@types/better-sqlite3",
       "@types/node",
+      "esbuild",
+      "tsx",
       "typescript",
       "vitest"
     ],
@@ -60,6 +61,8 @@
   },
   "components": [
     "src",
+    "dist/mcp",
+    "dist/workers",
     "docs",
     "plugins/agent-workbench",
     "plugins/agent-workbench/claude-plugin",

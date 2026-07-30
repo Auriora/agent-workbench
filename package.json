@@ -43,6 +43,10 @@
     "scripts/postinstall.mjs",
     "scripts/rebuild-native.mjs",
     "src",
+    "dist/mcp/stdio-entrypoint.mjs",
+    "dist/mcp/daemon-entrypoint.mjs",
+    "dist/mcp/runtime-build-receipt.json",
+    "dist/workers/startup-graph-warmup-worker-entrypoint.mjs",
     "tsconfig.json"
   ],
   "engines": {
@@ -51,10 +55,13 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "build-runtime": "node scripts/build-runtime.mjs",
+    "build-runtime:check": "node scripts/build-runtime.mjs --check",
     "test:devcli": "python3 -m unittest discover -s tools/devcli/tests",
     "dev": "tsx src/index.ts",
-    "mcp": "node src/mcp/stdio-entrypoint.mjs",
+    "mcp": "node dist/mcp/stdio-entrypoint.mjs",
     "postinstall": "node scripts/postinstall.mjs",
+    "prepack": "node scripts/build-runtime.mjs --quiet",
     "debug:mcp-status": "tsx src/debug/mcp-status.ts",
     "debug:mcp-use-case": "tsx src/debug/mcp-use-case.ts",
     "debug:mcp-profile": "tsx src/debug/mcp-use-case.ts --profile",
@@ -80,13 +87,14 @@
     "tree-sitter-javascript": "^0.25.0",
     "tree-sitter-python": "^0.25.0",
     "tree-sitter-typescript": "^0.23.2",
-    "tsx": "^4.20.0",
     "yaml": "^2.9.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^24.0.0",
+    "esbuild": "^0.27.7",
+    "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vitest": "^4.1.5"
   },
