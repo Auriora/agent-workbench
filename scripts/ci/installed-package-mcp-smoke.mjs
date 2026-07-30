@@ -33,6 +33,7 @@ let installedPackageRootObserved;
 let daemonLaunchPossible = false;
 let daemonMetadataObserved = false;
 let currentPhase = "setup";
+let legacyReceipts;
 
 for (const directory of [packRoot, installRoot, stateRoot, runtimeRoot, npmCacheRoot]) {
   fs.mkdirSync(directory, { recursive: true });
@@ -72,7 +73,8 @@ let cleanup = {
   daemon_stopped: false,
   socket_removed: false,
   metadata_removed: false,
-  temporary_root_removed: false
+  temporary_root_removed: false,
+  legacy_receipts_untouched: false
 };
 
 try {
@@ -134,7 +136,8 @@ async function runSmoke() {
   const installedPackageContentSha256 = hashDirectory(installedPackageRoot);
 
   currentPhase = "fixture";
-  createWorkspaceFixture();
+  legacyReceipts = createWorkspaceFixture();
+  assert(assertLegacyReceiptsUntouched("legacy receipts are seeded"), "legacy receipts are seeded and untouched");
 
   currentPhase = "codex_session";
   const codex = trackSession(startInstalledSession({
@@ -143,13 +146,39 @@ async function runSmoke() {
     pluginVersion: installedManifest.version,
     startupRefreshDelayMs: 0
   }));
-  await initializeSession(codex, "codex");
-  const baselineStatus = await waitForFreshStatus(codex, undefined, 60_000);
-  const oldSnapshotId = requiredString(baselineStatus.data.snapshot_id, "baseline snapshot id");
+  const claude = trackSession(startInstalledSession({
+    binPath: installedBin,
+    provider: "claude_code",
+    pluginVersion: installedManifest.version,
+    startupRefreshDelayMs: 60_000
+  }));
+  currentPhase = "sessions_init";
+  const [
+    codexBaseline,
+    claudeBaseline
+  ] = await Promise.all([
+    initializeAndProbeSession({
+      session: codex,
+      provider: "codex",
+      expectedVersion: installedManifest.version
+    }),
+    initializeAndProbeSession({
+      session: claude,
+      provider: "claude_code",
+      expectedVersion: installedManifest.version
+    })
+  ]);
+  const codexBaselineStatus = codexBaseline.status;
+  const codexBaselineHealth = codexBaseline.health;
+  const claudeBaselineHealth = claudeBaseline.health;
+  const oldSnapshotId = requiredString(
+    codexBaselineStatus.data.snapshot_id,
+    "baseline snapshot id"
+  );
   if (injectedFailure === "post-launch-pre-health") {
     throw new Error("Injected post-launch pre-health failure.");
   }
-  const baselineHealth = await readHealth(codex);
+  const baselineHealth = codexBaselineHealth;
   const baselineDaemon = requiredDaemon(baselineHealth);
   const baselineWorkerInvocations = requiredNonNegativeInteger(
     baselineDaemon.worker_invocations,
@@ -162,20 +191,8 @@ async function runSmoke() {
     isInside(runtimeRoot, daemonSocketPath),
     "daemon socket is inside the isolated runtime directory"
   );
-
-  const claude = trackSession(startInstalledSession({
-    binPath: installedBin,
-    provider: "claude_code",
-    pluginVersion: installedManifest.version,
-    startupRefreshDelayMs: 60_000
-  }));
-  currentPhase = "claude_session";
-  await initializeSession(claude, "claude_code");
-
-  const [codexInitialHealth, claudeInitialHealth] = await Promise.all([
-    readHealth(codex),
-    readHealth(claude)
-  ]);
+  const codexInitialHealth = codexBaselineHealth;
+  const claudeInitialHealth = claudeBaselineHealth;
   assertProviderIdentity(codexInitialHealth, "codex", installedManifest.version);
   assertProviderIdentity(claudeInitialHealth, "claude_code", installedManifest.version);
   const codexInitialDaemon = requiredDaemon(codexInitialHealth);
@@ -319,6 +336,7 @@ async function runSmoke() {
     snapshotId: replacementSnapshotId
   });
 
+  assert(assertLegacyReceiptsUntouched("legacy receipts are preserved for cleanup"), "legacy receipts are preserved for cleanup");
   assertSessionsQuiet();
   currentPhase = "bridge_lifecycle";
   const bridgeLifecycle = {
@@ -640,6 +658,41 @@ function createWorkspaceFixture() {
       ""
     ].join("\n")
   );
+
+  const legacyMetadataDir = path.join(workspaceRoot, ".cache", "agent-workbench", "daemon");
+  const legacyDaemonJsonPath = path.join(legacyMetadataDir, "daemon.json");
+  const legacyStartupLockPath = path.join(legacyMetadataDir, "startup.lock");
+  const seededAt = new Date().toISOString();
+  const identity = {
+    repoRoot: path.resolve(workspaceRoot),
+    runtimeVersion: "legacy-runtime",
+    schemaVersion: 1,
+    protocolVersion: 1,
+    id: crypto.createHash("sha256")
+      .update(path.resolve(workspaceRoot))
+      .digest("hex")
+      .slice(0, 24)
+  };
+  const legacyPid = process.pid;
+  fs.mkdirSync(legacyMetadataDir, { recursive: true });
+  fs.writeFileSync(legacyDaemonJsonPath, `${JSON.stringify({
+    identity,
+    pid: legacyPid,
+    socketPath: path.join(runtimeRoot, "legacy-daemon.sock"),
+    createdAt: seededAt
+  })}\n`);
+  fs.writeFileSync(legacyStartupLockPath, `${JSON.stringify({
+    pid: legacyPid,
+    created_at: seededAt,
+    token: "legacy-installed-package-smoke"
+  })}\n`);
+  return {
+    daemonJsonPath: legacyDaemonJsonPath,
+    startupLockPath: legacyStartupLockPath,
+    daemonJsonHash: hashFile(legacyDaemonJsonPath),
+    startupLockHash: hashFile(legacyStartupLockPath),
+    legacyPid
+  };
 }
 
 function startInstalledSession(input) {
@@ -799,6 +852,53 @@ async function initializeSession(session, provider) {
   session.notify("notifications/initialized", {});
 }
 
+async function initializeAndProbeSession({ session, provider, expectedVersion }) {
+  await initializeSession(session, provider);
+  const [
+    tools,
+    resources,
+    status,
+    scope,
+    health,
+    probe
+  ] = await Promise.all([
+    listTools(session, provider),
+    listResources(session, provider),
+    waitForFreshStatus(session, undefined, 60_000),
+    readResource(session, "repo:///scope"),
+    readHealth(session),
+    callTool(session, "find_references", {
+      symbol: "helper",
+      max_depth: 1,
+      max_results: 1
+    })
+  ]);
+  assert(scope.data?.repo_root === path.resolve(workspaceRoot), `${provider} scoped repo_root matches fixture`);
+  assert(status.data?.repo_root === path.resolve(workspaceRoot), `${provider} status repo_root matches fixture`);
+  assert(Array.isArray(tools), `${provider} tools/list returns tool results`);
+  assert(Array.isArray(resources), `${provider} resources/list returns resource results`);
+  assert(tools.some((tool) => tool.name === "docs_search"), `${provider} advertises docs_search`);
+  assert(resources.some((resource) => resource.uri === "repo:///scope"), `${provider} exposes repo:///scope`);
+  assert(typeof probe.data?.snapshot_id === "string", `${provider} probe call returns a snapshot id`);
+  assert(health.data?.repo_root === path.resolve(workspaceRoot), `${provider} health repo_root matches fixture`);
+  assertProviderIdentity(health, provider, expectedVersion);
+  return { status, health };
+}
+
+async function listTools(session, provider) {
+  const response = await session.call("tools/list", {}, 30_000);
+  const tools = response.result?.tools;
+  assert(Array.isArray(tools), `${provider} tools/list returns an array`);
+  return tools;
+}
+
+async function listResources(session, provider) {
+  const response = await session.call("resources/list", {}, 30_000);
+  const resources = response.result?.resources;
+  assert(Array.isArray(resources), `${provider} resources/list returns an array`);
+  return resources;
+}
+
 async function readStatus(session) {
   return parseEnvelope(await session.call("resources/read", { uri: "repo:///status" }, 30_000));
 }
@@ -813,6 +913,10 @@ async function readHealth(session) {
 
 async function callTool(session, name, args) {
   return parseEnvelope(await session.call("tools/call", { name, arguments: args }, 30_000));
+}
+
+async function readResource(session, uri) {
+  return parseEnvelope(await session.call("resources/read", { uri }, 30_000));
 }
 
 function parseEnvelope(message) {
@@ -925,6 +1029,7 @@ function assertSessionsQuiet() {
 
 async function cleanupSmoke() {
   const metadataDir = path.join(workspaceRoot, ".cache", "agent-workbench", "daemon");
+  let legacyReceiptsUntouched = false;
   let clientsClosed = false;
   let daemonStopped = false;
   let socketRemoved = false;
@@ -963,6 +1068,7 @@ async function cleanupSmoke() {
   } catch {
     socketRemoved = false;
   }
+  legacyReceiptsUntouched = assertLegacyReceiptsUntouched("legacy receipts (pre-cleanup)");
   if (daemonStopped) {
     try { fs.rmSync(metadataDir, { recursive: true, force: true }); } catch { /* reported below */ }
   }
@@ -982,8 +1088,30 @@ async function cleanupSmoke() {
     daemon_stopped: daemonStopped,
     socket_removed: socketRemoved,
     metadata_removed: metadataRemoved,
-    temporary_root_removed: temporaryRootRemoved
+    temporary_root_removed: temporaryRootRemoved,
+    legacy_receipts_untouched: legacyReceiptsUntouched
   };
+}
+
+function hashFile(filePath) {
+  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+}
+
+function assertLegacyReceiptsUntouched(label) {
+  if (!legacyReceipts) {
+    return true;
+  }
+  try {
+    assert(Number.isInteger(legacyReceipts.legacyPid) && legacyReceipts.legacyPid > 0, `${label}: legacy pid is positive`);
+    assert(legacyReceipts.legacyPid === process.pid, `${label}: legacy pid matches the smoke parent process`);
+    assert(fs.existsSync(legacyReceipts.daemonJsonPath), `${label}: legacy daemon.json is present`);
+    assert(fs.existsSync(legacyReceipts.startupLockPath), `${label}: legacy startup.lock is present`);
+    assert(hashFile(legacyReceipts.daemonJsonPath) === legacyReceipts.daemonJsonHash, `${label}: legacy daemon.json is unchanged`);
+    assert(hashFile(legacyReceipts.startupLockPath) === legacyReceipts.startupLockHash, `${label}: legacy startup.lock is unchanged`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function discoverDaemonMetadata(metadataDir) {

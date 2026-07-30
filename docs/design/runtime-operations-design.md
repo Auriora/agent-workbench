@@ -250,20 +250,25 @@ process owns the repo.
 
 Daemon identity is derived from canonical repo root, runtime version, graph
 schema version, and daemon protocol version. The IPC endpoint is local-only:
-Unix domain sockets on POSIX and named pipes on Windows. Repo-local metadata
-under `.cache/agent-workbench/daemon/` records PID, socket or pipe path, and
+Unix domain sockets on POSIX and named pipes on Windows. Repo-local lifecycle
+receipts and startup locks under `.cache/agent-workbench/daemon/` use the short
+identity hash in their filenames and record PID, socket or pipe path, and
 identity evidence; live daemon health reports connected client count, warm-up
-state, graph freshness, and last failure when available. Socket paths use a
-short identity hash under an owner-only OS temp directory on POSIX to avoid
-path-length failures; Windows named pipes use the same identity hash in the
-pipe name.
+state, graph freshness, and last failure when available. Socket paths use the
+same short identity hash under an owner-only OS temp directory on POSIX to
+avoid path-length failures; Windows named pipes use it in the pipe name.
 
-Cold daemon startup is serialized with a repo-local startup lock so parallel
-agent clients and same-session sub-agents elect one daemon starter. Stale owner
-cleanup requires positive evidence. The launcher may remove stale socket
-metadata only when PID and socket evidence prove the owner is gone. Ambiguous
-evidence must produce a structured blocked state rather than destructive
-cleanup.
+Cold daemon startup is serialized with an identity-scoped repo-local startup
+lock so parallel agent clients and same-session sub-agents using the same
+runtime identity elect one daemon starter. During a rolling upgrade, an older
+runtime identity may continue serving retained bridges while the current
+identity starts independently; their graph-refresh work remains serialized by
+the repository ownership lease. Legacy unsuffixed admission files remain owned
+by the runtime that created them and are neither overwritten nor deleted by a
+new runtime. Stale owner cleanup requires positive evidence. The launcher may
+remove stale socket metadata only when PID and socket evidence prove the owner
+is gone. Ambiguous evidence must produce a structured blocked state rather than
+destructive cleanup.
 
 The daemon metadata record is also the authoritative cold-start lifecycle
 receipt. It moves through `starting`, `ready`, or terminal `failed` state and

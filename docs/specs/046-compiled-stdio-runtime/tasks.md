@@ -14,7 +14,7 @@ last_reviewed: 2026-07-30
 ## Task Dependency Graph
 
 ```text
-T001 -> T002 -> T003 -> T004 -> T005
+T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
 ```
 
 ## Specification and review
@@ -102,6 +102,43 @@ T001 -> T002 -> T003 -> T004 -> T005
     targeted tests, the 103-file/1,109-test serial suite, plugin/package checks,
     installed/package launch smokes, repo-local installation, patch quality,
     and lifecycle evidence checks passed.
+
+- [x] T006 Isolate daemon admission state across installed runtime identities.
+  - Depends on: T005
+  - Requirements: Requirement 5
+  - Property: CP-005
+  - Files: daemon client path derivation, daemon launch tests, durable runtime
+    contracts, Spec 046 traceability and verification
+  - Acceptance: current-runtime startup ignores but does not mutate a live
+    legacy receipt; different daemon identities use different receipt and lock
+    paths; same-identity parallel clients retain one launch.
+  - Validation: focused daemon launch and entrypoint integration tests.
+  - Evidence mode: validation
+  - Evidence: Runtime logs from 2026-07-30 show installed v0.6.4 bridges exiting
+    before MCP initialize because a shared legacy v0.6.2 receipt was classified
+    as `blocked: ambiguous_process`. Identity-scoped receipt/lock paths and
+    legacy non-interference coverage passed in the 49-test daemon-launch suite
+    and the broader 75-test daemon/stdio suite.
+
+- [x] T007 Validate, independently review, package, and live-test the regression
+  fix.
+  - Depends on: T006
+  - Requirements: Requirement 5
+  - Property: CP-005
+  - Files: implementation, tests, package artifact, durable docs, verification
+  - Acceptance: targeted and full validation pass; installed-package concurrent
+    handshakes pass with legacy admission state present; independent review has
+    no unresolved blocker.
+  - Evidence mode: validation
+  - Evidence: `pnpm typecheck`, the 103-file/1,111-test serial suite, plugin
+    validation, package dry-run, and the installed-tarball smoke passed. The
+    installed smoke seeded positively live unsuffixed legacy admission files,
+    initialized two concurrent compiled sessions through tools/resources/call
+    probes, proved both shared one current daemon, preserved both legacy files
+    byte-for-byte, and completed cleanup. Independent architecture review had
+    no finding; QA and operations review findings about evidence state,
+    released-versus-worktree wording, and identity-input coverage were
+    reconciled before completion.
 
 ## Execution Rules
 

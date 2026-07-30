@@ -11,7 +11,7 @@ last_reviewed: 2026-07-30
 
 ## Scope
 
-This record covers Spec 046 Requirements 1-4 and tasks T001-T005.
+This record covers Spec 046 Requirements 1-5 and tasks T001-T007.
 
 ## Quality Gates
 
@@ -26,6 +26,21 @@ This record covers Spec 046 Requirements 1-4 and tasks T001-T005.
 | Same-host resource/module observation | yes | passed | Source 94,412 KiB RSS; compiled 56,092 KiB RSS; configured `max_threads = 6`, `max_depth = 1`. |
 | Durable documentation promotion | yes | passed | Runtime design, integration design, and Codex runbook updated. |
 | Final work-product review | yes | passed | Architecture, QA, documentation, and operations reviews completed; every blocker was implemented and warnings were fixed or reconciled to the lightweight-launch boundary with explicit operator guidance. |
+| Rolling-upgrade admission regression | yes | passed | Runtime logs identified `blocked: ambiguous_process` against legacy v0.6.2 daemon state during v0.6.4 agent startup. Identity-scoped admission passed focused/full tests and an installed-tarball smoke with concurrent sessions plus preserved live legacy files. |
+
+## Requirement 5 Regression Validation
+
+| Command or evidence | Result | Requirement 5 boundary proved |
+|---------------------|--------|-------------------------------|
+| `pnpm exec vitest run tests/mcp/daemon-launch.test.ts` | passed; 49 tests | Identity composition, identity-scoped receipt/lock paths, live legacy non-interference, and existing same-identity convergence. |
+| focused daemon/stdio suite | passed; 3 files and 75 tests | Daemon entrypoint and stdio lifecycle behavior remained compatible. |
+| `pnpm typecheck` | passed | Changed TypeScript contracts compile. |
+| `pnpm exec vitest run --maxWorkers=1` | passed; 103 files and 1,111 tests | Full regression after removing one exact ignored fixture cache created by an earlier live handshake; the affected golden test and full suite both passed on rerun. |
+| `pnpm validate:plugin` | passed | Packaged plugin paths and manifests remain coherent. |
+| `pnpm pack:dry-run` | passed | The generated compiled artifacts and receipt are included in the package payload. |
+| `CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs` | passed | The installed tarball preserved positively live unsuffixed legacy files while two concurrent sessions initialized, listed tools/resources, called tools, and shared one current daemon; EOF and cleanup checks passed. |
+| independent code architecture review | passed; no findings | The fix stays in path derivation and reuses existing lifecycle, cleanup, and graph-ownership paths. |
+| independent specification/QA and operations/documentation reviews | findings reconciled | Corrected lifecycle-readiness evidence, released-versus-v0.6.5 wording, and direct coverage of identity hash inputs. |
 
 ## Planned Validation
 
@@ -62,6 +77,8 @@ This record covers Spec 046 Requirements 1-4 and tasks T001-T005.
 | T003 | complete | all distributed surfaces and POSIX repo-local installation migrated and validated |
 | T004 | complete | durable owners promoted; host-local resource/cardinality evidence recorded |
 | T005 | complete | final reviews reconciled; full serial regression, packaging/install smokes, local install, and lifecycle checks passed |
+| T006 | complete | confirmed cross-version shared-receipt collision; identity-scoped admission and focused tests passed |
+| T007 | complete | full validation, installed-package concurrency smoke, independent review, and evidence reconciliation passed |
 
 ## Requirement and Property Coverage
 
@@ -71,6 +88,7 @@ This record covers Spec 046 Requirements 1-4 and tasks T001-T005.
 | Requirement 2 / CP-004 | T002-T003 receipt, missing/stale artifact, package, and installer-failure checks | post-build validation, package dry-run, and negative tests passed | checkout snapshots require reinstall after source changes |
 | Requirement 3 / CP-001 | T003 launch-surface, provider, root, argv, Windows-plan, POSIX-execve, and bounded-error checks | plugin validation, focused/full tests, source launch, and installed smoke passed | live provider CLI discovery remains separate from provider-labelled MCP sessions |
 | Requirement 4 | T004 controlled process observation and durable documentation | same-host module/RSS measurement and Markdown set check recorded | provider configuration determines open bridge cardinality |
+| Requirement 5 / CP-005 | T006-T007 identity-scoped receipt and startup-lock paths | focused/full/package tests and installed concurrent handshake smoke passed | retained old-runtime daemons may coexist until their provider sessions close |
 
 ## Evidence Log
 
@@ -85,6 +103,8 @@ This record covers Spec 046 Requirements 1-4 and tasks T001-T005.
 | 2026-07-30 | same-host controlled bridge observation | observed | Source `tsx` bridge: 94,412 KiB RSS; compiled bridge: 56,092 KiB RSS; 38,320 KiB (40.6%) lower. With configured six spawned threads plus the primary, the illustrative seven-bridge saving is about 262 MiB; exact bridge count is provider-owned. |
 | 2026-07-30 | final architecture, QA, documentation, and operations review | reviewed and reconciled | Enforced post-build receipt checking, added `tsconfig.json`, narrowed cleanup, added installer and npm-bin negative tests, corrected Windows/container docs, and clarified that checkout currency is established by reinstall rather than per-connection rehashing. |
 | 2026-07-30 | final validation and repo-local installation | passed | Focused 29-test run, typecheck, 103-file/1,109-test serial regression, plugin validation, package dry-run, installed/package launch smokes, repo-local Codex installation, and patch-quality check passed; Markdown findings were non-blocking table-readability warnings. |
+| 2026-07-30 | Codex MCP launcher logs for other agents after v0.6.4 reload | failed and diagnosed | Each generic initialize-response closure was preceded by `Agent Workbench daemon is blocked: ambiguous_process`; the same repository retained a v0.6.2 shared daemon receipt, proving a cross-version admission collision rather than an MCP protocol error. |
+| 2026-07-30 | Requirement 5 regression validation and work-product review | passed and reconciled | Focused/full/package/installed checks passed. Architecture review had no findings; QA/operations blockers and warning were corrected before task completion. |
 
 ## Scope Reconciliation Before Closure
 
@@ -93,6 +113,7 @@ This record covers Spec 046 Requirements 1-4 and tasks T001-T005.
 | compiled bridge, daemon, and graph worker | yes | covered | none | Spec 046 | no |
 | all distributed launch surfaces | yes | covered | none | Spec 046 | no |
 | provider-owned session cleanup | no | out-of-scope | task-completion lifecycle belongs to provider | provider integration owner | no |
+| rolling runtime upgrade admission | yes | covered | killing or adopting a valid older daemon remains rejected | Spec 046 | no |
 | portable exact RSS limit | no | out-of-scope | environment-dependent and misleading | rejected with rationale | no |
 
 ## Residual Risks
@@ -123,7 +144,8 @@ This record covers Spec 046 Requirements 1-4 and tasks T001-T005.
   only if a client later exposes that capability; it is not an internal stdio
   pooling change
 - **Ready for promotion:** yes
-- **Ready for release:** no
+- **Ready for release:** yes; release preparation, tag, CI, and installed release
+  verification remain external execution evidence
 - **Ready for closure:** yes, but not executed in this slice
 
 ## Durable Promotion and Cleanup
@@ -133,6 +155,7 @@ This record covers Spec 046 Requirements 1-4 and tasks T001-T005.
 | Compiled distribution and runtime ownership | `docs/design/runtime-operations-design.md` | complete |
 | Provider bridge cardinality and launch behavior | `docs/design/coding-agent-integration-design.md` | complete |
 | Install, rebuild, diagnosis, and rollback | `docs/runbooks/codex-agent-workbench-plugin.md` | complete |
+| Rolling-upgrade daemon admission contract | `docs/reference/runtime-contracts.md`, `docs/design/runtime-operations-design.md`, and `docs/runbooks/codex-agent-workbench-plugin.md` | complete |
 
 ### Spec Cleanup Decision
 

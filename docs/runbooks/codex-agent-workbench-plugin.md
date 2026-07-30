@@ -169,10 +169,15 @@ The plugin should not create a host-level Agent Workbench MCP block in
 
 ### Bridge process interpretation
 
-Expect one daemon per active repository and one stdio bridge per open client or
-sub-agent session. Four repository daemons can therefore be correct in a
-multi-repository workspace. A bridge with a live writer on file descriptor 0
-and a connected daemon socket is active; a bridge with neither is orphaned.
+Expect one daemon per active repository and compatible runtime identity, plus
+one stdio bridge per open client or sub-agent session. Four repository daemons
+can therefore be correct in a multi-repository workspace. During a rolling
+upgrade, retained older-runtime sessions can temporarily keep an older daemon
+beside the current daemon for the same repository; identity-scoped receipts,
+startup locks, and endpoints prevent admission collisions while the repository
+graph lease still serializes refresh ownership. A bridge with a live writer on
+file descriptor 0 and a connected daemon socket is active; a bridge with
+neither is orphaned.
 
 Codex agent-thread concurrency and nesting configuration can increase the
 number of simultaneous or retained sub-agent MCP connections. Record those
@@ -182,6 +187,14 @@ not evidence that Agent Workbench spawned additional repository daemons.
 Released version `0.6.2` used a resumed-stdin/timer keepalive and can leave such
 orphan bridges after the controlling client disappears. RSS and swap are useful
 diagnostics, but connection ownership determines whether a bridge is stale.
+
+Versions through `0.6.4` also used shared unsuffixed `daemon.json` and
+`startup.lock` files. A retained older daemon could therefore make a newly
+installed runtime report `blocked: ambiguous_process`, surfaced by Codex as a
+closed initialize response. The v0.6.5 implementation uses identity-scoped
+admission and ignores those legacy files without deleting or killing their
+possible owner; this behavior applies only after v0.6.5 or a later package is
+installed and the client starts a new MCP session.
 
 Inspect an exact PID with `ls -l /proc/<pid>/fd/0` and correlate Unix sockets
 with `ss -xnp`. Only send `SIGTERM` to an exact, confirmed orphan bridge PID.

@@ -164,6 +164,33 @@ memory guarantee.
    nesting depth as cardinality inputs, distinguish them from Agent Workbench
    daemon count, and avoid treating a fixed bridge count as a runtime invariant.
 
+### Requirement 5: Rolling runtime upgrade isolation
+
+**User Story:** As an operator upgrading Agent Workbench while older coding-agent
+sessions remain open, I want each runtime identity to own independent daemon
+admission state, so that new agents can initialize without disrupting valid
+older sessions.
+
+**Priority:** must-have
+
+#### Acceptance Criteria
+
+1. Daemon lifecycle receipts and startup locks SHALL be scoped by the existing
+   daemon identity, including runtime version, graph schema version, daemon
+   protocol version, and canonical repository root.
+2. GIVEN a live daemon receipt owned by a different runtime identity, WHEN a
+   current-runtime bridge starts for the same repository, THEN the bridge SHALL
+   elect or connect to its own identity-compatible daemon instead of returning
+   `ambiguous_process`.
+3. Concurrent bridges with the same daemon identity SHALL continue to converge
+   on one daemon launch.
+4. A current runtime SHALL neither delete nor overwrite legacy unsuffixed
+   daemon receipts and startup locks that may still be owned by an older
+   installed runtime.
+5. Cross-version daemon admission SHALL NOT create a second graph-refresh
+   ownership path; repository ownership remains serialized by the existing
+   daemon-owned graph lease.
+
 ## Correctness Properties
 
 - **CP-001:** Every distributed launch surface resolves one compiled stdio
@@ -175,6 +202,9 @@ memory guarantee.
   forbidden heavy-runtime dependency.
 - **CP-004:** For any source revision, packaging validation either proves the
   generated artifacts were built from that revision or fails before packaging.
+- **CP-005:** Daemon admission state for two unequal daemon identities cannot
+  collide, while equal identities still share exactly one receipt and startup
+  lock.
 
 ## Technical Context
 

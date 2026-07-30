@@ -258,8 +258,13 @@ test control. The value is a nonnegative safe integer in milliseconds; zero is
 valid, malformed values refuse daemon startup, and the default is 1000. It is
 not a provider-specific mode or a second refresh path.
 
-Repo-local daemon metadata is a complete atomic lifecycle receipt with exactly
-one of these states:
+Repo-local daemon metadata is a complete atomic lifecycle receipt scoped to one
+daemon identity. Its filename and matching startup lock contain the same short
+identity hash used by the IPC endpoint, so retained older-runtime sessions
+cannot block or overwrite admission for a newly installed runtime. Legacy
+unsuffixed receipts and locks remain owned by their creating runtime and are
+ignored, not destructively migrated, by current admission. Each receipt has
+exactly one of these states:
 
 - `starting`: one identified process and launch attempt owns cold startup; a
   bounded phase may explain which pre-listen boundary is active.
@@ -270,15 +275,15 @@ one of these states:
 
 The receipt carries daemon identity, launch-attempt identity, PID, endpoint,
 creation and update times, and state-specific evidence. Concurrent launchers
-must not interpret PID existence, phase movement, or socket-file existence by
-itself as readiness. Lifecycle writes are atomic, and startup uses one
-monotonic absolute deadline that is not reset by progress. A positively live
-`starting` receipt prevents another spawn even after one caller reaches its
-deadline; only positive dead-process evidence permits guarded cleanup and
-re-election within the original deadline. Loss of a previously ready receipt
-also returns the caller to the same guarded election path. Shutdown cleanup
-holds startup exclusion and removes metadata only when its launch-attempt token
-still matches.
+for the same identity must not interpret PID existence, phase movement, or
+socket-file existence by itself as readiness. Lifecycle writes are atomic, and
+startup uses one monotonic absolute deadline that is not reset by progress. A
+positively live `starting` receipt prevents another same-identity spawn even
+after one caller reaches its deadline; only positive dead-process evidence
+permits guarded cleanup and re-election within the original deadline. Loss of a
+previously ready receipt also returns the caller to the same guarded election
+path. Shutdown cleanup holds same-identity startup exclusion and removes
+metadata only when its launch-attempt token still matches.
 
 Daemon or graph-store startup failures use existing envelope vocabulary:
 incompatible or missing daemon identity maps to `invalid_due_to_environment`;

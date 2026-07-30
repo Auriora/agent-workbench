@@ -33,6 +33,7 @@ last_reviewed: 2026-07-30
 | Replace distributed source-wrapper launch | modify | package/plugin/container manifests | integration design and runbook | yes |
 | Build repository-local candidate before registration | modify | repo-local installer/materializer | Codex runbook | yes |
 | Add resource and module evidence | add | live verification | runbook and verification | yes |
+| Isolate rolling-upgrade daemon admission | modify | shared repo-local receipt and startup lock | runtime contracts, runtime operations design, and runbook | yes |
 
 ## Affected Surfaces
 
@@ -41,6 +42,7 @@ last_reviewed: 2026-07-30
 - npm bin and portable plugin shims
 - Codex, Claude Code, and Kiro package path assertions
 - repository-local installation
+- repo-local daemon lifecycle receipts and startup locks
 - container entrypoint and build
 - package/plugin integration profile and smoke tests
 
@@ -49,7 +51,7 @@ last_reviewed: 2026-07-30
 | Area | Reason unchanged |
 |------|------------------|
 | MCP request/response contracts | Compilation does not alter schemas or public tools/resources. |
-| daemon identity and graph schema | Existing values and compatibility remain authoritative. |
+| daemon identity and graph schema | Existing identity inputs and compatibility remain authoritative; admission files now honor that identity boundary. |
 | bridge lifecycle semantics | Spec 045 transport-owned teardown remains unchanged. |
 | parser and SQLite behavior | Same daemon source is compiled; native dependencies remain external. |
 | provider session lifecycle | Still-open connections remain provider-owned. |
@@ -62,6 +64,7 @@ last_reviewed: 2026-07-30
 | compiled runtime/build ownership | `docs/design/runtime-operations-design.md` | complete |
 | canonical distributed launch path | `docs/design/coding-agent-integration-design.md` | complete |
 | install/build/diagnosis/rollback | `docs/runbooks/codex-agent-workbench-plugin.md` | complete |
+| rolling-upgrade daemon admission | runtime contracts, runtime operations design, and Codex runbook | complete |
 
 ## Related Artifacts
 

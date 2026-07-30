@@ -150,8 +150,8 @@ export function daemonPaths(identity: AgentWorkbenchDaemonIdentity): DaemonPaths
     ipcDir,
     socketPath,
     metadataDir,
-    metadataPath: path.join(metadataDir, DAEMON_METADATA_FILE),
-    startupLockPath: path.join(metadataDir, DAEMON_STARTUP_LOCK_FILE)
+    metadataPath: path.join(metadataDir, `${shortHash}-${DAEMON_METADATA_FILE}`),
+    startupLockPath: path.join(metadataDir, `${shortHash}-${DAEMON_STARTUP_LOCK_FILE}`)
   };
 }
 

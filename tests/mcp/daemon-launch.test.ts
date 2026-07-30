@@ -4,6 +4,7 @@
  */
 
 import fs from "node:fs";
+import crypto from "node:crypto";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -629,6 +630,117 @@ describe("Agent Workbench daemon launcher", () => {
           resolve();
         });
       });
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  });
+
+  it("uses identity-scoped metadata and startup-lock paths for startup convergence", () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-identity-paths-");
+    const identity = createDaemonIdentity(repoRoot);
+    const sameIdentity = daemonPaths(identity);
+    const alternateIdentity = {
+      ...identity,
+      runtimeVersion: "0.0.0-legacy",
+      id: `alternate-${identity.id.slice(12)}`
+    };
+    const alternate = daemonPaths(alternateIdentity);
+    const shortHash = identity.id.slice(0, 24);
+    const alternateHash = alternateIdentity.id.slice(0, 24);
+    const expectedIdentityId = crypto.createHash("sha256").update([
+      identity.repoRoot,
+      identity.runtimeVersion,
+      String(identity.schemaVersion),
+      String(identity.protocolVersion)
+    ].join("\0")).digest("hex");
+
+    try {
+      expect(identity.id).toBe(expectedIdentityId);
+      expect(sameIdentity.metadataPath).toBe(path.join(
+        sameIdentity.metadataDir,
+        `${shortHash}-daemon.json`
+      ));
+      expect(sameIdentity.startupLockPath).toBe(path.join(
+        sameIdentity.metadataDir,
+        `${shortHash}-startup.lock`
+      ));
+      expect(alternate.metadataPath).toBe(path.join(
+        alternate.metadataDir,
+        `${alternateHash}-daemon.json`
+      ));
+      expect(alternate.startupLockPath).toBe(path.join(
+        alternate.metadataDir,
+        `${alternateHash}-startup.lock`
+      ));
+      expect(sameIdentity.metadataPath).not.toBe(alternate.metadataPath);
+      expect(sameIdentity.startupLockPath).not.toBe(alternate.startupLockPath);
+      expect(daemonPaths(createDaemonIdentity(repoRoot)).metadataPath).toBe(sameIdentity.metadataPath);
+      expect(sameIdentity.metadataDir).toBe(alternate.metadataDir);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("starts a new daemon when only a legacy unsuffixed receipt exists", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-legacy-unsuffixed-receipt-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    const legacyMetadataPath = path.join(
+      paths.metadataDir,
+      "daemon.json"
+    );
+    const legacyStartupLockPath = path.join(
+      paths.metadataDir,
+      "startup.lock"
+    );
+    const daemons: StartedAgentWorkbenchDaemon[] = [];
+    let starts = 0;
+
+    try {
+      fs.mkdirSync(paths.metadataDir, { recursive: true });
+      if (process.platform !== "win32") {
+        fs.mkdirSync(paths.ipcDir, { recursive: true });
+      }
+      const startedAt = "2026-07-05T00:00:00.000Z";
+      fs.writeFileSync(legacyMetadataPath, `${JSON.stringify({
+        identity,
+        pid: process.pid,
+        socketPath: paths.socketPath,
+        createdAt: startedAt
+      })}\n`);
+      fs.writeFileSync(legacyStartupLockPath, `${JSON.stringify({
+        pid: process.pid,
+        created_at: startedAt,
+        token: "legacy-token"
+      })}\n`);
+
+      const socket = await connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 2500,
+        spawnDaemon: () => {
+          starts += 1;
+          void startAgentWorkbenchDaemon({
+            repoRoot,
+            idleGraceMs: 100,
+            serverOptions: { startupRefreshDelayMs: 60_000 }
+          }).then((daemon) => daemons.push(daemon));
+          return fakeChildProcess();
+        }
+      });
+      socket.destroy();
+
+      expect(starts).toBe(1);
+      expect(fs.existsSync(paths.metadataPath)).toBe(true);
+      expect(fs.existsSync(legacyMetadataPath)).toBe(true);
+      expect(fs.existsSync(legacyStartupLockPath)).toBe(true);
+      expect(safeReadJson(paths.metadataPath)).toMatchObject({
+        identity: {
+          id: identity.id
+        }
+      });
+    } finally {
+      await closeDaemons(daemons);
       fs.rmSync(repoRoot, { recursive: true, force: true });
       fs.rmSync(paths.ipcDir, { recursive: true, force: true });
     }

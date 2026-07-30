@@ -94,6 +94,22 @@ contract and is what users execute.
 There is no launch-time source fallback. Missing compiled output is a clear
 installation/package defect.
 
+### D005: Scope daemon admission state by daemon identity
+
+Use the existing short daemon-identity hash in the repo-local lifecycle receipt
+and startup-lock filenames. The IPC endpoint is already scoped by that identity;
+the receipt and lock use the same boundary.
+
+This permits an older daemon to finish serving retained older-runtime bridges
+while newly started bridges elect a daemon compatible with the newly installed
+runtime. The new runtime does not delete, overwrite, adopt, or signal the older
+runtime's unsuffixed `daemon.json` or `startup.lock`. Same-identity clients still
+share one receipt and lock, preserving the existing single-election behavior.
+
+Daemon admission isolation does not duplicate graph refresh ownership. Daemons
+for different runtime identities still use the existing repository ownership
+lease and derived-store compatibility rules.
+
 ## Components and Changes
 
 ### Runtime builder
@@ -108,6 +124,18 @@ Add `scripts/build-runtime.mjs`:
 - fail non-zero on compilation errors.
 
 The builder must not write outside `dist/`.
+
+### Daemon admission paths
+
+`daemonPaths(identity)` derives both the lifecycle receipt filename and startup
+lock filename from the same short identity hash already used by the POSIX
+socket directory and Windows named pipe. The metadata directory remains
+`.cache/agent-workbench/daemon/`; only the files within it are identity-scoped.
+
+Legacy unsuffixed admission files remain owned by the runtime that created
+them. They are ignored by current admission and may disappear only through
+that owner's normal shutdown or explicit operator cache maintenance after no
+runtime is active.
 
 ### Entrypoints
 
@@ -148,6 +176,8 @@ Add or update tests to prove:
 - the repository-local installer invokes the build before registration;
 - missing compiled output fails with bounded build/install guidance and no
   source fallback;
+- legacy and foreign-runtime admission state cannot collide with current
+  identity startup, while same-identity parallel clients still converge;
 - compiled cold-daemon native loading failures preserve the existing rebuild
   guidance without leaking raw internal stderr.
 
@@ -176,6 +206,8 @@ receipt before accepting the generated output.
   existing bounded rebuild guidance.
 - The builder removes only its exact `dist/mcp` and `dist/workers` outputs
   before writing.
+- A foreign or legacy daemon receipt cannot block current-runtime admission and
+  is not destructively reconciled.
 
 ## Security and Trust
 
@@ -189,7 +221,10 @@ script uses explicit repository-relative inputs and outputs.
 This is an internal distribution-path change with no MCP protocol migration.
 Existing running source-wrapper bridges remain until their transports close.
 New distributed installs and refreshed POSIX repository-local plugins execute
-compiled output.
+compiled output. During a rolling upgrade, identity-scoped admission permits
+old and new daemon processes to coexist temporarily for the same repository;
+each serves only identity-compatible bridges, while graph refresh ownership
+remains serialized.
 
 Rollback is one coordinated change: restore all launchers and manifests to the
 source wrapper, remove the build hook and compiled payload requirements,
@@ -203,6 +238,7 @@ validation. Do not retain mixed compiled/source launchers.
 |---------------|---------------|-------------------|-------------|-----------------|
 | compiled distributed bridge and daemon | build, package, plugin, container, repo-local install | removing `tsx` from developer commands | none | no |
 | retained open sessions | lower per-bridge cost | task-state inference or idle reaping | provider integration owner | no |
+| rolling runtime upgrade | identity-scoped receipt and startup lock | killing or adopting an older daemon | none | no |
 | resource evidence | same-host diagnostic comparison | universal RSS guarantee | none | no |
 
 ## Validation Strategy
@@ -213,6 +249,7 @@ validation. Do not retain mixed compiled/source launchers.
 | compiled MCP smoke | Requirements 1 and 3 | source/package smoke |
 | plugin/package/container path tests | Requirements 2-3 | integration tests and validators |
 | same-host module/RSS observation | Requirement 4 | verification evidence |
+| daemon admission isolation | Requirement 5, CP-005 | identity-path, legacy-receipt, and concurrent launch tests |
 | typecheck and full tests | regression | verification evidence |
 | architecture, packaging, and QA review | design and implementation risk | review findings and dispositions |
 

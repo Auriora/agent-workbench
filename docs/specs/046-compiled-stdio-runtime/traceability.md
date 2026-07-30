@@ -18,6 +18,8 @@ last_reviewed: 2026-07-30
 | T003 | R2, R3 | R2 AC1-AC3, AC5; all R3 | D003-D004, launch surfaces | plugin/package/container/POSIX repo-local tests | integration design and runbook |
 | T004 | R4 | all | operational considerations | module/RSS/cardinality observation and docs checks | all three durable owners |
 | T005 | all | all | validation and rollback | full validation and independent review | verification record |
+| T006 | Requirement 5 | all | D005, daemon admission paths | identity-path, legacy-receipt, and same-identity convergence tests | runtime contracts, runtime design, runbook |
+| T007 | Requirement 5 | all | validation and migration | targeted/full/package/live handshake validation and independent review | verification record |
 
 ## Requirement To Delivery Matrix
 
@@ -27,6 +29,7 @@ last_reviewed: 2026-07-30
 | Requirement 2 | must-have | T002, T003, T005 | stale output, post-build receipt, tarball payload, installer failure tests | covered |
 | Requirement 3 | must-have | T003, T005 | launch-surface, bounded-failure, and installed smoke tests | covered |
 | Requirement 4 | should-have | T004, T005 | live module/RSS evidence and docs checks | covered |
+| Requirement 5 | must-have | T006, T007 | cross-version path isolation, legacy receipt, concurrency, and installed handshake tests | covered |
 
 ## Correctness Properties
 
@@ -36,6 +39,7 @@ last_reviewed: 2026-07-30
 | CP-002 | R1 | T002 | cold compiled daemon and graph-worker smoke | native/platform behavior remains installed-smoke dependent |
 | CP-003 | R1, R4 | T002, T004 | artifact scan and module observation | platform RSS varies |
 | CP-004 | R2 | T002, T003 | stale/missing build and installer-failure validation | checkout snapshots require reinstall after source changes |
+| CP-005 | Requirement 5 | T006, T007 | identity-scoped path and concurrent launch validation | live old/new runtime overlap remains bounded by retained provider sessions |
 
 ## Design To Implementation Matrix
 
@@ -45,6 +49,7 @@ last_reviewed: 2026-07-30
 | D002 / sibling outputs | R1, R3 | T002, T003 | stdio/daemon entrypoints and daemon client | cold-launch smoke | covered |
 | D003 / source and distribution authority | R2, R3 | T002, T003 | source tests, package tests, manifests | parity and payload checks | covered |
 | D004 / package and local install boundaries | R2, R3 | T003 | prepack, container, repo-local installer | plugin/package/install tests | covered |
+| D005 / identity-scoped daemon admission | Requirement 5 | T006, T007 | daemon paths, lifecycle receipts, startup locks | focused concurrency and installed handshake tests | covered |
 
 ## Open Decision Impact
 
