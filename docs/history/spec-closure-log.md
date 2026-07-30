@@ -670,3 +670,37 @@ historical audit explicitly needs the original scaffolding.
 - **Follow-up:** provider-side transport multiplexing only if a provider exposes
   a supported shared-transport contract; cross-platform workflow build ordering
   remains owned by the packaging workflow.
+
+### 2026-07-30 - 045-stdio-bridge-resource-lifecycle
+
+- **Spec:** `docs/specs/045-stdio-bridge-resource-lifecycle/`
+- **Title:** Stdio bridge resource lifecycle
+- **Final spec commit:** `2b953c6`
+- **Closure cleanup commit:** `pending`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/runtime-operations-design.md`
+  - `docs/design/coding-agent-integration-design.md`
+  - `docs/runbooks/codex-agent-workbench-plugin.md`
+  - `docs/release-notes/v0.6.3.md`
+  - `docs/release-notes/v0.6.7.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** The implementation record includes 10 focused
+  files and 144 tests, typecheck, the serial 102-file / 1,096-test suite,
+  plugin/package validation, source-launch and installed-package smoke, and
+  Markdown checks. Closure reconciliation mapped all 18 acceptance criteria,
+  made all 13 evidence records concrete, and passed lifecycle task-state,
+  evidence-quality, closure, and low-risk reviews. A current architecture
+  recheck passed four files and 81 tests. The fix shipped in `v0.6.3`; the
+  globally installed `v0.6.7` retains it through the compiled runtime delivered
+  by Spec 046.
+- **Residual risks:**
+  - Each intentionally open provider transport retains one lightweight bridge;
+    bridge cardinality remains controlled by agent concurrency and nesting.
+  - Exact RSS savings remain host- and Node-version-dependent.
+  - Operators should terminate a pre-`v0.6.3` bridge only after confirming the
+    exact PID has neither a controlling stdin writer nor a daemon socket.
+- **Follow-up:** none for Spec 045. Provider-side transport multiplexing remains
+  conditional on a provider exposing a supported shared-transport contract, as
+  recorded with Spec 046.
