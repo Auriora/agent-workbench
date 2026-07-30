@@ -40,12 +40,12 @@ the npm registry). Install the release tarball directly by URL — npm builds th
 native modules and runs the package's `postinstall` the same as any package:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.4/auriora-agent-workbench-0.6.4.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.5/auriora-agent-workbench-0.6.5.tgz
 ```
 
 For a different version, take the tarball URL from the matching release on
 <https://github.com/Auriora/agent-workbench/releases>. Offline/air-gapped: download
-the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.6.4.tgz`.
+the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.6.5.tgz`.
 
 The commands above install release `0.6.4`, including the compiled lightweight
 bridge, daemon-owned refresh convergence, and schema-isolated publication.

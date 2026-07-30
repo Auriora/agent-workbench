@@ -16,7 +16,7 @@ launches in place — there is no copy-to-prefix installer, no shell on the inst
 or runtime path. The latest published baseline is `0.6.4`:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.4/auriora-agent-workbench-0.6.4.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.5/auriora-agent-workbench-0.6.5.tgz
 ```
 
 (See the runbook for source-vs-release wording and install-model details, and
