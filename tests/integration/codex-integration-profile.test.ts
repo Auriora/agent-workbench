@@ -428,7 +428,7 @@ describe("Codex plugin artifacts", () => {
     expect(pluginRunbook).toContain("leaves `cwd` unset");
     expect(pluginRunbook).toContain("rejects a Codex MCP `cwd`");
     expect(pluginRunbook).toMatch(
-      /npm install -g https:\/\/github\.com\/Auriora\/agent-workbench\/releases\/download\/v0\.6\.2\/auriora-agent-workbench-0\.6\.2\.tgz[\s\S]*codex plugin add agent-workbench@agent-workbench-local/
+      /npm install -g https:\/\/github\.com\/Auriora\/agent-workbench\/releases\/download\/v0\.6\.3\/auriora-agent-workbench-0\.6\.3\.tgz[\s\S]*codex plugin add agent-workbench@agent-workbench-local/
     );
     expect(pluginRunbook).toContain("codex plugin remove agent-workbench@agent-workbench-local");
     expect(hooksConfig.hooks).toEqual({});
@@ -1028,9 +1028,9 @@ describe("Codex plugin artifacts", () => {
       registry: "ghcr.io",
       image: "ghcr.io/bcherrington/agent-workbench",
       containerfile: "packaging/agent-workbench/Containerfile",
-      release_status: "unreleased"
+      release_status: "released"
     });
-    expect(manifest.latest_released_version).toBe("0.6.2");
+    expect(manifest.latest_released_version).toBe("0.6.3");
     expect(manifest.install_command).toBe(latestReleasedInstallCommand);
     expect(manifest.npm_bin).toBe("packaging/agent-workbench/mcp-bin.mjs");
     expect(manifest.codex.plugin_install_model).toBe(latestReleasedInstallCommand);
@@ -1042,8 +1042,8 @@ describe("Codex plugin artifacts", () => {
     };
 
     expect(npmPackageManifest).toMatchObject({
-      release_status: "unreleased",
-      latest_released_version: "0.6.2",
+      release_status: "released",
+      latest_released_version: "0.6.3",
       install_command: latestReleasedInstallCommand
     });
     // The container build still uses pnpm; the manifest's dependency_install

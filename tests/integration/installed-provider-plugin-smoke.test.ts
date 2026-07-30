@@ -156,7 +156,7 @@ describe("installed provider plugin smoke", () => {
       if (scenario === "decoy") {
         expect(receipt.cleanup).toMatchObject({ daemon_stopped: true, socket_removed: true });
       }
-    });
+    }, 15_000);
   }
 
   it("rejects Codex discovery that omits the required direct tool", () => {

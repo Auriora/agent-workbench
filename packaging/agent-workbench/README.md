@@ -13,12 +13,10 @@ The supported distribution channel is the **GitHub release tarball** (package
 name `@auriora/agent-workbench`; it is **not** published to the npm registry). It
 is a normal npm package: installing the tarball builds the native modules and
 launches in place — there is no copy-to-prefix installer, no shell on the install
-or runtime path. The current worktree is an unreleased candidate while the latest
-published baseline is `0.6.2`; use that release URL for tarball install until the next
-official release cut is published:
+or runtime path. The latest published baseline is `0.6.3`:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.2/auriora-agent-workbench-0.6.2.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.3/auriora-agent-workbench-0.6.3.tgz
 ```
 
 (See the runbook for source-vs-release wording and install-model details, and
@@ -75,7 +73,7 @@ client connection. Stale first reads and watcher events request this path
 automatically; the package does not expose a manual refresh command, retry
 loop, provider branch, or alternate indexer.
 
-This convergence behavior is included in release `0.6.2` and in the install
+This convergence behavior is included in release `0.6.3` and in the install
 command above.
 
 Snapshot replacement is transactional. Readers retain the prior published

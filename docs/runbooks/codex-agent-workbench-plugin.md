@@ -18,8 +18,7 @@ Workbench from Codex without creating a second executable runtime path.
 ## Supported Model
 
 Agent Workbench has one executable Codex runtime path per packaged install.
-The current checkout is an unreleased package candidate; the latest released
-install payload remains `v0.6.2` until an official release cutover.
+The latest released install payload is `v0.6.3`.
 
 - Use install URLs explicitly tied to the latest published release for live bootstrap.
 
@@ -52,7 +51,7 @@ Workbench plugin should not package or proxy those companion runtimes.
 
 This keeps source updates explicit and keeps release state explicit:
 
-- `0.6.2` is the published install baseline until a new tagged release exists.
+- `0.6.3` is the published install baseline.
 - The candidate worktree can still be developed, validated, and verified without
   changing install URLs.
 
@@ -339,13 +338,12 @@ contract lives at `packaging/agent-workbench/npm-package.json`. It is an
 ordinary npm package: `npm install` builds the native modules
 (`tree-sitter`, `better-sqlite3`) from source the normal way — there is no
 custom installer, no copy-to-prefix step, and no POSIX shell on the path.
-The installed candidate is unreleased metadata-wise; for now use the latest
-published release URL (`v0.6.2`) in install commands.
+Use the latest published release URL (`v0.6.3`) in install commands.
 
 Install or refresh the runtime with:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.2/auriora-agent-workbench-0.6.2.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.3/auriora-agent-workbench-0.6.3.tgz
 ```
 
 This runs `scripts/postinstall.mjs`, which records the runtime-root pointer file
