@@ -401,6 +401,11 @@ describe("Codex plugin artifacts", () => {
       mcpServers: Record<string, { command: string; cwd?: string; args: string[]; startup_timeout_sec: number }>;
     };
     const pluginRunbook = fs.readFileSync(path.resolve("docs/runbooks/codex-agent-workbench-plugin.md"), "utf8");
+    const packageVersion = (
+      JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as { version: string }
+    ).version;
+    const releasedInstallCommand =
+      `npm install -g https://github.com/Auriora/agent-workbench/releases/download/v${packageVersion}/auriora-agent-workbench-${packageVersion}.tgz`;
     const hooksConfig = JSON.parse(
       fs.readFileSync(path.join(pluginRoot, "hooks/hooks.json"), "utf8")
     ) as {
@@ -427,8 +432,15 @@ describe("Codex plugin artifacts", () => {
     expect(pluginRunbook).toContain("RCA checklist for this failure mode");
     expect(pluginRunbook).toContain("leaves `cwd` unset");
     expect(pluginRunbook).toContain("rejects a Codex MCP `cwd`");
-    expect(pluginRunbook).toMatch(
-      /npm install -g https:\/\/github\.com\/Auriora\/agent-workbench\/releases\/download\/v0\.6\.4\/auriora-agent-workbench-0\.6\.4\.tgz[\s\S]*codex plugin add agent-workbench@agent-workbench-local/
+    expect(pluginRunbook).toContain(releasedInstallCommand);
+    const releasedInstallCommandIndex = pluginRunbook.indexOf(releasedInstallCommand);
+    expect(
+      pluginRunbook.indexOf(
+        "codex plugin add agent-workbench@agent-workbench-local",
+        releasedInstallCommandIndex
+      )
+    ).toBeGreaterThan(
+      releasedInstallCommandIndex
     );
     expect(pluginRunbook).toContain("codex plugin remove agent-workbench@agent-workbench-local");
     expect(hooksConfig.hooks).toEqual({});
@@ -1010,6 +1022,7 @@ describe("Codex plugin artifacts", () => {
       };
     };
     const packageJson = JSON.parse(fs.readFileSync(path.resolve("package.json"), "utf8")) as {
+      version: string;
       bin: Record<string, string>;
       scripts: Record<string, string>;
       dependencies: Record<string, string>;
@@ -1030,7 +1043,7 @@ describe("Codex plugin artifacts", () => {
       containerfile: "packaging/agent-workbench/Containerfile",
       release_status: "released"
     });
-    expect(manifest.latest_released_version).toBe("0.6.4");
+    expect(manifest.latest_released_version).toBe(packageJson.version);
     expect(manifest.install_command).toBe(latestReleasedInstallCommand);
     expect(manifest.npm_bin).toBe("packaging/agent-workbench/mcp-bin.mjs");
     expect(manifest.codex.plugin_install_model).toBe(latestReleasedInstallCommand);
@@ -1043,7 +1056,7 @@ describe("Codex plugin artifacts", () => {
 
     expect(npmPackageManifest).toMatchObject({
       release_status: "released",
-      latest_released_version: "0.6.4",
+      latest_released_version: packageJson.version,
       install_command: latestReleasedInstallCommand
     });
     // The container build still uses pnpm; the manifest's dependency_install
