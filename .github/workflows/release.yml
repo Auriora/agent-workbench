@@ -113,6 +113,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Build runtime
+        run: pnpm build-runtime
+
       - name: Test dev CLI
         run: pnpm test:devcli
 

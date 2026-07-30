@@ -1115,11 +1115,23 @@ describe("Codex plugin artifacts", () => {
     expect(pluginValidator).toContain("manifest.dependency_install.runtime_dependencies");
     expect(ciWorkflow).toContain("pnpm install --frozen-lockfile");
     expect(ciWorkflow).toContain("pnpm typecheck");
+    expect(ciWorkflow).toContain("pnpm build-runtime");
     expect(ciWorkflow).toContain("pnpm test");
     expect(ciWorkflow).toContain("pnpm run validate:plugin");
     expect(ciWorkflow).toContain("node scripts/ci/install-smoke.mjs");
     expect(ciWorkflow).toContain("node scripts/ci/mcp-launch-smoke.mjs");
     expect(ciWorkflow).toContain("pnpm pack:dry-run");
+    const ciTypecheck = ciWorkflow.indexOf("pnpm typecheck");
+    const ciBuildRuntime = ciWorkflow.indexOf("pnpm build-runtime");
+    const ciTest = ciWorkflow.indexOf("pnpm test");
+    const ciValidate = ciWorkflow.indexOf("pnpm run validate:plugin");
+    expect(ciTypecheck).toBeGreaterThan(-1);
+    expect(ciBuildRuntime).toBeGreaterThan(-1);
+    expect(ciTest).toBeGreaterThan(-1);
+    expect(ciValidate).toBeGreaterThan(-1);
+    expect(ciTypecheck).toBeLessThan(ciBuildRuntime);
+    expect(ciBuildRuntime).toBeLessThan(ciTest);
+    expect(ciBuildRuntime).toBeLessThan(ciValidate);
   });
 
   it("keeps cross-repo debug harnesses checkout-only", () => {
