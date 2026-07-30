@@ -160,7 +160,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008 -> T009
     handshake beside the retained v0.6.4 owner passed. Architecture re-review
     found no remaining blocker.
 
-- [ ] T009 Review, package, and live-test observer readiness.
+- [x] T009 Review, package, and live-test observer readiness.
   - Depends on: T008
   - Requirements: Requirement 5
   - Property: CP-006
@@ -171,6 +171,15 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008 -> T009
   - Validation: full serial suite, package/plugin validation, installed
     rolling-upgrade handshake, and independent architecture review.
   - Evidence mode: validation
+  - Evidence: Typecheck, the 103-file/1,114-test serial suite, 52 daemon-launch
+    tests, 18 real daemon-entrypoint tests, plugin/package/skill validation, and
+    patch checks passed. Independent architecture re-review found no remaining
+    blocker. Release v0.6.7 was published from commit `e837430`; its release
+    package, GHCR, and main CI workflows passed. The exact published tarball was
+    installed locally and initialized as v0.6.7 with 16 tools while the live
+    v0.6.4 daemon retained `refresh-owner.json`. The v0.6.7 daemon reported
+    observer state, no activity lease, and the compatible visible snapshot
+    without displacing or mutating the older owner.
 
 ## Execution Rules
 

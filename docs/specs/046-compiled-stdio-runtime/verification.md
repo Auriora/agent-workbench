@@ -27,7 +27,7 @@ This record covers Spec 046 Requirements 1-5 and tasks T001-T009.
 | Durable documentation promotion | yes | passed | Runtime design, integration design, and Codex runbook updated. |
 | Final work-product review | yes | passed | Architecture, QA, documentation, and operations reviews completed; every blocker was implemented and warnings were fixed or reconciled to the lightweight-launch boundary with explicit operator guidance. |
 | Rolling-upgrade admission regression | yes | passed | Runtime logs identified `blocked: ambiguous_process` against legacy v0.6.2 daemon state during v0.6.4 agent startup. Identity-scoped admission passed focused/full tests and an installed-tarball smoke with concurrent sessions plus preserved live legacy files. |
-| Observer-ready rolling upgrade | yes | in progress | The published v0.6.6 artifact passed identity-scoped admission but its daemon exited with `Repository refresh owner is active` while v0.6.4 retained the repo-wide refresh lease. T008-T009 address and revalidate this contract. |
+| Observer-ready rolling upgrade | yes | passed | The exact published v0.6.7 artifact initialized, advertised 16 tools, and served health/status as an observer while the live v0.6.4 daemon retained the repo-wide refresh lease unchanged. |
 
 ## Requirement 5 Regression Validation
 
@@ -54,6 +54,8 @@ This record covers Spec 046 Requirements 1-5 and tasks T001-T009.
 | `pnpm typecheck` and full serial Vitest | passed; 103 files and 1,114 tests | Type contracts and complete regression passed after launch-token propagation and direct-start race coverage. |
 | plugin validation, package dry-run, skills validation, and `git diff --check` | passed | Distribution metadata, generated package payload, owned skills, and patch quality remain coherent. |
 | independent architecture re-review | passed; no remaining blocker | Confirmed one lazy ownership authority, concrete diagnostics, normal orphan recovery, observer readiness, later acquisition coverage, lease lifecycle, and exact same-identity launch exclusion. |
+| v0.6.7 release package, GHCR, and main CI workflows | passed | The tagged release built and published the tarball and container; main CI repeated full validation and installed-package MCP convergence. |
+| exact published v0.6.7 tarball installed beside retained v0.6.4 owner | passed | Initialize returned runtime v0.6.7, `tools/list` returned 16 tools, health reported an observer daemon with no activity lease, and the v0.6.4 `refresh-owner.json` remained byte-for-byte owned by PID 1767265. |
 
 ## Planned Validation
 
@@ -76,10 +78,10 @@ This record covers Spec 046 Requirements 1-5 and tasks T001-T009.
 |-------|----------|---------------|
 | Scope | requirements, design slice boundary, and change impact | none known |
 | Context | Spec 045, live process/module evidence, direct launch/package reads | cross-platform memory magnitude unknown |
-| Permissions | user requested separate spec and implementation; no release or commit requested | release remains out of scope |
+| Permissions | user requested the spec, implementation, commit, release, push, local install, and live verification | none |
 | Validation | commands and evidence above | default parallel full run had three resource-contention timeouts; all affected files passed alone and the complete serial suite passed |
 | Review | architecture, packaging, QA before implementation; four-discipline independent final review | findings reconciled; no remaining blocker |
-| Closure | three durable owners promoted; keep active until separately closed | commit and lifecycle closure were not requested |
+| Closure | four durable owners promoted; all T001-T009 evidence complete | lifecycle closure gate remains to be executed |
 
 ## Task Evidence
 
@@ -93,7 +95,7 @@ This record covers Spec 046 Requirements 1-5 and tasks T001-T009.
 | T006 | complete | confirmed cross-version shared-receipt collision; identity-scoped admission and focused tests passed |
 | T007 | complete | full validation, installed-package concurrency smoke, independent review, and evidence reconciliation passed |
 | T008 | complete | lazy authority preparation preserves ordinary orphan recovery; 52 daemon-launch tests, 18 real daemon-entrypoint tests, typecheck, live old/new checkout handshake, and architecture re-review passed |
-| T009 | pending | full/package/review/published-artifact evidence pending T008 |
+| T009 | complete | full regression/package checks, independent review, successful v0.6.7 release workflows, exact published install, and live old/new observer handshake passed |
 
 ## Requirement and Property Coverage
 
@@ -104,7 +106,7 @@ This record covers Spec 046 Requirements 1-5 and tasks T001-T009.
 | Requirement 3 / CP-001 | T003 launch-surface, provider, root, argv, Windows-plan, POSIX-execve, and bounded-error checks | plugin validation, focused/full tests, source launch, and installed smoke passed | live provider CLI discovery remains separate from provider-labelled MCP sessions |
 | Requirement 4 | T004 controlled process observation and durable documentation | same-host module/RSS measurement and Markdown set check recorded | provider configuration determines open bridge cardinality |
 | Requirement 5 / CP-005 | T006-T007 identity-scoped receipt and startup-lock paths | focused/full/package tests and installed concurrent handshake smoke passed | retained old-runtime daemons may coexist until their provider sessions close |
-| Requirement 5 / CP-006 | T008-T009 observer-ready daemon bootstrap and exclusive refresh ownership | v0.6.6 installed handshake failed and supplied the regression fixture; corrected evidence pending | compatible published graph required for useful observer reads |
+| Requirement 5 / CP-006 | T008-T009 observer-ready daemon bootstrap and exclusive refresh ownership | v0.6.6 supplied the regression fixture; focused/full tests and the exact published v0.6.7 old/new overlap handshake passed | compatible published graph required for useful observer reads |
 
 ## Evidence Log
 
@@ -122,6 +124,7 @@ This record covers Spec 046 Requirements 1-5 and tasks T001-T009.
 | 2026-07-30 | Codex MCP launcher logs for other agents after v0.6.4 reload | failed and diagnosed | Each generic initialize-response closure was preceded by `Agent Workbench daemon is blocked: ambiguous_process`; the same repository retained a v0.6.2 shared daemon receipt, proving a cross-version admission collision rather than an MCP protocol error. |
 | 2026-07-30 | Requirement 5 CP-005 admission-path validation and work-product review | passed for CP-005; later superseded for end-to-end readiness | Focused/full/package/installed checks passed for identity-scoped receipts. The later published v0.6.6 overlap test reopened Requirement 5 through CP-006/T008-T009. |
 | 2026-07-30 | published v0.6.6 install with live v0.6.4 daemon | failed and diagnosed | Identity-scoped v0.6.6 receipt and endpoint were created, but foreground daemon startup proved eager repo-wide refresh ownership still threw `Repository refresh owner is active`; Spec 046 was extended with CP-006 and T008-T009. |
+| 2026-07-30 | published v0.6.7 release workflows and exact installed-artifact overlap test | passed | Release package, GHCR, and main CI passed. The installed v0.6.7 launcher initialized, returned 16 tools and observer health, held no activity lease, and preserved the active v0.6.4 refresh owner. The published graph was valid but stale because the retained older owner alone retained refresh authority. |
 
 ## Scope Reconciliation Before Closure
 
@@ -148,22 +151,22 @@ This record covers Spec 046 Requirements 1-5 and tasks T001-T009.
 
 ## Ship or Closure Risk
 
-- **Risk level:** medium
+- **Risk level:** low
 - **Breaking change:** no public MCP contract change
 - **Blast radius checked:** yes; targeted/full tests, every launch manifest,
   installed tarball smoke, source-launch smoke, and local installation
 - **Rollback path:** reinstall the prior release tarball, refresh plugin
   registration, and start a new client session. For source-only development,
   restore the source wrapper, build hook, and launch surfaces together.
-- **Requires human review:** yes; T008 architecture re-review is in progress
-- **Release notes needed:** yes at release time
+- **Requires human review:** completed; independent architecture re-review found no blocker
+- **Release notes needed:** complete in `docs/release-notes/v0.6.7.md`
 - **Follow-up issue or spec needed:** provider-side shared/multiplexed transport
   only if a client later exposes that capability; it is not an internal stdio
   pooling change
-- **Ready for promotion:** no; observer-readiness wording is drafted but not
-  yet implementation-verified
-- **Ready for release:** no; T008-T009 remain open
-- **Ready for closure:** no; T008-T009 remain open
+- **Ready for promotion:** yes; observer readiness is implemented, reviewed,
+  release-tested, and promoted to durable owners
+- **Ready for release:** yes; v0.6.7 is published and installed
+- **Ready for closure:** yes; all tasks and required evidence are complete
 
 ## Durable Promotion and Cleanup
 
@@ -172,13 +175,14 @@ This record covers Spec 046 Requirements 1-5 and tasks T001-T009.
 | Compiled distribution and runtime ownership | `docs/design/runtime-operations-design.md` | complete |
 | Provider bridge cardinality and launch behavior | `docs/design/coding-agent-integration-design.md` | complete |
 | Install, rebuild, diagnosis, and rollback | `docs/runbooks/codex-agent-workbench-plugin.md` | complete |
-| Rolling-upgrade daemon admission contract | `docs/reference/runtime-contracts.md`, `docs/design/runtime-operations-design.md`, and `docs/runbooks/codex-agent-workbench-plugin.md` | in progress |
+| Rolling-upgrade daemon admission contract | `docs/reference/runtime-contracts.md`, `docs/design/runtime-operations-design.md`, and `docs/runbooks/codex-agent-workbench-plugin.md` | complete |
 
 ### Spec Cleanup Decision
 
-- **Cleanup action:** keep active
-- **Reason:** T008-T009 and installed observer-readiness evidence remain open.
-- **Implementation/spec commit:** `c14bf60`
+- **Cleanup action:** close after lifecycle closure checks
+- **Reason:** T001-T009, durable promotion, independent review, release, and
+  exact installed observer-readiness evidence are complete.
+- **Implementation/spec commits:** `4167f6b`, `38aea4d`, `e837430`
 - **Closure log path:** `docs/history/spec-closure-log.md`
 - **Closure log entry updated:** no
 - **Residual spec-only content:** implementation evidence until closure

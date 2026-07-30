@@ -31,7 +31,7 @@ last_reviewed: 2026-07-30
 | Requirement 2 | must-have | T002, T003, T005 | stale output, post-build receipt, tarball payload, installer failure tests | covered |
 | Requirement 3 | must-have | T003, T005 | launch-surface, bounded-failure, and installed smoke tests | covered |
 | Requirement 4 | should-have | T004, T005 | live module/RSS evidence and docs checks | covered |
-| Requirement 5 | must-have | T006, T007, T008, T009 | cross-version path isolation, legacy receipt, observer readiness, concurrency, and installed handshake tests | in progress |
+| Requirement 5 | must-have | T006, T007, T008, T009 | cross-version path isolation, legacy receipt, observer readiness, concurrency, and installed handshake tests | covered |
 
 ## Correctness Properties
 
@@ -53,7 +53,7 @@ last_reviewed: 2026-07-30
 | D003 / source and distribution authority | R2, R3 | T002, T003 | source tests, package tests, manifests | parity and payload checks | covered |
 | D004 / package and local install boundaries | R2, R3 | T003 | prepack, container, repo-local installer | plugin/package/install tests | covered |
 | D005 / identity-scoped daemon admission | Requirement 5 | T006, T007 | daemon paths, lifecycle receipts, startup locks | focused concurrency and installed handshake tests | covered |
-| D006 / observer daemon readiness | Requirement 5 | T008, T009 | daemon bootstrap and lazy ownership-gated refresh authority | owner-active observer and installed rolling-upgrade handshake | in progress |
+| D006 / observer daemon readiness | Requirement 5 | T008, T009 | daemon bootstrap and lazy ownership-gated refresh authority | owner-active observer and installed v0.6.7 rolling-upgrade handshake | covered |
 
 ## Open Decision Impact
 
