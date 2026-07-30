@@ -25,6 +25,7 @@ import {
 } from "../server.js";
 import {
   FileRepositoryOwnershipAdapter,
+  LazyOwnershipGatedRefreshAuthority,
   waitForControllerShutdownSafety
 } from "../infrastructure/runtime/repository-ownership.js";
 import { createDocsRankingCursorCodec, createReferenceCursorCodec } from "../infrastructure/runtime/index.js";
@@ -41,6 +42,7 @@ import type {
 } from "../ports/index.js";
 import {
   acquireDaemonStartupLock,
+  classifyDaemonState,
   cleanupStaleDaemonState,
   createDaemonIdentity,
   createDaemonMetadata,
@@ -191,9 +193,9 @@ export async function startAgentWorkbenchDaemon(input: {
   const sharedGraphStore = createAsyncGraphStore(databasePath);
   const ownerGeneration = Date.now();
   const ownership = new FileRepositoryOwnershipAdapter(repositoryOwnershipPath(databasePath));
-  let ownershipLease: (RepositoryOwnershipLease & { state: "active" }) | undefined;
   let refreshController: SnapshotRefreshControllerPort &
     SnapshotRefreshDiagnosticsPort & SnapshotRefreshAdmissionFailurePort;
+  let refreshAuthority: LazyOwnershipGatedRefreshAuthority | undefined;
   let closePromise: Promise<void> | undefined;
   let startupTimer: ReturnType<typeof setTimeout> | undefined;
   let startupRefreshPromise: Promise<void> | undefined;
@@ -265,14 +267,11 @@ export async function startAgentWorkbenchDaemon(input: {
     if (startupRefreshPromise !== undefined) {
       await startupRefreshPromise.catch(() => undefined);
     }
-    if (refreshController !== undefined) {
+    await refreshAuthority?.close().catch(() => undefined);
+    if (refreshAuthority === undefined && refreshController !== undefined) {
       await waitForControllerShutdownSafety(refreshController).catch(() => undefined);
     }
     lifetime?.dispose();
-    if (ownershipLease !== undefined) {
-      await ownership.release({ lease: ownershipLease }).catch(() => undefined);
-      ownershipLease = undefined;
-    }
     if (server.listening) {
       await new Promise<void>((resolve, reject) => {
         server.close((error) => {
@@ -350,23 +349,21 @@ export async function startAgentWorkbenchDaemon(input: {
     }
   });
 
-  const ownershipAdmission = await ownership.acquire({
-    repo_root: repoRoot,
-    runtime_identity: `${AGENT_WORKBENCH_RUNTIME_VERSION}:${GRAPH_STORE_IDENTITY_VERSION}`,
-    schema_version: GRAPH_STORE_IDENTITY_VERSION,
-    owner_id: `daemon:${process.pid}:${ownerGeneration}`,
-    owner_pid: process.pid,
-    owner_generation: ownerGeneration,
-    heartbeat_at: new Date().toISOString()
+  const existingState = classifyDaemonState({
+    metadataPath: paths.metadataPath,
+    expectedIdentity: identity,
+    socketPath: paths.socketPath
   });
-  if (ownershipAdmission.outcome === "blocked") {
-    throw new Error(
-      ownershipAdmission.reason === "owner_active"
-        ? "Repository refresh owner is active."
-        : "Repository refresh ownership is ambiguous."
-    );
+  const ownStartingReceipt = existingState.state === "blocked" &&
+    existingState.reason === "starting" &&
+    existingState.metadata?.pid === process.pid &&
+    existingState.metadata?.launchLifecycle?.launchToken === launchToken;
+  if (existingState.state === "ready") {
+    throw new Error("Agent Workbench daemon is already running for this runtime identity.");
   }
-  ownershipLease = ownershipAdmission.lease;
+  if (existingState.state === "blocked" && !ownStartingReceipt) {
+    throw new Error(`Agent Workbench daemon is blocked: ${existingState.reason}.`);
+  }
 
   let listenFailureCode: DaemonStartupFailureCode = "listen_failed";
   try {
@@ -396,15 +393,6 @@ export async function startAgentWorkbenchDaemon(input: {
 
     const store = await sharedGraphStore();
     retireLegacyGraphStore(databasePath);
-    const orphanReconciliation = await store.reconcileOrphanedBuilds({
-      repo_root: repoRoot,
-      current_owner: ownershipLease,
-      recovered_owners: ownershipAdmission.recovered_owners,
-      updated_at: new Date().toISOString()
-    });
-    if (orphanReconciliation.outcome === "blocked") {
-      throw new Error("Repository refresh ownership is ambiguous.");
-    }
     refreshController = await createRepositoryRefreshController({
       repoRoot,
       graphStore: sharedGraphStore,
@@ -412,19 +400,62 @@ export async function startAgentWorkbenchDaemon(input: {
       controllerGeneration: ownerGeneration,
       maxFiles: input.serverOptions?.startupWarmupMaxFiles ?? 2000
     });
-    if (orphanReconciliation.snapshot_ids[0] !== undefined) {
-      await refreshController.recordAdmissionFailure({
+    let recoveredSnapshotIds: readonly string[] = [];
+    let recoveryLease: (RepositoryOwnershipLease & { state: "active" }) | undefined;
+    refreshAuthority = new LazyOwnershipGatedRefreshAuthority({
+      ownership,
+      ownership_request: {
         repo_root: repoRoot,
-        invalidation_generation: 0,
-        code: "orphaned_build",
-        target_snapshot_id: orphanReconciliation.snapshot_ids[0]
-      });
+        runtime_identity: `${AGENT_WORKBENCH_RUNTIME_VERSION}:${GRAPH_STORE_IDENTITY_VERSION}`,
+        schema_version: GRAPH_STORE_IDENTITY_VERSION,
+        owner_id: `daemon:${process.pid}:${ownerGeneration}`,
+        owner_pid: process.pid,
+        owner_generation: ownerGeneration,
+        heartbeat_at: new Date().toISOString()
+      },
+      prepare_controller: async (admission) => {
+        const orphanReconciliation = await store.reconcileOrphanedBuilds({
+          repo_root: repoRoot,
+          current_owner: admission.lease,
+          recovered_owners: admission.recovered_owners,
+          updated_at: new Date().toISOString()
+        });
+        recoveredSnapshotIds = orphanReconciliation.outcome === "reconciled"
+          ? orphanReconciliation.snapshot_ids
+          : [];
+        recoveryLease = orphanReconciliation.outcome === "reconciled"
+          ? admission.lease
+          : undefined;
+        return orphanReconciliation.outcome === "blocked"
+          ? "ownership_ambiguous"
+          : "ready";
+      },
+      create_controller: async () => {
+        if (recoveredSnapshotIds[0] !== undefined) {
+          await refreshController.recordAdmissionFailure({
+            repo_root: repoRoot,
+            invalidation_generation: 0,
+            code: "orphaned_build",
+            target_snapshot_id: recoveredSnapshotIds[0]
+          });
+        }
+        if (recoveryLease !== undefined) {
+          await ownership.confirmRecovery({ lease: recoveryLease });
+        }
+        return refreshController;
+      }
+    });
+    const refreshPreparation = await refreshAuthority.prepare();
+    if (
+      refreshPreparation.outcome === "blocked" &&
+      refreshPreparation.reason === "ownership_ambiguous"
+    ) {
+      throw new Error("Repository refresh ownership is ambiguous.");
     }
-    await ownership.confirmRecovery({ lease: ownershipLease });
 
     const refreshTriggers = new RepositoryRefreshTriggerCoordinator({
       repo_root: repoRoot,
-      controller: refreshController,
+      controller: refreshAuthority,
       publications: createAsyncPublicationPort(sharedGraphStore),
       snapshots: {
         async markSnapshotFreshness(request) {
@@ -443,7 +474,7 @@ export async function startAgentWorkbenchDaemon(input: {
     });
     sharedDisposers.add(() => workspaceRefresh.close());
     sharedRepositoryServices = {
-      refreshController,
+      refreshController: refreshAuthority,
       refreshDiagnostics: refreshController,
       refreshTriggers,
       graphStore: sharedGraphStore,
@@ -471,7 +502,7 @@ export async function startAgentWorkbenchDaemon(input: {
       }
     };
     lifetime = new DaemonRefreshLifetimeCoordinator({
-      controller: refreshController,
+      controller: refreshAuthority,
       connected_clients: () => connected.size,
       idle_grace_ms: input.idleGraceMs ?? readIdleGraceMs(process.env),
       close
@@ -511,7 +542,8 @@ export async function startAgentWorkbenchDaemon(input: {
       if (startupRefreshPromise !== undefined) {
         await startupRefreshPromise;
       }
-      if (refreshController !== undefined) {
+      await refreshAuthority?.close();
+      if (refreshAuthority === undefined && refreshController !== undefined) {
         await waitForControllerShutdownSafety(refreshController);
       }
       if (server.listening) {
@@ -524,10 +556,6 @@ export async function startAgentWorkbenchDaemon(input: {
             resolve();
           });
         });
-      }
-      if (ownershipLease !== undefined) {
-        await ownership.release({ lease: ownershipLease });
-        ownershipLease = undefined;
       }
       await sharedGraphStore.close();
       if (shutdownLock !== undefined) {

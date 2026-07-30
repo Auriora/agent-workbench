@@ -14,7 +14,7 @@ last_reviewed: 2026-07-30
 ## Task Dependency Graph
 
 ```text
-T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
+T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008 -> T009
 ```
 
 ## Specification and review
@@ -139,6 +139,38 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007
     no finding; QA and operations review findings about evidence state,
     released-versus-worktree wording, and identity-input coverage were
     reconciled before completion.
+
+- [x] T008 Decouple rolling-upgrade endpoint readiness from refresh ownership.
+  - Depends on: T007
+  - Requirements: Requirement 5
+  - Property: CP-006
+  - Files: daemon bootstrap, ownership-gated refresh authority integration,
+    daemon launch tests, durable runtime contracts/design/runbook, verification
+  - Acceptance: a current identity daemon initializes and serves the published
+    graph while an older live owner retains the repository refresh lease;
+    refresh admission is structured `owner_active` with no local `planned`
+    state; same-identity duplicate startup cannot unlink the healthy endpoint.
+  - Validation: focused daemon launch tests and typecheck.
+  - Evidence mode: validation
+  - Evidence: The daemon now prepares the existing lazy ownership-gated
+    authority during bootstrap. Free ownership preserves synchronous orphan
+    reconciliation; `owner_active` publishes a ready observer with concrete
+    diagnostics and no local activity lease. Typecheck, 52 daemon-launch tests,
+    all 18 real daemon-entrypoint integration tests, and a live checkout
+    handshake beside the retained v0.6.4 owner passed. Architecture re-review
+    found no remaining blocker.
+
+- [ ] T009 Review, package, and live-test observer readiness.
+  - Depends on: T008
+  - Requirements: Requirement 5
+  - Property: CP-006
+  - Files: implementation, tests, package artifact, durable docs, verification
+  - Acceptance: full serial regression and package checks pass; independent
+    architecture review has no unresolved blocker; a published installed
+    artifact initializes while an older live daemon retains refresh ownership.
+  - Validation: full serial suite, package/plugin validation, installed
+    rolling-upgrade handshake, and independent architecture review.
+  - Evidence mode: validation
 
 ## Execution Rules
 

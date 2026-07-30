@@ -34,6 +34,7 @@ last_reviewed: 2026-07-30
 | Build repository-local candidate before registration | modify | repo-local installer/materializer | Codex runbook | yes |
 | Add resource and module evidence | add | live verification | runbook and verification | yes |
 | Isolate rolling-upgrade daemon admission | modify | shared repo-local receipt and startup lock | runtime contracts, runtime operations design, and runbook | yes |
+| Permit observer-ready daemons under active refresh ownership | modify | eager daemon bootstrap lease acquisition | runtime contracts, runtime operations design, and runbook | yes |
 
 ## Affected Surfaces
 
@@ -43,6 +44,7 @@ last_reviewed: 2026-07-30
 - Codex, Claude Code, and Kiro package path assertions
 - repository-local installation
 - repo-local daemon lifecycle receipts and startup locks
+- daemon bootstrap and lazy refresh-ownership admission
 - container entrypoint and build
 - package/plugin integration profile and smoke tests
 
@@ -64,7 +66,7 @@ last_reviewed: 2026-07-30
 | compiled runtime/build ownership | `docs/design/runtime-operations-design.md` | complete |
 | canonical distributed launch path | `docs/design/coding-agent-integration-design.md` | complete |
 | install/build/diagnosis/rollback | `docs/runbooks/codex-agent-workbench-plugin.md` | complete |
-| rolling-upgrade daemon admission | runtime contracts, runtime operations design, and Codex runbook | complete |
+| rolling-upgrade daemon admission and observer readiness | runtime contracts, runtime operations design, and Codex runbook | in progress |
 
 ## Related Artifacts
 

@@ -190,6 +190,11 @@ older sessions.
 5. Cross-version daemon admission SHALL NOT create a second graph-refresh
    ownership path; repository ownership remains serialized by the existing
    daemon-owned graph lease.
+6. GIVEN a compatible published graph and a live refresh lease owned by a
+   different runtime identity, WHEN the current-runtime daemon starts, THEN it
+   SHALL become ready as an observer and serve the published graph while
+   refresh requests return structured `owner_active` evidence; it SHALL NOT
+   fail MCP initialization or create local `planned` refresh state.
 
 ## Correctness Properties
 
@@ -205,6 +210,9 @@ older sessions.
 - **CP-005:** Daemon admission state for two unequal daemon identities cannot
   collide, while equal identities still share exactly one receipt and startup
   lock.
+- **CP-006:** Endpoint readiness is independent of acquiring the repo-wide
+  refresh lease, while admission to refresh `planned` state remains exclusive
+  to the one lease owner.
 
 ## Technical Context
 

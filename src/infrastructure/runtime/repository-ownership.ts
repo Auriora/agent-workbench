@@ -203,6 +203,14 @@ export class LazyOwnershipGatedRefreshAuthority implements SnapshotRefreshContro
     return await controller.request(input);
   }
 
+  public async prepare(): Promise<{ outcome: "ready" } | BlockedOwnershipAdmission> {
+    if (this.closed) {
+      throw new Error("Refresh authority is closed.");
+    }
+    const controller = this.controller ?? await this.initialize();
+    return "request" in controller ? { outcome: "ready" } : controller;
+  }
+
   public async recordAdmissionFailure(input: Parameters<SnapshotRefreshAdmissionFailurePort["recordAdmissionFailure"]>[0]): Promise<Extract<SnapshotRefreshAdmission, { outcome: "blocked" }>> {
     if (this.closed) throw new Error("Refresh authority is closed.");
     const controller = this.controller ?? await this.initialize();

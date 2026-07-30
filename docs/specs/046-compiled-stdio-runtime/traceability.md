@@ -20,6 +20,8 @@ last_reviewed: 2026-07-30
 | T005 | all | all | validation and rollback | full validation and independent review | verification record |
 | T006 | Requirement 5 | all | D005, daemon admission paths | identity-path, legacy-receipt, and same-identity convergence tests | runtime contracts, runtime design, runbook |
 | T007 | Requirement 5 | all | validation and migration | targeted/full/package/live handshake validation and independent review | verification record |
+| T008 | Requirement 5 | AC5-AC6 | D006 / observer daemon readiness | owner-active observer, later lazy acquisition, and same-identity socket safety | runtime contracts, runtime design, runbook, verification |
+| T009 | Requirement 5 | AC6 | validation and release | full regression, package checks, independent review, and installed rolling-upgrade handshake | verification |
 
 ## Requirement To Delivery Matrix
 
@@ -29,7 +31,7 @@ last_reviewed: 2026-07-30
 | Requirement 2 | must-have | T002, T003, T005 | stale output, post-build receipt, tarball payload, installer failure tests | covered |
 | Requirement 3 | must-have | T003, T005 | launch-surface, bounded-failure, and installed smoke tests | covered |
 | Requirement 4 | should-have | T004, T005 | live module/RSS evidence and docs checks | covered |
-| Requirement 5 | must-have | T006, T007 | cross-version path isolation, legacy receipt, concurrency, and installed handshake tests | covered |
+| Requirement 5 | must-have | T006, T007, T008, T009 | cross-version path isolation, legacy receipt, observer readiness, concurrency, and installed handshake tests | in progress |
 
 ## Correctness Properties
 
@@ -40,6 +42,7 @@ last_reviewed: 2026-07-30
 | CP-003 | R1, R4 | T002, T004 | artifact scan and module observation | platform RSS varies |
 | CP-004 | R2 | T002, T003 | stale/missing build and installer-failure validation | checkout snapshots require reinstall after source changes |
 | CP-005 | Requirement 5 | T006, T007 | identity-scoped path and concurrent launch validation | live old/new runtime overlap remains bounded by retained provider sessions |
+| CP-006 | Requirement 5 | T008, T009 | owner-active observer readiness and exclusive refresh admission | compatible published graph required for useful observer reads |
 
 ## Design To Implementation Matrix
 
@@ -50,6 +53,7 @@ last_reviewed: 2026-07-30
 | D003 / source and distribution authority | R2, R3 | T002, T003 | source tests, package tests, manifests | parity and payload checks | covered |
 | D004 / package and local install boundaries | R2, R3 | T003 | prepack, container, repo-local installer | plugin/package/install tests | covered |
 | D005 / identity-scoped daemon admission | Requirement 5 | T006, T007 | daemon paths, lifecycle receipts, startup locks | focused concurrency and installed handshake tests | covered |
+| D006 / observer daemon readiness | Requirement 5 | T008, T009 | daemon bootstrap and lazy ownership-gated refresh authority | owner-active observer and installed rolling-upgrade handshake | in progress |
 
 ## Open Decision Impact
 

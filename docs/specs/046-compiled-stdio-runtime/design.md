@@ -110,6 +110,24 @@ Daemon admission isolation does not duplicate graph refresh ownership. Daemons
 for different runtime identities still use the existing repository ownership
 lease and derived-store compatibility rules.
 
+### D006: Start observer daemons before refresh ownership
+
+Reuse the existing lazy ownership-gated refresh authority inside the daemon.
+The daemon binds its identity-scoped endpoint, opens the compatible graph for
+reads, constructs shared request services, and publishes `ready` without first
+acquiring the repo-wide refresh lease. Startup, watcher, and first-read refresh
+triggers all pass through the lazy authority.
+
+If another runtime identity owns refresh, those triggers return structured
+`owner_active` evidence and create no local `planned` state. The observer keeps
+serving the currently published graph. Once ownership becomes available, the
+same authority performs orphan reconciliation, constructs the controller, and
+executes refresh; there is no alternate executor or retry path.
+
+A direct duplicate start for the same daemon identity remains blocked before
+the existing healthy socket can be unlinked. Different identities have distinct
+receipts, startup locks, and endpoints and may coexist as observers.
+
 ## Components and Changes
 
 ### Runtime builder
@@ -249,7 +267,7 @@ validation. Do not retain mixed compiled/source launchers.
 | compiled MCP smoke | Requirements 1 and 3 | source/package smoke |
 | plugin/package/container path tests | Requirements 2-3 | integration tests and validators |
 | same-host module/RSS observation | Requirement 4 | verification evidence |
-| daemon admission isolation | Requirement 5, CP-005 | identity-path, legacy-receipt, and concurrent launch tests |
+| daemon admission isolation | Requirement 5, CP-005, CP-006 | identity-path, legacy-receipt, observer-readiness, and concurrent launch tests |
 | typecheck and full tests | regression | verification evidence |
 | architecture, packaging, and QA review | design and implementation risk | review findings and dispositions |
 

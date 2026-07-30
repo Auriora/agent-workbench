@@ -263,7 +263,10 @@ lock so parallel agent clients and same-session sub-agents using the same
 runtime identity elect one daemon starter. During a rolling upgrade, an older
 runtime identity may continue serving retained bridges while the current
 identity starts independently; their graph-refresh work remains serialized by
-the repository ownership lease. Legacy unsuffixed admission files remain owned
+the repository ownership lease. A new identity may publish a ready observer
+endpoint while the older identity retains that lease; its refresh triggers
+return structured `owner_active` evidence and do not enter local `planned`
+state. Legacy unsuffixed admission files remain owned
 by the runtime that created them and are neither overwritten nor deleted by a
 new runtime. Stale owner cleanup requires positive evidence. The launcher may
 remove stale socket metadata only when PID and socket evidence prove the owner
@@ -288,10 +291,12 @@ the caller's original deadline, including when a lock owner dies before
 publishing its first receipt or a previously ready daemon disappears before
 connection.
 
-`ready` is published only after repository ownership, graph-store opening,
-orphan reconciliation, controller construction, socket binding, and endpoint
-metadata publication succeed. Broad graph refresh remains asynchronous after
-the endpoint is ready. Binding early and queueing MCP traffic behind incomplete
+`ready` is published after compatible graph-store opening, shared request
+service construction, socket binding, and endpoint metadata publication
+succeed. Repository ownership, orphan reconciliation, and controller
+construction occur through the single lazy refresh authority when a trigger
+can acquire the lease. Broad graph refresh remains asynchronous after the
+endpoint is ready. Binding early and queueing MCP traffic behind incomplete
 startup is not an alternate readiness route.
 
 Shutdown takes the same startup lock before removing canonical socket or

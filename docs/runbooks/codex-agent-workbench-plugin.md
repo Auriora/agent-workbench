@@ -196,6 +196,13 @@ admission and ignores those legacy files without deleting or killing their
 possible owner; this behavior applies only after v0.6.5 or a later package is
 installed and the client starts a new MCP session.
 
+The v0.6.6 package isolated admission files but still acquired the repo-wide
+refresh lease during daemon bootstrap. If an older daemon retained that lease,
+the new daemon exited with `Repository refresh owner is active`, again closing
+initialize. The corrected runtime starts a ready observer, serves the compatible
+published graph, and reports `owner_active` only for refresh admission until
+the lease becomes available.
+
 Inspect an exact PID with `ls -l /proc/<pid>/fd/0` and correlate Unix sockets
 with `ss -xnp`. Only send `SIGTERM` to an exact, confirmed orphan bridge PID.
 Do not kill the shared repository daemon or delete runtime caches as bridge

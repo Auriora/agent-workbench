@@ -72,6 +72,38 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
+  it("retries lazy refresh ownership after an active owner releases", async () => {
+    const fixture = createShutdownController("running");
+    const owner = ownershipLease("active");
+    let acquisitions = 0;
+    const authority = new LazyOwnershipGatedRefreshAuthority({
+      ownership: {
+        async acquire() {
+          acquisitions += 1;
+          return acquisitions === 1
+            ? { outcome: "blocked", reason: "owner_active", owner } as const
+            : { outcome: "acquired", lease: owner } as const;
+        },
+        async release() {}
+      },
+      ownership_request: ownershipRequest(),
+      create_controller: async () => fixture.controller
+    });
+
+    expect(await authority.request(refreshRequest())).toMatchObject({
+      outcome: "blocked",
+      reason: "owner_active",
+      state: "idle"
+    });
+    expect(await authority.request(refreshRequest())).toMatchObject({
+      outcome: "accepted",
+      state: "planned"
+    });
+    expect(acquisitions).toBe(2);
+    fixture.settle("complete", "not_required");
+    await authority.close();
+  });
+
   it("reclaims repository ownership only after positive dead-owner evidence", async () => {
     const root = makeRepoRoot("agent-workbench-owner-reclaim-");
     const lockPath = path.join(root, "refresh-owner.json");
@@ -444,9 +476,10 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -460,7 +493,7 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           return fakeChildProcess();
         }
@@ -488,10 +521,11 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 1500,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           void startGate.then(async () => {
             const daemon = await startAgentWorkbenchDaemon({
+              launchToken: spawnInput.launchToken,
               repoRoot,
               idleGraceMs: 100,
               serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -522,7 +556,7 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           return fakeChildProcess();
         }
@@ -551,7 +585,7 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 120,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           return fakeChildProcess();
         }
       })).rejects.toThrow(/Timed out connecting to Agent Workbench daemon/);
@@ -613,7 +647,7 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           throw new Error("Legacy metadata should reuse existing daemon.");
         }
       });
@@ -718,9 +752,10 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2500,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -788,9 +823,10 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -836,9 +872,10 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -881,10 +918,11 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 120,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           void startGate.then(async () => {
             const daemon = await startAgentWorkbenchDaemon({
+              launchToken: spawnInput.launchToken,
               repoRoot,
               idleGraceMs: 100,
               serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -920,7 +958,7 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 1500,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           return fakeChildProcess();
         }
@@ -960,9 +998,10 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 1000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 },
@@ -980,7 +1019,7 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 1000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           return fakeChildProcess();
         }
@@ -1066,8 +1105,9 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 300,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           daemonStart = startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 },
@@ -1114,9 +1154,10 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 },
@@ -1231,7 +1272,7 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 500,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           metadataWaiterSpawned = true;
           return fakeChildProcess();
         }
@@ -1353,12 +1394,13 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 5000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           const child = fakeChildProcess(() => {
             // no-op startup process.
           }, { stderr: childStderr });
           launchChild = child;
           void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -1412,7 +1454,106 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
-  it("does not unlink a healthy daemon socket when a second direct start loses ownership", async () => {
+  it("starts as an observer while another runtime owns refresh without displacing it", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-observer-owner-");
+    const ownership = new FileRepositoryOwnershipAdapter(
+      path.join(repoRoot, ".cache", "agent-workbench", "refresh-owner.json")
+    );
+    const external = await ownership.acquire({
+      repo_root: repoRoot,
+      runtime_identity: "legacy-runtime:3",
+      schema_version: 3,
+      owner_id: "legacy-daemon",
+      owner_pid: process.pid,
+      owner_generation: 41,
+      heartbeat_at: "2026-07-30T09:00:00.000Z"
+    });
+    expect(external.outcome).toBe("acquired");
+    if (external.outcome !== "acquired") {
+      throw new Error("Expected external refresh ownership.");
+    }
+    const daemon = await startAgentWorkbenchDaemon({
+      repoRoot,
+      idleGraceMs: 3000,
+      serverOptions: { startupRefreshDelayMs: 0 }
+    });
+    let socket: net.Socket | undefined;
+
+    try {
+      expect(daemon.metadata.launchLifecycle?.state).toBe("ready");
+      socket = await connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 2000
+      });
+      const session = createSocketSession(socket);
+      await initializeSocketSession(session, 1, "observer-owner-test");
+
+      await sleep(25);
+      const health = await session.call({
+        jsonrpc: "2.0",
+        id: 2,
+        method: "resources/read",
+        params: { uri: "integration:///health/agent-workbench" }
+      });
+      const healthEnvelope = JSON.parse(health.result.contents[0].text) as {
+        data: {
+          daemon?: {
+            warmup_state?: string;
+            activity_lease_held?: boolean;
+          };
+        };
+      };
+      expect(healthEnvelope.data.daemon).toMatchObject({
+        warmup_state: "idle",
+        activity_lease_held: false
+      });
+      expect(safeReadJson(
+        path.join(repoRoot, ".cache", "agent-workbench", "refresh-owner.json")
+      )).toMatchObject({
+        owner_id: "legacy-daemon",
+        runtime_identity: "legacy-runtime:3"
+      });
+
+    } finally {
+      socket?.destroy();
+      await daemon.close();
+      await ownership.release({ lease: external.lease });
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks a concurrent same-process direct start with a different launch token", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-direct-starting-");
+    const bootstrapGate = controlledDeferred<void>();
+    const firstStart = startAgentWorkbenchDaemon({
+      repoRoot,
+      launchToken: "first-direct-launch",
+      idleGraceMs: 3000,
+      serverOptions: { startupRefreshDelayMs: 60_000 },
+      testHooks: { awaitBootstrap: bootstrapGate.promise }
+    });
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    const firstSocket = await connectSocketEventually(paths.socketPath);
+    firstSocket.destroy();
+
+    try {
+      await expect(startAgentWorkbenchDaemon({
+        repoRoot,
+        launchToken: "second-direct-launch",
+        idleGraceMs: 3000,
+        serverOptions: { startupRefreshDelayMs: 60_000 }
+      })).rejects.toThrow("blocked: starting");
+      expect(fs.existsSync(paths.socketPath)).toBe(process.platform !== "win32");
+    } finally {
+      bootstrapGate.resolve(undefined);
+      const first = await firstStart;
+      await first.close();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not unlink a healthy daemon socket when a second direct start loses identity admission", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-second-start-");
     const first = await startAgentWorkbenchDaemon({
       repoRoot,
@@ -1424,7 +1565,7 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         idleGraceMs: 3000,
         serverOptions: { startupRefreshDelayMs: 60_000 }
-      })).rejects.toThrow("Repository refresh owner is active");
+      })).rejects.toThrow("already running for this runtime identity");
       expect(fs.existsSync(first.metadata.socketPath)).toBe(process.platform !== "win32");
       const socket = net.createConnection(first.metadata.socketPath);
       await new Promise<void>((resolve, reject) => {
@@ -1508,10 +1649,11 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 5000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           void daemonStartGate
             .then(() => startAgentWorkbenchDaemon({
+              launchToken: spawnInput.launchToken,
               repoRoot,
               idleGraceMs: 100,
               serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -1524,7 +1666,7 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 5000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           return fakeChildProcess();
         }
@@ -1558,9 +1700,10 @@ describe("Agent Workbench daemon launcher", () => {
           repoRoot,
           debugRepoRootOverride: false,
           startTimeoutMs: 2000,
-          spawnDaemon: () => {
+          spawnDaemon: (spawnInput) => {
             starts += 1;
             void startAgentWorkbenchDaemon({
+              launchToken: spawnInput.launchToken,
               repoRoot,
               idleGraceMs: 100,
               serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -1594,8 +1737,9 @@ describe("Agent Workbench daemon launcher", () => {
           plugin_version: "0.5.2"
         },
         startTimeoutMs: 2000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -1663,9 +1807,10 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -1716,9 +1861,10 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -1766,10 +1912,11 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 5000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           void daemonStartGate
             .then(() => startAgentWorkbenchDaemon({
+              launchToken: spawnInput.launchToken,
               repoRoot,
               idleGraceMs: 100,
               serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -1782,7 +1929,7 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 5000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           return fakeChildProcess();
         }
@@ -1817,7 +1964,7 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 200,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           starts += 1;
           return fakeChildProcess();
         }
@@ -2171,8 +2318,9 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 }
@@ -2253,8 +2401,9 @@ describe("Agent Workbench daemon launcher", () => {
         repoRoot,
         debugRepoRootOverride: false,
         startTimeoutMs: 2000,
-        spawnDaemon: () => {
+        spawnDaemon: (spawnInput) => {
           void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
             repoRoot,
             idleGraceMs: 100,
             serverOptions: { startupRefreshDelayMs: 60_000 }

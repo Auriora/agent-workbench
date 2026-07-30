@@ -268,8 +268,9 @@ exactly one of these states:
 
 - `starting`: one identified process and launch attempt owns cold startup; a
   bounded phase may explain which pre-listen boundary is active.
-- `ready`: ownership, store recovery, controller construction, socket binding,
-  and endpoint metadata publication completed for the recorded daemon identity.
+- `ready`: compatible graph-store opening, request-service construction, socket
+  binding, and endpoint metadata publication completed for the recorded daemon
+  identity. A rolling-upgrade observer may be ready without owning refresh.
 - `failed`: the identified launch attempt ended with a bounded safe failure
   code and is not usable as a daemon endpoint.
 
@@ -284,6 +285,13 @@ permits guarded cleanup and re-election within the original deadline. Loss of a
 previously ready receipt also returns the caller to the same guarded election
 path. Shutdown cleanup holds same-identity startup exclusion and removes
 metadata only when its launch-attempt token still matches.
+
+The repo-wide refresh lease gates transition into refresh `planned` state, not
+daemon endpoint readiness. If another runtime identity owns that lease, a
+ready observer serves the compatible published graph and returns structured
+`owner_active` refresh admission without constructing a second controller.
+Ownership acquisition, orphan reconciliation, controller construction, and
+refresh execution remain one lazy authority path.
 
 Daemon or graph-store startup failures use existing envelope vocabulary:
 incompatible or missing daemon identity maps to `invalid_due_to_environment`;
