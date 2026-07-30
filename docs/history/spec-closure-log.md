@@ -642,7 +642,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/046-compiled-stdio-runtime/`
 - **Title:** Compiled stdio runtime
 - **Final spec commit:** `77b0f55`
-- **Closure cleanup commit:** `pending`
+- **Closure cleanup commit:** `e9dd779`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/coding-agent-integration-design.md`
