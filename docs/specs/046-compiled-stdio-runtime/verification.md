@@ -137,9 +137,8 @@ This record covers Spec 046 Requirements 1-4 and tasks T001-T005.
 ### Spec Cleanup Decision
 
 - **Cleanup action:** keep active
-- **Reason:** lifecycle closure checks are ready, but commit and closure
-  authorization were not requested.
-- **Final spec commit:** pending
+- **Reason:** lifecycle closure checks are ready, but closure was not requested.
+- **Implementation/spec commit:** `c14bf60`
 - **Closure log path:** `docs/history/spec-closure-log.md`
 - **Closure log entry updated:** no
 - **Residual spec-only content:** implementation evidence until closure
