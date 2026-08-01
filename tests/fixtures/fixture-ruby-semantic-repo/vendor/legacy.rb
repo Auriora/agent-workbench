@@ -1,0 +1,2 @@
+class LegacyArtifact
+end

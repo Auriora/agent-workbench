@@ -31,10 +31,11 @@ only from the owning repository checkout.
 
 ## Native build is npm's job (and the user's toolchain)
 
-`npm install` compiles the native modules from source the same way it does for
-any native dependency. Only the core `tree-sitter` binding compiles from source;
-the grammar packages and `better-sqlite3` ship prebuilt binaries for all
-targets. The build needs **Python 3** and a **C/C++ toolchain**:
+`npm install` prepares native modules the same way it does for any native
+dependency. A compatible prebuilt binary may be used when a package provides
+one; otherwise the core `tree-sitter` binding, a grammar package such as
+`tree-sitter-ruby`, or `better-sqlite3` can compile from source. A source build
+needs **Python 3** and a **C/C++ toolchain**:
 
 - Linux/macOS: `make` plus `g++`/`clang++` (e.g. `build-essential` or the Xcode
   command line tools).
@@ -47,7 +48,7 @@ If that build fails, it is a local toolchain issue to resolve — not a packagin
 bug. The package surfaces an actionable hint in two places: a best-effort note
 from `postinstall`, and (authoritatively) a message at server launch if a native
 binding cannot load. A source checkout can rebuild with `pnpm rebuild:native`
-(or `npm rebuild tree-sitter better-sqlite3`).
+(or `npm rebuild tree-sitter tree-sitter-ruby better-sqlite3`).
 
 ## Launch model
 

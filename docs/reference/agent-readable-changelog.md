@@ -26,6 +26,42 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
+## 2026-08-01: Ruby And Rails Partial-Semantic Navigation
+
+### Agent-Visible Changes
+
+- Ruby repositories now expose parser-backed modules, classes, singleton
+  scopes, methods and constants through the common symbol, reference, impact
+  and context routes.
+- Literal loading, inheritance, constants, ordinary calls, concern mixins, and
+  a bounded Rails route/model DSL subset can contribute conservative graph
+  relationships. Ambiguous and dynamic forms remain explicit unresolved
+  evidence.
+
+### Contract Changes
+
+- No public schema changed. Ruby evidence uses the existing
+  `partial_semantic`, parser provenance, confidence, source-range and
+  parser-route coverage contracts.
+- `tree-sitter-ruby` is an approved native runtime dependency and the only Ruby
+  parser path. Parser failure blocks the file batch; no lexical, shell, Rails,
+  AST, LSP or retry fallback is used.
+
+### Required Agent Behavior Changes
+
+- Treat Ruby/Rails relationships as bounded static navigation evidence, not
+  whole-program dispatch, a booted Rails route set, callback execution or
+  association validity.
+- Inspect unresolved dynamic and ambiguity records before making caller or
+  impact claims, and directly read relevant source for closure or security
+  conclusions.
+
+### Migration Notes
+
+- Source installs must rebuild the approved native dependencies when their
+  Node ABI changes. Existing SQLite stores require no schema migration and are
+  refreshed through the normal snapshot path.
+
 ## 2026-08-01: Offline Edit Freshness Validation
 
 ### Agent-Visible Changes

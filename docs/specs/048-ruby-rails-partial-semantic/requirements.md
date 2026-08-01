@@ -69,16 +69,17 @@ code or overstating the behavior of Ruby metaprogramming and Rails DSLs.
 
 ## Staged Readiness
 
-- **Current stage:** requirements
-- **Next stage:** dependency reconciliation and design review
-- **Ready to implement when:** Spec 047 is implemented and reconciled;
-  tree-sitter Ruby dependency/build viability is proven; supported forms,
-  coverage receipts, and fixture boundaries are accepted.
+- **Current stage:** implementation
+- **Next stage:** native grammar integration, then parser extraction
+- **Ready to implement when:** satisfied by the Spec 047 closure reconciliation
+  recorded in T001. Tree-sitter Ruby dependency/build viability is the first
+  implementation proof in T002, not a prerequisite hidden outside the task.
 - **Design-first exception:** no
 - **Optional artifacts included:** `canonical-context.md`, `change-impact.md`,
   `traceability.md`, `verification.md`
-- **Downstream review needed:** architecture, implementation, security/trust,
-  verification
+- **Downstream review needed:** design and traceability were refreshed after
+  this requirements revision; architecture, implementation, security/trust,
+  and verification review remain required against the implemented diff.
 
 ## Requirements
 

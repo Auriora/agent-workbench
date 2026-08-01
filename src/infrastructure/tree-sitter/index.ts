@@ -9,3 +9,5 @@ export * from "./javascript-extractor.js";
 export * from "./javascript-parser.js";
 export * from "./python-extractor.js";
 export * from "./python-parser.js";
+export * from "./ruby-extractor.js";
+export * from "./ruby-parser.js";

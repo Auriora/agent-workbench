@@ -129,6 +129,21 @@ describe("reference-completeness boundary fixtures", () => {
     ]);
   });
 
+  it("reports an exhausted parser domain for parser-backed nodes with zero references", async () => {
+    const fixture = parserFixture("empty", 0);
+    const result = await parserQuery(fixture);
+
+    expect(result.references.references).toEqual([]);
+    expect(result.references.cursor).toBeUndefined();
+    expect(coverageFor(result)).toMatchObject({
+      state: "complete",
+      route: "parser",
+      route_exhaustion: { outgoing: true, incoming: true, unresolved: true },
+      complete_matches: 0,
+      stop_reason: "route_exhausted"
+    });
+  });
+
   it("preserves disjoint composite progress, deterministic replay, and key-epoch expiry", async () => {
     const fixture = parserFixture("mixed", 2);
     const first = await parserQuery(fixture);
@@ -176,8 +191,10 @@ type ParserFixture = {
   pageState: { active: number };
 };
 
-function parserFixture(route: ParserRoute | "mixed", count: number): ParserFixture {
-  const counts: ParserCounts = route === "mixed"
+function parserFixture(route: ParserRoute | "mixed" | "empty", count: number): ParserFixture {
+  const counts: ParserCounts = route === "empty"
+    ? { outgoing: 0, incoming: 0, unresolved: 0 }
+    : route === "mixed"
     ? { outgoing: count, incoming: count, unresolved: count }
     : count > 0
       ? {
@@ -190,7 +207,7 @@ function parserFixture(route: ParserRoute | "mixed", count: number): ParserFixtu
         : route === "incoming"
           ? { outgoing: 0, incoming: 0, unresolved: 1 }
           : { outgoing: 0, incoming: 1, unresolved: 0 };
-  const target = parserNode("target", "src/target.ts");
+  const target = parserNode("target", route === "empty" ? "app/models/target.rb" : "src/target.ts", route === "empty" ? "ruby" : "typescript");
   const calls: ParserCall[] = [];
   const pageState = { active: 0 };
   const sourceNodes = Array.from({ length: counts.incoming }, (_, index) => parserNode(`incoming-${index}`, `src/in-${index}.ts`));
@@ -366,16 +383,20 @@ function parserRoute(reference: { provenance: string; source_file_path?: string 
   return "outgoing";
 }
 
-function parserNode(id: string, filePath: string): GraphNode {
+function parserNode(id: string, filePath: string, language = "typescript"): GraphNode {
   return {
     id,
     kind: "function",
     name: id === "target" ? "targetSymbol" : id,
     qualified_name: id,
     file_path: filePath,
-    language: "typescript",
+    language,
     source_range: { start_line: 1, start_column: 0, end_line: 1, end_column: 1 },
-    metadata: {}
+    metadata: {
+      capability_level: "partial_semantic",
+      evidence_kinds: ["parser"],
+      parser: language === "ruby" ? "tree-sitter-ruby" : "tree-sitter-typescript"
+    }
   };
 }
 

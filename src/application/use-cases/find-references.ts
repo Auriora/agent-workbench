@@ -307,7 +307,18 @@ async function probeParserRoute(input: EvidenceBackedInput, pageLimit: number): 
     if (rows.length > 0) return { route, rows, prior_exhaustion: exhaustion };
     exhaustion[route] = true;
   }
+  if (hasParserBackedTarget(input.target)) {
+    return { route: "unresolved", rows: [], prior_exhaustion: exhaustion };
+  }
   return undefined;
+}
+
+function hasParserBackedTarget(target: GraphNode): boolean {
+  const evidenceKinds = target.metadata.evidence_kinds;
+  const parser = target.metadata.parser;
+  return target.language === "ruby" &&
+    ((Array.isArray(evidenceKinds) && evidenceKinds.includes("parser")) ||
+      (typeof parser === "string" && parser.startsWith("tree-sitter-")));
 }
 
 async function loadParserRoute(

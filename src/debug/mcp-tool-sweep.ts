@@ -56,7 +56,8 @@ import { createDocsRankingCursorCodec, createReferenceCursorCodec } from "../inf
 import {
   JavaScriptTypeScriptTreeSitterExtractorAdapter,
   PythonParserAdapter,
-  PythonTreeSitterExtractorAdapter
+  PythonTreeSitterExtractorAdapter,
+  RubyTreeSitterExtractorAdapter
 } from "../infrastructure/tree-sitter/index.js";
 import { SystemClockAdapter } from "../infrastructure/time/index.js";
 import {
@@ -446,6 +447,7 @@ async function warmGraph(input: { repoRoot: string; runtime: RepoRuntime }): Pro
   registry.register(new PythonTreeSitterExtractorAdapter({ parser: new PythonParserAdapter() }));
   registry.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "javascript" }));
   registry.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "typescript" }));
+  registry.register(new RubyTreeSitterExtractorAdapter());
   await indexRepositoryGraph({
     repo_root: input.repoRoot,
     scanner: input.runtime.scanner,

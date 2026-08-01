@@ -358,7 +358,8 @@ or runtime telemetry.
 ### EB010: Language And Ecosystem Semantic Promotion
 
 - Priority: P2
-- Status: ongoing backlog stream; Ruby/Rails resource-backed slice delivered by Spec 047, parser promotion active in Spec 048
+- Status: ongoing backlog stream; Ruby/Rails resource-backed and bounded
+  partial-semantic slices delivered by Specs 047 and 048
 - Friction signal: broad routing and impact analysis are weak when language or
   project-shape evidence is shallow.
 - Runtime surface: language adapters, graph extraction, symbol search,
@@ -387,8 +388,11 @@ or runtime telemetry.
   gates, recent project evidence, and tester availability justify promotion.
   Ruby/Rails met those gates through representative fixtures, an active Rails
   dogfood solution and available tester feedback. Spec 047 delivered bounded
-  resource-backed discovery and non-executed validation planning; Spec 048 is
-  the sole owner of tree-sitter Ruby and partial-semantic Rails promotion.
+  resource-backed discovery and non-executed validation planning; Spec 048
+  delivered tree-sitter Ruby declarations, bounded static references,
+  conservative graph queries and the fixture-approved Rails DSL matrix. EB010
+  remains the single owner for deeper Ruby constant lookup, dynamic dispatch,
+  metaprogramming, refinements, autoloading and Rails engine/runtime semantics.
 
 ### EB011: Contextual Tool Exposure And Dynamic Router
 

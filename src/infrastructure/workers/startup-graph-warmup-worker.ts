@@ -20,7 +20,8 @@ import {
   CppDeclarationExtractorAdapter,
   GoDeclarationExtractorAdapter,
   JavaScriptTypeScriptTreeSitterExtractorAdapter,
-  PythonTreeSitterExtractorAdapter
+  PythonTreeSitterExtractorAdapter,
+  RubyTreeSitterExtractorAdapter
 } from "../tree-sitter/index.js";
 import { SystemClockAdapter } from "../time/index.js";
 
@@ -58,6 +59,7 @@ extractors.register(new GoDeclarationExtractorAdapter());
 extractors.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "javascript" }));
 extractors.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "typescript" }));
 extractors.register(new PythonTreeSitterExtractorAdapter());
+extractors.register(new RubyTreeSitterExtractorAdapter());
 
 try {
   const result = await buildRepositoryGraph({

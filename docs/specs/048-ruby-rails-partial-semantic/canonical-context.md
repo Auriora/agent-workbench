@@ -43,7 +43,7 @@ gate is satisfied.
 
 | Spec path | Source path | Source revision or date | Status | Canonical scope | Promotion target |
 |-----------|-------------|-------------------------|--------|-----------------|------------------|
-| full package | Spec 047 package and delivered evidence | future T001 reconciliation | background until delivered | resource discovery dependency | durable adapter docs |
+| full package | Spec 047 closure record and delivered source/tests | final `2f0b160`; cleanup `a2a667e`; resolved `7113d4e` | reconciled dependency | resource discovery baseline only | durable adapter docs |
 | requirements/design | `docs/design/language-adapter-design.md` | reviewed 2026-08-01 | adapted | parser policy and promotion gates | same source |
 | requirements/design | `docs/backlog/README.md` EB010/EB061 | reviewed 2026-08-01 | adapted | language priority and coverage truth | backlog disposition |
 
@@ -62,6 +62,18 @@ gate is satisfied.
 | Capability level | language capability matrix | yes |
 | Coverage-domain contract | runtime contracts and MCP design if changed | yes |
 | Deeper dynamic semantics | backlog or focused follow-up spec | yes |
+
+## Reconciled Spec 047 Boundary
+
+Spec 047 delivered catalog identity for `.rb` and Ruby/Rails anchors, a single
+application-owned Rails project-shape pass, first-party fixture exclusion,
+resource-backed role and framework evidence, policy-aware RSpec/Minitest
+planning, nested Rails credential protection, response redaction, and bounded
+Rails dogfood evidence. It deliberately did not add a Ruby parser, declaration
+or reference nodes, Rails DSL semantics, or runtime Rails execution. Spec 048
+therefore owns exactly one new primary path: `tree-sitter-ruby` behind the
+existing extraction port. Resource-backed project shape and validation planning
+remain complementary catalog evidence, not a parser fallback.
 
 ## Related Artifacts
 

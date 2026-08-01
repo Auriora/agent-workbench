@@ -4,6 +4,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { posix as pathPosix } from "node:path";
 
 import type {
   ExtractionBatch,
@@ -876,8 +877,9 @@ function resolveReferences(batches: readonly ExtractionBatch[]): {
   batches: ExtractionBatch[];
   edges: Array<{ file_path: string; edges: GraphEdgeWriteModel[] }>;
 } {
+  const allNodes = batches.flatMap((batch) => batch.nodes);
   const nodesByName = new Map<string, GraphNodeWriteModel[]>();
-  for (const node of batches.flatMap((batch) => batch.nodes)) {
+  for (const node of allNodes) {
     const key = node.name.toLowerCase();
     nodesByName.set(key, [...(nodesByName.get(key) ?? []), node]);
   }
@@ -890,7 +892,11 @@ function resolveReferences(batches: readonly ExtractionBatch[]): {
     for (const reference of batch.unresolved_references) {
       const candidates = filterReferenceCandidates({
         reference,
-        candidates: nodesByName.get(reference.reference_name.toLowerCase()) ?? []
+        candidates: candidatePoolForReference({
+          reference,
+          allNodes,
+          namedCandidates: nodesByName.get(reference.reference_name.toLowerCase()) ?? []
+        })
       });
       const unique = candidates.length === 1 ? candidates[0] : undefined;
       if (unique) {
@@ -946,29 +952,93 @@ function resolveReferences(batches: readonly ExtractionBatch[]): {
   };
 }
 
+function candidatePoolForReference(input: {
+  reference: UnresolvedReferenceWriteModel;
+  allNodes: readonly GraphNodeWriteModel[];
+  namedCandidates: readonly GraphNodeWriteModel[];
+}): GraphNodeWriteModel[] {
+  if (input.reference.candidate_metadata.provenance !== "tree-sitter-ruby") {
+    return [...input.namedCandidates];
+  }
+  if (input.reference.candidate_metadata.static !== true) {
+    return [];
+  }
+  const referenceKind = input.reference.reference_kind;
+  const rawNormalizedName = input.reference.reference_name.replaceAll("::", ".").toLowerCase();
+  const normalizedName = referenceKind === "ruby_require_relative"
+    ? pathPosix.normalize(pathPosix.join(
+      pathPosix.dirname(input.reference.source_file_path),
+      rawNormalizedName
+    )).replace(/\.rb$/u, "")
+    : rawNormalizedName.replace(/\.rb$/u, "");
+  const additional = input.allNodes.filter((candidate) => {
+    if (candidate.language !== "ruby") return false;
+    const qualified = candidate.qualified_name?.replaceAll("::", ".").toLowerCase();
+    if (qualified === normalizedName) return true;
+    if (referenceKind !== "ruby_require" && referenceKind !== "ruby_require_relative") return false;
+    const pathWithoutExtension = candidate.file_path.replace(/\.rb$/u, "").toLowerCase();
+    return candidate.kind === "module" &&
+      (pathWithoutExtension === normalizedName || pathWithoutExtension.endsWith(`/${normalizedName}`));
+  });
+  return [...new Map([...input.namedCandidates, ...additional].map((candidate) => [candidate.id, candidate])).values()];
+}
+
 function filterReferenceCandidates(input: {
   reference: UnresolvedReferenceWriteModel;
   candidates: readonly GraphNodeWriteModel[];
 }): GraphNodeWriteModel[] {
-  if (input.candidates.length <= 1) {
-    return [...input.candidates];
+  if (input.reference.candidate_metadata.provenance === "tree-sitter-ruby" &&
+    input.reference.candidate_metadata.static !== true) {
+    return [];
+  }
+  const candidates = input.reference.candidate_metadata.provenance === "tree-sitter-ruby"
+    ? input.candidates.filter((candidate) => rubyCandidateKindMatches(input.reference, candidate))
+    : input.candidates;
+  if (candidates.length <= 1) {
+    return [...candidates];
   }
   if (input.reference.candidate_metadata.provenance !== "tree-sitter-go") {
-    return [...input.candidates];
+    return [...candidates];
   }
   const resolution = input.reference.candidate_metadata.resolution;
   const importPath = input.reference.candidate_metadata.import_path;
   if (resolution === "import_selector" && typeof importPath === "string") {
-    const imported = input.candidates.filter(
+    const imported = candidates.filter(
       (candidate) => candidate.kind !== "method" && goNodeMatchesImportPath(candidate, importPath)
     );
-    return imported.length > 0 ? imported : [...input.candidates];
+    return imported.length > 0 ? imported : [...candidates];
   }
   if (resolution === "receiver_or_package_local") {
-    const methods = input.candidates.filter((candidate) => candidate.kind === "method");
-    return methods.length > 0 ? methods : [...input.candidates];
+    const methods = candidates.filter((candidate) => candidate.kind === "method");
+    return methods.length > 0 ? methods : [...candidates];
   }
-  return [...input.candidates];
+  return [...candidates];
+}
+
+function rubyCandidateKindMatches(
+  reference: UnresolvedReferenceWriteModel,
+  candidate: GraphNodeWriteModel
+): boolean {
+  const referenceKind = reference.reference_kind;
+  if (referenceKind === "ruby_require" || referenceKind === "ruby_require_relative") {
+    return candidate.kind === "module" && candidate.metadata.parser_version === "tree-sitter-ruby";
+  }
+  if (referenceKind === "ruby_inheritance" || referenceKind === "ruby_model_dsl") {
+    return candidate.kind === "class";
+  }
+  if (referenceKind === "ruby_call") {
+    return candidate.kind === "method" || candidate.kind === "singleton_method";
+  }
+  if (referenceKind === "ruby_route") {
+    return reference.candidate_metadata.controller_action_candidate === true &&
+      (candidate.kind === "method" || candidate.kind === "singleton_method");
+  }
+  if (referenceKind === "ruby_constant" || referenceKind === "ruby_include" ||
+    referenceKind === "ruby_extend" || referenceKind === "ruby_prepend") {
+    return (candidate.kind === "constant" || candidate.kind === "class" || candidate.kind === "module") &&
+      typeof candidate.metadata.declaration_kind === "string";
+  }
+  return false;
 }
 
 function goNodeMatchesImportPath(node: GraphNodeWriteModel, importPath: string): boolean {

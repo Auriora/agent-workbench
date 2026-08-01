@@ -21,11 +21,11 @@ not a second parser or executable framework adapter.
 
 | Requirement | Acceptance Criteria | Design Coverage | Validation Approach |
 |-------------|---------------------|-----------------|---------------------|
-| R1 | AC1-AC3 | Grammar integration, adapter registration, structured failure | Native-load and parser-failure fixtures |
-| R2 | AC1-AC3 | Declaration visitor and stable identity policy | Extraction golden tests |
-| R3 | AC1-AC3 | Reference forms, resolver guardrails, coverage receipt | Reference/impact/query fixtures |
-| R4 | AC1-AC3 | Bounded Rails DSL visitors and confidence rules | Rails route/model fixtures |
-| R5 | AC1-AC4 | Fixture matrix, common presenters, promotion/review | Focused/full validation and dogfood |
+| Requirement 1 | AC1-AC3 | Grammar integration, adapter registration, structured failure | Native-load and parser-failure fixtures |
+| Requirement 2 | AC1-AC3 | Declaration visitor and stable identity policy | Extraction golden tests |
+| Requirement 3 | AC1-AC3 | Reference forms, resolver guardrails, coverage receipt | Reference/impact/query fixtures |
+| Requirement 4 | AC1-AC3 | Bounded Rails DSL visitors and confidence rules | Rails route/model fixtures |
+| Requirement 5 | AC1-AC4 | Fixture matrix, common presenters, promotion/review | Focused/full validation and dogfood |
 
 ## Correctness Property Coverage
 
@@ -183,6 +183,11 @@ must be additive and language-neutral.
 - Pause for architecture review if generic contracts or graph schema change.
 - Use focused tests during slices, then typecheck, full tests, plugin/package
   validation, installed-runtime smoke, and Rails dogfood.
+
+The design was reviewed after the 2026-08-01 requirements revision. The shared
+extraction and graph contracts remain sufficient for the initial slice; a
+language-specific public schema is not accepted. Coverage disclosure must reuse
+the existing generic provenance, capability, completeness, and caveat fields.
 
 ## Operational Considerations
 

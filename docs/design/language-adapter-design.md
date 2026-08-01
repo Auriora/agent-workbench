@@ -76,7 +76,7 @@ routing, freshness behavior, and degraded-mode reporting.
 | Go | `partial_semantic`, then `semantic` | `tree-sitter-go` declarations/references, `go.mod`/Makefile/CI/Docker validation evidence, optional `gopls`, `go list`, `go test` enrichers only after promotion fixtures |
 | C/C++ | `resource_backed`, then `partial_semantic` | `tree-sitter` (mandatory), clangd/libclang when `compile_commands.json` exists |
 | Rust | `partial_semantic`, then `semantic` | `tree-sitter` (mandatory), optional Rust parser/enrichment, Cargo metadata, `rust-analyzer`, `cargo test` |
-| Ruby | `resource_backed`, then `partial_semantic` | `tree-sitter` parser, Bundler/Gemfile metadata, Rails route/model/controller discovery, RSpec/Minitest planning, optional Ruby LSP |
+| Ruby/Rails | `partial_semantic` | `tree-sitter-ruby` declarations and bounded references/DSL records, Bundler/Gemfile project shape, and RSpec/Minitest planning; deeper dynamic semantics remain deferred |
 | SQL | `resource_backed`, then `partial_semantic` | dialect-aware parser, migration-tool integration, schema/table/column references |
 | Bash/Shell | `partial_semantic` | shell parser, ShellCheck, sourced-file and command/function references |
 | Terraform/HCL | `partial_semantic` | HCL parser, provider/module/resource/variable/output graph |
@@ -114,8 +114,8 @@ After the MVP slice works, deepen support in this order:
 1. first language path to `semantic` only after promotion fixtures pass
 2. TypeScript/JavaScript to `partial_semantic`
 3. TypeScript/JavaScript to `semantic` after promotion fixtures pass
-4. Ruby/Rails resource-backed discovery and validation planning (delivered by
-   Spec 047), followed by partial-semantic promotion in Spec 048
+4. Ruby/Rails resource-backed discovery and validation planning (Spec 047) and
+   bounded partial-semantic promotion (Spec 048), both delivered
 5. PHP/Laravel resource-backed discovery and validation planning
 6. Nuxt/Vue web-app routing and validation planning
 7. CloudFormation/SAM resource-backed discovery
@@ -131,23 +131,44 @@ conventions, React page/component areas, and nearby tests. Symbol, export,
 import, and route-level navigation should be promoted only after fixture-backed
 adapter tests prove the extracted evidence and confidence labels.
 
-The delivered Ruby/Rails first slice is `resource_backed`. It classifies Ruby
+The delivered Ruby/Rails foundation classifies Ruby
 files plus Bundler, Rake, Ruby-version, Rack, Rails route, config, role and test
 anchors through the shared file catalog. A pure application-layer project-shape
 policy admits only observed Rails roots, including engines and non-standard
 layouts, and excludes embedded fixture repositories, generated/vendor paths and
 secret-bearing Rails credentials. Generic `resource` graph nodes carry bounded
-heuristic role/path metadata; no Ruby parser, Ruby DSL evaluation, runtime Rails
-semantics or language-specific public contract is introduced.
+heuristic role/path metadata alongside the parser-backed path; no Ruby DSL
+evaluation, runtime Rails semantics or language-specific public contract is
+introduced.
 
 Overview and task context expose observed Ruby/Rails platforms, configuration,
 first-party roles and nearby tests. Validation planning applies repository
 policy and required execution environments before catalog-backed RSpec or
 Minitest candidates, uses structured arguments through command safety, and
 returns commands as planned/not-executed. Container artifacts remain advisory
-unless repository policy requires them. Parser-backed declarations,
-references, impact and bounded Rails DSL evidence remain exclusively owned by
-Spec 048.
+unless repository policy requires them.
+
+The delivered Ruby/Rails promotion uses `tree-sitter-ruby` as its single parser
+path for `.rb` files. It emits parser-backed modules, classes, stable
+`class << self` scopes, instance and singleton methods, and constant
+assignments with lexical qualified names, exact ranges, reopen metadata,
+provenance, confidence and `partial_semantic` capability. Supported bounded
+references are literal `require`/`require_relative`, static superclass and
+constant references, ordinary calls, and `include`/`extend`/`prepend` mixins.
+The shared resolver admits only a unique first-party target of the compatible
+declaration kind; duplicate or reopened candidates remain ambiguous.
+
+The initial Rails DSL matrix adds static route calls (`get`, `post`, `put`,
+`patch`, `delete`, `match`, `resource`, and `resources`) plus model calls
+(`belongs_to`, `has_many`, `has_one`, `validates`, and `before_*`). These are
+navigation relationships, not proof of a booted route set, callback execution,
+association validity or runtime dispatch. Nonliteral operands and other dynamic
+forms remain bounded `ruby_dynamic` unresolved records and are never sent
+through lexical, shell, Rails, AST, LSP or retry fallbacks. A parser failure
+rejects the complete file extraction batch instead of returning partial
+results. Whole-program constant lookup, metaprogramming, refinements,
+autoloading, engine composition and type-aware dispatch remain under EB010;
+large-repository completion remains under EB014.
 
 The delivered TypeScript/JavaScript partial-semantic slice uses
 `tree-sitter-javascript` for JS/JSX and `tree-sitter-typescript` for TS/TSX.

@@ -19,7 +19,8 @@ const NATIVE_PACKAGES = [
   "tree-sitter-python",
   "tree-sitter-javascript",
   "tree-sitter-typescript",
-  "tree-sitter-go"
+  "tree-sitter-go",
+  "tree-sitter-ruby"
 ];
 
 // Resolve a command across PATH and (on Windows) PATHEXT so pnpm.cmd is found

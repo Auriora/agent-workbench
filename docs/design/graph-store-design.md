@@ -172,6 +172,16 @@ caches should be added only when a concrete query requires relational storage.
 
 ## Reference Query Pagination
 
+Ruby parser references use the same unresolved-reference and edge tables as
+other languages. Resolution is deliberately form-aware: literal load paths may
+target the matching file module; inheritance and Rails model DSL records may
+target classes; calls may target instance or singleton methods; and constants
+or mixins may target declared constants, classes or modules. Qualified names
+and normalized first-party load paths are considered, but an edge is written
+only when one compatible target remains. Dynamic Ruby records and ambiguous
+candidates stay unresolved with their parser provenance and candidate counts.
+No Ruby-specific table or public response field is introduced.
+
 Parser reference paging uses limit-plus-one probes over three disjoint routes:
 outgoing edges, incoming edges, then unresolved references. One authenticated
 composite cursor carries per-route offsets and exhaustion. Complete evidence

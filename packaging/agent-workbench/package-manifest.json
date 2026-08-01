@@ -37,6 +37,7 @@
       "tree-sitter-go",
       "tree-sitter-javascript",
       "tree-sitter-python",
+      "tree-sitter-ruby",
       "tree-sitter-typescript",
       "yaml",
       "zod"
@@ -56,6 +57,7 @@
       "tree-sitter-go",
       "tree-sitter-javascript",
       "tree-sitter-python",
+      "tree-sitter-ruby",
       "tree-sitter-typescript"
     ]
   },
