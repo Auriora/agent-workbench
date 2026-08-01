@@ -3,7 +3,7 @@ title: Agent-readable changelog
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-21
+last_reviewed: 2026-08-01
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -25,6 +25,34 @@ Each version or dated entry should include:
 - Contract changes
 - Required agent behavior changes
 - Migration notes
+
+## 2026-08-01: Offline Edit Freshness Validation
+
+### Agent-Visible Changes
+
+- First-read snapshot validation now detects live file size or modified-time
+  drift from available indexed catalog identities, including edits made while
+  no workspace watcher was running. Indexed search and graph evidence no longer
+  remain `fresh` solely because every indexed path still exists.
+
+### Contract Changes
+
+- The additive snapshot-validity receipt may include bounded `changed_paths`
+  evidence. Missing or changed indexed paths produce `state: stale` with
+  `refresh_required: true`. Orientation lists
+  `indexed_path_identity_changes` as a material refresh trigger.
+
+### Required Agent Behavior Changes
+
+- Treat changed-path validity evidence like missing-path evidence: wait for or
+  request the coordinated refresh before relying on indexed timestamps,
+  search results, or graph evidence.
+
+### Migration Notes
+
+- Existing SQLite stores require no schema migration. The comparison uses
+  persisted file-catalog identity and live filesystem metadata during bounded
+  first-read validation.
 
 ## 2026-07-21: Snapshot-Bound Documentation Readiness
 

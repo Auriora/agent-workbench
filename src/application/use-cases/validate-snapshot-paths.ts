@@ -4,9 +4,11 @@
 */
 
 import path from "node:path";
+import type { FileCatalogEntry } from "../../domain/models/index.js";
 import type { SnapshotState, SnapshotValidityReceipt } from "../../domain/models/runtime.js";
 import type {
   FileCatalogPort,
+  SnapshotPathValidationExpectation,
   SnapshotPathValidationOutcome,
   SnapshotPathInventoryPort,
   SnapshotPathValidationPort,
@@ -31,11 +33,16 @@ export class SnapshotValidityService implements SnapshotValidityPort {
         snapshot_id: input.snapshot.id,
         max_rows: input.max_paths + 1
       });
+      const observedEntries = await this.catalog.listFiles({
+        snapshot_id: input.snapshot.id,
+        max_rows: input.max_paths + 1
+      });
       return validateObservedPaths({
         snapshot: input.snapshot,
         observed_paths: observedPaths,
         path_validation: this.pathValidation,
-        max_paths: input.max_paths
+        max_paths: input.max_paths,
+        expectations: mapExpectations(observedEntries)
       });
     }
     return validateSnapshotPaths({
@@ -66,7 +73,8 @@ export async function validateSnapshotPaths(input: {
     snapshot: input.snapshot,
     observed_paths: observed.map((file) => file.path),
     path_validation: input.path_validation,
-    max_paths: maxPaths
+    max_paths: maxPaths,
+    expectations: mapExpectations(observed)
   });
 }
 
@@ -75,20 +83,28 @@ async function validateObservedPaths(input: {
   observed_paths: readonly string[];
   path_validation: SnapshotPathValidationPort;
   max_paths: number;
+  expectations: readonly SnapshotPathValidationExpectation[];
 }): Promise<SnapshotValidityReceipt> {
   const complete = input.observed_paths.length <= input.max_paths;
   const paths = input.observed_paths.slice(0, input.max_paths);
   const outcomes = await input.path_validation.validatePaths({
     repo_root: input.snapshot.repo_root,
-    paths
+    paths,
+    expectations: input.expectations
   });
   const normalized = normalizeOutcomes(paths, outcomes);
   const missingPaths = pathsForStatus(normalized, "missing");
   const inaccessiblePaths = pathsForStatus(normalized, "inaccessible");
+  const changedPaths = pathsForStatus(normalized, "changed");
   const publicMissingPaths = publicEvidencePaths(input.snapshot.repo_root, missingPaths);
   const publicInaccessiblePaths = publicEvidencePaths(input.snapshot.repo_root, inaccessiblePaths);
+  const publicChangedPaths = publicEvidencePaths(input.snapshot.repo_root, changedPaths);
 
-  if (missingPaths.length > 0) {
+  if (missingPaths.length > 0 || changedPaths.length > 0) {
+    const reasons = [
+      ...(!changedPaths.length ? [] : [`${changedPaths.length} indexed path(s) changed from indexed identity.`]),
+      ...(!missingPaths.length ? [] : [`${missingPaths.length} indexed path(s) are no longer present in the workspace.`])
+    ];
     return receipt({
       snapshotId: input.snapshot.id,
       state: "stale",
@@ -97,8 +113,9 @@ async function validateObservedPaths(input: {
       observedPathCount: input.observed_paths.length,
       missingPaths: publicMissingPaths,
       inaccessiblePaths: publicInaccessiblePaths,
+      changedPaths: publicChangedPaths,
       refreshRequired: true,
-      reason: `${missingPaths.length} indexed path(s) are no longer present in the workspace.`
+      reason: reasons.join(" ")
     });
   }
 
@@ -177,6 +194,7 @@ function receipt(input: {
   observedPathCount: number;
   missingPaths: readonly string[];
   inaccessiblePaths: readonly string[];
+  changedPaths?: readonly string[];
   refreshRequired: boolean;
   reason?: string;
 }): SnapshotValidityReceipt {
@@ -188,7 +206,19 @@ function receipt(input: {
     observed_path_count: input.observedPathCount,
     missing_paths: [...input.missingPaths],
     inaccessible_paths: [...input.inaccessiblePaths],
+    ...(input.changedPaths === undefined ? {} : { changed_paths: [...input.changedPaths] }),
     refresh_required: input.refreshRequired,
     ...(input.reason === undefined ? {} : { reason: input.reason })
   };
+}
+
+function mapExpectations(
+  entries: readonly FileCatalogEntry[]
+): SnapshotPathValidationExpectation[] {
+  return entries
+    .map((entry) => ({
+      path: entry.path,
+      size_bytes: entry.file_identity.size_bytes,
+      mtime_ms: entry.file_identity.mtime_ms
+    }));
 }

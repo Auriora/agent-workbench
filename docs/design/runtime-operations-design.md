@@ -3,7 +3,7 @@ title: Runtime operations design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-29
+last_reviewed: 2026-08-01
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -126,11 +126,14 @@ completion beyond the existing seed bounds.
 
 Persisted `fresh` state is necessary but not sufficient for first-read reuse.
 The runtime performs bounded path validation against the indexed catalog. A
-complete all-present receipt may preserve freshness; a missing path marks the
-snapshot stale and idempotently requests the existing warm-up coordinator;
-inaccessible or budget-incomplete evidence is degraded and remains unknown.
+complete receipt may preserve freshness only when every indexed path is still
+present and each available catalog identity still matches live file size and
+modified time. A missing or identity-changed path marks the snapshot stale and
+idempotently requests the existing warm-up coordinator; inaccessible or
+budget-incomplete evidence is degraded and remains unknown. Docs-index-only
+paths without a catalog identity remain existence-validated.
 Snapshot-ID-only valid-receipt caching is intentionally not used because it
-cannot detect deletions that predate runtime observation.
+cannot detect deletions or offline edits that predate runtime observation.
 
 MVP warm-up should be explicit and observable. `repo:///status` must report
 warm-up phase, snapshot freshness, queued work counts, extraction errors, and

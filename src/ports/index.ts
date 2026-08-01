@@ -226,14 +226,21 @@ export interface FileCatalogScanPort {
 
 export type SnapshotPathValidationOutcome = {
   path: string;
-  status: "present" | "missing" | "inaccessible";
+  status: "present" | "missing" | "changed" | "inaccessible";
   reason?: string;
+};
+
+export type SnapshotPathValidationExpectation = {
+  path: string;
+  size_bytes?: number;
+  mtime_ms?: number;
 };
 
 export interface SnapshotPathValidationPort {
   validatePaths(input: {
     repo_root: string;
     paths: readonly string[];
+    expectations?: readonly SnapshotPathValidationExpectation[];
   }): Promise<readonly SnapshotPathValidationOutcome[]>;
 }
 

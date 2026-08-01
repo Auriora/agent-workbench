@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-24
+last_reviewed: 2026-08-01
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -96,6 +96,8 @@ tool/argument fingerprint appears in `satisfied_actions`.
 repository root, optional snapshot ID, freshness, analysis validity and
 capability summary, whether the orientation decision is reusable, material
 blockers, detailed-resource links, and enumerated material refresh triggers.
+Those triggers include indexed path deletion and live file identity drift from
+the selected snapshot's available catalog evidence.
 `ordinary_content_edit_requires_refresh` is always false: content freshness
 still calibrates analysis claims, but does not by itself force agents to repeat
 repository orientation. Synchronized pending content changes remain reusable;
@@ -166,10 +168,13 @@ Adapter domain describes what kind of surface an adapter covers.
 
 Snapshot path validity is reported as a bounded receipt with `state`
 (`valid`, `stale`, or `degraded`), completeness, checked and observed path
-counts, bounded missing/inaccessible path evidence, and `refresh_required`.
-Only complete all-present evidence may be `valid`. Missing indexed paths are
-`stale`; inaccessible paths or an exhausted validation budget are `degraded`
-and map public freshness to `unknown`. The runtime caveat kinds are
+counts, bounded missing/changed/inaccessible path evidence, and
+`refresh_required`. Only complete evidence whose indexed paths remain present
+and whose live size and modified time match their indexed identities may be
+`valid`. Missing or identity-changed indexed paths are `stale`; inaccessible
+paths or an exhausted validation budget are `degraded` and map public freshness
+to `unknown`. Docs-index-only paths without catalog identity evidence remain
+existence-validated. The runtime caveat kinds are
 `stale_snapshot_paths` and `degraded_snapshot_path_validity`.
 
 Watcher freshness is evaluated separately from query execution before response

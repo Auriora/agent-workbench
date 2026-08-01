@@ -6,6 +6,7 @@
 import fs from "node:fs";
 import type {
   SnapshotPathValidationOutcome,
+  SnapshotPathValidationExpectation,
   SnapshotPathValidationPort
 } from "../../ports/index.js";
 import { WorkspaceSafetyAdapter, type WorkspaceSafetyPolicy } from "./workspace-safety.js";
@@ -22,17 +23,24 @@ export class FilesystemSnapshotPathValidatorAdapter implements SnapshotPathValid
   public async validatePaths(input: {
     repo_root: string;
     paths: readonly string[];
+    expectations?: readonly SnapshotPathValidationExpectation[];
   }): Promise<readonly SnapshotPathValidationOutcome[]> {
+    const expectationByPath = expectationMap(input.expectations ?? []);
     const outcomes: SnapshotPathValidationOutcome[] = [];
     for (let offset = 0; offset < input.paths.length; offset += this.maxConcurrency) {
       outcomes.push(...await Promise.all(
-        input.paths.slice(offset, offset + this.maxConcurrency).map((path) => this.validatePath(path))
+        input.paths
+          .slice(offset, offset + this.maxConcurrency)
+          .map((path) => this.validatePath(path, expectationByPath.get(path)))
       ));
     }
     return outcomes;
   }
 
-  private async validatePath(path: string): Promise<SnapshotPathValidationOutcome> {
+  private async validatePath(
+    path: string,
+    expected: SnapshotPathValidationExpectation | undefined
+  ): Promise<SnapshotPathValidationOutcome> {
     const decision = this.safety.resolveWorkspacePath(path);
     if (!decision.allowed) {
       return {
@@ -51,6 +59,19 @@ export class FilesystemSnapshotPathValidatorAdapter implements SnapshotPathValid
           reason: "The indexed file path no longer identifies a file."
         };
       }
+      if (expected === undefined || expected.size_bytes === undefined || expected.mtime_ms === undefined) {
+        return { path, status: "present" };
+      }
+      if (
+        stat.size !== expected.size_bytes ||
+        Math.trunc(stat.mtimeMs) !== Math.trunc(expected.mtime_ms ?? NaN)
+      ) {
+        return {
+          path,
+          status: "changed",
+          reason: "The indexed file identity does not match the snapshot record."
+        };
+      }
       return { path, status: "present" };
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
@@ -66,4 +87,14 @@ export class FilesystemSnapshotPathValidatorAdapter implements SnapshotPathValid
       };
     }
   }
+}
+
+function expectationMap(
+  expectations: readonly SnapshotPathValidationExpectation[]
+): Map<string, SnapshotPathValidationExpectation> {
+  const byPath = new Map<string, SnapshotPathValidationExpectation>();
+  for (const expectation of expectations) {
+    byPath.set(expectation.path, expectation);
+  }
+  return byPath;
 }

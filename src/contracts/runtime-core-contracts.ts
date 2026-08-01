@@ -162,6 +162,7 @@ export const snapshotValidityReceiptSchema = z
     observed_path_count: z.number().int().nonnegative(),
     missing_paths: z.array(z.string()),
     inaccessible_paths: z.array(z.string()),
+    changed_paths: z.array(z.string()).optional(),
     refresh_required: z.boolean(),
     reason: z.string().optional()
   })
@@ -177,17 +178,19 @@ export const snapshotValidityReceiptSchema = z
       !value.complete ||
       value.missing_paths.length > 0 ||
       value.inaccessible_paths.length > 0 ||
+      (value.changed_paths ?? []).length > 0 ||
       value.refresh_required
     )) {
       context.addIssue({
         code: "custom",
-        message: "A valid snapshot receipt requires complete evidence with no missing or inaccessible paths."
+        message: "A valid snapshot receipt requires complete evidence with no missing, changed, or inaccessible paths."
       });
     }
-    if (value.state === "stale" && (value.missing_paths.length === 0 || !value.refresh_required)) {
+    const staleChangedOrMissing = value.missing_paths.length + (value.changed_paths ?? []).length;
+    if (value.state === "stale" && (staleChangedOrMissing === 0 || !value.refresh_required)) {
       context.addIssue({
         code: "custom",
-        message: "A stale snapshot receipt requires missing paths and refresh_required."
+        message: "A stale snapshot receipt requires missing or changed paths and refresh_required."
       });
     }
     if (value.state === "degraded" && value.complete && value.inaccessible_paths.length === 0) {

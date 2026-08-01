@@ -3,7 +3,7 @@ title: Graph store design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-21
+last_reviewed: 2026-08-01
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -323,10 +323,10 @@ universe rather than re-running either candidate query.
   since the snapshot began.
 - Create, modify, rename, delete, ignore-rule, and config-change events
   invalidate snapshot freshness before new evidence is considered fresh.
-- First-read validation checks a bounded set of indexed paths. Missing paths
-  make the snapshot stale and schedule the existing refresh path; inaccessible
-  paths or an exhausted budget produce degraded/incomplete evidence and never
-  a fresh claim.
+- First-read validation checks a bounded set of indexed paths. Missing paths or
+  live size/modified-time drift from available catalog identities make it stale
+  and schedule the existing refresh path; inaccessible paths or an exhausted
+  budget produce degraded/incomplete evidence and never a fresh claim.
 - Readers during rebuild must either see the previous valid database or a
   `refreshing`/`cold` state, never a partial replacement.
 

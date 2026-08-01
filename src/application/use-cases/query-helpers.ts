@@ -51,7 +51,17 @@ export async function findMissingWorkspacePaths(input: {
 export function staleSnapshotMeta(input: {
   meta: ResponseMetadata;
   missing_paths: readonly string[];
+  changed_paths?: readonly string[];
 }): ResponseMetadata {
+  const missingLabel = input.missing_paths.length;
+  const changedLabel = input.changed_paths?.length ?? 0;
+  const messageParts: string[] = [];
+  if (missingLabel > 0) {
+    messageParts.push(`${missingLabel} indexed path(s) required by this graph query are missing.`);
+  }
+  if (changedLabel > 0) {
+    messageParts.push(`${changedLabel} indexed path(s) required by this graph query changed since snapshot publication.`);
+  }
   return {
     ...input.meta,
     analysis_validity: "valid",
@@ -62,7 +72,7 @@ export function staleSnapshotMeta(input: {
       {
         kind: "stale_snapshot_paths",
         severity: "blocker",
-        message: `${input.missing_paths.length} indexed path(s) required by this graph query are missing.`,
+        message: messageParts.join(" ") || "Indexed path validity is stale for this graph query.",
         evidence_kinds: []
       }
     ]
@@ -74,7 +84,11 @@ export function snapshotValidityMeta(input: {
   validity: SnapshotValidityReceipt;
 }): ResponseMetadata {
   if (input.validity.state === "stale") {
-    return staleSnapshotMeta({ meta: input.meta, missing_paths: input.validity.missing_paths });
+    return staleSnapshotMeta({
+      meta: input.meta,
+      missing_paths: input.validity.missing_paths,
+      changed_paths: input.validity.changed_paths
+    });
   }
   if (input.validity.state === "degraded") {
     return {

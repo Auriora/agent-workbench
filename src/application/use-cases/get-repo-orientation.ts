@@ -16,6 +16,7 @@ const refreshWhen: OrientationReceipt["refresh_when"] = [
   "scope_or_ignore_rules_change",
   "runtime_identity_changes",
   "policy_changes",
+  "indexed_path_identity_changes",
   "indexed_path_is_deleted",
   "index_becomes_invalid"
 ];
@@ -86,7 +87,11 @@ function materialOrientationBlockers(
     blockers.push("Ranked documentation readiness is invalid or unavailable.");
   }
   if (status.snapshot_validity?.state === "stale") {
-    blockers.push("One or more indexed paths are missing or deleted.");
+    const staleMessageParts: string[] = ["One or more indexed paths are stale for this snapshot."];
+    if ((status.snapshot_validity.changed_paths?.length ?? 0) > 0) {
+      staleMessageParts.push("One or more live file identities differ from their indexed records.");
+    }
+    blockers.push(staleMessageParts.join(" "));
   } else if (status.snapshot_validity?.state === "degraded") {
     blockers.push("Snapshot path validity could not be established within the declared bound.");
   }

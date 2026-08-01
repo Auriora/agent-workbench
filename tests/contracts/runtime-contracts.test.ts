@@ -179,12 +179,14 @@ describe("runtime contracts", () => {
       observed_path_count: 2,
       missing_paths: [],
       inaccessible_paths: [],
+      changed_paths: ["src/changed.ts"],
       refresh_required: false
     })).toMatchObject({
       state: "degraded",
       complete: false,
       checked_path_count: 1,
       observed_path_count: 2,
+      changed_paths: ["src/changed.ts"],
       refresh_required: false
     });
 
@@ -196,6 +198,19 @@ describe("runtime contracts", () => {
       observed_path_count: 2,
       missing_paths: [],
       inaccessible_paths: [],
+      changed_paths: [],
+      refresh_required: false
+    }).success).toBe(false);
+
+    expect(snapshotValidityReceiptSchema.safeParse({
+      snapshot_id: "snapshot-1",
+      state: "valid",
+      complete: true,
+      checked_path_count: 1,
+      observed_path_count: 1,
+      missing_paths: [],
+      inaccessible_paths: [],
+      changed_paths: ["src/changed.ts"],
       refresh_required: false
     }).success).toBe(false);
   });
