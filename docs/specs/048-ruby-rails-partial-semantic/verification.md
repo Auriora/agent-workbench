@@ -62,7 +62,7 @@ delivered and reconciled. Planned commands below are not executed evidence.
 | Permissions | user requested completion of Spec 048 on 2026-08-01 | No release, push, or external deployment authority. |
 | Validation | focused, bounded full-suite, package/install and dogfood commands above | Cross-platform native ABI matrix was not executed locally. |
 | Review needs | architecture, implementation, security/trust | Correctness review returned no findings; direct security/trust review found no actionable issues in the changed paths. |
-| Durable-doc impact | adapter/graph design, capability matrix, backlog, packaging, changelog, ledger and history updated | Closure readiness passed; cleanup commit still needs to archive the package. |
+| Durable-doc impact | adapter/graph design, capability matrix, backlog, packaging, changelog and ledger updated | Closure readiness passed; lifecycle cleanup still needs to write history and archive the package. |
 
 ## Scope Reconciliation Before Closure
 
@@ -90,9 +90,9 @@ delivered and reconciled. Planned commands below are not executed evidence.
 | 2026-08-01 | Ruby/Rails focused validation | passed | 6 files/92 tests plus 3 freshness files/21 tests; typecheck passed. |
 | 2026-08-01 | Full regression validation | passed with bounded workers | 106 files/1161 tests; five default-concurrency timeouts were isolated and passed 84/84 before the bounded full rerun. |
 | 2026-08-01 | Package and installed-runtime validation | passed | Plugin validation, pack dry-run and installed-package MCP smoke passed. |
-| 2026-08-01 | Active Rails application dogfood | passed with limitations | Final rerun: 362 Ruby declarations and 370 resolved Ruby-origin edges; no target-repo commands executed and the generic automatic reference probe was excluded from acceptance. |
-| 2026-08-01 | Final correctness and security/trust review | passed | Final correctness review reported no findings; direct security/trust review of the changed parser/resolver/query/doc paths found no actionable issues. |
-| 2026-08-01 | Lifecycle lint and closure readiness | passed | Spec lint returned zero diagnostics and closure readiness returned ready with zero blockers after T010 completion. |
+| 2026-08-01 | Active Rails application dogfood | passed with limitations | `pnpm debug:mcp-tool-sweep -- --repo /home/bcherrington/Projects/Auriora/ror-sandpit --output-dir /tmp/agent-workbench-spec048-dogfood-final --start-graph-warmup --timeout-ms 60000` completed; read-only SQLite counts were 362 Ruby declarations and 370 resolved Ruby-origin edges. No target-repo command was executed; the invalid generic automatic reference probe was excluded from acceptance. |
+| 2026-08-01 | Final correctness and security/trust review | passed | Independent correctness re-review reproduced the fixed `require_relative` and three controller/action edges and reported no remaining finding. Independent security review checked non-execution, fail-closed parsing, path normalization, dynamic exclusion and safety fixtures and reported no actionable finding. |
+| 2026-08-01 | Lifecycle lint and closure readiness | passed | `lint_spec_package` returned 0 errors/0 warnings/0 info; `closure_check` returned `ready: true` with 0 blockers and all five requirements covered after T010 completion. |
 
 ## Residual Risks
 
@@ -113,7 +113,7 @@ delivered and reconciled. Planned commands below are not executed evidence.
 | Resolution/storage behavior | `docs/design/graph-store-design.md` | promoted | Form-aware unique Ruby resolution recorded. |
 | Native install guidance | `packaging/agent-workbench/README.md` | promoted | Packaging README now documents grammar source-build expectations and `tree-sitter-ruby` rebuild guidance. |
 | EB010/EB061 and deeper semantics | backlog | promoted | EB010 owns deeper Ruby/Rails semantics; EB061 remains the generic disclosure owner. |
-| User-visible capability | changelog, dogfood ledger and history | promoted | Behavior, limits, counts, invalid generic probe and closure routing recorded. |
+| User-visible capability | changelog and dogfood ledger | promoted | Behavior, limits, counts, invalid generic probe and closure routing recorded; lifecycle cleanup writes closure history. |
 
 ### Spec Cleanup Decision
 

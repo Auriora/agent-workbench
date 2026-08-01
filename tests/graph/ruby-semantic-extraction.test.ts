@@ -320,6 +320,14 @@ describe("Ruby partial-semantic graph extraction", () => {
           }),
           expect.objectContaining({
             reference_kind: "ruby_dynamic",
+            reference_name: "get",
+            candidate_metadata: expect.objectContaining({
+              static: false,
+              reason: "non_literal_route_target"
+            })
+          }),
+          expect.objectContaining({
+            reference_kind: "ruby_dynamic",
             reference_name: "resources",
             candidate_metadata: expect.objectContaining({
               static: false,

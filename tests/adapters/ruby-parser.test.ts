@@ -196,6 +196,7 @@ end
 module Tracking
   include dynamic_module
   resources resource_name
+  get "/computed", to: route_target
   belongs_to account_name
   require send("json")
   require_relative base_path
@@ -207,6 +208,7 @@ module Tracking
     expect(dynamicNames).toEqual(expect.arrayContaining([
       "include",
       "resources",
+      "get",
       "belongs_to",
       "require",
       "require_relative"
@@ -214,6 +216,9 @@ module Tracking
 
     const includeDynamic = dynamic.find((reference) => reference.reference_name === "include");
     const resourcesDynamic = dynamic.find((reference) => reference.reference_name === "resources");
+    const routeTargetDynamic = dynamic.find((reference) =>
+      reference.reference_name === "get" && reference.candidate_metadata.reason === "non_literal_route_target"
+    );
     const belongsToDynamic = dynamic.find((reference) => reference.reference_name === "belongs_to");
     const requireDynamic = dynamic.find((reference) => reference.reference_name === "require");
     const requireRelativeDynamic = dynamic.find((reference) => reference.reference_name === "require_relative");
@@ -231,6 +236,15 @@ module Tracking
       candidate_metadata: expect.objectContaining({
         static: false,
         reason: "non_literal_resource_name"
+      })
+    }));
+    expect(routeTargetDynamic).toEqual(expect.objectContaining({
+      reference_kind: "ruby_dynamic",
+      candidate_metadata: expect.objectContaining({
+        static: false,
+        route_form: "get",
+        route_path: "/computed",
+        reason: "non_literal_route_target"
       })
     }));
     expect(belongsToDynamic).toEqual(expect.objectContaining({

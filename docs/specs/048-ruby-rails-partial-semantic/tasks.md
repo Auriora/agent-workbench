@@ -76,7 +76,7 @@ Spec 047 -> T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008 -> T009
   - Files: Ruby extractor, reference fixtures
   - Acceptance: Approved loading, constant, inheritance, and call forms carry
     exact source ranges, form metadata, provenance, and confidence.
-  - Evidence: Parser emits static require, require_relative, inheritance, constant, include, extend, prepend and ordinary call records with exact source ranges, tree-sitter-ruby provenance, form metadata and calibrated confidence. Nonliteral operands emit bounded ruby_dynamic records that are excluded from candidate resolution. Adapter and graph fixture suites passed.
+  - Evidence: Parser emits static require, require_relative, inheritance, constant, include, extend, prepend and ordinary call records with exact source ranges, tree-sitter-ruby provenance, form metadata and calibrated confidence. Nonliteral operands emit bounded ruby_dynamic records that are excluded from candidate resolution. `pnpm exec vitest run tests/adapters/ruby-parser.test.ts tests/graph/ruby-semantic-extraction.test.ts tests/graph/reference-completeness.test.ts tests/language/ruby-parser-path.test.ts` passed 4 files/20 tests after final route-target and relative-load fixes; `pnpm typecheck` passed.
 
   - Status: Complete; the call-form subset is explicit and fixture bounded.
   - Evidence mode: command
@@ -141,7 +141,7 @@ Spec 047 -> T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008 -> T009
   - Acceptance: Architecture and implementation findings are resolved or
     routed; `partial_semantic` limits are durable; deeper Ruby/Rails work has
     one owner; closure checks pass.
-  - Evidence: Final correctness review reported no findings and confirmed the resolved `require_relative` normalization plus static Rails `to:` controller-action routing coverage. A direct security/trust review of the changed parser, resolver, query and promoted-doc paths found no authentication, secret-exposure, injection, data-boundary or unsafe-fallback regressions in this slice. Durable language, graph, capability, backlog, packaging, changelog, dogfood and history owners are updated, and residual semantics remain routed to EB010, EB014 and EB061.
+  - Evidence: Final correctness review reported no findings and confirmed the resolved `require_relative` normalization plus static Rails `to:` controller-action routing coverage. An independent security review of the changed parser, resolver, query and fixture paths found no execution, secret-exposure, injection, data-boundary or unsafe-fallback regression in this slice. Durable language, graph, capability, backlog, packaging, changelog and dogfood owners are updated; residual semantics remain routed to EB010, EB014 and EB061; lifecycle cleanup owns the closure-history entry.
 
   - Status: Complete; closure checks may pass and the package can be archived after the final spec commit is recorded.
   - Evidence mode: artifact
