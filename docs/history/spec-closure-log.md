@@ -467,6 +467,38 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-01 - 048-ruby-rails-partial-semantic
+
+- **Spec:** `docs/specs/048-ruby-rails-partial-semantic/`
+- **Title:** Ruby and Rails partial-semantic requirements
+- **Final spec commit:** `87b4f19`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/language-adapter-design.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/reference/language-capability-matrix.md`
+  - `docs/reference/agent-readable-changelog.md`
+  - `docs/reference/dogfood-evidence-ledger.md`
+  - `docs/backlog/README.md`
+  - `packaging/agent-workbench/README.md`
+- **Verification summary:** The focused Ruby/parser/query suite passed 20 tests,
+  the workspace queue/freshness slice passed 21 tests, and the bounded full
+  suite passed 106 files / 1,161 tests. Typecheck, native rebuild/load, plugin
+  validation, package dry-run, installed-package MCP smoke, bounded Rails
+  dogfood, independent correctness/security review, lifecycle lint,
+  task-state audit, evidence-quality review, closure readiness, low-risk review,
+  active-spec scan, and archive-index validation passed.
+- **Residual risks:**
+  - Ruby/Rails evidence is bounded to the documented static forms; dynamic
+    dispatch, runtime constant lookup, metaprogramming, refinements, autoloading
+    and engine composition are not claimed.
+  - One Rails application and one local Node/platform ABI are bounded evidence,
+    not universal application or cross-platform packaging proof.
+  - Large-repository completion beyond first-pass graph budgets is not claimed.
+- **Follow-up:** EB010 owns deeper Ruby/Rails semantics, EB014 owns large-graph
+  completion, and EB061 owns generic parser-route coverage-domain disclosure.
+
 ### 2026-08-01 - 047-ruby-rails-resource-discovery
 
 - **Spec:** `docs/specs/047-ruby-rails-resource-discovery/`
@@ -480,7 +512,6 @@ historical audit explicitly needs the original scaffolding.
   - `docs/backlog/README.md`
   - `docs/reference/workspace-safety-contract.md`
   - `docs/reference/dogfood-evidence-ledger.md`
-  - `docs/specs/048-ruby-rails-partial-semantic/`
 - **Verification summary:** Typecheck, focused Rails and security suites, the
   final 103-file/1,148-test suite, plugin validation, package dry-run, bounded
   Rails dogfood, independent architecture/QA/lifecycle/security review,
@@ -490,8 +521,8 @@ historical audit explicitly needs the original scaffolding.
   - Resource-backed Rails paths and conventions do not imply parser-backed or
     runtime Rails semantics.
   - One dogfood application is bounded evidence, not universal framework proof.
-- **Follow-up:** Spec 048 owns the single tree-sitter Ruby path and bounded
-  partial-semantic Rails promotion.
+- **Follow-up:** Spec 048 delivered the single tree-sitter Ruby path and bounded
+  partial-semantic Rails promotion; deeper semantics remain under EB010.
 
 ### 2026-07-21 - 044-ranked-documentation-readiness-and-first-read-trust
 
