@@ -1,0 +1,13 @@
+{
+  "validation": {
+    "environment": "host",
+    "host_commands": "blocked",
+    "commands": [
+      {
+        "command": "bundle",
+        "args": ["exec", "ruby", "-I", "test", "test/models/widget_test.rb"],
+        "reason": "Run focused Minitest model coverage for this fixture."
+      }
+    ]
+  }
+}

@@ -8,6 +8,7 @@ import type { ExtractionRequest } from "../../src/domain/models/index.js";
 import { cloudFormationTemplateExtraction } from "../../src/infrastructure/extraction/cloudformation-resource-extractor.js";
 import { cmakeTargetNodes } from "../../src/infrastructure/extraction/cmake-resource-extractor.js";
 import { dotnetResourceNodes } from "../../src/infrastructure/extraction/dotnet-resource-extractor.js";
+import { ResourceExtractorAdapter } from "../../src/infrastructure/extraction/index.js";
 
 describe("resource extractor rule units", () => {
   it("extracts CMake target routing evidence without generator expressions", () => {
@@ -145,6 +146,74 @@ describe("resource extractor rule units", () => {
         })
       ])
     );
+  });
+
+  it("extracts generic resource evidence for Rails config and route files", async () => {
+    const adapter = new ResourceExtractorAdapter();
+
+    const databaseConfig = await adapter.extract(
+      extractionRequest({
+        path: "config/database.yml",
+        language: "yaml",
+        content: "default: &default\n  adapter: sqlite3\n"
+      })
+    );
+    const routesFile = await adapter.extract(
+      extractionRequest({
+        path: "config/routes.rb",
+        language: "text",
+        content: "Rails.application.routes.draw do\n  resources :widgets\nend\n"
+      })
+    );
+
+    expect(databaseConfig.nodes).toEqual([
+      expect.objectContaining({
+        kind: "resource",
+        name: "database.yml",
+        qualified_name: "config/database.yml",
+        metadata: expect.objectContaining({
+          domain: "config",
+          capability_level: "resource_backed",
+          evidence_kinds: ["config"]
+        })
+      })
+    ]);
+    expect(routesFile.nodes).toEqual([
+      expect.objectContaining({
+        kind: "resource",
+        name: "routes.rb",
+        qualified_name: "config/routes.rb",
+        metadata: expect.objectContaining({
+          domain: "documentation",
+          capability_level: "resource_backed",
+          evidence_kinds: ["docs"]
+        })
+      })
+    ]);
+  });
+
+  it.fails("classifies Ruby route candidates as resource-backed Rails path evidence", async () => {
+    const adapter = new ResourceExtractorAdapter();
+    const routesFile = await adapter.extract(
+      extractionRequest({
+        path: "config/routes.rb",
+        language: "ruby",
+        content: "Rails.application.routes.draw do\n  resources :widgets\nend\n"
+      })
+    );
+
+    expect(routesFile.nodes).toEqual([
+      expect.objectContaining({
+        kind: "resource",
+        qualified_name: "config/routes.rb",
+        metadata: expect.objectContaining({
+          domain: "rails",
+          role: "route",
+          capability_level: "resource_backed",
+          evidence_kinds: expect.arrayContaining(["path"])
+        })
+      })
+    ]);
   });
 });
 

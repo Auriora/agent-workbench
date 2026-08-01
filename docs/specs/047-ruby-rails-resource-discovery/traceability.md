@@ -58,6 +58,29 @@ No owner decision blocks T001. The recorded architecture uses the existing
 generic `resource` node; any proposed public schema or graph-kind change must
 pause the affected task for architecture review.
 
+## T001 Reconciliation Evidence
+
+| Boundary | Current owner | Reconciled outcome |
+|----------|---------------|--------------------|
+| Repository-wide shape | proposed `src/application/use-cases/rails-project-shape.ts`, called by each owning bounded-scan flow | exact owner fixed; pure catalog input; no second traversal or new port |
+| File-local extraction and graph transport | `src/infrastructure/extraction/resource-extractor.ts`; `src/domain/models/graph.ts` | generic `resource` node and metadata are sufficient; no schema change |
+| Identity and capability | `src/infrastructure/filesystem/file-identity.ts`; `src/application/use-cases/file-catalog-entry.ts`; `src/domain/policies/adapter-capabilities.ts` | Ruby/Bundler support is not implemented; both inference paths are explicit T003 seams |
+| Path and write safety | `src/domain/policies/path-policy.ts`; `src/infrastructure/filesystem/workspace-safety.ts` | shared route confirmed; nested Rails credentials remain a fixture-backed implementation gap |
+| Response redaction | `src/presentation/redaction.ts`; overview and task-context presenters | shared textual boundary confirmed; catalog exclusion remains the primary secret-path boundary |
+| Telemetry attributes | `src/interface-adapters/mcp/instrumentation.ts`; `src/infrastructure/telemetry/index.ts` | existing dispatch fields identified; Rails-specific negative suppression proof remains G5/T007 |
+| Validation planning | `src/application/use-cases/plan-verification.ts`; `validation-environment.ts`; `validation-ecosystems.ts`; `src/domain/policies/command-safety.ts` | bounded planning and structured `planCommand` route confirmed; no execution path |
+
+## T002 Fixture Evidence
+
+| Fixture or boundary | Explicit outcome |
+|---------------------|------------------|
+| Conventional application | Observed controller, model, job, mailer, channel, service, concern, migration, route, config, test, package, safe example, secret, generated, and vendor paths |
+| Rails engine | Observed engine-local application, config, route, migration, package, and test roots without requiring a root `app/` directory |
+| Non-standard layout | Observed `backend/src`, `backend/config`, and `backend/test` roots; missing conventional `app/`, `Rakefile`, and `config.ru` remain absent |
+| RSpec, Minitest, and constrained policy | Repository-policy commands are structured, planned, and not executed; the engine fixture requires Docker and blocks host commands |
+| Policy and coverage loss | Shared secret-path expectations plus deterministic oversized, permission-denied, and catalog-truncated cases expose non-complete evidence |
+| Phase boundary | 131 focused assertions pass; 8 expected failures define T003-T006 behavior without changing production source or adding parser semantics |
+
 ## Maintenance Notes
 
 Update coverage states and evidence when task scope or implementation changes.

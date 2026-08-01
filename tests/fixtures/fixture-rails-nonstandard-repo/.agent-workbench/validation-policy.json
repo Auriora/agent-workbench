@@ -1,0 +1,13 @@
+{
+  "validation": {
+    "environment": "host",
+    "host_commands": "allowed",
+    "commands": [
+      {
+        "command": "bundle",
+        "args": ["exec", "ruby", "-I", "test", "-e", "0"],
+        "reason": "Legacy nonstandard host policy."
+      }
+    ]
+  }
+}

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import type { FileCatalogEntry } from "../../src/domain/models/index.js";
 import type { WorkspaceFilePort } from "../../src/ports/index.js";
@@ -18,6 +19,7 @@ import {
 } from "../../src/application/use-cases/validation-package-scripts.js";
 import { discoverValidationProtocol } from "../../src/application/use-cases/validation-environment.js";
 import { buildStaticFeedback } from "../../src/application/use-cases/validation-static-feedback.js";
+import { WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
 
 describe("validation planner rule units", () => {
   it("selects package-local scripts for selected workspace files", () => {
@@ -118,6 +120,34 @@ describe("validation planner rule units", () => {
     expect(protocol.evidencePaths).toEqual([".agent-workbench/validation-policy.json"]);
     expect(protocol.policyCommands.map((command) => command.display)).toEqual([
       "docker compose run --rm app go test ./..."
+    ]);
+  });
+
+  it("discovers the explicit Minitest policy from the Rails fixture", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
+    const protocol = await discoverValidationProtocol(
+      new WorkspaceFileAdapter({ repoRoot })
+    );
+
+    expect(protocol.blocksHostCommands).toBe(true);
+    expect(protocol.requiresDockerValidation).toBe(false);
+    expect(protocol.evidencePaths).toEqual([".agent-workbench/validation-policy.json"]);
+    expect(protocol.policyCommands.map((command) => command.display)).toEqual([
+      "bundle exec ruby -I test test/models/widget_test.rb"
+    ]);
+  });
+
+  it("preserves a Rails engine fixture's constrained execution environment", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-rails-engine-repo");
+    const protocol = await discoverValidationProtocol(
+      new WorkspaceFileAdapter({ repoRoot })
+    );
+
+    expect(protocol.blocksHostCommands).toBe(true);
+    expect(protocol.requiresDockerValidation).toBe(true);
+    expect(protocol.evidencePaths).toEqual([".agent-workbench/validation-policy.json"]);
+    expect(protocol.policyCommands.map((command) => command.display)).toEqual([
+      "docker compose run --rm app bundle exec rake test"
     ]);
   });
 

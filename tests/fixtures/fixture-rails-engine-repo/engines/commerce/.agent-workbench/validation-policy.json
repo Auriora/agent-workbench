@@ -1,0 +1,13 @@
+{
+  "validation": {
+    "environment": "host",
+    "host_commands": "allowed",
+    "commands": [
+      {
+        "command": "bundle",
+        "args": ["exec", "ruby", "-I.", "-e", "0"],
+        "reason": "Engine local policy fallback."
+      }
+    ]
+  }
+}

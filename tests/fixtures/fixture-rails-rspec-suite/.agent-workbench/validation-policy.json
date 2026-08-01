@@ -1,0 +1,13 @@
+{
+  "validation": {
+    "environment": "host",
+    "host_commands": "allowed",
+    "commands": [
+      {
+        "command": "bundle",
+        "args": ["exec", "rspec"],
+        "reason": "Preferred suite for fixture."
+      }
+    ]
+  }
+}

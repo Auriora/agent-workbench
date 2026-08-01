@@ -503,6 +503,129 @@ describe("context_for_task use case", () => {
     );
   });
 
+  it("resolves Rails Minitest fixture files as direct bounded context anchors", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
+    const result = await getTaskContext({
+      request: {
+        task: "Update Rails widget routes and model behavior",
+        repo_root: repoRoot,
+        files: [
+          "app/models/widget.rb",
+          "app/controllers/widgets_controller.rb",
+          "config/routes.rb",
+          "test/models/widget_test.rb"
+        ],
+        symbols: [],
+        max_files: 8,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: repoRoot
+    });
+
+    expect(result.context.requested_files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "app/models/widget.rb",
+          exists: true
+        }),
+        expect.objectContaining({
+          path: "app/controllers/widgets_controller.rb",
+          exists: true
+        }),
+        expect.objectContaining({
+          path: "config/routes.rb",
+          exists: true
+        }),
+        expect.objectContaining({
+          path: "test/models/widget_test.rb",
+          exists: true
+        })
+      ])
+    );
+    expect(result.context.validation_hints).toEqual([]);
+  });
+
+  it.fails("ranks nearby Rails tests, routes, and package evidence for a selected model", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
+    const result = await getTaskContext({
+      request: {
+        task: "Update Rails widget behavior",
+        repo_root: repoRoot,
+        files: ["app/models/widget.rb"],
+        symbols: [],
+        max_files: 8,
+        max_docs: 5
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: repoRoot
+    });
+
+    expect(result.context.related_files.map((file) => file.path)).toEqual(
+      expect.arrayContaining([
+        "test/models/widget_test.rb",
+        "config/routes.rb",
+        "Gemfile"
+      ])
+    );
+    expect(result.context.related_files).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "test/models/widget_test.rb",
+          capability_level: "resource_backed"
+        })
+      ])
+    );
+  });
+
+  it("surfaces permission and budget loss for Rails-shaped catalog evidence", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
+    const scanner: FileCatalogScanPort = {
+      async scan(input) {
+        return {
+          repo_root: input.repo_root,
+          indexed_roots: input.indexed_roots,
+          skipped_roots: [...DEFAULT_SKIPPED_ROOTS].sort(),
+          skipped_paths: [
+            {
+              path: "app/models/private_widget.rb",
+              reason: "permission_denied",
+              detail: "Fixture test double denied the Rails model path."
+            }
+          ],
+          files: [],
+          truncated: true
+        };
+      }
+    };
+
+    const result = await getTaskContext({
+      request: {
+        task: "Inspect Rails routes with incomplete model evidence",
+        repo_root: repoRoot,
+        files: ["config/routes.rb"],
+        symbols: [],
+        max_files: 2,
+        max_docs: 2
+      },
+      scanner,
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: repoRoot
+    });
+
+    expect(result.meta.truncated).toBe(true);
+    expect(result.context.skipped_work).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "skipped_paths",
+          reason: expect.stringContaining("permission_denied")
+        })
+      ])
+    );
+  });
+
   it("resolves a symbol before recommending graph actions that require a node id", async () => {
     const result = await getTaskContext({
       request: {

@@ -401,6 +401,146 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
+  it("indexes the Rails Minitest fixture with expected resource-backed route/config evidence shape", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
+    const store = openGraphStore(path.join(dir, "rails-minitest.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new ResourceExtractorAdapter());
+
+    try {
+      const result = await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "204"
+      });
+
+      expect(result.scanned_files).toBeGreaterThan(10);
+      expect(result.resource_backed_files).toBe(result.scanned_files);
+
+      const files = await store.listFiles({ snapshot_id: "204" });
+      const filePaths = files.map((file) => file.path);
+      expect(filePaths).toEqual(
+        expect.arrayContaining([
+          "app/controllers/widgets_controller.rb",
+          "app/models/widget.rb",
+          "config/routes.rb",
+          "config/database.yml",
+          "test/models/widget_test.rb"
+        ])
+      );
+      expect(filePaths).not.toContain(".env");
+
+      const dbConfig = await store.findNodesByQualifiedName({
+        snapshot_id: "204",
+        qualified_name: "config/database.yml"
+      });
+      expect(dbConfig).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "resource",
+            metadata: expect.objectContaining({
+              domain: "config",
+              capability_level: "resource_backed"
+            })
+          })
+        ])
+      );
+    } finally {
+      store.close();
+    }
+  });
+
+  it.fails("keeps Rails generated and vendor paths out of graph extraction", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
+    const store = openGraphStore(path.join(dir, "rails-exclusions.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new ResourceExtractorAdapter());
+
+    try {
+      await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "206"
+      });
+
+      await expect(store.getFile({ snapshot_id: "206", path: "generated/schema.graphql" })).resolves.toEqual(
+        expect.objectContaining({ indexed: false, skipped_reason: "generated_or_vendor" })
+      );
+      await expect(store.getFile({ snapshot_id: "206", path: "vendor/bundle/placeholder.txt" })).resolves.toEqual(
+        expect.objectContaining({ indexed: false, skipped_reason: "generated_or_vendor" })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("records an oversized Rails model as non-indexed without reading its body", async () => {
+    const repoRoot = path.join(dir, "rails-oversized-repo");
+    fs.cpSync(path.resolve("tests/fixtures/fixture-rails-minitest-suite"), repoRoot, {
+      recursive: true
+    });
+    fs.writeFileSync(path.join(repoRoot, "app/models/widget.rb"), "x".repeat(2_000_001));
+    const store = openGraphStore(path.join(dir, "rails-oversized.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new ResourceExtractorAdapter());
+    const workspace = new WorkspaceFileAdapter({ repoRoot });
+    const guardedWorkspace: WorkspaceFilePort = {
+      readText(input) {
+        if (input.path === "app/models/widget.rb") {
+          throw new Error("oversized Rails file should not be read");
+        }
+        return workspace.readText(input);
+      },
+      readBinary: (input) => workspace.readBinary(input),
+      writeText: (input) => workspace.writeText(input),
+      writeBinary: (input) => workspace.writeBinary(input),
+      stat: (input) => workspace.stat(input),
+      deletePath: (input) => workspace.deletePath(input),
+      ensureDirectory: (input) => workspace.ensureDirectory(input)
+    };
+
+    try {
+      await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: guardedWorkspace,
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "205"
+      });
+
+      await expect(store.getFile({ snapshot_id: "205", path: "app/models/widget.rb" })).resolves.toEqual(
+        expect.objectContaining({
+          indexed: false,
+          skipped_reason: "file_too_large_for_text_extraction"
+        })
+      );
+    } finally {
+      store.close();
+    }
+  });
+
   it("yields to the event loop while indexing large repositories", async () => {
     const repoRoot = path.join(dir, "yield-repo");
     const store = openGraphStore(path.join(dir, "yield.sqlite"));

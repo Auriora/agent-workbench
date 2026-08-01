@@ -541,6 +541,50 @@ describe("repo overview MCP resource", () => {
       ])
     );
   });
+
+  it.fails("promotes observed Rails files and Rails validation hints", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
+    const result = await getRepoOverview({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter()
+    });
+
+    const keyFiles = result.overview.key_files.map((file) => file.path);
+    expect(result.overview.languages).toContain("ruby");
+    expect(result.overview.platforms).toEqual(expect.arrayContaining(["ruby", "rails"]));
+    expect(keyFiles).toEqual(expect.arrayContaining([
+      "app/controllers/widgets_controller.rb",
+      "app/models/widget.rb",
+      "config/routes.rb",
+      "test/models/widget_test.rb"
+    ]));
+    expect(result.overview.validation_hints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          command: "verification_plan",
+          reason: expect.stringContaining("Rails")
+        })
+      ])
+    );
+  });
+
+  it.fails.each([
+    ["fixture-rails-engine-repo", "engines/commerce/app/commerce/models/product.rb", "engines/commerce/config/routes.rb"],
+    ["fixture-rails-nonstandard-repo", "backend/src/models/client.rb", "backend/config/routes.rb"]
+  ])("uses only observed Rails roots for %s", async (fixture, rolePath, routePath) => {
+    const repoRoot = path.resolve("tests/fixtures", fixture);
+    const result = await getRepoOverview({
+      repo_root: repoRoot,
+      scanner: new FileCatalogScannerAdapter()
+    });
+    const keyFiles = result.overview.key_files.map((file) => file.path);
+
+    expect(result.overview.platforms).toContain("rails");
+    expect(keyFiles).toEqual(expect.arrayContaining([rolePath, routePath]));
+    if (fixture === "fixture-rails-nonstandard-repo") {
+      expect(keyFiles.some((file) => file.startsWith("app/"))).toBe(false);
+    }
+  });
 });
 
 describe("repo scope and overview composed server resources", () => {

@@ -1,0 +1,13 @@
+{
+  "validation": {
+    "environment": "docker",
+    "host_commands": "blocked",
+    "commands": [
+      {
+        "command": "docker",
+        "args": ["compose", "run", "--rm", "app", "bundle", "exec", "rake", "test"],
+        "reason": "Fixture engine validation is constrained to Docker Compose."
+      }
+    ]
+  }
+}

@@ -138,6 +138,50 @@ The policy runs once per owning flow (`index-repository-graph`, `get-repo-overvi
 `get-task-context`, validation planning). It does not traverse filesystem or
 re-enter scanning.
 
+### T001 Live-Source Reconciliation
+
+The 2026-08-01 reconciliation fixed the implementation boundary against the
+current source:
+
+- `rails-project-shape.ts` is the exact application-policy owner. Its exported
+  detector is a pure function over the `FileCatalogEntry[]`, scan coverage, and
+  skipped-path evidence already owned by the caller. The existing
+  `js-ts-project-shape.ts` establishes this application-layer pattern.
+- `index-repository-graph.ts` owns the single shape computation for graph
+  indexing and decides whether catalog-visible Rails associations are admitted.
+  `get-repo-overview.ts`, `get-task-context.ts`, and `plan-verification.ts` each
+  compute the same pure shape once from their own existing bounded scan. No new
+  port, traversal, cache, or process-global state is introduced.
+- `resource-extractor.ts` remains file-local and keeps the generic `resource`
+  graph node. `GraphNodeWriteModel.metadata` already carries language-neutral
+  metadata, so Spec 047 requires no graph kind, public schema, or migration.
+- Ruby identity must be added consistently to both
+  `FileIdentityAdapter.inferLanguage` and `inferLanguageFromPath`; current
+  source has two deliberate scan/stat inference entry points and neither yet
+  recognizes Ruby. `describeFileCapability` likewise does not yet classify
+  Ruby or Bundler manifests as resource-backed.
+- The shared path-policy route already governs catalog scanning and workspace
+  writes. It classifies `config/master.key`, root Rails credential files, and
+  `.env*` through generic secret rules, but nested
+  `config/credentials/**` is not yet covered and must be added to that shared
+  classifier rather than a Rails-only bypass.
+- Response construction remains in the overview/task-context presenters, with
+  `presentation/redaction.ts` as the shared textual redaction boundary.
+  `interface-adapters/mcp/instrumentation.ts` constructs MCP dispatch telemetry
+  from envelope status, counts, budgets, timing, and the pre-existing
+  `repo_root` identity. The telemetry adapter serializes only attributes passed
+  by call sites. Rails implementation must add no paths, bodies, command
+  arguments, secret-like values, or new repository identifiers; T007 supplies
+  the required negative proof.
+- Validation remains planning-only. `plan-verification.ts` owns the bounded
+  catalog scan and candidate orchestration, `validation-environment.ts` owns
+  repository-policy/environment discovery, and every configured command passes
+  through `planCommand` as structured executable and arguments before becoming
+  `planned`/`not_executed` evidence.
+
+These observations match the accepted design. They are reconciliation evidence,
+not implementation or telemetry-suppression proof.
+
 ### Route Evidence Constraint
 
 - `config/routes.rb` and equivalent observed route-file paths are surfaced only as

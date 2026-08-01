@@ -1,0 +1,3 @@
+default: &default
+  adapter: sqlite3
+  pool: 5

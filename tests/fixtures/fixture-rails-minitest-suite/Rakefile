@@ -1,0 +1,5 @@
+task :default => :test
+
+task :test do
+  sh 'ruby -I test test/models/widget_test.rb'
+end

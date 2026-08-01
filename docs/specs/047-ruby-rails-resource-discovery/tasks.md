@@ -19,7 +19,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
 
 ## Phase 1: Reconciliation and fixtures
 
-- [ ] T001 Reconcile Ruby/Rails scope with current adapters and public contracts.
+- [x] T001 Reconcile Ruby/Rails scope with current adapters and public contracts.
   - Depends on: none
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4
   - Files: `docs/specs/047-ruby-rails-resource-discovery/design.md`,
@@ -42,6 +42,9 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
     `src/infrastructure/extraction/extractor-registry.ts`,
     `src/infrastructure/extraction/index.ts`,
     `src/infrastructure/filesystem/workspace-safety.ts`,
+    `src/presentation/redaction.ts`,
+    `src/presentation/repo-overview-presenter.ts`,
+    `src/presentation/task-context-presenter.ts`,
     `src/interface-adapters/mcp/instrumentation.ts`,
     `src/infrastructure/telemetry/index.ts`,
     `tests/application/validation-planner-rules.test.ts`,
@@ -63,12 +66,14 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
     updates design, traceability, and verification only if reconciliation finds
     drift; its evidence names inspected seams and the result before T002. This
     inspection does not count as telemetry-suppression proof.
-  - Evidence: Pending.
+  - Evidence: Direct reads of the T001 source/test inventory confirmed: proposed `src/application/use-cases/rails-project-shape.ts` is the pure application-policy owner; each owning flow reuses its existing bounded catalog scan; `resource-extractor.ts` and `GraphNodeWriteModel.metadata` support the existing generic `resource` node without schema change; shared identity, safety, presentation, telemetry, and structured `planCommand` seams and their pending Ruby/Rails gaps are recorded in `design.md`, `traceability.md`, and `verification.md`. `lint_spec_package` completed with 0 diagnostics.
   - Design constraint: shape is repository-wide, catalog-driven, and consumed by
     `index-repository-graph`, `get-repo-overview`, `get-task-context`, and
     validation planning.
 
-- [ ] T002 Add representative Ruby/Rails fixture repositories and expected
+  - Status: Reconciled; no source or tests changed. T002 may begin.
+  - Evidence mode: artifact
+- [x] T002 Add representative Ruby/Rails fixture repositories and expected
   route/config evidence and validation outcomes.
   - Depends on: T001
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4
@@ -92,9 +97,11 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
     unreadable/oversized/budget-truncated cases, and generated/vendor
     exclusions. Each fixture asserts its expected resource, overview, context,
     coverage, exclusion, or validation outcome.
-  - Evidence: Pending.
+  - Evidence: Added five representative Rails fixture repositories and explicit fixture-first assertions across seven focused suites. Conventional, engine, non-standard, RSpec, Minitest, Docker-constrained policy, secret, generated/vendor, oversized, permission-denied, truncated, and absent-optional-file cases are covered. Focused Vitest completed with 131 passing assertions and 8 deliberate expected failures defining T003-T006; full Vitest completed with 103 files and 1124 passing tests plus the same 8 expected failures; pnpm typecheck, fixture JSON, bounded secret-pattern, and git visibility checks passed. No production source changed.
   - Prerequisite: T001 reconciliation must be complete with recorded evidence.
 
+  - Status: Phase 1 fixtures complete; T003 Ruby identity and capability implementation is next.
+  - Evidence mode: artifact
 ## Phase 2: Resource-backed implementation
 
 - [ ] T003 Implement Ruby file identity and resource-backed capability.

@@ -1,0 +1,8 @@
+# frozen_string_literal: true
+
+require_relative 'config/application'
+
+
+task :default do
+  sh 'bundle exec rake test'
+end

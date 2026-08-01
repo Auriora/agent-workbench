@@ -36,6 +36,7 @@ describe("shared path policy consistency", () => {
     fs.mkdirSync(path.join(repoRoot, "dist"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "generated"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "vendor"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "config", "credentials"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, ".vscode"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "ignored-dir"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "nested", ".git"), { recursive: true });
@@ -47,6 +48,9 @@ describe("shared path policy consistency", () => {
     fs.writeFileSync(path.join(repoRoot, ".env.local"), "TOKEN=secret\n");
     fs.writeFileSync(path.join(repoRoot, ".envrc"), "export TOKEN=secret\n");
     fs.writeFileSync(path.join(repoRoot, ".env.example"), "TOKEN=\n");
+    fs.writeFileSync(path.join(repoRoot, "config", "master.key"), "0123456789abcdef\n");
+    fs.writeFileSync(path.join(repoRoot, "config", "credentials", "development.yml.enc"), "widget_secret: ENC[development]\n");
+    fs.writeFileSync(path.join(repoRoot, "config", "credentials", "test.yml.enc"), "widget_secret: ENC[test]\n");
     fs.writeFileSync(path.join(repoRoot, "credentials.json"), "{\"token\":\"secret\"}\n");
     fs.writeFileSync(path.join(repoRoot, "secrets.yaml"), "token: secret\n");
     fs.writeFileSync(path.join(repoRoot, "id_rsa.pem"), "-----BEGIN PRIVATE KEY-----\nsecret\n-----END PRIVATE KEY-----\n");
@@ -74,8 +78,10 @@ describe("shared path policy consistency", () => {
     expect(classifyPathPolicy({ relativePath: ".envrc", isDirectory: false }).reason).toBe("secret");
     expect(classifyPathPolicy({ relativePath: "credentials.json", isDirectory: false }).reason).toBe("secret");
     expect(classifyPathPolicy({ relativePath: "secrets.yaml", isDirectory: false }).reason).toBe("secret");
+    expect(classifyPathPolicy({ relativePath: "config/master.key", isDirectory: false }).reason).toBe("secret");
     expect(classifyPathPolicy({ relativePath: "id_rsa.pem", isDirectory: false }).reason).toBe("secret");
     expect(classifyPathPolicy({ relativePath: ".env.example", isDirectory: false }).reason).toBe("source");
+    expect(classifyPathPolicy({ relativePath: "config/credentials/development.yml.enc", isDirectory: false }).reason).toBe("source");
     expect(
       classifyPathPolicy({
         relativePath: "ignored.log",
@@ -83,6 +89,11 @@ describe("shared path policy consistency", () => {
         gitignoreRules
       }).reason
     ).toBe("gitignore");
+  });
+
+  it.fails("treats encrypted Rails credentials paths as secret-bearing policy exceptions", () => {
+    expect(classifyPathPolicy({ relativePath: "config/credentials/development.yml.enc", isDirectory: false }).reason).toBe("secret");
+    expect(classifyPathPolicy({ relativePath: "config/credentials/test.yml.enc", isDirectory: false }).reason).toBe("secret");
   });
 
   it("keeps scanner skip reasons and workspace write refusals aligned", async () => {
@@ -109,6 +120,7 @@ describe("shared path policy consistency", () => {
     expect(skippedByPath.get(".env")).toBe("secret");
     expect(skippedByPath.get(".envrc")).toBe("secret");
     expect(skippedByPath.get("credentials.json")).toBe("secret");
+    expect(skippedByPath.get("config/master.key")).toBe("secret");
     expect(skippedByPath.get("secrets.yaml")).toBe("secret");
     expect(skippedByPath.get("id_rsa.pem")).toBe("secret");
     expect(skippedByPath.get("dist")).toBe("generated_or_vendor");
@@ -157,6 +169,7 @@ describe("shared path policy consistency", () => {
       ".env",
       ".envrc",
       "credentials.json",
+      "config/master.key",
       "secrets.yaml",
       "generated/out.ts",
       "vendor/dep.ts",
@@ -174,11 +187,30 @@ describe("shared path policy consistency", () => {
     });
   });
 
+  it.fails("requires an explicit Rails credentials carve-out for encrypted Rails credential files", async () => {
+    const scanner = new FileCatalogScannerAdapter();
+    const scan = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["."],
+      skipped_roots: ["configured-skip"],
+      max_files: 100
+    });
+    const skippedByPath = new Map(scan.skipped_paths?.map((skipped) => [skipped.path, skipped.reason]));
+
+    expect(skippedByPath.get("config/credentials/development.yml.enc")).toBe("secret");
+    expect(resolveWorkspacePath({ repoRoot }, "config/credentials/development.yml.enc", { write: true })).toMatchObject({
+      allowed: false,
+      reason: "path_refused"
+    });
+  });
+
   it("keeps hook path-risk vocabulary aligned with runtime classifications", () => {
     expect(hook.hookPathPolicyReason(".env")).toBe("secret");
     expect(hook.hookPathPolicyReason(".env.local")).toBe("secret");
     expect(hook.hookPathPolicyReason(".env.example")).toBeUndefined();
     expect(hook.hookPathPolicyReason("credentials.json")).toBe("secret");
+    expect(hook.hookPathPolicyReason("config/master.key")).toBe("secret");
+    expect(hook.hookPathPolicyReason("config/credentials/development.yml.enc")).toBeUndefined();
     expect(hook.hookPathPolicyReason("secrets.yaml")).toBe("secret");
     expect(hook.hookPathPolicyReason("generated/out.ts")).toBe("generated_or_vendor");
     expect(hook.hookPathPolicyReason("vendor/dep.ts")).toBe("generated_or_vendor");

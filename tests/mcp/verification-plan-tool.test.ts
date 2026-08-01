@@ -66,6 +66,63 @@ describe("verification_plan use case", () => {
     );
   });
 
+  it("plans a Rails minitest command from policy while suppressing generic host commands", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
+    const result = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["app/models/widget.rb"],
+        changed_files: ["app/models/widget.rb"],
+        include_static_feedback: true,
+        max_commands: 10
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+
+    expect(result.plan.status).toBe("planned");
+    expect(result.plan.planned_commands).toEqual([
+      expect.objectContaining({
+        command: "bundle",
+        args: ["exec", "ruby", "-I", "test", "test/models/widget_test.rb"],
+        display: "bundle exec ruby -I test test/models/widget_test.rb",
+        status: "planned",
+        execution: "not_executed"
+      })
+    ]);
+    expect(result.plan.risks).toEqual([]);
+    expect(result.plan.static_feedback).toBeUndefined();
+  });
+
+  it("plans the repository-approved RSpec command without executing it", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-rails-rspec-suite");
+    const result = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["app/models/widget.rb"],
+        changed_files: ["app/models/widget.rb"],
+        include_static_feedback: true,
+        max_commands: 10
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+
+    expect(result.plan.status).toBe("planned");
+    expect(result.plan.planned_commands).toEqual([
+      expect.objectContaining({
+        command: "bundle",
+        args: ["exec", "rspec"],
+        display: "bundle exec rspec",
+        status: "planned",
+        execution: "not_executed"
+      })
+    ]);
+    expect(result.plan.static_feedback).toBeUndefined();
+  });
+
   it("plans bounded Markdown quality checks for docs-only repositories when no files are selected", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-docs-only-"));
     try {
