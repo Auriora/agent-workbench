@@ -544,10 +544,17 @@ describe("context_for_task use case", () => {
         })
       ])
     );
-    expect(result.context.validation_hints).toEqual([]);
+    expect(result.context.validation_hints).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          command: "verification_plan",
+          reason: expect.stringContaining("Rails")
+        })
+      ])
+    );
   });
 
-  it.fails("ranks nearby Rails tests, routes, and package evidence for a selected model", async () => {
+  it("ranks nearby Rails tests, routes, and package evidence for a selected model", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
     const result = await getTaskContext({
       request: {

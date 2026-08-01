@@ -41,6 +41,10 @@ describe("file catalog scanner", () => {
     fs.writeFileSync(path.join(repoRoot, "src", "__pycache__", "service.cpython-312.pyc"), "compiled\n");
     fs.writeFileSync(path.join(repoRoot, "src", "app.ts"), "export const value = 'ok';\n");
     fs.writeFileSync(path.join(repoRoot, "package.json"), "{\"name\":\"fixture\"}\n");
+    fs.writeFileSync(path.join(repoRoot, "Gemfile"), "source 'https://rubygems.org'\n");
+    fs.writeFileSync(path.join(repoRoot, "Rakefile"), "task :default\n");
+    fs.writeFileSync(path.join(repoRoot, ".ruby-version"), "3.4.0\n");
+    fs.writeFileSync(path.join(repoRoot, "config.ru"), "run Application\n");
     fs.writeFileSync(path.join(repoRoot, ".github", "workflows", "ci.yml"), "name: ci\n");
     fs.writeFileSync(path.join(repoRoot, ".claude", "commands", "review.md"), "local agent guidance\n");
     fs.writeFileSync(path.join(repoRoot, ".codex", ".tmp", "plugin.md"), "local plugin cache\n");
@@ -88,11 +92,27 @@ describe("file catalog scanner", () => {
     });
 
     expect(result.truncated).toBe(false);
+    for (const rubyAnchor of ["Gemfile", "Rakefile", ".ruby-version"]) {
+      expect(result.files.find((file) => file.path === rubyAnchor)?.adapter_evidence).toMatchObject({
+        domain: "package_manager",
+        name: "ruby",
+        capability_level: "resource_backed"
+      });
+    }
+    expect(result.files.find((file) => file.path === "config.ru")?.adapter_evidence).toMatchObject({
+      domain: "framework",
+      name: "rails",
+      capability_level: "resource_backed"
+    });
     expect(result.skipped_roots).toEqual([...DEFAULT_SKIPPED_ROOTS].sort());
     expect(result.files.map((file) => file.path)).toEqual([
       ".github/workflows/ci.yml",
+      ".ruby-version",
+      "config.ru",
       "Dockerfile",
+      "Gemfile",
       "package.json",
+      "Rakefile",
       "src/app.ts",
       "src/service.py"
     ]);

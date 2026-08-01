@@ -161,4 +161,52 @@ describe("runtime telemetry boundary instrumentation", () => {
       }
     });
   });
+
+  it("does not leak Rails command internals through boundary telemetry payload", async () => {
+    const telemetry = new InMemoryTelemetryAdapter();
+    const sensitiveRailsFile = "backend/spec/services/payments_spec.rb";
+    const sensitiveCommandArg = "RAILS_ENV=test";
+    const sensitiveSourceBody = "def create; Payment.create!(token: 'top-secret'); end";
+    const sensitiveRepoId = "rails-sandbox-b7";
+
+    const result = await runTelemetryBoundary({
+      telemetry,
+      boundary: "worker",
+      name: "plan_verification",
+      attributes: {
+        phase: "plan"
+      },
+      run: () => ({
+        command: "bundle",
+        args: ["exec", "rspec", sensitiveRailsFile],
+        source_body: sensitiveSourceBody,
+        repo_identifier: sensitiveRepoId,
+        command_arg: sensitiveCommandArg
+      })
+    });
+
+    expect(result).toEqual({
+      command: "bundle",
+      args: ["exec", "rspec", sensitiveRailsFile],
+      source_body: sensitiveSourceBody,
+      repo_identifier: sensitiveRepoId,
+      command_arg: sensitiveCommandArg
+    });
+    const telemetryPayload = JSON.stringify(telemetry.records[0]?.properties);
+    expect(telemetryPayload).not.toContain(sensitiveRailsFile);
+    expect(telemetryPayload).not.toContain(sensitiveSourceBody);
+    expect(telemetryPayload).not.toContain(sensitiveCommandArg);
+    expect(telemetryPayload).not.toContain(sensitiveRepoId);
+    expect(telemetry.records[0]).toEqual(
+      expect.objectContaining({
+        name: "runtime.boundary",
+        properties: expect.objectContaining({
+          boundary_kind: "worker",
+          boundary_name: "plan_verification",
+          outcome: "ok",
+          phase: "plan"
+        })
+      })
+    );
+  });
 });

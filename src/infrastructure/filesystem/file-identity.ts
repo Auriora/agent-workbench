@@ -67,6 +67,10 @@ export class FileIdentityAdapter implements FileIdentityPort {
       return "csharp";
     }
 
+    if (ext === ".rb") {
+      return "ruby";
+    }
+
     if (ext === ".go") {
       return "go";
     }

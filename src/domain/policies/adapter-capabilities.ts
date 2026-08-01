@@ -13,7 +13,7 @@ type FileCapabilityInput = {
 };
 
 const partialSemanticLanguages = new Set(["go", "javascript", "python", "typescript"]);
-const resourceBackedLanguageNames = new Set(["c", "cpp", "csharp"]);
+const resourceBackedLanguageNames = new Set(["c", "cpp", "csharp", "ruby"]);
 const unsupportedLanguageNames = new Set([
   "java",
   "rust"
@@ -46,6 +46,10 @@ function isPackageManifest(filePath: string): boolean {
   const ext = extension(filePath);
   return (
     filename === "package.json" ||
+    filename === "gemfile" ||
+    filename === "gemfile.lock" ||
+    filename === ".ruby-version" ||
+    filename === "rakefile" ||
     filename === "pyproject.toml" ||
     filename === "go.mod" ||
     filename === "cargo.toml" ||
@@ -60,6 +64,9 @@ function packageManifestName(filePath: string): string {
   const filename = lowerBasename(filePath);
   if (filename === "package.json") {
     return "npm";
+  }
+  if (["gemfile", "gemfile.lock", ".ruby-version", "rakefile"].includes(filename)) {
+    return "ruby";
   }
   if (filename === "pyproject.toml") {
     return "python";
@@ -89,6 +96,15 @@ function isInfrastructureFile(filePath: string): boolean {
   );
 }
 
+function isRailsRouteFile(filePath: string): boolean {
+  const normalized = normalizePath(filePath).toLowerCase();
+  return lowerBasename(filePath) === "routes.rb" && (normalized === "config/routes.rb" || normalized.includes("/config/routes.rb"));
+}
+
+function isRailsRackEntry(filePath: string): boolean {
+  return lowerBasename(filePath) === "config.ru";
+}
+
 function evidence(
   input: FileCapabilityInput,
   domain: AdapterDomain,
@@ -113,6 +129,13 @@ export function describeFileCapability(input: FileCapabilityInput): AdapterEvide
     return {
       ...evidence(input, "package_manager", "resource_backed", ["config"], "high"),
       name: packageManifestName(input.path)
+    };
+  }
+
+  if ((input.language === "ruby" && isRailsRouteFile(input.path)) || isRailsRackEntry(input.path)) {
+    return {
+      ...evidence(input, "framework", "resource_backed", ["heuristic"], "high"),
+      name: "rails"
     };
   }
 

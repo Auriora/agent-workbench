@@ -31,6 +31,7 @@ import {
   mcpEvidenceReason,
   mcpTransportLabels
 } from "./mcp-server-shape.js";
+import { detectRailsProjectShape } from "./rails-project-shape.js";
 
 export type GetRepoOverviewResult = {
   overview: RepoOverview;
@@ -55,6 +56,10 @@ export async function getRepoOverview(input: {
   ]);
   const languages = uniqueSorted(scanned.files.map((file) => file.file_identity.language));
   const overviewFiles = scanned.files.filter((file) => !isEmbeddedFixturePath(file.path));
+  const railsShape = detectRailsProjectShape({
+    files: overviewFiles,
+    scan_truncated: scanned.truncated
+  });
   const status = getCatalogRepoStatus({
     repo_root: scanned.repo_root,
     indexed_roots: scanned.indexed_roots,
@@ -70,10 +75,10 @@ export async function getRepoOverview(input: {
       repo_root: scanned.repo_root,
       summary: `Repository has ${scanned.files.length} indexed file(s) across ${languages.length} language/category value(s).`,
       languages,
-      platforms: detectPlatforms(overviewFiles),
-      key_files: selectKeyFiles(overviewFiles),
+      platforms: detectPlatforms(overviewFiles, railsShape),
+      key_files: selectKeyFiles(overviewFiles, railsShape),
       key_docs: selectKeyDocs(overviewFiles),
-      validation_hints: inferValidationHints(overviewFiles),
+      validation_hints: inferValidationHints(overviewFiles, railsShape),
       skipped_paths: mapSkippedPaths(scanned.skipped_paths ?? []),
       recommended_first_calls: [
         { tool: "read_resource", args: { uri: "repo:///status" } },
@@ -103,10 +108,13 @@ function mapSkippedPaths(skippedPaths: readonly FileCatalogSkippedPath[]): Skipp
   }));
 }
 
-function selectKeyFiles(files: readonly FileCatalogEntry[]): FileReference[] {
+function selectKeyFiles(
+  files: readonly FileCatalogEntry[],
+  railsShape: ReturnType<typeof detectRailsProjectShape>
+): FileReference[] {
   return files
-    .filter((file) => isKeyFile(file.path))
-    .sort((left, right) => keyFileEvidence(right).score - keyFileEvidence(left).score || left.path.localeCompare(right.path))
+    .filter((file) => isKeyFile(file.path, railsShape))
+    .sort((left, right) => keyFileEvidence(right, railsShape).score - keyFileEvidence(left, railsShape).score || left.path.localeCompare(right.path))
     .slice(0, 20)
     .map((file) => ({
       path: file.path,
@@ -114,7 +122,7 @@ function selectKeyFiles(files: readonly FileCatalogEntry[]): FileReference[] {
       exists: true,
       capability_level: file.adapter_evidence?.capability_level ?? "unsupported",
       evidence_kinds: file.adapter_evidence?.evidence_kinds ?? [],
-      reason: keyFileEvidence(file).reason
+      reason: keyFileEvidence(file, railsShape).reason
     }));
 }
 
@@ -184,7 +192,10 @@ function isEmbeddedFixturePath(filePath: string): boolean {
   return lower.startsWith("tests/fixtures/") || lower.includes("/tests/fixtures/");
 }
 
-function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHint[] {
+function inferValidationHints(
+  files: readonly FileCatalogEntry[],
+  railsShape: ReturnType<typeof detectRailsProjectShape>
+): ValidationHint[] {
   const paths = new Set(files.map((file) => file.path));
   const hints: ValidationHint[] = [];
   const hasCmake = hasCMakeEvidence(paths);
@@ -291,6 +302,14 @@ function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHin
   if (paths.has("pyproject.toml")) {
     hints.push({ command: "python3 -m pytest", reason: "pyproject.toml indicates Python tests may be available.", status: "needed" });
   }
+  if (railsShape.rails_roots.length > 0) {
+    const evidence = railsShape.route_file_paths[0] ?? railsShape.config_file_paths[0] ?? railsShape.role_file_paths[0];
+    hints.push({
+      command: "verification_plan",
+      reason: `${evidence ?? "Observed Rails project evidence"} suggests Rails-aware validation planning should be generated before running commands.`,
+      status: "needed"
+    });
+  }
   if (
     hasDocsOrConfig &&
     samTemplate === undefined &&
@@ -310,9 +329,15 @@ function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHin
   return hints;
 }
 
-function detectPlatforms(files: readonly FileCatalogEntry[]): string[] {
+function detectPlatforms(
+  files: readonly FileCatalogEntry[],
+  railsShape: ReturnType<typeof detectRailsProjectShape>
+): string[] {
   const paths = new Set(files.map((file) => file.path));
   const platforms = new Set<string>();
+  if (files.some((file) => file.file_identity.language === "ruby")) {
+    platforms.add("ruby");
+  }
   if (paths.has("package.json")) platforms.add("node");
   const jsTsShape = detectJsTsProjectShape(files);
   if (jsTsShape.has_typescript || jsTsShape.tsconfig_files.length > 0) platforms.add("typescript");
@@ -335,11 +360,17 @@ function detectPlatforms(files: readonly FileCatalogEntry[]): string[] {
       platforms.add(`mcp_${transport}`);
     }
   }
+  if (railsShape.rails_roots.length > 0) {
+    platforms.add("rails");
+  }
   if ([...paths].some((file) => file.startsWith(".github/workflows/"))) platforms.add("github_actions");
   return [...platforms].sort();
 }
 
-function isKeyFile(filePath: string): boolean {
+function isKeyFile(
+  filePath: string,
+  railsShape: ReturnType<typeof detectRailsProjectShape>
+): boolean {
   return (
     filePath === "package.json" ||
     filePath === "pyproject.toml" ||
@@ -363,6 +394,10 @@ function isKeyFile(filePath: string): boolean {
     filePath === "Dockerfile" ||
     filePath.startsWith(".devcontainer/") ||
     filePath.startsWith(".github/workflows/") ||
+    railsShape.config_file_paths.includes(filePath) ||
+    railsShape.route_file_paths.includes(filePath) ||
+    railsShape.role_file_paths.includes(filePath) ||
+    railsShape.test_file_paths.includes(filePath) ||
     filePath.startsWith("apps/") ||
     filePath.startsWith("packages/") ||
     filePath.startsWith("services/") ||
@@ -372,7 +407,10 @@ function isKeyFile(filePath: string): boolean {
   );
 }
 
-function keyFileEvidence(file: FileCatalogEntry): { score: number; reason: string } {
+function keyFileEvidence(
+  file: FileCatalogEntry,
+  railsShape: ReturnType<typeof detectRailsProjectShape>
+): { score: number; reason: string } {
   const lower = file.path.toLowerCase();
   const reasons: string[] = [];
   let score = baseKeyFileRank(file);
@@ -443,6 +481,22 @@ function keyFileEvidence(file: FileCatalogEntry): { score: number; reason: strin
   }
   if (lower.startsWith(".github/workflows/")) {
     reasons.push("workflow configuration");
+  }
+  if (railsShape.config_file_paths.includes(file.path)) {
+    reasons.push("Rails application config");
+    score = Math.max(score, 118);
+  }
+  if (railsShape.route_file_paths.includes(file.path)) {
+    reasons.push("Rails routing file");
+    score = Math.max(score, 116);
+  }
+  if (railsShape.role_file_paths.includes(file.path)) {
+    reasons.push("Rails role source");
+    score = Math.max(score, 102);
+  }
+  if (railsShape.test_file_paths.includes(file.path)) {
+    reasons.push("Rails test file");
+    score = Math.max(score, 94);
   }
   if (isGeneratedVendorOrFixturePath(lower)) {
     reasons.push("downranked generated/vendor/fixture path");

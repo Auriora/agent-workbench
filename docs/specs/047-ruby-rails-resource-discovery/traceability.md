@@ -26,10 +26,10 @@ last_reviewed: 2026-08-01
 
 | Requirement | Priority | Acceptance Criteria | Design Sections | Tasks | Verification | Durable Targets | Coverage State | Residual Destination |
 |-------------|----------|---------------------|-----------------|-------|--------------|-----------------|----------------|----------------------|
-| Requirement 1 | must-have | Requirement 1 AC1; Requirement 1 AC2; Requirement 1 AC3; Requirement 1 AC4 | Components and Changes; Data Flow; Security, Trust, and Access | T001-T003, T007 | Gates 1-2, 6 | `docs/design/language-adapter-design.md`; `docs/reference/language-capability-matrix.md` | not-covered | Spec 047 tasks |
-| Requirement 2 | must-have | Requirement 2 AC1; Requirement 2 AC2; Requirement 2 AC3; Requirement 2 AC4; Requirement 2 AC5; Requirement 2 AC6 | System Architecture; Data Flow; Error Handling | T002, T004-T005, T007 | Gate 3 | `docs/design/language-adapter-design.md` | not-covered | Spec 047 tasks |
-| Requirement 3 | must-have | Requirement 3 AC1; Requirement 3 AC2; Requirement 3 AC3; Requirement 3 AC4; Requirement 3 AC5; Requirement 3 AC6 | Validation Candidate Discovery and Ranking; Error Handling | T002, T006-T007 | Gate 4 | `docs/design/language-adapter-design.md` | not-covered | Spec 047 tasks |
-| Requirement 4 | must-have | Requirement 4 AC1; Requirement 4 AC2; Requirement 4 AC3 | Validation Strategy; Slice Boundary And Residual Architecture | T001-T002, T004, T007-T008 | Gates 2-8 (AC1 fixture proof uses Gates 2-4; regression, promotion, and closure use Gates 5-8) | `docs/design/language-adapter-design.md`; `docs/reference/language-capability-matrix.md`; `docs/backlog/README.md`; `docs/reference/dogfood-evidence-ledger.md`; `docs/reference/workspace-safety-contract.md`; `docs/history/spec-closure-log.md` | not-covered | Spec 047 tasks |
+| Requirement 1 | must-have | Requirement 1 AC1; Requirement 1 AC2; Requirement 1 AC3; Requirement 1 AC4 | Components and Changes; Data Flow; Security, Trust, and Access | T001-T003, T007 | Gates 1-2, 6 | `docs/design/language-adapter-design.md`; `docs/reference/language-capability-matrix.md` | covered | none |
+| Requirement 2 | must-have | Requirement 2 AC1; Requirement 2 AC2; Requirement 2 AC3; Requirement 2 AC4; Requirement 2 AC5; Requirement 2 AC6 | System Architecture; Data Flow; Error Handling | T002, T004-T005, T007 | Gate 3 | `docs/design/language-adapter-design.md` | covered | `docs/specs/048-ruby-rails-partial-semantic/` for parser semantics |
+| Requirement 3 | must-have | Requirement 3 AC1; Requirement 3 AC2; Requirement 3 AC3; Requirement 3 AC4; Requirement 3 AC5; Requirement 3 AC6 | Validation Candidate Discovery and Ranking; Error Handling | T002, T006-T007 | Gate 4 | `docs/design/language-adapter-design.md` | covered | none |
+| Requirement 4 | must-have | Requirement 4 AC1; Requirement 4 AC2; Requirement 4 AC3 | Validation Strategy; Slice Boundary And Residual Architecture | T001-T002, T004, T007-T008 | Gates 2-8 (AC1 fixture proof uses Gates 2-4; regression, promotion, and closure use Gates 5-8) | `docs/design/language-adapter-design.md`; `docs/reference/language-capability-matrix.md`; `docs/backlog/README.md`; `docs/reference/dogfood-evidence-ledger.md`; `docs/reference/workspace-safety-contract.md`; `docs/history/spec-closure-log.md` | covered | `docs/specs/048-ruby-rails-partial-semantic/` |
 
 ## Correctness Property Coverage
 
@@ -46,11 +46,11 @@ last_reviewed: 2026-08-01
 
 | Design Section | Requirements | Tasks | Interfaces Or Files | Verification | Coverage State | Residual Destination |
 |----------------|--------------|-------|---------------------|--------------|----------------|----------------------|
-| Components and Changes | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | T001-T006 | `file-catalog-entry`, `rails-project-shape`, capability policy, extraction and use cases | Gates 2-5 | not-covered | Spec 047 tasks |
-| Data Flow | Requirement 1, Requirement 2, Requirement 3 | T003-T006 | catalog, resource extraction, context, validation planning | Gates 2-4 | not-covered | Spec 047 tasks |
-| Security, Trust, and Access | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | T002-T007 | shared path policy, command safety, telemetry suppression, presentation redaction | Gates 2-8 | not-covered | Spec 047 tasks |
-| Validation Strategy | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | T002, T007 | focused/full tests and dogfood evidence | Gates 2-7 | not-covered | Spec 047 tasks |
-| Slice Boundary And Residual Architecture | Requirement 4 | T008 | durable docs and follow-up package route | Gate 8 | not-covered | `docs/specs/048-ruby-rails-partial-semantic/` |
+| Components and Changes | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | T001-T006 | `file-catalog-entry`, `rails-project-shape`, capability policy, extraction and use cases | Gates 2-5 | covered | none |
+| Data Flow | Requirement 1, Requirement 2, Requirement 3 | T003-T006 | catalog, resource extraction, context, validation planning | Gates 2-4 | covered | none |
+| Security, Trust, and Access | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | T002-T007 | shared path policy, command safety, telemetry suppression, presentation redaction | Gates 2-8 | covered | none |
+| Validation Strategy | Requirement 1, Requirement 2, Requirement 3, Requirement 4 | T002, T007 | focused/full tests and dogfood evidence | Gates 2-7 | covered | none |
+| Slice Boundary And Residual Architecture | Requirement 4 | T008 | durable docs and follow-up package route | Gate 8 | covered | `docs/specs/048-ruby-rails-partial-semantic/` |
 
 ## Open Decision Impact
 

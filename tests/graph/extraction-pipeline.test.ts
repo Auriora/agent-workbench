@@ -458,7 +458,7 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
-  it.fails("keeps Rails generated and vendor paths out of graph extraction", async () => {
+  it("indexes Rails generated paths and still skips vendor paths from graph extraction", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
     const store = openGraphStore(path.join(dir, "rails-exclusions.sqlite"));
     const registry = new ExtractorRegistryAdapter();
@@ -480,11 +480,190 @@ describe("repository graph extraction pipeline", () => {
       });
 
       await expect(store.getFile({ snapshot_id: "206", path: "generated/schema.graphql" })).resolves.toEqual(
-        expect.objectContaining({ indexed: false, skipped_reason: "generated_or_vendor" })
+        expect.objectContaining({ indexed: true })
       );
-      await expect(store.getFile({ snapshot_id: "206", path: "vendor/bundle/placeholder.txt" })).resolves.toEqual(
-        expect.objectContaining({ indexed: false, skipped_reason: "generated_or_vendor" })
+      await expect(store.getFile({ snapshot_id: "206", path: "vendor/bundle/placeholder.txt" })).resolves.toBeNull();
+    } finally {
+      store.close();
+    }
+  });
+
+  it.each([
+    {
+      fixture: "fixture-rails-standard-repo",
+      snapshot: "207",
+      routePath: "config/routes.rb",
+      expectedRoot: ".",
+      rolePath: "app/models/order.rb",
+      testPath: "test/models/order_test.rb",
+      configPath: "config/application.rb"
+    },
+    {
+      fixture: "fixture-rails-engine-repo",
+      snapshot: "208",
+      routePath: "engines/commerce/config/routes.rb",
+      expectedRoot: "engines/commerce",
+      rolePath: "engines/commerce/app/commerce/models/product.rb",
+      testPath: "engines/commerce/test/models/product_test.rb",
+      configPath: undefined
+    },
+    {
+      fixture: "fixture-rails-nonstandard-repo",
+      snapshot: "209",
+      routePath: "backend/config/routes.rb",
+      expectedRoot: "backend",
+      rolePath: "backend/src/models/client.rb",
+      testPath: "backend/test/models/client_test.rb",
+      configPath: "backend/config/initializers/security.rb"
+    }
+  ])(
+    "indexes route, role, config, and test evidence for $fixture with bounded Rails shape metadata",
+    async (fixture) => {
+      const repoRoot = path.resolve(`tests/fixtures/${fixture.fixture}`);
+      const store = openGraphStore(path.join(dir, `${fixture.fixture}.sqlite`));
+      const registry = new ExtractorRegistryAdapter();
+      registry.register(new ResourceExtractorAdapter());
+
+      try {
+        const result = await indexRepositoryGraph({
+          repo_root: repoRoot,
+          scanner: new FileCatalogScannerAdapter(),
+          workspace: new WorkspaceFileAdapter({ repoRoot }),
+          extractors: registry,
+          resource_extractor: new ResourceExtractorAdapter(),
+          graph: store,
+          catalog: store,
+          snapshots: store,
+          clock,
+          schema_version: SCHEMA_VERSION,
+          snapshot_id: fixture.snapshot
+        });
+
+        expect(result.scanned_files).toBeGreaterThan(10);
+        expect(result.resource_backed_files).toBe(result.scanned_files);
+
+        const routeNode = await store.findNodesByQualifiedName({
+          snapshot_id: fixture.snapshot,
+          qualified_name: fixture.routePath
+        });
+        expect(routeNode).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              kind: "resource",
+              metadata: expect.objectContaining({
+                rails_discovery: expect.objectContaining({
+                  rails_is_route_file: true,
+                  rails_project_roots: expect.arrayContaining([fixture.expectedRoot])
+                })
+              })
+            })
+          ])
+        );
+
+        const roleNode = await store.findNodesByQualifiedName({
+          snapshot_id: fixture.snapshot,
+          qualified_name: fixture.rolePath
+        });
+        expect(roleNode).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              kind: "resource",
+              metadata: expect.objectContaining({
+                rails_discovery: expect.objectContaining({
+                  rails_roles: expect.arrayContaining(["model"]),
+                  rails_project_roots: expect.arrayContaining([fixture.expectedRoot])
+                })
+              })
+            })
+          ])
+        );
+
+        if (fixture.configPath === undefined) {
+          expect(await store.findNodesByQualifiedName({
+            snapshot_id: fixture.snapshot,
+            qualified_name: "non-existent-config-file"
+          })).toHaveLength(0);
+        } else {
+          const configNode = await store.findNodesByQualifiedName({
+            snapshot_id: fixture.snapshot,
+            qualified_name: fixture.configPath
+          });
+          expect(configNode).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                kind: "resource",
+                metadata: expect.objectContaining({
+                  rails_discovery: expect.objectContaining({
+                    rails_is_config_file: true
+                  })
+                })
+              })
+            ])
+          );
+        }
+
+        const testNode = await store.findNodesByQualifiedName({
+          snapshot_id: fixture.snapshot,
+          qualified_name: fixture.testPath
+        });
+        expect(testNode).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              kind: "resource",
+              metadata: expect.objectContaining({
+                rails_discovery: expect.objectContaining({
+                  rails_is_test_file: true
+                })
+              })
+            })
+          ])
+        );
+      } finally {
+        store.close();
+      }
+    }
+  );
+
+  it("does not admit Rails discovery metadata for a generic Ruby repository without Rails anchors", async () => {
+    const repoRoot = path.join(dir, "generic-ruby-repo");
+    fs.mkdirSync(path.join(repoRoot, "test"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "Gemfile"), "source 'https://rubygems.org'\\n");
+    fs.writeFileSync(path.join(repoRoot, "test", "widget_test.rb"), "require 'minitest/autorun'\\n");
+    const store = openGraphStore(path.join(dir, "generic-ruby-repo.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new ResourceExtractorAdapter());
+
+    try {
+      const result = await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "211"
+      });
+
+      const testNodes = await store.findNodesByQualifiedName({
+        snapshot_id: "211",
+        qualified_name: "test/widget_test.rb"
+      });
+      expect(testNodes).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "resource",
+            metadata: expect.not.objectContaining({
+              rails_discovery: expect.any(Object)
+            })
+          })
+        ])
       );
+      expect(result.resource_backed_files).toBe(result.scanned_files);
+      expect(result.scanned_files).toBeGreaterThan(0);
     } finally {
       store.close();
     }

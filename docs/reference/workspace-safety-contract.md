@@ -70,7 +70,11 @@ classification unless a later contract splits ignore-file diagnostics.
 Secret-bearing path detection includes `.env`, `.env.*` except safe examples
 such as `.env.example`, `.env.sample`, and `.env.template`, plus `.envrc`,
 `credentials.*`, `secrets.*`, and private-key or certificate-key file
-extensions. Content redaction remains a separate presentation boundary.
+extensions. Rails `config/master.key` and every root or nested
+`config/credentials/**` path are classified as `secret` by the same shared
+policy used for catalog scanning, direct validation entries, write safety and
+packaged post-edit hooks. Content redaction remains a separate presentation
+boundary.
 
 ## Command Execution
 

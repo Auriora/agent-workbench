@@ -9,6 +9,7 @@ import type { FileCatalogEntry } from "../../src/domain/models/index.js";
 import type { WorkspaceFilePort } from "../../src/ports/index.js";
 import {
   cmakeValidationCommands,
+  discoverRubyValidationCommands,
   type CMakeTargetEvidence
 } from "../../src/application/use-cases/validation-ecosystems.js";
 import {
@@ -135,6 +136,72 @@ describe("validation planner rule units", () => {
     expect(protocol.policyCommands.map((command) => command.display)).toEqual([
       "bundle exec ruby -I test test/models/widget_test.rb"
     ]);
+  });
+
+  it("discovers nearest Ruby framework command candidates with deterministic ordering", () => {
+    const candidates = discoverRubyValidationCommands({
+      files: [
+        catalogEntry("backend/test/models/client_test.rb", "ruby"),
+        catalogEntry("backend/src/models/client.rb", "ruby"),
+        catalogEntry("backend/Gemfile", "ruby"),
+        catalogEntry("app/spec/models/widget_spec.rb", "ruby"),
+        catalogEntry("Gemfile", "ruby")
+      ],
+      selectedEntries: [catalogEntry("backend/src/services/client_service.rb", "ruby")],
+      railsRoots: [".", "backend"]
+    });
+
+    expect(candidates[0]).toMatchObject({
+      family: "minitest",
+      root: "backend",
+      display: "bundle exec ruby -I backend/test backend/test/models/client_test.rb"
+    });
+  });
+
+  it("prefers RSpec candidates over Minitest when ranking is otherwise equal", () => {
+    const candidates = discoverRubyValidationCommands({
+      files: [
+        catalogEntry("app/spec/models/widget_spec.rb", "ruby"),
+        catalogEntry("app/test/models/widget_test.rb", "ruby"),
+        catalogEntry("Gemfile", "ruby")
+      ],
+      selectedEntries: [catalogEntry("app/models/widget.rb", "ruby")],
+      railsRoots: ["app"]
+    });
+
+    expect(candidates.map((candidate) => candidate.family).slice(0, 2)).toEqual(["rspec", "minitest"]);
+  });
+
+  it("supports root-level Ruby spec and test directories when building candidates", () => {
+    const candidates = discoverRubyValidationCommands({
+      files: [
+        catalogEntry("spec/widget_spec.rb", "ruby"),
+        catalogEntry("test/widget_test.rb", "ruby"),
+        catalogEntry("Gemfile", "ruby")
+      ],
+      selectedEntries: [catalogEntry("app/widget.rb", "ruby")],
+      railsRoots: ["."]
+    });
+
+    expect(candidates[0]).toMatchObject({
+      family: "rspec",
+      root: ".",
+      display: "bundle exec rspec spec/widget_spec.rb"
+    });
+  });
+
+  it("prefers a matching Ruby test basename before lexical directory order", () => {
+    const candidates = discoverRubyValidationCommands({
+      files: [
+        catalogEntry("test/config/recurring_config_test.rb", "ruby"),
+        catalogEntry("test/models/user_test.rb", "ruby"),
+        catalogEntry("Gemfile", "ruby")
+      ],
+      selectedEntries: [catalogEntry("app/models/user.rb", "ruby")],
+      railsRoots: ["."]
+    });
+
+    expect(candidates[0]?.display).toBe("bundle exec ruby -I test test/models/user_test.rb");
   });
 
   it("preserves a Rails engine fixture's constrained execution environment", async () => {

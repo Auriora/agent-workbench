@@ -46,6 +46,7 @@ import {
   isJsTsTestPath,
   jsTsPackageRootForPath
 } from "./js-ts-project-shape.js";
+import { detectRailsProjectShape } from "./rails-project-shape.js";
 import {
   detectMcpServerShape,
   isMcpServerEvidencePath,
@@ -97,6 +98,10 @@ export async function getTaskContext(input: {
   });
   const byPath = new Map(scanned.files.map((file) => [file.path, file]));
   const jsTsShape = detectJsTsProjectShape(scanned.files);
+  const railsShape = detectRailsProjectShape({
+    files: scanned.files.filter((file) => noisyArtifactPenalty(file.path) === 0),
+    scan_truncated: scanned.truncated
+  });
   const specRouting = await buildSpecRouting({
     request: input.request,
     byPath,
@@ -121,6 +126,7 @@ export async function getTaskContext(input: {
     files: scanned.files,
     exclude: new Set(requestedFiles.map((file) => file.path)),
     jsTsPackageRoots: jsTsShape.package_roots,
+    railsShape,
     limit: maxFiles,
     integrationIntent
   });
@@ -131,7 +137,11 @@ export async function getTaskContext(input: {
     limit: maxDocs,
     workspace: input.workspace
   });
-  const validationHints = inferValidationHints(catalogFiles);
+  const validationHints = inferValidationHints({
+    files: catalogFiles,
+    requestedPaths: requestedFiles.map((file) => file.path),
+    railsShape
+  });
   const snapshot = input.snapshots === undefined
     ? undefined
     : input.selected_snapshot_id === null
@@ -678,6 +688,7 @@ function selectRelatedFiles(input: {
   files: readonly FileCatalogEntry[];
   exclude: Set<string>;
   jsTsPackageRoots: readonly string[];
+  railsShape: ReturnType<typeof detectRailsProjectShape>;
   limit: number;
   integrationIntent: CodingAgentIntegrationIntent;
 }): { files: FileReference[]; skipped_work: SkippedWork[] } {
@@ -691,10 +702,18 @@ function selectRelatedFiles(input: {
         integrationEvidence,
         score:
           scoreFile(file, terms) +
+          scoreRailsSeededEvidence(file, input.requestedPaths, input.railsShape) +
           scoreFileSeededEvidence(file, input.requestedPaths, input.jsTsPackageRoots) +
           (integrationEvidence?.score ?? 0),
-        reason: integrationEvidence?.reason ??
-          reasonForRelatedFile(file, terms, input.requestedPaths, input.jsTsPackageRoots)
+        reason:
+          integrationEvidence?.reason ??
+          reasonForRelatedFile({
+            file,
+            terms,
+            requestedPaths: input.requestedPaths,
+            jsTsPackageRoots: input.jsTsPackageRoots,
+            railsShape: input.railsShape
+          })
       };
     })
     .filter((item) => item.score > 0)
@@ -783,6 +802,42 @@ function selectRelatedFileCandidatesWithScopeCoverage(input: {
 
 function compareRelatedFileCandidates(left: RelatedFileCandidate, right: RelatedFileCandidate): number {
   return right.score - left.score || left.file.path.localeCompare(right.file.path);
+}
+
+function scoreRailsSeededEvidence(
+  file: FileCatalogEntry,
+  requestedPaths: readonly string[],
+  railsShape: ReturnType<typeof detectRailsProjectShape>
+): number {
+  if (requestedPaths.length === 0 || railsShape.rails_roots.length === 0) {
+    return 0;
+  }
+  const requestedRoots = uniqueStrings(requestedPaths.flatMap((requestedPath) => matchingRailsRoots(requestedPath, railsShape)));
+  if (requestedRoots.length === 0) {
+    return 0;
+  }
+  const hasRequestContext = requestedPaths.some((requestedPath) => isObservedRailsPath(requestedPath, railsShape));
+  const fileRoots = matchingRailsRoots(file.path, railsShape);
+  const sharedRootCount = fileRoots.filter((pathRoot) => requestedRoots.includes(pathRoot)).length;
+  const packageEvidence = isRailsPackageEvidence(file.path);
+  const observedRailsEvidence = isObservedRailsPath(file.path, railsShape);
+  if (sharedRootCount === 0 && !(hasRequestContext && (packageEvidence || observedRailsEvidence))) {
+    return 0;
+  }
+  let score = 0;
+  if (railsShape.route_file_paths.includes(file.path) || railsShape.test_file_paths.includes(file.path)) {
+    score = Math.max(score, 14);
+  }
+  if (railsShape.config_file_paths.includes(file.path) || packageEvidence) {
+    score = Math.max(score, file.path.toLowerCase() === "gemfile" ? 20 : 12);
+  }
+  if (railsShape.role_file_paths.includes(file.path)) {
+    score = Math.max(score, 18);
+  }
+  if (sameRailsStem(file.path, requestedPaths)) {
+    score = Math.max(score, 12);
+  }
+  return score + Math.min(sharedRootCount, 1) * 2;
 }
 
 async function selectGoverningDocs(input: {
@@ -1158,8 +1213,12 @@ function buildCompleteness(input: {
   };
 }
 
-function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHint[] {
-  const paths = new Set(files.map((file) => file.path));
+function inferValidationHints(input: {
+  files: readonly FileCatalogEntry[];
+  requestedPaths: readonly string[];
+  railsShape: ReturnType<typeof detectRailsProjectShape>;
+}): ValidationHint[] {
+  const paths = new Set(input.files.map((file) => file.path));
   const hints: ValidationHint[] = [];
   if (paths.has("package.json")) {
     hints.push({
@@ -1180,7 +1239,68 @@ function inferValidationHints(files: readonly FileCatalogEntry[]): ValidationHin
       status: "needed"
     });
   }
+  if (input.railsShape.rails_roots.length > 0) {
+    const evidence = input.railsShape.role_file_paths.length > 0
+      ? input.railsShape.role_file_paths[0]
+      : input.railsShape.config_file_paths[0] ?? input.railsShape.route_file_paths[0];
+    const requestedRailsRoots = uniqueStrings(input.requestedPaths.flatMap((requestedPath) =>
+      matchingRailsRoots(requestedPath, input.railsShape)
+    ));
+    if (requestedRailsRoots.length > 0 || input.requestedPaths.length === 0) {
+      hints.push({
+        command: "verification_plan",
+        reason: `${evidence ?? "Observed Rails evidence"} indicates an active Rails project shape and repository-backed validation planning should be generated before running repo edits.`,
+        status: "needed"
+      });
+    }
+  }
   return hints;
+}
+
+function matchingRailsRoots(
+  filePath: string,
+  railsShape: ReturnType<typeof detectRailsProjectShape>
+): string[] {
+  const normalized = normalizeRepoPath(filePath).toLowerCase();
+  return railsShape.rails_roots.filter((root) => {
+    if (root === ".") {
+      return isObservedRailsPath(filePath, railsShape);
+    }
+    return normalized === root || normalized.startsWith(`${root}/`);
+  });
+}
+
+function sameRailsStem(filePath: string, requestedPaths: readonly string[]): boolean {
+  const candidateStem = stemFromPath(filePath);
+  const candidateDir = path.posix.dirname(filePath);
+  return requestedPaths.some((requestedPath) => {
+    const requestedStem = stemFromPath(requestedPath);
+    const requestedDir = path.posix.dirname(requestedPath);
+    if (candidateDir === requestedDir && candidateStem.toLowerCase() === requestedStem.toLowerCase()) {
+      return true;
+    }
+    return isNearbyTestPath(filePath, requestedDir, requestedStem);
+  });
+}
+
+function isRailsPackageEvidence(filePath: string): boolean {
+  const lower = filePath.toLowerCase();
+  return lower === "gemfile" ||
+    lower === "gemfile.lock" ||
+    lower === "rakefile" ||
+    lower === ".ruby-version" ||
+    lower === "config.ru";
+}
+
+function isObservedRailsPath(
+  filePath: string,
+  railsShape: ReturnType<typeof detectRailsProjectShape>
+): boolean {
+  return railsShape.config_file_paths.includes(filePath) ||
+    railsShape.route_file_paths.includes(filePath) ||
+    railsShape.role_file_paths.includes(filePath) ||
+    railsShape.test_file_paths.includes(filePath) ||
+    isRailsPackageEvidence(filePath);
 }
 
 function symbolTerms(input: {
@@ -1331,20 +1451,43 @@ function scoreFileSeededEvidence(
   return score;
 }
 
-function reasonForRelatedFile(
-  file: FileCatalogEntry,
-  terms: Set<string>,
-  requestedPaths: readonly string[],
-  jsTsPackageRoots: readonly string[]
-): string {
-  for (const requestedPath of requestedPaths) {
+function reasonForRelatedFile(input: {
+  file: FileCatalogEntry;
+  terms: Set<string>;
+  requestedPaths: readonly string[];
+  jsTsPackageRoots: readonly string[];
+  railsShape: ReturnType<typeof detectRailsProjectShape>;
+}): string {
+  const file = input.file;
+  for (const requestedPath of input.requestedPaths) {
     const requestedDir = path.posix.dirname(requestedPath);
     const requestedStem = stemFromPath(requestedPath);
     const candidateDir = path.posix.dirname(file.path);
     const candidateStem = stemFromPath(file.path);
+    if (input.railsShape.rails_roots.length > 0) {
+      const requestedRootMatch = matchingRailsRoots(requestedPath, input.railsShape).length > 0;
+      const candidateRootMatch = matchingRailsRoots(file.path, input.railsShape).length > 0;
+      if (requestedRootMatch && candidateRootMatch) {
+        if (input.railsShape.test_file_paths.includes(file.path)) {
+          return "Rails test routing evidence in the same observed Rails root.";
+        }
+        if (input.railsShape.route_file_paths.includes(file.path)) {
+          return "Rails route evidence in the same observed Rails root.";
+        }
+        if (input.railsShape.config_file_paths.includes(file.path)) {
+          return "Rails config evidence in the same observed Rails root.";
+        }
+        if (input.railsShape.role_file_paths.includes(file.path)) {
+          return "Rails role-adjacent source evidence in the same observed root.";
+        }
+        if (isRailsPackageEvidence(file.path)) {
+          return "Rails package evidence for the observed Rails root.";
+        }
+      }
+    }
     if (isJsTsRequestPath(requestedPath)) {
-      const requestedPackageRoot = jsTsPackageRootForPath(requestedPath, jsTsPackageRoots);
-      const candidatePackageRoot = jsTsPackageRootForPath(file.path, jsTsPackageRoots);
+      const requestedPackageRoot = jsTsPackageRootForPath(requestedPath, input.jsTsPackageRoots);
+      const candidatePackageRoot = jsTsPackageRootForPath(file.path, input.jsTsPackageRoots);
       if (requestedPackageRoot !== undefined && requestedPackageRoot === candidatePackageRoot && isJsTsProjectConfigPath(file.path)) {
         return "Package-local JavaScript/TypeScript configuration associated with an explicitly supplied source file.";
       }
@@ -1375,28 +1518,28 @@ function reasonForRelatedFile(
     }
   }
   const pathTerms = tokenSet([file.path]);
-  const hasExactPathTerm = [...terms].some((term) => pathTerms.has(term));
-  const cppReason = cppStructureReason(file.path, terms);
+  const hasExactPathTerm = [...input.terms].some((term) => pathTerms.has(term));
+  const cppReason = cppStructureReason(file.path, input.terms);
   if (cppReason !== undefined) {
     return cppReason;
   }
-  const webReason = webAppStructureReason(file.path, terms);
+  const webReason = webAppStructureReason(file.path, input.terms);
   if (webReason !== undefined) {
     return webReason;
   }
-  const jsTsReason = jsTsStructureReason(file.path, terms);
+  const jsTsReason = jsTsStructureReason(file.path, input.terms);
   if (jsTsReason !== undefined) {
     return jsTsReason;
   }
-  const dotnetReason = dotnetStructureReason(file.path, terms);
+  const dotnetReason = dotnetStructureReason(file.path, input.terms);
   if (dotnetReason !== undefined) {
     return dotnetReason;
   }
-  const samReason = samStructureReason(file.path, terms);
+  const samReason = samStructureReason(file.path, input.terms);
   if (samReason !== undefined) {
     return samReason;
   }
-  const mcpReason = mcpServerStructureReason(file.path, terms);
+  const mcpReason = mcpServerStructureReason(file.path, input.terms);
   if (mcpReason !== undefined) {
     return mcpReason;
   }

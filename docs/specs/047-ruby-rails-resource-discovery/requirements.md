@@ -74,14 +74,14 @@ belong to the sequenced follow-up spec.
 
 ## Staged Readiness
 
-- **Current stage:** reconcile
-- **Next stage:** T001 repository reconciliation
-- **Ready to leave design when:** Rails discovery ownership, safety, validation,
-  fixture, and follow-up boundaries pass focused design review.
+- **Current stage:** verified implementation and durable promotion
+- **Next stage:** lifecycle closure
+- **Ready to leave implementation when:** focused/full validation, security
+  review, real Rails dogfood, durable promotion, and closure checks pass.
 - **Design-first exception:** no
 - **Optional artifacts included:** `canonical-context.md`, `change-impact.md`,
   `traceability.md`, `verification.md`
-- **Downstream review needed:** design, tasks, traceability, verification
+- **Downstream review needed:** closure and archive consistency
 
 ## Requirements
 

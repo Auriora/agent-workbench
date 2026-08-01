@@ -39,6 +39,8 @@ import {
   selectedMarkdownText
 } from "./markdown-docs.js";
 import { extractDocumentationConcernIndex } from "./document-currency-routing.js";
+import { type RailsDiscoveryMetadata } from "./rails-project-shape.js";
+import { detectRailsProjectShape, projectAdmitsRailsDiscovery } from "./rails-project-shape.js";
 
 const MAX_TEXT_EXTRACTION_BYTES = 2_000_000;
 const MAX_DOCS_INDEX_BYTES = 120_000;
@@ -123,6 +125,11 @@ export async function buildRepositoryGraph(
     max_files: input.max_files ?? 2000
   });
 
+  const railsShape = detectRailsProjectShape({
+    files: scanned.files,
+    scan_truncated: scanned.truncated
+  });
+
   const batches: ExtractionBatch[] = [];
   let unsupportedFiles = 0;
   let resourceBackedFiles = 0;
@@ -179,11 +186,14 @@ export async function buildRepositoryGraph(
     }
 
     const content = await input.workspace.readText({ path: file.path });
-    const batch = await extractor.extract({
-      snapshot_id: snapshotId,
-      path: file.path,
-      language: file.file_identity.language,
-      content
+    const batch = applyRailsDiscoveryShape({
+      batch: await extractor.extract({
+        snapshot_id: snapshotId,
+        path: file.path,
+        language: file.file_identity.language,
+        content
+      }),
+      shape: railsShape
     });
     batches.push({
       ...batch,
@@ -631,6 +641,69 @@ function lambdaHandlerFileAnchor(input: {
       handler_export_candidate: exportName,
       event_sources: input.sourceNode.metadata.event_sources
     }
+  };
+}
+
+function applyRailsDiscoveryShape(input: {
+  batch: ExtractionBatch;
+  shape: ReturnType<typeof detectRailsProjectShape>;
+}): ExtractionBatch {
+  const nodes = input.batch.nodes.map((node) => {
+    const railsDiscovery = railsDiscoveryFromMetadata(node.metadata);
+    if (railsDiscovery === undefined) {
+      return node;
+    }
+    if (!projectAdmitsRailsDiscovery({
+      filePath: node.file_path,
+      discovery: railsDiscovery,
+      shape: input.shape
+    })) {
+      const { rails_discovery: _railsDiscovery, ...metadata } = node.metadata;
+      return {
+        ...node,
+        metadata
+      };
+    }
+    return node;
+  });
+
+  return {
+    ...input.batch,
+    nodes
+  };
+}
+
+function railsDiscoveryFromMetadata(metadata: Record<string, unknown>): RailsDiscoveryMetadata | undefined {
+  const candidate = metadata.rails_discovery;
+  if (candidate === undefined || typeof candidate !== "object" || candidate === null) {
+    return undefined;
+  }
+
+  const typed = candidate as {
+    rails_project_roots?: unknown;
+    rails_roles?: unknown;
+    rails_is_config_file?: unknown;
+    rails_is_route_file?: unknown;
+    rails_is_test_file?: unknown;
+  };
+
+  if (!Array.isArray(typed.rails_project_roots) || !Array.isArray(typed.rails_roles)) {
+    return undefined;
+  }
+  if (
+    typeof typed.rails_is_config_file !== "boolean" ||
+    typeof typed.rails_is_route_file !== "boolean" ||
+    typeof typed.rails_is_test_file !== "boolean"
+  ) {
+    return undefined;
+  }
+
+  return {
+    rails_project_roots: typed.rails_project_roots as string[],
+    rails_roles: typed.rails_roles as string[],
+    rails_is_config_file: typed.rails_is_config_file,
+    rails_is_route_file: typed.rails_is_route_file,
+    rails_is_test_file: typed.rails_is_test_file
   };
 }
 

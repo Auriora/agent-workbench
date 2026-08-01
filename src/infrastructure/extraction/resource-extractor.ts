@@ -14,7 +14,11 @@ import type { ExtractorPort } from "../../ports/index.js";
 import { cloudFormationTemplateExtraction } from "./cloudformation-resource-extractor.js";
 import { cmakeTargetNodes } from "./cmake-resource-extractor.js";
 import { dotnetResourceNodes } from "./dotnet-resource-extractor.js";
-import { fullFileRange, nodeId } from "./resource-shared.js";
+import {
+  discoverRailsPathMetadata,
+  fullFileRange,
+  nodeId
+} from "./resource-shared.js";
 
 const resourceLanguages = new Set(["config", "json", "toml", "yaml", "markdown", "text", "infrastructure"]);
 
@@ -82,7 +86,18 @@ function genericResourceNode(input: {
       domain: input.capability.domain,
       capability_level: input.capability.capability_level,
       evidence_kinds: input.capability.evidence_kinds,
-      provenance: input.capability.provenance
+      provenance: input.capability.provenance,
+      ...normalizeRailsDiscoveryMetadata(input.input.path)
     }
+  };
+}
+
+function normalizeRailsDiscoveryMetadata(filePath: string): Record<string, unknown> {
+  const metadata = discoverRailsPathMetadata(filePath);
+  if (metadata === undefined) {
+    return {};
+  }
+  return {
+    rails_discovery: metadata
   };
 }

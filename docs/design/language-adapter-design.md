@@ -3,7 +3,7 @@ title: Language adapter design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-21
+last_reviewed: 2026-08-01
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -114,11 +114,12 @@ After the MVP slice works, deepen support in this order:
 1. first language path to `semantic` only after promotion fixtures pass
 2. TypeScript/JavaScript to `partial_semantic`
 3. TypeScript/JavaScript to `semantic` after promotion fixtures pass
-4. PHP/Laravel resource-backed discovery and validation planning
-5. Nuxt/Vue web-app routing and validation planning
-6. CloudFormation/SAM resource-backed discovery
-7. C#/.NET project discovery
-8. Go, C/C++, Rust, Ruby, then the extended backlog
+4. Ruby/Rails resource-backed discovery and validation planning (delivered by
+   Spec 047), followed by partial-semantic promotion in Spec 048
+5. PHP/Laravel resource-backed discovery and validation planning
+6. Nuxt/Vue web-app routing and validation planning
+7. CloudFormation/SAM resource-backed discovery
+8. C#/.NET project discovery, then Go, C/C++, Rust and the extended backlog
 
 JavaScript/TypeScript dogfood against a large web monorepo confirmed that the
 first useful slice should start with repository-shape and package-boundary
@@ -129,6 +130,24 @@ client/server/e2e boundaries, `tsconfig` files, route/controller/service
 conventions, React page/component areas, and nearby tests. Symbol, export,
 import, and route-level navigation should be promoted only after fixture-backed
 adapter tests prove the extracted evidence and confidence labels.
+
+The delivered Ruby/Rails first slice is `resource_backed`. It classifies Ruby
+files plus Bundler, Rake, Ruby-version, Rack, Rails route, config, role and test
+anchors through the shared file catalog. A pure application-layer project-shape
+policy admits only observed Rails roots, including engines and non-standard
+layouts, and excludes embedded fixture repositories, generated/vendor paths and
+secret-bearing Rails credentials. Generic `resource` graph nodes carry bounded
+heuristic role/path metadata; no Ruby parser, Ruby DSL evaluation, runtime Rails
+semantics or language-specific public contract is introduced.
+
+Overview and task context expose observed Ruby/Rails platforms, configuration,
+first-party roles and nearby tests. Validation planning applies repository
+policy and required execution environments before catalog-backed RSpec or
+Minitest candidates, uses structured arguments through command safety, and
+returns commands as planned/not-executed. Container artifacts remain advisory
+unless repository policy requires them. Parser-backed declarations,
+references, impact and bounded Rails DSL evidence remain exclusively owned by
+Spec 048.
 
 The delivered TypeScript/JavaScript partial-semantic slice uses
 `tree-sitter-javascript` for JS/JSX and `tree-sitter-typescript` for TS/TSX.

@@ -81,7 +81,7 @@ describe("shared path policy consistency", () => {
     expect(classifyPathPolicy({ relativePath: "config/master.key", isDirectory: false }).reason).toBe("secret");
     expect(classifyPathPolicy({ relativePath: "id_rsa.pem", isDirectory: false }).reason).toBe("secret");
     expect(classifyPathPolicy({ relativePath: ".env.example", isDirectory: false }).reason).toBe("source");
-    expect(classifyPathPolicy({ relativePath: "config/credentials/development.yml.enc", isDirectory: false }).reason).toBe("source");
+    expect(classifyPathPolicy({ relativePath: "config/credentials/development.yml.enc", isDirectory: false }).reason).toBe("secret");
     expect(
       classifyPathPolicy({
         relativePath: "ignored.log",
@@ -91,9 +91,10 @@ describe("shared path policy consistency", () => {
     ).toBe("gitignore");
   });
 
-  it.fails("treats encrypted Rails credentials paths as secret-bearing policy exceptions", () => {
+  it("treats encrypted Rails credentials paths as secret-bearing policy exceptions", () => {
     expect(classifyPathPolicy({ relativePath: "config/credentials/development.yml.enc", isDirectory: false }).reason).toBe("secret");
     expect(classifyPathPolicy({ relativePath: "config/credentials/test.yml.enc", isDirectory: false }).reason).toBe("secret");
+    expect(classifyPathPolicy({ relativePath: "backend/config/credentials/production.yml.enc", isDirectory: false }).reason).toBe("secret");
   });
 
   it("keeps scanner skip reasons and workspace write refusals aligned", async () => {
@@ -187,7 +188,7 @@ describe("shared path policy consistency", () => {
     });
   });
 
-  it.fails("requires an explicit Rails credentials carve-out for encrypted Rails credential files", async () => {
+  it("requires an explicit Rails credentials carve-out for encrypted Rails credential files", async () => {
     const scanner = new FileCatalogScannerAdapter();
     const scan = await scanner.scan({
       repo_root: repoRoot,
@@ -196,9 +197,15 @@ describe("shared path policy consistency", () => {
       max_files: 100
     });
     const skippedByPath = new Map(scan.skipped_paths?.map((skipped) => [skipped.path, skipped.reason]));
+    const credentialsSkipReason =
+      skippedByPath.get("config/credentials/development.yml.enc") ?? skippedByPath.get("config/credentials");
 
-    expect(skippedByPath.get("config/credentials/development.yml.enc")).toBe("secret");
+    expect(credentialsSkipReason).toBe("secret");
     expect(resolveWorkspacePath({ repoRoot }, "config/credentials/development.yml.enc", { write: true })).toMatchObject({
+      allowed: false,
+      reason: "path_refused"
+    });
+    expect(resolveWorkspacePath({ repoRoot }, "backend/config/credentials/production.yml.enc", { write: true })).toMatchObject({
       allowed: false,
       reason: "path_refused"
     });
@@ -210,7 +217,8 @@ describe("shared path policy consistency", () => {
     expect(hook.hookPathPolicyReason(".env.example")).toBeUndefined();
     expect(hook.hookPathPolicyReason("credentials.json")).toBe("secret");
     expect(hook.hookPathPolicyReason("config/master.key")).toBe("secret");
-    expect(hook.hookPathPolicyReason("config/credentials/development.yml.enc")).toBeUndefined();
+    expect(hook.hookPathPolicyReason("config/credentials/development.yml.enc")).toBe("secret");
+    expect(hook.hookPathPolicyReason("backend/config/credentials/production.yml.enc")).toBe("secret");
     expect(hook.hookPathPolicyReason("secrets.yaml")).toBe("secret");
     expect(hook.hookPathPolicyReason("generated/out.ts")).toBe("generated_or_vendor");
     expect(hook.hookPathPolicyReason("vendor/dep.ts")).toBe("generated_or_vendor");

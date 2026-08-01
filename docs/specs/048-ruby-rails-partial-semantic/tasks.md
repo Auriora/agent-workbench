@@ -19,7 +19,7 @@ Spec 047 -> T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008 -> T009
 
 ## Phase 1: Dependency and parser foundation
 
-- [!] T001 Reconcile delivered Spec 047 behavior and freeze the Ruby parser
+- [ ] T001 Reconcile delivered Spec 047 behavior and freeze the Ruby parser
   promotion boundary.
   - Depends on: Spec 047 implementation and reconciliation
   - Upstream specs: `docs/specs/047-ruby-rails-resource-discovery`
@@ -27,8 +27,11 @@ Spec 047 -> T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008 -> T009
   - Files: Spec 047 evidence, delivered Ruby/Rails source/tests, this package
   - Acceptance: Resource-backed behavior, fixtures, validation policy, exact
     supported Ruby/Rails forms, and residual gaps are reconciled before coding.
-  - Status: blocked - Spec 047 implementation and reconciliation are not yet complete.
-  - Evidence: Pending.
+  - Status: ready after Spec 047 durable promotion and closure; implementation
+    of T002 remains prohibited until this reconciliation task completes.
+  - Evidence: Spec 047 delivered resource-backed Ruby/Rails behavior, fixtures,
+    validation planning and dogfood evidence on 2026-08-01; T001 must verify the
+    final commit and durable closure record before parser work begins.
 
 - [ ] T002 Add and validate the tree-sitter Ruby native dependency and package
   integration.

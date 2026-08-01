@@ -166,18 +166,25 @@ describe("resource extractor rule units", () => {
       })
     );
 
-    expect(databaseConfig.nodes).toEqual([
-      expect.objectContaining({
-        kind: "resource",
-        name: "database.yml",
-        qualified_name: "config/database.yml",
-        metadata: expect.objectContaining({
-          domain: "config",
-          capability_level: "resource_backed",
-          evidence_kinds: ["config"]
+      expect(databaseConfig.nodes).toEqual([
+        expect.objectContaining({
+          kind: "resource",
+          name: "database.yml",
+          qualified_name: "config/database.yml",
+          metadata: expect.objectContaining({
+            domain: "config",
+            capability_level: "resource_backed",
+            evidence_kinds: ["config"],
+            rails_discovery: expect.objectContaining({
+              rails_project_roots: ["."],
+              rails_roles: [],
+              rails_is_config_file: true,
+              rails_is_route_file: false,
+              rails_is_test_file: false
+            })
+          })
         })
-      })
-    ]);
+      ]);
     expect(routesFile.nodes).toEqual([
       expect.objectContaining({
         kind: "resource",
@@ -186,13 +193,20 @@ describe("resource extractor rule units", () => {
         metadata: expect.objectContaining({
           domain: "documentation",
           capability_level: "resource_backed",
-          evidence_kinds: ["docs"]
+            evidence_kinds: ["docs"],
+            rails_discovery: expect.objectContaining({
+              rails_project_roots: ["."],
+              rails_roles: [],
+              rails_is_config_file: true,
+              rails_is_route_file: true,
+              rails_is_test_file: false
+            })
+          })
         })
-      })
-    ]);
+      ]);
   });
 
-  it.fails("classifies Ruby route candidates as resource-backed Rails path evidence", async () => {
+  it("classifies Ruby route candidates as resource-backed Rails path evidence", async () => {
     const adapter = new ResourceExtractorAdapter();
     const routesFile = await adapter.extract(
       extractionRequest({
@@ -206,11 +220,47 @@ describe("resource extractor rule units", () => {
       expect.objectContaining({
         kind: "resource",
         qualified_name: "config/routes.rb",
+          metadata: expect.objectContaining({
+            domain: "framework",
+            capability_level: "resource_backed",
+            evidence_kinds: ["heuristic"],
+            rails_discovery: expect.objectContaining({
+              rails_project_roots: ["."],
+              rails_roles: [],
+              rails_is_config_file: true,
+              rails_is_route_file: true,
+              rails_is_test_file: false
+            })
+          })
+        })
+      ]);
+  });
+
+  it("emits role metadata for Ruby first-party directories", async () => {
+    const adapter = new ResourceExtractorAdapter();
+    const modelFile = await adapter.extract(
+      extractionRequest({
+        path: "app/models/widget.rb",
+        language: "ruby",
+        content: "class Widget\nend\n"
+      })
+    );
+
+    expect(modelFile.nodes).toEqual([
+      expect.objectContaining({
+        kind: "resource",
+        name: "widget.rb",
+        qualified_name: "app/models/widget.rb",
         metadata: expect.objectContaining({
-          domain: "rails",
-          role: "route",
+          domain: "language",
           capability_level: "resource_backed",
-          evidence_kinds: expect.arrayContaining(["path"])
+          rails_discovery: expect.objectContaining({
+            rails_project_roots: ["."],
+            rails_roles: ["model"],
+            rails_is_config_file: false,
+            rails_is_route_file: false,
+            rails_is_test_file: false
+          })
         })
       })
     ]);

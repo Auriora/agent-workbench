@@ -542,7 +542,7 @@ describe("repo overview MCP resource", () => {
     );
   });
 
-  it.fails("promotes observed Rails files and Rails validation hints", async () => {
+  it("promotes observed Rails files and Rails validation hints", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
     const result = await getRepoOverview({
       repo_root: repoRoot,
@@ -568,7 +568,23 @@ describe("repo overview MCP resource", () => {
     );
   });
 
-  it.fails.each([
+  it("does not infer Rails from an embedded fixture repository", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-overview-non-rails-fixture-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "tests", "fixtures", "rails", "config"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "README.md"), "# Non-Rails repository\n");
+      fs.writeFileSync(path.join(repoRoot, "tests", "fixtures", "rails", "config", "application.rb"), "class Application; end\n");
+
+      const result = await getRepoOverview({ repo_root: repoRoot, scanner: new FileCatalogScannerAdapter() });
+
+      expect(result.overview.platforms).not.toContain("rails");
+      expect(result.overview.validation_hints.some((hint) => hint.reason.includes("Rails"))).toBe(false);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
     ["fixture-rails-engine-repo", "engines/commerce/app/commerce/models/product.rb", "engines/commerce/config/routes.rb"],
     ["fixture-rails-nonstandard-repo", "backend/src/models/client.rb", "backend/config/routes.rb"]
   ])("uses only observed Rails roots for %s", async (fixture, rolePath, routePath) => {

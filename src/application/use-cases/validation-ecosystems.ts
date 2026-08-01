@@ -9,6 +9,15 @@ import type { FileCatalogEntry } from "../../domain/models/index.js";
 import type { WorkspaceFilePort } from "../../ports/index.js";
 import { normalizeRepoPath, statIfPresent, uniqueSorted } from "./validation-utils.js";
 
+export type RubyValidationCommandCandidate = {
+  family: "rspec" | "minitest";
+  root: string;
+  command: string;
+  args: string[];
+  display: string;
+  reason: string;
+};
+
 export type CMakeTargetEvidence = {
   name: string;
   kind: "library" | "executable";
@@ -20,6 +29,341 @@ export type CMakeDiscovery = {
   localCMakeFiles: readonly string[];
   cmakeTargets: readonly CMakeTargetEvidence[];
 };
+
+export function discoverRubyValidationCommands(input: {
+  files: readonly FileCatalogEntry[];
+  selectedEntries: readonly FileCatalogEntry[];
+  railsRoots: readonly string[];
+}): RubyValidationCommandCandidate[] {
+  const selectedPaths = uniqueSorted(input.selectedEntries.map((entry) => normalizeRepoPath(entry.path)));
+  const admittedRoots = new Set(input.railsRoots);
+  const rspecTestPathsByRoot = new Map<string, string[]>();
+  const minitestTestPathsByRoot = new Map<string, string[]>();
+  const rspecBinstubByRoot = new Map<string, string>();
+  const minitestBinstubByRoot = new Map<string, string>();
+  const manifestRoots = new Set<string>();
+
+  for (const file of input.files) {
+    const normalized = normalizeRepoPath(file.path);
+    const lower = normalized.toLowerCase();
+    if (isRSpecTestFile(normalized)) {
+      const root = inferRubyRootFromTestPath(normalized);
+      if (!admittedRoots.has(root)) {
+        continue;
+      }
+      rspecTestPathsByRoot.set(root, [...(rspecTestPathsByRoot.get(root) ?? []), file.path]);
+      continue;
+    }
+    if (isMinitestTestFile(normalized)) {
+      const root = inferRubyRootFromTestPath(normalized);
+      if (!admittedRoots.has(root)) {
+        continue;
+      }
+      minitestTestPathsByRoot.set(root, [...(minitestTestPathsByRoot.get(root) ?? []), file.path]);
+      continue;
+    }
+    if (isRubyManifestFile(lower)) {
+      const root = inferManifestRoot(normalized);
+      if (admittedRoots.has(root)) {
+        manifestRoots.add(root);
+      }
+      continue;
+    }
+    if (isRspecBinstubPath(lower)) {
+      const root = inferBinstubRoot(normalized);
+      if (!admittedRoots.has(root)) {
+        continue;
+      }
+      rspecBinstubByRoot.set(root, normalized.replace(/^\.\//u, ""));
+      continue;
+    }
+    if (isMinitestBinstubPath(lower)) {
+      const root = inferBinstubRoot(normalized);
+      if (!admittedRoots.has(root)) {
+        continue;
+      }
+      minitestBinstubByRoot.set(root, normalized.replace(/^\.\//u, ""));
+      continue;
+    }
+  }
+
+  const rspecCandidates = buildRubyFamilyCommands({
+    family: "rspec",
+    selectedPaths,
+    evidence: rspecTestPathsByRoot,
+    manifestRoots,
+    binStubByRoot: rspecBinstubByRoot
+  });
+  const minitestCandidates = buildRubyFamilyCommands({
+    family: "minitest",
+    selectedPaths,
+    evidence: minitestTestPathsByRoot,
+    manifestRoots,
+    binStubByRoot: minitestBinstubByRoot
+  });
+
+  return [...rspecCandidates, ...minitestCandidates]
+    .map((candidate) => ({
+      ...candidate,
+      rank: rankRubyRootForSelection(candidate.root, selectedPaths)
+    }))
+    .sort((left, right) => {
+      if (left.rank.ancestry !== right.rank.ancestry) {
+        return right.rank.ancestry - left.rank.ancestry;
+      }
+      if (left.rank.depth !== right.rank.depth) {
+        return right.rank.depth - left.rank.depth;
+      }
+      if (left.rank.distance !== right.rank.distance) {
+        return left.rank.distance - right.rank.distance;
+      }
+      if (left.family !== right.family) {
+        const familyRank: Readonly<Record<RubyValidationCommandCandidate["family"], number>> = {
+          rspec: 2,
+          minitest: 1
+        };
+        return familyRank[right.family] - familyRank[left.family];
+      }
+      return left.root.localeCompare(right.root);
+    })
+    .map((candidate) => {
+      const { rank: _rank, ...rest } = candidate;
+      return rest;
+    });
+}
+
+function buildRubyFamilyCommands(input: {
+  family: RubyValidationCommandCandidate["family"];
+  selectedPaths: readonly string[];
+  evidence: Map<string, string[]>;
+  manifestRoots: ReadonlySet<string>;
+  binStubByRoot: Map<string, string>;
+}): RubyValidationCommandCandidate[] {
+  const rootEvidence = new Set<string>([
+    ...input.evidence.keys(),
+    ...input.manifestRoots,
+    ...input.binStubByRoot.keys()
+  ]);
+  const roots = [...rootEvidence];
+  const candidates: RubyValidationCommandCandidate[] = [];
+
+  for (const root of roots.sort()) {
+    const hasTests = (input.evidence.get(root) ?? []).length > 0;
+    const nearestTest = nearestPathBySelection(input.evidence.get(root) ?? [], input.selectedPaths);
+    const binStub = input.binStubByRoot.get(root);
+    if (input.family === "rspec") {
+      if (!hasTests && binStub === undefined) {
+        continue;
+      }
+      if (binStub !== undefined) {
+        candidates.push({
+          family: "rspec",
+          root,
+          command: binStub,
+          args: nearestTest === undefined ? [] : [nearestTest],
+          display: nearestTest === undefined ? binStub : `${binStub} ${nearestTest}`,
+          reason: `RSpec binstub evidence from ${root} indicates repository-backed validation via ${binStub}.`
+        });
+        continue;
+      }
+      candidates.push({
+        family: "rspec",
+        root,
+        command: "bundle",
+        args: nearestTest === undefined ? ["exec", "rspec"] : ["exec", "rspec", nearestTest],
+        display: nearestTest === undefined
+          ? "bundle exec rspec"
+          : `bundle exec rspec ${nearestTest}`,
+        reason: nearestTest === undefined
+          ? `Roughly nearest RSpec evidence under ${root} indicates repository-backed validation.`
+          : `Nearest selected RSpec evidence under ${root} is ${nearestTest}.`
+      });
+      continue;
+    }
+
+    if (input.family === "minitest") {
+      if (!hasTests && binStub === undefined) {
+        continue;
+      }
+      if (binStub !== undefined) {
+        candidates.push({
+          family: "minitest",
+          root,
+          command: binStub,
+          args: ["test"],
+          display: `${binStub} test`,
+          reason: `Binstub evidence from ${root} indicates Rails test validation via ${binStub}.`
+        });
+        continue;
+      }
+      candidates.push({
+        family: "minitest",
+        root,
+        command: "bundle",
+        args: nearestTest === undefined
+          ? ["exec", "ruby", "-I", testLoadPath(root)]
+          : ["exec", "ruby", "-I", testLoadPath(root), nearestTest],
+        display: nearestTest === undefined
+          ? `bundle exec ruby -I ${testLoadPath(root)}`
+          : `bundle exec ruby -I ${testLoadPath(root)} ${nearestTest}`,
+        reason: nearestTest === undefined
+          ? `Nearest minitest evidence under ${root} indicates repository-backed validation.`
+          : `Nearest selected minitest evidence under ${root} is ${nearestTest}.`
+      });
+    }
+  }
+
+  return candidates;
+}
+
+function rankRubyRootForSelection(root: string, selectedPaths: readonly string[]): { ancestry: number; depth: number; distance: number } {
+  const depth = root === "." ? 0 : root.split("/").length;
+  let ancestry = 0;
+  let distance = Number.MAX_SAFE_INTEGER;
+  for (const selectedPath of selectedPaths) {
+    const candidateDistance = rootDistanceToPath(root, selectedPath);
+    if (candidateDistance < Number.MAX_SAFE_INTEGER) {
+      ancestry += 1;
+      distance = Math.min(distance, candidateDistance);
+    }
+  }
+  const normalizedDistance = Number.isFinite(distance) ? distance : Number.MAX_SAFE_INTEGER;
+  return {
+    ancestry: selectedPaths.length > 0 ? Math.min(1, ancestry) : 0,
+    depth,
+    distance: normalizedDistance
+  };
+}
+
+function rootDistanceToPath(root: string, targetPath: string): number {
+  if (root === ".") {
+    return targetPath === "." ? 0 : targetPath.split("/").length;
+  }
+  if (targetPath === root) {
+    return 0;
+  }
+  if (!targetPath.startsWith(`${root}/`)) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  const targetDepth = targetPath.split("/").length;
+  const rootDepth = root.split("/").length;
+  return targetDepth - rootDepth;
+}
+
+function inferRubyRootFromTestPath(filePath: string): string {
+  const normalized = normalizeRepoPath(filePath);
+  const segments = normalized.split("/");
+  const specIndex = segments.lastIndexOf("spec");
+  if (specIndex > -1) {
+    return segments.slice(0, specIndex).join("/") || ".";
+  }
+  const testIndex = segments.lastIndexOf("test");
+  if (testIndex > -1) {
+    return segments.slice(0, testIndex).join("/") || ".";
+  }
+  return ".";
+}
+
+function inferManifestRoot(filePath: string): string {
+  const normalized = normalizeRepoPath(filePath);
+  const directory = path.posix.dirname(normalized);
+  return directory === "." ? "." : directory;
+}
+
+function inferBinstubRoot(filePath: string): string {
+  const normalized = normalizeRepoPath(filePath);
+  const binDirectory = path.posix.dirname(normalized);
+  const root = path.posix.dirname(binDirectory);
+  return root === "." ? "." : root;
+}
+
+function testLoadPath(root: string): string {
+  return root === "." ? "test" : `${root}/test`;
+}
+
+function isRSpecTestFile(filePath: string): boolean {
+  const lower = normalizeRepoPath(filePath).toLowerCase();
+  return (lower.startsWith("spec/") || lower.includes("/spec/")) &&
+    lower.endsWith("_spec.rb");
+}
+
+function isMinitestTestFile(filePath: string): boolean {
+  const lower = normalizeRepoPath(filePath).toLowerCase();
+  return (lower.startsWith("test/") || lower.includes("/test/")) &&
+    lower.endsWith("_test.rb");
+}
+
+function isRubyManifestFile(filePath: string): boolean {
+  const lower = normalizeRepoPath(filePath).toLowerCase();
+  const basename = path.posix.basename(lower);
+  return basename === "gemfile" ||
+    basename === "gemfile.lock" ||
+    basename === "rakefile" ||
+    basename === "config.ru" ||
+    basename === ".ruby-version";
+}
+
+function isRspecBinstubPath(filePath: string): boolean {
+  const lower = normalizeRepoPath(filePath);
+  return lower === "bin/rspec" || lower.endsWith("/bin/rspec");
+}
+
+function isMinitestBinstubPath(filePath: string): boolean {
+  const lower = normalizeRepoPath(filePath);
+  return lower === "bin/rails" || lower.endsWith("/bin/rails") || lower === "bin/rake" || lower.endsWith("/bin/rake");
+}
+
+function nearestPathBySelection(candidates: readonly string[], selectedPaths: readonly string[]): string | undefined {
+  if (candidates.length === 0) {
+    return undefined;
+  }
+  if (selectedPaths.length === 0) {
+    return uniqueSorted(candidates)[0];
+  }
+  let nearest: string | undefined;
+  let nearestNameAffinity = -1;
+  let nearestDistance = Number.MAX_SAFE_INTEGER;
+  for (const candidate of candidates) {
+    for (const selectedPath of selectedPaths) {
+      const nameAffinity = rubyTestNameAffinity(candidate, selectedPath);
+      const distance = pathDistance(path.posix.dirname(candidate), path.posix.dirname(selectedPath));
+      if (
+        nameAffinity > nearestNameAffinity ||
+        (nameAffinity === nearestNameAffinity && distance < nearestDistance) ||
+        (nameAffinity === nearestNameAffinity && distance === nearestDistance &&
+          (nearest === undefined || candidate.localeCompare(nearest) < 0))
+      ) {
+        nearest = candidate;
+        nearestNameAffinity = nameAffinity;
+        nearestDistance = distance;
+      }
+    }
+  }
+  if (nearest !== undefined) {
+    return nearest;
+  }
+  return uniqueSorted(candidates)[0];
+}
+
+function rubyTestNameAffinity(testPath: string, selectedPath: string): number {
+  const testName = path.posix.basename(testPath, ".rb").replace(/_(?:spec|test)$/u, "");
+  const selectedName = path.posix.basename(selectedPath, path.posix.extname(selectedPath));
+  return testName === selectedName ? 1 : 0;
+}
+
+function pathDistance(left: string, right: string): number {
+  const leftSegments = left === "." ? [] : left.split("/");
+  const rightSegments = right === "." ? [] : right.split("/");
+  let shared = 0;
+  while (
+    shared < leftSegments.length &&
+    shared < rightSegments.length &&
+    leftSegments[shared] === rightSegments[shared]
+  ) {
+    shared += 1;
+  }
+  return leftSegments.length + rightSegments.length - (shared * 2);
+}
 
 export function projectShapeConfigCandidates(selectedPaths: readonly string[]): string[] {
   const candidates = new Set<string>();

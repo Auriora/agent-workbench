@@ -22,6 +22,7 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
+import { redactPresentationText } from "./redaction.js";
 
 export function buildVerificationPlanEnvelope(
   result: PlanVerificationResult,
@@ -68,7 +69,7 @@ function sanitizeVerificationPlan(
   return verificationPlanSchema.parse({
     repo_root: plan.repo_root,
     status: plan.status,
-    summary: plan.summary,
+    summary: redactPresentationText(plan.summary, { context: "message" }),
     planned_commands: plan.planned_commands.map(sanitizePlannedCommand),
     static_feedback: plan.static_feedback === undefined ? undefined : sanitizeStaticFeedback(plan.static_feedback),
     risks: plan.risks.map(sanitizeRisk),
@@ -90,10 +91,10 @@ function sanitizePlannedCommand(
   command: PlanVerificationResult["plan"]["planned_commands"][number]
 ) {
   return plannedValidationCommandSchema.parse({
-    command: command.command,
-    args: command.args,
-    display: command.display,
-    reason: command.reason,
+    command: redactPresentationText(command.command, { context: "source" }),
+    args: command.args.map((arg) => redactPresentationText(arg, { context: "source" })),
+    display: redactPresentationText(command.display, { context: "source" }),
+    reason: redactPresentationText(command.reason, { context: "message" }),
     status: command.status,
     execution: command.execution
   });
@@ -121,8 +122,8 @@ function sanitizeStaticFinding(input: NonNullable<PlanVerificationResult["plan"]
 function sanitizeRisk(input: PlanVerificationResult["plan"]["risks"][number]) {
   return contextRiskSchema.parse({
     severity: input.severity,
-    message: input.message,
-    why_this_matters: input.why_this_matters
+    message: redactPresentationText(input.message, { context: "message" }),
+    why_this_matters: redactPresentationText(input.why_this_matters, { context: "message" })
   });
 }
 

@@ -104,7 +104,7 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
   - Evidence mode: artifact
 ## Phase 2: Resource-backed implementation
 
-- [ ] T003 Implement Ruby file identity and resource-backed capability.
+- [x] T003 Implement Ruby file identity and resource-backed capability.
   - Depends on: T002
   - Requirements: Requirement 1
   - Properties: CP-004, CP-005, CP-006
@@ -117,9 +117,11 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
     `tests/graph/resource-extractor-rules.test.ts`
   - Acceptance: Ruby and Ruby/Rails metadata are classified accurately without
     changing existing adapter capability levels.
-  - Evidence: Pending.
+  - Evidence: Implemented Ruby identity in both file-identity paths, resource-backed Ruby capability, Gemfile/Gemfile.lock package evidence, Rails route framework evidence, and shared config/credentials path exclusion. pnpm typecheck passed; focused T003 tests passed 21/21; all seven Rails suites passed with 134 assertions and 5 remaining expected failures owned by T004-T005.
 
-- [ ] T004 Implement bounded Rails project-shape and resource extraction.
+  - Status: T003 complete; T004 may begin.
+  - Evidence mode: command
+- [x] T004 Implement bounded Rails project-shape and resource extraction.
   - Depends on: T003
   - Requirements: Requirement 2, Requirement 4
   - Properties: CP-001, CP-002, CP-004, CP-006
@@ -143,9 +145,11 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
     is parsed and no runtime semantics are claimed. Engine and non-standard
     layouts use their observed roots without fabricating a conventional `app/`
     layout.
-  - Evidence: Pending.
+  - Evidence: Added pure application-owned rails-project-shape.ts, computed once from the existing bounded graph scan, plus file-local Rails candidate metadata on generic resource nodes and catalog-gated admission. Conventional, engine, nonstandard, generic-Ruby negative, oversized, generated-downrank/vendor-exclusion fixtures pass. No new graph kind/schema, traversal, parser, or runtime semantics. pnpm typecheck passed; graph focused tests passed 36/36.
 
-- [ ] T005 Integrate Rails-aware overview and task-context ranking.
+  - Status: T004 complete; T005 may begin.
+  - Evidence mode: command
+- [x] T005 Integrate Rails-aware overview and task-context ranking.
   - Depends on: T004
   - Requirements: Requirement 2
   - Properties: CP-001, CP-002, CP-005
@@ -162,9 +166,11 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
     observed Rails key files and provides Rails validation hints; task context
     ranks relevant first-party Rails files and nearby tests ahead of unrelated
     resources. Both surfaces expose provenance and non-complete coverage.
-  - Evidence: Pending.
+  - Evidence: Integrated one bounded Rails shape computation into get-repo-overview and get-task-context. Overview reports Ruby/Rails platforms, observed key files, and verification_plan hints; task context ranks only observed Rails tests/routes/config/package/role evidence, including engine and nonstandard roots, with root '.' constrained against unrelated files. Public contracts and thin MCP adapters unchanged. pnpm typecheck passed; focused overview/context tests passed 61/61.
 
-- [ ] T006 Add policy-aware Rails validation planning.
+  - Status: T005 complete; T006 may begin.
+  - Evidence mode: command
+- [x] T006 Add policy-aware Rails validation planning.
   - Depends on: T005
   - Requirements: Requirement 3
   - Properties: CP-003
@@ -189,11 +195,13 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
     `planned`/`not_executed`. `planCommand` does not authorize execution or
     elevate repository-local policy commands into the trusted executable set;
     custom candidates retain explicit repository provenance.
-  - Evidence: Pending.
+  - Evidence: Added one catalog-only RailsProjectShape computation to verification planning, deterministic Rails-root RSpec and Minitest candidate ranking, root-correct binstub handling, nested Minitest load paths, explicit repository-policy precedence, host-environment blocking, structured planCommand safety, and planned/not_executed output. pnpm typecheck passed; focused validation-planner, verification-plan, and command-safety suites passed 48/48.
 
+  - Status: T006 complete; T007 may begin.
+  - Evidence mode: command
 ## Phase 3: Verification, promotion, and closure
 
-- [ ] T007 Run focused and full validation plus bounded Rails dogfood.
+- [x] T007 Run focused and full validation plus bounded Rails dogfood.
   - Depends on: T006
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4
   - Properties: CP-001, CP-002, CP-003, CP-004, CP-005, CP-006
@@ -219,9 +227,11 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
     insufficient.
     Shared path-policy consistency proves Rails credential rules apply across
     scanning, validation planning, presentation redaction, and write safety.
-  - Evidence: Pending.
+  - Evidence: Passed Rails fixture and regression validation (10 primary files/163 tests plus 8 remediation/safety files/132 tests), pnpm typecheck, final full Vitest (103 files/1148 tests), plugin validation and package dry-run. Bounded read-only dogfood on an active Rails application found a lexical nearest-test defect; after basename-aware repair the identical request planned test/models/user_test.rb without execution. Independent architecture, QA, lifecycle and security findings were remediated with complete anchor classification, Rails config selection, embedded-fixture isolation, response redaction, telemetry negatives and hook/runtime credential-policy parity.
 
-- [ ] T008 Promote accepted behavior and prepare lifecycle closure.
+  - Status: T007 complete; final validation green after review remediation.
+  - Evidence mode: command
+- [x] T008 Promote accepted behavior and prepare lifecycle closure.
   - Depends on: T007
   - Requirements: Requirement 4
   - Files: `docs/design/language-adapter-design.md`,
@@ -232,8 +242,10 @@ T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008
   - Acceptance: Durable docs describe current resource-backed support and the
     verified shared Rails credential policy, parser work remains owned by Spec
     048, review findings are resolved or routed, and closure checks pass.
-  - Evidence: Pending.
+  - Evidence: Promoted current behavior to docs/design/language-adapter-design.md, docs/reference/language-capability-matrix.md, docs/backlog/README.md, docs/reference/workspace-safety-contract.md and docs/reference/dogfood-evidence-ledger.md; routed parser ownership to docs/specs/048-ruby-rails-partial-semantic/tasks.md without starting T002. Post-promotion pnpm typecheck passed, 8 focused files/132 tests passed, lint_spec_package returned 0 diagnostics, task_state_audit passed with 0 findings, and closure_check returned ready=true with 0 blockers.
 
+  - Status: T008 complete; closure_check ready with zero blockers.
+  - Evidence mode: command
 ## Execution Rules
 
 - T001 is a read-only source reconciliation task; it does not authorize runtime

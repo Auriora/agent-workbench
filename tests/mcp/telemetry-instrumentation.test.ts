@@ -556,4 +556,100 @@ describe("MCP telemetry instrumentation", () => {
       })
     ]);
   });
+
+  it("does not emit Rails plan internals in telemetry properties", async () => {
+    const telemetry = new InMemoryTelemetryAdapter();
+    const { registeredTools, server } = createInstrumentedEndpoints(telemetry);
+    const sensitiveRailsPath = "backend/spec/models/user_spec.rb";
+    const sensitiveRailsArg = "RAILS_SECRET=1";
+    const sensitiveRepoIdentifier = "rails-monorepo-A1B2";
+    const sensitiveSourceBody = "class UsersController < ApplicationController\\n  def index\\n    render plain: 'ok'\\n  end\\nend";
+
+    server.tool(
+      "verification_plan",
+      "",
+      {},
+      async () => ({
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              {
+                data: {
+                  repo_root: "repo-with-rails",
+                  status: "needed",
+                  summary: "Planned commands for edit.",
+                  planned_commands: [
+                    {
+                      command: "bundle",
+                      args: ["exec", "rspec", sensitiveRailsPath],
+                      display: `bundle exec rspec ${sensitiveRailsPath} ${sensitiveRailsArg}`,
+                      reason: `${sensitiveRepoIdentifier} discovered in routes and configs.`,
+                      status: "planned",
+                      execution: "not_executed"
+                    }
+                  ],
+                  source_body: sensitiveSourceBody,
+                  next_actions: []
+                },
+                meta: {
+                  analysis_validity: "valid",
+                  freshness: "fresh",
+                  scope: {
+                    repo_root: "repo-with-rails",
+                    indexed_roots: ["."],
+                    skipped_roots: [],
+                    languages: ["ruby"]
+                  },
+                  capability_level: "resource_backed",
+                  evidence_kinds: ["config"],
+                  verification_status: "needed",
+                  truncated: false,
+                  budget: {
+                    row_limit: 10
+                  }
+                }
+              },
+              null,
+              2
+            )
+          }
+        ]
+      })
+    );
+
+    const response = await registeredTools.verification_plan.handler({ max_commands: 10 });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: {
+        repo_root: string;
+        status: string;
+        planned_commands: Array<{ args: string[]; display: string; reason: string }>;
+        source_body?: string;
+      };
+    };
+
+    expect(parsed.data.repo_root).toBe("repo-with-rails");
+    expect(parsed.data.planned_commands[0]?.args).toEqual(["exec", "rspec", sensitiveRailsPath]);
+    expect(parsed.data.source_body).toBe(sensitiveSourceBody);
+    const telemetryPayload = JSON.stringify(telemetry.records[0]?.properties);
+    expect(telemetryPayload).toContain("repo-with-rails");
+    expect(telemetryPayload).not.toContain(sensitiveRailsPath);
+    expect(telemetryPayload).not.toContain(sensitiveRailsArg);
+    expect(telemetryPayload).not.toContain(sensitiveRepoIdentifier);
+    expect(telemetryPayload).not.toContain(sensitiveSourceBody);
+    expect(telemetry.records[0]).toEqual(
+      expect.objectContaining({
+        properties: expect.objectContaining({
+          surface_name: "verification_plan",
+          surface_kind: "tool",
+          outcome: "ok",
+          analysis_validity: "valid",
+          verification_status: "needed",
+          row_limit: 10,
+          invalid_input_count: 0,
+          degraded_mode_count: 0
+        })
+      })
+    );
+  });
 });

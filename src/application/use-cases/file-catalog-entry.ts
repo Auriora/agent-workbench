@@ -32,6 +32,7 @@ export function inferLanguageFromPath(filePath: string): string {
   if (ext === ".ts" || ext === ".tsx") return "typescript";
   if (ext === ".js" || ext === ".jsx" || ext === ".mjs" || ext === ".cjs") return "javascript";
   if (ext === ".cs" || ext === ".razor" || ext === ".cshtml") return "csharp";
+  if (ext === ".rb") return "ruby";
   if (ext === ".go") return "go";
   if (ext === ".rs") return "rust";
   if (ext === ".java") return "java";

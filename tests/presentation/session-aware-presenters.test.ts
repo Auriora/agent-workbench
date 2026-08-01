@@ -48,6 +48,22 @@ describe("session-aware public presenters", () => {
       { tool: "docs_read_section", args: { path: "README.md", heading_id: "intro" } }
     ]);
   });
+
+  it("redacts secret-like verification command content at the response boundary", () => {
+    const result = verificationPlanResult();
+    result.plan.planned_commands.push({
+      command: "bundle",
+      args: ["exec", "rake", "TOKEN=fixture-secret"],
+      display: "bundle exec rake TOKEN=fixture-secret",
+      reason: "Policy included TOKEN=fixture-secret",
+      status: "planned",
+      execution: "not_executed"
+    });
+
+    const serialized = JSON.stringify(buildVerificationPlanEnvelope(result));
+    expect(serialized).not.toContain("fixture-secret");
+    expect(serialized).toContain("[REDACTED]");
+  });
 });
 
 function taskContextResult(): GetTaskContextResult {

@@ -383,11 +383,15 @@ function isHiddenPathSkippedByDefault(relativePath: string, isDirectory: boolean
 
 function isSecretPath(relativePath: string): boolean {
   const basename = relativePath.slice(relativePath.lastIndexOf("/") + 1);
+  const normalized = normalizeCatalogPath(relativePath).replace(/^\.\/+/, "").toLowerCase();
   return (
-    relativePath === ".env" ||
-    relativePath.endsWith("/.env") ||
-    SECRET_ENV_PATTERN.test(relativePath) ||
-    SECRET_BASENAME_PATTERN.test(basename)
+    normalized === ".env" ||
+    normalized.endsWith("/.env") ||
+    SECRET_ENV_PATTERN.test(normalized) ||
+    SECRET_BASENAME_PATTERN.test(basename) ||
+    normalized === "config/credentials" ||
+    normalized.startsWith("config/credentials/") ||
+    normalized.includes("/config/credentials/")
   );
 }
 

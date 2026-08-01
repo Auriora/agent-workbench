@@ -462,7 +462,16 @@ function isSecretPath(file) {
     file === ".env" ||
     file.endsWith("/.env") ||
     SECRET_ENV_PATTERN.test(file) ||
-    SECRET_BASENAME_PATTERN.test(basename)
+    SECRET_BASENAME_PATTERN.test(basename) ||
+    isRailsCredentialsPath(file)
+  );
+}
+
+function isRailsCredentialsPath(file) {
+  return (
+    file === "config/credentials" ||
+    file.startsWith("config/credentials/") ||
+    file.includes("/config/credentials/")
   );
 }
 

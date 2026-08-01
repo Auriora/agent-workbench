@@ -22,6 +22,7 @@ import {
   cmakeValidationCommands,
   discoverCMakeTargets,
   discoverGoCiCommands,
+  discoverRubyValidationCommands,
   discoverPythonNearestTests,
   dotnetTestTargets,
   isDocsOrConfigLanguage,
@@ -36,6 +37,7 @@ import {
   nearestDotnetProject,
   projectShapeConfigCandidates,
   selectSamTemplates,
+  type RubyValidationCommandCandidate,
   type CMakeTargetEvidence
 } from "./validation-ecosystems.js";
 import {
@@ -46,6 +48,7 @@ import {
   policyCommandsCoverHostSuppression,
   type ValidationProtocolDiscovery
 } from "./validation-environment.js";
+import { planCommand } from "../../domain/policies/command-safety.js";
 import {
   configuredPackageCommands,
   detectPackageManager,
@@ -61,6 +64,7 @@ import {
 } from "./mcp-server-shape.js";
 import { buildStaticFeedback } from "./validation-static-feedback.js";
 import { normalizeRepoPath, uniqueSorted } from "./validation-utils.js";
+import { detectRailsProjectShape, type RailsProjectShape } from "./rails-project-shape.js";
 
 export type PlanVerificationResult = {
   plan: VerificationPlan;
@@ -90,10 +94,16 @@ export async function planVerification(input: {
     selectedPaths,
     workspace: input.workspace
   });
+  const railsDiscoveryFiles = files.filter((file) => !isEmbeddedFixturePath(file.path));
   const selectedEntries = selectEntries(files, selectedPaths);
+  const railsShape = detectRailsProjectShape({
+    files: railsDiscoveryFiles,
+    scan_truncated: scanned.truncated
+  });
   const discovery = await discoverValidationEvidence({
-    files,
+    files: railsDiscoveryFiles,
     selectedEntries,
+    railsShape,
     workspace: input.workspace
   });
   const commandPlan = planValidationCommands({
@@ -321,6 +331,7 @@ async function mergeDirectValidationEntries(input: {
 async function discoverValidationEvidence(input: {
   files: readonly FileCatalogEntry[];
   selectedEntries: readonly FileCatalogEntry[];
+  railsShape: RailsProjectShape;
   workspace: WorkspaceFilePort;
 }): Promise<ValidationDiscovery> {
   const paths = new Set(input.files.map((file) => file.path));
@@ -347,6 +358,12 @@ async function discoverValidationEvidence(input: {
       workspace: input.workspace,
       cmakeFiles: [...paths].filter((filePath) => filePath === "CMakeLists.txt" || filePath.endsWith("/CMakeLists.txt")).sort()
     }),
+    rubyValidationCommands: discoverRubyValidationCommands({
+      files: input.files,
+      selectedEntries: input.selectedEntries,
+      railsRoots: input.railsShape.rails_roots
+    }),
+    railsShape: input.railsShape,
     dotnetSolutions: [...paths].filter((filePath) => lowerExtension(filePath) === ".sln").sort(),
     dotnetProjects: [...paths].filter((filePath) => isDotnetProjectPath(filePath)).sort(),
     dotnetTestProjects: [...paths].filter((filePath) => isDotnetProjectPath(filePath) && isDotnetTestProjectPath(filePath)).sort(),
@@ -376,6 +393,8 @@ type ValidationDiscovery = {
   hasRootCMake: boolean;
   localCMakeFiles: string[];
   cmakeTargets: CMakeTargetEvidence[];
+  rubyValidationCommands: RubyValidationCommandCandidate[];
+  railsShape: RailsProjectShape;
   dotnetSolutions: string[];
   dotnetProjects: string[];
   dotnetTestProjects: string[];
@@ -425,6 +444,11 @@ function planValidationCommands(input: {
       input.selectedEntries.some((file) => isMcpServerEvidencePath(file.path)) ||
       input.selectedEntries.some((file) => file.path === "package.json") ||
       taskMentionsMcp(input.task));
+  const rubyShapeSelected =
+    input.discovery.rubyValidationCommands.length > 0 &&
+    (includeAll
+      ? input.discovery.railsShape.rails_roots.length > 0
+      : input.selectedEntries.some((file) => isRailsValidationSelection(file, input.discovery.railsShape)));
   const pluginIntegrationSelected =
     taskMentionsPluginIntegration(input.task) ||
     input.selectedEntries.some(isPluginIntegrationEvidencePath);
@@ -604,6 +628,37 @@ function planValidationCommands(input: {
     }
   }
 
+  if (rubyShapeSelected) {
+    if (hostCommandsBlocked(input.discovery.validationProtocol)) {
+      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+        blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "Ruby/Rails"));
+      }
+    } else {
+      const rubyCommand = selectRubyValidationCommand(input.discovery.rubyValidationCommands);
+      if (rubyCommand !== undefined && !hasPlannedCommand(commands, rubyCommand)) {
+        const decision = planCommand({
+          command: rubyCommand.command,
+          args: rubyCommand.args,
+          source: "discovered"
+        });
+        if (decision.allowed) {
+          commands.push({
+            command: decision.command.command,
+            args: decision.command.args,
+            display: rubyCommand.display,
+            reason: rubyCommand.reason,
+            status: "planned",
+            execution: "not_executed"
+          });
+        } else {
+          lowConfidenceReasons.push(
+            `validation-command-safety: ${decision.message}`
+          );
+        }
+      }
+    }
+  }
+
   if (
     selectedPackageScripts.length > 0 &&
     !goShapeSelected &&
@@ -731,6 +786,69 @@ function planValidationCommands(input: {
 
 function taskMentionsPluginIntegration(task: string | undefined): boolean {
   return task !== undefined && /\b(?:plugin|plugins|hook|hooks|skill|skills|package|packaging)\b/iu.test(task);
+}
+
+function selectRubyValidationCommand(
+  candidates: readonly RubyValidationCommandCandidate[]
+): RubyValidationCommandCandidate | undefined {
+  return candidates[0];
+}
+
+function hasPlannedCommand(
+  commands: readonly PlannedValidationCommandLike[],
+  candidate: RubyValidationCommandCandidate
+): boolean {
+  return commands.some((command) =>
+    isRubyPolicyEquivalent(command, candidate) ||
+    (command.command === candidate.command &&
+      command.args.length === candidate.args.length &&
+      command.args.every((arg, index) => candidate.args[index] === arg) &&
+      command.display === candidate.display)
+  );
+}
+
+function isRubyPolicyEquivalent(
+  command: PlannedValidationCommandLike,
+  candidate: RubyValidationCommandCandidate
+): boolean {
+  if (command.command !== "bundle" || command.args.length < 2 || command.args[0] !== "exec") {
+    return false;
+  }
+  if (candidate.family === "rspec") {
+    return command.args[1] === "rspec" && candidate.args[1] === "rspec";
+  }
+  if (candidate.family === "minitest") {
+    return (
+      command.args[1] === "ruby" &&
+      command.args[2] === "-I" &&
+      candidate.args[0] === "exec" &&
+      candidate.args[1] === "ruby" &&
+      candidate.args[2] === "-I" &&
+      command.args[3] === candidate.args[3]
+    );
+  }
+  return false;
+}
+
+type PlannedValidationCommandLike = Pick<PlannedValidationCommand, "command" | "args" | "display">;
+
+function isRailsValidationSelection(file: FileCatalogEntry, shape: RailsProjectShape): boolean {
+  if (file.file_identity.language === "ruby") {
+    return true;
+  }
+  const basename = path.posix.basename(normalizeRepoPath(file.path).toLowerCase());
+  if (["gemfile", "gemfile.lock", ".ruby-version", "rakefile", "config.ru"].includes(basename)) {
+    return true;
+  }
+  return shape.route_file_paths.includes(file.path) ||
+    shape.config_file_paths.includes(file.path) ||
+    shape.test_file_paths.includes(file.path) ||
+    shape.role_file_paths.includes(file.path);
+}
+
+function isEmbeddedFixturePath(filePath: string): boolean {
+  const normalized = normalizeRepoPath(filePath).toLowerCase();
+  return normalized.startsWith("tests/fixtures/") || normalized.includes("/tests/fixtures/");
 }
 
 function isPluginIntegrationEvidencePath(file: FileCatalogEntry): boolean {

@@ -123,6 +123,87 @@ describe("verification_plan use case", () => {
     expect(result.plan.static_feedback).toBeUndefined();
   });
 
+  it("plans a nearest-targeted Rails Minitest command for nonstandard app roots", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-rails-nonstandard-plan-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "backend", "src", "models"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "backend", "test", "models"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "backend", "config"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "Gemfile"), "source 'https://rubygems.org'\n");
+      fs.writeFileSync(path.join(repoRoot, "backend", "config", "application.rb"), "class Application; end\n");
+      fs.writeFileSync(path.join(repoRoot, "backend", "src", "models", "client.rb"), "class Client; end\n");
+      fs.writeFileSync(path.join(repoRoot, "backend", "test", "models", "client_test.rb"), "require 'test_helper'\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["backend/src/models/client.rb"],
+          changed_files: ["backend/src/models/client.rb"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands).toEqual([
+        expect.objectContaining({
+          command: "bundle",
+          args: ["exec", "ruby", "-I", "backend/test", "backend/test/models/client_test.rb"],
+          display: "bundle exec ruby -I backend/test backend/test/models/client_test.rb",
+          status: "planned",
+          execution: "not_executed"
+        })
+      ]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("plans Rails validation for a selected Rails config file", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-rails-standard-repo");
+    const result = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["config/database.yml"],
+        changed_files: ["config/database.yml"],
+        include_static_feedback: true,
+        max_commands: 10
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+
+    expect(result.plan.planned_commands).toEqual(expect.arrayContaining([
+      expect.objectContaining({ command: "bundle", execution: "not_executed" })
+    ]));
+  });
+
+  it("does not infer Rails validation from embedded fixture repositories", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-non-rails-with-fixture-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "tests", "fixtures", "rails", "config"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "tests", "fixtures", "rails", "test", "models"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "README.md"), "# Non-Rails repository\n");
+      fs.writeFileSync(path.join(repoRoot, "tests", "fixtures", "rails", "config", "application.rb"), "class Application; end\n");
+      fs.writeFileSync(path.join(repoRoot, "tests", "fixtures", "rails", "test", "models", "user_test.rb"), "class UserTest; end\n");
+
+      const result = await planVerification({
+        request: { repo_root: repoRoot, files: [], changed_files: [], include_static_feedback: true, max_commands: 10 },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.planned_commands.some((command) => command.command === "bundle")).toBe(false);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("plans bounded Markdown quality checks for docs-only repositories when no files are selected", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-docs-only-"));
     try {
