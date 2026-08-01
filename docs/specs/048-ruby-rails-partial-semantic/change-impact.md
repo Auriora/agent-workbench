@@ -18,7 +18,7 @@ parser-backed partial-semantic evidence.
 
 | Source | Current behavior relied on | Confidence | Notes |
 |--------|----------------------------|------------|-------|
-| `docs/specs/047-ruby-rails-resource-discovery/` | Delivered Ruby identity, Rails shape, fixtures, and validation planning. | dependency | Must be reconciled before implementation. |
+| `docs/history/spec-closure-log.md` (Spec 047, final commit `2f0b160`) | Delivered Ruby identity, Rails shape, fixtures and validation planning. | dependency | Reconcile the durable closure record and delivered source before implementation. |
 | `docs/design/language-adapter-design.md` | Parser architecture, current language support, promotion gates. | high | Requires delivered-state update. |
 | `docs/reference/runtime-contracts.md` | Capability, graph, coverage, trust, and failure vocabulary. | high | Generic coverage clarification may be required. |
 | `docs/backlog/README.md` | EB010 language promotion and EB061 parser-route disclosure. | high | This spec delivers the Ruby slice and may partly deliver EB061. |

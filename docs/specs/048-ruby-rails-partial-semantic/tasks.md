@@ -22,7 +22,8 @@ Spec 047 -> T001 -> T002 -> T003 -> T004 -> T005 -> T006 -> T007 -> T008 -> T009
 - [ ] T001 Reconcile delivered Spec 047 behavior and freeze the Ruby parser
   promotion boundary.
   - Depends on: Spec 047 implementation and reconciliation
-  - Upstream specs: `docs/specs/047-ruby-rails-resource-discovery`
+  - Upstream specs: Spec 047 closure record in
+    `docs/history/spec-closure-log.md`, final commit `2f0b160`
   - Requirements: Requirement 1, Requirement 5
   - Files: Spec 047 evidence, delivered Ruby/Rails source/tests, this package
   - Acceptance: Resource-backed behavior, fixtures, validation policy, exact

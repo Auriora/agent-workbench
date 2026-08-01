@@ -51,7 +51,7 @@ code or overstating the behavior of Ruby metaprogramming and Rails DSLs.
 
 | Source | Current behavior relied on | Confidence | Notes |
 |--------|----------------------------|------------|-------|
-| `docs/specs/047-ruby-rails-resource-discovery/` | Ruby identity, Rails shape, fixtures, and validation planning. | spec dependency | Must be reconciled against delivered code before this spec starts. |
+| `docs/history/spec-closure-log.md` (Spec 047, final commit `2f0b160`) | Ruby identity, Rails shape, fixtures and validation planning. | spec dependency | Must be reconciled against delivered code before this spec starts. |
 | `docs/design/language-adapter-design.md` | Tree-sitter primary-path rule and semantic promotion gates. | high | Canonical adapter design. |
 | `docs/reference/language-capability-matrix.md` | Ruby target is resource-backed then partial-semantic. | high | Updated by Spec 047 before this package closes. |
 | `docs/reference/runtime-contracts.md` | Graph, capability, provenance, trust, coverage, and degraded-state vocabulary. | high | Public schemas stay language-neutral. |

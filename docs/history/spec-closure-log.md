@@ -467,6 +467,32 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-01 - 047-ruby-rails-resource-discovery
+
+- **Spec:** `docs/specs/047-ruby-rails-resource-discovery/`
+- **Title:** Ruby and Rails resource discovery requirements
+- **Final spec commit:** `2f0b160`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/language-adapter-design.md`
+  - `docs/reference/language-capability-matrix.md`
+  - `docs/backlog/README.md`
+  - `docs/reference/workspace-safety-contract.md`
+  - `docs/reference/dogfood-evidence-ledger.md`
+  - `docs/specs/048-ruby-rails-partial-semantic/`
+- **Verification summary:** Typecheck, focused Rails and security suites, the
+  final 103-file/1,148-test suite, plugin validation, package dry-run, bounded
+  Rails dogfood, independent architecture/QA/lifecycle/security review,
+  lifecycle lint, task-state audit, evidence-quality review, closure readiness,
+  and archive-index validation passed.
+- **Residual risks:**
+  - Resource-backed Rails paths and conventions do not imply parser-backed or
+    runtime Rails semantics.
+  - One dogfood application is bounded evidence, not universal framework proof.
+- **Follow-up:** Spec 048 owns the single tree-sitter Ruby path and bounded
+  partial-semantic Rails promotion.
+
 ### 2026-07-21 - 044-ranked-documentation-readiness-and-first-read-trust
 
 - **Spec:** `docs/specs/044-ranked-documentation-readiness-and-first-read-trust/`
