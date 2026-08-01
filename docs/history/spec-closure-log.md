@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/047-ruby-rails-resource-discovery/`
 - **Title:** Ruby and Rails resource discovery requirements
 - **Final spec commit:** `2f0b160`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `a2a667e`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/language-adapter-design.md`
