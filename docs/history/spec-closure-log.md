@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/048-ruby-rails-partial-semantic/`
 - **Title:** Ruby and Rails partial-semantic requirements
 - **Final spec commit:** `87b4f19`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `c867456`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/language-adapter-design.md`
