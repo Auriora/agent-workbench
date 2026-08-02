@@ -984,6 +984,15 @@ function candidatePoolForReference(input: {
   });
 
   if (referenceKind === "ruby_route") {
+    if (metadata.route_form === "concerns" && typeof metadata.route_concern_name === "string") {
+      const routeConcernName = metadata.route_concern_name.toLowerCase();
+      return input.allNodes.filter((candidate) =>
+        candidate.language === "ruby" &&
+        candidate.kind === "rails_route_concern" &&
+        typeof candidate.metadata.route_concern_name === "string" &&
+        candidate.metadata.route_concern_name.toLowerCase() === routeConcernName
+      );
+    }
     if (metadata.route_form === "draw" && typeof metadata.route_file_candidate === "string") {
       const routeFileCandidate = metadata.route_file_candidate.toLowerCase();
       return input.allNodes.filter((candidate) =>
@@ -1295,6 +1304,9 @@ function rubyCandidateKindMatches(
     return candidate.kind === "method" || candidate.kind === "singleton_method";
   }
   if (referenceKind === "ruby_route") {
+    if (reference.candidate_metadata.route_form === "concerns") {
+      return candidate.kind === "rails_route_concern";
+    }
     if (reference.candidate_metadata.route_form === "draw") {
       return candidate.kind === "module" && candidate.metadata.parser_version === "tree-sitter-ruby";
     }

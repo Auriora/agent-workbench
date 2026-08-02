@@ -13,7 +13,7 @@ export type RubyParser = {
 };
 
 export type RubyScope = {
-  kind: "module" | "class" | "singleton_class";
+  kind: "module" | "class" | "singleton_class" | "rails_route_concern";
   name: string;
   qualifiedName: string;
 };
@@ -33,7 +33,7 @@ type RubyResourceRouteOptions = {
 };
 
 export type RubyDeclaration = {
-  kind: "module" | "class" | "singleton_class" | "method" | "singleton_method" | "constant";
+  kind: "module" | "class" | "singleton_class" | "method" | "singleton_method" | "constant" | "rails_route_concern";
   name: string;
   qualifiedName: string;
   signature?: string;
@@ -73,7 +73,20 @@ const DEFAULT_PARSER: RubyParser = {
 const STATIC_REQUIRE_NAMES = new Set(["require", "require_relative"]);
 const STATIC_LOAD_NAMES = new Set(["load", "autoload", "autoload_relative"]);
 const STATIC_MIXIN_NAMES = new Set(["include", "extend", "prepend"]);
-const STATIC_ROUTE_NAMES = new Set(["get", "post", "put", "patch", "delete", "resource", "resources", "match", "root", "draw"]);
+const STATIC_ROUTE_NAMES = new Set([
+  "get",
+  "post",
+  "put",
+  "patch",
+  "delete",
+  "resource",
+  "resources",
+  "match",
+  "root",
+  "draw",
+  "concern",
+  "concerns"
+]);
 const STATIC_ROUTE_CONTEXT_NAMES = new Set(["namespace", "scope", "member", "collection", "resources", "resource"]);
 const STATIC_MODEL_DSL_NAMES = new Set([
   "belongs_to",
@@ -231,6 +244,33 @@ export class RubyParserAdapter {
         const methodName = node.childForFieldName("method")?.text;
         const args = node.childForFieldName("arguments");
         const routeContext = currentRouteContext(routeContextStack);
+
+        if (methodName === "concern" && isRailsRouteFilePath(sourceFilePath)) {
+          const block = routeCallBlock(node);
+          const concernDeclaration = routeConcernDeclarationFromCall(node, args, block, sourceQualifiedName, routeContext);
+          if (concernDeclaration === undefined) {
+            return;
+          }
+          if (concernDeclaration.type === "dynamic") {
+            references.push(concernDeclaration.reference);
+            return;
+          }
+
+          declarations.push(concernDeclaration.declaration);
+          if (block === null) {
+            return;
+          }
+          const concernScope: RubyScope = {
+            kind: "rails_route_concern",
+            name: concernDeclaration.declaration.name,
+            qualifiedName: concernDeclaration.declaration.qualifiedName
+          };
+          scopes.push(concernScope);
+          visit(block);
+          scopes.pop();
+          return;
+        }
+
         const nextRouteContext = methodName === undefined
           ? undefined
           : routeContextFromCall(methodName, args, routeContext);
@@ -609,7 +649,8 @@ function referencesFromCall(
   if (STATIC_MIXIN_NAMES.has(methodName)) {
     return mixinReferences(methodName, argsOnly, sourceQualifiedName);
   }
-  if (STATIC_ROUTE_NAMES.has(methodName)) {
+  if (STATIC_ROUTE_NAMES.has(methodName) &&
+    ((methodName !== "concern" && methodName !== "concerns") || isRailsRouteFilePath(sourceFilePath))) {
     return routeReferences(methodName, args, sourceQualifiedName, routeContext, sourceFilePath);
   }
   if (STATIC_MODEL_DSL_NAMES.has(methodName)) {
@@ -1099,6 +1140,103 @@ function routeReferences(
   }
   const args = argsNode.namedChildren;
 
+  if (methodName === "concerns") {
+    if (argsNode === null || args.length === 0) {
+      return [dynamicReference({
+        name: methodName,
+        sourceQualifiedName,
+        node: argsNode,
+        metadata: {
+          declaration_source: "tree-sitter-ruby",
+          static: false,
+          reason: "missing_concern_name",
+          route_form: methodName,
+          route_concern_source: "direct"
+        }
+      })];
+    }
+
+    const refs: RubyReference[] = [];
+    let hasStaticConcernRef = false;
+    for (const arg of args) {
+      const parsed = routeConcernNamesFromNode(arg);
+      if (parsed === undefined) {
+        refs.push(dynamicReference({
+          name: methodName,
+          sourceQualifiedName,
+          node: arg,
+          metadata: {
+            declaration_source: "tree-sitter-ruby",
+            static: false,
+            reason: "non_literal_concern_name",
+            route_form: methodName,
+            route_namespace: routeNamespaceFromContext(routeContext),
+            route_path_prefix: routePathPrefixFromContext(routeContext),
+            route_scope: routeScopeFromContext(routeContext),
+            route_concern_source: "direct"
+          }
+        }));
+        continue;
+      }
+
+      hasStaticConcernRef = hasStaticConcernRef || parsed.names.length > 0;
+      for (const concernName of parsed.names) {
+        refs.push(literalReference({
+          kind: "ruby_route",
+          name: concernName,
+          sourceQualifiedName,
+          node: arg,
+          metadata: {
+            static: true,
+            declaration_source: "tree-sitter-ruby",
+            route_form: methodName,
+            route_namespace: routeNamespaceFromContext(routeContext),
+            route_path_prefix: routePathPrefixFromContext(routeContext),
+            route_scope: routeScopeFromContext(routeContext),
+            route_concern_name: concernName,
+            route_concern_source: "direct"
+          }
+        }));
+      }
+      for (const dynamicNode of parsed.dynamicNodes) {
+        refs.push(dynamicReference({
+          name: methodName,
+          sourceQualifiedName,
+          node: dynamicNode,
+          metadata: {
+            declaration_source: "tree-sitter-ruby",
+            static: false,
+            reason: "non_literal_concern_name",
+            route_form: methodName,
+            route_namespace: routeNamespaceFromContext(routeContext),
+            route_path_prefix: routePathPrefixFromContext(routeContext),
+            route_scope: routeScopeFromContext(routeContext),
+            route_concern_source: "direct"
+          }
+        }));
+      }
+    }
+
+    if (!hasStaticConcernRef && refs.length === 0) {
+      return [dynamicReference({
+        name: methodName,
+        sourceQualifiedName,
+        node: argsNode,
+        metadata: {
+          declaration_source: "tree-sitter-ruby",
+          static: false,
+          reason: "non_literal_concern_name",
+          route_form: methodName,
+          route_namespace: routeNamespaceFromContext(routeContext),
+          route_path_prefix: routePathPrefixFromContext(routeContext),
+          route_scope: routeScopeFromContext(routeContext),
+          route_concern_source: "direct"
+        }
+      })];
+    }
+    return refs;
+  }
+
   if (methodName === "draw") {
     const routeCandidateNode = args[0];
     if (routeCandidateNode === undefined) {
@@ -1206,7 +1344,8 @@ function routeReferences(
     const routeResourceControllerModules = resourceRouteOptions.moduleName === undefined
       ? routeContext.controllerModules
       : [...routeContext.controllerModules, resourceRouteOptions.moduleName];
-    return [literalReference({
+    return [
+      literalReference({
       kind: "ruby_route",
       name: routeResourceName,
       sourceQualifiedName,
@@ -1226,7 +1365,12 @@ function routeReferences(
           resourceControllerName
         ))
       }
-    })];
+    }), ...routeConcernReferencesFromResourceOptions(
+      args,
+      sourceQualifiedName,
+      routeContext,
+      routeResourceName
+    )];
   }
 
   if (methodName === "root") {
@@ -1619,6 +1763,238 @@ function routeActionScopeFromArguments(args: readonly Parser.SyntaxNode[]): "mem
   return onValue === "member" || onValue === "collection" ? onValue : undefined;
 }
 
+function routeConcernDeclarationFromCall(
+  node: Parser.SyntaxNode,
+  argsNode: Parser.SyntaxNode | null,
+  block: Parser.SyntaxNode | null,
+  sourceQualifiedName: string | undefined,
+  routeContext: RubyRouteContext
+): { type: "static"; declaration: RubyDeclaration } | { type: "dynamic"; reference: RubyReference } | undefined {
+  if (argsNode === null || argsNode.namedChildren.length === 0) {
+    return {
+      type: "dynamic",
+      reference: dynamicReference({
+        name: "concern",
+        sourceQualifiedName,
+        node: argsNode ?? node,
+        metadata: routeConcernDynamicMetadata(routeContext, "missing_concern_name")
+      })
+    };
+  }
+  if (block === null) {
+    return {
+      type: "dynamic",
+      reference: dynamicReference({
+        name: "concern",
+        sourceQualifiedName,
+        node,
+        metadata: routeConcernDynamicMetadata(routeContext, "missing_concern_block")
+      })
+    };
+  }
+
+  const nameNode = argsNode.namedChildren[0];
+  const concernName = nameNode === undefined || argsNode.namedChildren.length !== 1
+    ? undefined
+    : staticRouteConcernSymbolName(nameNode);
+  if (concernName === undefined) {
+    return {
+      type: "dynamic",
+      reference: dynamicReference({
+        name: "concern",
+        sourceQualifiedName,
+        node: nameNode ?? argsNode,
+        metadata: routeConcernDynamicMetadata(routeContext, "non_literal_concern_name")
+      })
+    };
+  }
+
+  const qualifiedName = `RailsRoutes.Concern.${concernName}@${nameNode.startPosition.row + 1}:${nameNode.startPosition.column}`;
+  return {
+    type: "static",
+    declaration: {
+      kind: "rails_route_concern",
+      name: concernName,
+      qualifiedName,
+      signature: firstLine(node.text),
+      startLine: nameNode.startPosition.row + 1,
+      startColumn: nameNode.startPosition.column,
+      endLine: block.endPosition.row + 1,
+      endColumn: block.endPosition.column,
+      metadata: {
+        declaration_kind: "rails_route_concern",
+        route_concern_name: concernName,
+        route_namespace: routeNamespaceFromContext(routeContext),
+        route_path_prefix: routePathPrefixFromContext(routeContext),
+        route_scope: routeScopeFromContext(routeContext),
+        declaration_source: "tree-sitter-ruby",
+        declaration_stability: "static",
+        static_source: "rails_route_concern"
+      }
+    }
+  };
+}
+
+function routeConcernDynamicMetadata(routeContext: RubyRouteContext, reason: string): Record<string, unknown> {
+  return {
+    declaration_source: "tree-sitter-ruby",
+    static: false,
+    reason,
+    route_form: "concern",
+    route_namespace: routeNamespaceFromContext(routeContext),
+    route_path_prefix: routePathPrefixFromContext(routeContext),
+    route_scope: routeScopeFromContext(routeContext)
+  };
+}
+
+function routeConcernNamesFromNode(node: Parser.SyntaxNode): {
+  names: string[];
+  dynamicNodes: Parser.SyntaxNode[];
+} | undefined {
+  const directName = staticRouteConcernSymbolName(node);
+  if (directName !== undefined) {
+    return { names: [directName], dynamicNodes: [] };
+  }
+  if (node.type !== "array") {
+    return undefined;
+  }
+
+  const names: string[] = [];
+  const dynamicNodes: Parser.SyntaxNode[] = [];
+  for (const child of node.namedChildren) {
+    const childName = staticRouteConcernSymbolName(child);
+    if (childName === undefined) {
+      dynamicNodes.push(child);
+      continue;
+    }
+    names.push(childName);
+  }
+  return { names, dynamicNodes };
+}
+
+function staticRouteConcernSymbolName(node: Parser.SyntaxNode): string | undefined {
+  if (node.type !== "simple_symbol" && node.type !== "symbol") {
+    return undefined;
+  }
+  const name = node.text.startsWith(":") ? node.text.slice(1) : node.text;
+  return /^[a-zA-Z_][a-zA-Z0-9_]*$/u.test(name) ? name : undefined;
+}
+
+function isRailsRouteFilePath(sourceFilePath: string | undefined): boolean {
+  if (sourceFilePath === undefined) {
+    return false;
+  }
+  const normalized = sourceFilePath.replaceAll("\\", "/").replace(/^\.\//u, "");
+  return normalized === "config/routes.rb" ||
+    (normalized.startsWith("config/routes/") && normalized.endsWith(".rb"));
+}
+
+function routeConcernReferencesFromResourceOptions(
+  args: readonly Parser.SyntaxNode[],
+  sourceQualifiedName: string | undefined,
+  routeContext: RubyRouteContext,
+  routeResourceName: string
+): RubyReference[] {
+  const pair = args.find((arg) => arg.type === "pair" && pairKey(arg) === "concerns");
+  if (pair === undefined) {
+    return [];
+  }
+  const valueNode = pair.childForFieldName("value");
+  if (valueNode === null) {
+    return [dynamicReference({
+      name: "concerns",
+      sourceQualifiedName,
+      node: pair,
+      metadata: routeConcernReuseMetadata({
+        routeContext,
+        routeResourceName,
+        source: "resource_option",
+        static: false,
+        reason: "missing_concern_name"
+      })
+    })];
+  }
+
+  const parsed = routeConcernNamesFromNode(valueNode);
+  if (parsed === undefined) {
+    return [dynamicReference({
+      name: "concerns",
+      sourceQualifiedName,
+      node: valueNode,
+      metadata: routeConcernReuseMetadata({
+        routeContext,
+        routeResourceName,
+        source: "resource_option",
+        static: false,
+        reason: "non_literal_concern_name"
+      })
+    })];
+  }
+
+  const refs: RubyReference[] = [];
+  for (const concernName of parsed.names) {
+    refs.push(literalReference({
+      kind: "ruby_route",
+      name: concernName,
+      sourceQualifiedName,
+      node: valueNode,
+      metadata: routeConcernReuseMetadata({
+        routeContext,
+        routeResourceName,
+        source: "resource_option",
+        static: true,
+        concernName
+      })
+    }));
+  }
+  for (const dynamicNode of parsed.dynamicNodes) {
+    refs.push(dynamicReference({
+      name: "concerns",
+      sourceQualifiedName,
+      node: dynamicNode,
+      metadata: routeConcernReuseMetadata({
+        routeContext,
+        routeResourceName,
+        source: "resource_option",
+        static: false,
+        reason: "non_literal_concern_name"
+      })
+    }));
+  }
+  return refs;
+}
+
+function routeConcernReuseMetadata(input: {
+  routeContext: RubyRouteContext;
+  routeResourceName?: string;
+  source: "direct" | "resource_option";
+  static: boolean;
+  concernName?: string;
+  reason?: string;
+}): Record<string, unknown> {
+  const metadata: Record<string, unknown> = {
+    declaration_source: "tree-sitter-ruby",
+    static: input.static,
+    route_form: "concerns",
+    route_namespace: routeNamespaceFromContext(input.routeContext),
+    route_path_prefix: routePathPrefixFromContext(input.routeContext),
+    route_scope: input.routeResourceName === undefined
+      ? routeScopeFromContext(input.routeContext)
+      : scopedRouteName(input.routeContext, input.routeResourceName),
+    route_concern_source: input.source
+  };
+  if (input.concernName !== undefined) {
+    metadata.route_concern_name = input.concernName;
+  }
+  if (input.reason !== undefined) {
+    metadata.reason = input.reason;
+  }
+  if (input.routeResourceName !== undefined) {
+    metadata.route_resource = input.routeResourceName;
+  }
+  return metadata;
+}
+
 function drawRouteFileCandidate(routeFile: string, sourceFilePath: string | undefined): string | undefined {
   const normalized = trimRouteSegment(routeFile);
   if (normalized.length === 0) {
@@ -1680,6 +2056,13 @@ function scopedRouteName(routeContext: RubyRouteContext, routeName: string): str
   return routeContext.routePathPrefixSegments.length === 0
     ? routeName
     : [...routeContext.routePathPrefixSegments, routeName].join("/");
+}
+
+function routeScopeFromContext(routeContext: RubyRouteContext): string {
+  if (routeContext.resourceName !== undefined) {
+    return scopedRouteName(routeContext, routeContext.resourceName);
+  }
+  return routePathPrefixFromContext(routeContext);
 }
 
 function modelDslReferences(

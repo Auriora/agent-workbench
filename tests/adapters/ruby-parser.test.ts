@@ -445,6 +445,157 @@ draw :admin
     ]));
   });
 
+  it("extracts Rails routing concern declarations and static reuse without suppressing dynamic siblings", () => {
+    const result = extractRuby(`
+Rails.application.routes.draw do
+  concern :commentable do
+    resources :comments
+    concerns :auditable
+  end
+
+  concern dynamic_name do
+    resources :ignored
+  end
+
+  namespace :admin do
+    resources :posts, concerns: [:commentable, dynamic_name]
+    concerns :commentable, [:auditable, dynamic_name], *more
+  end
+end
+`, "config/routes.rb");
+
+    expect(result.declarations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "rails_route_concern",
+        name: "commentable",
+        qualifiedName: "RailsRoutes.Concern.commentable@3:10",
+        metadata: expect.objectContaining({
+          declaration_kind: "rails_route_concern",
+          route_concern_name: "commentable",
+          declaration_source: "tree-sitter-ruby"
+        })
+      })
+    ]));
+    expect(result.declarations).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "rails_route_concern",
+        name: "dynamic_name"
+      })
+    ]));
+
+    expect(result.references).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "ruby_route",
+        name: "comments",
+        sourceQualifiedName: "RailsRoutes.Concern.commentable@3:10",
+        metadata: expect.objectContaining({
+          route_form: "resources",
+          controller_candidate: "CommentsController"
+        })
+      }),
+      expect.objectContaining({
+        kind: "ruby_route",
+        name: "auditable",
+        sourceQualifiedName: "RailsRoutes.Concern.commentable@3:10",
+        metadata: expect.objectContaining({
+          route_form: "concerns",
+          route_concern_name: "auditable",
+          route_concern_source: "direct"
+        })
+      }),
+      expect.objectContaining({
+        kind: "ruby_route",
+        name: "posts",
+        metadata: expect.objectContaining({
+          route_form: "resources",
+          route_namespace: "admin",
+          route_scope: "admin/posts",
+          controller_candidate: "Admin.PostsController"
+        })
+      }),
+      expect.objectContaining({
+        kind: "ruby_route",
+        name: "commentable",
+        metadata: expect.objectContaining({
+          route_form: "concerns",
+          route_namespace: "admin",
+          route_scope: "admin/posts",
+          route_concern_source: "resource_option",
+          route_resource: "posts"
+        })
+      }),
+      expect.objectContaining({
+        kind: "ruby_route",
+        name: "auditable",
+        metadata: expect.objectContaining({
+          route_form: "concerns",
+          route_namespace: "admin",
+          route_scope: "admin",
+          route_concern_source: "direct"
+        })
+      })
+    ]));
+
+    const dynamicConcernOperands = result.references.filter((reference) =>
+      reference.kind === "ruby_dynamic" &&
+      reference.name === "concerns" &&
+      reference.metadata.reason === "non_literal_concern_name"
+    );
+    expect(dynamicConcernOperands.length).toBeGreaterThanOrEqual(2);
+    expect(dynamicConcernOperands).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          route_form: "concerns",
+          route_concern_source: "resource_option",
+          route_scope: "admin/posts",
+          static: false
+        })
+      }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          route_form: "concerns",
+          route_concern_source: "direct",
+          route_scope: "admin",
+          static: false
+        })
+      })
+    ]));
+    const directDynamicOperands = dynamicConcernOperands.filter((reference) =>
+      reference.metadata.route_concern_source === "direct"
+    );
+    expect(directDynamicOperands).toHaveLength(2);
+    expect(directDynamicOperands.every((reference) =>
+      reference.metadata.route_namespace === "admin" &&
+      reference.metadata.route_scope === "admin"
+    )).toBe(true);
+    expect(result.references).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "ruby_dynamic",
+        name: "concern",
+        metadata: expect.objectContaining({
+          reason: "non_literal_concern_name",
+          route_form: "concern",
+          static: false
+        })
+      })
+    ]));
+
+    const nonRouteResult = extractRuby(`
+class Widget
+  concern :previewable do
+    concerns :auditable
+  end
+end
+`, "app/models/widget.rb");
+    expect(nonRouteResult.declarations).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "rails_route_concern" })
+    ]));
+    expect(nonRouteResult.references).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "ruby_call", name: "concern" }),
+      expect.objectContaining({ kind: "ruby_call", name: "concerns" })
+    ]));
+  });
+
   it("captures conservative load/autoload, alias, and visibility metadata", () => {
     const references = extractRuby(`
 alias public_name full_name

@@ -399,9 +399,12 @@ or runtime telemetry.
   association navigation. Spec 049 adds canonical singleton identity, separate
   Rails controller-module/path scopes, static resource/custom-action/draw links,
   HABTM and ambiguity-gated polymorphic/source-type associations. EB010 remains
-  the single owner for deeper Ruby constant lookup, dynamic dispatch,
-  metaprogramming, refinements, autoload execution and Rails
-  engine/runtime semantics.
+  the single owner after Spec 050 adds source-distinct static routing-concern
+  declarations and ambiguity-gated reuse through the existing graph path.
+  Callable or computed concerns, option-dependent route composition, cloned
+  reuse-site route expansion, deeper Ruby constant lookup, dynamic dispatch,
+  metaprogramming, refinements, autoload execution and Rails engine/runtime
+  semantics remain deferred here.
 
 ### EB011: Contextual Tool Exposure And Dynamic Router
 

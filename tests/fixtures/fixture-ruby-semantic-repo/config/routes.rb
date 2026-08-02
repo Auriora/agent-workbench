@@ -2,8 +2,27 @@ route_prefix = :checkout
 
 Rails.application.routes.draw do
   root "home#index"
+  concern :previewable do
+    get "/preview", to: "checkouts#preview"
+  end
+  concern :cycle_a do
+    concerns :cycle_b
+  end
+  concern :cycle_b do
+    concerns :cycle_a
+  end
+  concern :duplicated do
+    get "/first_duplicate", to: "checkouts#show"
+  end
+  concern :duplicated do
+    get "/second_duplicate", to: "checkouts#show"
+  end
+  concerns :duplicated
+  concerns :missing_concern
   resources :checkouts
+  resources :checkouts, concerns: [:previewable, dynamic_concern]
   resources :checkouts do
+    concerns :previewable
     member do
       get :preview
     end

@@ -176,6 +176,17 @@ associations without an explicit concrete type remain unresolved. All targets
 resolve only when first-party indexed declarations make them unambiguous.
 These are navigation relationships, not proof of a booted route set, callback
 execution, association validity or runtime dispatch.
+Static Rails routing concerns use the same graph path. A block declaration in
+the form `concern :name do` produces a source-distinct
+`rails_route_concern` identity, and contained route or concern references use
+that identity as their source. Direct symbol operands, literal symbol arrays,
+and `concerns:` options on `resource` or `resources` produce scoped reuse edges
+only when exactly one matching first-party declaration exists. The incoming
+reuse edge and outgoing contained-route edge retain their separate source
+ranges and provenance, allowing bounded multi-hop impact without cloning or
+evaluating a Rails route set. Missing, duplicate, mixed dynamic, callable,
+string, computed and recursive forms remain unresolved or finite relationship
+records; options are not executed or composed.
 Nonliteral operands, irregular or ambiguous candidates, and other dynamic
 forms remain bounded unresolved records and are never sent through lexical,
 shell, Rails, AST, LSP or retry fallbacks. A parser failure rejects the complete

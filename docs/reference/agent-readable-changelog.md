@@ -45,6 +45,11 @@ Each version or dated entry should include:
   separates controller-module scope from path-only route scope, and adds static
   resource options, custom actions, `draw` route-file links, HABTM, explicit
   `source_type`, and polymorphic ambiguity guards.
+- Spec 050 adds source-distinct Rails routing-concern declaration identities
+  and scoped static reuse edges for direct symbols, literal symbol arrays, and
+  `concerns:` resource options. Existing reference, impact, and task-context
+  paths expose the relationship; duplicate, missing, callable, computed, and
+  mixed dynamic forms fail closed without route-set evaluation.
 - Literal Ruby load/autoload helpers, aliases, and visibility directives are
   advisory parser evidence only; they do not prove runtime dispatch or constant
   availability. Validation-environment blocking reasons now use a repository-
@@ -63,7 +68,9 @@ Each version or dated entry should include:
   policy or an approved container command; do not execute the suppressed host
   command.
 - Continue treating Rails route and association relationships as navigation
-  evidence. Directly inspect source before making runtime or validity claims.
+  evidence. Routing-concern traversal is a provenance-preserving graph path,
+  not proof that Rails composed or exposed a runtime route. Directly inspect
+  source before making runtime or validity claims.
 
 ### Migration Notes
 

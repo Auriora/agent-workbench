@@ -192,6 +192,26 @@ describe("Ruby partial-semantic graph extraction", () => {
         snapshot_id: "602",
         qualified_name: "config.routes"
       });
+      const [previewableConcern] = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "602",
+        qualified_name: "RailsRoutes.Concern.previewable@5:10"
+      });
+      const [cycleAConcern] = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "602",
+        qualified_name: "RailsRoutes.Concern.cycle_a@8:10"
+      });
+      const [cycleBConcern] = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "602",
+        qualified_name: "RailsRoutes.Concern.cycle_b@11:10"
+      });
+      const [firstDuplicatedConcern] = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "602",
+        qualified_name: "RailsRoutes.Concern.duplicated@14:10"
+      });
+      const [secondDuplicatedConcern] = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "602",
+        qualified_name: "RailsRoutes.Concern.duplicated@17:10"
+      });
       const [previewAction] = await fixture.store.findNodesByQualifiedName({
         snapshot_id: "602",
         qualified_name: "CheckoutsController#preview"
@@ -229,6 +249,19 @@ describe("Ruby partial-semantic graph extraction", () => {
       expect(checkout).toHaveLength(1);
       expect(bootstrap).toHaveLength(1);
       expect(routesFile).toHaveLength(1);
+      expect(previewableConcern).toMatchObject({
+        kind: "rails_route_concern",
+        name: "previewable",
+        metadata: expect.objectContaining({
+          declaration_kind: "rails_route_concern",
+          route_concern_name: "previewable",
+          parser: "tree-sitter-ruby"
+        })
+      });
+      expect(cycleAConcern).toMatchObject({ kind: "rails_route_concern" });
+      expect(cycleBConcern).toMatchObject({ kind: "rails_route_concern" });
+      expect(firstDuplicatedConcern).toMatchObject({ kind: "rails_route_concern" });
+      expect(secondDuplicatedConcern).toMatchObject({ kind: "rails_route_concern" });
 
       const checkoutReferences = await fixture.store.getReferences({
         snapshot_id: "602",
@@ -245,6 +278,35 @@ describe("Ruby partial-semantic graph extraction", () => {
       const routeFileReferences = await fixture.store.getReferences({
         snapshot_id: "602",
         node_id: routesFile[0]!.id
+      });
+      const routeFileEdges = await fixture.store.getOutgoingEdges({
+        snapshot_id: "602",
+        node_id: routesFile[0]!.id,
+        max_rows: 100
+      });
+      const previewableReferences = await fixture.store.getReferences({
+        snapshot_id: "602",
+        node_id: previewableConcern!.id
+      });
+      const previewableEdges = await fixture.store.getOutgoingEdges({
+        snapshot_id: "602",
+        node_id: previewableConcern!.id
+      });
+      const cycleAReferences = await fixture.store.getReferences({
+        snapshot_id: "602",
+        node_id: cycleAConcern!.id
+      });
+      const cycleAEdges = await fixture.store.getOutgoingEdges({
+        snapshot_id: "602",
+        node_id: cycleAConcern!.id
+      });
+      const cycleBReferences = await fixture.store.getReferences({
+        snapshot_id: "602",
+        node_id: cycleBConcern!.id
+      });
+      const cycleBEdges = await fixture.store.getOutgoingEdges({
+        snapshot_id: "602",
+        node_id: cycleBConcern!.id
       });
 
       expect(bootstrapReferences).toEqual(
@@ -284,12 +346,81 @@ describe("Ruby partial-semantic graph extraction", () => {
           expect.objectContaining({
             target_file_path: "config/routes/admin.rb",
             provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_node_id: previewableConcern!.id,
+            target_file_path: "config/routes.rb",
+            provenance: "tree-sitter-ruby"
           })
         ])
       );
+      expect(routeFileEdges).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          target_node_id: previewableConcern!.id,
+          metadata: expect.objectContaining({
+            route_form: "concerns",
+            route_concern_name: "previewable",
+            route_concern_source: "resource_option",
+            route_scope: "checkouts"
+          })
+        })
+      ]));
       expect(routeFileReferences.map((reference) => reference.target_node_id)).toEqual(
         expect.arrayContaining([previewAction!.id, searchAction!.id, archiveAction!.id])
       );
+      expect(routeFileEdges).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          target_node_id: expect.stringContaining(":app/controllers/checkouts_controller.rb:class:CheckoutsController"),
+          metadata: expect.objectContaining({
+            route_form: "resources",
+            controller_candidate: "CheckoutsController"
+          })
+        })
+      ]));
+      expect(previewableReferences).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          target_node_id: previewAction!.id,
+          provenance: "tree-sitter-ruby"
+        })
+      ]));
+      expect(previewableEdges).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          target_node_id: previewAction!.id,
+          metadata: expect.objectContaining({
+            route_form: "get",
+            route_controller: "checkouts",
+            route_action: "preview"
+          })
+        })
+      ]));
+      expect(cycleAReferences).toEqual([
+        expect.objectContaining({
+          target_node_id: cycleBConcern!.id
+        })
+      ]);
+      expect(cycleAEdges).toEqual([
+        expect.objectContaining({
+          target_node_id: cycleBConcern!.id,
+          metadata: expect.objectContaining({
+            route_form: "concerns",
+            route_concern_name: "cycle_b"
+          })
+        })
+      ]);
+      expect(cycleBReferences).toEqual([
+        expect.objectContaining({
+          target_node_id: cycleAConcern!.id
+        })
+      ]);
+      expect(cycleBEdges).toEqual([
+        expect.objectContaining({
+          target_node_id: cycleAConcern!.id,
+          metadata: expect.objectContaining({
+            route_form: "concerns",
+            route_concern_name: "cycle_a"
+          })
+        })
+      ]);
       expect(routeFileReferences).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({
@@ -379,6 +510,17 @@ describe("Ruby partial-semantic graph extraction", () => {
       const dynamicPrepend = bootstrapDynamicRefs.find((reference) =>
         reference.reference_kind === "ruby_dynamic" && reference.reference_name === "prepend"
       );
+      const ambiguousConcernReuse = routeRefs.find((reference) =>
+        reference.reference_kind === "ruby_route" && reference.reference_name === "duplicated"
+      );
+      const dynamicConcernReuse = routeRefs.find((reference) =>
+        reference.reference_kind === "ruby_dynamic" &&
+        reference.reference_name === "concerns" &&
+        reference.candidate_metadata.route_concern_source === "resource_option"
+      );
+      const missingConcernReuse = routeRefs.find((reference) =>
+        reference.reference_kind === "ruby_route" && reference.reference_name === "missing_concern"
+      );
 
       expect(ambiguousInclude).toMatchObject({
         candidate_metadata: expect.objectContaining({
@@ -425,9 +567,38 @@ describe("Ruby partial-semantic graph extraction", () => {
               static: false,
               reason: "non_literal_resource_name"
             })
+          }),
+          expect.objectContaining({
+            reference_kind: "ruby_route",
+            reference_name: "duplicated",
+            candidate_metadata: expect.objectContaining({
+              route_form: "concerns",
+              route_concern_name: "duplicated",
+              resolution: "ambiguous",
+              candidate_count: 2
+            })
+          }),
+          expect.objectContaining({
+            reference_kind: "ruby_dynamic",
+            reference_name: "concerns",
+            candidate_metadata: expect.objectContaining({
+              route_form: "concerns",
+              route_concern_source: "resource_option",
+              reason: "non_literal_concern_name"
+            })
           })
         ])
       );
+      expect(ambiguousConcernReuse).toBeDefined();
+      expect(dynamicConcernReuse).toBeDefined();
+      expect(missingConcernReuse).toMatchObject({
+        candidate_metadata: expect.objectContaining({
+          route_form: "concerns",
+          route_concern_name: "missing_concern",
+          resolution: "unresolved",
+          candidate_count: 0
+        })
+      });
 
       expect(customerDynamicRefs).toEqual(
         expect.arrayContaining([
@@ -504,6 +675,79 @@ describe("Ruby partial-semantic graph extraction", () => {
       expect(
         references.references.references.every((reference) => reference.provenance !== "bounded_lexical_identifier_scan")
       ).toBe(true);
+    } finally {
+      fixture.store.close();
+    }
+  });
+
+  it("exposes routing concern references and impact through the public graph use cases", async () => {
+    const fixture = await indexedRubyFixture(dir, "606");
+    try {
+      const [previewableConcern] = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "606",
+        qualified_name: "RailsRoutes.Concern.previewable@5:10"
+      });
+      const references = await findReferences({
+        request: {
+          node_id: previewableConcern!.id,
+          repo_root: fixture.repoRoot,
+          max_depth: 3,
+          max_results: 100
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        snapshot_validity: {
+          snapshot_id: "606",
+          state: "valid",
+          complete: true,
+          checked_path_count: 1,
+          observed_path_count: 1,
+          missing_paths: [],
+          inaccessible_paths: [],
+          refresh_required: false
+        },
+        default_repo_root: fixture.repoRoot
+      });
+      expect(references.references.coverage_status).toBe("evidence_backed");
+      expect(references.references.references).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          target_file_path: "config/routes.rb",
+          provenance: "tree-sitter-ruby"
+        })
+      ]));
+
+      const impact = await computeImpact({
+        request: {
+          node_id: previewableConcern!.id,
+          repo_root: fixture.repoRoot,
+          direction: "both",
+          max_depth: 2,
+          max_nodes: 100
+        },
+        graph: fixture.store,
+        snapshots: fixture.store,
+        catalog: fixture.store,
+        snapshot_validity: {
+          snapshot_id: "606",
+          state: "valid",
+          complete: true,
+          checked_path_count: 1,
+          observed_path_count: 1,
+          missing_paths: [],
+          inaccessible_paths: [],
+          refresh_required: false
+        },
+        default_repo_root: fixture.repoRoot
+      });
+      expect(impact.impact.affected_files.map((file) => file.path)).toEqual(expect.arrayContaining([
+        "config/routes.rb",
+        "app/controllers/checkouts_controller.rb"
+      ]));
+      expect(impact.impact.confidence).toMatchObject({
+        scope: "graph",
+        evidence_kinds: ["parser"]
+      });
     } finally {
       fixture.store.close();
     }

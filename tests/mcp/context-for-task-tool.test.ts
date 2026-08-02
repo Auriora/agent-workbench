@@ -16,7 +16,7 @@ import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/i
 import { WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/workspace-file.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
 import { InMemoryRuntimeOperationsAdapter } from "../../src/infrastructure/runtime/index.js";
-import { PythonTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
+import { PythonTreeSitterExtractorAdapter, RubyTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
 import { contextForTaskTool } from "../../src/interface-adapters/mcp/registries/tools/context-for-task.js";
 import {
   docsSearchRequestSchema,
@@ -1021,6 +1021,70 @@ describe("context_for_task use case", () => {
           expect.objectContaining({ tool: "impact" })
         ])
       );
+    } finally {
+      store.close();
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it("surfaces Rails routing concern nodes through existing graph-ranked task context", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-ruby-context-"));
+    const repoRoot = path.resolve("tests/fixtures/fixture-ruby-semantic-repo");
+    const store = openGraphStore(path.join(tempDir, "graph.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new RubyTreeSitterExtractorAdapter());
+    const scanner = new FileCatalogScannerAdapter();
+    const workspace = new WorkspaceFileAdapter({ repoRoot });
+    try {
+      await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner,
+        workspace,
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "2022"
+      });
+
+      const result = await getTaskContext({
+        request: {
+          task: "Update shared Rails previewable routing concern",
+          repo_root: repoRoot,
+          files: ["config/routes.rb"],
+          symbols: ["previewable"],
+          max_files: 5,
+          max_docs: 2
+        },
+        scanner,
+        graph: store,
+        snapshots: store,
+        catalog: store,
+        workspace,
+        default_repo_root: repoRoot
+      });
+
+      expect(result.context.ranked_symbols[0]).toEqual(expect.objectContaining({
+        symbol: expect.objectContaining({
+          name: "previewable",
+          kind: "rails_route_concern",
+          path: "config/routes.rb",
+          capability_level: "partial_semantic",
+          evidence_kinds: ["parser"]
+        })
+      }));
+      expect(result.context.next_actions).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          tool: "find_references",
+          args: expect.objectContaining({
+            node_id: expect.stringContaining(":config/routes.rb:rails_route_concern:RailsRoutes.Concern.previewable@5:10"),
+            symbol: "previewable"
+          })
+        })
+      ]));
     } finally {
       store.close();
       fs.rmSync(tempDir, { recursive: true, force: true });
