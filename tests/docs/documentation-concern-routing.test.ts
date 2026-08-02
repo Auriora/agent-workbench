@@ -249,6 +249,40 @@ describe("documentation concern routing fixture", () => {
       .every(({ owner_state }) => owner_state === "valid")).toBe(true);
   });
 
+  it("records policy-excluded mapped owners without statting or reading owner content", async () => {
+    const map = [
+      "| Concern | Canonical owner |",
+      "| --- | --- |",
+      "| Fixture owner | [Embedded](../../tests/fixtures/embedded/docs/owner.md) |"
+    ].join("\n");
+    const stat = vi.fn<WorkspaceFilePort["stat"]>(async ({ path: requestedPath }) => {
+      if (requestedPath === "docs/reference/documentation-map.md") {
+        return { exists: true, is_file: true, size_bytes: Buffer.byteLength(map), mtime_ms: 0 };
+      }
+      throw new Error(`Excluded owner was statted: ${requestedPath}`);
+    });
+    const readText = vi.fn<WorkspaceFilePort["readText"]>(async ({ path: requestedPath }) => {
+      if (requestedPath === "docs/reference/documentation-map.md") return map;
+      throw new Error(`Excluded owner was read: ${requestedPath}`);
+    });
+
+    const evidence = await extractDocumentationConcernIndex({
+      workspace: boundedWorkspace({ stat, readText })
+    });
+
+    expect(evidence.state).toBe("complete");
+    expect(evidence.owners).toEqual([
+      expect.objectContaining({
+        mapped_owner_path: "tests/fixtures/embedded/docs/owner.md",
+        owner_state: "excluded",
+        exclusion_reason: "embedded_fixture"
+      })
+    ]);
+    expect(evidence.owners[0]).not.toHaveProperty("document_id");
+    expect(stat).toHaveBeenCalledExactlyOnceWith({ path: "docs/reference/documentation-map.md" });
+    expect(readText).toHaveBeenCalledExactlyOnceWith({ path: "docs/reference/documentation-map.md" });
+  });
+
   it("extracts the checked-in repository documentation map through the production use case", async () => {
     const evidence = await extractDocumentationConcernIndex({
       workspace: new WorkspaceFileAdapter({ repoRoot: path.resolve(".") })

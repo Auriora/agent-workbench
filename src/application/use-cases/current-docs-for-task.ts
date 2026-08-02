@@ -5,6 +5,7 @@
 
 import path from "node:path";
 import type {
+  DocumentationCorpusReceipt,
   DocsCurrentForTaskRequest,
   DocsCurrentForTaskResult,
   DocsWarning,
@@ -15,6 +16,10 @@ import type {
   FileCatalogScanPort,
   WorkspaceFilePort
 } from "../../ports/index.js";
+import {
+  partitionDocumentationCorpusPaths,
+  type DocumentationCorpusDecisionPartition
+} from "../../domain/policies/index.js";
 import {
   classifyMarkdownEntryCurrency,
   currencyRank,
@@ -45,11 +50,14 @@ export async function getCurrentDocsForTask(input: {
     skipped_roots: [],
     max_files: DOC_ROW_LIMIT
   });
+  const markdownFiles = scanned.files.filter((file) => file.file_identity.language === "markdown");
+  const corpus = partitionDocumentationCorpusPaths(markdownFiles.map((file) => file.path));
+  const eligibleMarkdownPaths = new Set(corpus.eligible_markdown_paths);
+  const eligibleMarkdownFiles = markdownFiles.filter((file) => eligibleMarkdownPaths.has(file.path));
   const requestFiles = input.request.files ?? [];
   const terms = tokenSet([input.request.task, ...requestFiles]);
   const explicit = new Set(requestFiles.map(normalizeRepoPath));
-  const docs = scanned.files
-    .filter((file) => file.file_identity.language === "markdown")
+  const docs = eligibleMarkdownFiles
     .filter((file) => isInScope(file.path, input.request.scope_path))
     .map((file) => ({
       file,
@@ -59,7 +67,7 @@ export async function getCurrentDocsForTask(input: {
     .sort((left, right) => right.score - left.score || left.file.path.localeCompare(right.file.path))
     .slice(0, Math.max(input.request.max_docs * 4, input.request.max_docs));
   const owners = await loadDocumentationMapOwners({
-    files: scanned.files,
+    files: eligibleMarkdownFiles,
     workspace: input.workspace
   });
   const warnings: DocsWarning[] = [];
@@ -90,7 +98,7 @@ export async function getCurrentDocsForTask(input: {
           doc_status: currency.doc_status,
           authority: currency.authority,
           authority_caveat: currency.authority_caveat,
-          ...publicCurrency(currency)
+          ...publicDocumentReferenceCurrency(currency)
         }
       });
     } catch {
@@ -137,6 +145,7 @@ export async function getCurrentDocsForTask(input: {
       supporting_docs: supportingDocs.slice(0, input.request.max_docs),
       non_authoritative_docs: nonAuthoritativeDocs.slice(0, input.request.max_docs),
       unknown_docs: unknownDocs.slice(0, input.request.max_docs),
+      documentation_corpus: publicDocumentationCorpus(corpus),
       warnings,
       next_actions: capNextActions(selected.flatMap((doc) => [
         {
@@ -165,9 +174,42 @@ export async function getCurrentDocsForTask(input: {
       truncated: scanned.truncated,
       budget: {
         row_limit: DOC_ROW_LIMIT
-      }
+      },
+      index_coverage: [
+        {
+          evidence_class: "docs",
+          state: scanned.truncated ? "partial" : "complete",
+          indexed_files: eligibleMarkdownFiles.length,
+          eligible_files_seen: corpus.eligible_markdown_files,
+          scan_truncated: scanned.truncated,
+          indexed_roots: ["."],
+          documentation_corpus_policy_version: corpus.policy_version,
+          policy_excluded_files: corpus.excluded_markdown_files,
+          policy_exclusions: [...corpus.exclusions],
+          reason: scanned.truncated
+            ? "Docs current-for-task scan reached its file budget before covering the full repository."
+            : "Docs current-for-task scan applied the production documentation corpus policy."
+        } as ResponseMetadata["index_coverage"] extends readonly (infer Item)[] ? Item : never
+      ]
     }
   };
+}
+
+function publicDocumentationCorpus(
+  corpus: DocumentationCorpusDecisionPartition
+): DocumentationCorpusReceipt {
+  return {
+    policy_version: corpus.policy_version,
+    discovered_markdown_files: corpus.discovered_markdown_files,
+    eligible_markdown_files: corpus.eligible_markdown_files,
+    excluded_markdown_files: corpus.excluded_markdown_files,
+    exclusions: [...corpus.exclusions]
+  };
+}
+
+function publicDocumentReferenceCurrency(input: Parameters<typeof publicCurrency>[0]) {
+  const { currency_priority: _currencyPriority, ...fields } = publicCurrency(input);
+  return fields;
 }
 
 function scoreDocPath(filePath: string, terms: Set<string>): number {

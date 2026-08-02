@@ -136,6 +136,9 @@ export function buildRankedDocsSearchEnvelope(
         state: coverageState,
         indexed_files: countReceipt.priority_scan_indexed_markdown_files_count,
         eligible_files_seen: countReceipt.priority_scan_eligible_markdown_files_count,
+        documentation_corpus_policy_version: countReceipt.documentation_corpus_policy_version,
+        policy_excluded_files: countReceipt.policy_excluded_files,
+        policy_exclusions: countReceipt.policy_exclusions,
         scan_truncated: countReceipt.priority_scan_truncated,
         indexed_roots: ["AGENTS.md", "README.md", "docs", "doc", "documentation"],
         reason: countReceipt.priority_scan_coverage_note
@@ -170,6 +173,13 @@ export function buildInvalidDocsCurrentForTaskInputEnvelope(input: {
       repo_root: input.repoRoot,
       task: input.task ?? "",
       status: "blocked",
+      documentation_corpus: {
+        policy_version: "production-docs-v1",
+        discovered_markdown_files: 0,
+        eligible_markdown_files: 0,
+        excluded_markdown_files: 0,
+        exclusions: []
+      },
       canonical_docs: [],
       supporting_docs: [],
       non_authoritative_docs: [],
@@ -498,6 +508,7 @@ function sanitizeDocsCurrentForTask(
     repo_root: input.repo_root,
     task: input.task,
     status: input.status,
+    documentation_corpus: input.documentation_corpus,
     canonical_docs: input.canonical_docs.map(sanitizeDocumentReference),
     supporting_docs: input.supporting_docs.map(sanitizeDocumentReference),
     non_authoritative_docs: input.non_authoritative_docs.map(sanitizeDocumentReference),

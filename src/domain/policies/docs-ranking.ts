@@ -7,6 +7,7 @@ import {
   DOCS_RANKING_POLICY_VERSION,
   type DocsCandidateSource,
   type DocsFinalRankComponents,
+  type DocsGoverningOwnerPriority,
   type DocsGoverningOwnerTier,
   type DocsRankingCandidate,
   type DocsRelevanceBand,
@@ -41,6 +42,14 @@ const OWNER_ORDER: Record<DocsGoverningOwnerTier, number> = {
   non_owner: 1,
   invalid_owner: 2,
   invalid_conflicting_owner: 3
+};
+
+const OWNER_PRIORITY_ORDER: Record<DocsGoverningOwnerPriority, number> = {
+  current_canonical_owner: 0,
+  other_valid_owner: 1,
+  non_owner: 2,
+  invalid_owner: 3,
+  invalid_conflicting_owner: 4
 };
 
 const AUTHORITY_ORDER: Record<DocumentAuthority, number> = {
@@ -82,7 +91,8 @@ export function compareDocsFinalRankComponents(
   left: DocsFinalRankComponents,
   right: DocsFinalRankComponents
 ): number {
-  return RELEVANCE_ORDER[left.relevance_band] - RELEVANCE_ORDER[right.relevance_band] ||
+  return OWNER_PRIORITY_ORDER[left.governing_owner_priority] - OWNER_PRIORITY_ORDER[right.governing_owner_priority] ||
+    RELEVANCE_ORDER[left.relevance_band] - RELEVANCE_ORDER[right.relevance_band] ||
     OWNER_ORDER[left.governing_owner_tier] - OWNER_ORDER[right.governing_owner_tier] ||
     AUTHORITY_ORDER[left.authority_tier] - AUTHORITY_ORDER[right.authority_tier] ||
     CURRENCY_ORDER[left.currency_tier] - CURRENCY_ORDER[right.currency_tier] ||
@@ -97,6 +107,20 @@ export function governingOwnerTierForStates(
   if (states.some((state) => state === "valid" || state === "draft")) return "valid_owner";
   if (states.includes("conflicting")) return "invalid_conflicting_owner";
   if (states.length > 0) return "invalid_owner";
+  return "non_owner";
+}
+
+export function governingOwnerPriorityForEvidence(input: {
+  states: readonly DocumentationConcernOwnerState[];
+  authority: DocumentAuthority;
+  currency: DocumentCurrencyState;
+}): DocsGoverningOwnerPriority {
+  if (input.states.includes("valid") && input.authority === "canonical" && input.currency === "current") {
+    return "current_canonical_owner";
+  }
+  if (input.states.some((state) => state === "valid" || state === "draft")) return "other_valid_owner";
+  if (input.states.includes("conflicting")) return "invalid_conflicting_owner";
+  if (input.states.length > 0) return "invalid_owner";
   return "non_owner";
 }
 
@@ -120,6 +144,11 @@ export function ownershipCaveat(owner: DocumentationConcernOwnerEvidence): strin
         throw new Error(`Conflicting owner ${owner.path} lacks declared canonical-owner evidence.`);
       }
       return `Mapped owner ${owner.path} conflicts with declared canonical owner ${owner.declared_canonical_owner}.`;
+    case "excluded":
+      if (owner.exclusion_reason === undefined) {
+        throw new Error(`Excluded owner ${owner.path} lacks exclusion_reason evidence.`);
+      }
+      return `Mapped owner ${owner.path} is excluded by documentation corpus policy: ${owner.exclusion_reason}.`;
   }
 }
 
@@ -152,6 +181,11 @@ function rankCandidate(input: {
     ? isMatchedOwner ? "fts_and_matched_owner" : "fts"
     : "matched_owner";
   const ownerTier = governingOwnerTierForStates(relatedOwners.map(({ state }) => state));
+  const ownerPriority = governingOwnerPriorityForEvidence({
+    states: relatedOwners.map(({ state }) => state),
+    authority: candidate.hit.authority,
+    currency: candidate.hit.currency_state
+  });
   const relevanceBand = relevanceBandForCandidate({
     queryTokens: input.queryTokens,
     titleHeadingText: candidate.title_heading_text,
@@ -160,6 +194,7 @@ function rankCandidate(input: {
     isMatchedOwner
   });
   const finalRankComponents: DocsFinalRankComponents = {
+    governing_owner_priority: ownerPriority,
     relevance_band: relevanceBand,
     governing_owner_tier: ownerTier,
     authority_tier: candidate.hit.authority,
@@ -174,6 +209,7 @@ function rankCandidate(input: {
     candidate_source: candidateSource,
     concern_match_state: input.resolution.concern_match_state,
     matched_concerns: input.resolution.matches,
+    governing_owner_priority: ownerPriority,
     governing_owner_tier: ownerTier,
     final_rank_components: finalRankComponents,
     ranking_policy_version: DOCS_RANKING_POLICY_VERSION,
@@ -183,6 +219,7 @@ function rankCandidate(input: {
       relatedOwners,
       ownedConcernKeys,
       candidateSource,
+      ownerPriority,
       relevanceBand,
       authority: candidate.hit.authority,
       currency: candidate.hit.currency_state,
@@ -222,6 +259,7 @@ function rankingReasons(input: {
   relatedOwners: readonly DocumentationConcernOwnerEvidence[];
   ownedConcernKeys: readonly string[];
   candidateSource: DocsCandidateSource;
+  ownerPriority: DocsGoverningOwnerPriority;
   relevanceBand: DocsRelevanceBand;
   authority: DocumentAuthority;
   currency: DocumentCurrencyState;
@@ -240,8 +278,9 @@ function rankingReasons(input: {
       : `Exact concern matches: ${summarize(matchedTerms)}.`,
     `Candidate source: ${input.candidateSource}.`,
     input.relatedOwners.length === 0
-      ? "Governing owner tier: non_owner; no matched concern owns this document."
+      ? "Governing owner priority: non_owner; no matched concern owns this document."
       : `Governing owner evidence: ${summarize(input.relatedOwners.map(({ path, state }) => `${path}:${state}`))}.`,
+    `Governing owner priority: ${input.ownerPriority}.`,
     ...(input.ownedConcernKeys.length === 0
       ? []
       : [`Owned matched concerns: ${summarize(input.ownedConcernKeys)}.`]),

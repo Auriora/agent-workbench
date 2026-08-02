@@ -26,6 +26,47 @@ const documentationRankingReasonSchema = z.string().refine(
   `Documentation ranking reasons must not exceed ${DOCUMENTATION_RANKING_REASON_MAX_BYTES} UTF-8 bytes.`
 ).optional();
 
+export const documentationCorpusExclusionReasonSchema = z.enum(["embedded_fixture"]);
+export type DocumentationCorpusExclusionReason = z.infer<typeof documentationCorpusExclusionReasonSchema>;
+
+export const documentationCorpusExclusionSchema = z
+  .object({
+    reason: documentationCorpusExclusionReasonSchema,
+    count: z.number().int().nonnegative()
+  })
+  .strict();
+export type DocumentationCorpusExclusion = z.infer<typeof documentationCorpusExclusionSchema>;
+
+export const documentationCorpusReceiptSchema = z
+  .object({
+    policy_version: z.literal("production-docs-v1"),
+    discovered_markdown_files: z.number().int().nonnegative(),
+    eligible_markdown_files: z.number().int().nonnegative(),
+    excluded_markdown_files: z.number().int().nonnegative(),
+    exclusions: z.array(documentationCorpusExclusionSchema).max(8)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.eligible_markdown_files + value.excluded_markdown_files !== value.discovered_markdown_files) {
+      context.addIssue({
+        code: "custom",
+        message: "Documentation corpus discovered count must equal eligible plus excluded files."
+      });
+    }
+    const reasons = value.exclusions.map(({ reason }) => reason);
+    if (new Set(reasons).size !== reasons.length) {
+      context.addIssue({ code: "custom", message: "Documentation corpus exclusions must be reason-deduplicated." });
+    }
+    const excluded = value.exclusions.reduce((sum, exclusion) => sum + exclusion.count, 0);
+    if (excluded !== value.excluded_markdown_files) {
+      context.addIssue({
+        code: "custom",
+        message: "Documentation corpus exclusion counts must exhaust excluded files."
+      });
+    }
+  });
+export type DocumentationCorpusReceipt = z.infer<typeof documentationCorpusReceiptSchema>;
+
 export const documentationRankingReceiptSchema = z.discriminatedUnion("state", [
   z.object({
     snapshot_id: z.string().min(1),
@@ -130,7 +171,7 @@ export type DocsSearchHit = z.infer<typeof docsSearchHitSchema>;
 
 export const DOCS_RANKING_CONTRACT_VERSION = 1 as const;
 export const DOCS_RANKING_SCHEMA_VERSION = 1 as const;
-export const DOCS_RANKING_POLICY_VERSION = "authority-aware-v1" as const;
+export const DOCS_RANKING_POLICY_VERSION = "authority-aware-v2" as const;
 export const DOCS_RANKING_CANDIDATE_LIMIT = 500 as const;
 export const DOCS_RANKING_OVERFLOW_SENTINEL = 501 as const;
 
@@ -140,7 +181,8 @@ export const documentationConcernOwnerStateSchema = z.enum([
   "missing",
   "archived",
   "superseded",
-  "conflicting"
+  "conflicting",
+  "excluded"
 ]);
 export type DocumentationConcernOwnerState = z.infer<typeof documentationConcernOwnerStateSchema>;
 
@@ -152,16 +194,26 @@ export const documentationConcernOwnerEvidenceSchema = z
     document_id: z.string().min(1).optional(),
     path: z.string().min(1),
     state: documentationConcernOwnerStateSchema,
+    exclusion_reason: documentationCorpusExclusionReasonSchema.optional(),
     superseded_by: z.string().min(1).optional(),
     declared_canonical_owner: z.string().min(1).optional()
   })
   .strict()
   .superRefine((value, context) => {
-    if (value.state === "missing" && value.document_id !== undefined) {
-      context.addIssue({ code: "custom", message: "Missing concern owners cannot identify an indexed document." });
+    if ((value.state === "missing" || value.state === "excluded") && value.document_id !== undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "Missing or excluded concern owners cannot identify an indexed document."
+      });
     }
-    if (value.state !== "missing" && value.document_id === undefined) {
+    if (value.state !== "missing" && value.state !== "excluded" && value.document_id === undefined) {
       context.addIssue({ code: "custom", message: "Repository-present concern owners require a stable document id." });
+    }
+    if (value.state === "excluded" && value.exclusion_reason === undefined) {
+      context.addIssue({ code: "custom", message: "Excluded concern owners require exclusion_reason evidence." });
+    }
+    if (value.state !== "excluded" && value.exclusion_reason !== undefined) {
+      context.addIssue({ code: "custom", message: "Only excluded concern owners can carry exclusion_reason evidence." });
     }
     if (value.state === "superseded" && value.superseded_by === undefined) {
       context.addIssue({ code: "custom", message: "Superseded concern owners require superseded_by evidence." });
@@ -229,8 +281,18 @@ export const docsGoverningOwnerTierSchema = z.enum([
 ]);
 export type DocsGoverningOwnerTier = z.infer<typeof docsGoverningOwnerTierSchema>;
 
+export const docsGoverningOwnerPrioritySchema = z.enum([
+  "current_canonical_owner",
+  "other_valid_owner",
+  "non_owner",
+  "invalid_owner",
+  "invalid_conflicting_owner"
+]);
+export type DocsGoverningOwnerPriority = z.infer<typeof docsGoverningOwnerPrioritySchema>;
+
 export const docsFinalRankComponentsSchema = z
   .object({
+    governing_owner_priority: docsGoverningOwnerPrioritySchema,
     relevance_band: docsRelevanceBandSchema,
     governing_owner_tier: docsGoverningOwnerTierSchema,
     authority_tier: documentAuthoritySchema,
@@ -250,6 +312,7 @@ export const rankedDocsSearchHitSchema = docsSearchHitSchema
     candidate_source: docsCandidateSourceSchema,
     concern_match_state: docsConcernMatchStateSchema,
     matched_concerns: z.array(docsConcernMatchEvidenceSchema),
+    governing_owner_priority: docsGoverningOwnerPrioritySchema,
     governing_owner_tier: docsGoverningOwnerTierSchema,
     final_rank_components: docsFinalRankComponentsSchema,
     ranking_policy_version: z.literal(DOCS_RANKING_POLICY_VERSION),
@@ -310,10 +373,24 @@ export const rankedDocsSearchHitSchema = docsSearchHitSchema
         : ownerStates.length > 0
           ? "invalid_owner"
           : "non_owner";
+    const expectedOwnerPriority = ownerStates.includes("valid") &&
+        value.authority === "canonical" && value.currency_state === "current"
+      ? "current_canonical_owner"
+      : ownerStates.some((state) => state === "valid" || state === "draft")
+        ? "other_valid_owner"
+        : ownerStates.includes("conflicting")
+          ? "invalid_conflicting_owner"
+          : ownerStates.length > 0
+            ? "invalid_owner"
+            : "non_owner";
     if (value.governing_owner_tier !== expectedOwnerTier) {
       issue("Governing owner tier must agree with the exhaustive matched owner states.");
     }
-    if (value.final_rank_components.governing_owner_tier !== value.governing_owner_tier ||
+    if (value.governing_owner_priority !== expectedOwnerPriority) {
+      issue("Governing owner priority must agree with owner state, authority, and currency evidence.");
+    }
+    if (value.final_rank_components.governing_owner_priority !== value.governing_owner_priority ||
+        value.final_rank_components.governing_owner_tier !== value.governing_owner_tier ||
         value.final_rank_components.authority_tier !== value.authority ||
         value.final_rank_components.currency_tier !== value.currency_state ||
         value.final_rank_components.lexical_score !== value.lexical_score ||
@@ -379,6 +456,9 @@ export const docsQueryFilterBasisSchema = z
 export type DocsQueryFilterBasis = z.infer<typeof docsQueryFilterBasisSchema>;
 
 const docsCountReceiptBaseShape = {
+  documentation_corpus_policy_version: z.literal("production-docs-v1"),
+  policy_excluded_files: z.number().int().nonnegative(),
+  policy_exclusions: z.array(documentationCorpusExclusionSchema).max(8),
   searchable_snapshot_documents_count: z.number().int().nonnegative(),
   searchable_scope_documents_count: z.number().int().nonnegative(),
   returned_page_documents_count: z.number().int().nonnegative(),
@@ -397,6 +477,8 @@ const docsCountReceiptBaseShape = {
 
 function validateDocsCountReceiptBase(
   value: {
+    policy_excluded_files: number;
+    policy_exclusions: readonly DocumentationCorpusExclusion[];
     searchable_snapshot_documents_count: number;
     searchable_scope_documents_count: number;
     priority_scan_eligible_markdown_files_count: number;
@@ -411,6 +493,14 @@ function validateDocsCountReceiptBase(
   if (value.priority_scan_indexed_markdown_files_count + value.priority_scan_skipped_markdown_files_count !==
       value.priority_scan_eligible_markdown_files_count) {
     context.addIssue({ code: "custom", message: "Priority indexed and skipped counts must exhaust eligible files." });
+  }
+  const reasons = value.policy_exclusions.map(({ reason }) => reason);
+  if (new Set(reasons).size !== reasons.length) {
+    context.addIssue({ code: "custom", message: "Policy exclusions must be reason-deduplicated." });
+  }
+  const excluded = value.policy_exclusions.reduce((sum, exclusion) => sum + exclusion.count, 0);
+  if (excluded !== value.policy_excluded_files) {
+    context.addIssue({ code: "custom", message: "Policy exclusion counts must exhaust policy_excluded_files." });
   }
 }
 
@@ -575,6 +665,7 @@ export const rankedDocsSearchUnavailableResultSchema = z
     trust_state: z.enum(["blocked_cursor_stale", "blocked_cursor_invalid", "blocked_ranking_unavailable"]),
     blocker: z.enum(["ranked_universe_expired", "ranking_cursor_invalid", "ranking_unavailable"]),
     hits: z.array(rankedDocsSearchHitSchema).length(0),
+    documentation_ranking: documentationRankingReceiptSchema.optional(),
     truncated: z.literal(false)
   })
   .strict()
@@ -586,6 +677,12 @@ export const rankedDocsSearchUnavailableResultSchema = z
     } as const;
     if (value.trust_state !== expected[value.blocker]) {
       context.addIssue({ code: "custom", message: "Unavailable ranking trust state must agree with its blocker." });
+    }
+    if (value.documentation_ranking !== undefined && value.blocker !== "ranking_unavailable") {
+      context.addIssue({
+        code: "custom",
+        message: "Only ranking_unavailable can carry documentation ranking readiness."
+      });
     }
   });
 export type RankedDocsSearchUnavailableResult = z.infer<typeof rankedDocsSearchUnavailableResultSchema>;
@@ -803,6 +900,7 @@ export const docsCurrentForTaskResultSchema = z
     supporting_docs: z.array(documentReferenceSchema),
     non_authoritative_docs: z.array(documentReferenceSchema),
     unknown_docs: z.array(documentReferenceSchema),
+    documentation_corpus: documentationCorpusReceiptSchema,
     warnings: z.array(docsWarningSchema),
     next_actions: z.array(nextActionSchema)
   })

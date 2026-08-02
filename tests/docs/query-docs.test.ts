@@ -32,6 +32,8 @@ import {
 } from "../../src/application/use-cases/markdown-docs.js";
 import { openGraphStore, SCHEMA_VERSION, type GraphStore } from "../../src/infrastructure/sqlite/index.js";
 import type { DocsIndexPort, DocsIndexSearchResult } from "../../src/ports/index.js";
+import type { FileCatalogScanPort, WorkspaceFilePort } from "../../src/ports/index.js";
+import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
 
 const fixtureRoot = path.resolve("tests/fixtures/fixture-docs-query-repo");
 const scanner = new FileCatalogScannerAdapter();
@@ -105,6 +107,31 @@ describe("docs query application contracts", () => {
     } finally {
       fixture.dispose();
     }
+  });
+
+  it("excludes embedded fixture Markdown from live docs maps before content reads", async () => {
+    const result = await getDocsMap({
+      request: {
+        repo_root: "/repo",
+        max_docs: 20,
+        max_headings_per_doc: 5
+      },
+      scanner: scannerForDocsMap([
+        "README.md",
+        "docs/current.md",
+        "tests/fixtures/embedded/docs/leak.md"
+      ]),
+      workspace: workspaceForDocsMap({
+        "README.md": "# Project\n\nOverview.\n",
+        "docs/current.md": "# Current\n\nCurrent guidance.\n",
+        "tests/fixtures/embedded/docs/leak.md": "# Leak\n\nShould not be read.\n"
+      }, ["tests/fixtures/embedded/docs/leak.md"]),
+      default_repo_root: "/repo"
+    });
+    const map = docsMapSchema.parse(result.map);
+
+    expect(map.docs.map((doc) => doc.path)).toEqual(expect.arrayContaining(["README.md", "docs/current.md"]));
+    expect(map.result_count).toBe(2);
   });
 
   it("exposes document currency metadata in docs inventory and indexed search", async () => {
@@ -869,5 +896,59 @@ function blockedDocsIndex(input: {
         result_count: 0
       };
     }
+  };
+}
+
+function scannerForDocsMap(paths: readonly string[]): FileCatalogScanPort {
+  return {
+    async scan(input) {
+      return {
+        repo_root: input.repo_root,
+        indexed_roots: input.indexed_roots,
+        skipped_roots: input.skipped_roots,
+        truncated: false,
+        files: paths.map((path, index) => buildFileCatalogEntry({
+          file_identity: {
+            path,
+            language: "markdown",
+            content_hash: `docs-map-${index}`,
+            size_bytes: 32,
+            mtime_ms: index
+          }
+        }))
+      };
+    }
+  };
+}
+
+function workspaceForDocsMap(
+  files: Record<string, string>,
+  forbiddenReads: readonly string[] = []
+): WorkspaceFilePort {
+  const forbidden = new Set(forbiddenReads);
+  return {
+    async readText(input) {
+      if (forbidden.has(input.path)) {
+        throw new Error(`Excluded content was read: ${input.path}`);
+      }
+      const content = files[input.path];
+      if (content === undefined) throw new Error(`Missing fixture content: ${input.path}`);
+      return content;
+    },
+    async readBinary() {
+      return new Uint8Array();
+    },
+    async writeText() {},
+    async writeBinary() {},
+    async stat(input) {
+      return {
+        exists: files[input.path] !== undefined,
+        is_file: files[input.path] !== undefined,
+        size_bytes: Buffer.byteLength(files[input.path] ?? ""),
+        mtime_ms: 0
+      };
+    },
+    async deletePath() {},
+    async ensureDirectory() {}
   };
 }

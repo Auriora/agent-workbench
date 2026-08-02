@@ -70,10 +70,13 @@ changelog as applicable before closure.
 
 ## Staged Readiness
 
-- **Current stage:** tasks drafted; implementation not started
-- **Next stage:** requirements/design review, then implementation
-- **Ready to implement when:** lifecycle lint, requirements/design trace review,
-  task readiness, and corpus-version migration review have no blocking finding
+- **Current stage:** source implementation, validation, and durable-documentation
+  promotion complete; the package remains active
+- **Next stage:** installed-runtime acceptance, evidence reconciliation, and an
+  explicit closure decision
+- **Implementation entry evidence:** lifecycle lint, requirements/design trace
+  review, task readiness, and corpus-version migration review had no blocking
+  finding before implementation
 - **Design-first exception:** no
 - **Optional artifacts included:** `research.md`, `canonical-context.md`,
   `change-impact.md`, `traceability.md`, `verification.md`

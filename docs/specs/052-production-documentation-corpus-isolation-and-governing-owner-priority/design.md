@@ -83,6 +83,9 @@ it, and interface adapters remain thin.
 - `src/application/use-cases/current-docs-for-task.ts`: apply the same policy
   before scoring, owner loading, and reading candidates; expose bounded
   exclusion evidence.
+- `src/application/use-cases/query-docs.ts`: apply the same policy to the live
+  `docs_overview`/`docs_map` inventory loader before content reads, so all live
+  documentation inventory surfaces use the production corpus.
 - `src/application/use-cases/documentation-ranking-readiness.ts` and
   `query-docs.ts`: require the current corpus-policy identity before success.
 - `src/domain/policies/docs-ranking.ts`: treat valid exact matched-owner intent
@@ -124,11 +127,15 @@ DocsGoverningOwnerPriority =
   | "invalid_conflicting_owner"
 ```
 
-The public shape must remain bounded: stable reason plus aggregate count, with
-no unbounded path list or content. `IndexCoverage` may carry the policy identity
-and receipt fields or reference one same-snapshot docs-corpus state row. T002
-chooses the smallest current-schema-aligned form, but the observable contract
-above is fixed.
+The public shape remains bounded: stable reason plus aggregate count, with no
+unbounded path list or content. T002 selects an additive `IndexCoverage` form
+on the existing same-snapshot docs row: `documentation_corpus_policy_version`,
+`policy_excluded_files`, and `policy_exclusions`. Existing
+`eligible_files_seen` becomes the exact policy-eligible Markdown count for docs
+coverage, and `indexed_files` remains the persisted searchable document count.
+The public `DocumentationCorpusReceipt` is projected from those fields and is
+also returned by `docs_current_for_task`; it includes `discovered_markdown_files`
+so `discovered = eligible + excluded` is directly auditable.
 
 ### Data Flow
 
@@ -213,9 +220,17 @@ compatibility-only.
 - Advance `DOCS_RANKING_POLICY_VERSION` from `authority-aware-v1` to
   `authority-aware-v2`.
 - Add `excluded` plus `exclusion_reason` to documentation concern-owner evidence
-  and add `governing_owner_priority` to v2 final rank components.
-- Snapshot docs readiness requires the current corpus policy. Missing or
-  mismatched identity returns a structured refresh-required blocker.
+  and transactionally rebuild `documentation_concern_owners` so excluded rows
+  require no `document_id`; matched-owner candidate reads continue to join only
+  rows with document identities. Add `governing_owner_priority` to v2 final
+  rank components.
+- Snapshot docs readiness reads the snapshot-bound docs coverage row before
+  term, owner, or candidate retrieval and requires the current corpus policy.
+  Missing or mismatched identity returns the existing public
+  `ranking_unavailable` blocker together with a documentation-ranking receipt
+  whose recovery is `refresh` and whose bounded reason identifies the missing
+  or mismatched corpus policy. `repo:///status` remains the detailed operator
+  recovery surface; no second public blocker route is introduced.
 - Migration removes expired/incompatible v1 ranked universes and recreates or
   relaxes the transient table constraint for v2 using the repository's normal
   transactional migration pattern.

@@ -20,7 +20,7 @@ import {
 
 describe("documentation ranking policy fixture", () => {
   for (const seed of [1, 7, 19, 41, 73]) {
-    it(`orders every relevance band through the production ranker independent of insertion order (seed ${seed})`, () => {
+    it(`orders owner priority before every v1 relevance band independent of insertion order (seed ${seed})`, () => {
       const resolution = resolveDocumentationConcerns({
         query: "runtime contract",
         terms: [{ concern_key: "runtime", normalized_term: "runtime", token_count: 1 }],
@@ -40,17 +40,17 @@ describe("documentation ranking policy fixture", () => {
         candidates: seededShuffle(candidates, seed)
       });
       expect(ranked.map(({ final_rank_components }) => final_rank_components.relevance_band)).toEqual([
+        "intent_owner_match",
         "exact_document_phrase",
         "all_query_tokens_title_or_heading",
         "all_query_tokens_body",
-        "intent_owner_match",
         "partial_fts_match"
       ]);
       expect(ranked.map(({ path: hitPath }) => hitPath)).toEqual([
+        "docs/4-intent.md",
         "docs/1-exact.md",
         "docs/2-title.md",
         "docs/3-body.md",
-        "docs/4-intent.md",
         "docs/5-partial.md"
       ]);
     });
@@ -58,6 +58,15 @@ describe("documentation ranking policy fixture", () => {
 
   it("exhausts the remaining production tuple tiers in their fixed comparison order", () => {
     const base = rankComponents();
+    expect(sortedComponentValues([
+      { ...base, governing_owner_priority: "invalid_conflicting_owner" },
+      { ...base, governing_owner_priority: "non_owner" },
+      { ...base, governing_owner_priority: "current_canonical_owner" },
+      { ...base, governing_owner_priority: "invalid_owner" },
+      { ...base, governing_owner_priority: "other_valid_owner" }
+    ], "governing_owner_priority")).toEqual([
+      "current_canonical_owner", "other_valid_owner", "non_owner", "invalid_owner", "invalid_conflicting_owner"
+    ]);
     expect(sortedComponentValues([
       { ...base, governing_owner_tier: "invalid_conflicting_owner" },
       { ...base, governing_owner_tier: "non_owner" },
@@ -117,10 +126,11 @@ describe("documentation ranking policy fixture", () => {
       concern_match_state: "matched",
       governing_owner_tier: "valid_owner",
       final_rank_components: {
+        governing_owner_priority: "current_canonical_owner",
         relevance_band: "intent_owner_match",
         stable_document_id: "docs/design/coding-agent-integration-design.md"
       },
-      ranking_policy_version: "authority-aware-v1"
+      ranking_policy_version: "authority-aware-v2"
     });
     expect(ranked).not.toHaveProperty("lexical_score");
     expect(ranked?.matched_concerns.map(({ concern_key }) => concern_key)).toEqual([
@@ -131,7 +141,7 @@ describe("documentation ranking policy fixture", () => {
     expect(ranked?.ranking_reasons.join(" ")).toContain("Lexical score: absent");
   });
 
-  it("applies relevance before ownership and authority, then preserves raw lexical ordering", () => {
+  it("applies owner priority before relevance, then preserves the v1 tuple", () => {
     const resolution = resolveDocumentationConcerns({
       query: "sessionstart behavior",
       terms: [{ concern_key: "integrations", normalized_term: "sessionstart", token_count: 1 }],
@@ -181,15 +191,15 @@ describe("documentation ranking policy fixture", () => {
     });
 
     expect(ranked.map(({ path: hitPath }) => hitPath)).toEqual([
+      "docs/design/owner.md",
       "docs/runbooks/exact.md",
       "docs/runbooks/body-high.md",
-      "docs/runbooks/body-low.md",
-      "docs/design/owner.md"
+      "docs/runbooks/body-low.md"
     ]);
-    expect(ranked[1]?.score).toBe(999);
-    expect(ranked[1]?.lexical_score).toBe(40);
-    expect(ranked[3]?.candidate_source).toBe("fts_and_matched_owner");
-    expect(ranked[3]?.final_rank_components.relevance_band).toBe("intent_owner_match");
+    expect(ranked[0]?.candidate_source).toBe("fts_and_matched_owner");
+    expect(ranked[0]?.governing_owner_priority).toBe("current_canonical_owner");
+    expect(ranked[2]?.score).toBe(999);
+    expect(ranked[2]?.lexical_score).toBe(40);
   });
 
   it("lets ownership and authority govern only within an established relevance band", () => {
@@ -261,6 +271,11 @@ describe("documentation ranking policy fixture", () => {
         superseded_by: "current.md"
       },
       {
+        path: "excluded.md",
+        state: "excluded" as const,
+        exclusion_reason: "embedded_fixture" as const
+      },
+      {
         path: "conflicting.md",
         state: "conflicting" as const,
         document_id: "conflicting.md",
@@ -273,12 +288,14 @@ describe("documentation ranking policy fixture", () => {
       expect.stringContaining("missing"),
       expect.stringContaining("archived"),
       expect.stringContaining("current.md"),
+      expect.stringContaining("embedded_fixture"),
       expect.stringContaining("current.md")
     ]);
   });
 
   it("uses normalized path and stable identity as the final deterministic tie breakers", () => {
     const base = {
+      governing_owner_priority: "non_owner" as const,
       relevance_band: "partial_fts_match" as const,
       governing_owner_tier: "non_owner" as const,
       authority_tier: "supporting" as const,
@@ -382,6 +399,7 @@ function ownerRow(
 
 function rankComponents(): DocsFinalRankComponents {
   return {
+    governing_owner_priority: "current_canonical_owner",
     relevance_band: "exact_document_phrase",
     governing_owner_tier: "valid_owner",
     authority_tier: "canonical",

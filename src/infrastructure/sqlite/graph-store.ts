@@ -21,13 +21,18 @@ import type { SnapshotState } from "../../domain/models/runtime.js";
 import type {
   DocsRankingCandidate,
   DocsRankingCandidateQueryResult,
+  DocumentationCorpusExclusion,
   DocsHeading,
   DocsSearchHit,
   Freshness,
   IndexCoverage,
   RankedDocsSearchHit
 } from "../../contracts/index.js";
-import { docsRankingCountReceiptSchema, rankedDocsSearchHitSchema } from "../../contracts/index.js";
+import {
+  DOCS_RANKING_POLICY_VERSION,
+  docsRankingCountReceiptSchema,
+  rankedDocsSearchHitSchema
+} from "../../contracts/index.js";
 import {
   classifyMarkdownDocCurrency,
   extractMarkdownFrontmatterSignals
@@ -211,6 +216,9 @@ type IndexCoverageRow = {
   continuation_cursor: string | null;
   indexed_roots_json: string | null;
   missing_priority_roots_json: string | null;
+  documentation_corpus_policy_version: "production-docs-v1" | null;
+  policy_excluded_files: number | null;
+  policy_exclusions_json: string | null;
   reason: string | null;
 };
 
@@ -2258,6 +2266,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           continuation_cursor,
           indexed_roots_json,
           missing_priority_roots_json,
+          documentation_corpus_policy_version,
+          policy_excluded_files,
+          policy_exclusions_json,
           reason
         ) VALUES (
           @snapshotId,
@@ -2274,6 +2285,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           @continuationCursor,
           @indexedRootsJson,
           @missingPriorityRootsJson,
+          @documentationCorpusPolicyVersion,
+          @policyExcludedFiles,
+          @policyExclusionsJson,
           @reason
         )
       `);
@@ -2323,6 +2337,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           continuationCursor: item.continuation_cursor ?? null,
           indexedRootsJson: item.indexed_roots === undefined ? null : JSON.stringify(item.indexed_roots),
           missingPriorityRootsJson: item.missing_priority_roots === undefined ? null : JSON.stringify(item.missing_priority_roots),
+          documentationCorpusPolicyVersion: item.documentation_corpus_policy_version ?? null,
+          policyExcludedFiles: item.policy_excluded_files ?? null,
+          policyExclusionsJson: item.policy_exclusions === undefined ? null : JSON.stringify(item.policy_exclusions),
           reason: item.reason ?? null
         });
       }
@@ -2393,9 +2410,10 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           document_id,
           owner_state,
           source_line,
+          exclusion_reason,
           superseded_by,
           declared_canonical_owner
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const owners = new Map<string, DocumentationConcernOwnerWrite>();
       for (const owner of input.owners) {
@@ -2404,6 +2422,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         if (existing !== undefined && (
           existing.document_id !== owner.document_id ||
           existing.owner_state !== owner.owner_state ||
+          existing.exclusion_reason !== owner.exclusion_reason ||
           existing.superseded_by !== owner.superseded_by ||
           existing.declared_canonical_owner !== owner.declared_canonical_owner
         )) {
@@ -2425,6 +2444,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           owner.document_id ?? null,
           owner.owner_state,
           owner.source_line,
+          owner.exclusion_reason ?? null,
           owner.superseded_by ?? null,
           owner.declared_canonical_owner ?? null
         );
@@ -2496,6 +2516,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         document_id,
         owner_state,
         source_line,
+        exclusion_reason,
         superseded_by,
         declared_canonical_owner
       FROM documentation_concern_owners
@@ -2512,6 +2533,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       document_id: string | null;
       owner_state: DocumentationConcernOwnerWrite["owner_state"];
       source_line: number;
+      exclusion_reason: DocumentationConcernOwnerWrite["exclusion_reason"] | null;
       superseded_by: string | null;
       declared_canonical_owner: string | null;
     }>;
@@ -2524,6 +2546,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         document_id: row.document_id ?? undefined,
         owner_state: row.owner_state,
         source_line: row.source_line,
+        exclusion_reason: row.exclusion_reason ?? undefined,
         superseded_by: row.superseded_by ?? undefined,
         declared_canonical_owner: row.declared_canonical_owner ?? undefined
       }))
@@ -2750,7 +2773,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         ...(row.normalized_scope_path === null ? {} : { normalized_scope_path: row.normalized_scope_path }),
         retrieval_bound: row.retrieval_bound as 500,
         ranking_schema_version: row.ranking_schema_version as 1,
-        ranking_policy_version: row.ranking_policy_version as "authority-aware-v1"
+        ranking_policy_version: row.ranking_policy_version as typeof DOCS_RANKING_POLICY_VERSION
       },
       admitted_authority_map: row.admitted_authority_map,
       hits: hits.map(({ hit_json: hitJson }) =>
@@ -2874,6 +2897,8 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         freshness: "cold",
         status: "cold",
         coverage_state: "blocked",
+        coverage,
+        docs_scan_truncated: docsCoverage?.scan_truncated,
         reason: "No Markdown documents were indexed into docs FTS for this snapshot.",
         document_count: 0
       };
@@ -3243,6 +3268,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           continuation_cursor,
           indexed_roots_json,
           missing_priority_roots_json,
+          documentation_corpus_policy_version,
+          policy_excluded_files,
+          policy_exclusions_json,
           reason
         FROM snapshot_index_coverage
         WHERE snapshot_id = @snapshotId
@@ -3267,6 +3295,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       continuation_cursor: row.continuation_cursor ?? undefined,
       indexed_roots: parseStringArrayJson(row.indexed_roots_json),
       missing_priority_roots: parseStringArrayJson(row.missing_priority_roots_json),
+      documentation_corpus_policy_version: row.documentation_corpus_policy_version ?? undefined,
+      policy_excluded_files: row.policy_excluded_files ?? undefined,
+      policy_exclusions: parseDocumentationCorpusExclusionsJson(row.policy_exclusions_json),
       reason: row.reason ?? undefined
     }));
   }
@@ -3473,12 +3504,16 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         snapshot_id, evidence_class, state, indexed_files, eligible_files_seen,
         admitted_files, extracted_files, scan_truncated, extraction_truncated,
         continuation_available, continuation_kind, continuation_cursor,
-        indexed_roots_json, missing_priority_roots_json, reason
+        indexed_roots_json, missing_priority_roots_json,
+        documentation_corpus_policy_version, policy_excluded_files,
+        policy_exclusions_json, reason
       ) VALUES (
         @snapshotId, @evidenceClass, @state, @indexedFiles, @eligibleFilesSeen,
         @admittedFiles, @extractedFiles, @scanTruncated, @extractionTruncated,
         @continuationAvailable, @continuationKind, @continuationCursor,
-        @indexedRootsJson, @missingPriorityRootsJson, @reason
+        @indexedRootsJson, @missingPriorityRootsJson,
+        @documentationCorpusPolicyVersion, @policyExcludedFiles,
+        @policyExclusionsJson, @reason
       )
       ON CONFLICT(snapshot_id, evidence_class) DO UPDATE SET
         state = excluded.state,
@@ -3493,6 +3528,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         continuation_cursor = excluded.continuation_cursor,
         indexed_roots_json = excluded.indexed_roots_json,
         missing_priority_roots_json = excluded.missing_priority_roots_json,
+        documentation_corpus_policy_version = excluded.documentation_corpus_policy_version,
+        policy_excluded_files = excluded.policy_excluded_files,
+        policy_exclusions_json = excluded.policy_exclusions_json,
         reason = excluded.reason
     `).run({
       snapshotId: input.snapshotId,
@@ -3515,6 +3553,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       missingPriorityRootsJson: input.item.missing_priority_roots === undefined
         ? null
         : JSON.stringify(input.item.missing_priority_roots),
+      documentationCorpusPolicyVersion: input.item.documentation_corpus_policy_version ?? null,
+      policyExcludedFiles: input.item.policy_excluded_files ?? null,
+      policyExclusionsJson: input.item.policy_exclusions === undefined ? null : JSON.stringify(input.item.policy_exclusions),
       reason: input.item.reason ?? null
     });
   }
@@ -3858,13 +3899,17 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         snapshot_id, evidence_class, state, indexed_files, eligible_files_seen,
         admitted_files, extracted_files, scan_truncated, extraction_truncated,
         continuation_available, continuation_kind, continuation_cursor,
-        indexed_roots_json, missing_priority_roots_json, reason
+        indexed_roots_json, missing_priority_roots_json,
+        documentation_corpus_policy_version, policy_excluded_files,
+        policy_exclusions_json, reason
       )
       SELECT
         @targetSnapshotId, evidence_class, state, indexed_files, eligible_files_seen,
         admitted_files, extracted_files, scan_truncated, extraction_truncated,
         continuation_available, continuation_kind, continuation_cursor,
-        indexed_roots_json, missing_priority_roots_json, reason
+        indexed_roots_json, missing_priority_roots_json,
+        documentation_corpus_policy_version, policy_excluded_files,
+        policy_exclusions_json, reason
       FROM snapshot_index_coverage
       WHERE snapshot_id = @sourceSnapshotId
       ORDER BY evidence_class ASC
@@ -3902,10 +3947,10 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     this.db.prepare(`
       INSERT INTO documentation_concern_owners (
         snapshot_id, concern_key, mapped_owner_path, document_id, owner_state,
-        source_line, superseded_by, declared_canonical_owner
+        source_line, exclusion_reason, superseded_by, declared_canonical_owner
       )
       SELECT @targetSnapshotId, concern_key, mapped_owner_path, document_id,
-             owner_state, source_line, superseded_by, declared_canonical_owner
+             owner_state, source_line, exclusion_reason, superseded_by, declared_canonical_owner
       FROM documentation_concern_owners
       WHERE snapshot_id = @sourceSnapshotId
     `).run(input);
@@ -4519,9 +4564,10 @@ function migrate(db: Database.Database): void {
       mapped_owner_path TEXT NOT NULL CHECK (length(mapped_owner_path) > 0),
       document_id TEXT,
       owner_state TEXT NOT NULL CHECK (
-        owner_state IN ('valid', 'draft', 'missing', 'archived', 'superseded', 'conflicting')
+        owner_state IN ('valid', 'draft', 'missing', 'archived', 'superseded', 'conflicting', 'excluded')
       ),
       source_line INTEGER NOT NULL CHECK (source_line > 0),
+      exclusion_reason TEXT CHECK (exclusion_reason IS NULL OR exclusion_reason IN ('embedded_fixture')),
       superseded_by TEXT,
       declared_canonical_owner TEXT,
       PRIMARY KEY(snapshot_id, concern_key, mapped_owner_path),
@@ -4530,9 +4576,14 @@ function migrate(db: Database.Database): void {
       FOREIGN KEY(snapshot_id, document_id)
         REFERENCES docs_documents(snapshot_id, path),
       CHECK (
-        (owner_state = 'missing' AND document_id IS NULL)
+        (owner_state IN ('missing', 'excluded') AND document_id IS NULL)
         OR
-        (owner_state <> 'missing' AND document_id = mapped_owner_path)
+        (owner_state NOT IN ('missing', 'excluded') AND document_id = mapped_owner_path)
+      ),
+      CHECK (
+        (owner_state = 'excluded' AND exclusion_reason IS NOT NULL)
+        OR
+        (owner_state <> 'excluded' AND exclusion_reason IS NULL)
       ),
       CHECK (
         (owner_state = 'superseded' AND superseded_by IS NOT NULL)
@@ -4555,7 +4606,7 @@ function migrate(db: Database.Database): void {
       normalized_scope_path TEXT,
       retrieval_bound INTEGER NOT NULL CHECK (retrieval_bound = 500),
       ranking_schema_version INTEGER NOT NULL CHECK (ranking_schema_version = 1),
-      ranking_policy_version TEXT NOT NULL CHECK (ranking_policy_version = 'authority-aware-v1'),
+      ranking_policy_version TEXT NOT NULL CHECK (ranking_policy_version = 'authority-aware-v2'),
       admitted_authority_map TEXT NOT NULL CHECK (admitted_authority_map IN ('present', 'absent')),
       counts_json TEXT NOT NULL CHECK (length(counts_json) > 0),
       created_at TEXT NOT NULL,
@@ -4588,6 +4639,12 @@ function migrate(db: Database.Database): void {
       continuation_cursor TEXT,
       indexed_roots_json TEXT,
       missing_priority_roots_json TEXT,
+      documentation_corpus_policy_version TEXT CHECK (
+        documentation_corpus_policy_version IS NULL
+        OR documentation_corpus_policy_version = 'production-docs-v1'
+      ),
+      policy_excluded_files INTEGER CHECK (policy_excluded_files IS NULL OR policy_excluded_files >= 0),
+      policy_exclusions_json TEXT,
       reason TEXT,
       UNIQUE(snapshot_id, evidence_class)
     );
@@ -4671,14 +4728,15 @@ function migrate(db: Database.Database): void {
     const coverageColumns = tableColumns(db, "snapshot_index_coverage");
     const graphBuildColumns = tableColumns(db, "graph_build_progress");
     const rankedUniverseColumns = tableColumns(db, "ranked_docs_universes");
-    if (!rankedUniverseColumns.has("admitted_authority_map")) {
-      db.exec(`
-        DELETE FROM ranked_docs_universe_hits;
-        DELETE FROM ranked_docs_universes;
-        ALTER TABLE ranked_docs_universes
-          ADD COLUMN admitted_authority_map TEXT NOT NULL DEFAULT 'present'
-          CHECK (admitted_authority_map IN ('present', 'absent'));
-      `);
+    const concernOwnerColumns = tableColumns(db, "documentation_concern_owners");
+    const rankedUniverseSql = tableSql(db, "ranked_docs_universes");
+    if (!rankedUniverseColumns.has("admitted_authority_map") ||
+        !rankedUniverseSql.includes("authority-aware-v2")) {
+      rebuildRankedDocsUniversesForCurrentPolicy(db);
+    }
+    const concernOwnerSql = tableSql(db, "documentation_concern_owners");
+    if (!concernOwnerColumns.has("exclusion_reason") || !concernOwnerSql.includes("'excluded'")) {
+      rebuildDocumentationConcernOwnersForCorpusExclusions(db);
     }
     if (!snapshotColumns.has("publication_state")) {
       db.exec("ALTER TABLE snapshots ADD COLUMN publication_state TEXT NOT NULL DEFAULT 'published'");
@@ -4709,6 +4767,15 @@ function migrate(db: Database.Database): void {
     }
     if (!coverageColumns.has("continuation_cursor")) {
       db.exec("ALTER TABLE snapshot_index_coverage ADD COLUMN continuation_cursor TEXT");
+    }
+    if (!coverageColumns.has("documentation_corpus_policy_version")) {
+      db.exec("ALTER TABLE snapshot_index_coverage ADD COLUMN documentation_corpus_policy_version TEXT");
+    }
+    if (!coverageColumns.has("policy_excluded_files")) {
+      db.exec("ALTER TABLE snapshot_index_coverage ADD COLUMN policy_excluded_files INTEGER");
+    }
+    if (!coverageColumns.has("policy_exclusions_json")) {
+      db.exec("ALTER TABLE snapshot_index_coverage ADD COLUMN policy_exclusions_json TEXT");
     }
     if (!graphBuildColumns.has("owner_id")) {
       db.exec(`ALTER TABLE graph_build_progress
@@ -4816,6 +4883,111 @@ function tableColumns(db: Database.Database, table: string): Set<string> {
   return new Set((db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((row) => row.name));
 }
 
+function tableSql(db: Database.Database, table: string): string {
+  const row = db.prepare(`
+    SELECT sql
+    FROM sqlite_master
+    WHERE type = 'table' AND name = ?
+  `).get(table) as { sql: string | null } | undefined;
+  return row?.sql ?? "";
+}
+
+function rebuildDocumentationConcernOwnersForCorpusExclusions(db: Database.Database): void {
+  db.exec(`
+    ALTER TABLE documentation_concern_owners RENAME TO documentation_concern_owners_old;
+    CREATE TABLE documentation_concern_owners (
+      snapshot_id INTEGER NOT NULL,
+      concern_key TEXT NOT NULL,
+      mapped_owner_path TEXT NOT NULL CHECK (length(mapped_owner_path) > 0),
+      document_id TEXT,
+      owner_state TEXT NOT NULL CHECK (
+        owner_state IN ('valid', 'draft', 'missing', 'archived', 'superseded', 'conflicting', 'excluded')
+      ),
+      source_line INTEGER NOT NULL CHECK (source_line > 0),
+      exclusion_reason TEXT CHECK (exclusion_reason IS NULL OR exclusion_reason IN ('embedded_fixture')),
+      superseded_by TEXT,
+      declared_canonical_owner TEXT,
+      PRIMARY KEY(snapshot_id, concern_key, mapped_owner_path),
+      FOREIGN KEY(snapshot_id, concern_key)
+        REFERENCES documentation_concerns(snapshot_id, concern_key) ON DELETE CASCADE,
+      FOREIGN KEY(snapshot_id, document_id)
+        REFERENCES docs_documents(snapshot_id, path),
+      CHECK (
+        (owner_state IN ('missing', 'excluded') AND document_id IS NULL)
+        OR
+        (owner_state NOT IN ('missing', 'excluded') AND document_id = mapped_owner_path)
+      ),
+      CHECK (
+        (owner_state = 'excluded' AND exclusion_reason IS NOT NULL)
+        OR
+        (owner_state <> 'excluded' AND exclusion_reason IS NULL)
+      ),
+      CHECK (
+        (owner_state = 'superseded' AND superseded_by IS NOT NULL)
+        OR
+        (owner_state <> 'superseded' AND superseded_by IS NULL)
+      ),
+      CHECK (
+        (owner_state = 'conflicting'
+          AND declared_canonical_owner IS NOT NULL
+          AND declared_canonical_owner <> mapped_owner_path)
+        OR
+        (owner_state <> 'conflicting' AND declared_canonical_owner IS NULL)
+      )
+    );
+    INSERT INTO documentation_concern_owners (
+      snapshot_id, concern_key, mapped_owner_path, document_id, owner_state,
+      source_line, exclusion_reason, superseded_by, declared_canonical_owner
+    )
+    SELECT
+      snapshot_id, concern_key, mapped_owner_path, document_id, owner_state,
+      source_line, NULL, superseded_by, declared_canonical_owner
+    FROM documentation_concern_owners_old;
+    DROP TABLE documentation_concern_owners_old;
+    CREATE INDEX IF NOT EXISTS idx_documentation_concern_owners_snapshot_concern
+      ON documentation_concern_owners(snapshot_id, concern_key);
+    CREATE INDEX IF NOT EXISTS idx_documentation_concern_owners_snapshot_document
+      ON documentation_concern_owners(snapshot_id, document_id);
+    CREATE INDEX IF NOT EXISTS idx_documentation_concern_owners_snapshot_state
+      ON documentation_concern_owners(snapshot_id, owner_state);
+  `);
+}
+
+function rebuildRankedDocsUniversesForCurrentPolicy(db: Database.Database): void {
+  db.exec(`
+    DROP TABLE IF EXISTS ranked_docs_universe_hits;
+    DROP TABLE IF EXISTS ranked_docs_universes;
+    CREATE TABLE ranked_docs_universes (
+      universe_id TEXT PRIMARY KEY CHECK (length(universe_id) > 0),
+      snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
+      normalized_query TEXT NOT NULL CHECK (length(normalized_query) > 0),
+      normalized_scope_path TEXT,
+      retrieval_bound INTEGER NOT NULL CHECK (retrieval_bound = 500),
+      ranking_schema_version INTEGER NOT NULL CHECK (ranking_schema_version = 1),
+      ranking_policy_version TEXT NOT NULL CHECK (ranking_policy_version = 'authority-aware-v2'),
+      admitted_authority_map TEXT NOT NULL CHECK (admitted_authority_map IN ('present', 'absent')),
+      counts_json TEXT NOT NULL CHECK (length(counts_json) > 0),
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      CHECK (expires_at > created_at)
+    );
+    CREATE TABLE ranked_docs_universe_hits (
+      universe_id TEXT NOT NULL REFERENCES ranked_docs_universes(universe_id) ON DELETE CASCADE,
+      position INTEGER NOT NULL CHECK (position >= 0 AND position < 500),
+      stable_document_id TEXT NOT NULL CHECK (length(stable_document_id) > 0),
+      hit_json TEXT NOT NULL CHECK (length(hit_json) > 0),
+      PRIMARY KEY(universe_id, position),
+      UNIQUE(universe_id, stable_document_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ranked_docs_universes_snapshot
+      ON ranked_docs_universes(snapshot_id);
+    CREATE INDEX IF NOT EXISTS idx_ranked_docs_universes_expiry
+      ON ranked_docs_universes(expires_at, universe_id);
+    CREATE INDEX IF NOT EXISTS idx_ranked_docs_universe_hits_document
+      ON ranked_docs_universe_hits(universe_id, stable_document_id);
+  `);
+}
+
 function validateSchema(db: Database.Database): boolean {
   const expected = [
     "files",
@@ -4863,6 +5035,24 @@ function parseStringArrayJson(text: string | null): string[] | undefined {
     const value = JSON.parse(text) as unknown;
     return Array.isArray(value) && value.every((item) => typeof item === "string")
       ? value
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function parseDocumentationCorpusExclusionsJson(text: string | null): DocumentationCorpusExclusion[] | undefined {
+  if (text === null) {
+    return undefined;
+  }
+  try {
+    const value = JSON.parse(text) as unknown;
+    return Array.isArray(value) &&
+        value.every((item) => typeof item === "object" && item !== null &&
+          (item as { reason?: unknown }).reason === "embedded_fixture" &&
+          Number.isInteger((item as { count?: unknown }).count) &&
+          ((item as { count: number }).count) >= 0)
+      ? value as DocumentationCorpusExclusion[]
       : undefined;
   } catch {
     return undefined;

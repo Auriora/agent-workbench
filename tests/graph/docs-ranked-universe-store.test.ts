@@ -26,6 +26,36 @@ describe("ranked documentation universe store", () => {
     fs.rmSync(directory, { recursive: true, force: true });
   });
 
+  it("retains corpus coverage for a fresh snapshot with no Markdown documents", async () => {
+    const store = openGraphStore(path.join(directory, "empty-docs.sqlite"));
+    try {
+      await createBuildingSnapshot(store, "5100");
+      await store.replaceSnapshotDocs({
+        snapshot_id: "5100",
+        repo_root: REPO_ROOT,
+        documents: [],
+        coverage: [docsCoverage(0)]
+      });
+      await publishSnapshot(store, "5100");
+
+      await expect(store.getState({
+        repo_root: REPO_ROOT,
+        snapshot_id: "5100"
+      })).resolves.toMatchObject({
+        status: "cold",
+        document_count: 0,
+        coverage: [expect.objectContaining({
+          evidence_class: "docs",
+          documentation_corpus_policy_version: "production-docs-v1",
+          policy_excluded_files: 0,
+          policy_exclusions: []
+        })]
+      });
+    } finally {
+      store.close();
+    }
+  });
+
   it("retrieves one bounded FTS source with no offset and treats row 501 as a sentinel", async () => {
     const store = openGraphStore(path.join(directory, "fts.sqlite"));
     try {
@@ -212,6 +242,50 @@ describe("ranked documentation universe store", () => {
     }
   });
 
+  it("round-trips an excluded concern owner without creating a matched-owner candidate", async () => {
+    const store = openGraphStore(path.join(directory, "excluded-owner.sqlite"));
+    try {
+      await createBuildingSnapshot(store, "5111");
+      await writeDocumentPaths(store, "5111", ["docs/current.md"]);
+      await store.replaceSnapshotDocumentationConcerns({
+        snapshot_id: "5111",
+        state: "complete",
+        source_path: "docs/reference/documentation-map.md",
+        source_content_hash: "map-hash",
+        concerns: [{ concern_key: "fixtures", label: "Fixtures", normalized_label: "fixtures" }],
+        terms: [{ concern_key: "fixtures", normalized_term: "fixture docs", token_count: 2 }],
+        owners: [{
+          concern_key: "fixtures",
+          mapped_owner_path: "tests/fixtures/product/docs/runtime.md",
+          owner_state: "excluded",
+          source_line: 12,
+          exclusion_reason: "embedded_fixture"
+        }]
+      });
+      await publishSnapshot(store, "5111");
+
+      await expect(store.listDocumentationConcernOwners({ snapshot_id: "5111", max_rows: 10 })).resolves.toMatchObject({
+        status: "ready",
+        rows: [{
+          concern_key: "fixtures",
+          mapped_owner_path: "tests/fixtures/product/docs/runtime.md",
+          document_id: undefined,
+          owner_state: "excluded",
+          source_line: 12,
+          exclusion_reason: "embedded_fixture"
+        }]
+      });
+      await expect(store.findMatchedOwnerCandidates({
+        snapshot_id: "5111",
+        concern_keys: ["fixtures"],
+        normalized_query: "fixture docs",
+        max_rows: 501
+      })).resolves.toEqual({ status: "exact", candidates: [] });
+    } finally {
+      store.close();
+    }
+  });
+
   it("persists an immutable ordered universe and purges expired records", async () => {
     const store = openGraphStore(path.join(directory, "universe.sqlite"));
     try {
@@ -259,12 +333,27 @@ describe("ranked documentation universe store", () => {
     }
   });
 
-  it("atomically purges legacy universes and child hits before adding admission trust", async () => {
+  it("atomically purges legacy universes while preserving compatible graph, docs, and concern evidence", async () => {
     const databasePath = path.join(directory, "legacy-universe.sqlite");
     const initial = openGraphStore(databasePath, { enforceForeignKeys: false });
     try {
       await createBuildingSnapshot(initial, "5110");
       await writeDocuments(initial, "5110", 2);
+      await initial.replaceSnapshotDocumentationConcerns({
+        snapshot_id: "5110",
+        state: "complete",
+        source_path: "docs/reference/documentation-map.md",
+        source_content_hash: "map-hash",
+        concerns: [{ concern_key: "hooks", label: "Hooks", normalized_label: "hooks" }],
+        terms: [{ concern_key: "hooks", normalized_term: "sessionstart", token_count: 1 }],
+        owners: [{
+          concern_key: "hooks",
+          mapped_owner_path: "docs/virtual/0001/sessionstart.md",
+          document_id: "docs/virtual/0001/sessionstart.md",
+          owner_state: "valid",
+          source_line: 1
+        }]
+      });
       await publishSnapshot(initial, "5110");
       await initial.put({ universe: rankedUniverse("5110", "legacy-universe-5110") });
     } finally {
@@ -285,8 +374,24 @@ describe("ranked documentation universe store", () => {
     try {
       expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM ranked_docs_universes").get()).toEqual({ count: 0 });
       expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM ranked_docs_universe_hits").get()).toEqual({ count: 0 });
+      expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM snapshots").get()).toEqual({ count: 1 });
+      expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM docs_documents").get()).toEqual({ count: 2 });
+      expect(migrated.db.prepare("SELECT COUNT(*) AS count FROM documentation_concern_owners").get())
+        .toEqual({ count: 1 });
+      expect(migrated.db.prepare(`
+        SELECT documentation_corpus_policy_version, policy_excluded_files, policy_exclusions_json
+        FROM snapshot_index_coverage
+        WHERE snapshot_id = 5110 AND evidence_class = 'docs'
+      `).get()).toEqual({
+        documentation_corpus_policy_version: "production-docs-v1",
+        policy_excluded_files: 0,
+        policy_exclusions_json: "[]"
+      });
       expect(migrated.db.prepare("PRAGMA table_info(ranked_docs_universes)").all())
         .toContainEqual(expect.objectContaining({ name: "admitted_authority_map", notnull: 1 }));
+      expect(migrated.db.prepare(`
+        SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'ranked_docs_universes'
+      `).get()).toEqual(expect.objectContaining({ sql: expect.stringContaining("authority-aware-v2") }));
     } finally {
       migrated.close();
     }
@@ -450,7 +555,8 @@ async function writeDocuments(
       byte_count: 64,
       indexed_at: "2026-07-21T00:00:00.000Z",
       truncated: false
-    }))
+    })),
+    coverage: [docsCoverage(count)]
   });
 }
 
@@ -471,8 +577,22 @@ async function writeDocumentPaths(
       byte_count: 48,
       indexed_at: "2026-07-21T00:00:00.000Z",
       truncated: false
-    }))
+    })),
+    coverage: [docsCoverage(paths.length)]
   });
+}
+
+function docsCoverage(count: number) {
+  return {
+    evidence_class: "docs" as const,
+    state: "complete" as const,
+    indexed_files: count,
+    eligible_files_seen: count,
+    scan_truncated: false,
+    documentation_corpus_policy_version: "production-docs-v1" as const,
+    policy_excluded_files: 0,
+    policy_exclusions: []
+  };
 }
 
 function rankedUniverse(snapshotId: string, universeId: string): RankedDocsUniverseRecord {
@@ -490,8 +610,10 @@ function rankedUniverse(snapshotId: string, universeId: string): RankedDocsUnive
     candidate_source: "fts" as const,
     concern_match_state: "no_match" as const,
     matched_concerns: [],
+    governing_owner_priority: "non_owner" as const,
     governing_owner_tier: "non_owner" as const,
     final_rank_components: {
+      governing_owner_priority: "non_owner" as const,
       relevance_band: "all_query_tokens_body" as const,
       governing_owner_tier: "non_owner" as const,
       authority_tier: "canonical" as const,
@@ -515,6 +637,9 @@ function rankedUniverse(snapshotId: string, universeId: string): RankedDocsUnive
     },
     hits,
     counts: {
+      documentation_corpus_policy_version: "production-docs-v1",
+      policy_excluded_files: 0,
+      policy_exclusions: [],
       searchable_snapshot_documents_count: 2,
       searchable_scope_documents_count: 2,
       fts_candidate_documents_count: 2,

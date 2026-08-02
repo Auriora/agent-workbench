@@ -48,6 +48,10 @@ import {
   selectedMarkdownText
 } from "./markdown-docs.js";
 import { extractDocumentationConcernIndex } from "./document-currency-routing.js";
+import {
+  partitionDocumentationCorpusPaths,
+  type DocumentationCorpusDecisionPartition
+} from "../../domain/policies/index.js";
 import { type RailsDiscoveryMetadata } from "./rails-project-shape.js";
 import {
   detectRailsProjectShape,
@@ -292,11 +296,15 @@ export async function buildRepositoryGraph(
 
   const markdownContentByPath = new Map<string, string>();
   const documents: DocsIndexDocumentWrite[] = [];
+  let docsPartition: DocumentationCorpusDecisionPartition | undefined;
   if (input.docs_index !== undefined) {
-    const docsFiles = mergeDocsIndexFiles({
+    const mergedDocsFiles = mergeDocsIndexFiles({
       graphFiles: scanned.files,
       docsFiles: docsScan?.files ?? []
     });
+    docsPartition = partitionDocumentationCorpusPaths(mergedDocsFiles.map((file) => file.path));
+    const eligibleDocsPaths = new Set(docsPartition.eligible_markdown_paths);
+    const docsFiles = mergedDocsFiles.filter((file) => eligibleDocsPaths.has(file.path));
     for (const [index, file] of docsFiles.entries()) {
       await yieldToEventLoop(index);
       const content = file.file_identity.size_bytes > MAX_DOCS_INDEX_BYTES
@@ -324,12 +332,13 @@ export async function buildRepositoryGraph(
 
   let concernIndex: Awaited<ReturnType<typeof extractDocumentationConcernIndex>> | undefined;
   if (input.documentation_concerns !== undefined) {
-    if (input.docs_index === undefined) {
+    if (input.docs_index === undefined || docsPartition === undefined) {
       throw new Error("Documentation concern indexing requires the snapshot docs index.");
     }
     concernIndex = await extractDocumentationConcernIndex({
       workspace: input.workspace,
-      content_by_path: markdownContentByPath
+      content_by_path: markdownContentByPath,
+      corpus_decisions: new Map(docsPartition.decisions.map((decision) => [decision.relativePath, decision]))
     });
     for (const [documentPath, documentContent] of concernIndex.document_content_by_path) {
       if (documents.some((document) => document.path === documentPath)) continue;
@@ -348,28 +357,37 @@ export async function buildRepositoryGraph(
       });
     }
     documents.sort(compareDocsIndexDocuments);
+    docsPartition = partitionDocumentationCorpusPaths([
+      ...new Set([
+        ...docsPartition.decisions.map(({ relativePath }) => relativePath),
+        ...documents.map(({ path: documentPath }) => documentPath)
+      ])
+    ]);
   }
 
   if (input.docs_index !== undefined) {
+    const coverage = buildIndexCoverage({
+      graphScan: scanned,
+      docsScan,
+      docsPartition,
+      docsIndexedFiles: documents.length,
+      graphExtraction: {
+        admitted_files: extractionFiles.length,
+        extracted_files: batches.length,
+        truncated: extractionTruncated,
+        budget: maxExtractionFiles,
+        continuation_cursor: extractionContinuationCursor({
+          scanned,
+          extractionFiles,
+          extractionTruncated
+        })
+      }
+    });
     await input.docs_index.replaceSnapshotDocs({
       snapshot_id: snapshotId,
       repo_root: scanned.repo_root,
       documents,
-      coverage: buildIndexCoverage({
-        graphScan: scanned,
-        docsScan,
-        graphExtraction: {
-          admitted_files: extractionFiles.length,
-          extracted_files: batches.length,
-          truncated: extractionTruncated,
-          budget: maxExtractionFiles,
-          continuation_cursor: extractionContinuationCursor({
-            scanned,
-            extractionFiles,
-            extractionTruncated
-          })
-        }
-      })
+      coverage
     });
   }
 
@@ -406,6 +424,8 @@ export async function buildRepositoryGraph(
   const coverage = buildIndexCoverage({
     graphScan: scanned,
     docsScan,
+    docsPartition,
+    docsIndexedFiles: documents.length,
     graphExtraction: {
       admitted_files: extractionFiles.length,
       extracted_files: resolved.batches.length,
@@ -984,6 +1004,8 @@ function buildIndexCoverage(input: {
     indexed_roots: readonly string[];
     truncated: boolean;
   };
+  docsPartition?: DocumentationCorpusDecisionPartition;
+  docsIndexedFiles?: number;
 }): readonly IndexCoverage[] {
   const graphCoverageTruncated = input.graphScan.truncated || input.graphExtraction.truncated;
   const graphCoverageReasonMessage = graphCoverageReason({
@@ -1012,21 +1034,46 @@ function buildIndexCoverage(input: {
   };
   const docsCoverage = input.docsScan === undefined
     ? undefined
-    : {
+    : docsIndexCoverage({
+        docsScan: input.docsScan,
+        docsPartition: input.docsPartition ?? partitionDocumentationCorpusPaths(
+          input.docsScan.files
+            .filter((file) => file.file_identity.language === "markdown")
+            .map((file) => file.path)
+        ),
+        docsIndexedFiles: input.docsIndexedFiles,
+        truncated: input.docsScan.truncated
+      });
+  return docsCoverage === undefined ? [graphCoverage] : [docsCoverage, graphCoverage];
+}
+
+function docsIndexCoverage(input: {
+  docsScan: {
+    files: readonly FileCatalogEntry[];
+    indexed_roots: readonly string[];
+    truncated: boolean;
+  };
+  docsPartition: DocumentationCorpusDecisionPartition;
+  docsIndexedFiles?: number;
+  truncated: boolean;
+}): IndexCoverage {
+  return {
         evidence_class: "docs" as const,
-        state: coverageState(input.docsScan.truncated),
-        indexed_files: input.docsScan.files.filter((file) => file.file_identity.language === "markdown").length,
-        eligible_files_seen: input.docsScan.files.length,
-        scan_truncated: input.docsScan.truncated,
+        state: coverageState(input.truncated),
+        indexed_files: input.docsIndexedFiles ?? input.docsPartition.eligible_markdown_files,
+        eligible_files_seen: input.docsPartition.eligible_markdown_files,
+        scan_truncated: input.truncated,
         indexed_roots: [...input.docsScan.indexed_roots],
         missing_priority_roots: DOCS_INDEX_ROOTS.filter((root) =>
-          !input.docsScan?.files.some((file) => file.path === root || file.path.startsWith(`${root}/`))
+          !input.docsScan.files.some((file) => file.path === root || file.path.startsWith(`${root}/`))
         ),
-        reason: input.docsScan.truncated
+        documentation_corpus_policy_version: input.docsPartition.policy_version,
+        policy_excluded_files: input.docsPartition.excluded_markdown_files,
+        policy_exclusions: [...input.docsPartition.exclusions],
+        reason: input.truncated
           ? "Docs index scan reached its file budget before covering all docs priority roots."
           : "Docs index scan covered docs priority roots independently from graph seed order."
-      };
-  return docsCoverage === undefined ? [graphCoverage] : [docsCoverage, graphCoverage];
+      } as IndexCoverage;
 }
 
 function extractionContinuationCursor(input: {

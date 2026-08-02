@@ -679,7 +679,7 @@ function searchResult(repoRoot: string, query: string): RankedDocsSearchResult {
     query,
     normalized_query: query,
     ranking_schema_version: 1,
-    ranking_policy_version: "authority-aware-v1",
+    ranking_policy_version: "authority-aware-v2",
     status: "done",
     trust_state: "complete_ranked_universe",
     universe_id: "universe-test",
@@ -699,8 +699,10 @@ function searchResult(repoRoot: string, query: string): RankedDocsSearchResult {
           candidate_source: "fts",
           concern_match_state: "no_match",
           matched_concerns: [],
+          governing_owner_priority: "non_owner",
           governing_owner_tier: "non_owner",
           final_rank_components: {
+            governing_owner_priority: "non_owner",
             relevance_band: "all_query_tokens_title_or_heading",
             governing_owner_tier: "non_owner",
             authority_tier: "canonical",
@@ -709,7 +711,7 @@ function searchResult(repoRoot: string, query: string): RankedDocsSearchResult {
             normalized_path: "docs/guide.md",
             stable_document_id: "docs/guide.md"
           },
-          ranking_policy_version: "authority-aware-v1",
+          ranking_policy_version: "authority-aware-v2",
           ranking_reasons: ["Fixture ranked result."]
     }],
     counts: {
@@ -720,6 +722,9 @@ function searchResult(repoRoot: string, query: string): RankedDocsSearchResult {
       candidate_union_documents_count: 1,
       ranked_candidate_universe_count: 1,
       returned_page_documents_count: 1,
+      documentation_corpus_policy_version: "production-docs-v1",
+      policy_excluded_files: 0,
+      policy_exclusions: [],
       priority_scan_eligible_markdown_files_count: 1,
       priority_scan_indexed_markdown_files_count: 1,
       priority_scan_skipped_markdown_files_count: 0,
@@ -753,6 +758,13 @@ function currentDocsResult(repoRoot: string, task: string): CurrentDocsForTaskUs
       repo_root: repoRoot,
       task,
       status: "needed",
+      documentation_corpus: {
+        policy_version: "production-docs-v1",
+        discovered_markdown_files: 1,
+        eligible_markdown_files: 1,
+        excluded_markdown_files: 0,
+        exclusions: []
+      },
       canonical_docs: [
         {
           path: "docs/guide.md",
@@ -942,6 +954,16 @@ async function seedDocsSnapshot(
       byte_count: Buffer.byteLength(selectedText, "utf8"),
       indexed_at: indexedAt,
       truncated: false
+    }],
+    coverage: [{
+      evidence_class: "docs",
+      state: "complete",
+      indexed_files: 1,
+      eligible_files_seen: 1,
+      scan_truncated: false,
+      documentation_corpus_policy_version: "production-docs-v1",
+      policy_excluded_files: 0,
+      policy_exclusions: []
     }]
   });
   await store.replaceSnapshotDocumentationConcerns({

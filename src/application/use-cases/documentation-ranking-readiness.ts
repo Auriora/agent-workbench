@@ -6,9 +6,12 @@
 import type {
   AnalysisValidity,
   DocumentationRankingReceipt,
+  IndexCoverage,
   ResponseMetadata
 } from "../../contracts/index.js";
 import type { DocumentationConcernIndexPort } from "../../ports/index.js";
+import type { DocsIndexPort } from "../../ports/index.js";
+import { DOCUMENTATION_CORPUS_POLICY_VERSION } from "../../domain/policies/index.js";
 
 export type DocumentationRankingReadiness = {
   receipt: DocumentationRankingReceipt;
@@ -20,9 +23,39 @@ export type DocumentationRankingReadiness = {
 /** Read and classify ranking readiness for exactly one selected snapshot. */
 export async function readDocumentationRankingReadiness(input: {
   snapshot_id: string;
+  repo_root?: string;
+  docs_index?: DocsIndexPort;
   documentation_concerns: DocumentationConcernIndexPort;
 }): Promise<DocumentationRankingReadiness> {
   try {
+    if (input.docs_index !== undefined && input.repo_root !== undefined) {
+      const docsState = await input.docs_index.getState({
+        repo_root: input.repo_root,
+        snapshot_id: input.snapshot_id
+      });
+      if (docsState.snapshot_id !== undefined && docsState.snapshot_id !== input.snapshot_id) {
+        return unavailableDocumentationRanking(
+          input.snapshot_id,
+          "refresh",
+          "Docs index state did not match the selected snapshot.",
+          "invalid_due_to_environment"
+        );
+      }
+      const corpusPolicy = docsCoverageCorpusPolicy(docsState.coverage?.find(({ evidence_class }) =>
+        evidence_class === "docs"
+      ));
+      if (corpusPolicy !== DOCUMENTATION_CORPUS_POLICY_VERSION) {
+        return unavailableDocumentationRanking(
+          input.snapshot_id,
+          "refresh",
+          corpusPolicy === undefined
+            ? "Selected snapshot docs coverage is missing documentation corpus policy identity."
+            : `Selected snapshot docs coverage uses documentation corpus policy '${corpusPolicy}', expected '${DOCUMENTATION_CORPUS_POLICY_VERSION}'.`,
+          "invalid_due_to_environment"
+        );
+      }
+    }
+
     const state = await input.documentation_concerns.getDocumentationConcernIndexState({
       snapshot_id: input.snapshot_id
     });
@@ -91,6 +124,12 @@ export async function readDocumentationRankingReadiness(input: {
       "invalid_due_to_environment"
     );
   }
+}
+
+function docsCoverageCorpusPolicy(coverage: IndexCoverage | undefined): string | undefined {
+  return (coverage as (IndexCoverage & {
+    documentation_corpus_policy_version?: unknown;
+  }) | undefined)?.documentation_corpus_policy_version as string | undefined;
 }
 
 export function mergeDocumentationRankingTrust(

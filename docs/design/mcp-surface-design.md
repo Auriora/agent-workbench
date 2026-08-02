@@ -445,15 +445,23 @@ callable narrower-scope `docs_search` action. No partial page is emitted from an
 incomplete universe.
 
 A complete union of at most 500 documents is ordered by one deterministic
-tuple: relevance band, governing-owner tier, authority, currency, optional raw
-lexical score, normalized path, then stable document ID. Relevance is
-established before ownership or authority, so a governing owner can reorder a
-comparably relevant set but an irrelevant canonical document cannot outrank an
-exact relevant result solely through authority. Valid and draft mapped owners
-receive the valid-owner tier while retaining truthful status; missing,
-archived, superseded, and conflicting owners retain bounded governance caveats
-and receive no valid-owner promotion. Multiple owners are valid by themselves;
-conflict requires a mapped document whose `canonical_owner` names another path.
+`authority-aware-v2` tuple: governing-owner priority, relevance band,
+governing-owner tier, authority, currency, optional raw lexical score,
+normalized path, then stable document ID. For an exactly matched concern, its
+current canonical owner ranks before other valid owners and before non-owner
+lexical mentions. Invalid, excluded, archived, superseded, and conflicting
+owners retain bounded governance caveats and receive no valid-owner promotion.
+Multiple owners are valid by themselves; conflict requires a mapped document
+whose `canonical_owner` names another path.
+
+One versioned `production-docs-v1` corpus policy runs before documentation
+content reads. Markdown below `tests/fixtures/<fixture-root>/` is excluded when
+the containing product is selected, with aggregate reason `embedded_fixture`;
+the same paths are ordinary root-relative documents when that fixture root is
+selected directly. Snapshot indexing, `docs_current_for_task`,
+`repo:///docs/overview`, and `repo:///docs/map` use this same policy. Receipts
+conserve discovered as eligible plus excluded Markdown and never expose
+excluded content.
 
 Before returning page one, the route persists the complete ordered universe and
 its count receipt for 15 minutes. The cursor authenticates universe ID, next
@@ -487,7 +495,9 @@ If no valid snapshot can be selected for a valid request, `docs_search` returns
 the snapshot-less `selected_snapshot_unavailable` blocker and a
 `repo:///status` action; it never fabricates snapshot identity. An unavailable
 or incompatible concern/ranking index returns `ranking_unavailable` and the
-same status route. If same-snapshot terms or owners become unavailable after
+same status route. Missing or mismatched `production-docs-v1` snapshot coverage
+blocks before concern or candidate reads and adds a `documentation_ranking`
+receipt with `recovery: refresh`. If same-snapshot terms or owners become unavailable after
 readiness admission, the route returns `ranking_environment_unavailable` with
 environment-invalid trust, zero hits/actions, and no fabricated recovery; a
 status read may still hold the earlier ready receipt. An expired/missing frozen universe returns
@@ -525,9 +535,9 @@ workspace escapes and generated/vendor paths through structured blocked
 responses rather than best-effort reads.
 
 `repo:///docs/overview`, `repo:///docs/map`, `docs_outline`, and
-`docs_read_section` remain direct scanner/read surfaces. The docs overview and
-map resources accept the same `scope_path` prefix for bounded documentation
-subtree inventories. They are separate from the FTS search hot path because
+`docs_read_section` remain direct scanner/read surfaces. Overview and map apply
+the production corpus before reads and accept the same `scope_path` prefix for
+bounded documentation subtree inventories. They are separate from the FTS search hot path because
 outline and section reads are precise direct evidence rather than search
 ranking evidence. Documentation crosslink graphs, broad docs reports, and
 generated architecture answers remain post-MVP.

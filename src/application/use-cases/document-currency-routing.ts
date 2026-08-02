@@ -7,9 +7,12 @@ import { createHash } from "node:crypto";
 import type { DocumentReference, DocsDocument, DocsSearchHit } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import {
+  classifyDocumentationCorpusPath,
   classifyMarkdownDocCurrency,
   classifyDocumentationConcernOwner,
   parseDocumentationConcernMap,
+  type DocumentationCorpusDecision,
+  type DocumentationCorpusExclusionReason,
   type DocumentationMapOwnerSignal,
   type MarkdownDocCurrencySignal
 } from "../../domain/policies/index.js";
@@ -47,6 +50,7 @@ export type DocumentationConcernIndexEvidence = {
 export async function extractDocumentationConcernIndex(input: {
   workspace: WorkspaceFilePort;
   content_by_path?: ReadonlyMap<string, string>;
+  corpus_decisions?: ReadonlyMap<string, DocumentationCorpusDecision>;
 }): Promise<DocumentationConcernIndexEvidence> {
   let mapStat: Awaited<ReturnType<WorkspaceFilePort["stat"]>>;
   try {
@@ -95,6 +99,21 @@ export async function extractDocumentationConcernIndex(input: {
     truncated: false
   }]]);
   for (const mappedPath of [...new Set(parsed.owners.map(({ mapped_owner_path }) => mapped_owner_path))].sort()) {
+    const corpusDecision = documentationCorpusDecisionForPath({
+      path: mappedPath,
+      decisions: input.corpus_decisions
+    });
+    if ("invalid" in corpusDecision) {
+      return invalidConcernIndex(corpusDecision.failure_reason, contentHash);
+    }
+    if (corpusDecision.status === "excluded") {
+      ownerEvidenceByPath.set(mappedPath, excludedOwnerEvidence({
+        mapped_owner_path: mappedPath,
+        exclusion_reason: corpusDecision.reason
+      }));
+      continue;
+    }
+
     let stat: Awaited<ReturnType<WorkspaceFilePort["stat"]>>;
     try {
       stat = await input.workspace.stat({ path: mappedPath });
@@ -196,6 +215,33 @@ export function boundedDocumentationOwnerClassificationContent(input: {
       : { content: boundedPrefix };
   }
   return { content: boundedPrefix };
+}
+
+function documentationCorpusDecisionForPath(input: {
+  path: string;
+  decisions?: ReadonlyMap<string, DocumentationCorpusDecision>;
+}): DocumentationCorpusDecision | { invalid: true; failure_reason: string } {
+  const existing = input.decisions?.get(input.path);
+  if (existing !== undefined) return existing;
+  try {
+    return classifyDocumentationCorpusPath(input.path);
+  } catch (error) {
+    return {
+      invalid: true,
+      failure_reason: error instanceof Error ? error.message : "Documentation corpus classification failed."
+    };
+  }
+}
+
+function excludedOwnerEvidence(input: {
+  mapped_owner_path: string;
+  exclusion_reason: DocumentationCorpusExclusionReason;
+}): Omit<DocumentationConcernOwnerWrite, "concern_key" | "source_line"> {
+  return {
+    mapped_owner_path: input.mapped_owner_path,
+    owner_state: "excluded",
+    exclusion_reason: input.exclusion_reason
+  } as Omit<DocumentationConcernOwnerWrite, "concern_key" | "source_line">;
 }
 
 function findClosingFrontmatterDelimiterEnd(content: string, firstLineEnd: number): number | undefined {

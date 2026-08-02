@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import { searchRankedDocs } from "../../src/application/use-cases/query-docs.js";
 import { getSnapshotRepoStatus } from "../../src/application/use-cases/get-repo-status.js";
-import type { DocumentationConcernIndexPort } from "../../src/ports/index.js";
+import type { DocsIndexPort, DocumentationConcernIndexPort } from "../../src/ports/index.js";
 import { docsSearchTool } from "../../src/interface-adapters/mcp/registries/tools/docs-search.js";
 import { repoStatusResource } from "../../src/interface-adapters/mcp/registries/resources/repo-status.js";
 import { createDocsRankingCursorCodec } from "../../src/infrastructure/runtime/index.js";
@@ -117,6 +117,118 @@ describe("docs_search status recovery chain", () => {
     );
   });
 
+  it("exposes refresh recovery when selected snapshot coverage lacks corpus policy identity", async () => {
+    const concerns = concernPort(async () => {
+      throw new Error("concern evidence must not be read before corpus readiness");
+    });
+    const search = registerMcpTool(docsSearchTool, {
+      repoRoot: "/repo",
+      searchRankedDocs: ({ request }) => searchRankedDocs({
+        request,
+        selected_snapshot_id: "snapshot-stable",
+        docs_index: {
+          ...currentDocsIndex(),
+          async getState() {
+            return {
+              repo_root: "/repo",
+              snapshot_id: "snapshot-stable",
+              freshness: "fresh" as const,
+              status: "usable" as const,
+              document_count: 0,
+              coverage: [{
+                evidence_class: "docs" as const,
+                state: "complete" as const,
+                indexed_files: 0,
+                eligible_files_seen: 0,
+                scan_truncated: false
+              }]
+            };
+          }
+        },
+        documentation_concerns: concerns,
+        ranking_candidates: blockedAfterReadiness("ranking candidates"),
+        ranking_cursor_codec: createDocsRankingCursorCodec({ key: Buffer.alloc(32, 8) }),
+        ranked_universes: blockedAfterReadiness("ranked universes"),
+        default_repo_root: "/repo",
+        now_iso8601: "2026-07-21T12:00:00.000Z",
+        universe_id: "unreachable"
+      })
+    });
+
+    const envelope = JSON.parse((await search.handler({ query: "runtime" })).content[0]!.text);
+
+    expect(envelope.data).toMatchObject({
+      snapshot_id: "snapshot-stable",
+      status: "blocked",
+      blocker: "ranking_unavailable",
+      documentation_ranking: {
+        snapshot_id: "snapshot-stable",
+        state: "unavailable",
+        recovery: "refresh",
+        authority_map: "unknown",
+        reason: expect.stringContaining("missing documentation corpus policy identity")
+      },
+      hits: []
+    });
+
+    const status = registerMcpResource(repoStatusResource, {
+      repoRoot: "/repo",
+      getRepoStatus: ({ repo_root }) => getSnapshotRepoStatus({
+        repo_root,
+        selected_snapshot_id: "snapshot-stable",
+        snapshots: {
+          async getSnapshot() {
+            return {
+              id: "snapshot-stable", repo_root: "/repo", workspace_root: "/repo",
+              repo_identity: "repo", config_identity: "config", schema_version: 1,
+              freshness: "fresh", analysis_validity: "valid", owner_state: "owner",
+              created_at: "2026-07-21T12:00:00.000Z", updated_at: "2026-07-21T12:00:00.000Z"
+            };
+          },
+          async listSnapshots() { return []; }, async upsertSnapshot() {}, async markSnapshotFreshness() {}
+        },
+        catalog: {
+          async listFiles() { return []; }, async getFile() { return null; },
+          async upsertEntry() {}, async removeEntry() {}
+        },
+        docs_index: {
+          ...currentDocsIndex(),
+          async getState() {
+            return {
+              repo_root: "/repo",
+              snapshot_id: "snapshot-stable",
+              freshness: "fresh" as const,
+              status: "usable" as const,
+              document_count: 0,
+              coverage: [{
+                evidence_class: "docs" as const,
+                state: "complete" as const,
+                indexed_files: 0,
+                eligible_files_seen: 0,
+                scan_truncated: false
+              }]
+            };
+          }
+        },
+        documentation_concerns: concerns,
+        refresh_triggers: blockedAfterReadiness("refresh trigger")
+      })
+    });
+    const statusEnvelope = JSON.parse((await status.handler({ uri: "repo:///status" })).contents[0]!.text);
+    expect(statusEnvelope).toMatchObject({
+      data: {
+        snapshot_id: "snapshot-stable",
+        documentation_ranking: {
+          snapshot_id: "snapshot-stable",
+          state: "unavailable",
+          recovery: "refresh",
+          reason: expect.stringContaining("missing documentation corpus policy identity")
+        }
+      },
+      meta: { verification_status: "blocked" }
+    });
+  });
+
   it("maps a readiness-state throw to environment repair through the emitted status action", async () => {
     const concerns = concernPort(async () => {
       throw new Error("database locked at /home/example/private.sqlite token=secret");
@@ -208,7 +320,7 @@ describe("docs_search status recovery chain", () => {
         searchRankedDocs: ({ request }) => searchRankedDocs({
           request,
           selected_snapshot_id: "snapshot-stable",
-          docs_index: blockedAfterReadiness("docs index"),
+          docs_index: currentDocsIndex(),
           documentation_concerns: concerns,
           ranking_candidates: blockedAfterReadiness("ranking candidates"),
           ranking_cursor_codec: createDocsRankingCursorCodec({ key: Buffer.alloc(32, 6) }),
@@ -251,6 +363,34 @@ function concernPort(
     getDocumentationConcernIndexState: getState,
     async listDocumentationConcernTerms() { throw new Error("terms must not be read"); },
     async listDocumentationConcernOwners() { throw new Error("owners must not be read"); }
+  };
+}
+
+function currentDocsIndex(): DocsIndexPort {
+  return {
+    async replaceSnapshotDocs() {},
+    async getState() {
+      return {
+        repo_root: "/repo",
+        snapshot_id: "snapshot-stable",
+        freshness: "fresh",
+        status: "usable",
+        document_count: 0,
+        coverage: [{
+          evidence_class: "docs",
+          state: "complete",
+          indexed_files: 0,
+          eligible_files_seen: 0,
+          scan_truncated: false,
+          documentation_corpus_policy_version: "production-docs-v1",
+          policy_excluded_files: 0,
+          policy_exclusions: []
+        }]
+      };
+    },
+    async search() {
+      throw new Error("legacy docs search must not run");
+    }
   };
 }
 

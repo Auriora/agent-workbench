@@ -119,7 +119,8 @@ watcher or scan event
 - `documentation_concern_owners`: the complete one-to-many concern/owner
   relation, stable document identity when present, source line, and the
   exhaustive `valid`, `draft`, `missing`, `archived`, `superseded`, or
-  `conflicting` owner state.
+  `conflicting` owner state. Policy-excluded mapped owners use `excluded`, a
+  bounded exclusion reason, and no document identity.
 - `ranked_docs_universes` and `ranked_docs_universe_hits`: immutable ordered
   documentation-search universes, their identity and count receipt, canonical
   creation/expiry times, stable document IDs, and frozen hit evidence.
@@ -424,18 +425,28 @@ normalization. Query resolution is exact: multi-token terms match contiguous
 normalized phrases and single-token terms match equal query tokens. The runtime
 never derives synonyms or broad-reads the map during a query.
 
+The docs `snapshot_index_coverage` row records
+`documentation_corpus_policy_version`, `policy_excluded_files`, and bounded
+`policy_exclusions`. `production-docs-v1` admits root-relative Markdown except
+embedded product fixtures under `tests/fixtures/<fixture-root>/`. The stored
+eligible and excluded counts describe the same partition used to write
+`docs_documents`.
+
 Candidate retrieval unions bounded FTS evidence with every repository-present,
 in-scope owner of an exactly matched concern. SQLite supplies candidates and
 lexical evidence but does not assign authority or final rank. The application
-policy establishes relevance first, then governing-owner tier, authority,
-currency, optional lexical score, normalized path, and stable document ID.
+policy establishes governing-owner priority first, then relevance,
+governing-owner tier, authority, currency, optional lexical score, normalized
+path, and stable document ID.
 Invalid or non-governing owner states retain their caveats and never receive a
 valid-owner promotion.
 
 Before page one, the runtime persists the complete ordered hit set and count
 receipt in `ranked_docs_universes` and `ranked_docs_universe_hits`. Identity
 binds the snapshot, normalized query, normalized optional scope, retrieval bound
-500, ranking schema version 1, and policy `authority-aware-v1`. The universe
+500, ranking schema version 1, and policy `authority-aware-v2`. Migration drops
+v1 transient universe/hit rows and recreates their policy constraint without
+altering graph, docs, or concern evidence. The universe
 expires after 15 minutes and never outlives its snapshot. Continuations load it
 by ID and position; missing, expired, cardinality-inconsistent, or
 identity-mismatched state blocks instead of rebuilding or restarting the search.

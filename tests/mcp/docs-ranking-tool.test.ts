@@ -128,7 +128,7 @@ describe("ranked docs_search MCP tool", () => {
       version: 1, universe_id: "universe-043", next_position: 10,
       snapshot_id: "snapshot-043", normalized_query: "runtime",
       retrieval_bound: 500, ranking_schema_version: 1,
-      ranking_policy_version: "authority-aware-v1"
+      ranking_policy_version: "authority-aware-v2"
     });
     expect(codec.decode(cursor)).toMatchObject({ ok: true, payload: { next_position: 10 } });
     expect(createDocsRankingCursorCodec({ key, key_epoch: "epoch-b" }).decode(cursor))
@@ -163,7 +163,7 @@ describe("ranked docs_search MCP tool", () => {
         query: "secret raw query",
         normalized_query: "secret raw query",
         ranking_schema_version: 1,
-        ranking_policy_version: "authority-aware-v1",
+        ranking_policy_version: "authority-aware-v2",
         status: "blocked",
         trust_state: trustState,
         blocker,
@@ -180,13 +180,16 @@ function emptyResult(request: DocsSearchRequest): RankedDocsSearchResult {
   return {
     ranking_contract_version: 1, repo_root: request.repo_root ?? "/repo", snapshot_id: "snapshot-043",
     query: request.query, normalized_query: request.query, ranking_schema_version: 1,
-    ranking_policy_version: "authority-aware-v1", status: "not_applicable",
+    ranking_policy_version: "authority-aware-v2", status: "not_applicable",
     trust_state: "complete_ranked_universe", universe_id: "universe-043", hits: [],
     counts: {
       searchable_snapshot_documents_count: 1, searchable_scope_documents_count: 1,
       fts_candidate_documents_count: 0, matched_owner_candidate_documents_count: 0,
       candidate_union_documents_count: 0, ranked_candidate_universe_count: 0,
-      returned_page_documents_count: 0, priority_scan_eligible_markdown_files_count: 1,
+      returned_page_documents_count: 0,
+      documentation_corpus_policy_version: "production-docs-v1",
+      policy_excluded_files: 0, policy_exclusions: [],
+      priority_scan_eligible_markdown_files_count: 1,
       priority_scan_indexed_markdown_files_count: 1, priority_scan_skipped_markdown_files_count: 0,
       priority_scan_coverage_state: "complete", priority_scan_truncated: false,
       searchable_filter_basis: "merged_graph_and_priority_markdown", scope_filter_basis: "repo_root",

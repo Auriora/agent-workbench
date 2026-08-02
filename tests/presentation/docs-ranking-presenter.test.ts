@@ -256,7 +256,7 @@ function base() {
     query: "runtime contracts",
     normalized_query: "runtime contracts",
     ranking_schema_version: 1 as const,
-    ranking_policy_version: "authority-aware-v1" as const,
+    ranking_policy_version: "authority-aware-v2" as const,
     warnings: [],
     next_actions: []
   };
@@ -306,6 +306,9 @@ function countBase(page: number) {
     fts_candidate_documents_count: page, matched_owner_candidate_documents_count: 0,
     candidate_union_documents_count: page, ranked_candidate_universe_count: page,
     returned_page_documents_count: page,
+    documentation_corpus_policy_version: "production-docs-v1" as const,
+    policy_excluded_files: 0,
+    policy_exclusions: [],
     priority_scan_eligible_markdown_files_count: 10,
     priority_scan_indexed_markdown_files_count: 10,
     priority_scan_skipped_markdown_files_count: 0,
@@ -330,13 +333,14 @@ function hit(path: string, score: number, lexicalScore: number): RankedDocsSearc
     path, title: path, score, lexical_score: lexicalScore, evidence_kinds: ["docs", "fts"],
     direct_read_caveat: "Read the source section.", authority: "canonical", currency_state: "current",
     currency_caveats: [], candidate_source: "fts", concern_match_state: "no_match",
-    matched_concerns: [], governing_owner_tier: "non_owner",
+    matched_concerns: [], governing_owner_priority: "non_owner", governing_owner_tier: "non_owner",
     final_rank_components: {
+      governing_owner_priority: "non_owner",
       relevance_band: "all_query_tokens_body", governing_owner_tier: "non_owner",
       authority_tier: "canonical", currency_tier: "current", lexical_score: lexicalScore,
       normalized_path: path, stable_document_id: path
     },
-    ranking_policy_version: "authority-aware-v1", ranking_reasons: ["Frozen rank fixture."]
+    ranking_policy_version: "authority-aware-v2", ranking_reasons: ["Frozen rank fixture."]
   };
 }
 
@@ -352,12 +356,13 @@ function ownerHit(): RankedDocsSearchHit {
       query_token_start: 0, query_token_end_exclusive: 2, token_count: 2,
       owners: [{ document_id: path, path, state: "valid" }]
     }],
-    governing_owner_tier: "valid_owner",
+    governing_owner_priority: "current_canonical_owner", governing_owner_tier: "valid_owner",
     final_rank_components: {
+      governing_owner_priority: "current_canonical_owner",
       relevance_band: "intent_owner_match", governing_owner_tier: "valid_owner",
       authority_tier: "canonical", currency_tier: "current", normalized_path: path,
       stable_document_id: path
     },
-    ranking_policy_version: "authority-aware-v1", ranking_reasons: ["Owner fixture."]
+    ranking_policy_version: "authority-aware-v2", ranking_reasons: ["Owner fixture."]
   };
 }

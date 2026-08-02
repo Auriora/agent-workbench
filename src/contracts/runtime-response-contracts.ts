@@ -21,6 +21,7 @@ import {
   verificationStatusSchema
 } from "./runtime-core-contracts.js";
 import { referenceCoverageReceiptSchema } from "./runtime-graph-contracts.js";
+import { documentationCorpusExclusionSchema } from "./runtime-docs-contracts.js";
 
 export const scopeMetadataSchema = z.object({
   repo_root: z.string(),
@@ -69,9 +70,50 @@ export const indexCoverageSchema = z
     continuation_cursor: z.string().optional(),
     indexed_roots: z.array(z.string()).optional(),
     missing_priority_roots: z.array(z.string()).optional(),
+    documentation_corpus_policy_version: z.literal("production-docs-v1").optional(),
+    policy_excluded_files: z.number().int().nonnegative().optional(),
+    policy_exclusions: z.array(documentationCorpusExclusionSchema).max(8).optional(),
     reason: z.string().optional()
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    const hasAnyPolicyField =
+      value.documentation_corpus_policy_version !== undefined ||
+      value.policy_excluded_files !== undefined ||
+      value.policy_exclusions !== undefined;
+    const hasAllPolicyFields =
+      value.documentation_corpus_policy_version !== undefined &&
+      value.policy_excluded_files !== undefined &&
+      value.policy_exclusions !== undefined;
+    if (hasAnyPolicyField && !hasAllPolicyFields) {
+      context.addIssue({
+        code: "custom",
+        message: "Documentation corpus coverage requires policy version, excluded count, and exclusions together."
+      });
+      return;
+    }
+    const policyExclusions = value.policy_exclusions;
+    if (!hasAllPolicyFields || value.policy_excluded_files === undefined || policyExclusions === undefined) {
+      return;
+    }
+    if (value.evidence_class !== "docs") {
+      context.addIssue({
+        code: "custom",
+        message: "Documentation corpus coverage fields are only valid for docs evidence."
+      });
+    }
+    const reasons = policyExclusions.map(({ reason }) => reason);
+    if (new Set(reasons).size !== reasons.length) {
+      context.addIssue({ code: "custom", message: "Documentation corpus coverage exclusions must be reason-deduplicated." });
+    }
+    const excluded = policyExclusions.reduce((sum, exclusion) => sum + exclusion.count, 0);
+    if (excluded !== value.policy_excluded_files) {
+      context.addIssue({
+        code: "custom",
+        message: "Documentation corpus coverage exclusion counts must exhaust policy_excluded_files."
+      });
+    }
+  });
 export type IndexCoverage = z.infer<typeof indexCoverageSchema>;
 
 export const trustUseSchema = z.enum([

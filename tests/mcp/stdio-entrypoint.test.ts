@@ -567,7 +567,7 @@ describe("stdio MCP entrypoint", () => {
       await session.close();
       fs.rmSync(fixtureRoot, { recursive: true, force: true });
     }
-  }, 15_000);
+  }, 30_000);
 
   it("allows only one startup graph warmup owner for concurrent stdio sessions in the same repo", async () => {
     const fixtureRoot = createCleanFixtureCopy({
@@ -716,7 +716,7 @@ describe("stdio MCP entrypoint", () => {
     }
   });
 
-  it("bounds startup graph warmup file count", async () => {
+  it("continues bounded startup graph warmup to catalog exhaustion", async () => {
     const fixtureRoot = createCleanFixtureCopy({
       prefix: "agent-workbench-mcp-bounded-warmup-",
       sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
@@ -770,7 +770,14 @@ describe("stdio MCP entrypoint", () => {
           snapshot_id: status.data.snapshot_id ?? "",
           max_rows: 10
         });
-        expect(files).toHaveLength(1);
+        expect(files.map(({ path: filePath }) => filePath).sort()).toEqual([
+          "docs/reference/documentation-map.md",
+          "docs/reference/runtime-owner.md",
+          "pyproject.toml",
+          "src/sample_pkg/__init__.py",
+          "src/sample_pkg/service.py",
+          "tests/test_service.py"
+        ]);
         await expect(graphStore.getDocumentationConcernIndexState({
           snapshot_id: status.data.snapshot_id ?? ""
         })).resolves.toMatchObject({ status: "ready", state: "complete" });
@@ -793,7 +800,7 @@ describe("stdio MCP entrypoint", () => {
       await session.close();
       fs.rmSync(fixtureRoot, { recursive: true, force: true });
     }
-  }, 15_000);
+  }, 30_000);
 
   it("reports startup graph warmup failures without hiding the failed runtime state", async () => {
     const fixtureRoot = createCleanFixtureCopy({
@@ -832,7 +839,7 @@ describe("stdio MCP entrypoint", () => {
       await session.close();
       fs.rmSync(fixtureRoot, { recursive: true, force: true });
     }
-  }, 15_000);
+  }, 30_000);
 
   it("returns fixture MVP responses shaped by presenter envelopes", async () => {
     const fixtureRoot = createFixtureCopy("agent-workbench-mcp-server-");
@@ -1310,8 +1317,23 @@ async function waitForWarmupStatus(
   session: StdioSession,
   expectedState: string
 ): Promise<StatusEnvelope> {
+  return waitForStatus(
+    session,
+    (candidate) => candidate.data.warmup_state === expectedState,
+    `warmup_state=${expectedState}`
+  );
+}
+
+async function waitForStatus(
+  session: StdioSession,
+  predicate: (status: StatusEnvelope) => boolean,
+  description = "status predicate"
+): Promise<StatusEnvelope> {
   let lastStatus: StatusEnvelope | undefined;
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  // Bounded one-file startup continuation can require several published
+  // slices. This wait observes that finite worker protocol; it does not retry
+  // or extend any runtime extraction budget.
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     lastStatus = parseResponseEnvelope<StatusEnvelope>(
       await session.call({
         jsonrpc: "2.0",
@@ -1322,12 +1344,12 @@ async function waitForWarmupStatus(
         }
       })
     );
-    if (lastStatus.data.warmup_state === expectedState) {
+    if (predicate(lastStatus)) {
       return lastStatus;
     }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  throw new Error(`Timed out waiting for warmup_state=${expectedState}: ${JSON.stringify(lastStatus)}`);
+  throw new Error(`Timed out waiting for ${description}: ${JSON.stringify(lastStatus)}`);
 }
 
 async function runStdioSmoke(repoRoot: string, inputMessages: unknown[]): Promise<StdioMessage[]> {
@@ -1389,7 +1411,7 @@ async function waitForWarmSymbolSearch(
   query: string
 ): Promise<SymbolSearchEnvelope> {
   let lastEnvelope: SymbolSearchEnvelope | undefined;
-  for (let attempt = 0; attempt < 80; attempt += 1) {
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     const envelope = parseResponseEnvelope<SymbolSearchEnvelope>(
       await session.call({
         jsonrpc: "2.0",

@@ -26,6 +26,34 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
+## 2026-08-02: Production Documentation Corpus And Owner Priority
+
+### Agent-Visible Changes
+
+- Documentation inventory surfaces exclude embedded fixture Markdown from the
+  containing product while retaining those documents when the fixture itself
+  is selected as repository root.
+- Exact documentation concerns now rank their current canonical owner before
+  supporting documents with stronger lexical repetition.
+
+### Contract Changes
+
+- Corpus receipts use `production-docs-v1` and conserve discovered, eligible,
+  and excluded Markdown with bounded `embedded_fixture` attribution.
+- Ranked search uses `authority-aware-v2`, exposes
+  `governing_owner_priority`, and blocks old policy snapshots with a refresh
+  receipt. V1 transient ranked universes do not cross the migration.
+
+### Required Agent Behavior Changes
+
+- Use returned order and corpus receipts; do not treat fixture documentation or
+  lexical score as authority over an exact governing owner.
+
+### Migration Notes
+
+- Refresh repositories indexed before `production-docs-v1`. This is source
+  implementation evidence; installed-runtime acceptance is still pending.
+
 ## 2026-08-02: Rails Dogfood Follow-Up
 
 ### Agent-Visible Changes

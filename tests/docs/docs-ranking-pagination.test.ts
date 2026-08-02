@@ -774,7 +774,8 @@ function legacyOverflowIndex(scenario: OverflowScenario): DocsIndexPort {
         snapshot_id: "snapshot-043",
         freshness: "fresh" as const,
         status: "usable" as const,
-        document_count: 501
+        document_count: 501,
+        coverage: [currentDocsCoverage(501)]
       };
     },
     async search() {
@@ -897,7 +898,8 @@ function rankedUniverseProofHarness(options: {
           snapshot_id: "snapshot-043",
           freshness: "fresh" as const,
           status: "usable" as const,
-          document_count: expectedFrozenOrder.length
+          document_count: expectedFrozenOrder.length,
+          coverage: [currentDocsCoverage(expectedFrozenOrder.length)]
         };
       },
       async search(input) {
@@ -990,6 +992,19 @@ function docsHit(hitPath: string): DocsSearchHit {
     authority: "canonical",
     currency_state: "current",
     currency_caveats: []
+  };
+}
+
+function currentDocsCoverage(indexedFiles: number) {
+  return {
+    evidence_class: "docs" as const,
+    state: "complete" as const,
+    indexed_files: indexedFiles,
+    eligible_files_seen: indexedFiles,
+    scan_truncated: false,
+    documentation_corpus_policy_version: "production-docs-v1" as const,
+    policy_excluded_files: 0,
+    policy_exclusions: []
   };
 }
 
@@ -1134,8 +1149,10 @@ function rankedDocsHit(hitPath: string, index: number, lexicalScore = 10 - index
     candidate_source: "fts",
     concern_match_state: "no_match",
     matched_concerns: [],
+    governing_owner_priority: "non_owner",
     governing_owner_tier: "non_owner",
     final_rank_components: {
+      governing_owner_priority: "non_owner",
       relevance_band: "all_query_tokens_body",
       governing_owner_tier: "non_owner",
       authority_tier: "canonical",

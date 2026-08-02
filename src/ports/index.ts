@@ -43,6 +43,7 @@ import type {
   DiagnosticsProviderStatus,
   DocsDocument,
   DocsHeading,
+  DocumentationCorpusExclusionReason,
   DocumentationConcernOwnerState,
   DocsRankingCountReceipt,
   DocsRankingCursorPayload,
@@ -459,6 +460,7 @@ export type DocumentationConcernOwnerWrite = {
   document_id?: string;
   owner_state: DocumentationConcernOwnerState;
   source_line: number;
+  exclusion_reason?: DocumentationCorpusExclusionReason;
   superseded_by?: string;
   declared_canonical_owner?: string;
 };

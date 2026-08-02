@@ -2289,8 +2289,8 @@ Do not promote an item when:
 ### EB064: Production Documentation Corpus Isolation And Governing-Owner Priority
 
 - Priority: P1
-- Status: proposed; discovered during Codex dogfood on installed runtime
-  `0.6.1` against fresh snapshot `1784672461549`
+- Status: delivered in source through Spec 052; installed-runtime acceptance
+  remains to be recorded after package installation
 - Friction signal: `docs_search` returned `complete_ranked_universe` for
   `rule governing SessionStart behavior`, but ranked the draft/supporting
   dogfood ledger and backlog ahead of the current/canonical governing owner at
@@ -2322,11 +2322,13 @@ Do not promote an item when:
   - Add a fixture-root regression proving the same fixture documentation is
     indexed normally when the fixture root is opened as the repository, so
     corpus isolation cannot erase fixture-backed documentation tests.
-- Promotion target: promote corpus isolation and governing-owner priority
-  together into one focused documentation-ranking spec under EB018, EB054, and
-  EB060. Promote the accepted policy to the documentation map, MCP surface
-  design, runtime contracts, graph-store design, and proof matrix; do not fold
-  EB059 universe-capacity policy into that spec.
+- Delivery: `production-docs-v1` now isolates embedded fixture Markdown across
+  snapshot and live documentation surfaces, receipts conserve and attribute
+  exclusions, excluded mapped owners cannot become candidates, and
+  `authority-aware-v2` ranks an exact concern's current canonical owner first.
+  Old/missing policy snapshots require refresh and v1 transient universes are
+  invalidated. EB059 universe capacity and EB065 presentation compaction remain
+  separate.
 
 ### EB065: Validation-Plan Skipped-Path Payload Compaction
 
@@ -2431,10 +2433,6 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-- Promote EB064 next as one focused documentation-ranking spec. Establish
-  production-versus-fixture corpus eligibility before further ranking tuning,
-  then prove the governing SessionStart owner precedes draft/supporting mention
-  evidence on a complete ranked universe.
 - Schedule EB065 independently as a bounded validation-plan presentation repair;
   it must preserve the five-gate plan and material exclusions while compressing
   routine skipped paths.

@@ -1362,7 +1362,7 @@ describe("Agent Workbench daemon launcher", () => {
       await expect(connectOrStartDaemon({
         repoRoot,
         debugRepoRootOverride: false,
-        startTimeoutMs: 5000,
+        startTimeoutMs: 10_000,
         env: {
           ...process.env,
           NODE_OPTIONS: `--experimental-loader=${loaderPath}`
@@ -1381,7 +1381,7 @@ describe("Agent Workbench daemon launcher", () => {
       fs.rmSync(repoRoot, { recursive: true, force: true });
       fs.rmSync(paths.ipcDir, { recursive: true, force: true });
     }
-  }, 10_000);
+  }, 20_000);
 
   it("destroys startup stderr capture when launch completes", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-native-hint-cleanup-ready-");

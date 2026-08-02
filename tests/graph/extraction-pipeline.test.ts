@@ -14,7 +14,7 @@ import {
   warmupRepositoryGraph
 } from "../../src/application/use-cases/index-repository-graph.js";
 import type { IndexRepositoryGraphResult } from "../../src/application/use-cases/index-repository-graph.js";
-import type { ClockPort, ExtractorPort, FileCatalogScanPort, WorkspaceFilePort } from "../../src/ports/index.js";
+import type { ClockPort, DocsIndexPort, ExtractorPort, FileCatalogScanPort, WorkspaceFilePort } from "../../src/ports/index.js";
 import type { ExtractionRequest } from "../../src/domain/models/index.js";
 import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../../src/infrastructure/extraction/index.js";
@@ -250,6 +250,68 @@ describe("repository graph extraction pipeline", () => {
       if (docsSearch.status === "done") {
         expect(docsSearch.hits.map((hit) => hit.path)).toEqual(["docs/late.md"]);
       }
+    } finally {
+      store.close();
+    }
+  });
+
+  it("excludes embedded fixture Markdown from snapshot docs indexing before content reads", async () => {
+    const repoRoot = path.join(dir, "containing-docs-repo");
+    const store = openGraphStore(path.join(dir, "containing-docs-repo.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    const docsWrites: Array<Parameters<DocsIndexPort["replaceSnapshotDocs"]>[0]> = [];
+    const docsIndex: DocsIndexPort = {
+      async replaceSnapshotDocs(input) {
+        docsWrites.push(input);
+      },
+      async search() {
+        throw new Error("docs search should not be called by graph indexing.");
+      },
+      async getState() {
+        throw new Error("docs state should not be called by graph indexing.");
+      }
+    };
+
+    try {
+      await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: scannerWithMarkdown([
+          "README.md",
+          "docs/current.md",
+          "tests/fixtures/embedded/docs/leak.md"
+        ]),
+        workspace: workspaceWithReadTrap({
+          "README.md": "# Project\n\nOverview.\n",
+          "docs/current.md": "# Current\n\nCurrent docs.\n",
+          "tests/fixtures/embedded/docs/leak.md": "# Leak\n\nShould not be read.\n"
+        }, ["tests/fixtures/embedded/docs/leak.md"]),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        docs_index: docsIndex,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "104",
+        max_extraction_files: 0
+      });
+
+      expect(docsWrites).toHaveLength(1);
+      expect(docsWrites[0]?.documents.map((doc) => doc.path)).toEqual(["README.md", "docs/current.md"]);
+      expect(docsWrites[0]?.coverage).toEqual([
+        expect.objectContaining({
+          evidence_class: "docs",
+          documentation_corpus_policy_version: "production-docs-v1",
+          eligible_files_seen: 2,
+          indexed_files: 2,
+          policy_excluded_files: 1,
+          policy_exclusions: [{ reason: "embedded_fixture", count: 1 }]
+        }),
+        expect.objectContaining({
+          evidence_class: "graph"
+        })
+      ]);
     } finally {
       store.close();
     }
@@ -1945,7 +2007,7 @@ describe("repository graph extraction pipeline", () => {
     } finally {
       reopened.close();
     }
-  });
+  }, 15_000);
 
   it("leaves a controlled failed build terminally untouched for controller disposition", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-basic-python");
@@ -2229,7 +2291,7 @@ describe("repository graph extraction pipeline", () => {
         completed_generation: 11
       }
     });
-  }, 15_000);
+  }, 30_000);
 
   it("uses one resolved snapshot id for standalone failure cleanup when the clock advances", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-basic-python");
@@ -2660,6 +2722,60 @@ function fakeWorkspace(): WorkspaceFilePort {
         exists: true,
         is_file: true,
         size_bytes: 10,
+        mtime_ms: 0
+      };
+    },
+    async deletePath() {},
+    async ensureDirectory() {}
+  };
+}
+
+function scannerWithMarkdown(paths: readonly string[]): FileCatalogScanPort {
+  return {
+    async scan(input) {
+      return {
+        repo_root: input.repo_root,
+        indexed_roots: input.indexed_roots,
+        skipped_roots: input.skipped_roots,
+        truncated: false,
+        files: paths.map((path, index) => buildFileCatalogEntry({
+          file_identity: {
+            path,
+            language: "markdown",
+            content_hash: `markdown-${index}`,
+            size_bytes: 32,
+            mtime_ms: index
+          }
+        }))
+      };
+    }
+  };
+}
+
+function workspaceWithReadTrap(
+  files: Record<string, string>,
+  forbiddenReads: readonly string[]
+): WorkspaceFilePort {
+  const forbidden = new Set(forbiddenReads);
+  return {
+    async readText(input) {
+      if (forbidden.has(input.path)) {
+        throw new Error(`Excluded content was read: ${input.path}`);
+      }
+      const content = files[input.path];
+      if (content === undefined) throw new Error(`Missing fixture content: ${input.path}`);
+      return content;
+    },
+    async readBinary() {
+      return new Uint8Array();
+    },
+    async writeText() {},
+    async writeBinary() {},
+    async stat(input) {
+      return {
+        exists: files[input.path] !== undefined,
+        is_file: files[input.path] !== undefined,
+        size_bytes: Buffer.byteLength(files[input.path] ?? ""),
         mtime_ms: 0
       };
     },

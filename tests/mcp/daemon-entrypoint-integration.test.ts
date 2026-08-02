@@ -188,7 +188,12 @@ describe("daemon-backed stdio entrypoint integration", () => {
     }));
     await initializeSession(startupClient);
     await waitForSymbolSearch(startupClient, "Runner");
-    const before = repoStatus(await startupClient.call("resources/read", { uri: "repo:///status" }));
+    await waitForRefreshCompletion(startupClient, {
+      requireFreshGraph: true,
+      requireConvergedGenerations: true,
+      requireNoActivityLease: true
+    });
+    const before = await waitForFreshRepoStatus(startupClient);
     expect(before.data.snapshot_id).toEqual(expect.any(String));
     expect(before.data.freshness).toBe("fresh");
     const previousSnapshotId = before.data.snapshot_id as string;
@@ -575,7 +580,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
       terminateIfRunning(firstDaemonPid);
       terminateIfRunning(replacementDaemonPid);
     }
-  }, 30_000);
+  }, 60_000);
 
   it("does not expose raw SQLite lock text when graph startup is blocked", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-locked-");
@@ -695,6 +700,18 @@ function repoStatus(message: McpMessage): {
   return parseEnvelope(message) as {
     data: { snapshot_id?: string; freshness: string };
   };
+}
+
+async function waitForFreshRepoStatus(session: EntryPointSession): Promise<ReturnType<typeof repoStatus>> {
+  let lastStatus: ReturnType<typeof repoStatus> | undefined;
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    lastStatus = repoStatus(await session.call("resources/read", { uri: "repo:///status" }));
+    if (lastStatus.data.freshness === "fresh" && lastStatus.data.snapshot_id !== undefined) {
+      return lastStatus;
+    }
+    await sleep(50);
+  }
+  throw new Error(`Timed out waiting for fresh repository status: ${JSON.stringify(lastStatus)}`);
 }
 
 function createCleanFixtureCopy(prefix: string): string {

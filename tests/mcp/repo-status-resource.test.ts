@@ -9,7 +9,10 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { repoStatusResource } from "../../src/interface-adapters/mcp/registries/resources/repo-status.js";
 import type { GetRepoStatusResult } from "../../src/application/use-cases/get-repo-status.js";
-import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
+import {
+  buildFileCatalogEntry,
+  DOCUMENTATION_CORPUS_POLICY_VERSION
+} from "../../src/domain/policies/index.js";
 import { InMemoryRuntimeOperationsAdapter } from "../../src/infrastructure/runtime/index.js";
 import { FileRepositoryOwnershipAdapter } from "../../src/infrastructure/runtime/repository-ownership.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
@@ -870,7 +873,7 @@ async function seedPublishedEntry(
     snapshot: Parameters<ReturnType<typeof openGraphStore>["createBuildSnapshot"]>[0]["snapshot"];
     snapshot_id: string;
     entry: Parameters<ReturnType<typeof openGraphStore>["upsertEntry"]>[0]["entry"];
-    documentation_concern_state?: "complete";
+    documentation_concern_state?: "complete" | "no_map";
   }
 ): Promise<void> {
   await store.createBuildSnapshot({
@@ -880,17 +883,38 @@ async function seedPublishedEntry(
     created_at: input.snapshot.created_at
   });
   await store.upsertEntry({ snapshot_id: input.snapshot_id, entry: input.entry });
-  if (input.documentation_concern_state !== undefined) {
-    await store.replaceSnapshotDocumentationConcerns({
-      snapshot_id: input.snapshot_id,
-      state: input.documentation_concern_state,
-      source_path: "docs/reference/documentation-map.md",
-      source_content_hash: "sha256:test-documentation-map",
-      concerns: [],
-      terms: [],
-      owners: []
-    });
-  }
+  await store.replaceSnapshotDocs({
+    snapshot_id: input.snapshot_id,
+    repo_root: input.snapshot.repo_root,
+    documents: [],
+    coverage: [{
+      evidence_class: "docs",
+      state: "complete",
+      indexed_files: 0,
+      eligible_files_seen: 0,
+      admitted_files: 0,
+      extracted_files: 0,
+      scan_truncated: false,
+      extraction_truncated: false,
+      continuation_available: false,
+      documentation_corpus_policy_version: DOCUMENTATION_CORPUS_POLICY_VERSION,
+      policy_excluded_files: 0,
+      policy_exclusions: []
+    }]
+  });
+  await store.replaceSnapshotDocumentationConcerns({
+    snapshot_id: input.snapshot_id,
+    state: input.documentation_concern_state ?? "no_map",
+    ...(input.documentation_concern_state === "complete"
+      ? {
+          source_path: "docs/reference/documentation-map.md",
+          source_content_hash: "sha256:test-documentation-map"
+        }
+      : {}),
+    concerns: [],
+    terms: [],
+    owners: []
+  });
   await store.transitionBuild({
     repo_root: input.snapshot.repo_root,
     snapshot_id: input.snapshot_id,

@@ -25,6 +25,7 @@ import type {
   FileCatalogPort,
   FileCatalogScanPort,
   DocumentationConcernIndexPort,
+  DocsIndexPort,
   SnapshotPort,
   WarmupCoordinatorPort
 } from "../../ports/index.js";
@@ -140,6 +141,7 @@ export async function getSnapshotRepoStatus(input: {
   snapshots: SnapshotPort;
   catalog: FileCatalogPort;
   documentation_concerns: DocumentationConcernIndexPort;
+  docs_index?: DocsIndexPort;
   warmups?: WarmupCoordinatorPort;
   refresh_triggers: RepositoryRefreshTriggerPort;
   watcher?: WatcherFreshnessState;
@@ -174,6 +176,8 @@ export async function getSnapshotRepoStatus(input: {
 
   const readiness = await readDocumentationRankingReadiness({
     snapshot_id: snapshot.id,
+    repo_root: input.repo_root,
+    docs_index: input.docs_index,
     documentation_concerns: input.documentation_concerns
   });
   let rankingRefreshWatcher: WatcherFreshnessState | undefined;

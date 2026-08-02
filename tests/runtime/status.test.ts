@@ -17,6 +17,7 @@ import type { WatcherFreshnessState } from "../../src/application/use-cases/resp
 import type { RepositoryRefreshTriggerPort } from "../../src/application/use-cases/repository-refresh-triggers.js";
 import type {
   DocumentationConcernIndexPort,
+  DocsIndexPort,
   FileCatalogPort,
   SnapshotPort,
   WarmupCoordinatorPort
@@ -546,6 +547,50 @@ describe("runtime status", () => {
       reason: "Documentation ranking readiness could not be read from the snapshot store."
     });
     expect(JSON.stringify(failed)).not.toContain("database is locked");
+  });
+
+  it("surfaces refresh recovery when selected snapshot docs coverage lacks corpus policy identity", async () => {
+    const result = await getSnapshotRepoStatus({
+      repo_root: "/repo",
+      snapshots: snapshotPort(snapshot({ freshness: "fresh" })),
+      catalog: catalogPort([statusTypeScriptFile()]),
+      docs_index: {
+        ...currentDocsIndex(),
+        async getState() {
+          return {
+            repo_root: "/repo",
+            snapshot_id: "snap-1",
+            freshness: "fresh",
+            status: "usable",
+            document_count: 0,
+            coverage: [{
+              evidence_class: "docs" as const,
+              state: "complete" as const,
+              indexed_files: 0,
+              eligible_files_seen: 0,
+              scan_truncated: false
+            }]
+          };
+        }
+      },
+      documentation_concerns: documentationConcernPort({
+        status: "ready",
+        snapshot_id: "snap-1",
+        state: "complete"
+      })
+    });
+
+    expect(result.status.documentation_ranking).toEqual({
+      snapshot_id: "snap-1",
+      state: "unavailable",
+      recovery: "refresh",
+      authority_map: "unknown",
+      reason: "Selected snapshot docs coverage is missing documentation corpus policy identity."
+    });
+    expect(result.meta).toMatchObject({
+      analysis_validity: "invalid_due_to_environment",
+      verification_status: "blocked"
+    });
   });
 
   it("admits only refresh-class readiness through the shared coordinator before reading warmup", async () => {
@@ -1134,6 +1179,34 @@ function documentationConcernPort(
     },
     async listDocumentationConcernOwners() {
       return { status: "ready", snapshot_id: state.snapshot_id, rows: [] };
+    }
+  };
+}
+
+function currentDocsIndex(): DocsIndexPort {
+  return {
+    async replaceSnapshotDocs() {},
+    async getState() {
+      return {
+        repo_root: "/repo",
+        snapshot_id: "snap-1",
+        freshness: "fresh",
+        status: "usable",
+        document_count: 0,
+        coverage: [{
+          evidence_class: "docs",
+          state: "complete",
+          indexed_files: 0,
+          eligible_files_seen: 0,
+          scan_truncated: false,
+          documentation_corpus_policy_version: "production-docs-v1",
+          policy_excluded_files: 0,
+          policy_exclusions: []
+        }]
+      };
+    },
+    async search() {
+      throw new Error("legacy docs search must not run");
     }
   };
 }

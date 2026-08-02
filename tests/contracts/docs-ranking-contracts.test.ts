@@ -10,7 +10,9 @@ import {
   DOCS_RANKING_OVERFLOW_SENTINEL,
   DOCS_RANKING_POLICY_VERSION,
   DOCS_RANKING_SCHEMA_VERSION,
+  documentationCorpusReceiptSchema,
   docsConcernMatchEvidenceSchema,
+  docsCurrentForTaskResultSchema,
   docsQueryFilterBasisSchema,
   docsRankingCandidateQueryResultSchema,
   docsRankingCandidateSchema,
@@ -63,6 +65,7 @@ describe("authority-aware docs ranking contracts", () => {
 
     const conflictOwner = ownerOnlyHit({
       path: "docs/design/a.md",
+      ownerPriority: "invalid_conflicting_owner",
       ownerTier: "invalid_conflicting_owner",
       owners: [{
         ...ownerEvidence("docs/design/a.md", "conflicting"),
@@ -73,6 +76,7 @@ describe("authority-aware docs ranking contracts", () => {
       .toBe("invalid_conflicting_owner");
     expect(rankedDocsSearchHitSchema.safeParse(ownerOnlyHit({
       path: "docs/design/a.md",
+      ownerPriority: "invalid_conflicting_owner",
       ownerTier: "invalid_conflicting_owner",
       owners: [ownerEvidence("docs/design/a.md", "conflicting")]
     })).success).toBe(false);
@@ -108,6 +112,7 @@ describe("authority-aware docs ranking contracts", () => {
 
     const unrelatedValidAndRelatedConflict = ownerOnlyHit({
       path: "docs/design/a.md",
+      ownerPriority: "invalid_conflicting_owner",
       ownerTier: "invalid_conflicting_owner",
       owners: [
         ownerEvidence("docs/design/b.md", "valid"),
@@ -119,6 +124,63 @@ describe("authority-aware docs ranking contracts", () => {
     });
     expect(rankedDocsSearchHitSchema.parse(unrelatedValidAndRelatedConflict).governing_owner_tier)
       .toBe("invalid_conflicting_owner");
+  });
+
+  it("models bounded documentation corpus receipts and excluded owner evidence", () => {
+    expect(documentationCorpusReceiptSchema.parse({
+      policy_version: "production-docs-v1",
+      discovered_markdown_files: 5,
+      eligible_markdown_files: 3,
+      excluded_markdown_files: 2,
+      exclusions: [{ reason: "embedded_fixture", count: 2 }]
+    })).toMatchObject({ excluded_markdown_files: 2 });
+    expect(documentationCorpusReceiptSchema.safeParse({
+      policy_version: "production-docs-v1",
+      discovered_markdown_files: 5,
+      eligible_markdown_files: 4,
+      excluded_markdown_files: 2,
+      exclusions: [{ reason: "embedded_fixture", count: 2 }]
+    }).success).toBe(false);
+
+    const excludedOwner = {
+      concern_key: "fixtures",
+      normalized_term: "fixture docs",
+      query_token_start: 0,
+      query_token_end_exclusive: 2,
+      token_count: 2,
+      owners: [{
+        path: "tests/fixtures/product/docs/runtime.md",
+        state: "excluded" as const,
+        exclusion_reason: "embedded_fixture" as const
+      }]
+    };
+    expect(docsConcernMatchEvidenceSchema.parse(excludedOwner)).toEqual(excludedOwner);
+    expect(docsConcernMatchEvidenceSchema.safeParse({
+      ...excludedOwner,
+      owners: [{
+        ...excludedOwner.owners[0],
+        document_id: "tests/fixtures/product/docs/runtime.md"
+      }]
+    }).success).toBe(false);
+
+    expect(docsCurrentForTaskResultSchema.parse({
+      repo_root: "/repo",
+      task: "fixture docs",
+      status: "done",
+      canonical_docs: [],
+      supporting_docs: [],
+      non_authoritative_docs: [],
+      unknown_docs: [],
+      documentation_corpus: {
+        policy_version: "production-docs-v1",
+        discovered_markdown_files: 1,
+        eligible_markdown_files: 1,
+        excluded_markdown_files: 0,
+        exclusions: []
+      },
+      warnings: [],
+      next_actions: []
+    }).documentation_corpus.policy_version).toBe("production-docs-v1");
   });
 
   it("enforces the complete candidate-source and relevance-band matrix with non-empty reasons", () => {
@@ -406,8 +468,10 @@ function ftsHit(input: {
     candidate_source: "fts",
     concern_match_state: "no_match",
     matched_concerns: [],
+    governing_owner_priority: "non_owner",
     governing_owner_tier: "non_owner",
     final_rank_components: {
+      governing_owner_priority: "non_owner",
       relevance_band: input.relevanceBand ?? "all_query_tokens_body",
       governing_owner_tier: "non_owner",
       authority_tier: "canonical",
@@ -423,10 +487,12 @@ function ftsHit(input: {
 
 function ownerOnlyHit(input: {
   path?: string;
+  ownerPriority?: RankedDocsSearchHit["governing_owner_priority"];
   ownerTier?: RankedDocsSearchHit["governing_owner_tier"];
   owners?: ReturnType<typeof ownerEvidence>[];
 } = {}): RankedDocsSearchHit {
   const path = input.path ?? "docs/design/coding-agent-integration-design.md";
+  const ownerPriority = input.ownerPriority ?? "current_canonical_owner";
   const ownerTier = input.ownerTier ?? "valid_owner";
   const owners = input.owners ?? [ownerEvidence(path, "valid")];
   return {
@@ -448,8 +514,10 @@ function ownerOnlyHit(input: {
       token_count: 1,
       owners
     }],
+    governing_owner_priority: ownerPriority,
     governing_owner_tier: ownerTier,
     final_rank_components: {
+      governing_owner_priority: ownerPriority,
       relevance_band: "intent_owner_match",
       governing_owner_tier: ownerTier,
       authority_tier: "canonical",
@@ -495,6 +563,9 @@ function queryFilterBasis() {
 
 function countBase() {
   return {
+    documentation_corpus_policy_version: "production-docs-v1",
+    policy_excluded_files: 2,
+    policy_exclusions: [{ reason: "embedded_fixture", count: 2 }],
     searchable_snapshot_documents_count: 600,
     searchable_scope_documents_count: 600,
     priority_scan_eligible_markdown_files_count: 40,

@@ -34,24 +34,32 @@ T006 -> T007 -> T008 -> T009
   - Acceptance: lifecycle lint, requirements/design trace review, task-state
     audit, and architecture/migration review have no unresolved blocker.
   - Evidence mode: validation
-  - Evidence: 2026-08-02: lifecycle package lint returned 0 errors/warnings; task_details and traceability_lookup resolved exact Requirement 1-6 context for T001 and Requirement 2/4 for T002 with no gaps; task-state audit had info-only broad-task advisories; independent senior readiness re-review confirmed B1-B3 and W1-W2 resolved with no remaining blocker or warning.
+  - Evidence: 2026-08-02 `lint_spec_package` returned 0 errors and 0 warnings; `reconcile_spec` returned no findings or blind spots after the requirements/QA, architecture, and persistence/operations MoE review findings were incorporated.
 
-  - Status: Spec package reviewed and ready for the T002 contract/migration seam; source implementation has not started.
-- [ ] T002 Confirm the exact corpus receipt and migration seam.
+  - Status: Readiness review completed before implementation; downstream tasks are now implemented and validated.
+- [x] T002 Confirm the exact corpus receipt and migration seam.
   - Depends on: T001
-  - Requirements: Requirement 2, Requirement 4
+  - Requirements: Requirement 1, Requirement 2, Requirement 4
+  - Properties: CP-003, CP-006, CP-007
   - Files: `src/contracts/runtime-docs-contracts.ts`,
     `src/contracts/runtime-response-contracts.ts`, `src/ports/index.ts`,
     `src/infrastructure/sqlite/graph-store.ts`, `design.md`
-  - Acceptance: one additive corpus-policy identity/aggregate representation,
-    exact count equations, v2 universe migration, and stale-policy blocker are
-    documented with no EB059 capacity decision or fallback.
-  - Evidence mode: contract
-  - Evidence: Pending.
+  - Acceptance: the existing docs `IndexCoverage` row additively carries
+    `documentation_corpus_policy_version`, `policy_excluded_files`, and bounded
+    `policy_exclusions`; public receipts expose discovered/eligible/excluded
+    conservation; `documentation_concern_owners` is rebuilt transactionally for
+    `excluded` plus `exclusion_reason` and no document identity; readiness reads
+    snapshot-bound docs coverage before candidate work; v1 universes are
+    removed by the same migration; the existing public `ranking_unavailable`
+    result carries a ranking-readiness receipt with `recovery: refresh`; no
+    EB059 capacity decision, distinct fallback, or alternate blocker is added.
+  - Evidence mode: validation
+  - Evidence: `pnpm typecheck` passed; `tests/contracts/docs-ranking-contracts.test.ts`, `tests/graph/docs-ranked-universe-store.test.ts`, `tests/mcp/docs-status-recovery.test.ts`, and `tests/runtime/status.test.ts` passed in the focused and full runs.
 
+  - Status: Implemented and validated.
 ## Phase 2: Corpus Policy And Admission
 
-- [ ] T003 Implement the shared repository-relative documentation corpus policy
+- [x] T003 Implement the shared repository-relative documentation corpus policy
   and its invariant tests.
   - Depends on: T002
   - Requirements: Requirement 1
@@ -61,29 +69,34 @@ T006 -> T007 -> T008 -> T009
   - Acceptance: stable `embedded_fixture` exclusion, root relativity, invalid
     path handling, excluded-owner decision, and deterministic partition/count
     behavior pass without reading content or using absolute paths.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: validation
+  - Evidence: `tests/docs/documentation-corpus-policy.test.ts` passed, covering `production-docs-v1`, deterministic `embedded_fixture` exclusion, root relativity, invalid paths, and count conservation.
 
-- [ ] T004 Apply the shared policy to snapshot indexing and
+  - Status: Implemented and validated.
+- [x] T004 Apply the shared policy to snapshot indexing and
   `docs_current_for_task` before content reads or scoring.
   - Depends on: T003
   - Requirements: Requirement 1, Requirement 2, Requirement 5
   - Properties: CP-002, CP-003, CP-007
   - Files: `src/application/use-cases/index-repository-graph.ts`,
     `src/application/use-cases/document-currency-routing.ts`,
-    `src/application/use-cases/current-docs-for-task.ts`, selected docs fixtures,
-    `tests/graph/extraction-pipeline.test.ts`, documentation-concern,
-    current-doc, and MCP surface tests
+    `src/application/use-cases/current-docs-for-task.ts`,
+    `src/application/use-cases/query-docs.ts`, selected docs fixtures,
+    `tests/graph/extraction-pipeline.test.ts`,
+    `tests/docs/current-docs-for-task.test.ts`,
+    `tests/docs/query-docs.test.ts`, documentation-concern, and MCP surface tests
   - Acceptance: embedded fixture docs are absent in the containing repo, an
     exact mapped excluded owner records state/reason without document identity,
-    the same fixture is present when selected as root, both surfaces agree, and
-    an excluded-content read trap is never invoked.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+    the same fixture is present when selected as root, snapshot/live task/live
+    overview-map surfaces agree, and an excluded-content read trap is never
+    invoked.
+  - Evidence mode: validation
+  - Evidence: `tests/graph/extraction-pipeline.test.ts`, `tests/docs/current-docs-for-task.test.ts`, `tests/docs/query-docs.test.ts`, and `tests/mcp/docs-surfaces.test.ts` passed, including containing-root, selected-root, excluded-owner, and read-trap assertions.
 
+  - Status: Implemented and validated.
 ## Phase 3: Contracts, Store, Readiness, And Ranking
 
-- [ ] T005 Persist corpus-policy identity and truthful bounded coverage.
+- [x] T005 Persist corpus-policy identity and truthful bounded coverage.
   - Depends on: T004
   - Requirements: Requirement 2, Requirement 4
   - Properties: CP-003, CP-006
@@ -95,10 +108,11 @@ T006 -> T007 -> T008 -> T009
     with refresh, map-less current-policy repositories remain non-blocking,
     exclusions expose stable aggregate reason only, and migrations are
     transactional.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: validation
+  - Evidence: `tests/graph/docs-ranked-universe-store.test.ts`, `tests/mcp/docs-status-recovery.test.ts`, `tests/mcp/repo-status-resource.test.ts`, and `tests/runtime/status.test.ts` passed, including persisted empty-corpus coverage and current/missing/mismatched/map-less policy states.
 
-- [ ] T006 Implement exact-concern governing-owner priority and v2 ranked
+  - Status: Implemented and validated.
+- [x] T006 Implement exact-concern governing-owner priority and v2 ranked
   universe identity.
   - Depends on: T005
   - Requirements: Requirement 3, Requirement 4
@@ -109,12 +123,13 @@ T006 -> T007 -> T008 -> T009
     owner precedence inspectable; multiple/invalid/excluded owner cases remain
     truthful and deterministic; policy reasons match comparison; old
     universes/cursors cannot cross into v2.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: validation
+  - Evidence: `tests/docs/docs-ranking-policy.test.ts`, `tests/docs/docs-ranking-pagination.test.ts`, `tests/mcp/docs-ranking-tool.test.ts`, and `tests/presentation/docs-ranking-presenter.test.ts` passed for `authority-aware-v2`, owner-priority permutations, v1 invalidation, pagination, cursor, and presentation behavior.
 
+  - Status: Implemented and validated.
 ## Phase 4: Cross-Surface Acceptance
 
-- [ ] T007 Add the production-repository, fixture-root, SessionStart, count,
+- [x] T007 Add the production-repository, fixture-root, SessionStart, count,
   leakage, and migration regressions.
   - Depends on: T006
   - Requirements: Requirement 5
@@ -125,9 +140,10 @@ T006 -> T007 -> T008 -> T009
     generated candidate permutations cover owner dominance and determinism
     without adding a new property-test dependency.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Named corpus, leakage, owner, SessionStart, count, status, store, migration, MCP, and pagination regressions pass in the focused Spec 052 suite.
 
-- [ ] T008 Run focused and full validation, then perform bounded dogfood.
+  - Status: Implemented and validated.
+- [x] T008 Run focused and full validation, then perform bounded dogfood.
   - Depends on: T007
   - Requirements: Requirement 1 through Requirement 5
   - Files: `verification.md`, implementation and test files
@@ -135,11 +151,12 @@ T006 -> T007 -> T008 -> T009
     plugin/package gates, exact SessionStart dogfood, direct count inspection,
     and target-worktree checks pass or retain truthful blocking evidence.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Validation passed: pnpm typecheck; 109-file full Vitest suite with maxWorkers=4 (1211 tests); plugin validation; package dry-run; git diff --check. Checkout-copy dogfood blocked truthfully on refresh worker deadline and is recorded without acceptance overclaim.
 
+  - Status: Implemented and validated.
 ## Phase 5: Promotion, Review, And Closure Readiness
 
-- [ ] T009 Promote accepted behavior and address final review findings.
+- [x] T009 Promote accepted behavior and address final review findings.
   - Depends on: T008
   - Requirements: Requirement 6
   - Files: all durable targets in `change-impact.md`, this package
@@ -148,8 +165,9 @@ T006 -> T007 -> T008 -> T009
     with rationale, or routed; verification has no partial-blocking/not-covered
     requirement; closure check passes before package removal.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: `git diff --check`, `pnpm validate:plugin`, and `pnpm pack:dry-run` passed after the nine `change-impact.md` durable owners were updated; final architecture MoE reported no actionable defect, and the QA status-fixture plus zero-document regressions pass in the 1,211-test full suite.
 
+  - Status: Implementation and promotion complete; package intentionally remains active and unclosed.
 ## Execution Rules
 
 - Do not implement from this file alone.

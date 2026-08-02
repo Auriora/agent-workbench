@@ -5,6 +5,7 @@
 
 import path from "node:path";
 import type {
+  DocumentationCorpusExclusion,
   DocsDocument,
   DocsHeading,
   DocsMap,
@@ -36,6 +37,9 @@ import {
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
 import {
+  DOCUMENTATION_CORPUS_POLICY_VERSION,
+  partitionDocumentationCorpusPaths,
+  type DocumentationCorpusDecisionPartition,
   catalogSkipReason,
   normalizeDocumentationConcern,
   rankDocumentationCandidates,
@@ -101,10 +105,7 @@ export type DocsReadSectionUseCaseResult = {
   meta: ResponseMetadata;
 };
 
-/**
- * Carries the snapshot-bound ranking readiness to the presentation boundary.
- * The receipt is presentation metadata, not part of the public ranked result.
- */
+/** Carries snapshot-bound ranking readiness to the presentation boundary. */
 export type RankedDocsSearchUseCaseResult = RankedDocsSearchResult & {
   documentation_ranking_readiness: DocumentationRankingReadiness;
 };
@@ -374,10 +375,15 @@ export async function searchRankedDocs(input: {
 
   const readiness = await readDocumentationRankingReadiness({
     snapshot_id: input.selected_snapshot_id,
+    repo_root: repoRoot,
+    docs_index: input.docs_index,
     documentation_concerns: input.documentation_concerns
   });
   if (readiness.blocked) {
-    return rankingUnavailable(base, "ranking_unavailable");
+    return withDocumentationRankingReadiness(
+      rankingUnavailable(base, "ranking_unavailable", readiness.receipt),
+      readiness
+    );
   }
 
   try {
@@ -651,6 +657,7 @@ type LoadedDocsIndex = {
   skippedPaths: readonly FileCatalogSkippedPath[];
   truncated: boolean;
   scannedFiles: readonly FileCatalogEntry[];
+  corpus: DocumentationCorpusDecisionPartition;
   totalDocuments: number;
 };
 
@@ -668,17 +675,20 @@ async function loadDocsIndex(input: {
     skipped_roots: [],
     max_files: DOC_ROW_LIMIT
   });
-  const markdownFiles = scanned.files
-    .filter((file) => file.file_identity.language === "markdown")
+  const markdownFiles = scanned.files.filter((file) => file.file_identity.language === "markdown");
+  const corpus = partitionDocumentationCorpusPaths(markdownFiles.map((file) => file.path));
+  const eligibleMarkdownPaths = new Set(corpus.eligible_markdown_paths);
+  const eligibleMarkdownFiles = markdownFiles
+    .filter((file) => eligibleMarkdownPaths.has(file.path))
     .filter((file) => isInDocsScope(file.path, input.request.scope_path))
     .sort((left, right) => left.path.localeCompare(right.path));
   const orderedMarkdownFiles = input.order === "importance"
-    ? [...markdownFiles].sort((left, right) => docRank(right.path) - docRank(left.path) || left.path.localeCompare(right.path))
-    : markdownFiles;
+    ? [...eligibleMarkdownFiles].sort((left, right) => docRank(right.path) - docRank(left.path) || left.path.localeCompare(right.path))
+    : eligibleMarkdownFiles;
   const warnings = mapSkippedPaths(scanned.skipped_paths ?? []);
   const documents: Array<DocsDocument & { content: string }> = [];
   const owners = await loadDocumentationMapOwners({
-    files: scanned.files,
+    files: markdownFiles.filter((file) => eligibleMarkdownPaths.has(file.path)),
     workspace: input.workspace
   });
   const cursorOffset = decodeCursor(input.request.cursor, DOCS_CURSOR_KIND);
@@ -702,7 +712,7 @@ async function loadDocsIndex(input: {
         path: file.path,
         title,
         headings: headings.slice(0, Math.max(input.request.max_headings_per_doc, 100)),
-        links: extractMarkdownDocLinks({ fromPath: file.path, content, docs: markdownFiles }),
+        links: extractMarkdownDocLinks({ fromPath: file.path, content, docs: eligibleMarkdownFiles }),
         capability_level: "resource_backed",
         evidence_kinds: ["docs"],
         direct_read_caveat: DIRECT_READ_CAVEAT,
@@ -725,7 +735,8 @@ async function loadDocsIndex(input: {
     skippedPaths: scanned.skipped_paths ?? [],
     truncated: scanned.truncated || orderedMarkdownFiles.length > readLimit,
     scannedFiles: scanned.files,
-    totalDocuments: markdownFiles.length
+    corpus,
+    totalDocuments: eligibleMarkdownFiles.length
   };
 }
 
@@ -775,7 +786,23 @@ function docsMeta(index: LoadedDocsIndex): ResponseMetadata {
     truncated: index.truncated,
     budget: {
       row_limit: DOC_ROW_LIMIT
-    }
+    },
+    index_coverage: [
+      {
+        evidence_class: "docs",
+        state: index.truncated ? "partial" : "complete",
+        indexed_files: index.documents.length,
+        eligible_files_seen: index.corpus.eligible_markdown_files,
+        scan_truncated: index.truncated,
+        indexed_roots: ["."],
+        documentation_corpus_policy_version: index.corpus.policy_version,
+        policy_excluded_files: index.corpus.excluded_markdown_files,
+        policy_exclusions: [...index.corpus.exclusions],
+        reason: index.truncated
+          ? "Live docs inventory reached its read budget after applying the production documentation corpus policy."
+          : "Live docs inventory applied the production documentation corpus policy before content reads."
+      } as ResponseMetadata["index_coverage"] extends readonly (infer Item)[] ? Item : never
+    ]
   };
 }
 
@@ -1280,7 +1307,8 @@ function rankedResultBase(input: {
 
 function rankingUnavailable(
   base: RankedResultBase,
-  blocker: "ranked_universe_expired" | "ranking_cursor_invalid" | "ranking_unavailable"
+  blocker: "ranked_universe_expired" | "ranking_cursor_invalid" | "ranking_unavailable",
+  documentationRanking?: DocumentationRankingReadiness["receipt"]
 ): RankedDocsSearchResult {
   const trustState = blocker === "ranked_universe_expired"
     ? "blocked_cursor_stale"
@@ -1293,6 +1321,7 @@ function rankingUnavailable(
     trust_state: trustState,
     blocker,
     hits: [],
+    ...(documentationRanking === undefined ? {} : { documentation_ranking: documentationRanking }),
     next_actions: capNextActions([blocker === "ranking_unavailable"
       ? {
           tool: "read_resource",
@@ -1375,9 +1404,14 @@ async function rankedCounts(input: {
     })
   ]);
   const docsCoverage = state.coverage?.find(({ evidence_class }) => evidence_class === "docs");
+  const corpus = corpusCoverageFields(docsCoverage);
+  if (corpus === undefined) {
+    throw new DocsRankingUnavailableError("Current documentation corpus coverage is unavailable.");
+  }
   const indexed = docsCoverage?.indexed_files ?? state.document_count;
   const eligible = docsCoverage?.eligible_files_seen ?? indexed;
   return {
+    ...corpus,
     ...searchable,
     fts_candidate_documents_count: input.ftsCount,
     matched_owner_candidate_documents_count: input.ownerCount,
@@ -1423,6 +1457,10 @@ async function rankedOverflowResult(input: {
     })
   ]);
   const docsCoverage = state.coverage?.find(({ evidence_class }) => evidence_class === "docs");
+  const corpus = corpusCoverageFields(docsCoverage);
+  if (corpus === undefined) {
+    throw new DocsRankingUnavailableError("Current documentation corpus coverage is unavailable.");
+  }
   const indexed = docsCoverage?.indexed_files ?? state.document_count;
   const eligible = docsCoverage?.eligible_files_seen ?? indexed;
   return {
@@ -1432,6 +1470,7 @@ async function rankedOverflowResult(input: {
     blocker: "candidate_universe_exceeds_limit",
     hits: [],
     counts: {
+      ...corpus,
       ...searchable,
       ...(input.ftsCount === undefined
         ? { fts_candidate_count_lower_bound: 501 as const }
@@ -1477,6 +1516,30 @@ async function rankedOverflowResult(input: {
       reason: "Retry within a narrower documentation scope; narrow the query further if the scoped union still exceeds 500."
     }]),
     truncated: false
+  };
+}
+
+function corpusCoverageFields(coverage: IndexCoverage | undefined): {
+  documentation_corpus_policy_version: typeof DOCUMENTATION_CORPUS_POLICY_VERSION;
+  policy_excluded_files: number;
+  policy_exclusions: DocumentationCorpusExclusion[];
+} | undefined {
+  const candidate = coverage as (IndexCoverage & {
+    documentation_corpus_policy_version?: unknown;
+    policy_excluded_files?: unknown;
+    policy_exclusions?: unknown;
+  }) | undefined;
+  if (
+    candidate?.documentation_corpus_policy_version !== DOCUMENTATION_CORPUS_POLICY_VERSION ||
+    typeof candidate.policy_excluded_files !== "number" ||
+    !Array.isArray(candidate.policy_exclusions)
+  ) {
+    return undefined;
+  }
+  return {
+    documentation_corpus_policy_version: candidate.documentation_corpus_policy_version,
+    policy_excluded_files: candidate.policy_excluded_files,
+    policy_exclusions: candidate.policy_exclusions as DocumentationCorpusExclusion[]
   };
 }
 

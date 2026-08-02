@@ -475,8 +475,14 @@ complete relevance-ranked universe without owner-intent evidence and carries a
 must-verify caveat. Other readiness states return `ranking_unavailable`, zero
 hits, and the callable `repo:///status` action rather than a fallback search.
 
+Initial ranked search also requires the selected snapshot's docs coverage to
+name corpus policy `production-docs-v1` before concern or candidate reads.
+Missing or mismatched identity returns `ranking_unavailable` with an additive
+`documentation_ranking` receipt whose recovery is `refresh` and whose bounded
+reason identifies the policy mismatch.
+
 `docs_search` uses ranking contract version `1`, ranking schema version `1`,
-policy `authority-aware-v1`, candidate limit `500`, and overflow sentinel `501`.
+policy `authority-aware-v2`, candidate limit `500`, and overflow sentinel `501`.
 It returns one of five shapes: a complete frozen-universe page, candidate
 overflow, ranking/cursor unavailable, mid-route ranking-environment
 unavailable, or snapshot-selection unavailable. Every
@@ -502,31 +508,45 @@ matched evidence includes:
 - optional `superseded_by` for superseded owners; and
 - optional contradictory `declared_canonical_owner` for conflicting owners.
 
-Owner state is `valid`, `draft`, `missing`, `archived`, `superseded`, or
-`conflicting`. Valid and draft map to `valid_owner`; a draft keeps its draft
+Owner state is `valid`, `draft`, `missing`, `archived`, `superseded`,
+`conflicting`, or `excluded`. Excluded owners carry a bounded
+`exclusion_reason` and no `document_id`. Valid and draft map to `valid_owner`; a draft keeps its draft
 status and direct-read caveat. Missing, archived, and superseded map to
 `invalid_owner`; conflicting maps to `invalid_conflicting_owner`. A document
 with no matched-owner relation is `non_owner`. Multiple mapped owners alone are
 not conflict evidence. A stable document ID is the same canonical repo-relative
 POSIX path as the hit.
 
+### Documentation Corpus Receipt
+
+`documentation_corpus` receipts expose policy version plus discovered,
+eligible, and excluded Markdown counts with bounded reason aggregates. The
+contract requires `discovered = eligible + excluded` and exclusion aggregates
+to exhaust the excluded count. Docs `IndexCoverage` carries the matching policy
+version, `policy_excluded_files`, and `policy_exclusions`; excluded content is
+never included in a receipt.
+
 ### Ranked Hit And Ordering
 
 `candidate_source` is `fts`, `matched_owner`, or `fts_and_matched_owner`.
+`governing_owner_priority` is `current_canonical_owner`, `other_valid_owner`,
+`non_owner`, `invalid_owner`, or `invalid_conflicting_owner`, and is the first
+component of the public deterministic v2 rank tuple.
 Every hit exposes a non-empty `ranking_reasons` array,
 `ranking_policy_version`, `governing_owner_tier`, matched concern evidence, and
 `final_rank_components` in this comparison order:
 
-1. `relevance_band`: `exact_document_phrase`,
+1. `governing_owner_priority`;
+2. `relevance_band`: `exact_document_phrase`,
    `all_query_tokens_title_or_heading`, `all_query_tokens_body`,
    `intent_owner_match`, or `partial_fts_match`;
-2. `governing_owner_tier`: `valid_owner`, `non_owner`, `invalid_owner`, or
+3. `governing_owner_tier`: `valid_owner`, `non_owner`, `invalid_owner`, or
    `invalid_conflicting_owner`;
-3. truthful `authority_tier`;
-4. truthful `currency_tier`;
-5. optional `lexical_score`, present before absent and descending when present;
-6. `normalized_path`, ascending; and
-7. `stable_document_id`, ascending.
+4. truthful `authority_tier`;
+5. truthful `currency_tier`;
+6. optional `lexical_score`, present before absent and descending when present;
+7. `normalized_path`, ascending; and
+8. `stable_document_id`, ascending.
 
 Response order is authoritative. The numeric `score` field is a deprecated
 compatibility field retaining its shipped aggregate lexical/path/field/

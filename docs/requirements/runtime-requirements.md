@@ -149,6 +149,21 @@ workflow designers.
 
 ## Evidence
 
+### Production Documentation Corpus And Governing Owners
+
+- The runtime SHALL apply one versioned repo-relative documentation corpus
+  policy before snapshot or live-inventory content reads. Embedded Markdown at
+  `tests/fixtures/<fixture-root>/` is excluded only when the containing product
+  is selected; the fixture remains eligible as its own repository root.
+- Coverage and public receipts SHALL identify the policy and conserve
+  discovered, eligible, indexed, and excluded bases without exposing excluded
+  content. A selected snapshot missing the current identity SHALL block ranked
+  search with refresh recovery rather than returning partial results.
+- For an exact documentation concern, the current canonical governing owner
+  SHALL rank before valid secondary owners and non-owner lexical mentions.
+  Invalid, conflicting, or excluded owner evidence SHALL remain inspectable but
+  SHALL not receive owner promotion.
+
 - Code:
 - Config:
 - Tests:
