@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/053-validation-plan-skipped-path-payload-compaction/`
 - **Title:** Validation-plan skipped-path payload compaction requirements
 - **Final spec commit:** `f1e327b`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `377faa8`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/requirements/runtime-requirements.md`
