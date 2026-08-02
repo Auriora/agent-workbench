@@ -75,11 +75,13 @@ export async function discoverValidationProtocol(workspace: WorkspaceFilePort): 
       continue;
     }
     const lower = content.toLowerCase();
+    const runThroughDocker = /\brun\s+project\s+commands?\s+through\s+docker\b/u.test(lower);
     const dockerOnly =
       /\bdocker[- ]only\b/u.test(lower) ||
       /always\s+use\s+docker/u.test(lower) ||
       /must\s+use\s+docker/u.test(lower) ||
-      /validation[^.\n]{0,120}\buse\s+docker/u.test(lower);
+      /validation[^.\n]{0,120}\buse\s+docker/u.test(lower) ||
+      runThroughDocker;
     const devcontainerOnly =
       /\bdevcontainer[- ]only\b/u.test(lower) ||
       /always\s+use\s+(?:the\s+)?devcontainer/u.test(lower) ||

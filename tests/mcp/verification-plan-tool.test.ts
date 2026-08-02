@@ -162,6 +162,97 @@ describe("verification_plan use case", () => {
     }
   });
 
+  it("suppresses Ruby host commands when AGENTS.md requires Docker-first validation and no policy command is provided", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-rails-docker-guidance-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "app", "models"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "test", "models"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "config"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, "AGENTS.md"),
+        "# Repository Guidelines\n\nRun project commands through Docker. Host Ruby is not required."
+      );
+      fs.writeFileSync(path.join(repoRoot, "Gemfile"), "source 'https://rubygems.org'\n");
+      fs.writeFileSync(path.join(repoRoot, "config", "application.rb"), "class Application; end\n");
+      fs.writeFileSync(path.join(repoRoot, "app", "models", "widget.rb"), "class Widget; end\n");
+      fs.writeFileSync(path.join(repoRoot, "test", "models", "widget_test.rb"), "require 'test_helper'\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["app/models/widget.rb"],
+          changed_files: ["app/models/widget.rb"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("blocked");
+      expect(result.plan.planned_commands).toEqual([]);
+      expect(result.plan.risks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            severity: "blocker",
+            message: expect.stringContaining("Repository guidance requires Docker-based validation")
+          }),
+          expect.objectContaining({
+            severity: "blocker",
+            message: expect.stringContaining("Evidence: AGENTS.md")
+          })
+        ])
+      );
+      expect(result.plan.static_feedback).toBeUndefined();
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not block Ruby host commands when AGENTS.md only says host Ruby is not required", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-rails-ruby-advisory-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "app", "models"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "test", "models"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "config"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "AGENTS.md"), "# Repository Guidelines\n\nHost Ruby is not required.");
+      fs.writeFileSync(path.join(repoRoot, "Gemfile"), "source 'https://rubygems.org'\n");
+      fs.writeFileSync(path.join(repoRoot, "config", "application.rb"), "class Application; end\n");
+      fs.writeFileSync(path.join(repoRoot, "app", "models", "widget.rb"), "class Widget; end\n");
+      fs.writeFileSync(path.join(repoRoot, "test", "models", "widget_test.rb"), "require 'test_helper'\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["app/models/widget.rb"],
+          changed_files: ["app/models/widget.rb"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            command: "bundle",
+            args: ["exec", "ruby", "-I", "test", "test/models/widget_test.rb"],
+            display: "bundle exec ruby -I test test/models/widget_test.rb",
+            status: "planned",
+            execution: "not_executed"
+          })
+        ])
+      );
+      expect(result.plan.risks).toEqual([]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("plans Rails validation for a selected Rails config file", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-rails-standard-repo");
     const result = await planVerification({

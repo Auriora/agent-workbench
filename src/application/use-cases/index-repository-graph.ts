@@ -963,6 +963,8 @@ function candidatePoolForReference(input: {
   if (input.reference.candidate_metadata.static !== true) {
     return [];
   }
+
+  const metadata = input.reference.candidate_metadata;
   const referenceKind = input.reference.reference_kind;
   const rawNormalizedName = input.reference.reference_name.replaceAll("::", ".").toLowerCase();
   const normalizedName = referenceKind === "ruby_require_relative"
@@ -980,7 +982,217 @@ function candidatePoolForReference(input: {
     return candidate.kind === "module" &&
       (pathWithoutExtension === normalizedName || pathWithoutExtension.endsWith(`/${normalizedName}`));
   });
+
+  if (referenceKind === "ruby_route") {
+    const namespacedControllerCandidates = controllerClassCandidatesForRouteReference(metadata, input.allNodes);
+    const actionCandidates = routeActionCandidatesForReference(input.reference, input.allNodes);
+    return uniqueById([...namespacedControllerCandidates, ...actionCandidates]);
+  }
+
+  if (referenceKind === "ruby_model_dsl") {
+    const modelForm = metadata.model_form;
+    if (modelForm !== "belongs_to" && modelForm !== "has_many" && modelForm !== "has_one") {
+      return [];
+    }
+    const modelDsnCandidates = modelDslClassCandidates(input.reference, input.allNodes);
+    return uniqueById([...input.namedCandidates, ...additional, ...modelDsnCandidates]);
+  }
+
   return [...new Map([...input.namedCandidates, ...additional].map((candidate) => [candidate.id, candidate])).values()];
+}
+
+function modelDslClassCandidates(
+  reference: UnresolvedReferenceWriteModel,
+  allNodes: readonly GraphNodeWriteModel[]
+): GraphNodeWriteModel[] {
+  if (reference.candidate_metadata.model_form !== "has_many" &&
+    reference.candidate_metadata.model_form !== "has_one" &&
+    reference.candidate_metadata.model_form !== "belongs_to") {
+    return [];
+  }
+
+  const explicitClassName = typeof reference.candidate_metadata.class_name === "string"
+    ? reference.candidate_metadata.class_name
+    : undefined;
+  const candidateClassNames = explicitClassName === undefined || explicitClassName.length === 0
+    ? inferModelClassNames(reference.candidate_metadata.model_form, reference.reference_name)
+    : [explicitClassName];
+  const normalizedCandidateNames = new Set(candidateClassNames.map((name) => name.toLowerCase()));
+  if (normalizedCandidateNames.size === 0) {
+    return [];
+  }
+
+  return allNodes.filter((candidate) => {
+    if (candidate.language !== "ruby" || candidate.kind !== "class") {
+      return false;
+    }
+    const name = candidate.name.toLowerCase();
+    const qualifiedName = candidate.qualified_name?.toLowerCase();
+    return Array.from(normalizedCandidateNames).some((expectedClassName) => {
+      return name === expectedClassName || (qualifiedName !== undefined && qualifiedName.endsWith(`.${expectedClassName}`));
+    });
+  });
+}
+
+function inferModelClassNames(form: string, associationName: string): string[] {
+  const singularAssociationName = form === "has_many"
+    ? singularizeAssociationName(associationName)
+    : associationName;
+  const pascalized = toPascalCase(singularAssociationName);
+  return pascalized.length === 0 ? [] : [pascalized];
+}
+
+function singularizeAssociationName(value: string): string {
+  const lowered = value.toLowerCase();
+  if (lowered.endsWith("_ids") && lowered.length > 4) {
+    return lowered.slice(0, -4);
+  }
+  if (lowered.endsWith("ies") && lowered.length > 3) {
+    return `${lowered.slice(0, -3)}y`;
+  }
+  if (lowered.endsWith("s") && lowered.length > 1) {
+    return lowered.slice(0, -1);
+  }
+  return lowered;
+}
+
+function toPascalCase(input: string): string {
+  return input
+    .split("_")
+    .filter((segment) => segment.length > 0)
+    .map((segment) => `${segment[0]!.toUpperCase()}${segment.slice(1)}`)
+    .join("");
+}
+
+function controllerClassCandidatesForRouteReference(
+  metadata: Record<string, unknown>,
+  allNodes: readonly GraphNodeWriteModel[]
+): GraphNodeWriteModel[] {
+  const controllerCandidate = typeof metadata.controller_candidate === "string"
+    ? metadata.controller_candidate
+    : typeof metadata.route_controller_class === "string"
+      ? metadata.route_controller_class
+      : undefined;
+  if (controllerCandidate === undefined) {
+    return [];
+  }
+
+  const namespace = typeof metadata.route_namespace === "string"
+    ? metadata.route_namespace
+    : undefined;
+  const namespaceTokens = namespace?.split("/").map((segment) => segment.toLowerCase()).filter(Boolean) ?? [];
+  const controllerCandidateContainsNamespace = controllerCandidate.includes(".") || controllerCandidate.includes("/");
+  const expectedControllerNames = candidateControllerNamesFromMetadata(controllerCandidate);
+  return allNodes.filter((candidate) => {
+    if (candidate.language !== "ruby" || candidate.kind !== "class") {
+      return false;
+    }
+    if (!nodeMatchesRouteControllerName(candidate, expectedControllerNames)) {
+      return false;
+    }
+    if (namespaceTokens.length === 0 && !controllerCandidateContainsNamespace) {
+      const qualifiedName = candidate.qualified_name ?? "";
+      if (qualifiedName.includes(".")) {
+        return false;
+      }
+    }
+    return namespaceTokens.length === 0 || nodeMatchesRouteNamespace(candidate, namespaceTokens);
+  });
+}
+
+function candidateControllerNamesFromMetadata(controllerClass: string): string[] {
+  const normalized = controllerClass
+    .replaceAll("::", ".")
+    .split(".")
+    .filter((segment) => segment.length > 0);
+  if (normalized.length === 0) {
+    return [];
+  }
+  const full = normalized.join(".");
+  return [full];
+}
+
+function nodeMatchesRouteControllerName(node: GraphNodeWriteModel, expectedControllerNames: string[]): boolean {
+  if (expectedControllerNames.length === 0) {
+    return false;
+  }
+  const lowerName = node.name.toLowerCase();
+  const lowerQualified = node.qualified_name?.toLowerCase();
+  const normalizedExpected = expectedControllerNames.map((name) => name.toLowerCase());
+  return normalizedExpected.some((expectedName) => {
+    const finalExpected = expectedName.split(".").at(-1);
+    if (finalExpected !== undefined && finalExpected !== expectedName) {
+      return lowerQualified === expectedName;
+    }
+    return lowerName === expectedName ||
+      lowerName === (finalExpected ?? expectedName) ||
+      (lowerQualified !== undefined && (
+        lowerQualified === expectedName ||
+        lowerQualified.endsWith(`.${expectedName}`)
+      ));
+  });
+}
+
+function nodeMatchesRouteNamespace(node: GraphNodeWriteModel, namespaceTokens: string[]): boolean {
+  if (namespaceTokens.length === 0) {
+    return true;
+  }
+  const nodeTokens = [node.file_path, node.qualified_name ?? ""]
+    .join(" ")
+    .toLowerCase()
+    .replaceAll("/", ".")
+    .split(/[^a-z0-9_]+/u)
+    .filter(Boolean);
+  return namespaceTokens.every((segment) => nodeTokens.includes(segment));
+}
+
+function routeActionCandidatesForReference(
+  reference: UnresolvedReferenceWriteModel,
+  allNodes: readonly GraphNodeWriteModel[]
+): GraphNodeWriteModel[] {
+  if (reference.candidate_metadata.controller_action_candidate !== true) {
+    return [];
+  }
+  const routeAction = typeof reference.candidate_metadata.route_action === "string"
+    ? reference.candidate_metadata.route_action
+    : undefined;
+  if (routeAction === undefined || routeAction.length === 0) {
+    return [];
+  }
+
+  const controllers = controllerClassCandidatesForRouteReference(reference.candidate_metadata, allNodes);
+  if (controllers.length === 0) {
+    return [];
+  }
+
+  const controllerScopes = new Set(
+    controllers
+      .map((controller) => controller.qualified_name)
+      .filter((qualified): qualified is string => qualified !== undefined)
+      .map((qualified) => qualified.toLowerCase())
+  );
+  const action = routeAction.toLowerCase();
+  return allNodes.filter((candidate) => {
+    if (candidate.kind !== "method" && candidate.kind !== "singleton_method") {
+      return false;
+    }
+    if (candidate.name.toLowerCase() !== action) {
+      return false;
+    }
+    const candidateScope = candidate.qualified_name ?? "";
+    const hashScope = candidateScope.lastIndexOf("#");
+    const parentScope = hashScope >= 0
+      ? candidateScope.slice(0, hashScope)
+      : candidateScope.slice(0, Math.max(0, candidateScope.lastIndexOf(".")));
+    const lowerParentScope = parentScope.toLowerCase();
+    return Array.from(controllerScopes).some((controllerScope) => {
+      return lowerParentScope === controllerScope || lowerParentScope.startsWith(`${controllerScope}.`);
+    });
+  });
+}
+
+function uniqueById(candidates: readonly GraphNodeWriteModel[]): GraphNodeWriteModel[] {
+  return [...new Map(candidates.map((candidate) => [candidate.id, candidate])).values()];
 }
 
 function filterReferenceCandidates(input: {
@@ -1024,14 +1236,21 @@ function rubyCandidateKindMatches(
     return candidate.kind === "module" && candidate.metadata.parser_version === "tree-sitter-ruby";
   }
   if (referenceKind === "ruby_inheritance" || referenceKind === "ruby_model_dsl") {
-    return candidate.kind === "class";
+    const modelForm = reference.candidate_metadata.model_form;
+    if (referenceKind === "ruby_inheritance") {
+      return candidate.kind === "class";
+    }
+    return (modelForm === "belongs_to" || modelForm === "has_many" || modelForm === "has_one")
+      && candidate.kind === "class";
   }
   if (referenceKind === "ruby_call") {
     return candidate.kind === "method" || candidate.kind === "singleton_method";
   }
   if (referenceKind === "ruby_route") {
-    return reference.candidate_metadata.controller_action_candidate === true &&
-      (candidate.kind === "method" || candidate.kind === "singleton_method");
+    if (reference.candidate_metadata.controller_action_candidate === true) {
+      return candidate.kind === "method" || candidate.kind === "singleton_method";
+    }
+    return candidate.kind === "class";
   }
   if (referenceKind === "ruby_constant" || referenceKind === "ruby_include" ||
     referenceKind === "ruby_extend" || referenceKind === "ruby_prepend") {

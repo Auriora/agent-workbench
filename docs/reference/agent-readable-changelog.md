@@ -26,6 +26,38 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
+## 2026-08-02: Rails Dogfood Follow-Up
+
+### Agent-Visible Changes
+
+- Public status, scope, overview and context evidence now report Ruby source as
+  parser-backed `partial_semantic`; Rails project-shape evidence remains a
+  separate `resource_backed` framework signal.
+- Validation planning recognizes explicit instructions to run project commands
+  through Docker and blocks generic host Ruby commands when no approved
+  container command is configured.
+- Static hash-rocket routes, namespace-qualified controller targets, ordinary
+  resource controllers and model associations can contribute conservative
+  Ruby graph relationships when the first-party target is unambiguous.
+
+### Contract Changes
+
+- No public schema changed. Existing capability, planned/blocked validation,
+  parser provenance and unresolved-reference contracts carry the new evidence.
+
+### Required Agent Behavior Changes
+
+- Treat a blocked Docker-required validation plan as a request for repository
+  policy or an approved container command; do not execute the suppressed host
+  command.
+- Continue treating Rails route and association relationships as navigation
+  evidence. Directly inspect source before making runtime or validity claims.
+
+### Migration Notes
+
+- No graph schema migration is required. Refresh repository snapshots to
+  publish the corrected Ruby capability and expanded Rails relationships.
+
 ## 2026-08-01: Ruby And Rails Partial-Semantic Navigation
 
 ### Agent-Visible Changes

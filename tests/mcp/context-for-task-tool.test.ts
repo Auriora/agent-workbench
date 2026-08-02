@@ -581,7 +581,7 @@ describe("context_for_task use case", () => {
       expect.arrayContaining([
         expect.objectContaining({
           path: "test/models/widget_test.rb",
-          capability_level: "resource_backed"
+          capability_level: "partial_semantic"
         })
       ])
     );

@@ -148,6 +148,18 @@ type RepoFacts = {
   symbol_query?: string;
 };
 
+type SupportedSweepLanguage = (typeof SWEEP_SYMBOL_LANGUAGES)[number];
+
+const SWEEP_SYMBOL_LANGUAGES = ["python", "typescript", "javascript", "ruby"] as const;
+const SWEEP_TEXT_FILE_LANGUAGES = ["ruby", "python", "typescript", "javascript"] as const;
+const SWEEP_TEXT_FILE_FALLBACK_LANGUAGES = ["markdown", "json", "text", "yaml"] as const;
+const SWEEP_SYMBOL_REGEX_BY_LANGUAGE: Record<SupportedSweepLanguage, RegExp> = {
+  python: /(?:^|\n)\s*(?:def|class)\s+([A-Za-z_][A-Za-z0-9_!?]*)/gu,
+  typescript: /(?:^|\n)\s*(?:class|interface|type|enum|def|function|const|let)\s+([A-Za-z_][A-Za-z0-9_!?]*)/gu,
+  javascript: /(?:^|\n)\s*(?:class|function|const|let|def)\s+([A-Za-z_][A-Za-z0-9_!?]*)/gu,
+  ruby: /(?:^|\n)\s*(?:class|module|def)\s+([A-Za-z_][A-Za-z0-9_!?]*)/gu
+};
+
 type RepoRuntime = {
   scanner: FileCatalogScannerAdapter;
   workspace: WorkspaceFileAdapter;
@@ -903,19 +915,26 @@ async function discoverRepoFacts(input: { repoRoot: string; runtime: RepoRuntime
     max_files: 15000
   });
   const files = [...scanned.files].sort((left, right) => left.path.localeCompare(right.path));
+  const sourceLanguageOrder = sourceTextLanguageOrder(files);
+  const symbolLanguageOrder = sweepSymbolLanguageOrder(files);
   const markdownFiles = files.filter((file) => file.file_identity.language === "markdown");
   const headed = markdownFiles.find((file) => /^#\s+/mu.test(readSafe(path.join(input.repoRoot, file.path))));
   const noHeading = markdownFiles.find((file) => !/^#\s+/mu.test(readSafe(path.join(input.repoRoot, file.path))));
   const jsonFiles = files.filter((file) => file.file_identity.language === "json");
   const json = jsonFiles.find((file) => isJsonParseable(path.join(input.repoRoot, file.path))) ?? jsonFiles[0];
-  const text = preferredTextFile(files);
+  const text = preferredTextFile(files, sourceLanguageOrder, input.repoRoot);
   return {
     markdown_path: headed?.path ?? markdownFiles[0]?.path,
     no_heading_markdown_path: noHeading?.path,
     missing_markdown_path: "docs/missing-sweep-document.md",
     json_path: json?.path,
     text_path: text?.path,
-    symbol_query: await discoverIndexedSymbol({ repoRoot: input.repoRoot, runtime: input.runtime, files })
+    symbol_query: await discoverIndexedSymbol({
+      repoRoot: input.repoRoot,
+      runtime: input.runtime,
+      files,
+      languagePriorities: symbolLanguageOrder
+    })
   };
 }
 
@@ -923,12 +942,21 @@ async function discoverIndexedSymbol(input: {
   repoRoot: string;
   runtime: RepoRuntime;
   files: readonly FileCatalogEntry[];
+  languagePriorities: readonly string[];
 }): Promise<string | undefined> {
   const snapshot = (await input.runtime.graph.listSnapshots({ repo_root: input.repoRoot }))[0];
   if (snapshot === undefined) {
-    return discoverSourceSymbol({ repoRoot: input.repoRoot, files: input.files });
+    return discoverSourceSymbol({
+      repoRoot: input.repoRoot,
+      files: input.files,
+      languagePriorities: input.languagePriorities
+    });
   }
-  for (const symbol of discoverSourceSymbols({ repoRoot: input.repoRoot, files: input.files })) {
+  for (const symbol of discoverSourceSymbols({
+    repoRoot: input.repoRoot,
+    files: input.files,
+    languagePriorities: input.languagePriorities
+  })) {
     const nodes = await input.runtime.graph.findNodesByName({
       snapshot_id: snapshot.id,
       query: symbol,
@@ -939,34 +967,100 @@ async function discoverIndexedSymbol(input: {
       return symbol;
     }
   }
-  return discoverSourceSymbol({ repoRoot: input.repoRoot, files: input.files });
+  return discoverSourceSymbol({
+    repoRoot: input.repoRoot,
+    files: input.files,
+    languagePriorities: input.languagePriorities
+  });
 }
 
-function discoverSourceSymbol(input: { repoRoot: string; files: readonly FileCatalogEntry[] }): string | undefined {
+function discoverSourceSymbol(input: {
+  repoRoot: string;
+  files: readonly FileCatalogEntry[];
+  languagePriorities: readonly string[];
+}): string | undefined {
   return discoverSourceSymbols(input)[0];
 }
 
-function discoverSourceSymbols(input: { repoRoot: string; files: readonly FileCatalogEntry[] }): string[] {
+function discoverSourceSymbols(input: {
+  repoRoot: string;
+  files: readonly FileCatalogEntry[];
+  languagePriorities: readonly string[];
+}): string[] {
   const symbols: string[] = [];
-  for (const file of input.files.filter((candidate) => ["python", "typescript", "javascript"].includes(candidate.file_identity.language)).slice(0, 50)) {
-    const content = readSafe(path.join(input.repoRoot, file.path));
-    const match = /(?:def|function|class)\s+([A-Za-z_][A-Za-z0-9_]*)/u.exec(content);
-    if (match?.[1]) {
-      symbols.push(match[1]);
+  for (const language of input.languagePriorities) {
+    const pattern = SWEEP_SYMBOL_REGEX_BY_LANGUAGE[language as SupportedSweepLanguage];
+    if (pattern === undefined) {
+      continue;
+    }
+    const symbolPattern = new RegExp(pattern.source, pattern.flags);
+    const filesForLanguage = input.files.filter((file) => file.file_identity.language === language).slice(0, 50);
+    for (const file of filesForLanguage) {
+      const content = readSafe(path.join(input.repoRoot, file.path));
+      for (const match of content.matchAll(symbolPattern)) {
+        const symbol = match[1];
+        if (symbol !== undefined && !symbols.includes(symbol)) {
+          symbols.push(symbol);
+        }
+      }
     }
   }
-  return Array.from(new Set(symbols));
+  return symbols;
 }
 
 function isUsableSweepSymbol(node: GraphNode): boolean {
-  return ["python", "typescript", "javascript"].includes(node.language);
+  return SWEEP_SYMBOL_LANGUAGES.includes(node.language as SupportedSweepLanguage);
 }
 
-function preferredTextFile(files: readonly FileCatalogEntry[]): FileCatalogEntry | undefined {
-  return files.find((file) => ["python", "typescript", "javascript"].includes(file.file_identity.language))
-    ?? files.find((file) => file.file_identity.language === "markdown")
-    ?? files.find((file) => file.file_identity.language === "json")
-    ?? files.find((file) => ["text", "yaml"].includes(file.file_identity.language));
+function preferredTextFile(
+  files: readonly FileCatalogEntry[],
+  languagePriorities: readonly string[],
+  repoRoot: string
+): FileCatalogEntry | undefined {
+  for (const language of languagePriorities) {
+    const candidates = files.filter((entry) => entry.file_identity.language === language);
+    if (candidates.length > 0) {
+      for (const candidate of candidates) {
+        const content = readSafe(path.join(repoRoot, candidate.path));
+        const pattern = SWEEP_SYMBOL_REGEX_BY_LANGUAGE[language as SupportedSweepLanguage];
+        if (pattern !== undefined && content.match(new RegExp(pattern.source, pattern.flags)) !== null) {
+          return candidate;
+        }
+      }
+      return candidates[0];
+    }
+  }
+
+  return SWEEP_TEXT_FILE_FALLBACK_LANGUAGES
+    .map((language) => files.find((entry) => entry.file_identity.language === language))
+    .find((file) => file !== undefined);
+}
+
+function sourceTextLanguageOrder(files: readonly FileCatalogEntry[]): string[] {
+  return isRubyTargetRepo(files)
+    ? [...SWEEP_TEXT_FILE_LANGUAGES]
+    : [...SWEEP_TEXT_FILE_LANGUAGES.slice(1), SWEEP_TEXT_FILE_LANGUAGES[0]];
+}
+
+function sweepSymbolLanguageOrder(files: readonly FileCatalogEntry[]): string[] {
+  return isRubyTargetRepo(files)
+    ? ["ruby", "python", "typescript", "javascript"]
+    : [...SWEEP_SYMBOL_LANGUAGES];
+}
+
+function isRubyTargetRepo(files: readonly FileCatalogEntry[]): boolean {
+  return files.some((file) => {
+    if (file.file_identity.language !== "ruby") {
+      return false;
+    }
+    const normalizedPath = file.path.replaceAll("\\", "/");
+    return normalizedPath === "Gemfile" ||
+      normalizedPath === "Rakefile" ||
+      normalizedPath === "config.ru" ||
+      normalizedPath.startsWith("app/") ||
+      normalizedPath.startsWith("config/") ||
+      normalizedPath.endsWith("/routes.rb");
+  });
 }
 
 function isJsonParseable(filePath: string): boolean {

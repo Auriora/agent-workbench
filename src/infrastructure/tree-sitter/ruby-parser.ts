@@ -59,6 +59,7 @@ const DEFAULT_PARSER: RubyParser = {
 const STATIC_REQUIRE_NAMES = new Set(["require", "require_relative"]);
 const STATIC_MIXIN_NAMES = new Set(["include", "extend", "prepend"]);
 const STATIC_ROUTE_NAMES = new Set(["get", "post", "put", "patch", "delete", "resource", "resources", "match"]);
+const STATIC_ROUTE_SCOPE_NAMES = new Set(["namespace", "scope"]);
 const STATIC_MODEL_DSL_NAMES = new Set([
   "belongs_to",
   "has_many",
@@ -91,6 +92,7 @@ export class RubyParserAdapter {
     const declarations: RubyDeclaration[] = [];
     const references: RubyReference[] = [];
     const scopes: RubyScope[] = [];
+    const routeScopeStack: string[] = [];
     const classSeen = new Map<string, number>();
     const moduleSeen = new Map<string, number>();
 
@@ -159,7 +161,24 @@ export class RubyParserAdapter {
         }
       } else if (node.type === "call") {
         const sourceQualifiedName = scopes.at(-1)?.qualifiedName;
-        references.push(...referencesFromCall(node, sourceQualifiedName));
+        const methodName = node.childForFieldName("method")?.text;
+        const args = node.childForFieldName("arguments");
+        references.push(...referencesFromCall(node, sourceQualifiedName, routeScopeStack, methodName));
+        const routeScope = methodName === undefined
+          ? undefined
+          : staticRouteScope(methodName, args);
+        if (routeScope !== undefined) {
+          const block = routeCallBlock(node);
+          if (block !== null) {
+            if (args !== null) {
+              visit(args);
+            }
+            routeScopeStack.push(routeScope);
+            visit(block);
+            routeScopeStack.pop();
+            return;
+          }
+        }
       } else if ((node.type === "constant" || node.type === "scope_resolution") &&
         shouldExtractConstantReference(node)) {
         const name = declarationNameFromNode(node);
@@ -456,9 +475,39 @@ function shouldExtractConstantReference(node: Parser.SyntaxNode): boolean {
   return true;
 }
 
-function referencesFromCall(node: Parser.SyntaxNode, sourceQualifiedName: string | undefined): RubyReference[] {
+function routeCallBlock(node: Parser.SyntaxNode): Parser.SyntaxNode | null {
+  const block = node.childForFieldName("block") ?? node.childForFieldName("body");
+  if (block === null) {
+    return null;
+  }
+  return block.childForFieldName("body") ?? block.childForFieldName("value") ?? block;
+}
+
+function staticRouteScope(methodName: string, argsNode: Parser.SyntaxNode | null): string | undefined {
+  if (!STATIC_ROUTE_SCOPE_NAMES.has(methodName)) {
+    return undefined;
+  }
+  const args = argsNode === null ? [] : argsNode.namedChildren;
+  const scopeArg = args[0];
+  if (scopeArg === undefined) {
+    return undefined;
+  }
+  const scope = firstSymbolOrString(scopeArg);
+  if (scope === undefined) {
+    return undefined;
+  }
+  const normalized = scope.replace(/^\/+|\/+$/gu, "");
+  return normalized.length === 0 ? undefined : normalized;
+}
+
+function referencesFromCall(
+  node: Parser.SyntaxNode,
+  sourceQualifiedName: string | undefined,
+  routeScope: readonly string[] = [],
+  methodNameOverride?: string
+): RubyReference[] {
   const methodNode = node.childForFieldName("method");
-  const methodName = methodNode?.text;
+  const methodName = methodNameOverride ?? methodNode?.text;
   if (methodName === undefined) {
     return [];
   }
@@ -472,7 +521,7 @@ function referencesFromCall(node: Parser.SyntaxNode, sourceQualifiedName: string
     return mixinReferences(methodName, argsOnly, sourceQualifiedName);
   }
   if (STATIC_ROUTE_NAMES.has(methodName)) {
-    return routeReferences(methodName, args, sourceQualifiedName);
+    return routeReferences(methodName, args, sourceQualifiedName, routeScope);
   }
   if (STATIC_MODEL_DSL_NAMES.has(methodName)) {
     return modelDslReferences(methodName, args, sourceQualifiedName);
@@ -594,7 +643,8 @@ function mixinReferences(
 function routeReferences(
   methodName: string,
   argsNode: Parser.SyntaxNode | null,
-  sourceQualifiedName: string | undefined
+  sourceQualifiedName: string | undefined,
+  routeScope: readonly string[] = []
 ): RubyReference[] {
   if (argsNode === null) {
     return [dynamicReference({
@@ -635,6 +685,9 @@ function routeReferences(
         }
       })];
     }
+    const routeControllerResourceName = methodName === "resource"
+      ? routePluralizedResourceName(resourceName)
+      : resourceName;
     return [literalReference({
       kind: "ruby_route",
       name: resourceName,
@@ -644,8 +697,9 @@ function routeReferences(
         static: true,
         declaration_source: "tree-sitter-ruby",
         route_form: methodName,
-        route_scope: resourceName,
-        controller_candidate: railsControllerName(resourceName)
+        route_scope: scopedRouteName(routeScope, resourceName),
+        route_namespace: routeScope.join("/"),
+        controller_candidate: railsControllerName(scopedRouteControllerPath(routeScope, routeControllerResourceName))
       }
     })];
   }
@@ -663,12 +717,12 @@ function routeReferences(
     })];
   }
 
-  const routePath = stringValue(args[0]);
-  if (routePath === undefined) {
+  const routePathArgument = extractRoutePathArgument(args);
+  if (routePathArgument === undefined) {
     return [dynamicReference({
       name: methodName,
       sourceQualifiedName,
-      node: args[0],
+      node: args[0] ?? null,
       metadata: {
         declaration_source: "tree-sitter-ruby",
         static: false,
@@ -676,33 +730,35 @@ function routeReferences(
       }
     })];
   }
+  const routePath = routePathArgument.path;
+  const routePathNode = routePathArgument.node;
 
   const routeReference = literalReference({
     kind: "ruby_route",
     name: routePath,
     sourceQualifiedName,
-    node: args[0],
+    node: routePathNode,
     metadata: {
       static: true,
       declaration_source: "tree-sitter-ruby",
       route_form: methodName,
-      route_path: routePath
+      route_path: routePath,
+      route_namespace: routeScope.join("/")
     }
   });
-  const targetPair = args.find((arg) =>
-    arg.type === "pair" && arg.childForFieldName("key")?.text === "to"
-  );
+
+  const targetPair = routeTargetPair(args);
   if (targetPair === undefined) {
     return [routeReference];
   }
-  const targetNode = targetPair.childForFieldName("value");
+  const targetNode = targetPair.valueNode;
   const target = targetNode === null ? undefined : stringValue(targetNode);
-  const parsedTarget = target === undefined ? undefined : railsControllerActionCandidate(target);
+  const parsedTarget = target === undefined ? undefined : railsControllerActionCandidate(target, routeScope);
   if (targetNode === null || parsedTarget === undefined) {
     return [routeReference, dynamicReference({
       name: methodName,
       sourceQualifiedName,
-      node: targetNode ?? targetPair,
+      node: targetNode ?? targetPair.pairNode,
       metadata: {
         declaration_source: "tree-sitter-ruby",
         static: false,
@@ -722,11 +778,145 @@ function routeReferences(
       declaration_source: "tree-sitter-ruby",
       route_form: methodName,
       route_path: routePath,
+      route_namespace: routeScope.join("/"),
       route_controller: parsedTarget.controller,
+      route_controller_class: railsControllerName(parsedTarget.controller),
       route_action: parsedTarget.action,
       controller_action_candidate: true
     }
   })];
+}
+
+function routeTargetPair(args: readonly Parser.SyntaxNode[]): {
+  pairNode: Parser.SyntaxNode;
+  valueNode: Parser.SyntaxNode | null;
+} | undefined {
+  const toPair = args.find((arg): arg is Parser.SyntaxNode => arg.type === "pair" &&
+    pairKey(arg) === "to");
+  if (toPair !== undefined) {
+    return {
+      pairNode: toPair,
+      valueNode: toPair.childForFieldName("value")
+    };
+  }
+
+  const hashRocketPair = extractHashRocketRoutePair(args);
+  if (hashRocketPair === undefined) {
+    return undefined;
+  }
+
+  return {
+    pairNode: hashRocketPair.pairNode,
+    valueNode: hashRocketPair.valueNode
+  };
+}
+
+function extractHashRocketRoutePair(args: readonly Parser.SyntaxNode[]): {
+  pairNode: Parser.SyntaxNode;
+  valueNode: Parser.SyntaxNode;
+} | undefined {
+  const pairs = args.filter((arg) => arg.type === "pair");
+  for (const pair of pairs) {
+    const key = pairKey(pair);
+    if (key === undefined || key === "to" || key === "via" || key === "as" ||
+      key === "constraints" || key === "defaults" || key === "controller" || key === "action") {
+      continue;
+    }
+    const valueNode = pair.childForFieldName("value");
+    if (valueNode !== null && stringValue(valueNode) !== undefined) {
+      return { pairNode: pair, valueNode };
+    }
+  }
+  return undefined;
+}
+
+function extractRoutePathArgument(args: readonly Parser.SyntaxNode[]): {
+  path: string;
+  node: Parser.SyntaxNode;
+} | undefined {
+  const first = args[0];
+  if (first !== undefined) {
+    const firstPath = stringValue(first);
+    if (firstPath !== undefined) {
+      return { path: firstPath, node: first };
+    }
+  }
+  const hashRocketPair = extractHashRocketRoutePair(args);
+  if (hashRocketPair === undefined) {
+    return undefined;
+  }
+  const keyNode = hashRocketPair.pairNode.childForFieldName("key");
+  if (keyNode === null) {
+    return undefined;
+  }
+  const routePath = pairLiteralValue(keyNode);
+  if (routePath === undefined) {
+    return undefined;
+  }
+  return { path: routePath, node: keyNode };
+}
+
+function pairKey(pair: Parser.SyntaxNode): string | undefined {
+  const keyNode = pair.childForFieldName("key");
+  if (keyNode === null) {
+    return undefined;
+  }
+  return pairLiteralValue(keyNode);
+}
+
+function pairLiteralValue(node: Parser.SyntaxNode): string | undefined {
+  return firstSymbolOrString(node) ?? stringValue(node);
+}
+
+function scopedRouteControllerPath(routeScope: readonly string[], resourceName: string): string {
+  const normalizedResourceName = resourceName.replace(/::/gu, "/");
+  if (routeScope.length === 0 || normalizedResourceName.includes("/") || normalizedResourceName.includes("::")) {
+    return normalizedResourceName;
+  }
+  return [...routeScope, normalizedResourceName].join("/");
+}
+
+function routePluralizedResourceName(rawResourceName: string): string {
+  const normalized = rawResourceName.replace(/^\/+|\/+$/gu, "");
+  if (normalized.length === 0) {
+    return rawResourceName;
+  }
+  return normalized
+    .split("/")
+    .filter(Boolean)
+    .map(pluralizeResourceNameSegment)
+    .join("/");
+}
+
+function toPascalCase(input: string): string {
+  return input
+    .split("_")
+    .filter((segment) => segment.length > 0)
+    .map((segment) => `${segment[0]!.toUpperCase()}${segment.slice(1)}`)
+    .join("");
+}
+
+function pluralizeResourceNameSegment(resourceName: string): string {
+  const normalized = resourceName.trim();
+  const lowered = normalized.toLowerCase();
+  if (lowered.length === 0 || lowered.includes("::")) {
+    return resourceName;
+  }
+  if (lowered.endsWith("s")) {
+    return toPascalCase(resourceName);
+  }
+  if (lowered.endsWith("y") && lowered.length > 1 &&
+    !"aeiou".includes(lowered.charAt(lowered.length - 2))) {
+    return `${toPascalCase(resourceName.slice(0, -1))}ies`;
+  }
+  if (/(ch|sh|x|z)$/u.test(lowered)) {
+    return `${toPascalCase(resourceName)}es`;
+  }
+  return `${toPascalCase(resourceName)}s`;
+}
+
+function scopedRouteName(routeScope: readonly string[], routeName: string): string {
+  return routeScope.length === 0 ? routeName : [...routeScope, routeName].join("/");
 }
 
 function modelDslReferences(
@@ -760,17 +950,62 @@ function modelDslReferences(
       }
     })];
   }
+  const className = modelDslClassNameOption(argsNode);
+  if (className === null) {
+    return [dynamicReference({
+      name: methodName,
+      sourceQualifiedName,
+      node: argsNode,
+      metadata: {
+        declaration_source: "tree-sitter-ruby",
+        static: false,
+        reason: "non_literal_model_dsl_argument",
+        model_form: methodName
+      }
+    })];
+  }
+  const metadata: Record<string, unknown> = {
+    static: true,
+    declaration_source: "tree-sitter-ruby",
+    model_form: methodName
+  };
+  if (className !== undefined) {
+    metadata.class_name = className;
+  }
   return [literalReference({
     kind: "ruby_model_dsl",
     name: firstName,
     sourceQualifiedName,
     node: firstArg,
-    metadata: {
-      static: true,
-      declaration_source: "tree-sitter-ruby",
-      model_form: methodName
-    }
+    metadata
   })];
+}
+
+function modelDslClassNameOption(argsNode: Parser.SyntaxNode): string | null | undefined {
+  const args = argsNode === null ? [] : argsNode.namedChildren;
+  const classNamePair = args.find((candidate) => candidate.type === "pair" && pairKey(candidate) === "class_name");
+  if (classNamePair === undefined) {
+    return undefined;
+  }
+  const valueNode = classNamePair.childForFieldName("value");
+  if (valueNode === null) {
+    return null;
+  }
+  const value = stringValue(valueNode) ?? constantName(valueNode);
+  if (value === undefined) {
+    return null;
+  }
+  return normalizeModelClassName(value);
+}
+
+function normalizeModelClassName(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed.includes("::")) {
+    return trimmed;
+  }
+  return trimmed
+    .replace(/^::+/u, "")
+    .replace(/::/gu, ".");
 }
 
 function literalReference(input: {
@@ -830,6 +1065,9 @@ function firstSymbolOrString(node: Parser.SyntaxNode): string | undefined {
   if (symbolValue !== undefined) {
     return symbolValue;
   }
+  if (node.type === "hash_key_symbol") {
+    return node.text.endsWith(":") ? node.text.slice(0, -1) : node.text;
+  }
   return stringValue(node);
 }
 
@@ -857,7 +1095,10 @@ function constantName(node: Parser.SyntaxNode): string | undefined {
   return undefined;
 }
 
-function railsControllerActionCandidate(target: string): {
+function railsControllerActionCandidate(
+  target: string,
+  routeScope: readonly string[] = []
+): {
   controller: string;
   action: string;
   qualifiedName: string;
@@ -871,10 +1112,13 @@ function railsControllerActionCandidate(target: string): {
   if (!/^[a-zA-Z_][a-zA-Z0-9_/]*$/u.test(controller) || !/^[a-zA-Z_][a-zA-Z0-9_!?=]*$/u.test(action)) {
     return undefined;
   }
+  const controllerPath = routeScope.length === 0 || controller.includes("/") || controller.includes("::")
+    ? controller
+    : [...routeScope, controller].join("/");
   return {
-    controller,
+    controller: controllerPath,
     action,
-    qualifiedName: `${railsControllerName(controller)}#${action}`
+    qualifiedName: `${railsControllerName(controllerPath)}#${action}`
   };
 }
 

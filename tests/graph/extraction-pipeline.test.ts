@@ -24,7 +24,8 @@ import {
   CppDeclarationExtractorAdapter,
   GoDeclarationExtractorAdapter,
   JavaScriptTypeScriptTreeSitterExtractorAdapter,
-  PythonTreeSitterExtractorAdapter
+  PythonTreeSitterExtractorAdapter,
+  RubyTreeSitterExtractorAdapter
 } from "../../src/infrastructure/tree-sitter/index.js";
 import { InMemoryRuntimeOperationsAdapter } from "../../src/infrastructure/runtime/index.js";
 
@@ -401,7 +402,7 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
-  it("indexes the Rails Minitest fixture with expected resource-backed route/config evidence shape", async () => {
+  it("indexes the Rails Minitest fixture with expected route/config evidence shape", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
     const store = openGraphStore(path.join(dir, "rails-minitest.sqlite"));
     const registry = new ExtractorRegistryAdapter();
@@ -423,7 +424,8 @@ describe("repository graph extraction pipeline", () => {
       });
 
       expect(result.scanned_files).toBeGreaterThan(10);
-      expect(result.resource_backed_files).toBe(result.scanned_files);
+      expect(result.resource_backed_files).toBeGreaterThan(0);
+      expect(result.resource_backed_files).toBeLessThan(result.scanned_files);
 
       const files = await store.listFiles({ snapshot_id: "204" });
       const filePaths = files.map((file) => file.path);
@@ -539,8 +541,9 @@ describe("repository graph extraction pipeline", () => {
           snapshot_id: fixture.snapshot
         });
 
-        expect(result.scanned_files).toBeGreaterThan(10);
-        expect(result.resource_backed_files).toBe(result.scanned_files);
+      expect(result.scanned_files).toBeGreaterThan(10);
+        expect(result.resource_backed_files).toBeGreaterThan(0);
+        expect(result.resource_backed_files).toBeLessThan(result.scanned_files);
 
         const routeNode = await store.findNodesByQualifiedName({
           snapshot_id: fixture.snapshot,
@@ -564,19 +567,11 @@ describe("repository graph extraction pipeline", () => {
           snapshot_id: fixture.snapshot,
           qualified_name: fixture.rolePath
         });
-        expect(roleNode).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              kind: "resource",
-              metadata: expect.objectContaining({
-                rails_discovery: expect.objectContaining({
-                  rails_roles: expect.arrayContaining(["model"]),
-                  rails_project_roots: expect.arrayContaining([fixture.expectedRoot])
-                })
-              })
-            })
-          ])
-        );
+        expect(roleNode).toEqual([]);
+        await expect(store.getFile({ snapshot_id: fixture.snapshot, path: fixture.rolePath })).resolves.toMatchObject({
+          indexed: false,
+          skipped_reason: "unsupported"
+        });
 
         if (fixture.configPath === undefined) {
           expect(await store.findNodesByQualifiedName({
@@ -588,36 +583,22 @@ describe("repository graph extraction pipeline", () => {
             snapshot_id: fixture.snapshot,
             qualified_name: fixture.configPath
           });
-          expect(configNode).toEqual(
-            expect.arrayContaining([
-              expect.objectContaining({
-                kind: "resource",
-                metadata: expect.objectContaining({
-                  rails_discovery: expect.objectContaining({
-                    rails_is_config_file: true
-                  })
-                })
-              })
-            ])
-          );
+          expect(configNode).toEqual([]);
+          await expect(store.getFile({ snapshot_id: fixture.snapshot, path: fixture.configPath })).resolves.toMatchObject({
+            indexed: false,
+            skipped_reason: "unsupported"
+          });
         }
 
         const testNode = await store.findNodesByQualifiedName({
           snapshot_id: fixture.snapshot,
           qualified_name: fixture.testPath
         });
-        expect(testNode).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              kind: "resource",
-              metadata: expect.objectContaining({
-                rails_discovery: expect.objectContaining({
-                  rails_is_test_file: true
-                })
-              })
-            })
-          ])
-        );
+        expect(testNode).toEqual([]);
+        await expect(store.getFile({ snapshot_id: fixture.snapshot, path: fixture.testPath })).resolves.toMatchObject({
+          indexed: false,
+          skipped_reason: "unsupported"
+        });
       } finally {
         store.close();
       }
@@ -652,17 +633,13 @@ describe("repository graph extraction pipeline", () => {
         snapshot_id: "211",
         qualified_name: "test/widget_test.rb"
       });
-      expect(testNodes).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            kind: "resource",
-            metadata: expect.not.objectContaining({
-              rails_discovery: expect.any(Object)
-            })
-          })
-        ])
-      );
-      expect(result.resource_backed_files).toBe(result.scanned_files);
+      expect(testNodes).toEqual([]);
+      await expect(store.getFile({ snapshot_id: "211", path: "test/widget_test.rb" })).resolves.toMatchObject({
+        indexed: false,
+        skipped_reason: "unsupported"
+      });
+      expect(result.resource_backed_files).toBeGreaterThan(0);
+      expect(result.resource_backed_files).toBeLessThan(result.scanned_files);
       expect(result.scanned_files).toBeGreaterThan(0);
     } finally {
       store.close();
@@ -677,7 +654,7 @@ describe("repository graph extraction pipeline", () => {
     fs.writeFileSync(path.join(repoRoot, "app/models/widget.rb"), "x".repeat(2_000_001));
     const store = openGraphStore(path.join(dir, "rails-oversized.sqlite"));
     const registry = new ExtractorRegistryAdapter();
-    registry.register(new ResourceExtractorAdapter());
+    registry.register(new RubyTreeSitterExtractorAdapter());
     const workspace = new WorkspaceFileAdapter({ repoRoot });
     const guardedWorkspace: WorkspaceFilePort = {
       readText(input) {

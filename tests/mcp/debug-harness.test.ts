@@ -448,6 +448,77 @@ describe("repo-local MCP debug harness", () => {
     }
   });
 
+  it("prefers Ruby symbols/files for mixed Rails repositories", async () => {
+    const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep-ruby", String(Date.now()));
+    const targetRepo = path.resolve("tests/fixtures/fixture-mcp-tool-sweep-ruby");
+    try {
+      const report = await runMcpToolSweep({
+        repos: [targetRepo],
+        output_dir: outputDir,
+        call_timeout_ms: 30_000,
+        include_raw: true,
+        start_graph_warmup: true
+      });
+      const symbolSearch = report.results.find(
+        (result) => result.kind === "tool" && result.name === "symbol_search"
+      );
+      const findReferences = report.results.find(
+        (result) => result.kind === "tool" && result.name === "find_references"
+      );
+      const impact = report.results.find(
+        (result) => result.kind === "tool" && result.name === "impact"
+      );
+      const context = report.results.find(
+        (result) => result.kind === "tool" && result.name === "context_for_task"
+      );
+      const rawSymbolSearch = symbolSearch?.raw_envelope as {
+        data?: { symbols?: Array<{ node_id?: string; name?: string; path?: string; language?: string }> };
+      } | undefined;
+      const rawReferences = findReferences?.raw_envelope as {
+        data?: {
+          target?: {
+            node_id?: string;
+            path?: string;
+            language?: string;
+          };
+        };
+      } | undefined;
+      const rawImpact = impact?.raw_envelope as {
+        data?: { start_node_ids?: string[] };
+      } | undefined;
+      const rawContext = context?.raw_envelope as {
+        data?: { requested_files?: Array<{ path?: string; language?: string }>; symbols?: Array<{ name?: string }> };
+      } | undefined;
+
+      expect(symbolSearch).toMatchObject({ status: "ok", quality: "full" });
+      expect(findReferences).toMatchObject({ status: "ok", quality: "full" });
+      expect(impact).toMatchObject({ status: "ok", quality: "full" });
+      expect(context).toMatchObject({ status: "ok", quality: "full" });
+
+      expect(rawSymbolSearch?.data?.symbols?.[0]).toMatchObject({
+        name: "CheckoutService",
+        path: "app/services/checkout_service.rb",
+        language: "ruby"
+      });
+      expect(rawReferences?.data?.target).toMatchObject({
+        path: "app/services/checkout_service.rb",
+        language: "ruby",
+        node_id: rawSymbolSearch?.data?.symbols?.[0]?.node_id
+      });
+      expect(rawImpact?.data?.start_node_ids).toContain(rawSymbolSearch?.data?.symbols?.[0]?.node_id);
+      expect(rawContext?.data?.requested_files).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            path: "app/services/checkout_service.rb",
+            language: "ruby"
+          })
+        ])
+      );
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    }
+  });
+
   it("does not classify successful findings as degraded sweep quality", async () => {
     const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep-findings-quality", String(Date.now()));
     const targetRepo = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-findings-quality-"));

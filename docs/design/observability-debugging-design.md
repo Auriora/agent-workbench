@@ -95,6 +95,11 @@ against repository-owned fixtures or committed-tree sandbox copies under `.tmp`
 or an Agent Workbench-named `/tmp` sandbox. Original external repositories are
 read-only inputs.
 
+Graph-backed sweep probes select a deterministic symbol-bearing source file
+from the detected repository ecosystem. Rails-shaped mixed repositories prefer
+Ruby for symbol, reference, impact, and context probes so a successful sweep
+actually exercises the promoted Ruby adapter instead of incidental JavaScript.
+
 Tool sweep quality labels describe harness result quality, not product
 severity:
 

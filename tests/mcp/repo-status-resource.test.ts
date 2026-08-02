@@ -755,6 +755,113 @@ describe("repo status MCP resource", () => {
       })
     ]);
   });
+
+  it("classifies Ruby source files as parser-backed partial semantic in public repo status", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-ruby-status-"));
+    fs.cpSync(path.resolve("tests/fixtures/fixture-ruby-semantic-repo"), repoRoot, {
+      recursive: true,
+      filter: (source) => path.basename(source) !== ".cache" && path.basename(source) !== "node_modules"
+    });
+    const sharedConfigPath = path.join(repoRoot, "lib", "shared_config.rb");
+    const routePath = path.join(repoRoot, "config", "routes.rb");
+    const store = openGraphStore(graphStorePath(repoRoot));
+    try {
+      await store.createBuildSnapshot({
+        snapshot: {
+          id: "1000",
+          repo_root: repoRoot,
+          workspace_root: repoRoot,
+          repo_identity: repoRoot,
+          config_identity: "default",
+          schema_version: SCHEMA_VERSION,
+          freshness: "fresh",
+          owner_state: "owner",
+          created_at: "2026-07-05T12:00:00.000Z",
+          updated_at: "2026-07-05T12:00:00.000Z"
+        },
+        controller_generation: 0,
+        invalidation_generation: 0,
+        created_at: "2026-07-05T12:00:00.000Z"
+      });
+      await store.upsertEntry({
+        snapshot_id: "1000",
+        entry: buildFileCatalogEntry({
+          file_identity: {
+            path: "lib/shared_config.rb",
+            language: "ruby",
+            content_hash: "sha256:test-ruby-shared-config",
+            size_bytes: fs.statSync(sharedConfigPath).size,
+            mtime_ms: fs.statSync(sharedConfigPath).mtimeMs,
+            indexed_at: "2026-07-05T12:00:00.000Z"
+          }
+        })
+      });
+      await store.upsertEntry({
+        snapshot_id: "1000",
+        entry: buildFileCatalogEntry({
+          file_identity: {
+            path: "config/routes.rb",
+            language: "ruby",
+            content_hash: "sha256:test-ruby-routes",
+            size_bytes: fs.statSync(routePath).size,
+            mtime_ms: fs.statSync(routePath).mtimeMs,
+            indexed_at: "2026-07-05T12:00:00.000Z"
+          }
+        })
+      });
+      await store.transitionBuild({
+        repo_root: repoRoot,
+        snapshot_id: "1000",
+        controller_generation: 0,
+        invalidation_generation: 0,
+        from: "building",
+        to: "published",
+        updated_at: "2026-07-05T12:00:00.000Z"
+      });
+    } finally {
+      store.close();
+    }
+
+    try {
+      const server = createAgentWorkbenchServer(repoRoot, {
+        startupRefreshDelayMs: 60_000
+      });
+
+      const response = await getRegisteredResource(server, "repo:///status").readCallback({});
+      const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
+        data: GetRepoStatusResult["status"];
+      };
+
+      const rubyEvidence = parsed.data.adapter_coverage.find(
+        (entry) =>
+          entry.domain === "language" &&
+          entry.name === "ruby" &&
+          entry.paths.some((value) => value.endsWith(".rb"))
+      );
+      const railsEvidence = parsed.data.adapter_coverage.find(
+        (entry) => entry.domain === "framework" && entry.name === "rails"
+      );
+
+      expect(rubyEvidence).toMatchObject({
+        domain: "language",
+        name: "ruby",
+        capability_level: "partial_semantic",
+        evidence_kinds: ["parser"]
+      });
+      expect(rubyEvidence?.confidence).toBe("high");
+      expect(rubyEvidence?.provenance).toBe("file_identity");
+      expect(rubyEvidence?.paths.length).toBeGreaterThan(0);
+      expect(rubyEvidence?.paths).not.toContain("config/routes.rb");
+      expect(railsEvidence).toMatchObject({
+        domain: "framework",
+        name: "rails",
+        capability_level: "resource_backed",
+        evidence_kinds: ["heuristic"]
+      });
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 async function seedPublishedEntry(

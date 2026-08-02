@@ -8,4 +8,9 @@ Rails.application.routes.draw do
   match "/legacy", to: "checkouts#legacy", via: :all
   get "/computed", to: route_prefix
   resources route_prefix
+  namespace :admin do
+    resources :checkouts
+    get "/checkout/:id" => "checkouts#show"
+  end
+  get "/admin/widgets/:id" => "admin/widgets#show"
 end

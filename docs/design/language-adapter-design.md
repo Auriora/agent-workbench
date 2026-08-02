@@ -145,8 +145,11 @@ Overview and task context expose observed Ruby/Rails platforms, configuration,
 first-party roles and nearby tests. Validation planning applies repository
 policy and required execution environments before catalog-backed RSpec or
 Minitest candidates, uses structured arguments through command safety, and
-returns commands as planned/not-executed. Container artifacts remain advisory
-unless repository policy requires them.
+returns commands as planned/not-executed. Explicit guidance that project
+commands must run through Docker blocks generic host Ruby commands and names
+the governing evidence when no approved container command is configured.
+Container artifacts and advisory wording remain non-blocking unless repository
+policy requires a constrained environment.
 
 The delivered Ruby/Rails promotion uses `tree-sitter-ruby` as its single parser
 path for `.rb` files. It emits parser-backed modules, classes, stable
@@ -158,17 +161,22 @@ constant references, ordinary calls, and `include`/`extend`/`prepend` mixins.
 The shared resolver admits only a unique first-party target of the compatible
 declaration kind; duplicate or reopened candidates remain ambiguous.
 
-The initial Rails DSL matrix adds static route calls (`get`, `post`, `put`,
-`patch`, `delete`, `match`, `resource`, and `resources`) plus model calls
-(`belongs_to`, `has_many`, `has_one`, `validates`, and `before_*`). These are
-navigation relationships, not proof of a booted route set, callback execution,
-association validity or runtime dispatch. Nonliteral operands and other dynamic
-forms remain bounded `ruby_dynamic` unresolved records and are never sent
-through lexical, shell, Rails, AST, LSP or retry fallbacks. A parser failure
-rejects the complete file extraction batch instead of returning partial
-results. Whole-program constant lookup, metaprogramming, refinements,
-autoloading, engine composition and type-aware dispatch remain under EB010;
-large-repository completion remains under EB014.
+The Rails DSL matrix adds static route calls (`get`, `post`, `put`, `patch`,
+`delete`, `match`, `resource`, and `resources`) plus model calls (`belongs_to`,
+`has_many`, `has_one`, `validates`, and `before_*`). Literal controller/action
+targets use either `to:` or hash-rocket syntax, and statically named namespace
+blocks qualify controller candidates. Resource-controller and association
+class candidates use bounded conventional inflection or an explicit literal
+`class_name:` and resolve only when first-party indexed declarations make the
+target unambiguous. These are navigation relationships, not proof of a booted
+route set, callback execution, association validity or runtime dispatch.
+Nonliteral operands, irregular or ambiguous candidates, and other dynamic
+forms remain bounded unresolved records and are never sent through lexical,
+shell, Rails, AST, LSP or retry fallbacks. A parser failure rejects the complete
+file extraction batch instead of returning partial results. Whole-program
+constant lookup, metaprogramming, refinements, autoloading, engine composition
+and type-aware dispatch remain under EB010; large-repository completion remains
+under EB014.
 
 The delivered TypeScript/JavaScript partial-semantic slice uses
 `tree-sitter-javascript` for JS/JSX and `tree-sitter-typescript` for TS/TSX.

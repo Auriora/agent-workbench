@@ -1,0 +1,3 @@
+function helperFunction() {
+  return "ready";
+}

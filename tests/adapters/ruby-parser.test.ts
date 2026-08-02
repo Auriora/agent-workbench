@@ -33,10 +33,28 @@ end
 
 require "json"
 require_relative "support/widget"
+class WidgetsController
+  def show
+  end
+end
+
+module Admin
+  class WidgetsController
+    def show
+    end
+  end
+end
 resources :widgets
-get "/widgets/:id", to: "admin/widgets#show"
-belongs_to :account
-`
+namespace :admin do
+  resources :widgets
+  get "/widgets/:id" => "widgets#show"
+end
+get "/admin/widgets/:id" => "admin/widgets#show"
+resource :session
+    belongs_to :account
+    has_many :orders, class_name: "Checkout"
+    has_many :line_items, class_name: "::Commerce::Billing::Checkout"
+    `
     });
 
     const names = result.nodes.map((node) => node.qualified_name);
@@ -79,13 +97,34 @@ belongs_to :account
           reference_name: "widgets",
           candidate_metadata: expect.objectContaining({
             route_form: "resources",
+            route_namespace: "",
             controller_candidate: "WidgetsController"
+          })
+        }),
+        expect.objectContaining({
+          reference_kind: "ruby_route",
+          reference_name: "session",
+          candidate_metadata: expect.objectContaining({
+            route_form: "resource",
+            route_namespace: "",
+            controller_candidate: "SessionsController"
+          })
+        }),
+        expect.objectContaining({
+          reference_kind: "ruby_route",
+          reference_name: "widgets",
+          candidate_metadata: expect.objectContaining({
+            route_form: "resources",
+            route_namespace: "admin",
+            route_scope: "admin/widgets",
+            controller_candidate: "Admin.WidgetsController"
           })
         }),
         expect.objectContaining({
           reference_kind: "ruby_route",
           reference_name: "Admin.WidgetsController#show",
           candidate_metadata: expect.objectContaining({
+            route_namespace: "",
             route_controller: "admin/widgets",
             route_action: "show",
             controller_action_candidate: true
@@ -95,6 +134,22 @@ belongs_to :account
           reference_kind: "ruby_model_dsl",
           reference_name: "account",
           candidate_metadata: expect.objectContaining({ model_form: "belongs_to" })
+        }),
+        expect.objectContaining({
+          reference_kind: "ruby_model_dsl",
+          reference_name: "orders",
+          candidate_metadata: expect.objectContaining({
+            model_form: "has_many",
+            class_name: "Checkout"
+          })
+        }),
+        expect.objectContaining({
+          reference_kind: "ruby_model_dsl",
+          reference_name: "line_items",
+          candidate_metadata: expect.objectContaining({
+            model_form: "has_many",
+            class_name: "Commerce.Billing.Checkout"
+          })
         }),
         expect.objectContaining({
           reference_kind: "ruby_call",

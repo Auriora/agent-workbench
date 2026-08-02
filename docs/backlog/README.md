@@ -390,9 +390,13 @@ or runtime telemetry.
   dogfood solution and available tester feedback. Spec 047 delivered bounded
   resource-backed discovery and non-executed validation planning; Spec 048
   delivered tree-sitter Ruby declarations, bounded static references,
-  conservative graph queries and the fixture-approved Rails DSL matrix. EB010
-  remains the single owner for deeper Ruby constant lookup, dynamic dispatch,
-  metaprogramming, refinements, autoloading and Rails engine/runtime semantics.
+  conservative graph queries and the fixture-approved Rails DSL matrix. A
+  follow-up dogfood repair aligned public Ruby capability reporting, enforced
+  explicit Docker-only repository guidance, made the sweep exercise Ruby, and
+  added bounded hash-rocket, namespace, resource-controller and association
+  navigation. EB010 remains the single owner for deeper Ruby constant lookup,
+  dynamic dispatch, metaprogramming, refinements, autoloading and Rails
+  engine/runtime semantics.
 
 ### EB011: Contextual Tool Exposure And Dynamic Router
 

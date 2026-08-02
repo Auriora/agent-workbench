@@ -722,6 +722,24 @@ describe("repo scope and overview composed server resources", () => {
     });
   });
 
+  it("reports Ruby source as partial semantic in the public scope resource", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-ruby-semantic-repo");
+    const server = createAgentWorkbenchServer(repoRoot, {
+      startupRefreshDelayMs: 60_000
+    });
+
+    const response = await getRegisteredResource(server, "repo:///scope").readCallback({});
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
+      data: GetRepoScopeResult["scope"];
+      meta: GetRepoScopeResult["meta"];
+    };
+
+    expect(parsed.data.languages).toContain("ruby");
+    expect(parsed.data.file_counts.ruby).toBeGreaterThan(0);
+    expect(parsed.data.capability_counts.partial_semantic).toBeGreaterThan(0);
+    expect(parsed.meta.evidence_kinds).toContain("parser");
+  });
+
   it("aligns scope freshness with an available fresh snapshot", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-cmake-cpp-repo");
     const result = await getRepoScope({
@@ -815,6 +833,23 @@ describe("repo scope and overview composed server resources", () => {
         })
       ])
     );
+  });
+
+  it("returns parser-backed Ruby coverage in the public overview resource", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-ruby-semantic-repo");
+    const server = createAgentWorkbenchServer(repoRoot, {
+      startupRefreshDelayMs: 60_000
+    });
+
+    const response = await getRegisteredResource(server, "repo:///overview").readCallback({});
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
+      data: GetRepoOverviewResult["overview"];
+      meta: GetRepoOverviewResult["meta"];
+    };
+
+    expect(parsed.data.platforms).toContain("ruby");
+    expect(parsed.meta.capability_level).toBe("partial_semantic");
+    expect(parsed.meta.evidence_kinds).toContain("parser");
   });
 });
 

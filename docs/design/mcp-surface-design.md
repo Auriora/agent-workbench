@@ -798,7 +798,10 @@ Post-closure dogfood caveats from large mixed-language repositories:
 - Done: validation planning must read bounded repo-local guidance before
   generic language defaults. If guidance requires Docker-based validation or
   forbids host test commands, suppress direct commands such as `go test ./...`
-  and return a blocked plan with the governing evidence.
+  or `bundle exec ruby ...` and return a blocked plan with the governing
+  evidence. An explicit instruction to run project commands through Docker is
+  blocking; advisory environment files or wording that host tooling is not
+  required are not blocking by themselves.
 - Done: skip common hidden runtime/test artifact directories such as `.home`,
   `.sandbox`, `.gocache`, hidden `*-tests` folders, build outputs, and generated
   caches before applying row caps.

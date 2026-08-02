@@ -206,7 +206,7 @@ describe("resource extractor rule units", () => {
       ]);
   });
 
-  it("classifies Ruby route candidates as resource-backed Rails path evidence", async () => {
+  it("classifies Ruby route candidates as framework-backed Rails path evidence", async () => {
     const adapter = new ResourceExtractorAdapter();
     const routesFile = await adapter.extract(
       extractionRequest({
@@ -220,10 +220,9 @@ describe("resource extractor rule units", () => {
       expect.objectContaining({
         kind: "resource",
         qualified_name: "config/routes.rb",
-          metadata: expect.objectContaining({
+        metadata: expect.objectContaining({
             domain: "framework",
             capability_level: "resource_backed",
-            evidence_kinds: ["heuristic"],
             rails_discovery: expect.objectContaining({
               rails_project_roots: ["."],
               rails_roles: [],
@@ -253,7 +252,8 @@ describe("resource extractor rule units", () => {
         qualified_name: "app/models/widget.rb",
         metadata: expect.objectContaining({
           domain: "language",
-          capability_level: "resource_backed",
+          capability_level: "partial_semantic",
+          evidence_kinds: ["parser"],
           rails_discovery: expect.objectContaining({
             rails_project_roots: ["."],
             rails_roles: ["model"],

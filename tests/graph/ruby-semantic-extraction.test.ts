@@ -237,6 +237,30 @@ describe("Ruby partial-semantic graph extraction", () => {
           expect.objectContaining({
             target_file_path: "app/controllers/checkouts_controller.rb",
             provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/controllers/admin/checkouts_controller.rb",
+            provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/controllers/sessions_controller.rb",
+            provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/controllers/admin/widgets_controller.rb",
+            provenance: "tree-sitter-ruby"
+          })
+        ])
+      );
+      expect(routeFileReferences).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            target_file_path: "app/models/session.rb",
+            provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/controllers/widgets_controller.rb",
+            provenance: "tree-sitter-ruby"
           })
         ])
       );
@@ -258,6 +282,18 @@ describe("Ruby partial-semantic graph extraction", () => {
         expect.arrayContaining([
           expect.objectContaining({
             target_file_path: "app/models/account.rb",
+            provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/models/checkout.rb",
+            provenance: "tree-sitter-ruby"
+          })
+        ])
+      );
+      expect(customerReferences).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            target_file_path: "app/models/session.rb",
             provenance: "tree-sitter-ruby"
           })
         ])
@@ -310,15 +346,6 @@ describe("Ruby partial-semantic graph extraction", () => {
       expect(routeRefs).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            reference_kind: "ruby_route",
-            reference_name: "checkouts",
-            candidate_metadata: expect.objectContaining({
-              static: true,
-              route_form: "resources",
-              controller_candidate: "CheckoutsController"
-            })
-          }),
-          expect.objectContaining({
             reference_kind: "ruby_dynamic",
             reference_name: "get",
             candidate_metadata: expect.objectContaining({
@@ -345,6 +372,15 @@ describe("Ruby partial-semantic graph extraction", () => {
             candidate_metadata: expect.objectContaining({
               static: false,
               reason: "non_literal_model_dsl_argument"
+            })
+          }),
+          expect.objectContaining({
+            reference_kind: "ruby_model_dsl",
+            reference_name: "session",
+            candidate_metadata: expect.objectContaining({
+              model_form: "validates",
+              static: true,
+              resolution: "unresolved"
             })
           })
         ])
