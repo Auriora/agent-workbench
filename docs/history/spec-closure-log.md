@@ -467,6 +467,32 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-02 - 053-validation-plan-skipped-path-payload-compaction
+
+- **Spec:** `docs/specs/053-validation-plan-skipped-path-payload-compaction/`
+- **Title:** Validation-plan skipped-path payload compaction requirements
+- **Final spec commit:** `f1e327b`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/requirements/runtime-requirements.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/reference/mvp-proof-matrix.md`
+  - `docs/backlog/README.md`
+  - `docs/reference/agent-readable-changelog.md`
+  - `docs/reference/dogfood-evidence-ledger.md`
+- **Verification summary:** Typecheck, 127 focused tests, 16 stdio tests, the
+  full 1,218-test suite, plugin/skill/runtime-build/package checks, two final
+  reviews, lifecycle lint, task-state audit, evidence-quality check, and
+  closure check passed.
+- **Residual risks:**
+  - Installed-package confirmation may be added with the next release; the
+    recorded dogfood is checkout-source evidence and executed no planned
+    validation command.
+- **Follow-up:** EB014, EB059, EB061, and other raw skipped-path surfaces retain
+  their existing independent ownership.
+
 ### 2026-08-02 - 051-large-repository-graph-completion
 
 - **Spec:** `docs/specs/051-large-repository-graph-completion/`
