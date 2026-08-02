@@ -21,7 +21,7 @@ matrix. Task markers and evidence fields remain the authority for delivery state
   - Requirement: N/A
   - Files: `docs/specs/049-ruby-rails-semantic-correctness-and-static-dsl-expansion/README.md`, `requirements.md`, `design.md`, `tasks.md`, `research.md`, `traceability.md`, `verification.md`, `canonical-context.md`, `change-impact.md`
   - Acceptance: Package files reflect current package scope and required lifecycle headings.
-  - Evidence: complete (package creation pass)
+  - Evidence: `spec_runtime.py lint docs/specs/049-ruby-rails-semantic-correctness-and-static-dsl-expansion` returned 0 errors/0 warnings, and `task-state-audit` returned status `pass` with 0 findings on 2026-08-02.
 
 ## Phase 2: Core static enhancements
 
@@ -53,7 +53,7 @@ matrix. Task markers and evidence fields remain the authority for delivery state
   - Requirement: Requirement 8
   - Files: `design.md`, `requirements.md`
   - Acceptance: Advisory/static behavior for `load`, `autoload`, alias, and visibility is implemented with parser assertions.
-  - Evidence: Parser assertions passed for literal load/autoload, alias, visibility, and dynamic fail-closed records.
+  - Evidence: `tests/adapters/ruby-parser.test.ts` passed assertions for literal `load`/`autoload`, alias, visibility, and dynamic fail-closed records in the 43-test focused run.
 
 ## Phase 4: Validation and release readiness
 

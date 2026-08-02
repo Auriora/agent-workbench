@@ -43,11 +43,11 @@ license: GPL-3.0-or-later
 
 | Spec content | Durable destination | Promotion status | Notes |
 |---|---|---|---|
-| Requirement and design intent | `docs/design/language-adapter-design.md` | pending | Package-only authoring completed, runtime implementation pending |
-| Capability and slice boundary detail | `docs/reference/language-capability-matrix.md` | pending | Keep as `partial_semantic` unless evidence extends scope |
-| Agent-visible behavior changes | `docs/reference/agent-readable-changelog.md` | pending | Add no-runtime static-boundary notes if accepted |
-| Backlog follow-ups | `docs/backlog/README.md` | pending | Route deferred forms and follow-up checks |
-| Historical evidence baseline | `docs/reference/dogfood-evidence-ledger.md` | pending | Add only when closure evidence is verified |
+| Requirement and design intent | `docs/design/language-adapter-design.md` | complete | Delivered static behavior and fail-closed boundaries recorded |
+| Capability and slice boundary detail | `docs/reference/language-capability-matrix.md` | complete | Ruby/Rails remains `partial_semantic` with the expanded static forms listed |
+| Agent-visible behavior changes | `docs/reference/agent-readable-changelog.md` | complete | No-runtime static-boundary behavior recorded |
+| Backlog follow-ups | `docs/backlog/README.md` | complete | EB010 retains concern identity and deeper/runtime forms |
+| Historical evidence baseline | `docs/reference/dogfood-evidence-ledger.md` | complete | Fresh bounded evidence for both Rails repositories recorded |
 
 ## Unchanged Durable Areas
 

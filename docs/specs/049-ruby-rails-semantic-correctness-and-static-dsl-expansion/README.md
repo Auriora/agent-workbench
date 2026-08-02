@@ -47,5 +47,5 @@ captured inside this package.
 - Spec ID: 049
 - Owner: platform
 - Start date: 2026-08-02
-- Current state: active package draft
+- Current state: verified and ready for removal after closure metadata is recorded
 - Scope owner: `docs/specs/049-ruby-rails-semantic-correctness-and-static-dsl-expansion/`

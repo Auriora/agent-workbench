@@ -29,7 +29,7 @@ validation is complete; final lifecycle cleanup remains commit-dependent.
 | Automated tests pass or alternate verification recorded | yes | complete | Typecheck, focused suites, and full 1,173-test suite passed |
 | Durable documentation updates identified | yes | complete | Design/capability/promotional targets listed in `change-impact.md` |
 | Durable documentation promoted or explicitly deferred | yes | complete | Design, capability matrix, changelog, and backlog updated |
-| Spec cleanup decision recorded | yes | complete | `Keep active` recorded in this package |
+| Spec cleanup decision recorded | yes | complete | Remove after closure metadata is recorded |
 | Governance or policy conflicts resolved | yes | complete | No conflicts identified during package-only pass |
 
 ## Validation Commands
@@ -86,16 +86,16 @@ validation is complete; final lifecycle cleanup remains commit-dependent.
 | Scope and out-of-scope files | requirements/non-goals + canonical-context | low |
 | Must-read and optional context | requirements.md, design.md, traceability.md | low |
 | Permissions and approval points | AGENTS.md constraints | low |
-| Validation commands and expected signals | verification command placeholders | medium |
-| Review needs | durable promotion and closure review | medium |
-| Durable-doc or closure impact | change-impact + canonical-context matrixes | medium |
-| Optional repo-evidence caveats | pre-existing baseline in README/research | medium |
+| Validation commands and expected signals | executed commands and counts above | low |
+| Review needs | lifecycle lint, evidence-quality, risk, and closure checks | low |
+| Durable-doc or closure impact | promoted targets in change-impact and this record | low |
+| Optional repo-evidence caveats | bounded static-only evidence in README/research | low |
 
 ## Task Evidence
 
 | Task ID | Status | Evidence | Notes |
 |---|---|---|---|
-| T001 | complete | package-file structure updated | package-only authoring pass |
+| T001 | complete | nine package artifacts inspected; lifecycle lint and task audit clean | none |
 | T002 | complete | singleton, scope, and overview assertions passed | none |
 | T003 | complete | route options, custom actions, and draw parser/graph assertions passed | concern reuse explicitly out of scope |
 | T004 | complete | association parser/graph assertions passed | none |
@@ -109,7 +109,7 @@ validation is complete; final lifecycle cleanup remains commit-dependent.
 
 | Date | Evidence | Result | Notes |
 |---|---|---|---|
-| 2026-08-02 | package repair pass | passed | Lifecycle lint clean |
+| 2026-08-02 | `spec_runtime.py lint` and `task-state-audit` for Spec 049 | passed | 0 errors, 0 warnings, and 0 task-state findings |
 | 2026-08-02 | parser and graph focused suites | passed | 43/43 tests |
 | 2026-08-02 | broader Ruby/Rails regression set | passed | 138/138 tests |
 | 2026-08-02 | full Vitest suite with four workers | passed | 106 files and 1,173/1,173 tests |
@@ -141,13 +141,13 @@ validation is complete; final lifecycle cleanup remains commit-dependent.
 
 ### Spec Cleanup Decision
 
-- **Cleanup action:** keep active
-- **Reason:** package repair is metadata/structure correction; implementation work not yet complete.
-- **Final spec commit:** pending
-- **Closure log path:** `docs/history/spec-closure-log.md` once acceptance is complete
-- **Closure cleanup:** pending
+- **Cleanup action:** remove after promotion and closure evidence
+- **Reason:** implementation, verification, promotion, and follow-up routing are complete.
+- **Final spec commit:** captured by the closure record after this final package revision
+- **Closure log path:** `docs/history/spec-closure-log.md`
+- **Closure cleanup:** pending package removal
 - **Active indexes updated:** no
-- **Durable docs linked back to evidence where useful:** no
+- **Durable docs linked back to evidence where useful:** yes
 - **Residual spec-only content:** package metadata and planning matrices
 
 ## Ship Or Closure Risk

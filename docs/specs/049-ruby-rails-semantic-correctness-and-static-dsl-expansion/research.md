@@ -34,9 +34,10 @@ evidence-justified for Spec 049 without introducing runtime fallback paths?
 
 - Prior Rails work in this repository already established the baseline for
   Ruby/Rails partial-semantic behavior in bounded parser-backed slices.
-- There is an existing uncommitted follow-up area in the worktree covering root,
+- The initial worktree contained a pre-existing follow-up area covering root,
   through, source, and Docker validation/orientation improvements.
-- That area is treated as pre-existing baseline, not as validated Spec 049 evidence.
+- That baseline was reconciled, implemented, and included in the verified Spec
+  049 evidence rather than inferred from its initial worktree state.
 
 - Singleton method canonical identity is feasible with current AST shapes.
 - Namespace/path/module disambiguation is feasible with explicit nesting stacks.
@@ -83,7 +84,8 @@ evidence-justified for Spec 049 without introducing runtime fallback paths?
   - Tree-sitter output is stable for the targeted syntax patterns.
   - No runtime parser fallback is introduced in this scope.
 - **Evidence gaps:**
-  - Full fixture suite for edge-case routing/action combinations.
+  - Runtime and dynamic Rails forms remain intentionally outside the static
+    fixture domain.
 
 ## Recommendation
 
@@ -93,8 +95,9 @@ ambiguous, or runtime-dependent cases.
 ## Decision Impact
 
 - Requirement 5/6/7 behavior stays in this spec, with fallback-to-unresolved for unsupported forms.
-- Verification remains implementation-dependent and should record any missing route edge cases as residual destinations.
-- Durable documentation updates are still deferred until implementation evidence exists.
+- Verification records the implemented route forms and routes unsupported
+  concern reuse to EB010.
+- Durable documentation updates are complete.
 
 ## Open questions and constraints
 

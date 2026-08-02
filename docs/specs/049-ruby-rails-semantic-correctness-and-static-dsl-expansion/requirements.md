@@ -62,14 +62,15 @@ first-party file scope.
 
 ## Staged Readiness
 
-- **Current stage:** requirements
-- **Next stage:** design
-- **Ready to design when:** all goals, non-goals, all requirements, and
-  correctness properties are complete and explicitly bounded.
+- **Current stage:** closure
+- **Next stage:** record closure metadata and remove the temporary package
+- **Ready to close:** yes; all goals, non-goals, requirements, acceptance
+  criteria, and correctness properties have implementation and verification
+  evidence.
 - **Design-first exception:** no
 - **Optional artifacts recommended:** traceability, verification, research
-- **Downstream review needed:** tasks, design, verification
-- **Open readiness blocks:** none in package authoring; external implementation and tests remain pending.
+- **Downstream review needed:** none within this package
+- **Open readiness blocks:** none
 
 ## Requirements
 
