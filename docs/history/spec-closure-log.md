@@ -467,6 +467,33 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-02 - 052-production-documentation-corpus-isolation-and-governing-owner-priority
+
+- **Spec:** `docs/specs/052-production-documentation-corpus-isolation-and-governing-owner-priority/`
+- **Title:** Production documentation corpus isolation and governing-owner priority requirements
+- **Final spec commit:** `b13d3a3`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/backlog/README.md`
+  - `docs/reference/documentation-map.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/reference/dogfood-evidence-ledger.md`
+  - `docs/requirements/runtime-requirements.md`
+  - `docs/reference/mvp-proof-matrix.md`
+  - `docs/reference/agent-readable-changelog.md`
+- **Verification summary:** Lifecycle closure check passed with no blockers;
+  typecheck, 266 focused tests, the 1,211-test full suite, plugin validation,
+  package dry-run, diff checks, and final architecture/QA review passed.
+- **Residual risks:**
+  - Checkout-copy dogfood reached a structured refresh-worker deadline before
+    fresh installed-runtime ranking/count acceptance; no unsupported acceptance
+    claim was made.
+- **Follow-up:** EB059 retains ranked-universe capacity/eviction policy;
+  EB065 was independently delivered and closed by Spec 053.
+
 ### 2026-08-02 - 053-validation-plan-skipped-path-payload-compaction
 
 - **Spec:** `docs/specs/053-validation-plan-skipped-path-payload-compaction/`
