@@ -3,7 +3,7 @@ title: Runtime requirements
 doc_type: requirements
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-08-02
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -67,6 +67,7 @@ workflow designers.
 | REQ-028 | OpenTelemetry export must be disabled by default, configurable by environment, and support OTLP HTTP endpoints suitable for Jaeger or collectors. | Runtime operations, telemetry | Observability design, runtime operations design | Telemetry config tests |
 | REQ-029 | Repo-local debug harnesses may target arbitrary repos for MCP/use-case testing, but must not be registered as public MCP surfaces or emitted to other projects. | Debug tooling | Observability design, MCP design | Debug harness tests |
 | REQ-030 | Profiling and performance monitoring must identify slow MCP paths with low overhead through spans, budgets, counters, and profiler-friendly harnesses. | Runtime operations, MCP tools | Observability design, performance principles | Profiling and budget tests |
+| REQ-031 | Validation planning must summarize every scanner-observed unique skipped `reason:path` decision with exact conserved counts and deterministic bounded samples, preserve bounded actionable requested-path exclusions and source-truncation truth, and must not turn presentation bounds into scan, classification, or extraction limits. | File catalog, workflow service, MCP surface | MCP design, runtime contracts | Scanner population, validation-plan, context, presenter, and generated-heavy five-gate tests |
 
 ## Configuration Requirements
 

@@ -295,6 +295,7 @@ describe("context_for_task use case", () => {
           indexed_roots: input.indexed_roots,
           skipped_roots: [...DEFAULT_SKIPPED_ROOTS].sort(),
           files: [],
+          skipped_path_population: { total_count: 0, groups: [] },
           truncated: true
         };
       }
@@ -355,6 +356,7 @@ describe("context_for_task use case", () => {
           indexed_roots: input.indexed_roots,
           skipped_roots: [...DEFAULT_SKIPPED_ROOTS].sort(),
           files: [],
+          skipped_path_population: { total_count: 0, groups: [] },
           truncated: true
         };
       }
@@ -602,6 +604,13 @@ describe("context_for_task use case", () => {
               detail: "Fixture test double denied the Rails model path."
             }
           ],
+          skipped_path_population: {
+            total_count: 2,
+            groups: [
+              { reason: "generated_or_vendor", count: 1, sample_paths: ["dist"], sample_truncated: false },
+              { reason: "permission_denied", count: 1, sample_paths: ["private"], sample_truncated: false }
+            ]
+          },
           files: [],
           truncated: true
         };
@@ -631,6 +640,49 @@ describe("context_for_task use case", () => {
         })
       ])
     );
+  });
+
+  it("renders every skipped-path reason group from the shared scanner receipt", async () => {
+    const reasons = [
+      "configured_skip",
+      "generated_or_vendor",
+      "gitignore",
+      "hidden_path",
+      "nested_git_repository",
+      "permission_denied"
+    ] as const;
+    const scanner: FileCatalogScanPort = {
+      async scan(input) {
+        return {
+          repo_root: input.repo_root,
+          indexed_roots: input.indexed_roots,
+          skipped_roots: [],
+          skipped_paths: [],
+          skipped_path_population: {
+            total_count: reasons.length,
+            groups: reasons.map((reason) => ({
+              reason,
+              count: 1,
+              sample_paths: [`sample/${reason}`],
+              sample_truncated: false
+            }))
+          },
+          files: [],
+          truncated: false
+        };
+      }
+    };
+    const result = await getTaskContext({
+      request: { task: "Inspect exclusions", files: [], symbols: [], max_files: 2, max_docs: 2 },
+      scanner,
+      default_repo_root: "."
+    });
+
+    const skippedReasons = result.context.skipped_work
+      .filter((item) => item.kind === "skipped_paths")
+      .map((item) => item.reason);
+    expect(skippedReasons).toHaveLength(reasons.length);
+    for (const reason of reasons) expect(skippedReasons.join("\n")).toContain(reason);
   });
 
   it("resolves a symbol before recommending graph actions that require a node id", async () => {

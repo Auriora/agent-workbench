@@ -12,6 +12,7 @@ import {
   fileReferenceSchema,
   nextActionSchema,
   skippedPathSchema,
+  validationSkippedPathSummarySchema,
   verificationStatusSchema
 } from "./runtime-core-contracts.js";
 import { sourceRangeSchema } from "./runtime-graph-contracts.js";
@@ -68,6 +69,8 @@ export const verificationPlanSchema = z
     planned_commands: z.array(plannedValidationCommandSchema),
     static_feedback: staticFeedbackSchema.optional(),
     risks: z.array(contextRiskSchema),
+    skipped_path_summary: validationSkippedPathSummarySchema.optional(),
+    /** @deprecated Accepted for compatibility inputs; current plans do not emit it. */
     skipped_paths: z.array(skippedPathSchema).optional(),
     next_actions: z.array(nextActionSchema)
   })

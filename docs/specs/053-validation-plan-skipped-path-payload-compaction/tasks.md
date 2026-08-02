@@ -34,10 +34,12 @@ T007 -> T008 -> T009
     audit, public-contract review, and scanner accounting review have no
     unresolved blocker; findings are incorporated before source changes.
   - Evidence mode: validation
-  - Evidence: Lifecycle lint and reconciliation, T001 task-state audit, independent requirements/QA and architecture/contract reviews, and direct public-contract/scanner-accounting review completed on 2026-08-02; all blocker and warning findings were incorporated into the spec package before source changes.
+  - Evidence: `lint_spec_package` returned 0 errors/warnings and
+    `task_state_audit` returned 0 errors/warnings on 2026-08-02; two independent
+    readiness reviews produced concrete edits incorporated before T002.
 
   - Status: Ready to proceed to dependency-safe T002; no implementation claim.
-- [ ] T002 Confirm the additive public receipt and internal population seam.
+- [x] T002 Confirm the additive public receipt and internal population seam.
   - Depends on: T001
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 5
   - Properties: CP-001, CP-002, CP-006
@@ -52,11 +54,14 @@ T007 -> T008 -> T009
     result producer/double that T004 must migrate; no feature flag, optional
     internal receipt, fallback, or contract-version break is introduced.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: `pnpm typecheck` exited 0 after migration of 14
+    `FileCatalogScanResult` doubles across eight test files; the focused contract
+    suite is included in the recorded 127-test Spec 053 pass.
 
+  - Status: Contract version remains 0.1; legacy raw input is accepted but current plans do not emit it.
 ## Phase 2: Shared Population Truth
 
-- [ ] T003 Implement the pure skipped-path population accumulator and invariant
+- [x] T003 Implement the pure skipped-path population accumulator and invariant
   tests.
   - Depends on: T002
   - Requirements: Requirement 1, Requirement 2, Requirement 3
@@ -70,9 +75,13 @@ T007 -> T008 -> T009
     dependency or runtime budget.
   - Validation: `pnpm exec vitest run tests/application/skipped-path-summary.test.ts --maxWorkers=4`
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: `pnpm exec vitest run
+    tests/application/skipped-path-summary.test.ts --maxWorkers=4` exited 0 with
+    2/2 tests covering deduplication, conservation, ordering, normalization,
+    permutation stability, and empty input.
 
-- [ ] T004 Integrate exact population accounting into the file catalog scanner.
+  - Status: Shared pure policy uses fixed sample limit 3 and no runtime budget.
+- [x] T004 Integrate exact population accounting into the file catalog scanner.
   - Depends on: T003
   - Requirements: Requirement 1, Requirement 3, Requirement 4
   - Properties: CP-001, CP-004, CP-005, CP-006
@@ -88,11 +97,12 @@ T007 -> T008 -> T009
     changing traversal or `max_files`.
   - Validation: `pnpm typecheck && pnpm exec vitest run tests/workspace/file-catalog-scanner.test.ts --maxWorkers=4`
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: tests/workspace/file-catalog-scanner.test.ts passes 19 tests, including exact population beyond the 100-record raw retention list; single-worker /usr/bin/time run recorded 169628 KiB peak RSS for the whole Vitest process.
 
+  - Status: Scanner traversal, max_files, truncation, and continuation behavior are unchanged.
 ## Phase 3: Validation Plan And Context Projections
 
-- [ ] T005 Replace validation-plan raw skip output with the structured summary.
+- [x] T005 Replace validation-plan raw skip output with the structured summary.
   - Depends on: T004
   - Requirements: Requirement 1 through Requirement 5
   - Properties: CP-001 through CP-006
@@ -111,9 +121,12 @@ T007 -> T008 -> T009
     emits no raw `skipped_paths` field.
   - Validation: `pnpm exec vitest run tests/contracts/runtime-contracts.test.ts tests/mcp/verification-plan-tool.test.ts tests/presentation/session-aware-presenters.test.ts tests/mcp/translation-boundary.test.ts --maxWorkers=4`
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: The recorded focused Spec 053 command exited 0 with 127 tests;
+    assertions cover the exact structured summary, actionable secret exclusion,
+    `source_truncated`, presenter redaction, and absence of raw current output.
 
-- [ ] T006 Derive task-context skipped work from the shared summary policy.
+  - Status: Planner forwards safe selected paths as scanner priorities and presenter redacts samples/details.
+- [x] T006 Derive task-context skipped work from the shared summary policy.
   - Depends on: T005
   - Requirements: Requirement 2, Requirement 4, Requirement 5
   - Properties: CP-002, CP-003, CP-005, CP-006
@@ -130,11 +143,15 @@ T007 -> T008 -> T009
     remains.
   - Validation: `pnpm exec vitest run tests/mcp/context-for-task-tool.test.ts tests/presentation/session-aware-presenters.test.ts --maxWorkers=4`
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: `pnpm exec vitest run tests/mcp/context-for-task-tool.test.ts
+    tests/presentation/session-aware-presenters.test.ts --maxWorkers=4` formed
+    part of the 127-test focused pass; assertions cover six reason groups and
+    presenter redaction.
 
+  - Status: The former five-reason slice and local recounting implementation were removed.
 ## Phase 4: Cross-Surface Acceptance
 
-- [ ] T007 Add the generated/vendor-heavy five-gate MCP regression and payload
+- [x] T007 Add the generated/vendor-heavy five-gate MCP regression and payload
   conservation proof.
   - Depends on: T006
   - Requirements: Requirement 6
@@ -149,11 +166,12 @@ T007 -> T008 -> T009
     once; exact counts, response size, actionable exclusion, material blocker,
     redaction, no-skip, and scanner-truncation assertions pass.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Generated-heavy verification regression produces 125 exact routine exclusions with a lexical three-path sample while preserving all five Agent Workbench gates exactly once; stdio-entrypoint suite passes 16 tests.
 
+  - Status: Existing fixture construction was extended rather than adding a duplicate fixture root.
 ## Phase 5: Validation, Promotion, And Review
 
-- [ ] T008 Run focused and full validation, then perform bounded installed or
+- [x] T008 Run focused and full validation, then perform bounded installed or
   checkout-source dogfood.
   - Depends on: T007
   - Requirements: Requirement 1 through Requirement 6
@@ -164,9 +182,10 @@ T007 -> T008 -> T009
     records runtime/package identity, response bytes, commands, counts, and
     truncation without claiming repository completeness from a truncated scan.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: pnpm typecheck passed; focused Spec 053 suite passed 127 tests; full Vitest passed 110 files/1218 tests; plugin and skills validation, runtime-build check, package dry-run, and git diff check passed. Source debug harness returned five gates, exact 84-path/four-reason summary, no raw list, and matching context counts/samples.
 
-- [ ] T009 Promote accepted behavior and address final review findings.
+  - Status: Dogfood used the checkout-source debug harness; it is source behavior evidence, not installed-package or executed validation-command proof.
+- [x] T009 Promote accepted behavior and address final review findings.
   - Depends on: T008
   - Requirements: Requirement 6
   - Files: all durable targets in `change-impact.md`, this package
@@ -176,8 +195,9 @@ T007 -> T008 -> T009
     or routed; verification has no partial-blocking/not-covered must-have row;
     closure check passes before package removal.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Two independent final reviews found no code blocker after remediation. The exact-population runtime warning regression now covers 100 retained routine skips plus a later permission_denied group; actionable-path ordering/uniqueness/group membership is schema-enforced. pnpm typecheck exited 0, 63 focused tests passed, and the full rerun passed 110 files/1,218 tests. All seven durable promotion targets are updated and EB065 is marked delivered.
 
+  - Status: Promotion and reviewer findings are complete; ready for final lifecycle closure check.
 ## Execution Rules
 
 - Mark exactly one implementation task `[~]` before changing source.

@@ -14,7 +14,12 @@ import type {
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import { isExplicitHiddenCatalogPathAllowed } from "../../domain/policies/index.js";
-import type { FileCatalogScanPort, FileCatalogSkippedPath, WorkspaceFilePort } from "../../ports/index.js";
+import type {
+  FileCatalogScanPort,
+  FileCatalogScanResult,
+  FileCatalogSkippedPath,
+  WorkspaceFilePort
+} from "../../ports/index.js";
 import { capNextActions } from "./response-metadata.js";
 import { buildStatBackedFileCatalogEntry } from "./file-catalog-entry.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
@@ -78,17 +83,18 @@ export async function planVerification(input: {
   default_repo_root: string;
 }): Promise<PlanVerificationResult> {
   const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
-  const scanned = await input.scanner.scan({
-    repo_root: repoRoot,
-    indexed_roots: ["."],
-    skipped_roots: [],
-    max_files: 15000
-  });
   const selectedPaths = uniqueSorted([
     ...input.request.files.map(normalizeRepoPath),
     ...input.request.changed_files.map(normalizeRepoPath)
   ]);
   const unsafePaths = selectedPaths.filter(isUnsafeValidationTarget);
+  const scanned = await input.scanner.scan({
+    repo_root: repoRoot,
+    indexed_roots: ["."],
+    skipped_roots: [],
+    max_files: 15000,
+    priority_paths: selectedPaths.filter((filePath) => !unsafePaths.includes(filePath))
+  });
   const files = await mergeDirectValidationEntries({
     scannedFiles: scanned.files,
     selectedPaths,
@@ -172,12 +178,12 @@ export async function planVerification(input: {
       message: reason.replace(/^validation-environment: /u, ""),
       why_this_matters: "Validation planning is evidence-driven; advisory environment or missing-script evidence should be checked before treating the plan as complete."
     })),
-    ...(hasRuntimeSkippedPath(scanned.skipped_paths ?? [])
+    ...(hasRuntimeSkippedPath(scanned.skipped_path_population)
       ? [
           {
             severity: "warning" as const,
             message: "Some repository paths were skipped during validation discovery.",
-            why_this_matters: "Skipped paths can hide validation config, tests, or generated noise; inspect skipped_paths before treating the plan as complete."
+            why_this_matters: "Skipped paths can hide validation config, tests, or generated noise; inspect skipped_path_summary before treating the plan as complete."
           }
         ]
       : []),
@@ -239,7 +245,12 @@ export async function planVerification(input: {
     }),
     planned_commands: commands,
     ...(staticFeedback?.status === "actionable" ? { static_feedback: staticFeedback } : {}),
-    skipped_paths: mapSkippedPaths(scanned.skipped_paths ?? []),
+    skipped_path_summary: buildSkippedPathSummary({
+      population: scanned.skipped_path_population,
+      skippedPaths: scanned.skipped_paths ?? [],
+      selectedPaths,
+      sourceTruncated: scanned.truncated
+    }),
     risks,
     next_actions: nextActions
   };
@@ -257,20 +268,36 @@ export async function planVerification(input: {
   };
 }
 
-function mapSkippedPaths(skippedPaths: readonly FileCatalogSkippedPath[]): SkippedPath[] | undefined {
-  if (skippedPaths.length === 0) {
+function buildSkippedPathSummary(input: {
+  population: FileCatalogScanResult["skipped_path_population"];
+  skippedPaths: readonly FileCatalogSkippedPath[];
+  selectedPaths: readonly string[];
+  sourceTruncated: boolean;
+}): VerificationPlan["skipped_path_summary"] {
+  if (input.population.total_count === 0) {
     return undefined;
   }
-  return skippedPaths.slice(0, 50).map((skipped) => ({
-    path: skipped.path,
-    reason: skipped.reason,
-    detail: skipped.detail
-  }));
+  const selected = new Set(input.selectedPaths);
+  const actionablePaths: SkippedPath[] = input.skippedPaths
+    .filter((skipped) => selected.has(skipped.path))
+    .sort((left, right) => left.path.localeCompare(right.path) || left.reason.localeCompare(right.reason))
+    .slice(0, 50)
+    .map((skipped) => ({ path: skipped.path, reason: skipped.reason, detail: skipped.detail }));
+  return {
+    total_count: input.population.total_count,
+    groups: input.population.groups.map((group) => ({
+      ...group,
+      sample_paths: [...group.sample_paths]
+    })),
+    count_basis: "scanner_observed_unique_reason_path",
+    source_truncated: input.sourceTruncated,
+    actionable_paths: actionablePaths
+  };
 }
 
-function hasRuntimeSkippedPath(skippedPaths: readonly FileCatalogSkippedPath[]): boolean {
-  return skippedPaths.some((skipped) =>
-    ["permission_denied", "missing", "not_directory", "workspace_escape"].includes(skipped.reason)
+function hasRuntimeSkippedPath(population: FileCatalogScanResult["skipped_path_population"]): boolean {
+  return population.groups.some((group) =>
+    ["permission_denied", "missing", "not_directory", "workspace_escape"].includes(group.reason)
   );
 }
 

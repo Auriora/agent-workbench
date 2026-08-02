@@ -105,6 +105,69 @@ describe("runtime contract categories", () => {
 });
 
 describe("runtime contracts", () => {
+  it("accepts the additive skipped-path summary and legacy raw compatibility input", () => {
+    const base = {
+      repo_root: "/repo",
+      status: "planned" as const,
+      summary: "Plan ready.",
+      planned_commands: [],
+      risks: [],
+      next_actions: []
+    };
+    expect(verificationPlanSchema.parse({
+      ...base,
+      skipped_path_summary: {
+        total_count: 4,
+        groups: [{
+          reason: "generated_or_vendor",
+          count: 4,
+          sample_paths: ["build", "dist", "vendor"],
+          sample_truncated: true
+        }],
+        count_basis: "scanner_observed_unique_reason_path",
+        source_truncated: false,
+        actionable_paths: []
+      }
+    }).skipped_path_summary?.total_count).toBe(4);
+    expect(verificationPlanSchema.parse({
+      ...base,
+      skipped_paths: [{ path: "dist", reason: "generated_or_vendor", detail: "legacy" }]
+    }).skipped_paths).toHaveLength(1);
+    expect(() => verificationPlanSchema.parse({
+      ...base,
+      skipped_path_summary: {
+        total_count: 5,
+        groups: [{
+          reason: "generated_or_vendor",
+          count: 4,
+          sample_paths: ["dist"],
+          sample_truncated: true
+        }],
+        count_basis: "scanner_observed_unique_reason_path",
+        source_truncated: false,
+        actionable_paths: []
+      }
+    })).toThrow();
+    expect(() => verificationPlanSchema.parse({
+      ...base,
+      skipped_path_summary: {
+        total_count: 2,
+        groups: [{
+          reason: "secret",
+          count: 2,
+          sample_paths: [".env", "config/master.key"],
+          sample_truncated: false
+        }],
+        count_basis: "scanner_observed_unique_reason_path",
+        source_truncated: false,
+        actionable_paths: [
+          { path: "config/master.key", reason: "secret", detail: "secret" },
+          { path: ".env", reason: "secret", detail: "secret" }
+        ]
+      }
+    })).toThrow();
+  });
+
   it("models a strict and UTF-8 bounded documentation ranking readiness receipt", () => {
     expect(documentationRankingReceiptSchema.parse({
       snapshot_id: "snapshot-1",

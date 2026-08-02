@@ -28,6 +28,7 @@ import type {
   WorkspaceWatchHandle,
   WorkspaceWatchRequest
 } from "../domain/models/index.js";
+import type { SkippedPathPopulation } from "../domain/policies/skipped-path-summary.js";
 import type {
   RuntimeContext,
   RuntimeContextInput,
@@ -195,6 +196,7 @@ export type FileCatalogScanResult = {
   indexed_roots: readonly string[];
   skipped_roots: readonly string[];
   skipped_paths?: readonly FileCatalogSkippedPath[];
+  skipped_path_population: SkippedPathPopulation<FileCatalogSkippedPath["reason"]>;
   files: readonly FileCatalogEntry[];
   truncated: boolean;
   continuation_cursor?: string;

@@ -175,6 +175,17 @@ planned-only evidence as agent-facing caveats or status fields. Planned
 validation commands remain non-executed evidence; diagnostics provider
 failures remain needed routing evidence rather than a clean no-op.
 
+Validation planning receives a required scanner population receipt that counts
+every unique normalized `reason:path` classification even after the scanner's
+bounded raw compatibility evidence fills. The public plan exposes the optional
+`skipped_path_summary` instead of raw per-path output: exact total and per-reason
+counts, lexically stable samples of at most three paths, independent sample and
+scanner-source truncation flags, and at most 50 requested-path exclusions that
+remain individually actionable. Task context derives its bounded skipped-work
+prose from the same population receipt and retains every encountered finite
+reason group. These are presentation bounds only; they do not limit traversal,
+classification, validation-command discovery, or extraction.
+
 ## MVP Resources
 
 - `repo:///orientation`

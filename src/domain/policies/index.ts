@@ -12,3 +12,4 @@ export * from "./catalog-path-policy.js";
 export * from "./document-authority.js";
 export * from "./document-concern.js";
 export * from "./docs-ranking.js";
+export * from "./skipped-path-summary.js";

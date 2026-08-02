@@ -59,6 +59,24 @@ Every MCP response must include a contract version.
 Breaking schema changes require a new contract version. Non-breaking additions
 may add optional fields but must not change enum meanings.
 
+## Validation Skipped-Path Summary
+
+Current `verification_plan` output may include `skipped_path_summary`; it does
+not emit the deprecated raw `skipped_paths` list. The additive summary contains
+an exact `total_count`, stable reason groups with exact counts, lexically ordered
+samples of at most three paths, `sample_truncated`, the fixed count basis
+`scanner_observed_unique_reason_path`, independent `source_truncated`, and at
+most 50 lexically ordered actionable requested-path exclusions. Group counts
+must conserve the total, samples must be unique and ordered, and truncation
+fields must agree with their counts. Legacy raw plan input remains accepted for
+contract `0.1` compatibility but is not used to reconstruct current summaries.
+
+The required internal file-catalog result carries the exact population receipt
+separately from its bounded raw diagnostic sample. Task context consumes that
+same receipt for every encountered reason group. Presentation paths and details
+are redacted before strict public-schema validation; none of these output bounds
+controls scanning, classification, command planning, or extraction.
+
 ## Task Context Lifecycle Evidence
 
 `context_for_task` separates repository evidence from lifecycle evidence.

@@ -2691,6 +2691,7 @@ function fakeScanner(fileCount: number): FileCatalogScanPort {
         indexed_roots: input.indexed_roots,
         skipped_roots: input.skipped_roots,
         truncated: false,
+        skipped_path_population: { total_count: 0, groups: [] },
         files: Array.from({ length: fileCount }, (_, index) =>
           buildFileCatalogEntry({
             file_identity: {
@@ -2738,6 +2739,7 @@ function scannerWithMarkdown(paths: readonly string[]): FileCatalogScanPort {
         indexed_roots: input.indexed_roots,
         skipped_roots: input.skipped_roots,
         truncated: false,
+        skipped_path_population: { total_count: 0, groups: [] },
         files: paths.map((path, index) => buildFileCatalogEntry({
           file_identity: {
             path,

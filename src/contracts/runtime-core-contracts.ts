@@ -322,6 +322,70 @@ export const skippedPathSchema = z
   .strict();
 export type SkippedPath = z.infer<typeof skippedPathSchema>;
 
+export const skippedPathPopulationGroupSchema = z
+  .object({
+    reason: skippedPathReasonSchema,
+    count: z.number().int().nonnegative(),
+    sample_paths: z.array(z.string()).max(3),
+    sample_truncated: z.boolean()
+  })
+  .strict();
+export type SkippedPathPopulationGroup = z.infer<typeof skippedPathPopulationGroupSchema>;
+
+export const skippedPathPopulationSchema = z
+  .object({
+    total_count: z.number().int().nonnegative(),
+    groups: z.array(skippedPathPopulationGroupSchema)
+  })
+  .strict();
+export type SkippedPathPopulation = z.infer<typeof skippedPathPopulationSchema>;
+
+export const validationSkippedPathSummarySchema = skippedPathPopulationSchema
+  .extend({
+    count_basis: z.literal("scanner_observed_unique_reason_path"),
+    source_truncated: z.boolean(),
+    actionable_paths: z.array(skippedPathSchema).max(50)
+  })
+  .strict()
+  .superRefine((summary, context) => {
+    const reasons = summary.groups.map((group) => group.reason);
+    const sortedReasons = [...reasons].sort((left, right) => left.localeCompare(right));
+    if (new Set(reasons).size !== reasons.length || reasons.some((reason, index) => reason !== sortedReasons[index])) {
+      context.addIssue({ code: "custom", message: "Skipped-path reason groups must be unique and sorted." });
+    }
+    const counted = summary.groups.reduce((sum, group) => sum + group.count, 0);
+    if (counted !== summary.total_count) {
+      context.addIssue({ code: "custom", message: "Skipped-path group counts must conserve total_count." });
+    }
+    for (const group of summary.groups) {
+      const sortedSamples = [...group.sample_paths].sort((left, right) => left.localeCompare(right));
+      if (
+        new Set(group.sample_paths).size !== group.sample_paths.length ||
+        group.sample_paths.some((sample, index) => sample !== sortedSamples[index])
+      ) {
+        context.addIssue({ code: "custom", message: "Skipped-path samples must be unique and sorted." });
+      }
+      if (group.count < group.sample_paths.length || group.sample_truncated !== (group.count > group.sample_paths.length)) {
+        context.addIssue({ code: "custom", message: "Skipped-path sample truncation must match the group count." });
+      }
+    }
+    const actionableKeys = summary.actionable_paths.map((skipped) => JSON.stringify([skipped.path, skipped.reason]));
+    const sortedActionable = [...summary.actionable_paths].sort(
+      (left, right) => left.path.localeCompare(right.path) || left.reason.localeCompare(right.reason)
+    );
+    if (
+      new Set(actionableKeys).size !== actionableKeys.length ||
+      summary.actionable_paths.some((skipped, index) => skipped !== sortedActionable[index])
+    ) {
+      context.addIssue({ code: "custom", message: "Actionable skipped paths must be unique and sorted." });
+    }
+    const groupedReasons = new Set(reasons);
+    if (summary.actionable_paths.some((skipped) => !groupedReasons.has(skipped.reason))) {
+      context.addIssue({ code: "custom", message: "Actionable skipped-path reasons must appear in the population groups." });
+    }
+  });
+export type ValidationSkippedPathSummary = z.infer<typeof validationSkippedPathSummarySchema>;
+
 export const contextCompletenessSchema = z
   .object({
     complete_enough: z.boolean(),

@@ -64,6 +64,31 @@ describe("session-aware public presenters", () => {
     expect(serialized).not.toContain("fixture-secret");
     expect(serialized).toContain("[REDACTED]");
   });
+
+  it("redacts skipped-path summary samples and actionable details", () => {
+    const result = verificationPlanResult();
+    result.plan.skipped_path_summary = {
+      total_count: 1,
+      groups: [{
+        reason: "secret",
+        count: 1,
+        sample_paths: ["/home/example/.env"],
+        sample_truncated: false
+      }],
+      count_basis: "scanner_observed_unique_reason_path",
+      source_truncated: false,
+      actionable_paths: [{
+        path: "/home/example/.env",
+        reason: "secret",
+        detail: "TOKEN=fixture-secret"
+      }]
+    };
+
+    const serialized = JSON.stringify(buildVerificationPlanEnvelope(result));
+    expect(serialized).not.toContain("/home/example");
+    expect(serialized).not.toContain("fixture-secret");
+    expect(serialized).toContain("[REDACTED");
+  });
 });
 
 function taskContextResult(): GetTaskContextResult {

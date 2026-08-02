@@ -3,7 +3,7 @@ title: Agent-readable changelog
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-02
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -25,6 +25,34 @@ Each version or dated entry should include:
 - Contract changes
 - Required agent behavior changes
 - Migration notes
+
+## 2026-08-02: Validation-Plan Skipped-Path Compaction
+
+### Agent-Visible Changes
+
+- `verification_plan` now replaces routine per-path skip noise with exact
+  per-reason counts and deterministic samples while retaining requested-path
+  exclusions that require action.
+- `context_for_task` reports the same complete set of encountered skip reasons;
+  validation commands, blockers, and next actions remain unchanged.
+
+### Contract Changes
+
+- Contract `0.1` additively exposes optional `skipped_path_summary` with exact
+  counts, three-path samples, independent sample/source truncation, and up to
+  50 actionable paths. Current plans omit raw `skipped_paths`; legacy raw input
+  remains parseable.
+
+### Required Agent Behavior Changes
+
+- Read `skipped_path_summary` for validation-discovery caveats. Do not infer
+  repository completeness from bounded samples or from `source_truncated` data.
+
+### Migration Notes
+
+- Clients may ignore the optional field under contract `0.1`, but clients that
+  previously consumed raw current-plan skips should migrate to the summary and
+  actionable-path fields.
 
 ## 2026-08-02: Production Documentation Corpus And Owner Priority
 

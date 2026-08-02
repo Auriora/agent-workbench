@@ -830,4 +830,30 @@ describe("file catalog scanner", () => {
       ])
     );
   });
+
+  it("counts exact skipped-path population after raw compatibility retention fills", async () => {
+    for (let index = 0; index < 125; index += 1) {
+      fs.mkdirSync(path.join(repoRoot, `cmake-build-${String(index).padStart(3, "0")}`));
+    }
+    const result = await new FileCatalogScannerAdapter().scan({
+      repo_root: repoRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      max_files: 100
+    });
+
+    expect(result.skipped_paths).toHaveLength(100);
+    const generated = result.skipped_path_population.groups.find(
+      (group) => group.reason === "generated_or_vendor"
+    );
+    expect(generated).toMatchObject({
+      count: expect.any(Number),
+      sample_paths: [".claude", ".codex", ".direnv"],
+      sample_truncated: true
+    });
+    expect(generated?.count).toBeGreaterThanOrEqual(125);
+    expect(result.skipped_path_population.total_count).toBe(
+      result.skipped_path_population.groups.reduce((sum, group) => sum + group.count, 0)
+    );
+  });
 });

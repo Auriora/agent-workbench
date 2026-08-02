@@ -931,6 +931,7 @@ describe("runtime status", () => {
             indexed_roots: ["."],
             skipped_roots: ["node_modules"],
             truncated: true,
+            skipped_path_population: { total_count: 0, groups: [] },
             files: [
               buildFileCatalogEntry({
                 file_identity: {
@@ -974,6 +975,7 @@ describe("runtime status", () => {
             indexed_roots: input.indexed_roots,
             skipped_roots: input.skipped_roots,
             truncated: false,
+            skipped_path_population: { total_count: 0, groups: [] },
             files: []
           };
         }
@@ -1005,6 +1007,7 @@ describe("runtime status", () => {
             indexed_roots: input.indexed_roots,
             skipped_roots: input.skipped_roots,
             truncated: false,
+            skipped_path_population: { total_count: 0, groups: [] },
             files: [
               buildFileCatalogEntry({
                 file_identity: {
@@ -1048,6 +1051,7 @@ describe("runtime status", () => {
             indexed_roots: input.indexed_roots,
             skipped_roots: ["dist", "vendor"],
             truncated: true,
+            skipped_path_population: { total_count: 0, groups: [] },
             files: [
               buildFileCatalogEntry({
                 file_identity: {

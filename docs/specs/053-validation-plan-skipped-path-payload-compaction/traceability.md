@@ -29,12 +29,12 @@ license: GPL-3.0-or-later
 
 | Requirement | Priority | Acceptance Criteria | Design Sections | Tasks | Verification | Durable Targets | Coverage State | Residual Destination |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Requirement 1 | must-have | AC1-AC6 | scanner receipt; data model; algorithm | T002-T005, T007 | G2-G4 | runtime contracts; MCP surface design | not-covered | none; blocks implementation completion |
-| Requirement 2 | must-have | AC1-AC5 | sample policy; security | T002, T003, T005-T007 | G2-G5 | runtime contracts; MCP surface design | not-covered | none; blocks implementation completion |
-| Requirement 3 | must-have | AC1-AC5 | population truth; slice boundary | T002-T005, T007 | G3, G4 | runtime requirements; MCP surface design | not-covered | none; blocks implementation completion |
-| Requirement 4 | must-have | AC1-AC5 | priority paths; blocker preservation | T004-T007 | G4, G5 | runtime contracts; MCP surface design | not-covered | none; blocks implementation completion |
-| Requirement 5 | must-have | AC1-AC5 | shared policy; compatibility | T002, T005-T007 | G2, G5 | runtime contracts; MCP surface design | not-covered | none; blocks implementation completion |
-| Requirement 6 | must-have | AC1-AC5 | validation; promotion | T007-T009 | G6-G10 | proof matrix; backlog; changelog; ledger | not-covered | none; blocks closure |
+| Requirement 1 | must-have | AC1-AC6 | scanner receipt; data model; algorithm | T002-T005, T007 | G2-G4 | runtime contracts; MCP surface design | complete | exact population and conservation tests pass |
+| Requirement 2 | must-have | AC1-AC5 | sample policy; security | T002, T003, T005-T007 | G2-G5 | runtime contracts; MCP surface design | complete | deterministic sampling and presenter redaction pass |
+| Requirement 3 | must-have | AC1-AC5 | population truth; slice boundary | T002-T005, T007 | G3, G4 | runtime requirements; MCP surface design | complete | scanner retains exact counts beyond raw evidence bound without changing traversal |
+| Requirement 4 | must-have | AC1-AC5 | priority paths; blocker preservation | T004-T007 | G4, G5 | runtime contracts; MCP surface design | complete | actionable requested exclusion and runtime-warning tests pass |
+| Requirement 5 | must-have | AC1-AC5 | shared policy; compatibility | T002, T005-T007 | G2, G5 | runtime contracts; MCP surface design | complete | contract, context, planner, and presenter parity pass |
+| Requirement 6 | must-have | AC1-AC5 | validation; promotion | T007-T009 | G6-G10 | proof matrix; backlog; changelog; ledger | complete | five-gate, full-suite, dogfood, promotion, and final review evidence recorded |
 
 ## Correctness Property Coverage
 
@@ -51,13 +51,13 @@ license: GPL-3.0-or-later
 
 | Design Section | Requirements | Tasks | Interfaces Or Files | Verification | Coverage State | Residual Destination |
 | --- | --- | --- | --- | --- | --- | --- |
-| shared population accumulator | Requirement 1-3 | T003 | domain policy; policy tests | G3 | not-covered | none |
-| scanner population receipt | Requirement 1, 3, 4 | T002, T004 | scanner; ports; scanner tests | G3, G4 | not-covered | none |
-| structured validation receipt | Requirement 1-5 | T002, T005 | contracts; planner; contract/MCP tests | G2, G4 | not-covered | none |
-| task-context parity | Requirement 5 | T006 | task context; context tests | G5 | not-covered | none |
-| presenter redaction | Requirement 2, 4 | T006 | presenters; presentation/translation tests | G5 | not-covered | none |
-| generated/vendor acceptance | Requirement 6 | T007, T008 | fixture; MCP/stdio tests | G6-G8 | not-covered | none |
-| promotion and residual boundary | Requirement 6 | T009 | durable docs/backlog/history | G9, G10 | not-covered | existing traversal/continuation policy remains separately owned |
+| shared population accumulator | Requirement 1-3 | T003 | domain policy; policy tests | G3 | complete | none |
+| scanner population receipt | Requirement 1, 3, 4 | T002, T004 | scanner; ports; scanner tests | G3, G4 | complete | none |
+| structured validation receipt | Requirement 1-5 | T002, T005 | contracts; planner; contract/MCP tests | G2, G4 | complete | none |
+| task-context parity | Requirement 5 | T006 | task context; context tests | G5 | complete | none |
+| presenter redaction | Requirement 2, 4 | T006 | presenters; presentation/translation tests | G5 | complete | none |
+| generated/vendor acceptance | Requirement 6 | T007, T008 | fixture; MCP/stdio tests | G6-G8 | complete | none |
+| promotion and residual boundary | Requirement 6 | T009 | durable docs/backlog/history | G9, G10 | complete | existing traversal/continuation policy remains separately owned |
 
 ## Open Decision Impact
 
@@ -73,6 +73,10 @@ review before implementation continues.
   actionable detail bound, the canonical policy-test path, and exact-count
   memory evidence across requirements, design, tasks, and verification; all
   revised downstream artifacts were reviewed before T001 completion.
+- T002-T008 implementation and validation completed the exact population,
+  public compaction, context parity, redaction, five-gate, full-suite, and
+  checkout-source dogfood paths. T009 promoted the accepted behavior and
+  retained EB014, EB059, EB061, and unrelated public surfaces separately.
 - Update coverage states only with concrete implementation and validation
   evidence.
 - Preserve the distinction between scanner-source truncation and presentation

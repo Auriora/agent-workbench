@@ -9,6 +9,7 @@ import type { FileCatalogEntry } from "../../domain/models/index.js";
 import {
   buildFileCatalogEntry,
   catalogSkipReason,
+  createSkippedPathPopulationAccumulator,
   mergeSkippedRoots,
   normalizeCatalogPath,
   type GitignoreRule
@@ -47,9 +48,10 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     const indexedRoots = input.indexed_roots.length > 0 ? input.indexed_roots : ["."];
     const entries: FileCatalogEntry[] = [];
     const skippedPaths: FileCatalogSkippedPath[] = [];
+    const skippedPathPopulation = createSkippedPathPopulationAccumulator<FileCatalogSkippedPath["reason"]>();
     const skippedRoots = new Set(input.skipped_roots);
     const gitignoreRules = readRootIgnoreRules(repoRoot);
-    const recordSkippedPath = skippedPathRecorder(skippedPaths);
+    const recordSkippedPath = skippedPathRecorder(skippedPaths, skippedPathPopulation);
     const prioritizedPaths = normalizeCatalogPaths(input.priority_paths ?? []);
     const prioritizedPathPatterns = normalizeCatalogPatterns(input.priority_path_patterns ?? []);
     const prioritySet = new Set<string>();
@@ -194,6 +196,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       indexed_roots: indexedRoots,
       skipped_roots: mergeSkippedRoots([...skippedRoots]),
       skipped_paths: skippedPaths,
+      skipped_path_population: skippedPathPopulation.finalize(),
       files: entries,
       truncated,
       continuation_cursor: truncated ? continuationCursor : undefined
@@ -371,17 +374,17 @@ function filesystemSkipReason(error: unknown): FileCatalogSkippedPath["reason"] 
   return "permission_denied";
 }
 
-function skippedPathRecorder(skippedPaths: FileCatalogSkippedPath[]): (skipped: FileCatalogSkippedPath) => void {
-  const seen = new Set<string>();
+function skippedPathRecorder(
+  skippedPaths: FileCatalogSkippedPath[],
+  population: ReturnType<typeof createSkippedPathPopulationAccumulator<FileCatalogSkippedPath["reason"]>>
+): (skipped: FileCatalogSkippedPath) => void {
   return (skipped) => {
-    if (skipped.path.length === 0 || skipped.path === ".") {
+    if (!population.record(skipped)) {
       return;
     }
-    const key = `${skipped.reason}:${skipped.path}`;
-    if (seen.has(key) || skippedPaths.length >= MAX_SKIPPED_PATHS) {
+    if (skippedPaths.length >= MAX_SKIPPED_PATHS) {
       return;
     }
-    seen.add(key);
     skippedPaths.push(skipped);
   };
 }

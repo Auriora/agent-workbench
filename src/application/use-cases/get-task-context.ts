@@ -32,7 +32,7 @@ import { capNextActions } from "./response-metadata.js";
 import type {
   FileCatalogPort,
   FileCatalogScanPort,
-  FileCatalogSkippedPath,
+  FileCatalogScanResult,
   GraphQueryPort,
   SnapshotPort,
   SnapshotPublicationPort,
@@ -1135,7 +1135,7 @@ function lambdaKindRank(node: GraphNode): number {
 }
 
 function skippedWorkForCatalog(input: {
-  scanned: { truncated: boolean; skipped_paths?: readonly FileCatalogSkippedPath[] };
+  scanned: Pick<FileCatalogScanResult, "truncated" | "skipped_path_population">;
   requestedFiles: readonly FileReference[];
   relatedFiles: readonly FileReference[];
   governingDocs: TaskContext["governing_docs"];
@@ -1147,7 +1147,7 @@ function skippedWorkForCatalog(input: {
       reason: "File catalog scan reached its row limit, so additional related files may exist."
     });
   }
-  for (const skippedPathSummary of summarizeSkippedPaths(input.scanned.skipped_paths ?? [])) {
+  for (const skippedPathSummary of summarizeSkippedPaths(input.scanned.skipped_path_population)) {
     skipped.push(skippedPathSummary);
   }
   if (input.requestedFiles.length === 0 && input.relatedFiles.length === 0) {
@@ -1165,21 +1165,10 @@ function skippedWorkForCatalog(input: {
   return skipped;
 }
 
-function summarizeSkippedPaths(skippedPaths: readonly FileCatalogSkippedPath[]): SkippedWork[] {
-  const counts = new Map<FileCatalogSkippedPath["reason"], { count: number; sample: string }>();
-  for (const skippedPath of skippedPaths) {
-    const existing = counts.get(skippedPath.reason);
-    counts.set(skippedPath.reason, {
-      count: (existing?.count ?? 0) + 1,
-      sample: existing?.sample ?? skippedPath.path
-    });
-  }
-  return [...counts.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .slice(0, 5)
-    .map(([reason, summary]) => ({
+function summarizeSkippedPaths(population: FileCatalogScanResult["skipped_path_population"]): SkippedWork[] {
+  return population.groups.map((group) => ({
       kind: "skipped_paths",
-      reason: `${summary.count} path(s) skipped with reason ${reason}; sample: ${summary.sample}.`
+      reason: `${group.count} path(s) skipped with reason ${group.reason}; samples: ${group.sample_paths.join(", ")}.`
     }));
 }
 

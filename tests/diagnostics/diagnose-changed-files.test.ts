@@ -376,6 +376,10 @@ describe("diagnoseChangedFiles", () => {
               reason: "gitignore" as const,
               detail: "Exact requested path matched the repository ignore policy."
             }],
+            skipped_path_population: {
+              total_count: 1,
+              groups: [{ reason: "gitignore", count: 1, sample_paths: ["ignored.log"], sample_truncated: false }]
+            },
             files: [],
             truncated: false
           };

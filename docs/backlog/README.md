@@ -2333,8 +2333,8 @@ Do not promote an item when:
 ### EB065: Validation-Plan Skipped-Path Payload Compaction
 
 - Priority: P2
-- Status: proposed; discovered during Codex dogfood on installed runtime
-  `0.6.1`
+- Status: delivered through Spec 053; discovered during Codex dogfood on
+  installed runtime `0.6.1`
 - Friction signal: `verification_plan` correctly selected and ordered all five
   repository CI gates, but wrapped the useful plan in roughly 50 individual
   `skipped_paths` records. `context_for_task` already demonstrates the desired
@@ -2357,9 +2357,13 @@ Do not promote an item when:
   - Add presenter parity coverage so `verification_plan` and
     `context_for_task` use compatible bounded summary semantics rather than
     separate ad hoc shapes.
-- Promotion target: schedule as an independent EB004 validation-planning and
-  EB009 payload-observability repair. Create a spec only if compacting the
-  public shape requires a compatibility or schema-version decision.
+- Delivery: Spec 053 added an exact scanner population receipt, deterministic
+  three-path reason samples, independent source/sample truncation, bounded
+  actionable requested-path exclusions, presenter redaction, and shared
+  task-context accounting. Generated-heavy acceptance preserves the five Agent
+  Workbench CI gates exactly once without adding a scan, classification, or
+  extraction budget. EB014 completion, EB059 capacity, EB061 parser coverage,
+  and other raw surfaces remain separately owned.
 
 ## Extension Idea Coverage
 
@@ -2433,9 +2437,8 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-- Schedule EB065 independently as a bounded validation-plan presentation repair;
-  it must preserve the five-gate plan and material exclusions while compressing
-  routine skipped paths.
+- EB065/Spec 053 is delivered with exact population accounting, bounded public
+  presentation, and five-gate regression evidence.
 - Complete the normal commit/release flow for the delivered EB055, EB056,
   EB057, and EB058 direct repairs without folding them into active spec scope;
   installed-runtime acceptance is already recorded for EB055 through EB057.

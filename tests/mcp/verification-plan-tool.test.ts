@@ -479,6 +479,9 @@ describe("verification_plan use case", () => {
         path.join(repoRoot, "plugins", "agent-workbench", "claude-plugin", "hooks", "session-start.js"),
         "export const sessionStart = true;\n"
       );
+      for (let index = 0; index < 125; index += 1) {
+        fs.mkdirSync(path.join(repoRoot, `cmake-build-${String(index).padStart(3, "0")}`));
+      }
 
       const result = await planVerification({
         request: {
@@ -510,6 +513,19 @@ describe("verification_plan use case", () => {
           })
         )
       );
+      expect(result.plan.skipped_paths).toBeUndefined();
+      expect(result.plan.skipped_path_summary).toMatchObject({
+        total_count: 125,
+        count_basis: "scanner_observed_unique_reason_path",
+        source_truncated: false,
+        actionable_paths: [],
+        groups: [{
+          reason: "generated_or_vendor",
+          count: 125,
+          sample_paths: ["cmake-build-000", "cmake-build-001", "cmake-build-002"],
+          sample_truncated: true
+        }]
+      });
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
@@ -804,6 +820,28 @@ describe("verification_plan use case", () => {
           indexed_roots: input.indexed_roots,
           skipped_roots: [...DEFAULT_SKIPPED_ROOTS].sort(),
           files: [],
+          skipped_paths: Array.from({ length: 100 }, (_, index) => ({
+            path: `dist/generated-${String(index).padStart(3, "0")}`,
+            reason: "generated_or_vendor" as const,
+            detail: "routine generated output"
+          })),
+          skipped_path_population: {
+            total_count: 126,
+            groups: [
+              {
+                reason: "generated_or_vendor",
+                count: 125,
+                sample_paths: ["dist/generated-000", "dist/generated-001", "dist/generated-002"],
+                sample_truncated: true
+              },
+              {
+                reason: "permission_denied",
+                count: 1,
+                sample_paths: ["private"],
+                sample_truncated: false
+              }
+            ]
+          },
           truncated: true
         };
       }
@@ -838,6 +876,14 @@ describe("verification_plan use case", () => {
       });
 
       expect(result.meta.truncated).toBe(true);
+      expect(result.plan.skipped_path_summary).toMatchObject({
+        total_count: 126,
+        source_truncated: true,
+        groups: [
+          { reason: "generated_or_vendor", count: 125 },
+          { reason: "permission_denied", count: 1 }
+        ]
+      });
       expect(result.plan.status).toBe("planned");
       expect(result.plan.static_feedback).toBeUndefined();
       expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
@@ -845,12 +891,16 @@ describe("verification_plan use case", () => {
         "pnpm run test",
         "planned docs/config syntax review"
       ]);
-      expect(result.plan.risks).toEqual([
+      expect(result.plan.risks).toEqual(expect.arrayContaining([
         expect.objectContaining({
           severity: "warning",
           message: "Validation discovery is low confidence for at least one repository area."
+        }),
+        expect.objectContaining({
+          severity: "warning",
+          message: "Some repository paths were skipped during validation discovery."
         })
-      ]);
+      ]));
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
@@ -865,6 +915,7 @@ describe("verification_plan use case", () => {
           indexed_roots: input.indexed_roots,
           skipped_roots: [...DEFAULT_SKIPPED_ROOTS].sort(),
           files: [],
+          skipped_path_population: { total_count: 0, groups: [] },
           truncated: true
         };
       }
@@ -913,6 +964,34 @@ describe("verification_plan use case", () => {
     }
   });
 
+  it("keeps a requested skipped path actionable while compacting routine evidence", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-actionable-skip-"));
+    try {
+      fs.writeFileSync(path.join(repoRoot, ".env"), "TOKEN=fixture-secret\n");
+      fs.writeFileSync(path.join(repoRoot, "package.json"), JSON.stringify({ scripts: { test: "vitest run" } }));
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: [".env"],
+          changed_files: [],
+          include_static_feedback: false,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: repoRoot
+      });
+
+      expect(result.plan.skipped_paths).toBeUndefined();
+      expect(result.plan.skipped_path_summary).toMatchObject({
+        total_count: 1,
+        actionable_paths: [{ path: ".env", reason: "secret" }]
+      });
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("plans Go project-shape validation from go.mod and Makefile evidence", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-go-service-repo");
     const result = await planVerification({
@@ -941,12 +1020,10 @@ describe("verification_plan use case", () => {
         })
       ])
     );
-    expect(result.plan.skipped_paths).toEqual(
+    expect(result.plan.skipped_paths).toBeUndefined();
+    expect(result.plan.skipped_path_summary?.groups).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          path: ".gocache",
-          reason: "generated_or_vendor"
-        })
+        expect.objectContaining({ reason: "generated_or_vendor" })
       ])
     );
   });

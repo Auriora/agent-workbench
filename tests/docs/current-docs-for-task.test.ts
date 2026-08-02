@@ -96,7 +96,8 @@ function scannerFor(paths: readonly string[]): FileCatalogScanPort {
             mtime_ms: index
           }
         })),
-        truncated: false
+        truncated: false,
+        skipped_path_population: { total_count: 0, groups: [] }
       };
     }
   };

@@ -8,6 +8,7 @@ import {
   nextActionSchema,
   plannedValidationCommandSchema,
   skippedPathSchema,
+  validationSkippedPathSummarySchema,
   staticFeedbackFindingSchema,
   staticFeedbackSchema,
   responseMetadataSchema,
@@ -73,7 +74,9 @@ function sanitizeVerificationPlan(
     planned_commands: plan.planned_commands.map(sanitizePlannedCommand),
     static_feedback: plan.static_feedback === undefined ? undefined : sanitizeStaticFeedback(plan.static_feedback),
     risks: plan.risks.map(sanitizeRisk),
-    skipped_paths: plan.skipped_paths?.map(sanitizeSkippedPath),
+    skipped_path_summary: plan.skipped_path_summary === undefined
+      ? undefined
+      : sanitizeSkippedPathSummary(plan.skipped_path_summary),
     next_actions: presentNextActions(plan.next_actions, context).map(sanitizeNextAction),
     task: plan.task
   });
@@ -81,9 +84,28 @@ function sanitizeVerificationPlan(
 
 function sanitizeSkippedPath(input: NonNullable<PlanVerificationResult["plan"]["skipped_paths"]>[number]) {
   return skippedPathSchema.parse({
-    path: input.path,
+    path: redactPresentationText(input.path, { context: "path" }),
     reason: input.reason,
-    detail: input.detail
+    detail: redactPresentationText(input.detail, { context: "message" })
+  });
+}
+
+function sanitizeSkippedPathSummary(
+  input: NonNullable<PlanVerificationResult["plan"]["skipped_path_summary"]>
+) {
+  return validationSkippedPathSummarySchema.parse({
+    total_count: input.total_count,
+    groups: input.groups.map((group) => ({
+      reason: group.reason,
+      count: group.count,
+      sample_paths: group.sample_paths.map((samplePath) =>
+        redactPresentationText(samplePath, { context: "path" })
+      ),
+      sample_truncated: group.sample_truncated
+    })),
+    count_basis: input.count_basis,
+    source_truncated: input.source_truncated,
+    actionable_paths: input.actionable_paths.map(sanitizeSkippedPath)
   });
 }
 

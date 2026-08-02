@@ -24,8 +24,8 @@ classification limit.
 - Spec ID: 053
 - Owner: platform
 - Start date: 2026-08-02
-- Current stage: requirements, research, design, tasks, traceability, and
-  verification planning drafted; implementation not started
+- Current stage: implementation and validation complete; durable behavior
+  promoted and final review/closure in progress
 - Scope owner:
   `docs/specs/053-validation-plan-skipped-path-payload-compaction/`
 - Backlog owner: EB065 under EB004 and EB009
