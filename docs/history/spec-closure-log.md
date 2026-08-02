@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/052-production-documentation-corpus-isolation-and-governing-owner-priority/`
 - **Title:** Production documentation corpus isolation and governing-owner priority requirements
 - **Final spec commit:** `b13d3a3`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `a371db4`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/backlog/README.md`
