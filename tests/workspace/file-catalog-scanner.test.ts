@@ -190,6 +190,294 @@ describe("file catalog scanner", () => {
     expect(result.files).toHaveLength(2);
   });
 
+  it("admits explicit priority files before normal scan candidates", async () => {
+    const scopedRoot = path.join(repoRoot, "scanner-priority");
+    fs.mkdirSync(path.join(scopedRoot, "config"), { recursive: true });
+    fs.mkdirSync(path.join(scopedRoot, "noise"), { recursive: true });
+    fs.writeFileSync(path.join(scopedRoot, "config", "routes.rb"), "Rails.application.routes.draw do\nend\n");
+    fs.writeFileSync(path.join(scopedRoot, "noise", "alpha.md"), "# alpha\n");
+    fs.writeFileSync(path.join(scopedRoot, "noise", "beta.md"), "# beta\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    const result = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-priority"],
+      skipped_roots: [],
+      max_files: 2,
+      priority_paths: ["scanner-priority/config/routes.rb"]
+    });
+
+    const paths = result.files.map((file) => file.path);
+    expect(paths).toEqual([
+      "scanner-priority/config/routes.rb",
+      "scanner-priority/noise/alpha.md"
+    ]);
+    expect(result.truncated).toBe(true);
+    expect(result.continuation_cursor).toBe("scanner-priority/noise/alpha.md");
+  });
+
+  it("supports deterministic resumable chunks and avoids duplicate admitted paths", async () => {
+    const scopedRoot = path.join(repoRoot, "scanner-chunks");
+    fs.mkdirSync(path.join(scopedRoot, "config"), { recursive: true });
+    fs.writeFileSync(path.join(scopedRoot, "config", "routes.rb"), "Rails.application.routes.draw do\nend\n");
+    fs.writeFileSync(path.join(scopedRoot, "config", "database.rb"), "ActiveRecord::Base\n");
+    fs.writeFileSync(path.join(scopedRoot, "alpha.rb"), "# alpha\n");
+    fs.writeFileSync(path.join(scopedRoot, "beta.rb"), "# beta\n");
+    fs.writeFileSync(path.join(scopedRoot, "gamma.rb"), "# gamma\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    const priorityPaths = [
+      "scanner-chunks/config/routes.rb",
+      "scanner-chunks/config/database.rb"
+    ];
+    const first = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-chunks"],
+      skipped_roots: [],
+      max_files: 2,
+      priority_paths: priorityPaths
+    });
+    expect(first.files.map((file) => file.path)).toEqual([
+      "scanner-chunks/config/routes.rb",
+      "scanner-chunks/config/database.rb"
+    ]);
+    expect(first.truncated).toBe(true);
+    expect(first.continuation_cursor).toBe("scanner-chunks/config/database.rb");
+
+    const second = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-chunks"],
+      skipped_roots: [],
+      max_files: 2,
+      priority_paths: priorityPaths,
+      after_path: first.continuation_cursor
+    });
+    expect(second.files.map((file) => file.path)).toEqual([
+      "scanner-chunks/alpha.rb",
+      "scanner-chunks/beta.rb"
+    ]);
+    expect(second.truncated).toBe(true);
+    expect(second.continuation_cursor).toBe("scanner-chunks/beta.rb");
+
+    const third = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-chunks"],
+      skipped_roots: [],
+      max_files: 2,
+      priority_paths: priorityPaths,
+      after_path: second.continuation_cursor
+    });
+    expect(third.files.map((file) => file.path)).toEqual(["scanner-chunks/gamma.rb"]);
+    expect(third.truncated).toBe(false);
+    expect(third.continuation_cursor).toBeUndefined();
+
+    const allFiles = [
+      ...first.files.map((file) => file.path),
+      ...second.files.map((file) => file.path),
+      ...third.files.map((file) => file.path)
+    ];
+    expect(new Set(allFiles).size).toBe(5);
+    expect(allFiles).toEqual(expect.arrayContaining([
+      "scanner-chunks/config/routes.rb",
+      "scanner-chunks/config/database.rb",
+      "scanner-chunks/alpha.rb",
+      "scanner-chunks/beta.rb",
+      "scanner-chunks/gamma.rb"
+    ]));
+  });
+
+  it("prioritizes discovered files by caller supplied path patterns before row cap", async () => {
+    const scopedRoot = path.join(repoRoot, "scanner-pattern-priority");
+    fs.mkdirSync(path.join(scopedRoot, "a", "config", "routes"), { recursive: true });
+    fs.mkdirSync(path.join(scopedRoot, "b"), { recursive: true });
+    fs.writeFileSync(path.join(scopedRoot, "a", "config", "routes", "admin.rb"), "Rails.application.routes.draw do\nend\n");
+    fs.writeFileSync(path.join(scopedRoot, "a", "config", "routes.rb"), "Rails.application.routes.draw do\nend\n");
+    fs.writeFileSync(path.join(scopedRoot, "x.txt"), "x\n");
+    fs.writeFileSync(path.join(scopedRoot, "y.txt"), "y\n");
+    fs.writeFileSync(path.join(scopedRoot, "z.txt"), "z\n");
+    fs.writeFileSync(path.join(scopedRoot, "b", "app.rb"), "class App; end\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    const result = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-pattern-priority"],
+      skipped_roots: [],
+      max_files: 2,
+      priority_path_patterns: ["**/config/routes.rb", "**/config/routes/*.rb"]
+    });
+
+    expect(result.files.map((file) => file.path)).toEqual([
+      "scanner-pattern-priority/a/config/routes.rb",
+      "scanner-pattern-priority/a/config/routes/admin.rb"
+    ]);
+    expect(result.truncated).toBe(true);
+    expect(result.continuation_cursor).toBe("scanner-pattern-priority/a/config/routes/admin.rb");
+  });
+
+  it("keeps prioritized route patterns stable across continuation", async () => {
+    const scopedRoot = path.join(repoRoot, "scanner-pattern-continuation");
+    fs.mkdirSync(path.join(scopedRoot, "engine", "config", "routes"), { recursive: true });
+    fs.writeFileSync(path.join(scopedRoot, "engine", "config", "routes.rb"), "Rails.application.routes.draw do\nend\n");
+    fs.writeFileSync(path.join(scopedRoot, "engine", "config", "routes", "admin.rb"), "Rails.application.routes.draw do\nend\n");
+    fs.writeFileSync(path.join(scopedRoot, "engine", "config", "routes", "api.rb"), "Rails.application.routes.draw do\nend\n");
+    fs.writeFileSync(path.join(scopedRoot, "core.rb"), "class Core; end\n");
+    fs.writeFileSync(path.join(scopedRoot, "readme.md"), "# Core\n");
+    fs.writeFileSync(path.join(scopedRoot, "script.rb"), "script\n");
+    fs.writeFileSync(path.join(scopedRoot, "utils.rb"), "utils\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    const first = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-pattern-continuation"],
+      skipped_roots: [],
+      max_files: 2,
+      priority_path_patterns: ["**/config/routes.rb", "**/config/routes/*.rb"]
+    });
+
+    expect(first.files.map((file) => file.path)).toEqual([
+      "scanner-pattern-continuation/engine/config/routes.rb",
+      "scanner-pattern-continuation/engine/config/routes/admin.rb"
+    ]);
+
+    const second = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-pattern-continuation"],
+      skipped_roots: [],
+      max_files: 2,
+      priority_path_patterns: ["**/config/routes.rb", "**/config/routes/*.rb"],
+      after_path: first.continuation_cursor
+    });
+
+    const third = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-pattern-continuation"],
+      skipped_roots: [],
+      max_files: 2,
+      priority_path_patterns: ["**/config/routes.rb", "**/config/routes/*.rb"],
+      after_path: second.continuation_cursor
+    });
+    const fourth = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-pattern-continuation"],
+      skipped_roots: [],
+      max_files: 2,
+      priority_path_patterns: ["**/config/routes.rb", "**/config/routes/*.rb"],
+      after_path: third.continuation_cursor
+    });
+
+    expect(second.files.map((file) => file.path)).toEqual([
+      "scanner-pattern-continuation/engine/config/routes/api.rb",
+      "scanner-pattern-continuation/core.rb"
+    ]);
+    expect(third.files.map((file) => file.path)).toEqual([
+      "scanner-pattern-continuation/script.rb",
+      "scanner-pattern-continuation/utils.rb"
+    ]);
+    expect(fourth.files.map((file) => file.path)).toEqual([
+      "scanner-pattern-continuation/readme.md"
+    ]);
+
+    expect(fourth.continuation_cursor).toBeUndefined();
+    expect(fourth.truncated).toBe(false);
+
+    const allPaths = [
+      ...first.files,
+      ...second.files,
+      ...third.files,
+      ...fourth.files
+    ].map((file) => file.path);
+    const seenPaths = new Set(allPaths);
+    expect(allPaths.length).toBe(seenPaths.size);
+    expect(allPaths).toEqual(
+      expect.arrayContaining([
+        "scanner-pattern-continuation/engine/config/routes.rb",
+        "scanner-pattern-continuation/engine/config/routes/admin.rb",
+        "scanner-pattern-continuation/engine/config/routes/api.rb",
+        "scanner-pattern-continuation/core.rb",
+        "scanner-pattern-continuation/script.rb",
+        "scanner-pattern-continuation/utils.rb",
+        "scanner-pattern-continuation/readme.md"
+      ])
+    );
+  });
+
+  it("throws when the continuation cursor is missing from the scan sequence", async () => {
+    const scopedRoot = path.join(repoRoot, "scanner-missing-cursor");
+    fs.mkdirSync(scopedRoot, { recursive: true });
+    fs.writeFileSync(path.join(scopedRoot, "a.rb"), "# a\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    await expect(
+      scanner.scan({
+        repo_root: repoRoot,
+        indexed_roots: ["scanner-missing-cursor"],
+        skipped_roots: [],
+        max_files: 2,
+        after_path: "scanner-missing-cursor/does-not-exist.rb"
+      })
+    ).rejects.toThrow("continuation cursor");
+  });
+
+  it("ignores ignored priority paths and continues normal admission order", async () => {
+    const scopedRoot = path.join(repoRoot, "scanner-ignored-priority");
+    fs.mkdirSync(scopedRoot, { recursive: true });
+    fs.writeFileSync(path.join(scopedRoot, ".env"), "SECRET=redacted\n");
+    fs.writeFileSync(path.join(scopedRoot, "app.rb"), "class App; end\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    const result = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-ignored-priority"],
+      skipped_roots: [],
+      max_files: 10,
+      priority_paths: ["scanner-ignored-priority/.env"]
+    });
+
+    expect(result.files.map((file) => file.path)).not.toContain("scanner-ignored-priority/.env");
+    expect(result.files.map((file) => file.path)).toContain("scanner-ignored-priority/app.rb");
+    expect(result.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "scanner-ignored-priority/.env",
+          reason: "secret"
+        })
+      ])
+    );
+  });
+
+  it("replays the same continuation cursor deterministically", async () => {
+    const scopedRoot = path.join(repoRoot, "scanner-stable-replay");
+    fs.mkdirSync(scopedRoot, { recursive: true });
+    fs.writeFileSync(path.join(scopedRoot, "z.rb"), "# z\n");
+    fs.writeFileSync(path.join(scopedRoot, "y.rb"), "# y\n");
+    fs.writeFileSync(path.join(scopedRoot, "x.rb"), "# x\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    const first = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-stable-replay"],
+      skipped_roots: [],
+      max_files: 1
+    });
+    const replayed = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-stable-replay"],
+      skipped_roots: [],
+      max_files: 1,
+      after_path: first.continuation_cursor
+    });
+    const replayedAgain = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["scanner-stable-replay"],
+      skipped_roots: [],
+      max_files: 1,
+      after_path: first.continuation_cursor
+    });
+
+    expect(replayed.files).toEqual(replayedAgain.files);
+    expect(replayed.continuation_cursor).toBe(replayedAgain.continuation_cursor);
+  });
+
   it("skips unreadable directories without aborting catalog scans", async () => {
     const unreadableRoot = path.join(repoRoot, "runtime-data", "diagnostic.data");
     fs.mkdirSync(unreadableRoot, { recursive: true });

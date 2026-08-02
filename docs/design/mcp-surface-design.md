@@ -623,6 +623,14 @@ safety contract.
 
 ## Response Metadata
 
+Graph-backed tool and resource responses preserve the selected snapshot's
+`index_coverage` evidence. Consumers must treat graph coverage as partial when
+`scan_truncated` or `extraction_truncated` is true. When
+`continuation_available` is true, `continuation_kind: graph_build` and
+`continuation_cursor` describe background graph-build continuation; they are
+not query-pagination cursors and must not be supplied to public query tools.
+Fresh snapshot currency does not upgrade partial graph coverage to complete.
+
 Every result must use the shared response envelope from
 [Runtime contracts](../reference/runtime-contracts.md).
 

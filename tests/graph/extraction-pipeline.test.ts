@@ -460,6 +460,77 @@ describe("repository graph extraction pipeline", () => {
     }
   });
 
+  it("prioritizes Rails route front-door files for capped extraction and reports partial coverage truthfully", async () => {
+    const repoRoot = path.join(dir, "rails-capped-routes");
+    fs.mkdirSync(repoRoot, { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "AGENTS.md"), "# Front-door agent instructions\n");
+    fs.writeFileSync(path.join(repoRoot, "README.md"), "# Rails Capped Fixture\n");
+    for (let index = 0; index < 20; index += 1) {
+      fs.writeFileSync(
+        path.join(repoRoot, `a-file-${String(index).padStart(2, "0")}.rb`),
+        "class AFile\nend\n"
+      );
+    }
+    fs.mkdirSync(path.join(repoRoot, "config"), { recursive: true });
+    fs.writeFileSync(
+      path.join(repoRoot, "config/routes.rb"),
+      "Rails.application.routes.draw do\n  get \"health\", to: \"health#index\"\nend\n"
+    );
+    const store = openGraphStore(path.join(dir, "rails-capped-routes.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new ResourceExtractorAdapter());
+
+    try {
+      const result = await indexRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "501",
+        max_extraction_files: 5
+      });
+
+      expect(result.scanned_files).toBe(23);
+      expect(result.admitted_files).toBe(5);
+      expect(result.eligible_files_seen).toBe(23);
+      expect(result.extraction_truncated).toBe(true);
+      expect(result.extracted_files).toBeLessThan(result.scanned_files);
+      expect(result.truncated).toBe(true);
+      const graphCoverage = result.coverage.find((entry) => entry.evidence_class === "graph");
+      expect(graphCoverage).toMatchObject({
+        state: "partial",
+        indexed_files: 3,
+        eligible_files_seen: 23,
+        admitted_files: 5,
+        extracted_files: 3,
+        scan_truncated: false,
+        reason: expect.stringContaining("max_extraction_files=5")
+      });
+      expect(result.coverage).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            evidence_class: "graph",
+            state: "partial"
+          })
+        ])
+      );
+      await expect(store.getFile({
+        snapshot_id: "501",
+        path: "config/routes.rb"
+      })).resolves.toMatchObject({
+        indexed: true
+      });
+    } finally {
+      store.close();
+    }
+  });
+
   it("indexes Rails generated paths and still skips vendor paths from graph extraction", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
     const store = openGraphStore(path.join(dir, "rails-exclusions.sqlite"));
@@ -1812,6 +1883,7 @@ describe("repository graph extraction pipeline", () => {
     const result = await runStartupGraphWorker({
       repoRoot,
       databasePath,
+      executionId: "warmup-production-worker",
       snapshotId: "608",
       configIdentity: "default",
       maxFiles: 100,
@@ -1821,7 +1893,17 @@ describe("repository graph extraction pipeline", () => {
       controllerGeneration: 8,
       invalidationGeneration: 13
     });
-    expect(result).toMatchObject({ snapshot_id: "608", repo_root: repoRoot });
+    expect(result.exit_code).toBe(0);
+    expect(result.messages).toHaveLength(1);
+    expect(result.messages[0]).toMatchObject({
+      type: "complete",
+      result: {
+        outcome: "complete",
+        execution_id: "warmup-production-worker",
+        target_snapshot_id: "608",
+        completed_generation: 13
+      }
+    });
 
     const reopened = openGraphStore(databasePath);
     try {
@@ -2060,6 +2142,94 @@ describe("repository graph extraction pipeline", () => {
       reopened.close();
     }
   });
+
+  it("startup warm-up worker emits durable partials and continues without caller-supplied cursor", async () => {
+    const repoRoot = path.join(dir, "startup-worker-partial");
+    fs.mkdirSync(repoRoot, { recursive: true });
+    for (let index = 0; index < 4; index += 1) {
+      fs.writeFileSync(
+        path.join(repoRoot, `app-${index}.py`),
+        `def app_${index}() -> str:\n    return "app_${index}"\n`
+      );
+    }
+    const databasePath = path.join(dir, "startup-worker-partial.sqlite");
+    const first = await runStartupGraphWorker({
+      repoRoot,
+      databasePath,
+      executionId: "warmup-partial-worker",
+      snapshotId: "709",
+      configIdentity: "default",
+      maxFiles: 1,
+      retainLatestSnapshots: 2,
+      retainLatestFreshSnapshots: 2,
+      vacuum: false,
+      controllerGeneration: 9,
+      invalidationGeneration: 11
+    });
+    expect(first.exit_code).toBe(0);
+    expect(first.messages).toHaveLength(1);
+    expect(first.messages[0]).toMatchObject({
+      type: "partial",
+      result: {
+        outcome: "partial",
+        execution_id: "warmup-partial-worker",
+        target_snapshot_id: "709",
+        completed_generation: 11,
+        partial_kind: "publish_seed",
+        continuation_cursor: expect.any(String)
+      }
+    });
+    const publisher = openGraphStore(databasePath);
+    await publisher.transitionBuild({
+      repo_root: repoRoot,
+      snapshot_id: "709",
+      controller_generation: 9,
+      invalidation_generation: 11,
+      from: "building",
+      to: "published",
+      updated_at: "2026-08-02T00:00:00.000Z"
+    });
+    publisher.close();
+
+    let finalMessage: StartupGraphWorkerMessage | undefined;
+    for (let pass = 0; pass < 8; pass += 1) {
+      const continuation = await runStartupGraphWorker({
+        repoRoot,
+        databasePath,
+        executionId: "warmup-partial-worker",
+        snapshotId: "710",
+        configIdentity: "default",
+        maxFiles: 1,
+        retainLatestSnapshots: 2,
+        retainLatestFreshSnapshots: 2,
+        vacuum: false,
+        controllerGeneration: 9,
+        invalidationGeneration: 11
+      });
+      expect(continuation.exit_code).toBe(0);
+      expect(continuation.messages).toHaveLength(1);
+      finalMessage = continuation.messages[0];
+      if (finalMessage?.type === "complete") break;
+      expect(finalMessage).toMatchObject({
+        type: "partial",
+        result: {
+          outcome: "partial",
+          partial_kind: "continue_build",
+          continuation_cursor: expect.any(String),
+          target_snapshot_id: "710"
+        }
+      });
+    }
+    expect(finalMessage).toMatchObject({
+      type: "complete",
+      result: {
+        outcome: "complete",
+        execution_id: "warmup-partial-worker",
+        target_snapshot_id: "710",
+        completed_generation: 11
+      }
+    });
+  }, 15_000);
 
   it("uses one resolved snapshot id for standalone failure cleanup when the clock advances", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-basic-python");
@@ -2305,29 +2475,85 @@ function snapshotFtsRowCount(store: TestGraphStore, table: "docs_fts", snapshotI
   return row.count;
 }
 
-function runStartupGraphWorker(workerData: Record<string, unknown>): Promise<IndexRepositoryGraphResult> {
+type StartupGraphWorkerMessage = {
+  type: "complete" | "partial";
+  result: {
+    outcome: "complete" | "partial";
+    execution_id: string;
+    target_snapshot_id: string;
+    completed_generation: number;
+    continuation_cursor?: string;
+    partial_kind?: "publish_seed" | "continue_build";
+  };
+};
+
+type StartupGraphWorkerRun = {
+  exit_code: number;
+  messages: readonly StartupGraphWorkerMessage[];
+};
+
+function runStartupGraphWorker(workerData: Record<string, unknown>): Promise<StartupGraphWorkerRun> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(
       new URL("../../src/infrastructure/workers/startup-graph-warmup-worker-entrypoint.mjs", import.meta.url),
       { workerData }
     );
-    let settled = false;
-    worker.once("message", (message: unknown) => {
-      settled = true;
-      if (
-        typeof message === "object" && message !== null &&
-        (message as { type?: unknown }).type === "complete"
-      ) {
-        resolve((message as { result: IndexRepositoryGraphResult }).result);
+    const messages: StartupGraphWorkerMessage[] = [];
+    const onMessage = (message: unknown): void => {
+      if (!isStartupGraphWorkerMessage(message)) {
+        reject(new Error("Startup graph worker returned an invalid result."));
         return;
       }
-      reject(new Error("Startup graph worker returned an invalid result."));
-    });
+      messages.push(message);
+    };
+    worker.on("message", onMessage);
     worker.once("error", reject);
     worker.once("exit", (code) => {
-      if (!settled && code !== 0) reject(new Error(`Startup graph worker exited with code ${code}.`));
+      if (code !== 0 && messages.length === 0) {
+        reject(new Error(`Startup graph worker exited with code ${code}.`));
+        return;
+      }
+      resolve({ exit_code: code, messages });
     });
   });
+}
+
+function isStartupGraphWorkerMessage(
+  message: unknown
+): message is StartupGraphWorkerMessage {
+  if (typeof message !== "object" || message === null) {
+    return false;
+  }
+  const candidate = message as Record<string, unknown>;
+  if (candidate.type !== "complete" && candidate.type !== "partial") {
+    return false;
+  }
+  if (typeof candidate.result !== "object" || candidate.result === null) {
+    return false;
+  }
+  const result = candidate.result as Record<string, unknown>;
+  if (
+    typeof result.execution_id !== "string" ||
+    result.execution_id.length === 0 ||
+    typeof result.target_snapshot_id !== "string" ||
+    result.target_snapshot_id.length === 0 ||
+    typeof result.completed_generation !== "number" ||
+    !Number.isInteger(result.completed_generation) ||
+    result.completed_generation < 0
+  ) {
+    return false;
+  }
+  if (result.outcome !== candidate.type) {
+    return false;
+  }
+  if (result.outcome === "complete") {
+    return Object.keys(result).length === 4;
+  }
+  return result.outcome === "partial" &&
+    typeof result.continuation_cursor === "string" &&
+    result.continuation_cursor.length > 0 &&
+    (result.partial_kind === "publish_seed" || result.partial_kind === "continue_build") &&
+    Object.keys(result).length === 6;
 }
 
 class FailingPythonExtractor implements ExtractorPort {

@@ -137,7 +137,10 @@ export function isRailsConfigFile(filePath: string): boolean {
 
 export function isRailsRouteFile(filePath: string): boolean {
   const normalized = normalizeRepoPath(filePath).toLowerCase();
-  return normalized.endsWith("/config/routes.rb") || normalized === "config/routes.rb";
+  return normalized === "config/routes.rb" ||
+    normalized.endsWith("/config/routes.rb") ||
+    normalized.startsWith("config/routes/") && normalized.endsWith(".rb") ||
+    normalized.includes("/config/routes/") && normalized.endsWith(".rb");
 }
 
 export function isRailsTestFile(filePath: string): boolean {

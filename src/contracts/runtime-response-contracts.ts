@@ -60,7 +60,13 @@ export const indexCoverageSchema = z
     state: evidenceCoverageStateSchema,
     indexed_files: z.number().int().nonnegative().optional(),
     eligible_files_seen: z.number().int().nonnegative().optional(),
+    admitted_files: z.number().int().nonnegative().optional(),
+    extracted_files: z.number().int().nonnegative().optional(),
     scan_truncated: z.boolean().optional(),
+    extraction_truncated: z.boolean().optional(),
+    continuation_available: z.boolean().optional(),
+    continuation_kind: z.enum(["graph_build"]).optional(),
+    continuation_cursor: z.string().optional(),
     indexed_roots: z.array(z.string()).optional(),
     missing_priority_roots: z.array(z.string()).optional(),
     reason: z.string().optional()

@@ -98,7 +98,10 @@ function isInfrastructureFile(filePath: string): boolean {
 
 function isRailsRouteFile(filePath: string): boolean {
   const normalized = normalizePath(filePath).toLowerCase();
-  return lowerBasename(filePath) === "routes.rb" && (normalized === "config/routes.rb" || normalized.includes("/config/routes.rb"));
+  return normalized === "config/routes.rb" ||
+    normalized.endsWith("/config/routes.rb") ||
+    normalized.startsWith("config/routes/") && normalized.endsWith(".rb") ||
+    normalized.includes("/config/routes/") && normalized.endsWith(".rb");
 }
 
 function isRailsRackEntry(filePath: string): boolean {

@@ -376,8 +376,31 @@ a known complete pre-migration cache or recoverable quarantine of the whole
 derived cache and rebuild by the older runtime. The artifact is retained for
 recovery provenance, but the operator runbook does not support overwriting the
 live guard in place. In-place downgrade or ad hoc deletion while an owner may
-be live is unsupported. Artifact size, copy duration, and progress at
-large-repository scale remain EB014 work.
+be live is unsupported. Artifact size, copy duration, and completion progress
+at large-repository scale are tracked under EB014 and are the target for
+production continuation semantics.
+
+### Durable graph-build completion state
+
+Bounded graph builds persist controller-owned progress in
+`graph_build_progress`. The row binds a building snapshot to controller and
+invalidation generations, the last committed scan cursor, the build phase, and
+cumulative eligible/admitted/extracted/resource/graph counters. Progress and
+coverage updates are accepted only for the matching building generation.
+
+The first bounded slice may be published as a queryable seed with explicit
+partial graph coverage. The controller then creates one isolated completion
+target. The store transactionally clones the published seed into that empty
+target, remaps file and node identities, preserves docs/FTS/concern/coverage
+evidence, and carries the committed cursor and counters forward. Public graph,
+catalog, and docs queries remain published-only and cannot select the building
+target.
+
+Continuation slices append to the same target. At scan exhaustion, build-only
+paged reads expose accumulated nodes and unresolved references to final
+cross-slice reconciliation. Resolution replacement and final coverage writes
+are generation-fenced; the controller publishes the target atomically only
+after that completion boundary.
 
 ## Documentation Concern, Ranking, And Currency Evidence
 

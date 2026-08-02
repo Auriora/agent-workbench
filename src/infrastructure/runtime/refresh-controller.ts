@@ -50,8 +50,11 @@ type ControllerWorkerFailureCode = Extract<
   | "invalid_worker_result"
 >;
 
+type PartialRefreshWorkerResult = Extract<RefreshWorkerResult, { outcome: "partial" }>;
+
 type PassOutcome =
-  | { outcome: "complete"; result: RefreshWorkerResult }
+  | { outcome: "partial"; result: PartialRefreshWorkerResult }
+  | { outcome: "complete"; result: Extract<RefreshWorkerResult, { outcome: "complete" }> }
   | { outcome: "failed"; code: ControllerWorkerFailureCode; worker_started: boolean };
 
 type ControllerFailureCode = ControllerWorkerFailureCode | "store_failure" | "permission_failure";
@@ -220,7 +223,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
       state: "planned",
       started_generation: this.startedGeneration,
       lease,
-      publication_state: "building"
+      publication_state: "building",
     };
     this.bumpDiagnosticRevision();
     this.emitActive("planned", this.active);
@@ -365,6 +368,59 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
           await this.failActiveBuild(executionId, outcome.code);
           return false;
         }
+
+        if (outcome.outcome === "partial") {
+          if (this.requestedGeneration > pass.started_generation) {
+            try {
+              await this.publication.transitionBuild({
+                repo_root: this.repoRoot,
+                snapshot_id: pass.target_snapshot_id,
+                controller_generation: this.controllerGeneration,
+                invalidation_generation: pass.started_generation,
+                from: "building",
+                to: "superseded",
+                updated_at: this.clock.nowIso8601()
+              });
+              pass.publication_state = "superseded";
+              this.targetPublicationState = "superseded";
+              this.bumpDiagnosticRevision();
+            } catch (error) {
+              await this.failActiveBuild(executionId, classifyRefreshInfrastructureFailure(error));
+              return false;
+            }
+
+            if (!(await this.allocateReplacementTarget(executionId, this.requestedGeneration))) {
+              return false;
+            }
+            return true;
+          }
+
+          if (outcome.result.partial_kind === "publish_seed") {
+            try {
+              await this.publication.transitionBuild({
+                repo_root: this.repoRoot,
+                snapshot_id: pass.target_snapshot_id,
+                controller_generation: this.controllerGeneration,
+                invalidation_generation: pass.started_generation,
+                from: "building",
+                to: "published",
+                updated_at: this.clock.nowIso8601()
+              });
+              pass.publication_state = "published";
+              this.targetPublicationState = "published";
+              this.bumpDiagnosticRevision();
+            } catch (error) {
+              await this.failActiveBuild(executionId, classifyRefreshInfrastructureFailure(error));
+              return false;
+            }
+            if (!(await this.allocateReplacementTarget(executionId, this.startedGeneration))) {
+              return false;
+            }
+            return true;
+          }
+          return true;
+        }
+
         if (this.requestedGeneration > pass.started_generation) {
           try {
             await this.publication.transitionBuild({
@@ -397,13 +453,13 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
           }
           this.targetSnapshotId = targetSnapshotId;
           this.targetPublicationState = "building";
-          this.active = {
-            ...pass,
-            target_snapshot_id: targetSnapshotId,
-            started_generation: this.startedGeneration,
-            state: "running",
-            publication_state: "building"
-          };
+        this.active = {
+          ...pass,
+          target_snapshot_id: targetSnapshotId,
+          started_generation: this.startedGeneration,
+          state: "running",
+          publication_state: "building"
+        };
           this.bumpDiagnosticRevision();
           return true;
         }
@@ -431,6 +487,38 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
         return;
       }
     }
+  }
+
+  private async allocateReplacementTarget(
+    executionId: string,
+    startedGeneration: number
+  ): Promise<boolean> {
+    if (this.active?.execution_id !== executionId) {
+      return false;
+    }
+    let targetSnapshotId: string;
+    try {
+      targetSnapshotId = await this.publication.allocateBuildSnapshotId({
+        repo_root: this.repoRoot,
+        minimum_id: String(Math.max(1, this.clock.nowUnixMs()))
+      });
+    } catch (error) {
+      this.fail(executionId, classifyRefreshInfrastructureFailure(error));
+      return false;
+    }
+
+    this.targetSnapshotId = targetSnapshotId;
+    this.targetPublicationState = "building";
+    this.startedGeneration = startedGeneration;
+    this.pass += 1;
+    if (this.active !== undefined) {
+      this.active.target_snapshot_id = targetSnapshotId;
+      this.active.started_generation = this.startedGeneration;
+      this.active.state = "running";
+      this.active.publication_state = "building";
+    }
+    this.bumpDiagnosticRevision();
+    return true;
   }
 
   private async executePass(execution: ActiveExecution): Promise<PassOutcome> {
@@ -491,13 +579,14 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
 
       let workerRun: Promise<RefreshExecutorCompletion>;
       try {
-        workerRun = this.executor.run({
+        const runInput = {
           repo_root: this.repoRoot,
           execution_id: execution.execution_id,
           target_snapshot_id: execution.target_snapshot_id,
           generation: execution.started_generation,
           deadline
-        });
+        };
+        workerRun = this.executor.run(runInput);
       } catch {
         if (claim()) {
           this.beginTermination(execution.execution_id, "worker_error");
@@ -551,11 +640,14 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
       return { outcome: "failed", code: "invalid_worker_result", worker_started: true };
     }
     if (
-      result.execution_id !== execution.execution_id ||
-      result.target_snapshot_id !== execution.target_snapshot_id ||
-      result.completed_generation !== execution.started_generation
-    ) {
+        result.execution_id !== execution.execution_id ||
+        result.target_snapshot_id !== execution.target_snapshot_id ||
+        result.completed_generation !== execution.started_generation
+      ) {
       return { outcome: "failed", code: "invalid_worker_result", worker_started: true };
+    }
+    if (result.outcome === "partial") {
+      return { outcome: "partial", result };
     }
     return { outcome: "complete", result };
   }
@@ -912,7 +1004,18 @@ function isRefreshWorkerResult(value: unknown): value is RefreshWorkerResult {
     return false;
   }
   const candidate = value as Record<string, unknown>;
-  return (
+  const completeKeys = new Set([
+    "outcome",
+    "execution_id",
+    "target_snapshot_id",
+    "completed_generation"
+  ]);
+  const partialKeys = new Set([
+    ...completeKeys,
+    "continuation_cursor",
+    "partial_kind"
+  ]);
+  if (
     candidate.outcome === "complete" &&
     typeof candidate.execution_id === "string" &&
     candidate.execution_id.length > 0 &&
@@ -921,8 +1024,22 @@ function isRefreshWorkerResult(value: unknown): value is RefreshWorkerResult {
     typeof candidate.completed_generation === "number" &&
     Number.isInteger(candidate.completed_generation) &&
     candidate.completed_generation >= 0 &&
-    Object.keys(candidate).every((key) =>
-      ["outcome", "execution_id", "target_snapshot_id", "completed_generation"].includes(key)
-    )
+    Object.keys(candidate).every((key) => completeKeys.has(key))
+  ) {
+    return true;
+  }
+  return (
+    candidate.outcome === "partial" &&
+    typeof candidate.execution_id === "string" &&
+    candidate.execution_id.length > 0 &&
+    typeof candidate.target_snapshot_id === "string" &&
+    candidate.target_snapshot_id.length > 0 &&
+    typeof candidate.completed_generation === "number" &&
+    Number.isInteger(candidate.completed_generation) &&
+    candidate.completed_generation >= 0 &&
+    typeof candidate.continuation_cursor === "string" &&
+    candidate.continuation_cursor.length > 0 &&
+    (candidate.partial_kind === "publish_seed" || candidate.partial_kind === "continue_build") &&
+    Object.keys(candidate).every((key) => partialKeys.has(key))
   );
 }

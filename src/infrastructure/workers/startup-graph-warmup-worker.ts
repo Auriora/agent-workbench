@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parentPort, workerData } from "node:worker_threads";
-import { buildRepositoryGraph } from "../../application/use-cases/index-repository-graph.js";
+import { runRepositoryGraphBuildSlice } from "../../application/use-cases/index-repository-graph.js";
 import { SCHEMA_VERSION, openGraphStore } from "../sqlite/index.js";
 import {
   FileCatalogScannerAdapter,
@@ -25,7 +25,16 @@ import {
 } from "../tree-sitter/index.js";
 import { SystemClockAdapter } from "../time/index.js";
 
+const COMMON_RAILS_FRONT_DOOR_PRIORITY_PATHS = [
+  "AGENTS.md",
+  "README.md",
+  "Gemfile",
+  "config/application.rb",
+  "config/routes.rb"
+] as const;
+
 type StartupGraphWarmupWorkerData = {
+  executionId: string;
   repoRoot: string;
   databasePath: string;
   snapshotId: string;
@@ -62,7 +71,7 @@ extractors.register(new PythonTreeSitterExtractorAdapter());
 extractors.register(new RubyTreeSitterExtractorAdapter());
 
 try {
-  const result = await buildRepositoryGraph({
+  const result = await runRepositoryGraphBuildSlice({
     repo_root: input.repoRoot,
     scanner,
     workspace,
@@ -73,13 +82,21 @@ try {
     docs_index: workerGraphStore,
     documentation_concerns: workerGraphStore,
     snapshots: workerGraphStore,
+    build_progress: workerGraphStore,
+    build_seed: workerGraphStore,
+    build_read: workerGraphStore,
+    build_coverage: workerGraphStore,
+    build_resolution: workerGraphStore,
     clock: new SystemClockAdapter(),
     schema_version: SCHEMA_VERSION,
     snapshot_id: input.snapshotId,
+    owner_id: input.executionId,
     config_identity: input.configIdentity,
+    max_files: input.maxFiles,
+    max_extraction_files: input.maxFiles,
+    priority_paths: COMMON_RAILS_FRONT_DOOR_PRIORITY_PATHS,
     controller_generation: input.controllerGeneration,
-    invalidation_generation: input.invalidationGeneration,
-    max_files: input.maxFiles
+    invalidation_generation: input.invalidationGeneration
   });
   await graphStore.pruneRepositorySnapshots({
     repo_root: input.repoRoot,
@@ -90,7 +107,32 @@ try {
   if (crashBarrierProbe?.barrier === "prepublication") {
     await pauseAtCrashBarrier(crashBarrierProbe, "prepublication");
   }
-  parentPort?.postMessage({ type: "complete", result });
+  if (result.outcome === "partial") {
+    if (result.continuation_cursor === undefined || result.partial_kind === undefined) {
+      throw new Error("Partial graph build slice did not return its continuation contract.");
+    }
+    parentPort?.postMessage({
+      type: "partial",
+      result: {
+        outcome: "partial",
+        execution_id: input.executionId,
+        target_snapshot_id: input.snapshotId,
+        completed_generation: input.invalidationGeneration,
+        continuation_cursor: result.continuation_cursor,
+        partial_kind: result.partial_kind
+      }
+    });
+  } else {
+    parentPort?.postMessage({
+      type: "complete",
+      result: {
+        outcome: "complete",
+        execution_id: input.executionId,
+        target_snapshot_id: input.snapshotId,
+        completed_generation: input.invalidationGeneration
+      }
+    });
+  }
 } finally {
   graphStore.close();
 }

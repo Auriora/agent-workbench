@@ -317,7 +317,7 @@ or runtime telemetry.
 ### EB008: Workspace Hygiene And Wrong-Repo Guard
 
 - Priority: P1
-- Status: proposed spec
+- Status: active in Spec 051
 - Friction signal: agents created or discussed work in the wrong repository,
   risked generated `.cache` artifacts, or needed correction around local
   workspace boundaries.
@@ -527,9 +527,9 @@ or runtime telemetry.
   minutes while the snapshot stayed
   `refreshing`; the run had already written roughly 159k nodes and 247k edges
   before it was stopped. Spec 036 fixed docs-first searchability and explicit
-  non-complete graph coverage for bounded first-pass warmup, but deliberately
-  deferred a persisted completion executor for files beyond the first-pass graph
-  budget to this backlog item.
+  non-complete graph coverage for bounded first-pass warmup; persisted
+  completion semantics for files beyond the first-pass graph budget are owned
+  by Spec 051 under this EB014 backlog item.
 - Runtime surface: MCP startup warmup, `repo:///status`, graph extraction,
   graph write batching, docs indexing, runtime telemetry, and cache/snapshot
   state.
@@ -547,8 +547,9 @@ or runtime telemetry.
     and freshness state.
   - A bounded first-pass graph warmup that stops before all eligible files are
     indexed should have one production completion path with durable cursor,
-    owner, cancellation, retry, and stale-repository semantics; until that path
-    exists, public metadata must continue to report non-complete graph coverage.
+    owner, cancellation, retry, and stale-repository semantics; while that path
+    is incomplete, public metadata must continue to report non-complete graph
+    coverage.
   - Performance fixes must not add parser, semantic, or command-execution
     fallbacks; they should address the actual indexing/write bottleneck.
 - Validation:
@@ -560,8 +561,8 @@ or runtime telemetry.
     reporting, and subsequent restart behavior.
   - Telemetry or debug harness output that records phase timings and row-count
     growth without requiring a live external tracing service.
-- Promotion target: create a future runtime operations or graph-store scale
-  spec under EB003, with telemetry evidence routed through EB009.
+- Promotion target: complete and close Spec 051 after runtime, graph-store,
+  debug-parity, cross-repository, and telemetry evidence is recorded.
 
 ### EB015: Markdown Document Audit Scale And Chunking
 

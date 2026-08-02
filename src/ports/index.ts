@@ -196,6 +196,7 @@ export type FileCatalogScanResult = {
   skipped_paths?: readonly FileCatalogSkippedPath[];
   files: readonly FileCatalogEntry[];
   truncated: boolean;
+  continuation_cursor?: string;
 };
 
 export type FileCatalogSkippedPath = {
@@ -220,7 +221,9 @@ export interface FileCatalogScanPort {
     indexed_roots: readonly string[];
     skipped_roots: readonly string[];
     max_files: number;
+    after_path?: string;
     priority_paths?: readonly string[];
+    priority_path_patterns?: readonly string[];
   }): Promise<FileCatalogScanResult>;
 }
 
@@ -738,12 +741,21 @@ export interface WarmupCoordinatorPort {
   completeWarmup(input: { execution_id: string; success: boolean; reason?: string }): Promise<void>;
 }
 
-export type RefreshWorkerResult = {
-  outcome: "complete";
-  execution_id: string;
-  target_snapshot_id: string;
-  completed_generation: InvalidationGeneration;
-};
+export type RefreshWorkerResult =
+  | {
+      outcome: "complete";
+      execution_id: string;
+      target_snapshot_id: string;
+      completed_generation: InvalidationGeneration;
+    }
+  | {
+      outcome: "partial";
+      execution_id: string;
+      target_snapshot_id: string;
+      completed_generation: InvalidationGeneration;
+      continuation_cursor: string;
+      partial_kind: "publish_seed" | "continue_build";
+    };
 
 export type RefreshExecutorCompletion = {
   exit_code: number;
@@ -859,6 +871,110 @@ export interface SnapshotBuildPort {
     invalidation_generation: InvalidationGeneration;
     created_at: string;
   }): Promise<SnapshotPublicationRecord & { state: "building" }>;
+}
+
+export type GraphBuildProgressPhase = "seed" | "extracting" | "resolving" | "complete";
+
+export type GraphBuildProgressStatus = "active" | "completed" | "cancelled" | "stale";
+
+export type GraphBuildProgressCounters = {
+  eligible_files: number;
+  scanned_files: number;
+  admitted_files: number;
+  extracted_files: number;
+  unsupported_files: number;
+  resource_backed_files: number;
+  nodes: number;
+  edges: number;
+  unresolved_references: number;
+};
+
+export type GraphBuildProgress = {
+  snapshot_id: string;
+  source_snapshot_id?: string;
+  owner_id?: string;
+  completion_target_id?: string;
+  phase: GraphBuildProgressPhase;
+  status?: GraphBuildProgressStatus;
+  scan_cursor?: string;
+  max_files?: number;
+  generation_source_hash?: string;
+  counters: GraphBuildProgressCounters;
+  controller_generation: number;
+  invalidation_generation: InvalidationGeneration;
+  updated_at: string;
+};
+
+export type BuildResolvedReferenceWrite = {
+  file_path: string;
+  edge: GraphEdge;
+};
+
+export interface GraphBuildProgressPort {
+  getGraphBuildProgress(input: {
+    snapshot_id: string;
+  }): Promise<GraphBuildProgress | null>;
+  upsertGraphBuildProgress(input: {
+    progress: GraphBuildProgress;
+  }): Promise<void>;
+  transitionGraphBuildProgressStatus(input: {
+    snapshot_id: string;
+    owner_id?: string;
+    controller_generation?: number;
+    invalidation_generation?: InvalidationGeneration;
+    from: GraphBuildProgressStatus;
+    to: GraphBuildProgressStatus;
+    completion_target_id?: string;
+    updated_at: string;
+  }): Promise<void>;
+}
+
+export interface GraphBuildSeedPort {
+  seedBuildSnapshotFromPublished(input: {
+    source_snapshot_id: string;
+    target_snapshot_id: string;
+    owner_id?: string;
+    controller_generation: number;
+    invalidation_generation: InvalidationGeneration;
+    updated_at: string;
+  }): Promise<void>;
+}
+
+export interface GraphBuildReadPort {
+  listBuildNodes(input: {
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: InvalidationGeneration;
+    after_node_id?: string;
+    max_rows?: number;
+  }): Promise<readonly GraphNode[]>;
+  listBuildUnresolvedReferences(input: {
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: InvalidationGeneration;
+    after_id?: string;
+    max_rows?: number;
+  }): Promise<readonly UnresolvedReference[]>;
+}
+
+export interface GraphBuildCoveragePort {
+  upsertGraphBuildCoverage(input: {
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: InvalidationGeneration;
+    coverage: IndexCoverage & { evidence_class: "graph" };
+  }): Promise<void>;
+}
+
+export interface GraphBuildResolutionWritePort {
+  replaceBuildResolution(input: {
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: InvalidationGeneration;
+    provenance: string;
+    resolved_references: readonly BuildResolvedReferenceWrite[];
+    unresolved_references: readonly UnresolvedReference[];
+  }): Promise<void>;
 }
 
 export type RepositoryOwnershipLease = {

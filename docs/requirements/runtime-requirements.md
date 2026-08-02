@@ -100,8 +100,9 @@ workflow designers.
   published evidence remains selected through failure or crash recovery.
 - Publication, freshness, and evidence coverage are independent. A completed
   bounded scan may be fresh and published with partial coverage; EB014 owns
-  large-repository completion, incremental indexing, throughput, and deadline
-  tuning beyond current bounds.
+  large-repository completion and continuation semantics. Completion truth is
+  based on scan/admission/extraction counters, durable continuation, and
+  resume-safe publication boundaries.
 - Refresh diagnostics must come from one awaited authority and identify
   controller/diagnostic revisions, worker invocation count, execution and
   invalidation generations, target/visible snapshots, publication/freshness,

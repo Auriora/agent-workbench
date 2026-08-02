@@ -6,7 +6,8 @@
 import { Worker } from "node:worker_threads";
 import type {
   RefreshExecutorCompletion,
-  RefreshExecutorPort
+  RefreshExecutorPort,
+  RefreshWorkerResult
 } from "../../ports/index.js";
 
 export type StartupGraphRefreshExecutorOptions = {
@@ -31,15 +32,16 @@ export class StartupGraphRefreshExecutor implements RefreshExecutorPort {
       throw new Error("Refresh execution already has a worker.");
     }
     const workerData = {
-          repoRoot: input.repo_root,
-          databasePath: this.options.database_path,
-          snapshotId: input.target_snapshot_id,
-          configIdentity: this.options.config_identity,
-          maxFiles: this.options.max_files,
-          retainLatestSnapshots: this.options.retain_latest_snapshots,
-          retainLatestFreshSnapshots: this.options.retain_latest_fresh_snapshots,
-          controllerGeneration: this.options.controller_generation,
-          invalidationGeneration: input.generation
+      executionId: input.execution_id,
+      repoRoot: input.repo_root,
+      databasePath: this.options.database_path,
+      snapshotId: input.target_snapshot_id,
+      configIdentity: this.options.config_identity,
+      maxFiles: this.options.max_files,
+      retainLatestSnapshots: this.options.retain_latest_snapshots,
+      retainLatestFreshSnapshots: this.options.retain_latest_fresh_snapshots,
+      controllerGeneration: this.options.controller_generation,
+      invalidationGeneration: input.generation
     };
     const worker = this.options.worker_factory?.({ workerData }) ?? new Worker(
       new URL("../workers/startup-graph-warmup-worker-entrypoint.mjs", import.meta.url),
@@ -60,16 +62,16 @@ export class StartupGraphRefreshExecutor implements RefreshExecutorPort {
       };
       const onMessage = (message: unknown): void => {
         if (results.length >= 2) return;
-        if (!isCompleteWorkerMessage(message, input.target_snapshot_id)) {
+        const result = getRefreshWorkerResult(
+          message,
+          input.target_snapshot_id,
+          input.execution_id
+        );
+        if (result === undefined) {
           results.push(message);
           return;
         }
-        results.push({
-            outcome: "complete",
-            execution_id: input.execution_id,
-            target_snapshot_id: input.target_snapshot_id,
-            completed_generation: input.generation
-        });
+        results.push(result);
       };
       const onError = (error: Error): void => {
         workerError = error;
@@ -102,21 +104,91 @@ export class StartupGraphRefreshExecutor implements RefreshExecutorPort {
   }
 }
 
-function isCompleteWorkerMessage(message: unknown, snapshotId: string): boolean {
+function getRefreshWorkerResult(
+  message: unknown,
+  snapshotId: string,
+  executionId: string
+): RefreshWorkerResult | undefined {
   if (
     typeof message !== "object" ||
     message === null ||
     !("type" in message) ||
-    (message as { type?: unknown }).type !== "complete" ||
     !("result" in message)
   ) {
-    return false;
+    return undefined;
+  }
+  const type = (message as { type?: unknown }).type;
+  if (type !== "complete" && type !== "partial") {
+    return undefined;
   }
   const result = (message as { result?: unknown }).result;
+  if (!isRefreshWorkerResult(result, snapshotId, executionId)) {
+    return undefined;
+  }
+  if (typeof result !== "object" || result === null) return undefined;
+  if (result.outcome !== type) {
+    return undefined;
+  }
+  if (result.outcome === "complete") {
+    return {
+      outcome: "complete",
+      execution_id: result.execution_id,
+      target_snapshot_id: result.target_snapshot_id,
+      completed_generation: result.completed_generation
+    };
+  }
+  return {
+    outcome: "partial",
+    execution_id: result.execution_id,
+    target_snapshot_id: result.target_snapshot_id,
+    completed_generation: result.completed_generation,
+    continuation_cursor: result.continuation_cursor,
+    partial_kind: result.partial_kind
+  };
+}
+
+function isRefreshWorkerResult(
+  value: unknown,
+  snapshotId: string,
+  executionId: string
+): value is RefreshWorkerResult {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const candidate = value as Record<string, unknown>;
+  const completeFields = new Set(["outcome", "execution_id", "target_snapshot_id", "completed_generation"]);
+  const partialFields = new Set(["outcome", "execution_id", "target_snapshot_id", "completed_generation", "continuation_cursor", "partial_kind"]);
+
+  if (
+    candidate.outcome === "complete" &&
+    candidate.execution_id === executionId &&
+    candidate.target_snapshot_id === snapshotId &&
+    typeof candidate.execution_id === "string" &&
+    candidate.execution_id.length > 0 &&
+    typeof candidate.target_snapshot_id === "string" &&
+    candidate.target_snapshot_id.length > 0 &&
+    typeof candidate.completed_generation === "number" &&
+    Number.isInteger(candidate.completed_generation) &&
+    candidate.completed_generation >= 0 &&
+    Object.keys(candidate).every((key) => completeFields.has(key))
+  ) {
+    return true;
+  }
+
   return (
-    typeof result === "object" &&
-    result !== null &&
-    "snapshot_id" in result &&
-    (result as { snapshot_id?: unknown }).snapshot_id === snapshotId
+    candidate.outcome === "partial" &&
+    candidate.execution_id === executionId &&
+    candidate.target_snapshot_id === snapshotId &&
+    typeof candidate.execution_id === "string" &&
+    candidate.execution_id.length > 0 &&
+    typeof candidate.target_snapshot_id === "string" &&
+    candidate.target_snapshot_id.length > 0 &&
+    typeof candidate.completed_generation === "number" &&
+    Number.isInteger(candidate.completed_generation) &&
+    candidate.completed_generation >= 0 &&
+    typeof candidate.continuation_cursor === "string" &&
+    candidate.continuation_cursor.length > 0 &&
+    (candidate.partial_kind === "publish_seed" || candidate.partial_kind === "continue_build") &&
+    Object.keys(candidate).every((key) => partialFields.has(key))
   );
 }

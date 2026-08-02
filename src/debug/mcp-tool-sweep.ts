@@ -21,7 +21,7 @@ import { getRepoScope } from "../application/use-cases/get-repo-scope.js";
 import { getScannedRepoStatus } from "../application/use-cases/get-repo-status.js";
 import { getTaskContext } from "../application/use-cases/get-task-context.js";
 import { getCurrentDocsForTask } from "../application/use-cases/current-docs-for-task.js";
-import { indexRepositoryGraph } from "../application/use-cases/index-repository-graph.js";
+import { runRepositoryGraphBuildSlice } from "../application/use-cases/index-repository-graph.js";
 import { planVerification } from "../application/use-cases/plan-verification.js";
 import {
   getDocsMap,
@@ -94,6 +94,7 @@ export type ToolSweepConfig = {
   call_timeout_ms: number;
   include_raw: boolean;
   start_graph_warmup: boolean;
+  graph_slice_files?: number;
 };
 
 export type ToolSweepQuality = "full" | "partial" | "degraded" | "blocked" | "invalid";
@@ -151,6 +152,7 @@ type RepoFacts = {
 type SupportedSweepLanguage = (typeof SWEEP_SYMBOL_LANGUAGES)[number];
 
 const SWEEP_SYMBOL_LANGUAGES = ["python", "typescript", "javascript", "ruby"] as const;
+const DEFAULT_GRAPH_SLICE_FILES = 500;
 const SWEEP_TEXT_FILE_LANGUAGES = ["ruby", "python", "typescript", "javascript"] as const;
 const SWEEP_TEXT_FILE_FALLBACK_LANGUAGES = ["markdown", "json", "text", "yaml"] as const;
 const SWEEP_SYMBOL_REGEX_BY_LANGUAGE: Record<SupportedSweepLanguage, RegExp> = {
@@ -190,7 +192,8 @@ export function resolveToolSweepConfig(input: {
     output_dir: path.resolve(input.cwd, readOption(args, "--output-dir") ?? ".tmp/agent-workbench-tool-sweep"),
     call_timeout_ms: readNumberOption(args, "--timeout-ms", 30_000),
     include_raw: args.includes("--include-raw"),
-    start_graph_warmup: args.includes("--start-graph-warmup")
+    start_graph_warmup: args.includes("--start-graph-warmup"),
+    graph_slice_files: readNumberOption(args, "--graph-slice-files", DEFAULT_GRAPH_SLICE_FILES)
   };
 }
 
@@ -232,7 +235,11 @@ export async function runMcpToolSweep(config: ToolSweepConfig): Promise<ToolSwee
           event: { repo_root: repoRoot, phase: "warmup", status: "started" }
         });
         try {
-          await warmGraph({ repoRoot, runtime });
+          await warmGraph({
+            repoRoot,
+            runtime,
+            sliceFiles: config.graph_slice_files ?? DEFAULT_GRAPH_SLICE_FILES
+          });
         } catch (error) {
           recordProgressEvent({
             progress,
@@ -454,28 +461,69 @@ function createRepoRuntime(input: { repoRoot: string; outputDir: string }): Repo
   };
 }
 
-async function warmGraph(input: { repoRoot: string; runtime: RepoRuntime }): Promise<void> {
+async function warmGraph(input: { repoRoot: string; runtime: RepoRuntime; sliceFiles: number }): Promise<void> {
   const registry = new ExtractorRegistryAdapter();
   registry.register(new PythonTreeSitterExtractorAdapter({ parser: new PythonParserAdapter() }));
   registry.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "javascript" }));
   registry.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "typescript" }));
   registry.register(new RubyTreeSitterExtractorAdapter());
-  await indexRepositoryGraph({
+  let snapshotId = await input.runtime.graph.allocateBuildSnapshotId({
     repo_root: input.repoRoot,
-    scanner: input.runtime.scanner,
-    workspace: input.runtime.workspace,
-    extractors: registry,
-    resource_extractor: new ResourceExtractorAdapter(),
-    graph: input.runtime.graph,
-    catalog: input.runtime.graph,
-    docs_index: input.runtime.graph,
-    documentation_concerns: input.runtime.graph,
-    snapshots: input.runtime.graph,
-    clock: input.runtime.clock,
-    schema_version: SCHEMA_VERSION,
-    max_files: 15000,
-    max_extraction_files: 500
+    minimum_id: String(Math.max(1, Date.now()))
   });
+  for (;;) {
+    const result = await runRepositoryGraphBuildSlice({
+      repo_root: input.repoRoot,
+      scanner: input.runtime.scanner,
+      workspace: input.runtime.workspace,
+      extractors: registry,
+      resource_extractor: new ResourceExtractorAdapter(),
+      graph: input.runtime.graph,
+      catalog: input.runtime.graph,
+      docs_index: input.runtime.graph,
+      documentation_concerns: input.runtime.graph,
+      snapshots: input.runtime.graph,
+      build_progress: input.runtime.graph,
+      build_seed: input.runtime.graph,
+      build_read: input.runtime.graph,
+      build_coverage: input.runtime.graph,
+      build_resolution: input.runtime.graph,
+      clock: input.runtime.clock,
+      schema_version: SCHEMA_VERSION,
+      snapshot_id: snapshotId,
+      owner_id: `debug-sweep:${input.repoRoot}`,
+      controller_generation: 0,
+      invalidation_generation: 0,
+      max_files: input.sliceFiles
+    });
+    if (result.outcome === "complete") {
+      await input.runtime.graph.transitionBuild({
+        repo_root: input.repoRoot,
+        snapshot_id: snapshotId,
+        controller_generation: 0,
+        invalidation_generation: 0,
+        from: "building",
+        to: "published",
+        updated_at: input.runtime.clock.nowIso8601()
+      });
+      return;
+    }
+    if (result.partial_kind === "publish_seed") {
+      await input.runtime.graph.transitionBuild({
+        repo_root: input.repoRoot,
+        snapshot_id: snapshotId,
+        controller_generation: 0,
+        invalidation_generation: 0,
+        from: "building",
+        to: "published",
+        updated_at: input.runtime.clock.nowIso8601()
+      });
+      snapshotId = await input.runtime.graph.allocateBuildSnapshotId({
+        repo_root: input.repoRoot,
+        minimum_id: String(Math.max(1, Date.now()))
+      });
+    }
+  }
 }
 
 async function callResource(input: {

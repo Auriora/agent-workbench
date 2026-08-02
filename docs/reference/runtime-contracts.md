@@ -210,13 +210,29 @@ the same repository snapshot. Response metadata may include additive
     {
       "evidence_class": "graph",
       "state": "partial",
-      "indexed_files": 2000,
+      "indexed_files": 1989,
+      "eligible_files_seen": 2000,
+      "admitted_files": 2000,
+      "extracted_files": 1989,
       "scan_truncated": true,
+      "extraction_truncated": false,
+      "continuation_available": true,
+      "continuation_kind": "graph_build",
+      "continuation_cursor": "app/models/account.rb",
       "reason": "startup graph seed budget reached"
     }
   ]
 }
 ```
+
+For bounded extraction, graph evidence `indexed_files` MUST be interpreted with
+`eligible_files_seen`, `admitted_files`, `extracted_files`, and the bounded
+truncation signals. `admitted_files` may exceed `extracted_files` when files
+reach an explicit terminal unsupported or size-policy classification; that is
+not itself truncation. A bounded graph result is `complete` only after the scan
+is exhausted, extraction is not truncated, and no continuation remains.
+Otherwise `partial` state with `continuation_kind: graph_build` and a durable
+`continuation_cursor` is required.
 
 Coverage states use `complete`, `partial`, `refreshing`, `stale`, `blocked`,
 and `unknown`. `freshness: fresh` must not be used to imply full coverage for an

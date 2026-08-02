@@ -40,6 +40,13 @@ import type {
   DocumentationConcernRowsResult,
   DocumentationConcernTermWrite,
   DocumentationConcernWrite,
+  GraphBuildProgress,
+  GraphBuildProgressStatus,
+  GraphBuildCoveragePort,
+  GraphBuildProgressPort,
+  GraphBuildReadPort,
+  GraphBuildResolutionWritePort,
+  GraphBuildSeedPort,
   DocsIndexDocumentWrite,
   DocsIndexPort,
   DocsIndexSearchRequest,
@@ -195,16 +202,50 @@ type IndexCoverageRow = {
   state: IndexCoverage["state"];
   indexed_files: number | null;
   eligible_files_seen: number | null;
+  admitted_files: number | null;
+  extracted_files: number | null;
   scan_truncated: number | null;
+  extraction_truncated: number | null;
+  continuation_available: number | null;
+  continuation_kind: "graph_build" | null;
+  continuation_cursor: string | null;
   indexed_roots_json: string | null;
   missing_priority_roots_json: string | null;
   reason: string | null;
+};
+
+type GraphBuildProgressRow = {
+  snapshot_id: number;
+  source_snapshot_id: number | null;
+  owner_id: string;
+  completion_target_id: number | null;
+  phase: GraphBuildProgress["phase"];
+  status: GraphBuildProgressStatus;
+  scan_cursor: string | null;
+  max_files: number;
+  generation_source_hash: string;
+  eligible_files: number;
+  scanned_files: number;
+  admitted_files: number;
+  extracted_files: number;
+  unsupported_files: number;
+  resource_backed_files: number;
+  nodes: number;
+  edges: number;
+  unresolved_references: number;
+  controller_generation: number;
+  invalidation_generation: number;
+  updated_at: string;
 };
 
 export type GraphStoreOptions = {
   busyTimeoutMs?: number;
   enforceForeignKeys?: boolean;
 };
+
+const LEGACY_GRAPH_BUILD_OWNER_ID = "legacy-unowned";
+const DEFAULT_GRAPH_BUILD_MAX_FILES = 2000;
+const GENERATION_SOURCE_HASH_PREFIX = "legacy-graph-generation";
 
 export interface GraphStore
   extends GraphWritePort,
@@ -214,6 +255,11 @@ export interface GraphStore
     SnapshotPublicationPort,
     SnapshotOrphanReconciliationPort,
     SnapshotBuildPort,
+    GraphBuildProgressPort,
+    GraphBuildSeedPort,
+    GraphBuildReadPort,
+    GraphBuildCoveragePort,
+    GraphBuildResolutionWritePort,
     FileCatalogPort,
     SnapshotPathInventoryPort,
     DocsIndexPort,
@@ -1260,6 +1306,440 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     };
   }
 
+  public async getGraphBuildProgress(input: {
+    snapshot_id: string;
+  }): Promise<GraphBuildProgress | null> {
+    const snapshotId = this.parseNumericId(input.snapshot_id);
+    if (snapshotId === null) {
+      return null;
+    }
+    const snapshot = this.getSnapshotRowById(snapshotId);
+    if (snapshot === undefined || (snapshot.publication_state !== "building" && snapshot.publication_state !== "published")) {
+      return null;
+    }
+    const row = this.getGraphBuildProgressRow(snapshotId);
+    return row === undefined ? null : this.mapGraphBuildProgressRow(row);
+  }
+
+  public async upsertGraphBuildProgress(input: {
+    progress: GraphBuildProgress;
+  }): Promise<void> {
+    const snapshot = this.requireBuildingSnapshotForGeneration({
+      snapshot_id: input.progress.snapshot_id,
+      controller_generation: input.progress.controller_generation,
+      invalidation_generation: input.progress.invalidation_generation
+    });
+    const sourceSnapshotId = input.progress.source_snapshot_id === undefined
+      ? null
+      : this.requirePublishedSnapshotIdForSeed(input.progress.source_snapshot_id, snapshot.repo_identity);
+    const existing = this.getGraphBuildProgressRow(snapshot.id);
+    const ownerId = resolveGraphBuildOwnerId(input.progress.owner_id ?? existing?.owner_id);
+    const provenance = resolveGraphBuildProgressProvenance({
+      progress: input.progress,
+      snapshotId: snapshot.id
+    });
+    const status = resolveGraphBuildProgressStatus(input.progress.status, input.progress.phase);
+    if (existing !== undefined && existing.owner_id !== ownerId) {
+      throw new Error(`Graph build progress owner does not match snapshot ${input.progress.snapshot_id}.`);
+    }
+    const completionTargetId = this.resolveGraphBuildCompletionTargetId({
+      repoRoot: snapshot.repo_identity,
+      snapshotId: snapshot.id,
+      completionTargetId: input.progress.completion_target_id ?? (
+        existing?.completion_target_id === null ? undefined : existing?.completion_target_id?.toString()
+      ),
+      status
+    });
+    assertGraphBuildProgressCounters(input.progress);
+    this.db.prepare(`
+      INSERT INTO graph_build_progress (
+        snapshot_id, source_snapshot_id, owner_id, completion_target_id, phase, status, scan_cursor, max_files,
+        generation_source_hash, eligible_files, scanned_files, admitted_files, extracted_files, unsupported_files,
+        resource_backed_files, nodes, edges, unresolved_references,
+        controller_generation, invalidation_generation, updated_at
+      ) VALUES (
+        @snapshotId, @sourceSnapshotId, @ownerId, @completionTargetId, @phase, @status, @scanCursor, @maxFiles,
+        @generationSourceHash, @eligibleFiles,
+        @scannedFiles, @admittedFiles, @extractedFiles, @unsupportedFiles,
+        @resourceBackedFiles, @nodes, @edges, @unresolvedReferences,
+        @controllerGeneration, @invalidationGeneration, @updatedAt
+      )
+      ON CONFLICT(snapshot_id) DO UPDATE SET
+        source_snapshot_id = excluded.source_snapshot_id,
+        owner_id = excluded.owner_id,
+        completion_target_id = excluded.completion_target_id,
+        phase = excluded.phase,
+        status = excluded.status,
+        scan_cursor = excluded.scan_cursor,
+        max_files = excluded.max_files,
+        generation_source_hash = excluded.generation_source_hash,
+        eligible_files = excluded.eligible_files,
+        scanned_files = excluded.scanned_files,
+        admitted_files = excluded.admitted_files,
+        extracted_files = excluded.extracted_files,
+        unsupported_files = excluded.unsupported_files,
+        resource_backed_files = excluded.resource_backed_files,
+        nodes = excluded.nodes,
+        edges = excluded.edges,
+        unresolved_references = excluded.unresolved_references,
+        controller_generation = excluded.controller_generation,
+        invalidation_generation = excluded.invalidation_generation,
+        updated_at = excluded.updated_at
+    `).run({
+      snapshotId: snapshot.id,
+      sourceSnapshotId,
+      ownerId,
+      completionTargetId,
+      phase: input.progress.phase,
+      status,
+      scanCursor: input.progress.scan_cursor ?? null,
+      maxFiles: provenance.maxFiles,
+      generationSourceHash: provenance.generationSourceHash,
+      eligibleFiles: input.progress.counters.eligible_files,
+      scannedFiles: input.progress.counters.scanned_files,
+      admittedFiles: input.progress.counters.admitted_files,
+      extractedFiles: input.progress.counters.extracted_files,
+      unsupportedFiles: input.progress.counters.unsupported_files,
+      resourceBackedFiles: input.progress.counters.resource_backed_files,
+      nodes: input.progress.counters.nodes,
+      edges: input.progress.counters.edges,
+      unresolvedReferences: input.progress.counters.unresolved_references,
+      controllerGeneration: input.progress.controller_generation,
+      invalidationGeneration: input.progress.invalidation_generation,
+      updatedAt: input.progress.updated_at
+    });
+  }
+
+  public async transitionGraphBuildProgressStatus(input: {
+    snapshot_id: string;
+    owner_id?: string;
+    controller_generation?: number;
+    invalidation_generation?: number;
+    from: GraphBuildProgressStatus;
+    to: GraphBuildProgressStatus;
+    completion_target_id?: string;
+    updated_at: string;
+  }): Promise<void> {
+    const snapshotId = this.parseNumericId(input.snapshot_id);
+    const snapshot = snapshotId === null ? undefined : this.getSnapshotRowById(snapshotId);
+    if (snapshot === undefined || (snapshot.publication_state !== "building" && snapshot.publication_state !== "published")) {
+      throw new Error(`Graph build progress is unavailable for snapshot ${input.snapshot_id}.`);
+    }
+    const progress = this.getGraphBuildProgressRow(snapshot.id);
+    if (progress === undefined) {
+      throw new Error(`Graph build progress is unavailable for snapshot ${input.snapshot_id}.`);
+    }
+    const ownerId = resolveGraphBuildOwnerId(input.owner_id ?? progress.owner_id);
+    if (progress.owner_id !== ownerId) {
+      throw new Error(`Graph build progress owner does not match snapshot ${input.snapshot_id}.`);
+    }
+    if (
+      input.controller_generation !== undefined &&
+      progress.controller_generation !== input.controller_generation
+    ) {
+      throw new Error(`Snapshot ${input.snapshot_id} build generation does not match.`);
+    }
+    if (
+      input.invalidation_generation !== undefined &&
+      progress.invalidation_generation !== input.invalidation_generation
+    ) {
+      throw new Error(`Snapshot ${input.snapshot_id} build generation does not match.`);
+    }
+    if (progress.status !== input.from) {
+      throw new Error(`Graph build progress status for snapshot ${input.snapshot_id} is ${progress.status}, not ${input.from}.`);
+    }
+    const completionTargetId = this.resolveGraphBuildCompletionTargetId({
+      repoRoot: snapshot.repo_identity,
+      snapshotId: snapshot.id,
+      completionTargetId: input.completion_target_id ?? (
+        progress.completion_target_id === null ? undefined : String(progress.completion_target_id)
+      ),
+      status: input.to
+    });
+    this.db.prepare(`
+      UPDATE graph_build_progress
+      SET status = @status,
+          completion_target_id = @completionTargetId,
+          updated_at = @updatedAt
+      WHERE snapshot_id = @snapshotId
+    `).run({
+      snapshotId: snapshot.id,
+      status: input.to,
+      completionTargetId,
+      updatedAt: input.updated_at
+    });
+  }
+
+  public async seedBuildSnapshotFromPublished(input: {
+    source_snapshot_id: string;
+    target_snapshot_id: string;
+    owner_id?: string;
+    controller_generation: number;
+    invalidation_generation: number;
+    updated_at: string;
+  }): Promise<void> {
+    const target = this.requireBuildingSnapshotForGeneration({
+      snapshot_id: input.target_snapshot_id,
+      controller_generation: input.controller_generation,
+      invalidation_generation: input.invalidation_generation
+    });
+    const sourceSnapshotId = this.requirePublishedSnapshotIdForSeed(input.source_snapshot_id, target.repo_identity);
+    const tx = this.db.transaction(() => {
+      this.assertBuildSnapshotEmpty(target.id);
+      const fileIdMap = this.cloneFilesForBuildSeed({
+        sourceSnapshotId,
+        targetSnapshotId: target.id
+      });
+      const nodeIdMap = this.cloneNodesForBuildSeed({
+        sourceSnapshotId,
+        targetSnapshotId: target.id,
+        fileIdMap
+      });
+      this.cloneEdgesForBuildSeed({ sourceSnapshotId, fileIdMap, nodeIdMap });
+      this.cloneUnresolvedForBuildSeed({ sourceSnapshotId, fileIdMap, nodeIdMap });
+      this.cloneDocsForBuildSeed({ sourceSnapshotId, targetSnapshotId: target.id });
+      this.cloneCoverageForBuildSeed({ sourceSnapshotId, targetSnapshotId: target.id });
+      this.cloneDocumentationConcernsForBuildSeed({ sourceSnapshotId, targetSnapshotId: target.id });
+      const sourceProgress = this.getGraphBuildProgressRow(sourceSnapshotId);
+      if (sourceProgress === undefined) {
+        throw new Error("Published graph build progress is unavailable.");
+      }
+      if (
+        sourceProgress.controller_generation !== input.controller_generation ||
+        sourceProgress.invalidation_generation !== input.invalidation_generation
+      ) {
+        throw new Error("Published graph build progress generation does not match the completion target.");
+      }
+      const ownerId = resolveGraphBuildOwnerId(input.owner_id ?? sourceProgress.owner_id);
+      if (sourceProgress.owner_id !== ownerId) {
+        throw new Error("Published graph build progress owner does not match the completion target.");
+      }
+      if (sourceProgress.status === "cancelled") {
+        throw new Error("Published graph build progress is cancelled.");
+      }
+      if (sourceProgress.status === "stale") {
+        throw new Error("Published graph build progress is stale.");
+      }
+      if (sourceProgress.status !== "active") {
+        throw new Error(`Published graph build progress is ${sourceProgress.status}.`);
+      }
+      if (
+        sourceProgress.completion_target_id !== null &&
+        sourceProgress.completion_target_id !== target.id
+      ) {
+        throw new Error("Published graph build progress is already linked to another completion target.");
+      }
+      this.db.prepare(`
+        UPDATE graph_build_progress
+        SET completion_target_id = @completionTargetId,
+            updated_at = @updatedAt
+        WHERE snapshot_id = @snapshotId
+      `).run({
+        snapshotId: sourceSnapshotId,
+        completionTargetId: target.id,
+        updatedAt: input.updated_at
+      });
+      this.db.prepare(`
+        INSERT INTO graph_build_progress (
+          snapshot_id, source_snapshot_id, owner_id, completion_target_id, phase, status, scan_cursor, max_files,
+          generation_source_hash, eligible_files, scanned_files, admitted_files, extracted_files, unsupported_files,
+          resource_backed_files, nodes, edges, unresolved_references,
+          controller_generation, invalidation_generation, updated_at
+        ) VALUES (
+          @snapshotId, @sourceSnapshotId, @ownerId, @completionTargetId, @phase, @status, @scanCursor, @maxFiles,
+          @generationSourceHash, @eligibleFiles, @scannedFiles, @admittedFiles, @extractedFiles,
+          @unsupportedFiles, @resourceBackedFiles, @nodes, @edges,
+          @unresolvedReferences, @controllerGeneration, @invalidationGeneration, @updatedAt
+        )
+      `).run({
+        snapshotId: target.id,
+        sourceSnapshotId,
+        ownerId,
+        completionTargetId: target.id,
+        phase: sourceProgress.phase,
+        status: "active",
+        scanCursor: sourceProgress.scan_cursor,
+        maxFiles: sourceProgress.max_files,
+        generationSourceHash: sourceProgress.generation_source_hash,
+        eligibleFiles: sourceProgress.eligible_files,
+        scannedFiles: sourceProgress.scanned_files,
+        admittedFiles: sourceProgress.admitted_files,
+        extractedFiles: sourceProgress.extracted_files,
+        unsupportedFiles: sourceProgress.unsupported_files,
+        resourceBackedFiles: sourceProgress.resource_backed_files,
+        nodes: sourceProgress.nodes,
+        edges: sourceProgress.edges,
+        unresolvedReferences: sourceProgress.unresolved_references,
+        controllerGeneration: input.controller_generation,
+        invalidationGeneration: input.invalidation_generation,
+        updatedAt: input.updated_at
+      });
+    });
+    tx.immediate();
+  }
+
+  public async listBuildNodes(input: {
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: number;
+    after_node_id?: string;
+    max_rows?: number;
+  }): Promise<readonly GraphNodeReadModel[]> {
+    const snapshot = this.requireBuildingSnapshotForGeneration(input);
+    const rows = this.db.prepare(`
+      SELECT nodes.*, files.path as path
+      FROM nodes
+      INNER JOIN files ON files.id = nodes.file_id
+      WHERE files.snapshot_id = @snapshotId
+        AND (@afterNodeId IS NULL OR nodes.id > @afterNodeId)
+      ORDER BY nodes.id ASC
+      LIMIT @maxRows
+    `).all({
+      snapshotId: snapshot.id,
+      afterNodeId: input.after_node_id ?? null,
+      maxRows: boundedBuildRowLimit(input.max_rows)
+    }) as NodeWithFileRow[];
+    return rows.map((row) => this.mapGraphNodeRow(row));
+  }
+
+  public async listBuildUnresolvedReferences(input: {
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: number;
+    after_id?: string;
+    max_rows?: number;
+  }): Promise<readonly UnresolvedReferenceReadModel[]> {
+    const snapshot = this.requireBuildingSnapshotForGeneration(input);
+    const afterId = input.after_id === undefined ? null : this.parseNumericId(input.after_id);
+    if (input.after_id !== undefined && afterId === null) {
+      throw new TypeError("after_id must be a numeric unresolved reference id.");
+    }
+    const rows = this.db.prepare(`
+      SELECT ur.id, ur.source_node_id, ur.reference_name, ur.reference_kind,
+             ur.start_line, ur.start_column, ur.end_line, ur.end_column,
+             ur.candidate_metadata_json, files.path AS source_file_path
+      FROM unresolved_refs ur
+      INNER JOIN files ON files.id = ur.file_id
+      WHERE files.snapshot_id = @snapshotId
+        AND (@afterId IS NULL OR ur.id > @afterId)
+      ORDER BY ur.id ASC
+      LIMIT @maxRows
+    `).all({
+      snapshotId: snapshot.id,
+      afterId,
+      maxRows: boundedBuildRowLimit(input.max_rows)
+    }) as UnresolvedRefRow[];
+    return rows.map((row) => ({
+      id: String(row.id),
+      source_node_id: row.source_node_id,
+      source_file_path: row.source_file_path,
+      reference_name: row.reference_name,
+      reference_kind: row.reference_kind,
+      source_range: {
+        start_line: row.start_line,
+        start_column: row.start_column,
+        end_line: row.end_line,
+        end_column: row.end_column
+      },
+      candidate_metadata: parseMetadataJson(row.candidate_metadata_json)
+    }));
+  }
+
+  public async upsertGraphBuildCoverage(input: {
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: number;
+    coverage: IndexCoverage & { evidence_class: "graph" };
+  }): Promise<void> {
+    const snapshot = this.requireBuildingSnapshotForGeneration(input);
+    this.upsertSnapshotIndexCoverage({
+      snapshotId: snapshot.id,
+      item: input.coverage
+    });
+  }
+
+  public async replaceBuildResolution(input: {
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: number;
+    provenance: string;
+    resolved_references: readonly { file_path: string; edge: GraphEdgeReadModel }[];
+    unresolved_references: readonly UnresolvedReferenceReadModel[];
+  }): Promise<void> {
+    if (input.provenance.trim().length === 0) {
+      throw new TypeError("provenance is required for build resolution replacement.");
+    }
+    const snapshot = this.requireBuildingSnapshotForGeneration(input);
+    const tx = this.db.transaction(() => {
+      this.db.prepare(`
+        DELETE FROM edges
+        WHERE provenance = @provenance
+          AND file_id IN (SELECT id FROM files WHERE snapshot_id = @snapshotId)
+      `).run({ snapshotId: snapshot.id, provenance: input.provenance });
+      this.db.prepare(`
+        DELETE FROM unresolved_refs
+        WHERE file_id IN (SELECT id FROM files WHERE snapshot_id = @snapshotId)
+      `).run({ snapshotId: snapshot.id });
+      const insertEdge = this.db.prepare(`
+        INSERT INTO edges (
+          source_node_id, target_node_id, kind, file_id, start_line,
+          start_column, end_line, end_column, provenance, confidence,
+          metadata_json
+        ) VALUES (
+          @sourceNodeId, @targetNodeId, @kind, @fileId, @startLine,
+          @startColumn, @endLine, @endColumn, @provenance, @confidence,
+          @metadata
+        )
+      `);
+      for (const resolved of input.resolved_references) {
+        const fileRow = this.getFileRow(snapshot.id, resolved.file_path);
+        if (!fileRow) {
+          throw new Error(`Unknown file for build resolution edge: ${resolved.file_path}`);
+        }
+        insertEdge.run({
+          sourceNodeId: resolved.edge.source_node_id,
+          targetNodeId: resolved.edge.target_node_id ?? null,
+          kind: resolved.edge.kind,
+          fileId: fileRow.id,
+          startLine: resolved.edge.source_range?.start_line ?? null,
+          startColumn: resolved.edge.source_range?.start_column ?? null,
+          endLine: resolved.edge.source_range?.end_line ?? null,
+          endColumn: resolved.edge.source_range?.end_column ?? null,
+          provenance: input.provenance,
+          confidence: resolved.edge.confidence,
+          metadata: JSON.stringify(resolved.edge.metadata)
+        });
+      }
+      const insertUnresolved = this.db.prepare(`
+        INSERT INTO unresolved_refs (
+          source_node_id, reference_name, reference_kind, file_id, start_line,
+          start_column, end_line, end_column, candidate_metadata_json
+        ) VALUES (
+          @sourceNodeId, @referenceName, @referenceKind, @fileId, @startLine,
+          @startColumn, @endLine, @endColumn, @candidateMetadata
+        )
+      `);
+      for (const unresolved of input.unresolved_references) {
+        const fileRow = this.getFileRow(snapshot.id, unresolved.source_file_path);
+        if (!fileRow) {
+          throw new Error(`Unknown file for build unresolved reference: ${unresolved.source_file_path}`);
+        }
+        insertUnresolved.run({
+          sourceNodeId: unresolved.source_node_id,
+          referenceName: unresolved.reference_name,
+          referenceKind: unresolved.reference_kind,
+          fileId: fileRow.id,
+          startLine: unresolved.source_range.start_line,
+          startColumn: unresolved.source_range.start_column,
+          endLine: unresolved.source_range.end_line,
+          endColumn: unresolved.source_range.end_column,
+          candidateMetadata: JSON.stringify(unresolved.candidate_metadata)
+        });
+      }
+    });
+    tx.immediate();
+  }
+
   public async allocateBuildSnapshotId(input: {
     repo_root: string;
     minimum_id: string;
@@ -1769,7 +2249,13 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           state,
           indexed_files,
           eligible_files_seen,
+          admitted_files,
+          extracted_files,
           scan_truncated,
+          extraction_truncated,
+          continuation_available,
+          continuation_kind,
+          continuation_cursor,
           indexed_roots_json,
           missing_priority_roots_json,
           reason
@@ -1779,7 +2265,13 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           @state,
           @indexedFiles,
           @eligibleFilesSeen,
+          @admittedFiles,
+          @extractedFiles,
           @scanTruncated,
+          @extractionTruncated,
+          @continuationAvailable,
+          @continuationKind,
+          @continuationCursor,
           @indexedRootsJson,
           @missingPriorityRootsJson,
           @reason
@@ -1822,7 +2314,13 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           state: item.state,
           indexedFiles: item.indexed_files ?? null,
           eligibleFilesSeen: item.eligible_files_seen ?? null,
+          admittedFiles: item.admitted_files ?? null,
+          extractedFiles: item.extracted_files ?? null,
           scanTruncated: item.scan_truncated === undefined ? null : item.scan_truncated ? 1 : 0,
+          extractionTruncated: item.extraction_truncated === undefined ? null : item.extraction_truncated ? 1 : 0,
+          continuationAvailable: item.continuation_available === undefined ? null : item.continuation_available ? 1 : 0,
+          continuationKind: item.continuation_kind ?? null,
+          continuationCursor: item.continuation_cursor ?? null,
           indexedRootsJson: item.indexed_roots === undefined ? null : JSON.stringify(item.indexed_roots),
           missingPriorityRootsJson: item.missing_priority_roots === undefined ? null : JSON.stringify(item.missing_priority_roots),
           reason: item.reason ?? null
@@ -2736,7 +3234,13 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           state,
           indexed_files,
           eligible_files_seen,
+          admitted_files,
+          extracted_files,
           scan_truncated,
+          extraction_truncated,
+          continuation_available,
+          continuation_kind,
+          continuation_cursor,
           indexed_roots_json,
           missing_priority_roots_json,
           reason
@@ -2752,7 +3256,15 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       state: row.state,
       indexed_files: row.indexed_files ?? undefined,
       eligible_files_seen: row.eligible_files_seen ?? undefined,
+      admitted_files: row.admitted_files ?? undefined,
+      extracted_files: row.extracted_files ?? undefined,
       scan_truncated: row.scan_truncated === null ? undefined : row.scan_truncated === 1,
+      extraction_truncated: row.extraction_truncated === null ? undefined : row.extraction_truncated === 1,
+      continuation_available: row.continuation_available === null
+        ? undefined
+        : row.continuation_available === 1,
+      continuation_kind: row.continuation_kind ?? undefined,
+      continuation_cursor: row.continuation_cursor ?? undefined,
       indexed_roots: parseStringArrayJson(row.indexed_roots_json),
       missing_priority_roots: parseStringArrayJson(row.missing_priority_roots_json),
       reason: row.reason ?? undefined
@@ -2809,6 +3321,11 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       return;
     }
     const placeholders = sqlPlaceholders(snapshotIds.length);
+    this.db.prepare(`UPDATE graph_build_progress SET source_snapshot_id = NULL WHERE source_snapshot_id IN (${placeholders})`)
+      .run(...snapshotIds);
+    this.db.prepare(`UPDATE graph_build_progress SET completion_target_id = NULL WHERE completion_target_id IN (${placeholders})`)
+      .run(...snapshotIds);
+    this.db.prepare(`DELETE FROM graph_build_progress WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
     this.db.prepare(`
       DELETE FROM ranked_docs_universe_hits
       WHERE universe_id IN (
@@ -2945,6 +3462,515 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       indexed: entry.indexed,
       skipped_reason: entry.skipped_reason
     };
+  }
+
+  private upsertSnapshotIndexCoverage(input: {
+    snapshotId: number;
+    item: IndexCoverage;
+  }): void {
+    this.db.prepare(`
+      INSERT INTO snapshot_index_coverage (
+        snapshot_id, evidence_class, state, indexed_files, eligible_files_seen,
+        admitted_files, extracted_files, scan_truncated, extraction_truncated,
+        continuation_available, continuation_kind, continuation_cursor,
+        indexed_roots_json, missing_priority_roots_json, reason
+      ) VALUES (
+        @snapshotId, @evidenceClass, @state, @indexedFiles, @eligibleFilesSeen,
+        @admittedFiles, @extractedFiles, @scanTruncated, @extractionTruncated,
+        @continuationAvailable, @continuationKind, @continuationCursor,
+        @indexedRootsJson, @missingPriorityRootsJson, @reason
+      )
+      ON CONFLICT(snapshot_id, evidence_class) DO UPDATE SET
+        state = excluded.state,
+        indexed_files = excluded.indexed_files,
+        eligible_files_seen = excluded.eligible_files_seen,
+        admitted_files = excluded.admitted_files,
+        extracted_files = excluded.extracted_files,
+        scan_truncated = excluded.scan_truncated,
+        extraction_truncated = excluded.extraction_truncated,
+        continuation_available = excluded.continuation_available,
+        continuation_kind = excluded.continuation_kind,
+        continuation_cursor = excluded.continuation_cursor,
+        indexed_roots_json = excluded.indexed_roots_json,
+        missing_priority_roots_json = excluded.missing_priority_roots_json,
+        reason = excluded.reason
+    `).run({
+      snapshotId: input.snapshotId,
+      evidenceClass: input.item.evidence_class,
+      state: input.item.state,
+      indexedFiles: input.item.indexed_files ?? null,
+      eligibleFilesSeen: input.item.eligible_files_seen ?? null,
+      admittedFiles: input.item.admitted_files ?? null,
+      extractedFiles: input.item.extracted_files ?? null,
+      scanTruncated: input.item.scan_truncated === undefined ? null : input.item.scan_truncated ? 1 : 0,
+      extractionTruncated: input.item.extraction_truncated === undefined
+        ? null
+        : input.item.extraction_truncated ? 1 : 0,
+      continuationAvailable: input.item.continuation_available === undefined
+        ? null
+        : input.item.continuation_available ? 1 : 0,
+      continuationKind: input.item.continuation_kind ?? null,
+      continuationCursor: input.item.continuation_cursor ?? null,
+      indexedRootsJson: input.item.indexed_roots === undefined ? null : JSON.stringify(input.item.indexed_roots),
+      missingPriorityRootsJson: input.item.missing_priority_roots === undefined
+        ? null
+        : JSON.stringify(input.item.missing_priority_roots),
+      reason: input.item.reason ?? null
+    });
+  }
+
+  private mapGraphBuildProgressRow(row: GraphBuildProgressRow): GraphBuildProgress {
+    return {
+      snapshot_id: String(row.snapshot_id),
+      source_snapshot_id: row.source_snapshot_id === null ? undefined : String(row.source_snapshot_id),
+      owner_id: row.owner_id,
+      completion_target_id: row.completion_target_id === null ? undefined : String(row.completion_target_id),
+      phase: row.phase,
+      status: row.status,
+      scan_cursor: row.scan_cursor ?? undefined,
+      max_files: row.max_files,
+      generation_source_hash: row.generation_source_hash,
+      counters: {
+        eligible_files: row.eligible_files,
+        scanned_files: row.scanned_files,
+        admitted_files: row.admitted_files,
+        extracted_files: row.extracted_files,
+        unsupported_files: row.unsupported_files,
+        resource_backed_files: row.resource_backed_files,
+        nodes: row.nodes,
+        edges: row.edges,
+        unresolved_references: row.unresolved_references
+      },
+      controller_generation: row.controller_generation,
+      invalidation_generation: row.invalidation_generation,
+      updated_at: row.updated_at
+    };
+  }
+
+  private requireBuildingSnapshotForGeneration(input: {
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: number;
+  }): SnapshotRow {
+    const snapshotId = this.parseNumericId(input.snapshot_id);
+    const row = snapshotId === null ? undefined : this.getSnapshotRowById(snapshotId);
+    if (row?.publication_state !== "building") {
+      throw new Error(`Snapshot ${input.snapshot_id} is not building.`);
+    }
+    if (
+      row.controller_generation !== input.controller_generation ||
+      row.invalidation_generation !== input.invalidation_generation
+    ) {
+      throw new Error(`Snapshot ${input.snapshot_id} build generation does not match.`);
+    }
+    return row;
+  }
+
+  private resolveGraphBuildCompletionTargetId(input: {
+    repoRoot: string;
+    snapshotId: number;
+    completionTargetId?: string;
+    status: GraphBuildProgressStatus;
+  }): number | null {
+    if (input.completionTargetId === undefined) {
+      return input.status === "completed" ? input.snapshotId : null;
+    }
+    const numericId = this.parseNumericId(input.completionTargetId);
+    const row = numericId === null ? undefined : this.getSnapshotRowById(numericId);
+    if (row === undefined || row.repo_identity !== input.repoRoot) {
+      throw new Error(`Graph build completion target is unavailable: ${input.completionTargetId}`);
+    }
+    return row.id;
+  }
+
+  private getGraphBuildProgressRow(snapshotId: number): GraphBuildProgressRow | undefined {
+    return this.db.prepare(`
+      SELECT snapshot_id, source_snapshot_id, owner_id, completion_target_id, phase, status, scan_cursor, eligible_files,
+             max_files, generation_source_hash, scanned_files, admitted_files, extracted_files, unsupported_files,
+             resource_backed_files, nodes, edges, unresolved_references,
+             controller_generation, invalidation_generation, updated_at
+      FROM graph_build_progress
+      WHERE snapshot_id = ?
+    `).get(snapshotId) as GraphBuildProgressRow | undefined;
+  }
+
+  private requirePublishedSnapshotIdForSeed(snapshotId: string, repoRoot: string): number {
+    const numericId = this.parseNumericId(snapshotId);
+    const row = numericId === null ? undefined : this.getSnapshotRowById(numericId);
+    if (row === undefined || row.repo_identity !== repoRoot || row.publication_state !== "published") {
+      throw new Error(`Published source snapshot is unavailable: ${snapshotId}`);
+    }
+    return row.id;
+  }
+
+  private assertBuildSnapshotEmpty(snapshotId: number): void {
+    const evidenceCounts = [
+      this.countFiles(snapshotId),
+      this.countDocs(snapshotId),
+      this.countCoverage(snapshotId),
+      this.countDocumentationConcernState(snapshotId),
+      this.countGraphBuildProgress(snapshotId)
+    ];
+    if (evidenceCounts.some((count) => count > 0)) {
+      throw new Error(`Build snapshot ${snapshotId} is not empty.`);
+    }
+  }
+
+  private cloneFilesForBuildSeed(input: {
+    sourceSnapshotId: number;
+    targetSnapshotId: number;
+  }): Map<number, number> {
+    const rows = this.db.prepare(`
+      SELECT id, snapshot_id, path, language, content_hash, size_bytes, mtime_ms,
+             indexed_at, node_count, indexing_error
+      FROM files
+      WHERE snapshot_id = ?
+      ORDER BY path ASC
+    `).all(input.sourceSnapshotId) as FileRow[];
+    const insert = this.db.prepare(`
+      INSERT INTO files (
+        snapshot_id, path, language, content_hash, size_bytes, mtime_ms,
+        indexed_at, node_count, indexing_error
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const fileIdMap = new Map<number, number>();
+    for (const row of rows) {
+      const result = insert.run(
+        input.targetSnapshotId,
+        row.path,
+        row.language,
+        row.content_hash,
+        row.size_bytes,
+        row.mtime_ms,
+        row.indexed_at,
+        row.node_count,
+        row.indexing_error
+      );
+      fileIdMap.set(row.id, Number(result.lastInsertRowid));
+    }
+    return fileIdMap;
+  }
+
+  private cloneNodesForBuildSeed(input: {
+    sourceSnapshotId: number;
+    targetSnapshotId: number;
+    fileIdMap: ReadonlyMap<number, number>;
+  }): Map<string, string> {
+    const rows = this.db.prepare(`
+      SELECT nodes.*, files.path AS path
+      FROM nodes
+      INNER JOIN files ON files.id = nodes.file_id
+      WHERE files.snapshot_id = ?
+      ORDER BY nodes.id ASC
+    `).all(input.sourceSnapshotId) as NodeWithFileRow[];
+    const insertNode = this.db.prepare(`
+      INSERT INTO nodes (
+        id, file_id, kind, name, lower_name, qualified_name, language,
+        start_line, start_column, end_line, end_column, signature,
+        docstring, metadata_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    const insertNodeFts = this.db.prepare(`
+      INSERT INTO node_fts (node_id, name, qualified_name, signature, docstring)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const nodeIdMap = new Map<string, string>();
+    for (const row of rows) {
+      const targetFileId = input.fileIdMap.get(row.file_id);
+      if (targetFileId === undefined) {
+        throw new Error(`Missing seeded file mapping for node ${row.id}.`);
+      }
+      const targetNodeId = remapSeededNodeId({
+        sourceSnapshotId: input.sourceSnapshotId,
+        targetSnapshotId: input.targetSnapshotId,
+        nodeId: row.id
+      });
+      nodeIdMap.set(row.id, targetNodeId);
+      insertNode.run(
+        targetNodeId,
+        targetFileId,
+        row.kind,
+        row.name,
+        row.lower_name,
+        row.qualified_name,
+        row.language,
+        row.start_line,
+        row.start_column,
+        row.end_line,
+        row.end_column,
+        row.signature,
+        row.docstring,
+        row.metadata_json
+      );
+      insertNodeFts.run(targetNodeId, row.name, row.qualified_name, row.signature, row.docstring);
+    }
+    return nodeIdMap;
+  }
+
+  private cloneEdgesForBuildSeed(input: {
+    sourceSnapshotId: number;
+    fileIdMap: ReadonlyMap<number, number>;
+    nodeIdMap: ReadonlyMap<string, string>;
+  }): void {
+    const rows = this.db.prepare(`
+      SELECT edges.*
+      FROM edges
+      INNER JOIN files ON files.id = edges.file_id
+      WHERE files.snapshot_id = ?
+      ORDER BY edges.id ASC
+    `).all(input.sourceSnapshotId) as (EdgeRow & { file_id: number })[];
+    const insert = this.db.prepare(`
+      INSERT INTO edges (
+        source_node_id, target_node_id, kind, file_id, start_line,
+        start_column, end_line, end_column, provenance, confidence,
+        metadata_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const row of rows) {
+      const sourceNodeId = input.nodeIdMap.get(row.source_node_id);
+      const targetNodeId = row.target_node_id === null ? null : input.nodeIdMap.get(row.target_node_id);
+      const fileId = input.fileIdMap.get(row.file_id);
+      if (sourceNodeId === undefined || targetNodeId === undefined || fileId === undefined) {
+        throw new Error(`Missing seeded graph mapping for edge ${row.id}.`);
+      }
+      insert.run(
+        sourceNodeId,
+        targetNodeId,
+        row.kind,
+        fileId,
+        row.start_line,
+        row.start_column,
+        row.end_line,
+        row.end_column,
+        row.provenance,
+        row.confidence,
+        row.metadata_json
+      );
+    }
+  }
+
+  private cloneUnresolvedForBuildSeed(input: {
+    sourceSnapshotId: number;
+    fileIdMap: ReadonlyMap<number, number>;
+    nodeIdMap: ReadonlyMap<string, string>;
+  }): void {
+    const rows = this.db.prepare(`
+      SELECT ur.id, ur.source_node_id, ur.reference_name, ur.reference_kind,
+             ur.file_id, ur.start_line, ur.start_column, ur.end_line,
+             ur.end_column, ur.candidate_metadata_json, files.path AS source_file_path
+      FROM unresolved_refs ur
+      INNER JOIN files ON files.id = ur.file_id
+      WHERE files.snapshot_id = ?
+      ORDER BY ur.id ASC
+    `).all(input.sourceSnapshotId) as UnresolvedRefRow[];
+    const insert = this.db.prepare(`
+      INSERT INTO unresolved_refs (
+        source_node_id, reference_name, reference_kind, file_id, start_line,
+        start_column, end_line, end_column, candidate_metadata_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    for (const row of rows) {
+      const sourceNodeId = input.nodeIdMap.get(row.source_node_id);
+      const fileId = input.fileIdMap.get(row.file_id);
+      if (sourceNodeId === undefined || fileId === undefined) {
+        throw new Error(`Missing seeded unresolved reference mapping for ${row.id}.`);
+      }
+      insert.run(
+        sourceNodeId,
+        row.reference_name,
+        row.reference_kind,
+        fileId,
+        row.start_line,
+        row.start_column,
+        row.end_line,
+        row.end_column,
+        row.candidate_metadata_json
+      );
+    }
+  }
+
+  private cloneDocsForBuildSeed(input: { sourceSnapshotId: number; targetSnapshotId: number }): void {
+    const documents = this.db.prepare(`
+      SELECT id, snapshot_id, path, title, content_hash, byte_count,
+             indexed_at, selected_text_truncated
+      FROM docs_documents
+      WHERE snapshot_id = ?
+      ORDER BY path ASC
+    `).all(input.sourceSnapshotId) as DocsDocumentRow[];
+    const insertDoc = this.db.prepare(`
+      INSERT INTO docs_documents (
+        snapshot_id, path, title, content_hash, byte_count, indexed_at,
+        selected_text_truncated
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    const insertHeading = this.db.prepare(`
+      INSERT INTO docs_headings (document_id, heading_id, heading_text, depth, line)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    const insertFts = this.db.prepare(`
+      INSERT INTO docs_fts (rowid, path, title, headings_text, selected_text)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    for (const document of documents) {
+      const docResult = insertDoc.run(
+        input.targetSnapshotId,
+        document.path,
+        document.title,
+        document.content_hash,
+        document.byte_count,
+        document.indexed_at,
+        document.selected_text_truncated
+      );
+      const targetDocId = Number(docResult.lastInsertRowid);
+      const headings = this.db.prepare(`
+        SELECT heading_id, heading_text, depth, line
+        FROM docs_headings
+        WHERE document_id = ?
+        ORDER BY id ASC
+      `).all(document.id) as Array<{
+        heading_id: string;
+        heading_text: string;
+        depth: number;
+        line: number;
+      }>;
+      for (const heading of headings) {
+        insertHeading.run(targetDocId, heading.heading_id, heading.heading_text, heading.depth, heading.line);
+      }
+      const fts = this.db.prepare(`
+        SELECT path, title, headings_text, selected_text
+        FROM docs_fts
+        WHERE rowid = ?
+      `).get(document.id) as {
+        path: string;
+        title: string;
+        headings_text: string;
+        selected_text: string;
+      } | undefined;
+      if (fts !== undefined) {
+        insertFts.run(targetDocId, fts.path, fts.title, fts.headings_text, fts.selected_text);
+      }
+    }
+  }
+
+  private cloneCoverageForBuildSeed(input: { sourceSnapshotId: number; targetSnapshotId: number }): void {
+    this.db.prepare(`
+      INSERT INTO snapshot_index_coverage (
+        snapshot_id, evidence_class, state, indexed_files, eligible_files_seen,
+        admitted_files, extracted_files, scan_truncated, extraction_truncated,
+        continuation_available, continuation_kind, continuation_cursor,
+        indexed_roots_json, missing_priority_roots_json, reason
+      )
+      SELECT
+        @targetSnapshotId, evidence_class, state, indexed_files, eligible_files_seen,
+        admitted_files, extracted_files, scan_truncated, extraction_truncated,
+        continuation_available, continuation_kind, continuation_cursor,
+        indexed_roots_json, missing_priority_roots_json, reason
+      FROM snapshot_index_coverage
+      WHERE snapshot_id = @sourceSnapshotId
+      ORDER BY evidence_class ASC
+    `).run(input);
+  }
+
+  private cloneDocumentationConcernsForBuildSeed(input: {
+    sourceSnapshotId: number;
+    targetSnapshotId: number;
+  }): void {
+    this.db.prepare(`
+      INSERT INTO documentation_concern_index_state (
+        snapshot_id, state, source_path, source_content_hash, failure_reason
+      )
+      SELECT @targetSnapshotId, state, source_path, source_content_hash, failure_reason
+      FROM documentation_concern_index_state
+      WHERE snapshot_id = @sourceSnapshotId
+    `).run(input);
+    this.db.prepare(`
+      INSERT INTO documentation_concerns (
+        snapshot_id, concern_key, label, normalized_label
+      )
+      SELECT @targetSnapshotId, concern_key, label, normalized_label
+      FROM documentation_concerns
+      WHERE snapshot_id = @sourceSnapshotId
+    `).run(input);
+    this.db.prepare(`
+      INSERT INTO documentation_concern_terms (
+        snapshot_id, concern_key, normalized_term, token_count
+      )
+      SELECT @targetSnapshotId, concern_key, normalized_term, token_count
+      FROM documentation_concern_terms
+      WHERE snapshot_id = @sourceSnapshotId
+    `).run(input);
+    this.db.prepare(`
+      INSERT INTO documentation_concern_owners (
+        snapshot_id, concern_key, mapped_owner_path, document_id, owner_state,
+        source_line, superseded_by, declared_canonical_owner
+      )
+      SELECT @targetSnapshotId, concern_key, mapped_owner_path, document_id,
+             owner_state, source_line, superseded_by, declared_canonical_owner
+      FROM documentation_concern_owners
+      WHERE snapshot_id = @sourceSnapshotId
+    `).run(input);
+  }
+
+  private countFiles(snapshotId: number): number {
+    return (this.db.prepare(
+      "SELECT COUNT(*) AS count FROM files WHERE snapshot_id = ?"
+    ).get(snapshotId) as { count: number }).count;
+  }
+
+  private countDocs(snapshotId: number): number {
+    return (this.db.prepare(
+      "SELECT COUNT(*) AS count FROM docs_documents WHERE snapshot_id = ?"
+    ).get(snapshotId) as { count: number }).count;
+  }
+
+  private countCoverage(snapshotId: number): number {
+    return (this.db.prepare(
+      "SELECT COUNT(*) AS count FROM snapshot_index_coverage WHERE snapshot_id = ?"
+    ).get(snapshotId) as { count: number }).count;
+  }
+
+  private countDocumentationConcernState(snapshotId: number): number {
+    return (this.db.prepare(
+      "SELECT COUNT(*) AS count FROM documentation_concern_index_state WHERE snapshot_id = ?"
+    ).get(snapshotId) as { count: number }).count;
+  }
+
+  private countGraphBuildProgress(snapshotId: number): number {
+    return (this.db.prepare(
+      "SELECT COUNT(*) AS count FROM graph_build_progress WHERE snapshot_id = ?"
+    ).get(snapshotId) as { count: number }).count;
+  }
+
+  private countUnsupportedFiles(snapshotId: number): number {
+    return (this.db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM files
+      WHERE snapshot_id = ? AND indexing_error IS NOT NULL
+    `).get(snapshotId) as { count: number }).count;
+  }
+
+  private countResourceBackedFiles(snapshotId: number): number {
+    return (this.db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM files
+      WHERE snapshot_id = ? AND indexed_at IS NOT NULL
+    `).get(snapshotId) as { count: number }).count;
+  }
+
+  private countEdges(snapshotId: number): number {
+    return (this.db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM edges
+      WHERE file_id IN (SELECT id FROM files WHERE snapshot_id = ?)
+    `).get(snapshotId) as { count: number }).count;
+  }
+
+  private countUnresolvedReferences(snapshotId: number): number {
+    return (this.db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM unresolved_refs
+      WHERE file_id IN (SELECT id FROM files WHERE snapshot_id = ?)
+    `).get(snapshotId) as { count: number }).count;
   }
 
   private mapDocsSearchRow(input: {
@@ -3210,6 +4236,91 @@ function boundedDocumentationConcernRowLimit(value: number | undefined): number 
   return limit;
 }
 
+function boundedBuildRowLimit(value: number | undefined): number {
+  const limit = value ?? 500;
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > 5_000) {
+    throw new RangeError("Build row limit must be an integer from 1 to 5000.");
+  }
+  return limit;
+}
+
+function assertGraphBuildProgressCounters(progress: GraphBuildProgress): void {
+  const counters = Object.entries(progress.counters);
+  for (const [name, value] of counters) {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new TypeError(`Graph build progress counter ${name} must be a non-negative safe integer.`);
+    }
+  }
+}
+
+function resolveGraphBuildProgressProvenance(input: {
+  progress: GraphBuildProgress;
+  snapshotId: number;
+}): {
+  maxFiles: number;
+  generationSourceHash: string;
+} {
+  return {
+    maxFiles: resolveGraphBuildMaxFiles(input.progress.max_files),
+    generationSourceHash: resolveGraphBuildGenerationSourceHash({
+      generationSourceHash: input.progress.generation_source_hash,
+      fallbackGenerationSourceHash: `graph:${input.snapshotId}:g${input.progress.controller_generation}:i${input.progress.invalidation_generation}`
+    })
+  };
+}
+
+function resolveGraphBuildMaxFiles(value: number | undefined): number {
+  if (value === undefined) {
+    return DEFAULT_GRAPH_BUILD_MAX_FILES;
+  }
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new TypeError("Graph build progress max_files must be a positive safe integer.");
+  }
+  return value;
+}
+
+function resolveGraphBuildGenerationSourceHash(input: {
+  generationSourceHash?: string;
+  fallbackGenerationSourceHash: string;
+}): string {
+  const value = input.generationSourceHash ?? input.fallbackGenerationSourceHash;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new TypeError("Graph build progress generation_source_hash must be a non-empty string.");
+  }
+  return value;
+}
+
+function resolveGraphBuildOwnerId(value: string | undefined): string {
+  const ownerId = value?.trim() ?? LEGACY_GRAPH_BUILD_OWNER_ID;
+  if (ownerId.length === 0) {
+    throw new TypeError("Graph build progress owner_id must be a non-empty string.");
+  }
+  return ownerId;
+}
+
+function resolveGraphBuildProgressStatus(
+  status: GraphBuildProgressStatus | undefined,
+  phase: GraphBuildProgress["phase"]
+): GraphBuildProgressStatus {
+  if (status !== undefined) {
+    return status;
+  }
+  return phase === "complete" ? "completed" : "active";
+}
+
+function remapSeededNodeId(input: {
+  sourceSnapshotId: number;
+  targetSnapshotId: number;
+  nodeId: string;
+}): string {
+  const sourcePrefix = `${input.sourceSnapshotId}:`;
+  if (input.nodeId.startsWith(sourcePrefix)) {
+    return `${input.targetSnapshotId}:${input.nodeId.slice(sourcePrefix.length)}`;
+  }
+  return `${input.targetSnapshotId}:seed:${input.nodeId}`;
+}
+
 function requireCanonicalUtcIso8601(value: string, field: string): number {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp) || new Date(timestamp).toISOString() !== value) {
@@ -3468,11 +4579,41 @@ function migrate(db: Database.Database): void {
       state TEXT NOT NULL,
       indexed_files INTEGER,
       eligible_files_seen INTEGER,
+      admitted_files INTEGER,
+      extracted_files INTEGER,
       scan_truncated INTEGER,
+      extraction_truncated INTEGER,
+      continuation_available INTEGER,
+      continuation_kind TEXT CHECK (continuation_kind IS NULL OR continuation_kind IN ('graph_build')),
+      continuation_cursor TEXT,
       indexed_roots_json TEXT,
       missing_priority_roots_json TEXT,
       reason TEXT,
       UNIQUE(snapshot_id, evidence_class)
+    );
+
+    CREATE TABLE IF NOT EXISTS graph_build_progress (
+      snapshot_id INTEGER PRIMARY KEY REFERENCES snapshots(id) ON DELETE CASCADE,
+      source_snapshot_id INTEGER REFERENCES snapshots(id) ON DELETE SET NULL,
+      owner_id TEXT NOT NULL DEFAULT 'legacy-unowned' CHECK (length(owner_id) > 0),
+      completion_target_id INTEGER REFERENCES snapshots(id) ON DELETE SET NULL,
+      phase TEXT NOT NULL CHECK (phase IN ('seed', 'extracting', 'resolving', 'complete')),
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'cancelled', 'stale')),
+      scan_cursor TEXT,
+      max_files INTEGER NOT NULL DEFAULT 2000 CHECK (max_files > 0),
+      generation_source_hash TEXT NOT NULL CHECK (length(generation_source_hash) > 0) DEFAULT 'legacy-graph-generation',
+      eligible_files INTEGER NOT NULL CHECK (eligible_files >= 0),
+      scanned_files INTEGER NOT NULL CHECK (scanned_files >= 0),
+      admitted_files INTEGER NOT NULL CHECK (admitted_files >= 0),
+      extracted_files INTEGER NOT NULL CHECK (extracted_files >= 0),
+      unsupported_files INTEGER NOT NULL CHECK (unsupported_files >= 0),
+      resource_backed_files INTEGER NOT NULL CHECK (resource_backed_files >= 0),
+      nodes INTEGER NOT NULL CHECK (nodes >= 0),
+      edges INTEGER NOT NULL CHECK (edges >= 0),
+      unresolved_references INTEGER NOT NULL CHECK (unresolved_references >= 0),
+      controller_generation INTEGER NOT NULL CHECK (controller_generation >= 0),
+      invalidation_generation INTEGER NOT NULL CHECK (invalidation_generation >= 0),
+      updated_at TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS docs_headings (
@@ -3521,10 +4662,14 @@ function migrate(db: Database.Database): void {
       ON ranked_docs_universes(expires_at, universe_id);
     CREATE INDEX IF NOT EXISTS idx_ranked_docs_universe_hits_document
       ON ranked_docs_universe_hits(universe_id, stable_document_id);
+    CREATE INDEX IF NOT EXISTS idx_graph_build_progress_source
+      ON graph_build_progress(source_snapshot_id);
 
     INSERT OR IGNORE INTO schema_migrations(version) VALUES (${SCHEMA_VERSION});
   `);
     const snapshotColumns = tableColumns(db, "snapshots");
+    const coverageColumns = tableColumns(db, "snapshot_index_coverage");
+    const graphBuildColumns = tableColumns(db, "graph_build_progress");
     const rankedUniverseColumns = tableColumns(db, "ranked_docs_universes");
     if (!rankedUniverseColumns.has("admitted_authority_map")) {
       db.exec(`
@@ -3547,6 +4692,87 @@ function migrate(db: Database.Database): void {
     if (!snapshotColumns.has("publication_updated_at")) {
       db.exec("ALTER TABLE snapshots ADD COLUMN publication_updated_at TEXT NOT NULL DEFAULT ''");
     }
+    if (!coverageColumns.has("admitted_files")) {
+      db.exec("ALTER TABLE snapshot_index_coverage ADD COLUMN admitted_files INTEGER");
+    }
+    if (!coverageColumns.has("extracted_files")) {
+      db.exec("ALTER TABLE snapshot_index_coverage ADD COLUMN extracted_files INTEGER");
+    }
+    if (!coverageColumns.has("extraction_truncated")) {
+      db.exec("ALTER TABLE snapshot_index_coverage ADD COLUMN extraction_truncated INTEGER");
+    }
+    if (!coverageColumns.has("continuation_available")) {
+      db.exec("ALTER TABLE snapshot_index_coverage ADD COLUMN continuation_available INTEGER");
+    }
+    if (!coverageColumns.has("continuation_kind")) {
+      db.exec("ALTER TABLE snapshot_index_coverage ADD COLUMN continuation_kind TEXT");
+    }
+    if (!coverageColumns.has("continuation_cursor")) {
+      db.exec("ALTER TABLE snapshot_index_coverage ADD COLUMN continuation_cursor TEXT");
+    }
+    if (!graphBuildColumns.has("owner_id")) {
+      db.exec(`ALTER TABLE graph_build_progress
+        ADD COLUMN owner_id TEXT NOT NULL DEFAULT '${LEGACY_GRAPH_BUILD_OWNER_ID}'
+        CHECK (length(owner_id) > 0)`);
+    }
+    if (!graphBuildColumns.has("completion_target_id")) {
+      db.exec("ALTER TABLE graph_build_progress ADD COLUMN completion_target_id INTEGER");
+    }
+    if (!graphBuildColumns.has("status")) {
+      db.exec(`ALTER TABLE graph_build_progress
+        ADD COLUMN status TEXT NOT NULL DEFAULT 'active'
+        CHECK (status IN ('active', 'completed', 'cancelled', 'stale'))`);
+    }
+    const addedGraphBuildMaxFiles = !graphBuildColumns.has("max_files");
+    if (addedGraphBuildMaxFiles) {
+      db.exec(`ALTER TABLE graph_build_progress
+        ADD COLUMN max_files INTEGER NOT NULL DEFAULT ${DEFAULT_GRAPH_BUILD_MAX_FILES}
+        CHECK (max_files > 0)`);
+    }
+    const addedGraphBuildGenerationSourceHash = !graphBuildColumns.has("generation_source_hash");
+    if (addedGraphBuildGenerationSourceHash) {
+      db.exec(`ALTER TABLE graph_build_progress
+        ADD COLUMN generation_source_hash TEXT NOT NULL DEFAULT '${GENERATION_SOURCE_HASH_PREFIX}'
+        CHECK (length(generation_source_hash) > 0)`);
+    }
+    if (addedGraphBuildGenerationSourceHash) {
+      db.exec(`UPDATE graph_build_progress
+        SET generation_source_hash = '${GENERATION_SOURCE_HASH_PREFIX}:' || snapshot_id || ':g' ||
+          controller_generation || ':i' || invalidation_generation`);
+    }
+    db.exec(`
+      UPDATE graph_build_progress
+      SET max_files = CASE
+        WHEN max_files IS NULL OR max_files <= 0
+          THEN CASE
+            WHEN scanned_files > 0 THEN scanned_files
+            ELSE 1
+          END
+        ELSE max_files
+      END;
+      UPDATE graph_build_progress
+      SET generation_source_hash = CASE
+        WHEN generation_source_hash IS NULL OR trim(generation_source_hash) = ''
+          THEN '${GENERATION_SOURCE_HASH_PREFIX}:' || snapshot_id || ':' || controller_generation || ':' || invalidation_generation
+        ELSE generation_source_hash
+      END;
+      UPDATE graph_build_progress
+      SET owner_id = '${LEGACY_GRAPH_BUILD_OWNER_ID}'
+      WHERE owner_id IS NULL OR trim(owner_id) = '';
+      UPDATE graph_build_progress
+      SET status = CASE WHEN phase = 'complete' THEN 'completed' ELSE 'active' END
+      WHERE status IS NULL OR status NOT IN ('active', 'completed', 'cancelled', 'stale');
+      UPDATE graph_build_progress
+      SET status = 'completed'
+      WHERE phase = 'complete' AND status = 'active';
+      UPDATE graph_build_progress
+      SET completion_target_id = snapshot_id
+      WHERE completion_target_id IS NULL AND status = 'completed';
+    `);
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_graph_build_progress_completion_target
+        ON graph_build_progress(completion_target_id);
+    `);
     if (needsPublicationMigration) {
       db.exec(`
         UPDATE snapshots
@@ -3607,7 +4833,8 @@ function validateSchema(db: Database.Database): boolean {
     "documentation_concern_terms",
     "documentation_concern_owners",
     "ranked_docs_universes",
-    "ranked_docs_universe_hits"
+    "ranked_docs_universe_hits",
+    "graph_build_progress"
   ];
   const rows = db
     .prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'virtual table')")

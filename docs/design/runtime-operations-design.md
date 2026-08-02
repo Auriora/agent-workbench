@@ -121,8 +121,19 @@ Warm-up presentation states:
 - `degraded`: required parser, database, or filesystem capability is missing
 
 These are freshness/presentation labels, not snapshot publication states. A
-completed bounded scan can be published with partial graph coverage; EB014 owns
-completion beyond the existing seed bounds.
+completed bounded scan can be published with partial graph coverage; Spec 051
+defines the completion path beyond the existing seed bounds under EB014, and
+partial coverage remains explicit until a complete slice publishes.
+
+For a bounded large-repository build, the worker returns one of two validated
+results per invocation: `partial` with a durable cursor and partial kind, or
+`complete`. The controller arms a fresh deadline for every pass. A
+`publish_seed` partial is atomically published so first-read queries can use its
+truthful bounded evidence; the controller then allocates one isolated target.
+Subsequent `continue_build` results reuse that target and never expose it to
+ordinary queries. A newer invalidation generation supersedes the current target
+before either partial publication or continuation. Only a generation-matching
+`complete` result permits the final atomic publish.
 
 Persisted `fresh` state is necessary but not sufficient for first-read reuse.
 The runtime performs bounded path validation against the indexed catalog. A
@@ -140,9 +151,9 @@ warm-up phase, snapshot freshness, queued work counts, extraction errors, and
 degraded blockers.
 
 Spec 036 accepted the docs-first seed plus explicit non-complete graph coverage
-as the current behavior. A persisted graph completion executor is deferred to
-EB014 in `docs/backlog/README.md`; until that follow-up ships, truncated graph
-seed coverage must not be presented as complete freshness.
+as the current behavior. EB014 (Spec 051) governs the persisted completion path
+beyond the first-pass graph budget; truncated graph seed coverage remains partial
+until that path publishes a complete continuation slice.
 
 First-read resources and planning tools must return bounded current-state
 evidence instead of waiting for broad hidden work. Status, scope, overview,

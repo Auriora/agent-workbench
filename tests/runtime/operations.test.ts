@@ -430,13 +430,50 @@ describe("runtime operation adapters", () => {
       return value;
     });
 
-    worker.emit("message", { type: "complete", result: { snapshot_id: "44" } });
+    worker.emit("message", {
+      type: "complete",
+      result: {
+        outcome: "complete",
+        execution_id: "exec-protocol",
+        target_snapshot_id: "44",
+        completed_generation: 7
+      }
+    });
     await Promise.resolve();
     expect(settled).toBe(false);
-    worker.emit("message", { type: "complete", result: { snapshot_id: "44" } });
+    worker.emit("message", {
+      type: "partial",
+      result: {
+        outcome: "partial",
+        execution_id: "exec-protocol",
+        target_snapshot_id: "44",
+        completed_generation: 7,
+        continuation_cursor: "1",
+        partial_kind: "continue_build"
+      }
+    });
+    worker.emit("message", {
+      type: "complete",
+      result: {
+        outcome: "complete",
+        execution_id: "exec-protocol",
+        target_snapshot_id: "44",
+        completed_generation: 7
+      }
+    });
     worker.emit("exit", 0);
 
-    await expect(completion).resolves.toMatchObject({ exit_code: 0, results: [{}, {}] });
+    await expect(completion).resolves.toMatchObject({ exit_code: 0, results: [{
+      outcome: "complete",
+      execution_id: "exec-protocol",
+      target_snapshot_id: "44",
+      completed_generation: 7
+    }, {
+      outcome: "partial",
+      execution_id: "exec-protocol",
+      target_snapshot_id: "44",
+      completed_generation: 7
+    }] });
     expect((await completion).results).toHaveLength(2);
   });
 
@@ -450,9 +487,84 @@ describe("runtime operation adapters", () => {
       generation: 8,
       deadline: { timeout_ms: 1000, deadline_at: "2026-07-20T10:00:01.000Z" }
     });
-    worker.emit("message", { type: "complete", result: { snapshot_id: "45" } });
+    worker.emit("message", {
+      type: "complete",
+      result: {
+        outcome: "complete",
+        execution_id: "exec-nonzero",
+        target_snapshot_id: "45",
+        completed_generation: 8
+      }
+    });
     worker.emit("exit", 2);
-    await expect(completion).resolves.toMatchObject({ exit_code: 2, results: [{}] });
+    await expect(completion).resolves.toMatchObject({
+      exit_code: 2,
+      results: [{
+        outcome: "complete",
+        execution_id: "exec-nonzero",
+        target_snapshot_id: "45",
+        completed_generation: 8
+      }]
+    });
+  });
+
+  it("maps valid payloads while preserving structurally invalid messages for fail-closed validation", async () => {
+    const worker = new ProtocolWorker();
+    const executor = createProtocolExecutor(worker);
+    const completion = executor.run({
+      repo_root: "/repo",
+      execution_id: "exec-mapped",
+      target_snapshot_id: "47",
+      generation: 11,
+      deadline: { timeout_ms: 1000, deadline_at: "2026-07-20T10:00:01.000Z" }
+    });
+
+    worker.emit("message", {
+      type: "complete",
+      result: {
+        outcome: "complete",
+        execution_id: "exec-mapped",
+        target_snapshot_id: "47",
+        completed_generation: 11,
+        extra_field: "ignore me"
+      }
+    });
+    worker.emit("message", {
+      type: "partial",
+      result: {
+        outcome: "partial",
+        execution_id: "exec-mapped",
+        target_snapshot_id: "47",
+        completed_generation: 11,
+        continuation_cursor: "cursor-1",
+        partial_kind: "continue_build"
+      }
+    });
+    worker.emit("message", {
+      type: "complete",
+      result: {
+        outcome: "complete",
+        execution_id: "exec-mapped",
+        target_snapshot_id: "47",
+        completed_generation: 11
+      }
+    });
+    worker.emit("exit", 0);
+
+    await expect(completion).resolves.toMatchObject({
+      exit_code: 0,
+      results: [{
+        type: "complete",
+        result: expect.objectContaining({ extra_field: "ignore me" })
+      }, {
+        outcome: "partial",
+        execution_id: "exec-mapped",
+        target_snapshot_id: "47",
+        completed_generation: 11,
+        continuation_cursor: "cursor-1",
+        partial_kind: "continue_build"
+      }]
+    });
   });
 
   it("terminates a retained production worker exactly once", async () => {
@@ -1530,6 +1642,174 @@ describe("runtime operation adapters", () => {
     expect(deadlines.activeCount()).toBe(0);
     expect(publication.transitions).toEqual([
       expect.objectContaining({ snapshot_id: "1001", to: "failed" })
+    ]);
+  });
+
+  it("loops over partial publish-seed and continue-build results before terminal completion", async () => {
+    const { controller, executor, deadlines, publication } = createControlledController();
+    const terminal = observeTerminal(controller);
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 4
+    });
+    await executor.waitForCalls(1);
+    const first = executor.calls[0] as (typeof executor.calls)[0];
+    executor.complete(0, {
+      exit_code: 0,
+      results: [{
+        outcome: "partial",
+        execution_id: first.execution_id,
+        target_snapshot_id: first.target_snapshot_id,
+        completed_generation: first.generation,
+        continuation_cursor: "cursor-1",
+        partial_kind: "publish_seed"
+      }]
+    });
+    await executor.waitForCalls(2);
+    const second = executor.calls[1] as (typeof executor.calls)[0];
+    expect(second.target_snapshot_id).toBe("1002");
+    executor.complete(1, {
+      exit_code: 0,
+      results: [{
+        outcome: "partial",
+        execution_id: second.execution_id,
+        target_snapshot_id: second.target_snapshot_id,
+        completed_generation: second.generation,
+        continuation_cursor: "cursor-2",
+        partial_kind: "continue_build"
+      }]
+    });
+    await executor.waitForCalls(3);
+    const third = executor.calls[2] as (typeof executor.calls)[0];
+    executor.complete(2, {
+      exit_code: 0,
+      results: [{
+        outcome: "complete",
+        execution_id: third.execution_id,
+        target_snapshot_id: third.target_snapshot_id,
+        completed_generation: third.generation
+      }]
+    });
+    await terminal;
+
+    expect(publication.transitions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ snapshot_id: "1001", to: "published" }),
+        expect.objectContaining({ snapshot_id: "1002", to: "published" })
+      ])
+    );
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "complete",
+      target_snapshot_id: "1002",
+      activity_lease: null,
+      last_failure: undefined,
+      worker_invocations: 3
+    });
+    expect(deadlines.activeCount()).toBe(0);
+  });
+
+  it("supersedes stale generation before consuming partial build state", async () => {
+    const { controller, executor, publication, deadlines } = createControlledController();
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 5
+    });
+    await executor.waitForCalls(1);
+
+    await expect(controller.request({
+      repo_root: "/repo",
+      reason: "stale_first_read",
+      source: "test-late",
+      invalidation_generation: 11
+    })).resolves.toMatchObject({
+      outcome: "reused",
+      execution_id: "exec-1"
+    });
+
+    executor.complete(0, {
+      exit_code: 0,
+      results: [{
+        outcome: "partial",
+        execution_id: "exec-1",
+        target_snapshot_id: "1001",
+        completed_generation: 5,
+        continuation_cursor: "late-cursor",
+        partial_kind: "continue_build"
+      }]
+    });
+    await executor.waitForCalls(2);
+    expect(publication.transitions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          snapshot_id: "1001",
+          from: "building",
+          to: "superseded"
+        })
+      ])
+    );
+    const second = executor.calls[1] as (typeof executor.calls)[0];
+    expect(second.execution_id).toBe("exec-1");
+    expect(second.target_snapshot_id).toBe("1002");
+    expect(second.generation).toBe(11);
+
+    executor.complete(1, {
+      exit_code: 0,
+      results: [{
+        outcome: "complete",
+        execution_id: second.execution_id,
+        target_snapshot_id: second.target_snapshot_id,
+        completed_generation: second.generation
+      }]
+    });
+    await waitForControllerState(controller, "complete");
+
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "complete",
+      started_generation: 11,
+      target_snapshot_id: "1002",
+      last_failure: undefined,
+      worker_invocations: 2
+    });
+    expect(deadlines.activeCount()).toBe(0);
+  });
+
+  it("rejects invalid partial worker payloads", async () => {
+    const { controller, executor, deadlines, publication } = createControlledController();
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    const terminal = observeTerminal(controller);
+    const call = executor.calls[0] as (typeof executor.calls)[0];
+    executor.complete(0, {
+      exit_code: 0,
+      results: [{
+        outcome: "partial",
+        execution_id: call.execution_id,
+        target_snapshot_id: call.target_snapshot_id,
+        completed_generation: call.generation,
+        partial_kind: "continue_build"
+      } as never]
+    });
+    await terminal;
+
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      last_failure: { code: "invalid_worker_result" }
+    });
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "failed" })
+    ]);
+    expect(deadlines.activeCount()).toBe(0);
+    expect(executor.terminations).toEqual([
+      { execution_id: "exec-1", reason: "worker_error" }
     ]);
   });
 

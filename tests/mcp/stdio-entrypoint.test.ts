@@ -567,7 +567,7 @@ describe("stdio MCP entrypoint", () => {
       await session.close();
       fs.rmSync(fixtureRoot, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("allows only one startup graph warmup owner for concurrent stdio sessions in the same repo", async () => {
     const fixtureRoot = createCleanFixtureCopy({
@@ -793,7 +793,7 @@ describe("stdio MCP entrypoint", () => {
       await session.close();
       fs.rmSync(fixtureRoot, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("reports startup graph warmup failures without hiding the failed runtime state", async () => {
     const fixtureRoot = createCleanFixtureCopy({

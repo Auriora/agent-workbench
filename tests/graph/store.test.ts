@@ -12,6 +12,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExtractionBatch } from "../../src/domain/models/index.js";
 import type { SnapshotState } from "../../src/domain/models/runtime.js";
 import type {
+  GraphBuildProgress,
+  GraphBuildProgressStatus,
   RepositoryOwnershipLease,
   SnapshotPublicationPort,
   SnapshotPublicationSelection,
@@ -1420,6 +1422,733 @@ describe("graph store", () => {
     }
   });
 
+  it("persists graph build progress only for matching building generations", async () => {
+    const store = openGraphStore(path.join(dir, "graph-build-progress.sqlite"));
+    const snapshot = { ...snapshotState("930"), freshness: "refreshing" as const };
+    const progress: GraphBuildProgress = {
+      snapshot_id: snapshot.id,
+      owner_id: "exec-930",
+      completion_target_id: undefined,
+      phase: "extracting",
+      status: "active",
+      scan_cursor: "src/a.rb",
+      max_files: 7,
+      generation_source_hash: "graph:930:g4:i9",
+      counters: {
+        eligible_files: 12,
+        scanned_files: 10,
+        admitted_files: 8,
+        extracted_files: 7,
+        unsupported_files: 1,
+        resource_backed_files: 7,
+        nodes: 30,
+        edges: 22,
+        unresolved_references: 3
+      },
+      controller_generation: 4,
+      invalidation_generation: 9,
+      updated_at: "2026-05-08T00:02:00.000Z"
+    };
+
+    try {
+      await store.createBuildSnapshot({
+        snapshot,
+        controller_generation: 4,
+        invalidation_generation: 9,
+        created_at: snapshot.created_at
+      });
+      await expect(store.upsertGraphBuildProgress({ progress })).resolves.toBeUndefined();
+      await expect(store.getGraphBuildProgress({ snapshot_id: snapshot.id })).resolves.toMatchObject(progress);
+      await expect(store.upsertGraphBuildProgress({
+        progress: { ...progress, controller_generation: 5 }
+      })).rejects.toThrow("build generation does not match");
+      await publishBuildingSnapshotWithGenerations(store, snapshot.id, 4, 9);
+      await expect(store.getGraphBuildProgress({ snapshot_id: snapshot.id })).resolves.toMatchObject(progress);
+      await expect(store.upsertGraphBuildProgress({ progress })).rejects.toThrow("is not building");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("validates graph build continuation provenance when upserting progress", async () => {
+    const store = openGraphStore(path.join(dir, "graph-build-progress-provenance-validation.sqlite"));
+    const snapshot = { ...snapshotState("936"), freshness: "refreshing" as const };
+    const progress: GraphBuildProgress = {
+      snapshot_id: snapshot.id,
+      owner_id: "exec-936",
+      phase: "extracting",
+      status: "active",
+      scan_cursor: "app/models/seed.rb",
+      max_files: 12,
+      generation_source_hash: "graph:936:g4:i9",
+      counters: {
+        eligible_files: 4,
+        scanned_files: 4,
+        admitted_files: 2,
+        extracted_files: 2,
+        unsupported_files: 1,
+        resource_backed_files: 1,
+        nodes: 12,
+        edges: 6,
+        unresolved_references: 2
+      },
+      controller_generation: 4,
+      invalidation_generation: 9,
+      updated_at: "2026-05-08T00:02:00.000Z"
+    };
+
+    try {
+      await store.createBuildSnapshot({
+        snapshot,
+        controller_generation: 4,
+        invalidation_generation: 9,
+        created_at: snapshot.created_at
+      });
+      await expect(store.upsertGraphBuildProgress({
+        progress: {
+          ...progress,
+          max_files: 0
+        }
+      })).rejects.toThrow("max_files must be a positive safe integer");
+      await expect(store.upsertGraphBuildProgress({
+        progress: {
+          ...progress,
+          generation_source_hash: " "
+        }
+      })).rejects.toThrow("generation_source_hash must be a non-empty string");
+      await expect(store.upsertGraphBuildProgress({
+        progress: {
+          ...progress,
+          max_files: undefined,
+          generation_source_hash: undefined
+        }
+      })).resolves.toBeUndefined();
+      await expect(store.getGraphBuildProgress({ snapshot_id: snapshot.id })).resolves.toMatchObject({
+        max_files: 2000,
+        generation_source_hash: "graph:936:g4:i9"
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("migrates legacy graph build progress provenance fields with safe backfill", async () => {
+    const databasePath = path.join(dir, "graph-build-progress-provenance-migration.sqlite");
+    const snapshot = { ...snapshotState("947"), freshness: "refreshing" as const };
+    const legacy = new Database(databasePath);
+    try {
+      const escapedRepoRoot = snapshot.repo_root.replaceAll("'", "''");
+      legacy.exec(`
+        CREATE TABLE schema_migrations (
+          version INTEGER PRIMARY KEY,
+          applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE snapshots (
+          id INTEGER PRIMARY KEY,
+          repo_identity TEXT NOT NULL,
+          config_identity TEXT NOT NULL,
+          freshness TEXT NOT NULL,
+          schema_version INTEGER NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          publication_state TEXT NOT NULL DEFAULT 'building',
+          controller_generation INTEGER NOT NULL DEFAULT 0,
+          invalidation_generation INTEGER NOT NULL DEFAULT 0,
+          publication_updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE graph_build_progress (
+          snapshot_id INTEGER PRIMARY KEY,
+          source_snapshot_id INTEGER,
+          owner_id TEXT NOT NULL,
+          completion_target_id INTEGER,
+          phase TEXT NOT NULL CHECK (phase IN ('seed', 'extracting', 'resolving', 'complete')),
+          scan_cursor TEXT,
+          eligible_files INTEGER NOT NULL CHECK (eligible_files >= 0),
+          scanned_files INTEGER NOT NULL CHECK (scanned_files >= 0),
+          admitted_files INTEGER NOT NULL CHECK (admitted_files >= 0),
+          extracted_files INTEGER NOT NULL CHECK (extracted_files >= 0),
+          unsupported_files INTEGER NOT NULL CHECK (unsupported_files >= 0),
+          resource_backed_files INTEGER NOT NULL CHECK (resource_backed_files >= 0),
+          nodes INTEGER NOT NULL CHECK (nodes >= 0),
+          edges INTEGER NOT NULL CHECK (edges >= 0),
+          unresolved_references INTEGER NOT NULL CHECK (unresolved_references >= 0),
+          controller_generation INTEGER NOT NULL DEFAULT 0,
+          invalidation_generation INTEGER NOT NULL DEFAULT 0,
+          updated_at TEXT NOT NULL
+        );
+        INSERT INTO schema_migrations(version) VALUES (1);
+        INSERT INTO snapshots(
+          id, repo_identity, config_identity, freshness, schema_version, created_at, publication_state,
+          controller_generation, invalidation_generation, publication_updated_at
+        ) VALUES (
+          ${snapshot.id},
+          '${escapedRepoRoot}',
+          '${snapshot.config_identity}',
+          'refreshing',
+          ${snapshot.schema_version},
+          '${snapshot.created_at}',
+          'building',
+          4,
+          9,
+          '${snapshot.updated_at}'
+        );
+        INSERT INTO graph_build_progress(
+          snapshot_id, source_snapshot_id, owner_id, completion_target_id, phase, scan_cursor,
+          eligible_files, scanned_files, admitted_files, extracted_files, unsupported_files,
+          resource_backed_files, nodes, edges, unresolved_references, controller_generation,
+          invalidation_generation, updated_at
+        ) VALUES (
+          ${snapshot.id},
+          NULL,
+          'legacy-owner',
+          NULL,
+          'extracting',
+          'app/models/legacy.rb',
+          4,
+          9,
+          3,
+          8,
+          1,
+          1,
+          4,
+          2,
+          1,
+          4,
+          9,
+          '${snapshot.created_at}'
+        );
+      `);
+    } finally {
+      legacy.close();
+    }
+    const store = openGraphStore(databasePath);
+    try {
+      const rows = store.db.prepare(`
+        SELECT max_files, generation_source_hash, status
+        FROM graph_build_progress WHERE snapshot_id = ?
+      `).get(Number(snapshot.id)) as {
+        max_files: number;
+        generation_source_hash: string;
+        status: GraphBuildProgressStatus;
+      };
+      expect(rows.max_files).toBe(2000);
+      expect(rows.generation_source_hash).toBe("legacy-graph-generation:947:g4:i9");
+      expect(rows.status).toBe("active");
+      await expect(store.getGraphBuildProgress({ snapshot_id: snapshot.id })).resolves.toMatchObject({
+        snapshot_id: snapshot.id,
+        max_files: 2000,
+        generation_source_hash: "legacy-graph-generation:947:g4:i9",
+        status: "active"
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("seeds a building snapshot from one published snapshot without exposing unpublished reads", async () => {
+    const store = openGraphStore(path.join(dir, "graph-build-seed.sqlite"));
+    const source = snapshotState("940");
+    const target = { ...snapshotState("941"), freshness: "refreshing" as const };
+
+    try {
+      await store.createBuildSnapshot({
+        snapshot: { ...source, freshness: "refreshing" },
+        controller_generation: 2,
+        invalidation_generation: 3,
+        created_at: source.created_at
+      });
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: source.id,
+          source_path: "app/models/source.rb",
+          node_id: "940:source",
+          name: "Source"
+        }),
+        replace: true
+      });
+      await store.replaceSnapshotExtraction({
+        batch: {
+          ...extractionBatch({
+            snapshot_id: source.id,
+            source_path: "app/models/target.rb",
+            node_id: "940:target",
+            name: "Target"
+          }),
+          edges: [{
+            id: "source-edge",
+            source_node_id: "940:target",
+            target_node_id: "940:source",
+            kind: "call",
+            source_range: { start_line: 2, start_column: 2, end_line: 2, end_column: 8 },
+            provenance: "unit-seed",
+            confidence: 1,
+            metadata: { reference_name: "Source" }
+          }],
+          unresolved_references: [{
+            id: "source-unresolved",
+            source_node_id: "940:target",
+            source_file_path: "app/models/target.rb",
+            reference_name: "Missing",
+            reference_kind: "call",
+            source_range: { start_line: 3, start_column: 2, end_line: 3, end_column: 9 },
+            candidate_metadata: { reason: "missing" }
+          }]
+        },
+        replace: true
+      });
+      await store.replaceSnapshotDocs({
+        snapshot_id: source.id,
+        repo_root: source.repo_root,
+        documents: [{
+          path: "docs/design.md",
+          title: "Design",
+          headings: [{ id: "overview", text: "Overview", depth: 1, line: 1 }],
+          selected_text: "seeded docs parity needle",
+          content_hash: "docs-hash",
+          byte_count: 25,
+          indexed_at: "2026-05-08T00:00:00.000Z",
+          truncated: false
+        }],
+        coverage: [{
+          evidence_class: "graph",
+          state: "partial",
+          indexed_files: 2,
+          eligible_files_seen: 5,
+          admitted_files: 2,
+          extracted_files: 2,
+          scan_truncated: false,
+          extraction_truncated: true,
+          continuation_available: true,
+          continuation_kind: "graph_build",
+          continuation_cursor: "app/models/target.rb",
+          reason: "test partial graph"
+        }, {
+          evidence_class: "docs",
+          state: "complete",
+          indexed_files: 1,
+          eligible_files_seen: 1,
+          scan_truncated: false
+        }]
+      });
+      await store.replaceSnapshotDocumentationConcerns({
+        snapshot_id: source.id,
+        state: "complete",
+        source_path: "docs/reference/documentation-map.md",
+        source_content_hash: "map-hash",
+        concerns: [{ concern_key: "design", label: "Design", normalized_label: "design" }],
+        terms: [{ concern_key: "design", normalized_term: "seeded", token_count: 1 }],
+        owners: [{
+          concern_key: "design",
+          mapped_owner_path: "docs/design.md",
+          document_id: "docs/design.md",
+          owner_state: "valid",
+          source_line: 1
+        }]
+      });
+      await store.upsertGraphBuildProgress({
+        progress: {
+        snapshot_id: source.id,
+          owner_id: "exec-940",
+          phase: "extracting",
+          status: "active",
+          scan_cursor: "app/models/target.rb",
+          max_files: 11,
+          generation_source_hash: "graph:940:g2:i3",
+          counters: {
+            eligible_files: 5,
+            scanned_files: 4,
+            admitted_files: 2,
+            extracted_files: 2,
+            unsupported_files: 1,
+            resource_backed_files: 2,
+            nodes: 2,
+            edges: 1,
+            unresolved_references: 1
+          },
+          controller_generation: 2,
+          invalidation_generation: 3,
+          updated_at: "2026-05-08T00:02:00.000Z"
+        }
+      });
+      await publishBuildingSnapshotWithGenerations(store, source.id, 2, 3);
+      await store.createBuildSnapshot({
+        snapshot: target,
+        controller_generation: 2,
+        invalidation_generation: 3,
+        created_at: target.created_at
+      });
+      const mismatchedTarget = { ...target, id: "942" };
+      await store.createBuildSnapshot({
+        snapshot: mismatchedTarget,
+        controller_generation: 4,
+        invalidation_generation: 5,
+        created_at: mismatchedTarget.created_at
+      });
+      await expect(store.seedBuildSnapshotFromPublished({
+        source_snapshot_id: source.id,
+        target_snapshot_id: mismatchedTarget.id,
+        owner_id: "other-owner",
+        controller_generation: 4,
+        invalidation_generation: 5,
+        updated_at: "2026-05-08T00:03:00.000Z"
+      })).rejects.toThrow("progress generation does not match");
+
+      await expect(store.seedBuildSnapshotFromPublished({
+        source_snapshot_id: source.id,
+        target_snapshot_id: target.id,
+        owner_id: "exec-940",
+        controller_generation: 2,
+        invalidation_generation: 3,
+        updated_at: "2026-05-08T00:03:00.000Z"
+      })).resolves.toBeUndefined();
+      await expect(store.findNodesByName({
+        snapshot_id: target.id,
+        query: "Source",
+        exact: true
+      })).resolves.toEqual([]);
+      await expect(store.search({
+        repo_root: target.repo_root,
+        snapshot_id: target.id,
+        query: "seeded docs parity needle",
+        max_results: 10,
+        include_snippets: false
+      })).resolves.toMatchObject({ status: "blocked", hits: [] });
+      await expect(store.listBuildNodes({
+        snapshot_id: target.id,
+        controller_generation: 2,
+        invalidation_generation: 3,
+        max_rows: 10
+      })).resolves.toEqual([
+        expect.objectContaining({ id: "941:source", name: "Source" }),
+        expect.objectContaining({ id: "941:target", name: "Target" })
+      ]);
+      await expect(store.listBuildUnresolvedReferences({
+        snapshot_id: target.id,
+        controller_generation: 2,
+        invalidation_generation: 3,
+        max_rows: 10
+      })).resolves.toEqual([
+        expect.objectContaining({ source_node_id: "941:target", reference_name: "Missing" })
+      ]);
+      await expect(store.getGraphBuildProgress({ snapshot_id: target.id })).resolves.toMatchObject({
+        snapshot_id: target.id,
+        source_snapshot_id: source.id,
+        owner_id: "exec-940",
+        completion_target_id: target.id,
+        phase: "extracting",
+        status: "active",
+        scan_cursor: "app/models/target.rb",
+        max_files: 11,
+        generation_source_hash: "graph:940:g2:i3",
+        counters: {
+          eligible_files: 5,
+          scanned_files: 4,
+          admitted_files: 2,
+          extracted_files: 2,
+          unsupported_files: 1,
+          resource_backed_files: 2,
+          nodes: 2,
+          edges: 1,
+          unresolved_references: 1
+        },
+        controller_generation: 2,
+        invalidation_generation: 3,
+        updated_at: "2026-05-08T00:03:00.000Z"
+      });
+      await expect(store.getGraphBuildProgress({ snapshot_id: source.id })).resolves.toMatchObject({
+        snapshot_id: source.id,
+        owner_id: "exec-940",
+        completion_target_id: target.id,
+        status: "active"
+      });
+
+      const targetRows = snapshotEvidenceRows(store.db, Number(target.id));
+      expect(targetRows.coverage).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          evidence_class: "graph",
+          admitted_files: 2,
+          extracted_files: 2,
+          extraction_truncated: 1,
+          continuation_available: 1,
+          continuation_kind: "graph_build",
+          continuation_cursor: "app/models/target.rb"
+        })
+      ]));
+      expect(targetRows.documents).toHaveLength(1);
+      expect(targetRows.docsFts).toHaveLength(1);
+      expect(store.db.prepare(`
+        SELECT COUNT(*) AS count
+        FROM documentation_concern_index_state
+        WHERE snapshot_id = ?
+      `).get(Number(target.id))).toEqual({ count: 1 });
+      await store.upsertGraphBuildCoverage({
+        snapshot_id: target.id,
+        controller_generation: 2,
+        invalidation_generation: 3,
+        coverage: {
+          evidence_class: "graph",
+          state: "complete",
+          indexed_files: 5,
+          eligible_files_seen: 5,
+          admitted_files: 5,
+          extracted_files: 5,
+          scan_truncated: false,
+          extraction_truncated: false,
+          continuation_available: false,
+          reason: "continued graph complete"
+        }
+      });
+      expect(snapshotEvidenceRows(store.db, Number(target.id)).coverage).toEqual([
+        expect.objectContaining({
+          evidence_class: "docs",
+          state: "complete",
+          indexed_files: 1
+        }),
+        expect.objectContaining({
+          evidence_class: "graph",
+          state: "complete",
+          admitted_files: 5,
+          extracted_files: 5,
+          continuation_available: 0,
+          reason: "continued graph complete"
+        })
+      ]);
+      await expect(store.upsertGraphBuildCoverage({
+        snapshot_id: target.id,
+        controller_generation: 99,
+        invalidation_generation: 3,
+        coverage: {
+          evidence_class: "graph",
+          state: "partial"
+        }
+      })).rejects.toThrow("build generation does not match");
+
+      await expect(store.seedBuildSnapshotFromPublished({
+        source_snapshot_id: source.id,
+        target_snapshot_id: target.id,
+        owner_id: "exec-940",
+        controller_generation: 2,
+        invalidation_generation: 3,
+        updated_at: "2026-05-08T00:04:00.000Z"
+      })).rejects.toThrow("is not empty");
+      await expect(store.seedBuildSnapshotFromPublished({
+        source_snapshot_id: target.id,
+        target_snapshot_id: source.id,
+        owner_id: "exec-940",
+        controller_generation: 0,
+        invalidation_generation: 0,
+        updated_at: "2026-05-08T00:04:00.000Z"
+      })).rejects.toThrow("is not building");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("rejects cancelled and stale published graph continuations", async () => {
+    const store = openGraphStore(path.join(dir, "graph-build-progress-status.sqlite"));
+    const source = snapshotState("943");
+    const cancelledTarget = { ...snapshotState("944"), freshness: "refreshing" as const };
+    const staleTarget = { ...snapshotState("945"), freshness: "refreshing" as const };
+
+    try {
+      await store.createBuildSnapshot({
+        snapshot: { ...source, freshness: "refreshing" },
+        controller_generation: 7,
+        invalidation_generation: 8,
+        created_at: source.created_at
+      });
+      await store.upsertGraphBuildProgress({
+        progress: {
+        snapshot_id: source.id,
+          owner_id: "exec-943",
+          phase: "extracting",
+          status: "active",
+          scan_cursor: "config/routes/admin.rb",
+          max_files: 16,
+          generation_source_hash: "graph:943:g7:i8",
+          counters: {
+            eligible_files: 4,
+            scanned_files: 4,
+            admitted_files: 2,
+            extracted_files: 2,
+            unsupported_files: 0,
+            resource_backed_files: 2,
+            nodes: 4,
+            edges: 2,
+            unresolved_references: 1
+          },
+          controller_generation: 7,
+          invalidation_generation: 8,
+          updated_at: "2026-05-08T00:02:00.000Z"
+        }
+      });
+      await publishBuildingSnapshotWithGenerations(store, source.id, 7, 8);
+      await store.transitionGraphBuildProgressStatus({
+        snapshot_id: source.id,
+        owner_id: "exec-943",
+        controller_generation: 7,
+        invalidation_generation: 8,
+        from: "active",
+        to: "cancelled",
+        updated_at: "2026-05-08T00:03:00.000Z"
+      });
+      await store.createBuildSnapshot({
+        snapshot: cancelledTarget,
+        controller_generation: 7,
+        invalidation_generation: 8,
+        created_at: cancelledTarget.created_at
+      });
+      await expect(store.seedBuildSnapshotFromPublished({
+        source_snapshot_id: source.id,
+        target_snapshot_id: cancelledTarget.id,
+        owner_id: "exec-943",
+        controller_generation: 7,
+        invalidation_generation: 8,
+        updated_at: "2026-05-08T00:04:00.000Z"
+      })).rejects.toThrow("cancelled");
+
+      await store.transitionGraphBuildProgressStatus({
+        snapshot_id: source.id,
+        owner_id: "exec-943",
+        controller_generation: 7,
+        invalidation_generation: 8,
+        from: "cancelled",
+        to: "stale",
+        updated_at: "2026-05-08T00:05:00.000Z"
+      });
+      await store.createBuildSnapshot({
+        snapshot: staleTarget,
+        controller_generation: 7,
+        invalidation_generation: 8,
+        created_at: staleTarget.created_at
+      });
+      await expect(store.seedBuildSnapshotFromPublished({
+        source_snapshot_id: source.id,
+        target_snapshot_id: staleTarget.id,
+        owner_id: "exec-943",
+        controller_generation: 7,
+        invalidation_generation: 8,
+        updated_at: "2026-05-08T00:06:00.000Z"
+      })).rejects.toThrow("stale");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("replaces build resolution evidence atomically on explicit building snapshots", async () => {
+    const store = openGraphStore(path.join(dir, "graph-build-resolution.sqlite"));
+    const snapshot = { ...snapshotState("950"), freshness: "refreshing" as const };
+
+    try {
+      await createBuildingSnapshot(store, snapshot);
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: snapshot.id,
+          source_path: "app/models/source.rb",
+          node_id: "source-node",
+          name: "Source"
+        }),
+        replace: true
+      });
+      await store.replaceSnapshotExtraction({
+        batch: {
+          ...extractionBatch({
+            snapshot_id: snapshot.id,
+            source_path: "app/models/target.rb",
+            node_id: "target-node",
+            name: "Target"
+          }),
+          unresolved_references: [{
+            id: "old-unresolved",
+            source_node_id: "target-node",
+            source_file_path: "app/models/target.rb",
+            reference_name: "OldMissing",
+            reference_kind: "call",
+            source_range: { start_line: 5, start_column: 2, end_line: 5, end_column: 12 },
+            candidate_metadata: {}
+          }]
+        },
+        replace: true
+      });
+      await store.replaceBuildResolution({
+        snapshot_id: snapshot.id,
+        controller_generation: 0,
+        invalidation_generation: 0,
+        provenance: "graph-build-final",
+        resolved_references: [{
+          file_path: "app/models/target.rb",
+          edge: {
+            id: "resolved-edge",
+            source_node_id: "target-node",
+            target_node_id: "source-node",
+            kind: "call",
+            source_range: { start_line: 6, start_column: 2, end_line: 6, end_column: 8 },
+            provenance: "ignored-input-provenance",
+            confidence: 0.9,
+            metadata: { reference_name: "Source" }
+          }
+        }],
+        unresolved_references: [{
+          id: "remaining-unresolved",
+          source_node_id: "target-node",
+          source_file_path: "app/models/target.rb",
+          reference_name: "StillMissing",
+          reference_kind: "call",
+          source_range: { start_line: 7, start_column: 2, end_line: 7, end_column: 14 },
+          candidate_metadata: { final: true }
+        }]
+      });
+      const beforeFailedReplacement = snapshotEvidenceRows(store.db, Number(snapshot.id));
+      expect(beforeFailedReplacement.edges).toEqual([
+        expect.objectContaining({
+          source_node_id: "target-node",
+          target_node_id: "source-node"
+        })
+      ]);
+      expect(beforeFailedReplacement.unresolved).toEqual([
+        expect.objectContaining({ reference_name: "StillMissing" })
+      ]);
+
+      await expect(store.replaceBuildResolution({
+        snapshot_id: snapshot.id,
+        controller_generation: 0,
+        invalidation_generation: 0,
+        provenance: "graph-build-final",
+        resolved_references: [{
+          file_path: "app/models/missing.rb",
+          edge: {
+            id: "bad-edge",
+            source_node_id: "target-node",
+            target_node_id: "source-node",
+            kind: "call",
+            provenance: "graph-build-final",
+            confidence: 1,
+            metadata: {}
+          }
+        }],
+        unresolved_references: []
+      })).rejects.toThrow("Unknown file for build resolution edge");
+      expect(snapshotEvidenceRows(store.db, Number(snapshot.id))).toEqual(beforeFailedReplacement);
+
+      await publishBuildingSnapshot(store, snapshot.id);
+      await expect(store.getReferences({
+        snapshot_id: snapshot.id,
+        node_id: "target-node"
+      })).resolves.toEqual([
+        expect.objectContaining({ target_node_id: "source-node", provenance: "graph-build-final" })
+      ]);
+      await expect(store.replaceBuildResolution({
+        snapshot_id: snapshot.id,
+        controller_generation: 0,
+        invalidation_generation: 0,
+        provenance: "graph-build-final",
+        resolved_references: [],
+        unresolved_references: []
+      })).rejects.toThrow("is not building");
+    } finally {
+      store.close();
+    }
+  });
+
   it("selects the latest published snapshot while a newer build remains invisible", async () => {
     const store = openGraphStore(path.join(dir, "index.sqlite"));
     const fresh = snapshotState("100");
@@ -2391,14 +3120,23 @@ async function publishBuildingSnapshot(
   store: ReturnType<typeof openGraphStore>,
   snapshotId: string
 ): Promise<void> {
+  await publishBuildingSnapshotWithGenerations(store, snapshotId, 0, 0);
+}
+
+async function publishBuildingSnapshotWithGenerations(
+  store: ReturnType<typeof openGraphStore>,
+  snapshotId: string,
+  controllerGeneration: number,
+  invalidationGeneration: number
+): Promise<void> {
   await store.markSnapshotFreshness({ snapshot_id: snapshotId, freshness: "fresh" });
   await store.transitionBuild({
     repo_root: "/tmp/repo",
     snapshot_id: snapshotId,
     from: "building",
     to: "published",
-    controller_generation: 0,
-    invalidation_generation: 0,
+    controller_generation: controllerGeneration,
+    invalidation_generation: invalidationGeneration,
     updated_at: "2026-05-08T00:01:00.000Z"
   });
 }
@@ -2445,7 +3183,7 @@ function countRows(db: import("better-sqlite3").Database, table: string): number
   return (db.prepare(`SELECT COUNT(*) AS count FROM ${table}`).get() as { count: number }).count;
 }
 
-function snapshotEvidenceRows(db: import("better-sqlite3").Database, snapshotId: number): object {
+function snapshotEvidenceRows(db: import("better-sqlite3").Database, snapshotId: number) {
   return {
     snapshot: db.prepare(`
       SELECT id, freshness, publication_state, publication_updated_at
@@ -2497,7 +3235,9 @@ function snapshotEvidenceRows(db: import("better-sqlite3").Database, snapshotId:
     `).all(snapshotId),
     coverage: db.prepare(`
       SELECT evidence_class, state, reason, indexed_files, eligible_files_seen,
-             scan_truncated, indexed_roots_json, missing_priority_roots_json
+             admitted_files, extracted_files, scan_truncated, extraction_truncated,
+             continuation_available, continuation_kind, continuation_cursor,
+             indexed_roots_json, missing_priority_roots_json
       FROM snapshot_index_coverage WHERE snapshot_id = ? ORDER BY evidence_class
     `).all(snapshotId)
   };

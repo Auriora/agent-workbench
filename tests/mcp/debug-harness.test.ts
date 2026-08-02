@@ -54,6 +54,8 @@ describe("repo-local MCP debug harness", () => {
     expect(source).toContain("docsRankingCursorCodec: createDocsRankingCursorCodec()");
     expect(source).toContain("ranking_cursor_codec: input.runtime.docsRankingCursorCodec");
     expect(source).not.toContain("ranking_cursor_codec: createDocsRankingCursorCodec()");
+    expect(source).toContain("runRepositoryGraphBuildSlice({");
+    expect(source).not.toContain("max_extraction_files: 500");
   });
 
   it("refuses to resolve outside this repository checkout", () => {
@@ -207,13 +209,14 @@ describe("repo-local MCP debug harness", () => {
     const before = fileContentSnapshot(targetRepo);
     try {
       const config = resolveToolSweepConfig({
-        argv: ["--repo", targetRepo, "--output-dir", outputDir, "--start-graph-warmup"],
+        argv: ["--repo", targetRepo, "--output-dir", outputDir, "--start-graph-warmup", "--graph-slice-files", "2"],
         cwd: process.cwd()
       });
       expect(config).toMatchObject({
         repos: [targetRepo],
         output_dir: outputDir,
-        start_graph_warmup: true
+        start_graph_warmup: true,
+        graph_slice_files: 2
       });
 
       const report = await runMcpToolSweep(config);
