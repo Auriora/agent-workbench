@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/049-ruby-rails-semantic-correctness-and-static-dsl-expansion/`
 - **Title:** Ruby/Rails semantic correctness and static DSL expansion
 - **Final spec commit:** `e82eb91`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `3f476e1`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/language-adapter-design.md`
