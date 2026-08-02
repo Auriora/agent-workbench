@@ -112,7 +112,8 @@ export async function runDebugMcpUseCase(
     return buildRepoOverviewEnvelope(
       await getRepoOverview({
         repo_root: config.targetRepo,
-        scanner
+        scanner,
+        workspace: new WorkspaceFileAdapter({ repoRoot: config.targetRepo })
       })
     );
   }

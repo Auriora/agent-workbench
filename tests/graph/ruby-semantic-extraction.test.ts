@@ -71,9 +71,14 @@ describe("Ruby partial-semantic graph extraction", () => {
         snapshot_id: "601",
         qualified_name: "Commerce.Billing.Checkout.<<self>>"
       });
-      const [defaultCurrencyMethod] = await fixture.store.findNodesByQualifiedName({
+      const defaultCurrencyNodes = await fixture.store.findNodesByQualifiedName({
         snapshot_id: "601",
-        qualified_name: "Commerce.Billing.Checkout#default_currency"
+        qualified_name: "Commerce.Billing.Checkout.default_currency"
+      });
+      const defaultCurrencyMethod = defaultCurrencyNodes.find((node) => node.kind === "singleton_method");
+      const [builderPathMethod] = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "601",
+        qualified_name: "Commerce.Billing.Checkout.builder_path"
       });
       const [calculateMethod] = await fixture.store.findNodesByQualifiedName({
         snapshot_id: "601",
@@ -118,6 +123,12 @@ describe("Ruby partial-semantic graph extraction", () => {
         })
       });
       expect(defaultCurrencyMethod).toMatchObject({
+        kind: "singleton_method",
+        metadata: expect.objectContaining({
+          declaration_kind: "singleton_method"
+        })
+      });
+      expect(builderPathMethod).toMatchObject({
         kind: "singleton_method",
         metadata: expect.objectContaining({
           declaration_kind: "singleton_method"
@@ -180,6 +191,18 @@ describe("Ruby partial-semantic graph extraction", () => {
       const routesFile = await fixture.store.findNodesByQualifiedName({
         snapshot_id: "602",
         qualified_name: "config.routes"
+      });
+      const [previewAction] = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "602",
+        qualified_name: "CheckoutsController#preview"
+      });
+      const [searchAction] = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "602",
+        qualified_name: "CheckoutsController#search"
+      });
+      const [archiveAction] = await fixture.store.findNodesByQualifiedName({
+        snapshot_id: "602",
+        qualified_name: "CheckoutsController#archive"
       });
       const sharedConfigUnresolved = await fixture.store.getUnresolvedReferences({
         snapshot_id: "602",
@@ -249,8 +272,23 @@ describe("Ruby partial-semantic graph extraction", () => {
           expect.objectContaining({
             target_file_path: "app/controllers/admin/widgets_controller.rb",
             provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/controllers/home_controller.rb",
+            provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/controllers/admin/dashboard_controller.rb",
+            provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "config/routes/admin.rb",
+            provenance: "tree-sitter-ruby"
           })
         ])
+      );
+      expect(routeFileReferences.map((reference) => reference.target_node_id)).toEqual(
+        expect.arrayContaining([previewAction!.id, searchAction!.id, archiveAction!.id])
       );
       expect(routeFileReferences).not.toEqual(
         expect.arrayContaining([
@@ -287,6 +325,18 @@ describe("Ruby partial-semantic graph extraction", () => {
           expect.objectContaining({
             target_file_path: "app/models/checkout.rb",
             provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/models/paragraph.rb",
+            provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/models/paperback.rb",
+            provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/models/tag.rb",
+            provenance: "tree-sitter-ruby"
           })
         ])
       );
@@ -295,12 +345,27 @@ describe("Ruby partial-semantic graph extraction", () => {
           expect.objectContaining({
             target_file_path: "app/models/session.rb",
             provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/models/active_account.rb",
+            provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/models/published_paragraph.rb",
+            provenance: "tree-sitter-ruby"
+          }),
+          expect.objectContaining({
+            target_file_path: "app/models/imageable.rb",
+            provenance: "tree-sitter-ruby"
           })
         ])
       );
 
       const ambiguousInclude = sharedConfigUnresolved.find((reference) =>
         reference.reference_kind === "ruby_include" && reference.reference_name === "SharedConfig"
+      );
+      const activeAccountsModelDsl = customerDynamicRefs.find((reference) =>
+        reference.reference_kind === "ruby_model_dsl" && reference.reference_name === "active_accounts"
       );
       const dynamicRequire = bootstrapDynamicRefs.find((reference) =>
         reference.reference_kind === "ruby_dynamic" && reference.reference_name === "require"
@@ -385,6 +450,7 @@ describe("Ruby partial-semantic graph extraction", () => {
           })
         ])
       );
+      expect(activeAccountsModelDsl).toBeUndefined();
     } finally {
       fixture.store.close();
     }

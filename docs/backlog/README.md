@@ -394,8 +394,13 @@ or runtime telemetry.
   follow-up dogfood repair aligned public Ruby capability reporting, enforced
   explicit Docker-only repository guidance, made the sweep exercise Ruby, and
   added bounded hash-rocket, namespace, resource-controller and association
-  navigation. EB010 remains the single owner for deeper Ruby constant lookup,
-  dynamic dispatch, metaprogramming, refinements, autoloading and Rails
+  navigation. A second Rails-starter pass aligned overview hints with that
+  Docker policy and added bounded `root` route plus literal `through:`/`source:`
+  association navigation. Spec 049 adds canonical singleton identity, separate
+  Rails controller-module/path scopes, static resource/custom-action/draw links,
+  HABTM and ambiguity-gated polymorphic/source-type associations. EB010 remains
+  the single owner for deeper Ruby constant lookup, dynamic dispatch,
+  metaprogramming, refinements, autoload execution and Rails
   engine/runtime semantics.
 
 ### EB011: Contextual Tool Exposure And Dynamic Router

@@ -27,7 +27,7 @@ export class RubyTreeSitterExtractorAdapter implements ExtractorPort {
 
   public async extract(input: ExtractionRequest): Promise<ExtractionBatch> {
     const extractedAt = new Date(0).toISOString();
-    const extracted = this.parser.extractRuby(input.content);
+    const extracted = this.parser.extractRuby(input.content, input.path);
     const moduleNode = moduleGraphNode(input);
     const nodes = [moduleNode, ...extracted.declarations.map((declaration) => toNode(input, declaration))];
     const nodeByQualifiedName = new Map(nodes.map((node) => [node.qualified_name ?? node.name, node]));

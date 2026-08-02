@@ -495,7 +495,11 @@ async function callResource(input: {
     return buildRepoScopeEnvelope(await getRepoScope({ repo_root: input.repoRoot, scanner: input.runtime.scanner }));
   }
   if (input.resourceName === "overview") {
-    return buildRepoOverviewEnvelope(await getRepoOverview({ repo_root: input.repoRoot, scanner: input.runtime.scanner }));
+    return buildRepoOverviewEnvelope(await getRepoOverview({
+      repo_root: input.repoRoot,
+      scanner: input.runtime.scanner,
+      workspace: input.runtime.workspace
+    }));
   }
   if (input.resourceName === "docs-overview") {
     return buildDocsOverviewEnvelope(await getDocsOverview({

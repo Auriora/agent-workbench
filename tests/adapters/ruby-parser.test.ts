@@ -50,8 +50,16 @@ namespace :admin do
   get "/widgets/:id" => "widgets#show"
 end
 get "/admin/widgets/:id" => "admin/widgets#show"
+root "home#index"
+root to: "landing#index"
+root dynamic_root_target
+namespace :admin do
+  root "dashboard#index"
+end
 resource :session
     belongs_to :account
+    has_many :active_accounts, -> { active }, through: :active_memberships, source: :account
+    has_many :published_paragraphs, through: :articles, source: :paragraphs
     has_many :orders, class_name: "Checkout"
     has_many :line_items, class_name: "::Commerce::Billing::Checkout"
     `
@@ -91,6 +99,49 @@ resource :session
           reference_kind: "ruby_extend",
           reference_name: "ActiveSupport.Concern",
           candidate_metadata: expect.objectContaining({ mixin_name: "extend" })
+        }),
+        expect.objectContaining({
+          reference_kind: "ruby_route",
+          reference_name: "HomeController#index",
+          candidate_metadata: expect.objectContaining({
+            route_form: "root",
+            route_namespace: "",
+            route_controller: "home",
+            route_action: "index",
+            controller_action_candidate: true
+          })
+        }),
+        expect.objectContaining({
+          reference_kind: "ruby_route",
+          reference_name: "LandingController#index",
+          candidate_metadata: expect.objectContaining({
+            route_form: "root",
+            route_namespace: "",
+            route_controller: "landing",
+            route_action: "index",
+            controller_action_candidate: true
+          })
+        }),
+        expect.objectContaining({
+          reference_kind: "ruby_route",
+          reference_name: "Admin.DashboardController#index",
+          candidate_metadata: expect.objectContaining({
+            route_form: "root",
+            route_namespace: "admin",
+            route_controller: "admin/dashboard",
+            route_action: "index",
+            controller_action_candidate: true
+          })
+        }),
+        expect.objectContaining({
+          reference_kind: "ruby_dynamic",
+          reference_name: "root",
+          candidate_metadata: expect.objectContaining({
+            route_form: "root",
+            reason: "non_literal_route_target",
+            route_path: "/",
+            static: false
+          })
         }),
         expect.objectContaining({
           reference_kind: "ruby_route",
@@ -152,6 +203,24 @@ resource :session
           })
         }),
         expect.objectContaining({
+          reference_kind: "ruby_model_dsl",
+          reference_name: "active_accounts",
+          candidate_metadata: expect.objectContaining({
+            model_form: "has_many",
+            model_through: "active_memberships",
+            model_source: "account"
+          })
+        }),
+        expect.objectContaining({
+          reference_kind: "ruby_model_dsl",
+          reference_name: "published_paragraphs",
+          candidate_metadata: expect.objectContaining({
+            model_form: "has_many",
+            model_through: "articles",
+            model_source: "paragraphs"
+          })
+        }),
+        expect.objectContaining({
           reference_kind: "ruby_call",
           reference_name: "render",
           candidate_metadata: expect.objectContaining({ call_form: "generic" })
@@ -207,6 +276,301 @@ end
         })
       })
     );
+  });
+
+  it("preserves singleton_class declaration identity while canonicalizing singleton methods to owner", () => {
+    const result = extractRuby(`
+class Widget
+  class << self
+    def helper
+    end
+  end
+  def self.api_version
+  end
+end
+`);
+    expect(result.declarations).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "singleton_class",
+        name: "<<self>>",
+        qualifiedName: "Widget.<<self>>"
+      }),
+      expect.objectContaining({
+        kind: "singleton_method",
+        name: "helper",
+        qualifiedName: "Widget.helper"
+      }),
+      expect.objectContaining({
+        kind: "singleton_method",
+        name: "api_version",
+        qualifiedName: "Widget.api_version"
+      })
+    ]));
+  });
+
+  it("tracks scoped route options, custom action inference, and draw file targets", () => {
+    const references = extractRuby(`
+resources :projects, module: :admin, path: "project_items", controller: "projects_admin" do
+  member do
+    get :preview
+  end
+  collection do
+    get :search
+  end
+  get :archive, on: :member
+end
+get "/explicit", controller: "admin/widgets", action: "show"
+scope "/portal" do
+  get "/status" => "health#status"
+end
+namespace :api do
+  resources :projects, path: "/api_projects"
+end
+scope module: :admin do
+  resources :widgets
+end
+draw :admin
+`, "config/routes.rb");
+
+    const routeRefs = references.references.filter((reference) => reference.kind === "ruby_route");
+    expect(routeRefs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        name: "project_items",
+        metadata: expect.objectContaining({
+          route_form: "resources",
+          route_namespace: "admin",
+          route_path_prefix: "",
+          controller_candidate: "Admin.ProjectsAdminController"
+        })
+      }),
+      expect.objectContaining({
+        name: "Admin.ProjectsAdminController#preview",
+        metadata: expect.objectContaining({
+          route_form: "get",
+          route_namespace: "admin",
+          route_path_prefix: "project_items",
+          route_controller: "admin/projects_admin",
+          route_action: "preview",
+          route_action_scope: "member",
+          controller_action_candidate: true
+        })
+      }),
+      expect.objectContaining({
+        name: "Admin.ProjectsAdminController#search",
+        metadata: expect.objectContaining({
+          route_form: "get",
+          route_namespace: "admin",
+          route_path_prefix: "project_items",
+          route_controller: "admin/projects_admin",
+          route_action: "search",
+          route_action_scope: "collection",
+          controller_action_candidate: true
+        })
+      }),
+      expect.objectContaining({
+        name: "Admin.ProjectsAdminController#archive",
+        metadata: expect.objectContaining({
+          route_form: "get",
+          route_namespace: "admin",
+          route_path_prefix: "project_items",
+          route_controller: "admin/projects_admin",
+          route_action: "archive",
+          route_action_scope: "member",
+          controller_action_candidate: true
+        })
+      }),
+      expect.objectContaining({
+        name: "Admin.WidgetsController#show",
+        metadata: expect.objectContaining({
+          route_form: "get",
+          route_namespace: "",
+          route_controller: "admin/widgets",
+          route_action: "show",
+          controller_action_candidate: true
+        })
+      }),
+      expect.objectContaining({
+        name: "HealthController#status",
+        metadata: expect.objectContaining({
+          route_form: "get",
+          route_namespace: "",
+          route_path_prefix: "portal",
+          route_controller: "health",
+          route_action: "status",
+          controller_action_candidate: true
+        })
+      }),
+      expect.objectContaining({
+        name: "api_projects",
+        metadata: expect.objectContaining({
+          route_form: "resources",
+          route_namespace: "api",
+          route_path_prefix: "api",
+          controller_candidate: "Api.ProjectsController"
+        })
+      }),
+      expect.objectContaining({
+        name: "admin",
+        metadata: expect.objectContaining({
+          route_form: "draw",
+          route_namespace: "",
+          route_path_prefix: "",
+          route_file_candidate: "config/routes/admin.rb"
+        })
+      }),
+      expect.objectContaining({
+        name: "widgets",
+        metadata: expect.objectContaining({
+          route_form: "resources",
+          route_namespace: "admin",
+          route_path_prefix: "",
+          controller_candidate: "Admin.WidgetsController"
+        })
+      })
+    ]));
+
+    const dynamicOptionRefs = extractRuby(
+      `get "/dynamic", controller: dynamic_controller, action: "show"`,
+      "config/routes.rb"
+    ).references;
+    expect(dynamicOptionRefs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "ruby_dynamic",
+        name: "get",
+        metadata: expect.objectContaining({
+          static: false,
+          reason: "non_literal_route_target"
+        })
+      })
+    ]));
+  });
+
+  it("captures conservative load/autoload, alias, and visibility metadata", () => {
+    const references = extractRuby(`
+alias public_name full_name
+private
+private :secret_method, :other_method
+load "app/bootstrap.rb"
+autoload :Loader, "app/loader"
+autoload_relative :LoaderRelative, "app/loader_relative"
+`);
+
+    const visibilityRefs = references.references.filter((reference) => reference.kind === "ruby_visibility");
+    const aliasRefs = references.references.filter((reference) => reference.kind === "ruby_alias");
+    const loadRefs = references.references.filter((reference) => reference.kind === "ruby_load");
+
+    expect(visibilityRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "private",
+          metadata: expect.objectContaining({
+            visibility: "private",
+            visibility_targets: []
+          })
+        }),
+        expect.objectContaining({
+          name: "private",
+          metadata: expect.objectContaining({
+            visibility: "private",
+            visibility_targets: ["secret_method", "other_method"]
+          })
+        })
+      ])
+    );
+
+    expect(aliasRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "full_name",
+          metadata: expect.objectContaining({
+            alias_from: "public_name",
+            alias_to: "full_name"
+          })
+        })
+      ])
+    );
+
+    expect(loadRefs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "app/bootstrap.rb",
+          metadata: expect.objectContaining({
+            load_form: "load",
+            load_target: "app/bootstrap.rb"
+          })
+        }),
+        expect.objectContaining({
+          name: "app/loader",
+          metadata: expect.objectContaining({
+            load_form: "autoload",
+            load_target: "app/loader",
+            load_symbol: "Loader"
+          })
+        }),
+        expect.objectContaining({
+          name: "app/loader_relative",
+          metadata: expect.objectContaining({
+            load_form: "autoload_relative",
+            load_target: "app/loader_relative",
+            load_symbol: "LoaderRelative"
+          })
+        })
+      ])
+    );
+
+    const dynamicLoadRefs = extractRuby(`load dynamic_path`).references;
+    expect(dynamicLoadRefs).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "ruby_dynamic",
+        name: "load",
+        metadata: expect.objectContaining({
+          static: false,
+          reason: "non_literal_load_target"
+        })
+      })
+    ]));
+  });
+
+  it("captures advisory model metadata for source_type and polymorphic associations", () => {
+    const references = extractRuby(`
+has_many :editions, through: :shelves, source: :format, source_type: "Paperback"
+belongs_to :imageable, polymorphic: true
+`, "app/models/publication.rb").references.filter((reference) => reference.kind === "ruby_model_dsl");
+
+    expect(references).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: "editions",
+          metadata: expect.objectContaining({
+            model_form: "has_many",
+            model_source_type: "Paperback",
+            model_through: "shelves",
+            model_source: "format"
+          })
+        }),
+        expect.objectContaining({
+          name: "imageable",
+          metadata: expect.objectContaining({
+            model_form: "belongs_to",
+            model_polymorphic: true
+          })
+        })
+      ])
+    );
+
+    const dynamicSourceType = extractRuby(
+      `has_many :editions, through: :shelves, source: :format, source_type: dynamic_type`
+    ).references;
+    expect(dynamicSourceType).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: "ruby_dynamic",
+        name: "has_many",
+        metadata: expect.objectContaining({
+          static: false,
+          reason: "non_literal_model_dsl_argument"
+        })
+      })
+    ]));
   });
 
   it("keeps constant assignments as declarations", () => {

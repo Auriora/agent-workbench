@@ -15,6 +15,7 @@ import type { FileCatalogEntry } from "../../domain/models/index.js";
 import type {
   FileCatalogScanPort,
   FileCatalogSkippedPath,
+  WorkspaceFilePort,
   SnapshotPort,
   WarmupCoordinatorPort
 } from "../../ports/index.js";
@@ -32,6 +33,12 @@ import {
   mcpTransportLabels
 } from "./mcp-server-shape.js";
 import { detectRailsProjectShape } from "./rails-project-shape.js";
+import {
+  discoverValidationProtocol,
+  hostCommandBlockedReason,
+  hostCommandsBlocked,
+  policyCommandsCoverHostSuppression
+} from "./validation-environment.js";
 
 export type GetRepoOverviewResult = {
   overview: RepoOverview;
@@ -41,6 +48,7 @@ export type GetRepoOverviewResult = {
 export async function getRepoOverview(input: {
   repo_root: string;
   scanner: FileCatalogScanPort;
+  workspace?: WorkspaceFilePort;
   snapshots?: SnapshotPort;
   warmups?: WarmupCoordinatorPort;
 }): Promise<GetRepoOverviewResult> {
@@ -60,6 +68,7 @@ export async function getRepoOverview(input: {
     files: overviewFiles,
     scan_truncated: scanned.truncated
   });
+  const validationProtocol = await discoverValidationProtocolForRepo(input.workspace);
   const status = getCatalogRepoStatus({
     repo_root: scanned.repo_root,
     indexed_roots: scanned.indexed_roots,
@@ -78,7 +87,7 @@ export async function getRepoOverview(input: {
       platforms: detectPlatforms(overviewFiles, railsShape),
       key_files: selectKeyFiles(overviewFiles, railsShape),
       key_docs: selectKeyDocs(overviewFiles),
-      validation_hints: inferValidationHints(overviewFiles, railsShape),
+      validation_hints: await inferValidationHints(overviewFiles, railsShape, validationProtocol),
       skipped_paths: mapSkippedPaths(scanned.skipped_paths ?? []),
       recommended_first_calls: [
         { tool: "read_resource", args: { uri: "repo:///status" } },
@@ -194,7 +203,13 @@ function isEmbeddedFixturePath(filePath: string): boolean {
 
 function inferValidationHints(
   files: readonly FileCatalogEntry[],
-  railsShape: ReturnType<typeof detectRailsProjectShape>
+  railsShape: ReturnType<typeof detectRailsProjectShape>,
+  validationProtocol?: {
+    hasHostCommandsBlocked: boolean;
+    policySuppressesHostCommands: boolean;
+    discoveryErrors: readonly string[];
+    hostCommandReason?: string;
+  }
 ): ValidationHint[] {
   const paths = new Set(files.map((file) => file.path));
   const hints: ValidationHint[] = [];
@@ -213,6 +228,9 @@ function inferValidationHints(
   const dotnetSolution = firstDotnetSolution(paths);
   const dotnetTestProject = firstDotnetTestProject(paths);
   const samTemplate = firstSamTemplate(paths);
+  const validationEnvironmentBlocksGenericHints =
+    (validationProtocol?.discoveryErrors.length ?? 0) > 0 ||
+    (validationProtocol?.hasHostCommandsBlocked === true && validationProtocol.policySuppressesHostCommands === false);
 
   if (samTemplate !== undefined) {
     hints.push({
@@ -275,29 +293,60 @@ function inferValidationHints(
     });
   }
   if (hasDockerComposeEvidence(paths)) {
-    hints.push({
-      command: "manual_review compose-validation-environment",
-      reason: "Docker Compose configuration indicates container workflow evidence; explicit repo guidance or policy is still required before suppressing host commands.",
-      status: "needed"
-    });
+    if (validationEnvironmentBlocksGenericHints) {
+      hints.push({
+        command: "manual_review validation-environment",
+        reason: validationProtocol?.hostCommandReason ??
+          `Validation environment discovery is incomplete: ${validationProtocol?.discoveryErrors[0] ?? "unknown error"}.`,
+        status: "needed"
+      });
+    } else {
+      hints.push({
+        command: "manual_review compose-validation-environment",
+        reason: "Docker Compose configuration indicates container workflow evidence; explicit repo guidance or policy is still required before suppressing host commands.",
+        status: "needed"
+      });
+    }
   }
   if (hasJsTsShape && !(hasCmake && hasCpp) && !hasGo) {
     const packageEvidence = jsTsShape.package_manifests[0] ?? "package.json";
-    hints.push({
-      command: "verification_plan",
-      reason: `${packageEvidence} and JS/TS project-shape evidence indicate package-local validation should be planned without executing package managers.`,
-      status: "needed"
-    });
-    hints.push({
-      command: "pnpm typecheck",
-      reason: "TypeScript configuration or package scripts indicate a non-executed typecheck candidate; confirm repo policy and package manager before running.",
-      status: "needed"
-    });
-    hints.push({
-      command: "pnpm test",
-      reason: "Package/test-root evidence indicates a non-executed JavaScript/TypeScript test candidate; confirm repo policy and package manager before running.",
-      status: "needed"
-    });
+    for (const error of validationProtocol?.discoveryErrors ?? []) {
+      hints.push({
+        command: "manual_review validation-environment",
+        reason: `Validation environment discovery failed: ${error}. Re-check AGENTS and project validation policy before running host commands.`,
+        status: "needed"
+      });
+    }
+    if (validationEnvironmentBlocksGenericHints) {
+      if (validationProtocol?.hostCommandReason !== undefined && !hasDockerComposeEvidence(paths)) {
+        hints.push({
+          command: "manual_review validation-environment",
+          reason: validationProtocol.hostCommandReason,
+          status: "needed"
+        });
+      }
+      hints.push({
+        command: "verification_plan",
+        reason: `${packageEvidence} and JS/TS project-shape evidence require validation planning before execution because the validation environment is constrained or incomplete.`,
+        status: "needed"
+      });
+    } else {
+      hints.push({
+        command: "verification_plan",
+        reason: `${packageEvidence} and JS/TS project-shape evidence indicate package-local validation should be planned without executing package managers.`,
+        status: "needed"
+      });
+      hints.push({
+        command: "pnpm typecheck",
+        reason: "TypeScript configuration or package scripts indicate a non-executed typecheck candidate; confirm repo policy and package manager before running.",
+        status: "needed"
+      });
+      hints.push({
+        command: "pnpm test",
+        reason: "Package/test-root evidence indicates a non-executed JavaScript/TypeScript test candidate; confirm repo policy and package manager before running.",
+        status: "needed"
+      });
+    }
   }
   if (paths.has("pyproject.toml")) {
     hints.push({ command: "python3 -m pytest", reason: "pyproject.toml indicates Python tests may be available.", status: "needed" });
@@ -327,6 +376,42 @@ function inferValidationHints(
     });
   }
   return hints;
+}
+
+async function discoverValidationProtocolForRepo(
+  workspace?: WorkspaceFilePort
+): Promise<{
+  hasHostCommandsBlocked: boolean;
+  policySuppressesHostCommands: boolean;
+  discoveryErrors: readonly string[];
+  hostCommandReason?: string;
+}> {
+  if (workspace === undefined) {
+    return {
+      hasHostCommandsBlocked: false,
+      policySuppressesHostCommands: false,
+      discoveryErrors: []
+    };
+  }
+  try {
+    const protocol = await discoverValidationProtocol(workspace);
+    return {
+      hasHostCommandsBlocked: hostCommandsBlocked(protocol),
+      policySuppressesHostCommands: policyCommandsCoverHostSuppression(protocol),
+      hostCommandReason: hostCommandsBlocked(protocol)
+        ? hostCommandBlockedReason(protocol, "repository")
+        : undefined,
+      discoveryErrors: protocol.errors
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : `Unknown discovery error: ${String(error)}`;
+    return {
+      hasHostCommandsBlocked: false,
+      policySuppressesHostCommands: false,
+      hostCommandReason: undefined,
+      discoveryErrors: [message]
+    };
+  }
 }
 
 function detectPlatforms(

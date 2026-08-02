@@ -984,6 +984,15 @@ function candidatePoolForReference(input: {
   });
 
   if (referenceKind === "ruby_route") {
+    if (metadata.route_form === "draw" && typeof metadata.route_file_candidate === "string") {
+      const routeFileCandidate = metadata.route_file_candidate.toLowerCase();
+      return input.allNodes.filter((candidate) =>
+        candidate.language === "ruby" &&
+        candidate.kind === "module" &&
+        candidate.metadata.parser_version === "tree-sitter-ruby" &&
+        candidate.file_path.toLowerCase() === routeFileCandidate
+      );
+    }
     const namespacedControllerCandidates = controllerClassCandidatesForRouteReference(metadata, input.allNodes);
     const actionCandidates = routeActionCandidatesForReference(input.reference, input.allNodes);
     return uniqueById([...namespacedControllerCandidates, ...actionCandidates]);
@@ -991,7 +1000,8 @@ function candidatePoolForReference(input: {
 
   if (referenceKind === "ruby_model_dsl") {
     const modelForm = metadata.model_form;
-    if (modelForm !== "belongs_to" && modelForm !== "has_many" && modelForm !== "has_one") {
+    if (modelForm !== "belongs_to" && modelForm !== "has_many" && modelForm !== "has_one" &&
+      modelForm !== "has_and_belongs_to_many") {
       return [];
     }
     const modelDsnCandidates = modelDslClassCandidates(input.reference, input.allNodes);
@@ -1007,19 +1017,53 @@ function modelDslClassCandidates(
 ): GraphNodeWriteModel[] {
   if (reference.candidate_metadata.model_form !== "has_many" &&
     reference.candidate_metadata.model_form !== "has_one" &&
-    reference.candidate_metadata.model_form !== "belongs_to") {
+    reference.candidate_metadata.model_form !== "belongs_to" &&
+    reference.candidate_metadata.model_form !== "has_and_belongs_to_many") {
     return [];
   }
 
   const explicitClassName = typeof reference.candidate_metadata.class_name === "string"
     ? reference.candidate_metadata.class_name
     : undefined;
-  const candidateClassNames = explicitClassName === undefined || explicitClassName.length === 0
-    ? inferModelClassNames(reference.candidate_metadata.model_form, reference.reference_name)
-    : [explicitClassName];
-  const normalizedCandidateNames = new Set(candidateClassNames.map((name) => name.toLowerCase()));
-  if (normalizedCandidateNames.size === 0) {
+  const explicitSourceName = typeof reference.candidate_metadata.model_source === "string"
+    ? reference.candidate_metadata.model_source
+    : undefined;
+  const explicitSourceType = typeof reference.candidate_metadata.model_source_type === "string"
+    ? reference.candidate_metadata.model_source_type
+    : undefined;
+  const throughName = typeof reference.candidate_metadata.model_through === "string"
+    ? reference.candidate_metadata.model_through
+    : undefined;
+  const polymorphic = reference.candidate_metadata.model_polymorphic === true;
+  if (polymorphic && explicitClassName === undefined && explicitSourceType === undefined) {
     return [];
+  }
+  const candidateClassNames = explicitClassName !== undefined && explicitClassName.length > 0
+    ? [explicitClassName]
+    : explicitSourceType !== undefined && explicitSourceType.length > 0
+      ? [explicitSourceType]
+      : explicitSourceName !== undefined && throughName !== undefined && throughName.length > 0
+        ? inferModelClassNames(reference.candidate_metadata.model_form, explicitSourceName)
+        : inferModelClassNames(reference.candidate_metadata.model_form, reference.reference_name);
+  return modelClassCandidatesForNames(allNodes, candidateClassNames);
+}
+
+function modelClassCandidatesForNames(
+  allNodes: readonly GraphNodeWriteModel[],
+  names: readonly string[]
+): GraphNodeWriteModel[] {
+  const normalizedExpectedNames = new Set<string>();
+  for (const name of names) {
+    const trimmed = name.trim();
+    if (trimmed.length === 0) {
+      continue;
+    }
+    const normalized = trimmed.toLowerCase();
+    normalizedExpectedNames.add(normalized);
+    if (!trimmed.includes(".") && !trimmed.includes("/") && !trimmed.includes("::")) {
+      const pascalized = toPascalCase(trimmed).toLowerCase();
+      normalizedExpectedNames.add(pascalized);
+    }
   }
 
   return allNodes.filter((candidate) => {
@@ -1028,14 +1072,17 @@ function modelDslClassCandidates(
     }
     const name = candidate.name.toLowerCase();
     const qualifiedName = candidate.qualified_name?.toLowerCase();
-    return Array.from(normalizedCandidateNames).some((expectedClassName) => {
-      return name === expectedClassName || (qualifiedName !== undefined && qualifiedName.endsWith(`.${expectedClassName}`));
+    return Array.from(normalizedExpectedNames).some((expectedName) => {
+      if (qualifiedName !== undefined && qualifiedName.endsWith(`.${expectedName}`)) {
+        return true;
+      }
+      return name === expectedName;
     });
   });
 }
 
 function inferModelClassNames(form: string, associationName: string): string[] {
-  const singularAssociationName = form === "has_many"
+  const singularAssociationName = form === "has_many" || form === "has_and_belongs_to_many"
     ? singularizeAssociationName(associationName)
     : associationName;
   const pascalized = toPascalCase(singularAssociationName);
@@ -1240,13 +1287,17 @@ function rubyCandidateKindMatches(
     if (referenceKind === "ruby_inheritance") {
       return candidate.kind === "class";
     }
-    return (modelForm === "belongs_to" || modelForm === "has_many" || modelForm === "has_one")
+    return (modelForm === "belongs_to" || modelForm === "has_many" || modelForm === "has_one" ||
+      modelForm === "has_and_belongs_to_many")
       && candidate.kind === "class";
   }
   if (referenceKind === "ruby_call") {
     return candidate.kind === "method" || candidate.kind === "singleton_method";
   }
   if (referenceKind === "ruby_route") {
+    if (reference.candidate_metadata.route_form === "draw") {
+      return candidate.kind === "module" && candidate.metadata.parser_version === "tree-sitter-ruby";
+    }
     if (reference.candidate_metadata.controller_action_candidate === true) {
       return candidate.kind === "method" || candidate.kind === "singleton_method";
     }

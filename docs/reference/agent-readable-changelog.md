@@ -39,6 +39,18 @@ Each version or dated entry should include:
 - Static hash-rocket routes, namespace-qualified controller targets, ordinary
   resource controllers and model associations can contribute conservative
   Ruby graph relationships when the first-party target is unambiguous.
+- Static Rails `root` controller/action targets and literal `through:` plus
+  `source:` associations now contribute the same bounded relationships.
+- Spec 049 canonicalizes `def self.x` and `class << self` methods as `Owner.x`,
+  separates controller-module scope from path-only route scope, and adds static
+  resource options, custom actions, `draw` route-file links, HABTM, explicit
+  `source_type`, and polymorphic ambiguity guards.
+- Literal Ruby load/autoload helpers, aliases, and visibility directives are
+  advisory parser evidence only; they do not prove runtime dispatch or constant
+  availability. Validation-environment blocking reasons now use a repository-
+  neutral command-family label.
+- Repository overview validation hints now honor the canonical Docker-only
+  guidance decision and suppress contradictory generic host/package commands.
 
 ### Contract Changes
 

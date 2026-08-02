@@ -802,6 +802,11 @@ Post-closure dogfood caveats from large mixed-language repositories:
   evidence. An explicit instruction to run project commands through Docker is
   blocking; advisory environment files or wording that host tooling is not
   required are not blocking by themselves.
+- Done: `repo:///overview` uses the same validation-environment discovery path
+  as detailed planning. Docker-only guidance suppresses generic host/package
+  command hints and routes the caller to `verification_plan`; advisory wording
+  alone leaves the generic hints available. Discovery failures are surfaced as
+  manual-review evidence and do not re-enable host command hints.
 - Done: skip common hidden runtime/test artifact directories such as `.home`,
   `.sandbox`, `.gocache`, hidden `*-tests` folders, build outputs, and generated
   caches before applying row caps.

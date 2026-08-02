@@ -301,6 +301,7 @@ export function createAgentWorkbenchServer(
       return getRepoOverview({
         repo_root,
         scanner,
+        workspace: workspaceForRepoRoot(repo_root),
         snapshots: store,
         warmups: warmupView
       });

@@ -162,21 +162,31 @@ The shared resolver admits only a unique first-party target of the compatible
 declaration kind; duplicate or reopened candidates remain ambiguous.
 
 The Rails DSL matrix adds static route calls (`get`, `post`, `put`, `patch`,
-`delete`, `match`, `resource`, and `resources`) plus model calls (`belongs_to`,
-`has_many`, `has_one`, `validates`, and `before_*`). Literal controller/action
-targets use either `to:` or hash-rocket syntax, and statically named namespace
-blocks qualify controller candidates. Resource-controller and association
-class candidates use bounded conventional inflection or an explicit literal
-`class_name:` and resolve only when first-party indexed declarations make the
-target unambiguous. These are navigation relationships, not proof of a booted
-route set, callback execution, association validity or runtime dispatch.
+`delete`, `match`, `root`, `resource`, `resources`, and `draw`) plus model calls
+(`belongs_to`, `has_many`, `has_one`, `has_and_belongs_to_many`, `validates`,
+and `before_*`). Literal controller/action targets use `to:`, hash-rocket, or
+separate `controller:` and `action:` options. Controller-module scope is kept
+separate from path-only scope; static resource `module:`, `controller:`, and
+`path:` options, plus `member`, `collection`, and `on:` custom actions, retain
+that distinction. Static `draw` targets can link the matching first-party route
+file. Association class candidates use one bounded precedence: an explicit
+literal `class_name:`, a literal `source_type:`, a literal `source:` on a
+literal `through:` association, or conventional inflection. Polymorphic
+associations without an explicit concrete type remain unresolved. All targets
+resolve only when first-party indexed declarations make them unambiguous.
+These are navigation relationships, not proof of a booted route set, callback
+execution, association validity or runtime dispatch.
 Nonliteral operands, irregular or ambiguous candidates, and other dynamic
 forms remain bounded unresolved records and are never sent through lexical,
 shell, Rails, AST, LSP or retry fallbacks. A parser failure rejects the complete
 file extraction batch instead of returning partial results. Whole-program
-constant lookup, metaprogramming, refinements, autoloading, engine composition
+constant lookup, metaprogramming, refinements, autoload execution, engine composition
 and type-aware dispatch remain under EB010; large-repository completion remains
 under EB014.
+
+Direct literal `load`, `autoload`, and `autoload_relative` calls, method aliases,
+and visibility directives are retained only as advisory parser records. They do
+not create dispatch, constant-availability, or callable-surface claims.
 
 The delivered TypeScript/JavaScript partial-semantic slice uses
 `tree-sitter-javascript` for JS/JSX and `tree-sitter-typescript` for TS/TSX.

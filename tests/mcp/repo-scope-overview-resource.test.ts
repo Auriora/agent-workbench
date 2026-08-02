@@ -13,6 +13,7 @@ import {
 } from "../../src/application/use-cases/get-repo-overview.js";
 import { getRepoScope, type GetRepoScopeResult } from "../../src/application/use-cases/get-repo-scope.js";
 import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/index.js";
+import { WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { repoOverviewResource } from "../../src/interface-adapters/mcp/registries/resources/repo-overview.js";
 import { repoScopeResource } from "../../src/interface-adapters/mcp/registries/resources/repo-scope.js";
 import { buildRepoOverviewEnvelope } from "../../src/presentation/repo-overview-presenter.js";
@@ -264,7 +265,8 @@ describe("repo overview MCP resource", () => {
 
       const result = await getRepoOverview({
         repo_root: repoRoot,
-        scanner: new FileCatalogScannerAdapter()
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot })
       });
 
       expect(result.overview.key_docs.map((doc) => doc.path).slice(0, 3)).toEqual([
@@ -312,7 +314,8 @@ describe("repo overview MCP resource", () => {
 
       const result = await getRepoOverview({
         repo_root: repoRoot,
-        scanner: new FileCatalogScannerAdapter()
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot })
       });
 
       expect(result.overview.platforms).toEqual(expect.arrayContaining(["devcontainer", "docker", "node"]));
@@ -323,6 +326,87 @@ describe("repo overview MCP resource", () => {
           })
         ])
       );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("suppresses generic package commands when Docker-only validation guidance is present", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-overview-docker-guidance-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "app", "models"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "test"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "config"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, "AGENTS.md"),
+        "# Repository Guidelines\n\nRun project commands through Docker. Host Ruby is not required."
+      );
+      fs.writeFileSync(path.join(repoRoot, "package.json"), JSON.stringify({ name: "fixture", scripts: { typecheck: "tsc --noEmit", test: "vitest run" } }));
+      fs.writeFileSync(path.join(repoRoot, "Gemfile"), "source 'https://rubygems.org'\n");
+      fs.writeFileSync(path.join(repoRoot, "app", "models", "widget.rb"), "class Widget; end\n");
+      fs.writeFileSync(path.join(repoRoot, "test", "widgets_test.rb"), "require 'test_helper'\n");
+      fs.writeFileSync(path.join(repoRoot, "config", "application.rb"), "class Application; end\n");
+
+      const result = await getRepoOverview({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot })
+      });
+
+      expect(result.overview.validation_hints).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ command: "manual_review validation-environment" }),
+          expect.objectContaining({ command: "verification_plan" })
+        ])
+      );
+      const commands = result.overview.validation_hints.map((hint) => hint.command);
+      expect(commands).not.toContain("pnpm typecheck");
+      expect(commands).not.toContain("pnpm test");
+      expect(commands).not.toContain("manual_review compose-validation-environment");
+      expect(result.overview.validation_hints.some((hint) => hint.reason.includes("explicit repo guidance or policy is still required"))).toBe(false);
+      expect(result.overview.validation_hints.some((hint) => hint.reason.includes("Repository guidance requires Docker-based validation"))).toBe(
+        true
+      );
+      const blockedReason = result.overview.validation_hints.find(
+        (hint) => hint.reason.includes("Repository guidance requires Docker-based validation")
+      )?.reason;
+      expect(blockedReason).toContain("generic host repository commands");
+      expect(blockedReason).not.toContain("JavaScript/TypeScript");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps generic package commands when AGENTS.md only contains a non-blocking Ruby advisory", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-overview-ruby-advisory-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "app", "models"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "test"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "config"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, "AGENTS.md"),
+        "# Repository Guidelines\n\nHost Ruby is not required."
+      );
+      fs.writeFileSync(path.join(repoRoot, "package.json"), JSON.stringify({ name: "fixture", scripts: { typecheck: "tsc --noEmit", test: "vitest run" } }));
+      fs.writeFileSync(path.join(repoRoot, "Gemfile"), "source 'https://rubygems.org'\n");
+      fs.writeFileSync(path.join(repoRoot, "app", "models", "widget.rb"), "class Widget; end\n");
+      fs.writeFileSync(path.join(repoRoot, "test", "widgets_test.rb"), "require 'test_helper'\n");
+      fs.writeFileSync(path.join(repoRoot, "config", "application.rb"), "class Application; end\n");
+
+      const result = await getRepoOverview({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot })
+      });
+
+      expect(result.overview.validation_hints).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ command: "verification_plan" }),
+          expect.objectContaining({ command: "pnpm typecheck" }),
+          expect.objectContaining({ command: "pnpm test" })
+        ])
+      );
+      expect(result.overview.validation_hints.some((hint) => hint.command === "manual_review validation-environment")).toBe(false);
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
