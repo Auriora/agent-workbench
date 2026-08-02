@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/051-large-repository-graph-completion/`
 - **Title:** Large-repository graph completion
 - **Final spec commit:** `933475c`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `f0fff20`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/backlog/README.md`
@@ -503,7 +503,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/050-rails-routing-concern-identity/`
 - **Title:** Rails routing concern identity
 - **Final spec commit:** `850ea98`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `f0fff20`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/language-adapter-design.md`
