@@ -226,6 +226,10 @@ or runtime telemetry.
     missing-tool constraints where evidence exists.
   - Distinguish planned, blocked, and executed validation.
   - Explain why each proposed command is relevant.
+  - Treat an explicitly requested policy-excluded path as excluded, not
+    missing, and retain its exact reason in actionable skipped-path evidence.
+  - Use a framework suite command for broad Rails requests with no selected
+    file instead of choosing an arbitrary lexical test path.
 - Validation:
   - Fixtures for host-allowed, Docker-required, missing-tool, package-manager,
     CMake, .NET, SAM, Go, Python, JavaScript, and docs-only repos.

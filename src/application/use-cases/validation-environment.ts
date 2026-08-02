@@ -22,6 +22,8 @@ export type ValidationProtocolDiscovery = {
   blocksHostCommands: boolean;
   prohibitsHostGoTest: boolean;
   policyCommands: PlannedValidationCommand[];
+  guidanceCommands: PlannedValidationCommand[];
+  guidanceCommandFamilies: ("repository" | "sam")[];
   environmentEvidence: ValidationEnvironmentEvidence[];
   evidencePaths: string[];
   errors: string[];
@@ -37,6 +39,7 @@ export async function discoverValidationProtocol(workspace: WorkspaceFilePort): 
   const evidencePaths: string[] = [];
   const errors: string[] = [];
   const policyCommands: PlannedValidationCommand[] = [];
+  const guidanceCandidates: Array<{ command: PlannedValidationCommand; family: "repository" | "sam" }> = [];
   const environmentEvidence = await discoverValidationEnvironmentEvidence(workspace);
   let requiresDockerValidation = false;
   let requiresDevcontainerValidation = false;
@@ -75,6 +78,9 @@ export async function discoverValidationProtocol(workspace: WorkspaceFilePort): 
       continue;
     }
     const lower = content.toLowerCase();
+    for (const discovered of guidanceValidationCommands(content, filePath)) {
+      guidanceCandidates.push(discovered);
+    }
     const runThroughDocker = /\brun\s+project\s+commands?\s+through\s+docker\b/u.test(lower);
     const dockerOnly =
       /\bdocker[- ]only\b/u.test(lower) ||
@@ -110,6 +116,8 @@ export async function discoverValidationProtocol(workspace: WorkspaceFilePort): 
     }
   }
 
+  const effectiveGuidance = uniqueGuidanceCommands(guidanceCandidates)
+    .filter((candidate) => blocksHostCommands || candidate.family === "sam");
   return {
     requiresDockerValidation,
     requiresDevcontainerValidation,
@@ -118,6 +126,8 @@ export async function discoverValidationProtocol(workspace: WorkspaceFilePort): 
     blocksHostCommands,
     prohibitsHostGoTest,
     policyCommands,
+    guidanceCommands: uniquePlannedCommands(effectiveGuidance.map((candidate) => candidate.command)),
+    guidanceCommandFamilies: [...new Set(effectiveGuidance.map((candidate) => candidate.family))].sort(),
     environmentEvidence,
     evidencePaths: uniqueSorted(evidencePaths),
     errors
@@ -132,8 +142,17 @@ export function isValidationEnvironmentReason(reason: string): boolean {
   return reason.startsWith("validation-environment: ");
 }
 
-export function policyCommandsCoverHostSuppression(protocol: ValidationProtocolDiscovery): boolean {
-  return hostCommandsBlocked(protocol) && protocol.policyCommands.length > 0;
+export function repoCommandsCoverHostSuppression(protocol: ValidationProtocolDiscovery): boolean {
+  return hostCommandsBlocked(protocol) && (
+    protocol.policyCommands.length > 0 || protocol.guidanceCommandFamilies.includes("repository")
+  );
+}
+
+export function guidanceCommandsCoverFamily(
+  protocol: ValidationProtocolDiscovery,
+  family: "sam"
+): boolean {
+  return protocol.guidanceCommandFamilies.includes(family);
 }
 
 export function hostCommandBlockedReason(protocol: ValidationProtocolDiscovery, family: string): string {
@@ -163,6 +182,90 @@ function validationGuidanceCandidates(): string[] {
     "docs/TESTING.md",
     "docs/developer/testing.md"
   ];
+}
+
+function guidanceValidationCommands(
+  content: string,
+  guidancePath: string
+): Array<{ command: PlannedValidationCommand; family: "repository" | "sam" }> {
+  const discovered: Array<{ command: PlannedValidationCommand; family: "repository" | "sam" }> = [];
+  for (const line of content.split(/\r?\n/u)) {
+    for (const match of line.matchAll(/`([^`\r\n]+)`/gu)) {
+      const candidate = match[1]?.trim();
+      if (candidate === undefined || candidate.length === 0) {
+        continue;
+      }
+      const before = line.slice(0, match.index ?? 0);
+      const clauseStart = Math.max(before.lastIndexOf("."), before.lastIndexOf(";"), before.lastIndexOf(":"));
+      const localPrefix = before.slice(clauseStart + 1).toLowerCase();
+      const suffix = line.slice((match.index ?? 0) + match[0].length).toLowerCase();
+      if (/\b(?:do not|don't|never|must not|should not|avoid)\b[^.\n]{0,100}$/u.test(localPrefix)) {
+        continue;
+      }
+      if (!/\b(?:run|use|prefer|primary|validate|validation|test|check|lint|before commit|includes?)\b/u.test(`${localPrefix} ${suffix}`)) {
+        continue;
+      }
+      const parts = candidate.split(/\s+/u);
+      if (
+        parts.length < 2 ||
+        parts.length > 20 ||
+        parts.some((part) => !/^[A-Za-z0-9_./:@%+=,-]+$/u.test(part)) ||
+        !parts.some(isValidationCommandToken)
+      ) {
+        continue;
+      }
+      const [command, ...args] = parts;
+      if (command === undefined) {
+        continue;
+      }
+      const decision = planCommand({ command, args, source: "configured" });
+      if (!decision.allowed) {
+        continue;
+      }
+      discovered.push({
+        family: parts.some((part) => part.toLowerCase() === "sam") ? "sam" : "repository",
+        command: {
+          command: decision.command.command,
+          args: decision.command.args,
+          display: [decision.command.command, ...decision.command.args].join(" "),
+          reason: `Explicit repo-local validation guidance. Guidance evidence: ${guidancePath}. This plans the command but does not authorize execution.`,
+          status: "planned",
+          execution: "not_executed"
+        }
+      });
+    }
+  }
+  return uniqueGuidanceCommands(discovered);
+}
+
+function isValidationCommandToken(value: string): boolean {
+  const lower = value.toLowerCase();
+  return /(?:pytest|ctest)/u.test(lower) ||
+    /(?:^|[-_:])(?:test|tests|spec|rspec|rubocop|lint|validate|validation|check|audit|typecheck)(?:$|[-_:])/u.test(lower);
+}
+
+function uniqueGuidanceCommands(
+  commands: Array<{ command: PlannedValidationCommand; family: "repository" | "sam" }>
+): Array<{ command: PlannedValidationCommand; family: "repository" | "sam" }> {
+  const byCommand = new Map<string, { command: PlannedValidationCommand; family: "repository" | "sam" }>();
+  for (const candidate of commands) {
+    const key = JSON.stringify([candidate.command.command, candidate.command.args]);
+    if (!byCommand.has(key)) {
+      byCommand.set(key, candidate);
+    }
+  }
+  return [...byCommand.values()];
+}
+
+function uniquePlannedCommands(commands: PlannedValidationCommand[]): PlannedValidationCommand[] {
+  const byCommand = new Map<string, PlannedValidationCommand>();
+  for (const command of commands) {
+    const key = JSON.stringify([command.command, command.args]);
+    if (!byCommand.has(key)) {
+      byCommand.set(key, command);
+    }
+  }
+  return [...byCommand.values()];
 }
 
 async function discoverValidationEnvironmentEvidence(workspace: WorkspaceFilePort): Promise<ValidationEnvironmentEvidence[]> {

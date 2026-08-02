@@ -37,7 +37,7 @@ import {
   discoverValidationProtocol,
   hostCommandBlockedReason,
   hostCommandsBlocked,
-  policyCommandsCoverHostSuppression
+  repoCommandsCoverHostSuppression
 } from "./validation-environment.js";
 
 export type GetRepoOverviewResult = {
@@ -397,7 +397,7 @@ async function discoverValidationProtocolForRepo(
     const protocol = await discoverValidationProtocol(workspace);
     return {
       hasHostCommandsBlocked: hostCommandsBlocked(protocol),
-      policySuppressesHostCommands: policyCommandsCoverHostSuppression(protocol),
+      policySuppressesHostCommands: repoCommandsCoverHostSuppression(protocol),
       hostCommandReason: hostCommandsBlocked(protocol)
         ? hostCommandBlockedReason(protocol, "repository")
         : undefined,

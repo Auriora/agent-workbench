@@ -18,7 +18,10 @@ import {
   selectPackageScripts,
   type PackageScriptEvidence
 } from "../../src/application/use-cases/validation-package-scripts.js";
-import { discoverValidationProtocol } from "../../src/application/use-cases/validation-environment.js";
+import {
+  discoverValidationProtocol,
+  repoCommandsCoverHostSuppression
+} from "../../src/application/use-cases/validation-environment.js";
 import { buildStaticFeedback } from "../../src/application/use-cases/validation-static-feedback.js";
 import { WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
 
@@ -124,6 +127,40 @@ describe("validation planner rule units", () => {
     ]);
   });
 
+  it("plans explicit validation-shaped guidance while rejecting build and prohibited host commands", async () => {
+    const workspace = new MemoryWorkspace({
+      "AGENTS.md": [
+        "Run project commands through Docker.",
+        "- `docker compose build web`: build the image.",
+        "- `docker compose run --rm test`: run the test suite.",
+        "Never run `bundle exec rspec` directly.",
+        "- `datalake stack sam validate`: validate the SAM templates."
+      ].join("\n")
+    });
+
+    const protocol = await discoverValidationProtocol(workspace);
+
+    expect(protocol.blocksHostCommands).toBe(true);
+    expect(protocol.guidanceCommands.map((command) => command.display)).toEqual([
+      "docker compose run --rm test",
+      "datalake stack sam validate"
+    ]);
+    expect(protocol.guidanceCommandFamilies).toEqual(["repository", "sam"]);
+    expect(protocol.guidanceCommands.every((command) => command.execution === "not_executed")).toBe(true);
+  });
+
+  it("does not treat a SAM-only guidance command as a repository-wide host replacement", async () => {
+    const protocol = await discoverValidationProtocol(new MemoryWorkspace({
+      "AGENTS.md": [
+        "Run project commands through Docker.",
+        "Use `datalake stack sam validate` to validate the SAM templates."
+      ].join("\n")
+    }));
+
+    expect(protocol.guidanceCommandFamilies).toEqual(["sam"]);
+    expect(repoCommandsCoverHostSuppression(protocol)).toBe(false);
+  });
+
   it("discovers the explicit Minitest policy from the Rails fixture", async () => {
     const repoRoot = path.resolve("tests/fixtures/fixture-rails-minitest-suite");
     const protocol = await discoverValidationProtocol(
@@ -188,6 +225,23 @@ describe("validation planner rule units", () => {
       root: ".",
       display: "bundle exec rspec spec/widget_spec.rb"
     });
+  });
+
+  it("uses suite-level Ruby commands when no files are selected", () => {
+    const candidates = discoverRubyValidationCommands({
+      files: [
+        catalogEntry("spec/models/widget_spec.rb", "ruby"),
+        catalogEntry("test/models/widget_test.rb", "ruby"),
+        catalogEntry("Gemfile", "ruby")
+      ],
+      selectedEntries: [],
+      railsRoots: ["."]
+    });
+
+    expect(candidates.map((candidate) => candidate.display)).toEqual([
+      "bundle exec rspec",
+      "bundle exec rails test"
+    ]);
   });
 
   it("prefers a matching Ruby test basename before lexical directory order", () => {

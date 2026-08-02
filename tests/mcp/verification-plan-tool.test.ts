@@ -123,6 +123,39 @@ describe("verification_plan use case", () => {
     expect(result.plan.static_feedback).toBeUndefined();
   });
 
+  it("plans the Rails test suite instead of an arbitrary test for a broad repository request", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-rails-broad-plan-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "config"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "test", "models"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, "Gemfile"), "source 'https://rubygems.org'\n");
+      fs.writeFileSync(path.join(repoRoot, "config", "application.rb"), "class Application; end\n");
+      fs.writeFileSync(path.join(repoRoot, "test", "models", "alpha_test.rb"), "require 'test_helper'\n");
+      fs.writeFileSync(path.join(repoRoot, "test", "models", "zebra_test.rb"), "require 'test_helper'\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: [],
+          changed_files: [],
+          include_static_feedback: false,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands.map((command) => command.display)).toContain("bundle exec rails test");
+      expect(result.plan.planned_commands.map((command) => command.display)).not.toContain(
+        "bundle exec ruby -I test test/models/alpha_test.rb"
+      );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("plans a nearest-targeted Rails Minitest command for nonstandard app roots", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-rails-nonstandard-plan-"));
     try {
@@ -205,6 +238,115 @@ describe("verification_plan use case", () => {
         ])
       );
       expect(result.plan.static_feedback).toBeUndefined();
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("plans an explicit Docker-first Rails validation command from repository guidance", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-rails-docker-command-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "app", "models"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "test", "models"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "config"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, "AGENTS.md"),
+        [
+          "# Repository Guidelines",
+          "",
+          "Run project commands through Docker. Host Ruby is not required.",
+          "Use `docker compose run --rm test` to run the test suite."
+        ].join("\n")
+      );
+      fs.writeFileSync(path.join(repoRoot, "Gemfile"), "source 'https://rubygems.org'\n");
+      fs.writeFileSync(path.join(repoRoot, "config", "application.rb"), "class Application; end\n");
+      fs.writeFileSync(path.join(repoRoot, "app", "models", "widget.rb"), "class Widget; end\n");
+      fs.writeFileSync(path.join(repoRoot, "test", "models", "widget_test.rb"), "require 'test_helper'\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["app/models/widget.rb"],
+          changed_files: ["app/models/widget.rb"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
+        "docker compose run --rm test"
+      ]);
+      expect(result.plan.planned_commands[0]?.reason).toContain("AGENTS.md");
+      expect(result.plan.risks).toEqual([]);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("prefers an explicit repository SAM wrapper over generic host SAM commands", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-sam-wrapper-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "infrastructure"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, "AGENTS.md"),
+        "Use `datalake stack sam validate` to validate SAM templates.\n"
+      );
+      fs.writeFileSync(path.join(repoRoot, "template.yaml"), "Resources: {}\n");
+      fs.writeFileSync(path.join(repoRoot, "pyproject.toml"), "[tool.pytest.ini_options]\ntestpaths = ['tests']\n");
+      fs.writeFileSync(path.join(repoRoot, "infrastructure", "handler.py"), "def handler(event, context): return {}\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["template.yaml"],
+          changed_files: ["template.yaml"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      const displays = result.plan.planned_commands.map((command) => command.display);
+      expect(result.plan.status).toBe("planned");
+      expect(displays).toContain("datalake stack sam validate");
+      expect(displays).not.toContain("sam validate --template-file template.yaml");
+      expect(displays.some((display) => display.startsWith("cfn-lint"))).toBe(false);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not let unrelated repository guidance suppress SAM template validation", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-sam-unrelated-guidance-"));
+    try {
+      fs.writeFileSync(
+        path.join(repoRoot, "AGENTS.md"),
+        "Use `docker compose run --rm test` to run integration tests.\n"
+      );
+      fs.writeFileSync(path.join(repoRoot, "template.yaml"), "Resources: {}\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["template.yaml"],
+          changed_files: ["template.yaml"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      const displays = result.plan.planned_commands.map((command) => command.display);
+      expect(displays).not.toContain("docker compose run --rm test");
+      expect(displays).toContain("sam validate --template-file template.yaml");
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
@@ -915,7 +1057,13 @@ describe("verification_plan use case", () => {
           indexed_roots: input.indexed_roots,
           skipped_roots: [...DEFAULT_SKIPPED_ROOTS].sort(),
           files: [],
-          skipped_path_population: { total_count: 0, groups: [] },
+          skipped_paths: [
+            { path: ".env", reason: "secret", detail: "Secret-bearing environment file is excluded." }
+          ],
+          skipped_path_population: {
+            total_count: 1,
+            groups: [{ reason: "secret", count: 1, sample_paths: [".env"], sample_truncated: false }]
+          },
           truncated: true
         };
       }
@@ -940,25 +1088,19 @@ describe("verification_plan use case", () => {
 
       expect(result.plan.status).toBe("blocked");
       expect(result.plan.planned_commands.map((command) => command.display)).toContain("planned docs/config syntax review");
-      expect(result.plan.static_feedback).toEqual(
-        expect.objectContaining({
-          status: "actionable",
-          findings: [
-            expect.objectContaining({
-              path: ".env",
-              severity: "warning"
-            })
-          ]
-        })
-      );
+      expect(result.plan.static_feedback).toBeUndefined();
+      expect(result.plan.skipped_path_summary).toMatchObject({
+        actionable_paths: [{ path: ".env", reason: "secret" }]
+      });
       expect(result.plan.risks).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
             severity: "blocker",
-            message: "Some requested validation files were not found in the scanned repository."
+            message: "Some requested validation files were excluded by workspace policy."
           })
         ])
       );
+      expect(result.plan.risks.map((risk) => risk.message).join(" ")).not.toContain("not found");
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
@@ -987,6 +1129,16 @@ describe("verification_plan use case", () => {
         total_count: 1,
         actionable_paths: [{ path: ".env", reason: "secret" }]
       });
+      expect(result.plan.status).toBe("blocked");
+      expect(result.plan.risks).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            severity: "blocker",
+            message: "Some requested validation files were excluded by workspace policy."
+          })
+        ])
+      );
+      expect(result.plan.risks.map((risk) => risk.message).join(" ")).not.toContain("not found");
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }

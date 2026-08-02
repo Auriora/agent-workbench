@@ -47,10 +47,11 @@ import {
 } from "./validation-ecosystems.js";
 import {
   discoverValidationProtocol,
+  guidanceCommandsCoverFamily,
   hostCommandBlockedReason,
   hostCommandsBlocked,
   isValidationEnvironmentReason,
-  policyCommandsCoverHostSuppression,
+  repoCommandsCoverHostSuppression,
   type ValidationProtocolDiscovery
 } from "./validation-environment.js";
 import { planCommand } from "../../domain/policies/command-safety.js";
@@ -120,17 +121,23 @@ export async function planVerification(input: {
     maxCommands: input.request.max_commands
   });
   const commands = commandPlan.commands;
+  const requestedExclusions = (scanned.skipped_paths ?? []).filter((skipped) => selectedPaths.includes(skipped.path));
+  const excludedPathSet = new Set(requestedExclusions.map((skipped) => skipped.path));
   const staticFeedback =
     input.request.include_static_feedback && input.request.changed_files.length > 0
-      ? buildStaticFeedback(input.request.changed_files, files)
+      ? buildStaticFeedback(
+          input.request.changed_files.filter((filePath) => !excludedPathSet.has(normalizeRepoPath(filePath))),
+          files
+        )
       : undefined;
   const missingPaths = selectedPaths.filter((filePath) =>
-    files.every((entry) => entry.path !== filePath)
+    !excludedPathSet.has(filePath) && files.every((entry) => entry.path !== filePath)
   );
   const tooBroad = selectedPaths.length > 50;
   const lowConfidence = scanned.truncated || commandPlan.lowConfidenceReasons.length > 0;
   const blocked =
     unsafePaths.length > 0 ||
+    requestedExclusions.length > 0 ||
     missingPaths.length > 0 ||
     tooBroad ||
     discovery.discoveryErrors.length > 0 ||
@@ -152,6 +159,15 @@ export async function planVerification(input: {
             severity: "blocker" as const,
             message: "Some requested validation files were not found in the scanned repository.",
             why_this_matters: "The plan can only route validation from known local evidence."
+          }
+        ]
+      : []),
+    ...(requestedExclusions.length > 0
+      ? [
+          {
+            severity: "blocker" as const,
+            message: "Some requested validation files were excluded by workspace policy.",
+            why_this_matters: "Inspect skipped_path_summary.actionable_paths for the exact exclusion reason before changing validation scope."
           }
         ]
       : []),
@@ -485,7 +501,10 @@ function planValidationCommands(input: {
     includeAll
   });
 
-  commands.push(...input.discovery.validationProtocol.policyCommands);
+  commands.push(
+    ...input.discovery.validationProtocol.policyCommands,
+    ...input.discovery.validationProtocol.guidanceCommands
+  );
   if (!hostCommandsBlocked(input.discovery.validationProtocol)) {
     lowConfidenceReasons.push(
       ...input.discovery.validationProtocol.environmentEvidence.map(
@@ -496,7 +515,7 @@ function planValidationCommands(input: {
 
   if (goShapeSelected) {
     if (hostCommandsBlocked(input.discovery.validationProtocol) || input.discovery.validationProtocol.prohibitsHostGoTest) {
-      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+      if (repoCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
         blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "Go"));
       }
     } else {
@@ -528,7 +547,7 @@ function planValidationCommands(input: {
 
   if (cmakeShapeSelected) {
     if (hostCommandsBlocked(input.discovery.validationProtocol)) {
-      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+      if (repoCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
         blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "CMake"));
       }
     } else {
@@ -542,7 +561,7 @@ function planValidationCommands(input: {
 
   if (dotnetShapeSelected) {
     if (hostCommandsBlocked(input.discovery.validationProtocol)) {
-      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+      if (repoCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
         blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, ".NET"));
       }
     } else {
@@ -603,10 +622,10 @@ function planValidationCommands(input: {
 
   if (samShapeSelected) {
     if (hostCommandsBlocked(input.discovery.validationProtocol)) {
-      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+      if (repoCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
         blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "SAM/CloudFormation"));
       }
-    } else {
+    } else if (!guidanceCommandsCoverFamily(input.discovery.validationProtocol, "sam")) {
       for (const template of selectSamTemplates({
         templates: input.discovery.samTemplates,
         selectedEntries: input.selectedEntries,
@@ -644,7 +663,7 @@ function planValidationCommands(input: {
 
   if (mcpShapeSelected) {
     if (hostCommandsBlocked(input.discovery.validationProtocol)) {
-      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+      if (repoCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
         blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "MCP server"));
       }
     } else {
@@ -657,7 +676,7 @@ function planValidationCommands(input: {
 
   if (rubyShapeSelected) {
     if (hostCommandsBlocked(input.discovery.validationProtocol)) {
-      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+      if (repoCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
         blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "Ruby/Rails"));
       }
     } else {
@@ -696,7 +715,7 @@ function planValidationCommands(input: {
     (includeAll || hasAny(selectedLanguages, ["typescript", "javascript", "json"]))
   ) {
     if (hostCommandsBlocked(input.discovery.validationProtocol)) {
-      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+      if (repoCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
         blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "JavaScript/TypeScript"));
       }
     } else {
@@ -761,7 +780,7 @@ function planValidationCommands(input: {
     (includeAll || selectedLanguages.has("python") || input.selectedEntries.some((file) => file.path === "pyproject.toml"))
   ) {
     if (hostCommandsBlocked(input.discovery.validationProtocol)) {
-      if (policyCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
+      if (repoCommandsCoverHostSuppression(input.discovery.validationProtocol) === false) {
         blockerReasons.push(hostCommandBlockedReason(input.discovery.validationProtocol, "Python"));
       }
     } else {

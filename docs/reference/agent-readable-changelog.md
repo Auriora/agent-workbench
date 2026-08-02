@@ -26,6 +26,36 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
+## 2026-08-02: Repository-Guided Validation Repairs
+
+### Agent-Visible Changes
+
+- `verification_plan` now plans explicit validation-shaped commands from
+  governing repository guidance after command-safety checks. Docker-first Rails
+  and repository-wrapped SAM validation no longer fall through to blocked or
+  conflicting generic host plans when the required command is stated.
+- Requested secret or otherwise policy-excluded paths are reported as excluded
+  with actionable skip evidence, not as absent files.
+- Broad Rails requests use suite-level RSpec or Rails test commands instead of
+  selecting the lexically first test file.
+
+### Contract Changes
+
+- No schema change. Existing planned-command, risk, and skipped-path-summary
+  fields now carry more accurate evidence.
+
+### Required Agent Behavior Changes
+
+- Treat guidance-derived commands as plans only. Run them only under the
+  repository's normal authorization and safety boundaries.
+- Inspect `skipped_path_summary.actionable_paths` when a requested path is
+  excluded by workspace policy.
+
+### Migration Notes
+
+- Consumers should not depend on the earlier contradictory missing-file risk
+  or arbitrary single-test selection for broad Rails requests.
+
 ## 2026-08-02: Validation-Plan Skipped-Path Compaction
 
 ### Agent-Visible Changes

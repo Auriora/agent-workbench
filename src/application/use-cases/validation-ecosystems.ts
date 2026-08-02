@@ -175,7 +175,7 @@ function buildRubyFamilyCommands(input: {
           ? "bundle exec rspec"
           : `bundle exec rspec ${nearestTest}`,
         reason: nearestTest === undefined
-          ? `Roughly nearest RSpec evidence under ${root} indicates repository-backed validation.`
+          ? `RSpec evidence under ${root} indicates the RSpec suite is the repository-backed validation path.`
           : `Nearest selected RSpec evidence under ${root} is ${nearestTest}.`
       });
       continue;
@@ -201,13 +201,13 @@ function buildRubyFamilyCommands(input: {
         root,
         command: "bundle",
         args: nearestTest === undefined
-          ? ["exec", "ruby", "-I", testLoadPath(root)]
+          ? ["exec", "rails", "test"]
           : ["exec", "ruby", "-I", testLoadPath(root), nearestTest],
         display: nearestTest === undefined
-          ? `bundle exec ruby -I ${testLoadPath(root)}`
+          ? "bundle exec rails test"
           : `bundle exec ruby -I ${testLoadPath(root)} ${nearestTest}`,
         reason: nearestTest === undefined
-          ? `Nearest minitest evidence under ${root} indicates repository-backed validation.`
+          ? `Minitest evidence under ${root} indicates the Rails test suite is the repository-backed validation path.`
           : `Nearest selected minitest evidence under ${root} is ${nearestTest}.`
       });
     }
@@ -318,7 +318,7 @@ function nearestPathBySelection(candidates: readonly string[], selectedPaths: re
     return undefined;
   }
   if (selectedPaths.length === 0) {
-    return uniqueSorted(candidates)[0];
+    return undefined;
   }
   let nearest: string | undefined;
   let nearestNameAffinity = -1;

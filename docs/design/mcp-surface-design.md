@@ -417,8 +417,12 @@ such as `mcp:smoke`, `mcp:inspect`, `inspect:mcp`, `mcp:stdio`, and `mcp:http`,
 and may add a manual planned smoke review for initialize, tools/list, and a
 targeted call-tool check. It must record the transport, entrypoint, and
 tool-registry evidence used to form the plan. Host-blocked validation policy
-continues to take precedence, returning a blocked state instead of generic host
-commands when repository guidance requires containerized validation.
+continues to take precedence. When governing repository guidance contains an
+explicit inline validation command, the planner may admit that command through
+the same command-safety policy and report it as planned and not executed. It
+must otherwise return a blocked state instead of generic host commands when
+repository guidance requires containerized validation. Guidance never
+authorizes execution.
 
 `diagnostics_for_files` runs compact provider-backed diagnostics for explicit
 repo-relative files. It is read-only, bounded by file count and provider
@@ -890,6 +894,11 @@ Post-closure dogfood caveats from large mixed-language repositories:
   environment requirements across languages. This is the reliable path for
   Docker-only, Nix-only, devcontainer-only, Bazel-only, or other
   project-specific validation rules.
+- Done: recognize explicit validation-shaped inline commands in governing
+  repository guidance as untrusted plan evidence. Structured validation policy
+  remains the canonical source for environment constraints and command
+  templates; guidance commands are safety-checked, never executed, and suppress
+  a conflicting generic host-family plan only for the family they cover.
 - Done: make first-read resources reliable on large AWS/IaC repositories. If
   `repo:///status`, `repo:///scope`, `repo:///overview`, or
   `integration:///profiles/codex` can time out while direct tools remain fast,
