@@ -467,6 +467,36 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-02 - 049-ruby-rails-semantic-correctness-and-static-dsl-expansion
+
+- **Spec:** `docs/specs/049-ruby-rails-semantic-correctness-and-static-dsl-expansion/`
+- **Title:** Ruby/Rails semantic correctness and static DSL expansion
+- **Final spec commit:** `e82eb91`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/language-adapter-design.md`
+  - `docs/reference/language-capability-matrix.md`
+  - `docs/reference/agent-readable-changelog.md`
+  - `docs/reference/dogfood-evidence-ledger.md`
+  - `docs/backlog/README.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Typecheck, the focused 43-test parser/graph/overview
+  slice, the broader 138-test Ruby/Rails regression set, and the full 106-file / 1,173-test
+  suite passed. Fresh read-only sweeps of `vibey-app` and `ror-sandpit` found
+  zero Ruby indexing errors and left both target worktrees unchanged. Lifecycle
+  lint, task-state audit, evidence-quality review, closure readiness, low-risk
+  review, active-spec scan, archive-index validation, and diff hygiene passed.
+- **Residual risks:**
+  - Evidence remains bounded to parser-backed static Ruby/Rails forms; dynamic
+    dispatch, runtime route evaluation, engine composition, and configurable
+    inflection execution are not claimed.
+  - The two dogfood repositories do not prove universal Rails application or
+    framework-version coverage.
+- **Follow-up:** EB010 retains first-class route-concern identity and deeper or
+  runtime Ruby/Rails semantics.
+
 ### 2026-08-01 - 048-ruby-rails-partial-semantic
 
 - **Spec:** `docs/specs/048-ruby-rails-partial-semantic/`
