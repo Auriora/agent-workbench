@@ -467,6 +467,64 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-02 - 051-large-repository-graph-completion
+
+- **Spec:** `docs/specs/051-large-repository-graph-completion/`
+- **Title:** Large-repository graph completion
+- **Final spec commit:** `933475c`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/backlog/README.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/design/runtime-operations-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/requirements/runtime-requirements.md`
+  - `docs/reference/dogfood-evidence-ledger.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Typecheck, a 153-test focused continuation, scanner,
+  storage, runtime and Rails slice, and the full Vitest suite passed. Fresh
+  100-file-slice sweeps completed 265/265 and 194/194 files across two Rails
+  repositories with 47 full, 3 bounded partial, 4 intentional degraded, and
+  zero blocked or invalid surfaces. Lifecycle lint and closure checks passed
+  with zero findings or blockers.
+- **Residual risks:**
+  - Engine route and route-fragment priority is fixture-backed; the two real
+    repositories use canonical route files.
+  - Dynamic Rails runtime composition and richer glob syntax remain outside
+    this bounded static graph-completion slice.
+- **Follow-up:** EB010 retains deeper dynamic/runtime Ruby and Rails semantics;
+  no remaining EB014 hard-cap or continuation work is open.
+
+### 2026-08-02 - 050-rails-routing-concern-identity
+
+- **Spec:** `docs/specs/050-rails-routing-concern-identity/`
+- **Title:** Rails routing concern identity
+- **Final spec commit:** `850ea98`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/language-adapter-design.md`
+  - `docs/reference/language-capability-matrix.md`
+  - `docs/reference/agent-readable-changelog.md`
+  - `docs/reference/dogfood-evidence-ledger.md`
+  - `docs/backlog/README.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Typecheck, 54 focused parser/graph/context tests,
+  260 broader Ruby/Rails tests, the full 1,176-test suite, two read-only Rails
+  sweeps, implementation review, lifecycle lint, and closure checks passed.
+  The real repositories provide regression evidence; new routing-concern forms
+  remain fixture-backed because neither repository contains that syntax.
+- **Residual risks:**
+  - Callable, computed, option-dependent and runtime concern composition remain
+    outside the supported static subset.
+  - The two dogfood repositories do not prove universal Rails version or
+    application coverage.
+- **Follow-up:** EB010 retains dynamic and runtime Rails semantics.
+
 ### 2026-08-02 - 049-ruby-rails-semantic-correctness-and-static-dsl-expansion
 
 - **Spec:** `docs/specs/049-ruby-rails-semantic-correctness-and-static-dsl-expansion/`
