@@ -3,7 +3,7 @@ title: Agent Workbench backlog
 doc_type: backlog
 status: draft
 owner: platform
-last_reviewed: 2026-07-21
+last_reviewed: 2026-08-02
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -913,7 +913,7 @@ or runtime telemetry.
 ### EB024: Executed Validation Status Distinction
 
 - Priority: P0
-- Status: proposed spec
+- Status: evidence gate evaluated on 2026-08-02; migration spec not promoted
 - Friction signal: agents must never report planned validation as passed
   validation.
 - Runtime surface: runtime contracts, validation planning, diagnostics,
@@ -929,8 +929,21 @@ or runtime telemetry.
   - Contract tests for validation status enums.
   - Golden responses proving planned commands cannot be rendered as passed
     checks.
+- Evidence audit:
+  - Current public validation behavior is planning-only. Planned commands are
+    structurally `planned` and `not_executed`, and no registered public surface
+    opts into executed-validation trust.
+  - Blocked, invalid, and partial evidence remains unsafe for
+    passed-validation claims. Manual verification and mixed executed outcomes
+    are not represented by a current public producer, so this audit does not
+    claim that the existing vocabulary can model them.
+  - Executed-command trust remains a contract boundary exercised by fixtures,
+    not a claim that Workbench currently executes validation. A future public
+    producer of executed results must bring pass, failure, manual, and mixed
+    result fixtures; ambiguity in any of them promotes this item.
 - Promotion target: create a future validation-status migration spec only if
-  fixture evidence shows the current vocabulary is insufficient.
+  a real public executed-validation producer has fixture evidence that cannot
+  represent its outcomes without ambiguity in the current vocabulary.
 
 ### EB025: Proof Bundle Export
 

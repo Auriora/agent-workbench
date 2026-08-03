@@ -1,0 +1,63 @@
+{
+  "scenarios": [
+    {
+      "id": "planned_not_executed",
+      "verification_status": "planned",
+      "analysis_validity": "valid",
+      "evidence_kinds": ["config"],
+      "includes_executed_validation": false,
+      "expected_bounded_executed_claim": false,
+      "expected_passed_claim_unsafe": true,
+      "expected_requirement": "run_planned_validation"
+    },
+    {
+      "id": "blocked_execution",
+      "verification_status": "blocked",
+      "analysis_validity": "invalid_due_to_environment",
+      "evidence_kinds": ["config"],
+      "includes_executed_validation": false,
+      "expected_bounded_executed_claim": false,
+      "expected_passed_claim_unsafe": true,
+      "expected_requirement": "resolve_blocked_environment"
+    },
+    {
+      "id": "executed_evidence_boundary",
+      "verification_status": "done",
+      "analysis_validity": "valid",
+      "evidence_kinds": ["executed_command"],
+      "includes_executed_validation": true,
+      "expected_bounded_executed_claim": true,
+      "expected_passed_claim_unsafe": true
+    },
+    {
+      "id": "executed_failure",
+      "verification_status": "blocked",
+      "analysis_validity": "invalid",
+      "evidence_kinds": ["executed_command"],
+      "includes_executed_validation": true,
+      "expected_bounded_executed_claim": false,
+      "expected_passed_claim_unsafe": true,
+      "expected_requirement": "resolve_blocked_environment"
+    },
+    {
+      "id": "manual_follow_up_is_planned_only",
+      "verification_status": "planned",
+      "analysis_validity": "valid",
+      "evidence_kinds": ["config"],
+      "includes_executed_validation": false,
+      "expected_bounded_executed_claim": false,
+      "expected_passed_claim_unsafe": true,
+      "expected_requirement": "run_planned_validation"
+    },
+    {
+      "id": "partial_evidence_blocks_execution_claim",
+      "verification_status": "blocked",
+      "analysis_validity": "partial",
+      "evidence_kinds": ["executed_command"],
+      "includes_executed_validation": true,
+      "expected_bounded_executed_claim": false,
+      "expected_passed_claim_unsafe": true,
+      "expected_requirement": "resolve_blocked_environment"
+    }
+  ]
+}
