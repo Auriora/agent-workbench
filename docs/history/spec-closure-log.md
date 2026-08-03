@@ -520,6 +520,35 @@ historical audit explicitly needs the original scaffolding.
 - **Follow-up:** EB014, EB059, EB061, and other raw skipped-path surfaces retain
   their existing independent ownership.
 
+### 2026-08-03 - 054-shared-mcp-failure-message-redaction
+
+- **Spec:** `docs/specs/054-shared-mcp-failure-message-redaction/`
+- **Title:** Shared MCP failure-message redaction
+- **Final spec commit:** `dcde6ef`
+- **Closure cleanup commit:** `0e33eba`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/reference/runtime-contracts.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/reference/workspace-safety-contract.md`
+  - `docs/reference/mvp-proof-matrix.md`
+  - `docs/backlog/README.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** `pnpm typecheck`; the 11-file focused Spec 054
+  Vitest slice with 148 tests; the full 111-file / 1,241-test Vitest suite;
+  `pnpm validate:plugin`; `pnpm validate:skills`; `pnpm pack:dry-run`;
+  `git diff --check`; lifecycle lint; task-state audit; closure check; and
+  in-session security/privacy plus correctness/regression review of the changed
+  public seams all passed after the shared fallback guard was validated.
+- **Residual risks:**
+  - Secret, path, and private-key detection remain intentionally bounded to the
+    canonical presentation redaction vocabulary rather than arbitrary pattern
+    discovery.
+  - Future public MCP failure sinks must continue to route through the shared
+    sanitizer boundary documented in the durable design and contract docs.
+- **Follow-up:** none
+
 ### 2026-08-02 - 051-large-repository-graph-completion
 
 - **Spec:** `docs/specs/051-large-repository-graph-completion/`
