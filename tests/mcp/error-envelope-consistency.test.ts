@@ -259,6 +259,63 @@ describe("MCP error envelope consistency", () => {
       retryable: true
     });
   });
+
+  it("redacts hostile tool failures without changing typed recovery semantics", async () => {
+    const registered = registerMcpTool(applyWorkspaceEditTool, {
+      applyWorkspaceEdit: () => {
+        throw new Error(
+          "Preview is stale; retry after refresh. /home/example/preview.json ../outside TOKEN=abc123"
+        );
+      }
+    });
+
+    const parsed = parseMcpTextContent<ResponseEnvelope<unknown>>(
+      await registered.handler({
+        preview_token: "token-1",
+        edits: [{ path: "src/app.ts", replacement_text: "export {};\n" }]
+      })
+    );
+
+    expectError(parsed, {
+      code: "stale_state",
+      analysis_validity: "valid",
+      freshness: "stale",
+      verification_status: "blocked",
+      retryable: false
+    });
+    expect(parsed.errors[0]?.message).toContain("retry after refresh");
+    expect(parsed.errors[0]?.message).toContain("[REDACTED_ABSOLUTE_PATH]");
+    expect(parsed.errors[0]?.message).toContain("[REDACTED_WORKSPACE_ESCAPE]");
+    expect(JSON.stringify(parsed)).not.toContain("/home/example");
+    expect(JSON.stringify(parsed)).not.toContain("../outside");
+    expect(JSON.stringify(parsed)).not.toContain("abc123");
+  });
+
+  it("redacts hostile resource failures in every duplicated public field", async () => {
+    const registered = registerMcpResource(docsOverviewResource, {
+      getDocsOverview: () => {
+        throw new Error(
+          "Retry after rebuilding docs. /home/example/docs.db ../outside TOKEN=abc123"
+        );
+      }
+    });
+
+    const parsed = parseMcpResourceText<ResponseEnvelope<{ summary: string }>>(
+      await registered.handler({})
+    );
+
+    expectError(parsed, {
+      code: "provider_unavailable",
+      analysis_validity: "invalid_due_to_environment",
+      verification_status: "blocked",
+      retryable: true
+    });
+    expect(parsed.data.summary).toBe(parsed.errors[0]?.message);
+    expect(parsed.data.summary).toContain("Retry after rebuilding docs.");
+    expect(JSON.stringify(parsed)).not.toContain("/home/example");
+    expect(JSON.stringify(parsed)).not.toContain("../outside");
+    expect(JSON.stringify(parsed)).not.toContain("abc123");
+  });
 });
 
 function expectError(

@@ -56,7 +56,10 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
-import { redactPresentationText } from "./redaction.js";
+import {
+  redactPresentationText,
+  sanitizePublicMcpFailureMessage
+} from "./redaction.js";
 
 export function buildDocsOverviewEnvelope(
   result: DocsOverviewUseCaseResult,
@@ -239,11 +242,15 @@ export function buildDocsOverviewProviderFailureEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<DocsOverview> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Documentation overview is unavailable; inspect the error code and retry guidance."
+  );
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
       status: "blocked",
-      summary: input.message,
+      summary: message,
       important_docs: [],
       warnings: [],
       truncated: false,
@@ -254,7 +261,7 @@ export function buildDocsOverviewProviderFailureEnvelope(input: {
       analysis_validity: "invalid_due_to_environment"
     }),
     trust_policy: { surface_kind: "docs_routing" },
-    errors: [providerUnavailableError(input.message)]
+    errors: [providerUnavailableError(message)]
   });
 }
 
@@ -644,7 +651,10 @@ function sanitizeWarning(input: DocsWarning): DocsWarning {
   return docsWarningSchema.parse({
     path: input.path === undefined ? undefined : normalizeRepoPath(input.path),
     reason: input.reason,
-    message: redactPresentationText(input.message, { context: "message" })
+    message: sanitizePublicMcpFailureMessage(
+      input.message,
+      "Documentation evidence is incomplete; inspect the warning reason and next action."
+    )
   });
 }
 
@@ -685,7 +695,10 @@ function compareSearchHits(left: DocsSearchHit, right: DocsSearchHit): number {
 function invalidInputError(message: string) {
   return {
     code: "invalid_input",
-    message,
+    message: sanitizePublicMcpFailureMessage(
+      message,
+      "Documentation input was invalid; inspect the request and retry."
+    ),
     retryable: false
   };
 }
@@ -693,7 +706,10 @@ function invalidInputError(message: string) {
 function providerUnavailableError(message: string) {
   return {
     code: "provider_unavailable",
-    message,
+    message: sanitizePublicMcpFailureMessage(
+      message,
+      "Documentation evidence is unavailable; inspect the error code and retry guidance."
+    ),
     retryable: true
   };
 }

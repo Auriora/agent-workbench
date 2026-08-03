@@ -18,6 +18,10 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
+import {
+  sanitizePublicMcpFailureMessage,
+  sanitizePublicMcpRuntimeErrors
+} from "./redaction.js";
 
 export function buildDiagnosticsForFilesEnvelope(
   result: DiagnoseChangedFilesResult,
@@ -27,7 +31,10 @@ export function buildDiagnosticsForFilesEnvelope(
     data: sanitizeDiagnosticsResult(result.diagnostics, context),
     meta: responseMetadataSchema.strip().parse(result.meta),
     trust_policy: { surface_kind: result.errors?.length ? "generic_error" : "diagnostics_static" },
-    errors: result.errors
+    errors: sanitizePublicMcpRuntimeErrors(
+      result.errors,
+      "Diagnostics failed; inspect the error code and retry guidance."
+    )
   });
 }
 
@@ -35,6 +42,10 @@ export function buildInvalidDiagnosticsForFilesInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<DiagnosticsForFilesResult> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Diagnostics input was invalid; inspect the request and retry."
+  );
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
@@ -58,7 +69,7 @@ export function buildInvalidDiagnosticsForFilesInputEnvelope(input: {
     errors: [
       {
         code: "invalid_input",
-        message: input.message,
+        message,
         retryable: false,
         next_action: {
           tool: "verification_plan",

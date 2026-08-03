@@ -17,7 +17,11 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
-import { sanitizeSymbolReference } from "./redaction.js";
+import {
+  sanitizePublicMcpFailureMessage,
+  sanitizePublicMcpRuntimeErrors,
+  sanitizeSymbolReference
+} from "./redaction.js";
 
 export function buildFindReferencesEnvelope(
   result: FindReferencesUseCaseResult,
@@ -34,7 +38,10 @@ export function buildFindReferencesEnvelope(
     data: references,
     meta: presentReferenceMetadata(references, result.meta),
     trust_policy: { surface_kind: "graph_reference_routing" },
-    errors: result.errors
+    errors: sanitizePublicMcpRuntimeErrors(
+      result.errors,
+      "Reference lookup failed; inspect the error code and retry guidance."
+    )
   });
 }
 
@@ -83,6 +90,10 @@ export function buildInvalidFindReferencesInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<FindReferencesResult> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Reference lookup input was invalid; inspect the request and retry."
+  );
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
@@ -93,7 +104,7 @@ export function buildInvalidFindReferencesInputEnvelope(input: {
     },
     meta: invalidMeta(input.repoRoot),
     trust_policy: { surface_kind: "graph_reference_routing" },
-    errors: [{ code: "invalid_input", message: input.message, retryable: false }]
+    errors: [{ code: "invalid_input", message, retryable: false }]
   });
 }
 

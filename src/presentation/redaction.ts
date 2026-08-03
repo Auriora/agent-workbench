@@ -6,6 +6,7 @@
 import {
   sourceSectionSchema,
   symbolReferenceSchema,
+  type RuntimeError,
   type SymbolReference
 } from "../contracts/index.js";
 
@@ -23,6 +24,8 @@ export type PresentationRedactionResult = {
   value: string;
   redacted: boolean;
 };
+
+export const PUBLIC_MCP_FAILURE_MESSAGE_MAX_UTF8_BYTES = 512;
 
 export function classifyPresentationValue(
   value: string,
@@ -134,6 +137,34 @@ export function redactAndBoundPresentationText(
   return bounded;
 }
 
+export function sanitizePublicMcpFailureMessage(message: string, fallback: string): string {
+  const sanitizedFallback = redactAndBoundPresentationText(fallback, {
+    context: "message",
+    max_utf8_bytes: PUBLIC_MCP_FAILURE_MESSAGE_MAX_UTF8_BYTES
+  });
+  if (!isUsablePublicFailureMessage(sanitizedFallback)) {
+    throw new Error("Public MCP failure fallback must contain fixed actionable text.");
+  }
+  const sanitizedMessage = redactAndBoundPresentationText(message, {
+    context: "message",
+    max_utf8_bytes: PUBLIC_MCP_FAILURE_MESSAGE_MAX_UTF8_BYTES
+  });
+  if (isUsablePublicFailureMessage(sanitizedMessage)) {
+    return sanitizedMessage;
+  }
+  return sanitizedFallback;
+}
+
+export function sanitizePublicMcpRuntimeErrors(
+  errors: RuntimeError[] | undefined,
+  fallback: string
+): RuntimeError[] | undefined {
+  return errors?.map((error) => ({
+    ...error,
+    message: sanitizePublicMcpFailureMessage(error.message, fallback)
+  }));
+}
+
 /**
  * Sanitizes every free-text field exposed by a public symbol reference while
  * preserving its typed, repository-relative path and graph identity fields.
@@ -180,7 +211,18 @@ function redactOptionalSymbolText(value: string | undefined): string | undefined
 function redactSecretLikeText(value: string): string {
   return value
     .replace(/(api[_-]?key|token|password|secret)=([^\s"'`),.;]+)/giu, "$1=[REDACTED]")
-    .replace(/-----BEGIN [A-Z ]+PRIVATE KEY-----[\s\S]*?-----END [A-Z ]+PRIVATE KEY-----/gu, "[REDACTED_PRIVATE_KEY]");
+    .replace(/-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+ )?PRIVATE KEY-----/gu, "[REDACTED_PRIVATE_KEY]");
+}
+
+function isUsablePublicFailureMessage(value: string): boolean {
+  const normalized = value
+    .replace(
+      /\b(?:api[_-]?key|token|password|secret)\s*=\s*\[(?:REDACTED(?:_[A-Z_]+)?)\]/giu,
+      " "
+    )
+    .replace(/\[(?:REDACTED(?:_[A-Z_]+)?)\]/gu, " ")
+    .replace(/[\s"'`=,:;.!?()[\]{}<>/\\|_-]+/gu, "");
+  return normalized.length > 0;
 }
 
 function hasTraversalSegment(value: string): boolean {

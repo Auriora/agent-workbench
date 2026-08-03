@@ -16,6 +16,7 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
+import { sanitizePublicMcpFailureMessage } from "./redaction.js";
 
 export function buildPreviewWorkspaceEditEnvelope(
   result: PreviewWorkspaceEditUseCaseResult,
@@ -61,7 +62,14 @@ export function buildInvalidPreviewWorkspaceEditInputEnvelope(input: {
     },
     meta: invalidMeta(input.repoRoot),
     trust_policy: { surface_kind: "edit_preview" },
-    errors: [{ code: "invalid_input", message: input.message, retryable: false }]
+    errors: [{
+      code: "invalid_input",
+      message: sanitizePublicMcpFailureMessage(
+        input.message,
+        "Workspace edit preview input was invalid; inspect the request and retry."
+      ),
+      retryable: false
+    }]
   });
 }
 
@@ -79,7 +87,14 @@ export function buildInvalidApplyWorkspaceEditInputEnvelope(input: {
     },
     meta: invalidMeta(input.repoRoot),
     trust_policy: { surface_kind: "edit_apply", mutation_applied: false },
-    errors: [{ code: "invalid_input", message: input.message, retryable: false }]
+    errors: [{
+      code: "invalid_input",
+      message: sanitizePublicMcpFailureMessage(
+        input.message,
+        "Workspace edit apply input was invalid; inspect the request and retry."
+      ),
+      retryable: false
+    }]
   });
 }
 

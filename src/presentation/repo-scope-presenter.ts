@@ -6,6 +6,7 @@
 import type { RepoScope, ResponseEnvelope } from "../contracts/index.js";
 import type { GetRepoScopeResult } from "../application/use-cases/get-repo-scope.js";
 import { invalidResponseMeta, makeTrustedEnvelope } from "../application/use-cases/response-metadata.js";
+import { sanitizePublicMcpFailureMessage } from "./redaction.js";
 
 export function buildRepoScopeEnvelope(
   result: GetRepoScopeResult
@@ -21,6 +22,10 @@ export function buildInvalidRepoScopeInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<RepoScope> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Repository scope input was invalid; inspect the request and retry."
+  );
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
@@ -41,7 +46,7 @@ export function buildInvalidRepoScopeInputEnvelope(input: {
     errors: [
       {
         code: "invalid_input",
-        message: input.message,
+        message,
         retryable: false
       }
     ]
@@ -52,6 +57,10 @@ export function buildRepoScopeProviderFailureEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<RepoScope> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Repository scope is unavailable; inspect the error code and retry guidance."
+  );
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
@@ -75,7 +84,7 @@ export function buildRepoScopeProviderFailureEnvelope(input: {
     errors: [
       {
         code: "provider_unavailable",
-        message: input.message,
+        message,
         retryable: true
       }
     ]

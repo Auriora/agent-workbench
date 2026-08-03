@@ -13,7 +13,10 @@ import {
   type RuntimeStatusResult
 } from "../application/use-cases/get-repo-status.js";
 import { invalidResponseMeta, makeTrustedEnvelope } from "../application/use-cases/response-metadata.js";
-import { redactAndBoundPresentationText } from "./redaction.js";
+import {
+  redactAndBoundPresentationText,
+  sanitizePublicMcpFailureMessage
+} from "./redaction.js";
 
 export type StatusPresentationPayload = {
   status: RuntimeStatus;
@@ -58,6 +61,10 @@ export function buildInvalidStatusInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<RuntimeStatus> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Repository status input was invalid; inspect the request and retry."
+  );
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
@@ -72,7 +79,7 @@ export function buildInvalidStatusInputEnvelope(input: {
     errors: [
       {
         code: "invalid_input",
-        message: input.message,
+        message,
         retryable: false
       }
     ]
@@ -83,6 +90,10 @@ export function buildStatusProviderFailureEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<RuntimeStatus> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Repository status is unavailable; inspect the error code and retry guidance."
+  );
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
@@ -91,7 +102,7 @@ export function buildStatusProviderFailureEnvelope(input: {
       indexed_roots: [],
       skipped_roots: [],
       adapter_coverage: [],
-      reason: input.message
+      reason: message
     },
     meta: invalidResponseMeta({
       repoRoot: input.repoRoot,
@@ -101,7 +112,7 @@ export function buildStatusProviderFailureEnvelope(input: {
     errors: [
       {
         code: "provider_unavailable",
-        message: input.message,
+        message,
         retryable: true
       }
     ]

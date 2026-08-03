@@ -15,7 +15,7 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
-import { sanitizeSymbolReference } from "./redaction.js";
+import { sanitizePublicMcpFailureMessage, sanitizeSymbolReference } from "./redaction.js";
 
 export function buildImpactEnvelope(
   result: ComputeImpactResult,
@@ -71,7 +71,14 @@ export function buildInvalidImpactInputEnvelope(input: {
     },
     meta: invalidResponseMeta({ repoRoot: input.repoRoot }),
     trust_policy: { surface_kind: "graph_impact_routing" },
-    errors: [{ code: "invalid_input", message: input.message, retryable: false }]
+    errors: [{
+      code: "invalid_input",
+      message: sanitizePublicMcpFailureMessage(
+        input.message,
+        "Impact input was invalid; inspect the request and retry."
+      ),
+      retryable: false
+    }]
   });
 }
 

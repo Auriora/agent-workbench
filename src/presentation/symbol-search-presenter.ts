@@ -15,7 +15,7 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
-import { sanitizeSymbolReference } from "./redaction.js";
+import { sanitizePublicMcpFailureMessage, sanitizeSymbolReference } from "./redaction.js";
 
 export function buildSymbolSearchEnvelope(
   result: SearchSymbolsResult,
@@ -46,7 +46,14 @@ export function buildInvalidSymbolSearchInputEnvelope(input: {
     },
     meta: invalidMeta(input.repoRoot),
     trust_policy: { surface_kind: "graph_symbol_routing" },
-    errors: [{ code: "invalid_input", message: input.message, retryable: false }]
+    errors: [{
+      code: "invalid_input",
+      message: sanitizePublicMcpFailureMessage(
+        input.message,
+        "Symbol search input was invalid; inspect the request and retry."
+      ),
+      retryable: false
+    }]
   });
 }
 

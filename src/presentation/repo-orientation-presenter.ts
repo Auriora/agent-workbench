@@ -6,6 +6,7 @@
 import type { OrientationReceipt, ResponseEnvelope } from "../contracts/index.js";
 import type { GetRepoOrientationResult } from "../application/use-cases/get-repo-orientation.js";
 import { invalidResponseMeta, makeTrustedEnvelope } from "../application/use-cases/response-metadata.js";
+import { sanitizePublicMcpFailureMessage } from "./redaction.js";
 
 export function buildRepoOrientationEnvelope(
   result: GetRepoOrientationResult
@@ -50,6 +51,10 @@ function makeOrientationFailureEnvelope(input: {
   retryable: boolean;
   validity: "invalid" | "invalid_due_to_environment";
 }): ResponseEnvelope<OrientationReceipt> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Repository orientation is unavailable; inspect the error code and retry guidance."
+  );
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
@@ -59,7 +64,7 @@ function makeOrientationFailureEnvelope(input: {
         capability_level: "unsupported",
         orientation_reusable: false
       },
-      material_blockers: [input.message],
+      material_blockers: [message],
       detail_resources: ["repo:///status", "repo:///scope", "repo:///overview"],
       refresh_required: true,
       refresh_when: [
@@ -78,7 +83,7 @@ function makeOrientationFailureEnvelope(input: {
     trust_policy: { surface_kind: "repository_status" },
     errors: [{
       code: input.code,
-      message: input.message,
+      message,
       retryable: input.retryable
     }]
   });

@@ -13,6 +13,7 @@ import {
   buildDiagnosticsForFilesEnvelope,
   buildInvalidDiagnosticsForFilesInputEnvelope
 } from "../../../../presentation/diagnostics-presenter.js";
+import { sanitizePublicMcpFailureMessage } from "../../../../presentation/redaction.js";
 import {
   formatMcpArgumentError,
   parseMcpArguments
@@ -113,7 +114,10 @@ export const diagnosticsForFilesTool: McpToolDeclaration = {
         } catch (error) {
           const envelope = buildInvalidDiagnosticsForFilesInputEnvelope({
             repoRoot: rootDecision.request.repo_root,
-            message: `diagnostics_for_files provider failed before diagnostics could complete: ${error instanceof Error ? error.message : String(error)}`
+            message: sanitizePublicMcpFailureMessage(
+              `diagnostics_for_files provider failed before diagnostics could complete: ${error instanceof Error ? error.message : String(error)}`,
+              "diagnostics_for_files provider failed before diagnostics could complete; inspect the error code and retry guidance."
+            )
           });
           return {
             content: [

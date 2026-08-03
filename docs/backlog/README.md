@@ -2279,7 +2279,7 @@ Do not promote an item when:
 ### EB063: Shared MCP Failure-Message Redaction
 
 - Priority: P1
-- Status: proposed; discovered during Spec 044 Phase 5 operations/security review
+- Status: delivered through Spec 054
 - Friction signal: ranked-documentation readiness reasons and the new
   mid-route environment blocker are bounded and redacted, but the generic MCP
   failure wrapper copies an arbitrary provider exception message directly into
@@ -2300,8 +2300,15 @@ Do not promote an item when:
     their schemas and tests prove equivalent safety; no per-tool hidden
     fallback redactors.
 - Promotion target: direct shared-envelope repair under EB038 error-envelope
-  consistency and the workspace-safety contract; create a spec only if public
-  error vocabulary or compatibility must change.
+  consistency and the workspace-safety contract.
+- Delivery: one canonical presentation sanitizer now redacts and bounds
+  arbitrary public MCP failure messages to 512 UTF-8 bytes across the shared
+  tool wrapper, shared resource-provider construction, inventoried presenters,
+  duplicated summary/reason/blocker fields, result-error pass-throughs, and the
+  manual diagnostics adapter. Hostile-message tests cover representative docs,
+  graph, diagnostics, workspace-edit, repository, and integration-health
+  surfaces while proving typed error semantics, trust, metadata, and recovery
+  actions remain compatible with contract `0.1`.
 
 ### EB064: Production Documentation Corpus Isolation And Governing-Owner Priority
 

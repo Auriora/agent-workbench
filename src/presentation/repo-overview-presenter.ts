@@ -6,6 +6,7 @@
 import type { RepoOverview, ResponseEnvelope } from "../contracts/index.js";
 import type { GetRepoOverviewResult } from "../application/use-cases/get-repo-overview.js";
 import { invalidResponseMeta, makeTrustedEnvelope } from "../application/use-cases/response-metadata.js";
+import { sanitizePublicMcpFailureMessage } from "./redaction.js";
 
 export function buildRepoOverviewEnvelope(
   result: GetRepoOverviewResult
@@ -21,6 +22,10 @@ export function buildInvalidRepoOverviewInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<RepoOverview> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Repository overview input was invalid; inspect the request and retry."
+  );
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
@@ -37,7 +42,7 @@ export function buildInvalidRepoOverviewInputEnvelope(input: {
     errors: [
       {
         code: "invalid_input",
-        message: input.message,
+        message,
         retryable: false
       }
     ]
@@ -48,6 +53,10 @@ export function buildRepoOverviewProviderFailureEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<RepoOverview> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Repository overview is unavailable; inspect the error code and retry guidance."
+  );
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
@@ -67,7 +76,7 @@ export function buildRepoOverviewProviderFailureEnvelope(input: {
     errors: [
       {
         code: "provider_unavailable",
-        message: input.message,
+        message,
         retryable: true
       }
     ]

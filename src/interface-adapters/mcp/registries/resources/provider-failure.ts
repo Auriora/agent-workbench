@@ -3,9 +3,14 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { sanitizePublicMcpFailureMessage } from "../../../../presentation/redaction.js";
+
 export function providerFailureMessage(resourceUri: string, error: unknown): string {
   const reason = sanitizedProviderFailureReason(error);
-  return `${resourceUri} provider could not read required runtime evidence: ${reason}`;
+  return sanitizePublicMcpFailureMessage(
+    `${resourceUri} provider could not read required runtime evidence: ${reason}`,
+    `${resourceUri} provider could not read required runtime evidence; inspect the error code and retry guidance.`
+  );
 }
 
 function sanitizedProviderFailureReason(error: unknown): string {

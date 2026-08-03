@@ -9,9 +9,11 @@ import { describe, expect, it } from "vitest";
 import type { GetTaskContextResult } from "../../src/application/use-cases/get-task-context.js";
 import type { SymbolReference } from "../../src/contracts/index.js";
 import {
+  PUBLIC_MCP_FAILURE_MESSAGE_MAX_UTF8_BYTES,
   classifyPresentationValue,
   redactPresentationText,
   redactPresentationValue,
+  sanitizePublicMcpFailureMessage,
   sanitizeSymbolReference
 } from "../../src/presentation/redaction.js";
 import { buildTaskContextEnvelope } from "../../src/presentation/task-context-presenter.js";
@@ -109,6 +111,60 @@ describe("presentation redaction boundary", () => {
     expect(symbol?.source_section?.text).toContain("/api/orders");
     expect(JSON.stringify(symbol)).not.toContain("abc123");
     expect(JSON.stringify(symbol)).not.toContain(fixtureValue("windowsHostPath"));
+  });
+
+  it("sanitizes public MCP failure messages with one idempotent bounded policy", () => {
+    const hostile = [
+      "Retry after the graph owner releases the lock.",
+      "/home/example/private/graph.sqlite",
+      String.raw`C:\Users\example\private\graph.sqlite`,
+      "../outside/graph.sqlite",
+      "TOKEN=abc123",
+      "-----BEGIN PRIVATE KEY-----private-material-----END PRIVATE KEY-----"
+    ].join(" ");
+
+    const sanitized = sanitizePublicMcpFailureMessage(
+      hostile,
+      "The provider failed; inspect the error code and retry guidance."
+    );
+
+    expect(sanitized).toContain("Retry after the graph owner releases the lock.");
+    expect(sanitized).toContain("[REDACTED_ABSOLUTE_PATH]");
+    expect(sanitized).toContain("[REDACTED_WORKSPACE_ESCAPE]");
+    expect(sanitized).toContain("TOKEN=[REDACTED]");
+    expect(sanitized).toContain("[REDACTED_PRIVATE_KEY]");
+    expect(sanitized).not.toContain("/home/example");
+    expect(sanitized).not.toContain(String.raw`C:\Users\example`);
+    expect(sanitized).not.toContain("../outside");
+    expect(sanitized).not.toContain("abc123");
+    expect(sanitizePublicMcpFailureMessage(sanitized, "unused fallback")).toBe(sanitized);
+    expect(new TextEncoder().encode(sanitized).byteLength).toBeLessThanOrEqual(
+      PUBLIC_MCP_FAILURE_MESSAGE_MAX_UTF8_BYTES
+    );
+  });
+
+  it("uses the fixed caller fallback for empty or marker-only public failures", () => {
+    const fallback = "The provider failed; inspect the error code and retry guidance.";
+
+    expect(sanitizePublicMcpFailureMessage("", fallback)).toBe(fallback);
+    expect(sanitizePublicMcpFailureMessage("/home/example/private.sqlite", fallback)).toBe(fallback);
+    expect(sanitizePublicMcpFailureMessage("TOKEN=abc123", fallback)).toBe(fallback);
+    expect(() => sanitizePublicMcpFailureMessage("safe", "TOKEN=abc123")).toThrow(
+      "Public MCP failure fallback must contain fixed actionable text."
+    );
+  });
+
+  it("bounds public failure text to 512 UTF-8 bytes without splitting a character", () => {
+    const sanitized = sanitizePublicMcpFailureMessage(
+      `Retry later. ${"🧭".repeat(200)}`,
+      "The provider failed; retry later."
+    );
+
+    expect(new TextEncoder().encode(sanitized).byteLength).toBeLessThanOrEqual(
+      PUBLIC_MCP_FAILURE_MESSAGE_MAX_UTF8_BYTES
+    );
+    expect(sanitized).toMatch(/🧭$/u);
+    expect(sanitized).not.toContain("�");
   });
 });
 

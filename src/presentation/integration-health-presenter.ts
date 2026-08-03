@@ -10,6 +10,10 @@ import {
 } from "../contracts/index.js";
 import type { GetIntegrationHealthResult } from "../application/use-cases/get-integration-health.js";
 import { invalidResponseMeta, makeTrustedEnvelope } from "../application/use-cases/response-metadata.js";
+import {
+  sanitizePublicMcpFailureMessage,
+  sanitizePublicMcpRuntimeErrors
+} from "./redaction.js";
 
 export function buildIntegrationHealthEnvelope(
   result: GetIntegrationHealthResult
@@ -27,7 +31,10 @@ export function buildIntegrationHealthEnvelope(
     trust_policy: {
       surface_kind: result.errors?.length ? "generic_error" : "integration_health"
     },
-    errors: result.errors
+    errors: sanitizePublicMcpRuntimeErrors(
+      result.errors,
+      "Integration health is unavailable; inspect the error code and retry guidance."
+    )
   });
 }
 
@@ -35,6 +42,10 @@ export function buildInvalidIntegrationHealthInputEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<IntegrationHealth> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Integration health input was invalid; inspect the request and retry."
+  );
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
@@ -61,7 +72,7 @@ export function buildInvalidIntegrationHealthInputEnvelope(input: {
     errors: [
       {
         code: "invalid_input",
-        message: input.message,
+        message,
         retryable: false
       }
     ]
@@ -72,6 +83,10 @@ export function buildIntegrationHealthProviderFailureEnvelope(input: {
   repoRoot: string;
   message: string;
 }): ResponseEnvelope<IntegrationHealth> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Integration health is unavailable; inspect the error code and retry guidance."
+  );
   return makeTrustedEnvelope({
     data: {
       repo_root: input.repoRoot,
@@ -101,7 +116,7 @@ export function buildIntegrationHealthProviderFailureEnvelope(input: {
     errors: [
       {
         code: "provider_unavailable",
-        message: input.message,
+        message,
         retryable: true
       }
     ]

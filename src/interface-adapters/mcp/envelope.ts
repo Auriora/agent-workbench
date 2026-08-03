@@ -6,6 +6,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { z } from "zod";
 import type { ResponseEnvelope } from "../../contracts/index.js";
+import { sanitizePublicMcpFailureMessage } from "../../presentation/redaction.js";
 import {
   formatMcpArgumentError,
   parseMcpArguments
@@ -199,6 +200,10 @@ export function classifiedFailureEnvelope<T>(
   envelope: ResponseEnvelope<T>,
   input: Pick<McpFailureEnvelopeInput<{ repo_root?: string }>, "classification" | "message">
 ): ResponseEnvelope<T> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "The operation failed; inspect the error code and retry guidance."
+  );
   return {
     ...envelope,
     meta: {
@@ -208,7 +213,7 @@ export function classifiedFailureEnvelope<T>(
     errors: [
       {
         code: input.classification,
-        message: input.message,
+        message,
         retryable: retryableFailure(input.classification)
       }
     ]

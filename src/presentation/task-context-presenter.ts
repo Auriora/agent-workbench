@@ -25,7 +25,7 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
-import { sanitizeSymbolReference } from "./redaction.js";
+import { sanitizePublicMcpFailureMessage, sanitizeSymbolReference } from "./redaction.js";
 
 export function buildTaskContextEnvelope(
   result: GetTaskContextResult,
@@ -69,7 +69,10 @@ export function buildInvalidTaskContextInputEnvelope(input: {
     errors: [
       {
         code: "invalid_input",
-        message: input.message,
+        message: sanitizePublicMcpFailureMessage(
+          input.message,
+          "Task context input was invalid; inspect the request and retry."
+        ),
         retryable: false
       }
     ]

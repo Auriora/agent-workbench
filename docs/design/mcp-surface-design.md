@@ -165,6 +165,17 @@ providers, return structured envelopes that still carry trust calibration.
 Transport failures that prevent MCP response framing are the only expected
 public exclusion.
 
+Public failure free text has one presentation policy across shared tool
+envelopes, resource-provider helpers, presenters, and manual adapters. Raw
+exceptions remain internal long enough to select the typed classification,
+cause code, retryability, metadata, trust, and recovery action. Immediately
+before public validation or serialization, the canonical sanitizer redacts the
+message and applies the 512-byte UTF-8 bound. Presenters reuse that value for
+duplicated failure summaries, reasons, and blockers, while fixed-safe or
+independently sanitized non-failure fields retain their existing contracts.
+Adapters must not add per-tool redactors, alternate response routes, retries,
+feature switches, or raw-message fallbacks.
+
 First-read resource and planning surfaces must keep this boundary explicit.
 `repo:///orientation`, `repo:///status`, `repo:///scope`, and `repo:///overview` report freshness,
 adapter coverage, scanner budget, watcher caveats, skipped paths, and provider

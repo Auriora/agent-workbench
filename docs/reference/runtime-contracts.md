@@ -839,6 +839,17 @@ failures use `analysis_validity: invalid_due_to_environment` and
 `verification_status: blocked`; stale-state failures use `freshness: stale`.
 Handlers may keep tool-specific data skeletons, but the failure code must match
 the next safe recovery action.
+
+Every arbitrary public MCP failure message uses the canonical presentation
+sanitizer before schema validation or serialization. It redacts secret-like
+assignments, private-key material, absolute host paths, and workspace escapes,
+then bounds the result to at most 512 UTF-8 bytes without splitting a code
+point. Empty or marker-only output uses a fixed recovery-oriented fallback.
+The same sanitized value is reused in duplicated public summary, reason, or
+blocker fields. Error classification, cause-code selection, retryability,
+metadata, trust, typed data, and next actions are derived from internal
+evidence before this presentation step; contract version `0.1` and the
+`RuntimeError` shape are unchanged.
 `symbol_search`, `find_references`, and `impact` validate the indexed paths
 needed by the selected result before source-backed presentation. Missing paths
 return empty blocked graph evidence with `freshness: stale`; an unexpected

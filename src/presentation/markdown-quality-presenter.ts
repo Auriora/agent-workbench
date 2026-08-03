@@ -25,7 +25,7 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
-import { redactPresentationText } from "./redaction.js";
+import { redactPresentationText, sanitizePublicMcpFailureMessage } from "./redaction.js";
 
 export function buildCheckMarkdownDocumentEnvelope(
   result: CheckMarkdownDocumentUseCaseResult,
@@ -70,7 +70,10 @@ export function buildInvalidCheckMarkdownDocumentInputEnvelope(input: {
     errors: [
       {
         code: "invalid_input",
-        message: input.message,
+        message: sanitizePublicMcpFailureMessage(
+          input.message,
+          "Markdown document input was invalid; inspect the request and retry."
+        ),
         retryable: false
       }
     ]
@@ -98,7 +101,10 @@ export function buildInvalidCheckMarkdownSetInputEnvelope(input: {
     errors: [
       {
         code: "invalid_input",
-        message: input.message,
+        message: sanitizePublicMcpFailureMessage(
+          input.message,
+          "Markdown set input was invalid; inspect the request and retry."
+        ),
         retryable: false
       }
     ]

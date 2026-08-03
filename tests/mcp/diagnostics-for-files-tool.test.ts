@@ -214,6 +214,39 @@ describe("diagnostics_for_files MCP tool", () => {
       }
     ]);
   });
+
+  it("redacts hostile failures from the manual diagnostics adapter", async () => {
+    const registered = registerDiagnosticsTool({
+      diagnoseChangedFiles: () => {
+        throw new Error(
+          "Retry diagnostics after fixing the provider. /home/example/diagnostics.log ../outside TOKEN=abc123"
+        );
+      }
+    });
+
+    const response = await registered.handler({ files: ["package.json"] });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: { status: string; summary: string; next_actions: unknown[] };
+      meta: { analysis_validity: string; verification_status: string };
+      errors: Array<{ code: string; retryable: boolean; message: string }>;
+    };
+
+    expect(parsed.data.status).toBe("blocked");
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid",
+      verification_status: "blocked"
+    });
+    expect(parsed.errors).toEqual([
+      expect.objectContaining({
+        code: "invalid_input",
+        retryable: false,
+        message: expect.stringContaining("Retry diagnostics after fixing the provider.")
+      })
+    ]);
+    expect(JSON.stringify(parsed)).not.toContain("/home/example");
+    expect(JSON.stringify(parsed)).not.toContain("../outside");
+    expect(JSON.stringify(parsed)).not.toContain("abc123");
+  });
 });
 
 function registerDiagnosticsTool(context: Record<string, unknown>): RegisteredMcpTool {

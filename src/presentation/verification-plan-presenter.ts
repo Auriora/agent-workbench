@@ -23,7 +23,7 @@ import {
   presentNextActions,
   type PresentationSessionContext
 } from "../application/use-cases/response-metadata.js";
-import { redactPresentationText } from "./redaction.js";
+import { redactPresentationText, sanitizePublicMcpFailureMessage } from "./redaction.js";
 
 export function buildVerificationPlanEnvelope(
   result: PlanVerificationResult,
@@ -56,7 +56,10 @@ export function buildInvalidVerificationPlanInputEnvelope(input: {
     errors: [
       {
         code: "invalid_input",
-        message: input.message,
+        message: sanitizePublicMcpFailureMessage(
+          input.message,
+          "Verification-plan input was invalid; inspect the request and retry."
+        ),
         retryable: false
       }
     ]
@@ -136,7 +139,10 @@ function sanitizeStaticFinding(input: NonNullable<PlanVerificationResult["plan"]
   return staticFeedbackFindingSchema.parse({
     path: input.path,
     severity: input.severity,
-    message: input.message,
+    message: sanitizePublicMcpFailureMessage(
+      input.message,
+      "Static validation found an issue; inspect the finding category and suggested action."
+    ),
     suggested_action: input.suggested_action
   });
 }

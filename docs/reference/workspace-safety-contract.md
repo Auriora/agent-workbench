@@ -135,6 +135,16 @@ free-text evidence field: `signature`, `docstring`, and
 `context_for_task` use the same sanitizer, while stored graph evidence and typed
 repo-relative path fields remain unchanged.
 
+Arbitrary public MCP failure messages use the same presentation redaction
+vocabulary and a fixed maximum of 512 UTF-8 bytes. The policy applies at the
+shared tool envelope, shared resource-provider construction, public presenter
+failure fields, and manual adapter catch paths. If redaction leaves no
+actionable text beyond markers, callers provide a fixed safe recovery message.
+Duplicated failure summaries, reasons, and blockers must reuse the sanitized
+message so a safe `errors[]` sibling cannot hide a leak. This display boundary
+does not classify errors or weaken containment; typed safety decisions continue
+to use the original internal evidence.
+
 Requested diagnostics paths are classified before provider invocation or a
 true-missing finding is constructed. Secret and workspace-escape exclusions
 return a blocked workspace-safety response without a follow-up containing the
