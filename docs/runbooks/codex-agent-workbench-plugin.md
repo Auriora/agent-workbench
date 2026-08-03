@@ -154,6 +154,17 @@ plugin, skill, hook, and MCP binding model. Read the static
 the read-only `integration_health` tool when supplying caller-discovery
 evidence.
 
+When a client needs the configured resource server, prefer listing resources
+without a server filter and copying the returned `server` field. If you must
+name the server directly, use the exact configured server ID:
+
+```json
+{"server":"agent-workbench"}
+```
+
+Do not derive the ID by changing hyphens to underscores or from a
+client-normalized callable namespace.
+
 In some sessions, plugin MCP tools may be deferred until tool discovery runs.
 If Agent Workbench tool schemas are not visible, discover them with a query
 such as `agent-workbench context_for_task verification_plan diagnostics_for_files

@@ -65,6 +65,11 @@ Even for `summarize this repo`:
 4. Read the selected evidence and follow `meta.trust` before making the summary's
    claims.
 
+For Claude Code resource helpers, prefer listing resources without a server
+filter and copy the returned `server` field. This plugin's configured server
+name is `plugin:agent-workbench:agent-workbench`, not the bare `.mcp.json` key
+or the normalized callable-tool namespace.
+
 ## Spec Documentation Scope
 
 When work is driven by `docs/specs/[###-slug]/`, `Spec NNN`, or a `TNNN` task

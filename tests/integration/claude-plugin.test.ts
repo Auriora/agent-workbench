@@ -74,6 +74,10 @@ describe("Claude Code plugin artifacts", () => {
     expect(skill).toContain("description: Use Agent Workbench before making repository claims");
     expect(skill).toContain("repo:///orientation");
     expect(skill).toContain("Claude Code Integration");
+    expect(skill).toContain("`plugin:agent-workbench:agent-workbench`");
+    expect(skill).toContain("prefer listing resources without a server");
+    expect(skill).toContain("copy the returned `server` field");
+    expect(skill).not.toContain("server ID `agent-workbench`");
     expect(skill).not.toContain("mcp__");
   });
 

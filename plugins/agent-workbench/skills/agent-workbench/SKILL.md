@@ -65,6 +65,12 @@ Even for `summarize this repo`:
 4. Read the selected evidence and follow `meta.trust` before making the summary's
    claims.
 
+When client-provided resource helpers are available, use the exact configured
+server ID `agent-workbench`. Prefer listing resources without a server filter,
+then copy the returned `server` field from the result. Do not derive the ID by
+changing hyphens to underscores or by normalizing a client-specific callable
+namespace.
+
 ## Spec Lifecycle Boundary
 
 When work is driven by `docs/specs/[###-slug]/`, `Spec NNN`, or a `TNNN` task,

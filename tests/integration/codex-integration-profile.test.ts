@@ -432,6 +432,10 @@ describe("Codex plugin artifacts", () => {
     expect(pluginRunbook).toContain("RCA checklist for this failure mode");
     expect(pluginRunbook).toContain("leaves `cwd` unset");
     expect(pluginRunbook).toContain("rejects a Codex MCP `cwd`");
+    expect(pluginRunbook).toContain('{"server":"agent-workbench"}');
+    expect(pluginRunbook).toContain("without a server filter");
+    expect(pluginRunbook).toContain("copying the returned `server` field");
+    expect(pluginRunbook).toContain("Do not derive the ID by changing hyphens to underscores");
     expect(pluginRunbook).toContain(releasedInstallCommand);
     const releasedInstallCommandIndex = pluginRunbook.indexOf(releasedInstallCommand);
     expect(
@@ -447,6 +451,10 @@ describe("Codex plugin artifacts", () => {
     expect(JSON.stringify(hooksConfig)).not.toContain("${PLUGIN_ROOT}");
     expect(skill).toContain("Agent Workbench is the executable runtime.");
     expect(skill).toContain("Do not add primary-plus-fallback routes");
+    expect(skill).toContain("server ID `agent-workbench`");
+    expect(skill).toContain("without a server filter");
+    expect(skill).toContain("copy the returned `server` field");
+    expect(skill).not.toContain('"server":"agent_workbench"');
   });
 
   it("rejects Codex manifest and provider identity drift", async () => {
