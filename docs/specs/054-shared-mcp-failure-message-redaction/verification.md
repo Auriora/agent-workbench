@@ -28,7 +28,7 @@ implementation, validation, promotion, and closure evidence.
 | Security and implementation reviews resolved | yes | complete | T001 readiness security review plus T005 in-session security/privacy and correctness/regression review found no blocker |
 | Automated repository gates pass | yes | complete | typecheck, 148 focused tests, 1,241 full tests, plugin/skill/package gates, and diff check passed |
 | Durable documentation promoted | yes | complete | runtime contracts, MCP surface design, workspace safety, proof matrix, and EB063 backlog disposition updated |
-| Spec cleanup decision recorded | yes | pending | closure check after T005 completion commit |
+| Spec cleanup decision recorded | yes | complete | `closure_check` rerun after T005 completion returned ready=true with 0 blockers |
 
 ## Validation Commands
 
@@ -42,7 +42,7 @@ implementation, validation, promotion, and closure evidence.
 | `pnpm pack:dry-run` | Distribution contents | passed | package `0.6.7`, 259 entries; npm emitted only host config deprecation warnings |
 | `git diff --check` | Patch hygiene | passed | exit 0 |
 | `lint_spec_package` | Spec structure | passed | 0 diagnostics at verify stage |
-| `closure_check` | Promotion and cleanup readiness | pending | rerun after T005 completion is written |
+| `closure_check` | Promotion and cleanup readiness | passed | ready=true, 0 blockers |
 
 ## Requirement Coverage
 
@@ -102,8 +102,8 @@ post-implementation repeat of this inventory owns any remaining candidate.
 | Must-read context | requirements Durable Source Baseline and design Components | direct reads required before implementation |
 | Permissions and approval points | repository instructions; source edits authorized only by a later implementation request | none for specification stage |
 | Validation commands and expected signals | Validation Commands above | focused file list may expand after inventory |
-| Review needs | security, public contract, implementation, final QA | reviews pending |
-| Durable-doc or closure impact | requirements Durable Impact | promotion pending |
+| Review needs | security, public contract, implementation, final QA | complete; no blocker in the final in-session review |
+| Durable-doc or closure impact | requirements Durable Impact | complete; durable docs promoted and `closure_check` passed |
 | Optional repo-evidence provider caveats | Agent Workbench routing is not implementation or validation proof | direct reads and commands required |
 
 ## Task Evidence
@@ -114,7 +114,7 @@ post-implementation repeat of this inventory owns any remaining candidate.
 | T002 | complete | Bounded `rg` candidate search plus direct reads of the shared envelope, resource helper, presenter builders, manual diagnostics adapter, and representative tests; inventory recorded above | T003 owns the failing hostile-message fixtures |
 | T003 | complete | Pre-implementation run: 6 expected failures, 19 passes | red phase recorded before source implementation |
 | T004 | complete | canonical sanitizer, all inventoried migrations, typecheck, and 148/148 focused tests | post-inventory resolved all public exception-derived candidates |
-| T005 | complete | durable docs updated; `pnpm typecheck`; 11-file focused Vitest slice 148/148; full Vitest 111 files/1,241 tests; `pnpm validate:plugin`; `pnpm validate:skills`; `pnpm pack:dry-run`; `git diff --check`; in-session security/privacy and correctness/regression review found no blocker | closure check must be rerun from the completed task state before cleanup |
+| T005 | complete | durable docs updated; `pnpm typecheck`; 11-file focused Vitest slice 148/148; full Vitest 111 files/1,241 tests; `pnpm validate:plugin`; `pnpm validate:skills`; `pnpm pack:dry-run`; `git diff --check`; `lint_spec_package`; `closure_check`; in-session security/privacy and correctness/regression review found no blocker | ready for closure cleanup |
 
 ## Evidence Log
 
@@ -125,7 +125,7 @@ post-implementation repeat of this inventory owns any remaining candidate.
 | 2026-08-03 | T002 public MCP failure-sink inventory | complete | `rg` and direct reads covered the shared wrapper, resource helper, presenter-built envelopes, duplicated failure fields, manual diagnostics adapter, fixed-safe wording, and non-public internal evidence. |
 | 2026-08-03 | T003 red-before-green run | expected failure | `pnpm exec vitest run tests/presentation/redaction-boundary.test.ts tests/mcp/error-envelope-consistency.test.ts tests/mcp/diagnostics-for-files-tool.test.ts --maxWorkers=4` produced 6 expected failures and 19 passes before source edits. |
 | 2026-08-03 | T004 focused implementation validation | passed | `pnpm typecheck` passed; 11 focused files and 148 tests passed; post-implementation sink inventory found no unresolved public exception-derived candidate. |
-| 2026-08-03 | T005 repository and packaging gates | passed | `pnpm typecheck`; `pnpm exec vitest run --maxWorkers=4` with 111 files and 1,241 tests; `pnpm validate:plugin`; `pnpm validate:skills` with 6 files, 0 errors, 0 warnings; `pnpm pack:dry-run` with 259 entries; `git diff --check`; `lint_spec_package` with 0 diagnostics. |
+| 2026-08-03 | T005 repository and packaging gates | passed | `pnpm typecheck`; `pnpm exec vitest run --maxWorkers=4` with 111 files and 1,241 tests; `pnpm validate:plugin`; `pnpm validate:skills` with 6 files, 0 errors, 0 warnings; `pnpm pack:dry-run` with 259 entries; `git diff --check`; `lint_spec_package` with 0 diagnostics; `closure_check` returned ready=true with 0 blockers; final in-session correctness/privacy review found no blocker. |
 
 ## T001 Review Finding Disposition
 
@@ -167,9 +167,9 @@ full-suite rerun validated.
 - **Reason:** active specs are temporary delivery scaffolding
 - **Final spec commit:** pending
 - **Closure log path:** `docs/history/spec-closure-log.md`
-- **Closure log entry updated:** no
+- **Closure log entry updated:** pending cleanup commit
 - **Closure cleanup commit:** pending
-- **Active indexes updated:** no
+- **Active indexes updated:** pending cleanup commit
 - **Durable docs linked back to evidence where useful:** no
 - **Residual spec-only content:** none expected
 
@@ -193,9 +193,9 @@ an explicit inventory, and security review are required.
 
 ## Readiness Decision
 
-- **Ready for promotion:** no
-- **Ready for release:** no
-- **Ready for closure:** no
+- **Ready for promotion:** yes
+- **Ready for release:** yes for this hardening slice; no separate release activity requested
+- **Ready for closure:** yes
 
 ## Related Artifacts
 
