@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: requirements
 status: draft
 owner: platform
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-03
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -78,10 +78,10 @@ data skeletons, and trust calibration.
 
 ## Staged Readiness
 
-- **Current stage:** requirements
-- **Next stage:** design review
-- **Ready to design when:** sinks, invariants, compatibility, and hostile fixture
-  classes are explicit
+- **Current stage:** implementation readiness
+- **Next stage:** T002 public failure-sink inventory
+- **Ready to implement when:** lifecycle, contract, and security review findings
+  are resolved and T001 records reproducible evidence
 - **Design-first exception:** no
 - **Optional artifacts recommended:** none; traceability and validation are
   embedded in the core package for this focused repair

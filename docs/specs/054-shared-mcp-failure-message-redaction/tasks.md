@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: tasks
 status: draft
 owner: platform
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-03
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -25,7 +25,7 @@ T001 -> T002 -> T003 -> T004 -> T005
 
 ## Phase 1: Readiness And Failure-Sink Baseline
 
-- [ ] T001 Reconcile and review Spec 054 for implementation readiness.
+- [x] T001 Reconcile and review Spec 054 for implementation readiness.
   - Depends on: none
   - Requirements: Requirement 1 through Requirement 5
   - Files: this package, EB063, durable sources, current source and tests
@@ -35,8 +35,9 @@ T001 -> T002 -> T003 -> T004 -> T005
   - Validation: `lint_spec_package`, `stage_readiness`, `task_state_audit`, and
     a bounded requirements/design review packet.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: 2026-08-03: lint_spec_package 0 findings; stage_readiness ready_to_implement=true with 0 blocking, context, downstream, acceptance, or traceability gaps; task_state_audit 0 errors/warnings and 2 informational findings; independent contract and security re-reviews found no blocker; focused Vitest baseline 14/14 passed; Markdown check examined 5 documents with 94 table-readability warnings only; git diff --check passed.
 
+  - Status: Complete. Spec 054 is ready for T002 public failure-sink inventory.
 - [ ] T002 Inventory and classify every public MCP failure-message sink.
   - Depends on: T001
   - Requirements: Requirement 1, Requirement 3, Requirement 5
@@ -46,7 +47,8 @@ T001 -> T002 -> T003 -> T004 -> T005
   - Acceptance: every exception-derived `errors`, warning, reason, and blocker
     sink is classified as unsafe, fixed-safe, or independently sanitized;
     debug-only paths are separated with evidence; implementation scope and
-    representative tests are updated from the inventory.
+    representative tests are updated from the inventory, starting from the
+    known resource/manual-adapter suites recorded in `verification.md`.
   - Validation: bounded `rg` inventory plus direct reads of every candidate.
   - Evidence mode: validation
   - Evidence: Pending.
@@ -61,10 +63,10 @@ T001 -> T002 -> T003 -> T004 -> T005
     `tests/mcp/error-envelope-consistency.test.ts`, representative docs, graph,
     diagnostics, resource, and workspace-edit test files
   - Acceptance: tests cover Unix/Windows paths, workspace escape, secret and
-    private-key material, safe phrase retention, idempotence, 512-byte
-    multi-byte output, shared tool/resource/manual-adapter paths, and exact
-    preservation of code, retryability, cause-code-dependent data, metadata,
-    trust, and next actions.
+    private-key material, safe phrase retention, marker-only recovery fallback,
+    idempotence, 512-byte multi-byte output, shared
+    tool/resource/manual-adapter paths, and exact preservation of code,
+    retryability, cause-code-dependent data, metadata, trust, and next actions.
   - Validation: run the selected focused Vitest files with `--maxWorkers=4` and
     record the expected pre-implementation failures.
   - Evidence mode: validation

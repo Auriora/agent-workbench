@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-03
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -32,6 +32,21 @@ version changes.
 | Requirement 3 | AC1-AC5 | shared wrapper, resource helper, presenter/manual-adapter inventory | source inventory and representative parity tests |
 | Requirement 4 | AC1-AC5 | hostile-message matrix across surface families | MCP, presenter, and resource tests |
 | Requirement 5 | AC1-AC4 | contract `0.1` and current schemas retained | contract, typecheck, and compatibility tests |
+
+## Canonical Context
+
+- **Decision:** use the embedded Durable Source Baseline in `requirements.md`;
+  a separate `canonical-context.md` would duplicate rather than clarify it.
+- **Always-canonical external sources:** `docs/backlog/README.md`,
+  `docs/reference/runtime-contracts.md`, `docs/design/mcp-surface-design.md`, and
+  `docs/reference/workspace-safety-contract.md` retain authority for their
+  documented areas.
+- **Spec-local role:** this package coordinates the proposed change and must be
+  reconciled when any durable source changes; it does not supersede those
+  sources before T005 promotion.
+- **Imported or background sources:** none. The package summarizes current
+  durable behavior and links to direct source rather than copying an external
+  authority snapshot.
 
 ## Correctness Property Coverage
 
@@ -105,14 +120,20 @@ is an internal presentation constant with public behavioral tests.
 
 ```text
 sanitizePublicMcpFailureMessage(message, fallback):
+  require fallback to be fixed, non-empty, and recovery-oriented
+  safeFallback = redactPresentationText(fallback, context = message)
   candidate = message is non-empty ? message : fallback
   safe = redactPresentationText(candidate, context = message)
-  bounded = truncate safe to at most 512 UTF-8 bytes by code point
-  return bounded is non-empty ? bounded : stable fallback
+  selected = safe contains actionable text beyond redaction markers
+    ? safe
+    : safeFallback
+  return truncate selected to at most 512 UTF-8 bytes by code point
 ```
 
-Callers must not reclassify errors from `bounded` or inspect redaction markers
-to select typed behavior.
+Callers must not reclassify errors from the selected public text or inspect
+redaction markers to select typed behavior. Marker-only output is not
+actionable and therefore uses the caller's fixed fallback; a hostile message
+that retains safe context keeps that context alongside the redaction markers.
 
 ### Proposed Interface
 
@@ -133,7 +154,9 @@ final public boundary without introducing a second algorithm.
 ### Error Handling
 
 - Non-`Error` thrown values continue through the existing fallback conversion.
-- Empty or fully unusable text becomes a stable recovery-oriented fallback.
+- Empty, marker-only, or otherwise fully unusable text becomes a fixed,
+  non-empty recovery-oriented fallback owned by the caller and sanitized by the
+  same helper.
 - Typed fixed domain messages may bypass arbitrary exception interpolation only
   when tests prove the entire final message safe.
 - A sanitization defect is an internal contract failure; callers must not emit

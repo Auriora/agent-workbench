@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: verification
 status: draft
 owner: platform
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-03
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -21,11 +21,11 @@ implementation, validation, promotion, and closure evidence.
 
 | Gate | Required? | Status | Evidence |
 | --- | --- | --- | --- |
-| Requirements, design, tasks, and traceability reviewed | yes | pending | T001 |
+| Requirements, design, tasks, and traceability reviewed | yes | complete | T001 lifecycle, contract, and security review on 2026-08-03 |
 | Public failure-sink inventory complete | yes | pending | T002 |
 | Hostile-message tests fail before and pass after implementation | yes | pending | T003, T004 |
 | Structural failure semantics remain compatible | yes | pending | T003, T004 |
-| Security and implementation reviews resolved | yes | pending | T001, T005 |
+| Security and implementation reviews resolved | yes | partial | T001 security readiness review resolved; implementation review remains T005 |
 | Automated repository gates pass | yes | pending | T004, T005 |
 | Durable documentation promoted | yes | pending | T005 |
 | Spec cleanup decision recorded | yes | pending | closure check |
@@ -35,7 +35,7 @@ implementation, validation, promotion, and closure evidence.
 | Command | Purpose | Result | Evidence |
 | --- | --- | --- | --- |
 | `pnpm typecheck` | TypeScript and contract compatibility | pending | T004, T005 |
-| `pnpm exec vitest run tests/presentation/redaction-boundary.test.ts tests/mcp/error-envelope-consistency.test.ts tests/mcp/diagnostics-for-files-tool.test.ts tests/mcp/repo-status-resource.test.ts tests/mcp/docs-ranking-tool.test.ts tests/mcp/workspace-edit-tools.test.ts tests/mcp/query-tools.test.ts --maxWorkers=4` | Representative redaction and failure-envelope parity | pending | T003, T004 |
+| `pnpm exec vitest run tests/presentation/redaction-boundary.test.ts tests/mcp/error-envelope-consistency.test.ts tests/mcp/diagnostics-for-files-tool.test.ts tests/mcp/repo-orientation-resource.test.ts tests/mcp/repo-status-resource.test.ts tests/mcp/repo-scope-overview-resource.test.ts tests/mcp/docs-surfaces.test.ts tests/mcp/docs-ranking-tool.test.ts tests/mcp/integration-health-resource.test.ts tests/mcp/workspace-edit-tools.test.ts tests/mcp/query-tools.test.ts --maxWorkers=4` | Representative redaction and failure-envelope parity across known tool, resource, presenter, and manual-adapter seams; T002 may expand this list | pending | T003, T004 |
 | `pnpm exec vitest run --maxWorkers=4` | Full regression suite | pending | T005 |
 | `pnpm validate:plugin` | Packaged MCP/plugin bindings | pending | T005 |
 | `pnpm validate:skills` | Packaged Agent Skills | pending | T005 |
@@ -59,7 +59,7 @@ implementation, validation, promotion, and closure evidence.
 | Property | Covered by | Evidence | Residual risk |
 | --- | --- | --- | --- |
 | CP-001 no unsafe sentinel | serialized response assertions | pending | nested fields require full-envelope inspection |
-| CP-002 idempotent 512-byte UTF-8 output | redaction table/boundary tests | pending | none expected |
+| CP-002 idempotent 512-byte UTF-8 output | redaction table, marker-only fallback, and boundary tests | pending | none expected |
 | CP-003 structural invariance | exact golden envelope assertions | pending | free-text wording is intentionally hardened |
 | CP-004 every public sink classified | T002 and T004 inventory | pending | debug/public boundary must be explicit |
 | CP-005 cause code precedes redaction | impact-domain regression | pending | none expected |
@@ -89,7 +89,7 @@ implementation, validation, promotion, and closure evidence.
 
 | Task ID | Status | Evidence | Notes |
 | --- | --- | --- | --- |
-| T001 | pending | none | readiness review not yet run |
+| T001 | complete | Lifecycle lint: 0 findings; stage readiness: ready to implement with 0 blocking gaps; task audit: 0 errors/warnings; traceability: 0 gaps; contract and security reviews resolved; baseline redaction/envelope tests: 14/14 passed | T002 is the next task |
 | T002 | pending | none | sink inventory not yet recorded |
 | T003 | pending | none | failing hostile-message tests not yet added |
 | T004 | pending | none | implementation not started |
@@ -100,6 +100,17 @@ implementation, validation, promotion, and closure evidence.
 | Date | Evidence | Result | Notes |
 | --- | --- | --- | --- |
 | 2026-08-02 | Spec creation plan and direct source review | specification only | Spec 054 allocated for backlog EB063; no implementation claim. |
+| 2026-08-03 | T001 lifecycle, contract, and security readiness review | ready to implement | `lint_spec_package`: 0 findings; `stage_readiness`: ready with 0 blocking/context/downstream/traceability gaps; `task_state_audit T001`: 0 findings after completion; independent contract/security re-reviews: no blocker; focused Vitest baseline: 14/14 passed; `git diff --check`: passed. No production implementation claimed. |
+
+## T001 Review Finding Disposition
+
+| Finding | Disposition | Evidence |
+| --- | --- | --- |
+| Named lifecycle checks might not be callable | rejected | `lint_spec_package`, `stage_readiness`, `task_state_audit`, `review_packet`, and `traceability_lookup` were called successfully through the authoritative lifecycle MCP surface. |
+| Package lifecycle and T001 evidence were inconsistent | resolved | Requirements now identify implementation readiness and T002 as next; task and verification records agree. |
+| Known resource/manual-adapter suites were absent from the focused command | resolved | The focused T003/T004 command now names orientation, scope/overview, docs surfaces, and integration-health suites; T002 still owns final inventory-driven expansion. |
+| Traceability `complete` could be read as implementation proof | resolved | Traceability now defines coverage state as planned mapping and directs delivery claims to this verification record. |
+| Marker-only redaction output was not explicitly recovery-oriented | resolved | Design and T003 acceptance now require the fixed sanitized fallback when no actionable text remains beyond redaction markers. |
 
 ## Manual Or External Verification
 

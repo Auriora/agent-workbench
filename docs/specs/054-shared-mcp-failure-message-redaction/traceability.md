@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: traceability
 status: draft
 owner: platform
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-03
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -16,6 +16,9 @@ license: GPL-3.0-or-later
 Map Spec 054 requirements, design sections, tasks, validation evidence, and
 durable promotion targets. Read the complete linked artifact before
 implementation; this matrix is a routing index, not a substitute for the spec.
+`Coverage State` records complete planned traceability through delivery tasks;
+it does not claim implementation or executed verification. `verification.md`
+owns those delivery states and evidence.
 
 ## Task To Context Matrix
 
@@ -42,7 +45,7 @@ implementation; this matrix is a routing index, not a substitute for the spec.
 | Property | Requirements | Design Sections | Tasks | Tests Or Verification | Residual Risk |
 | --- | --- | --- | --- | --- | --- |
 | CP-001 no unsafe sentinel in public MCP responses | Requirement 1, Requirement 3, Requirement 4 | Data Flow; Validation Strategy | T002-T005 | serialized hostile-message fixtures | sink inventory may reveal additional tests |
-| CP-002 idempotent, 512-byte UTF-8 output | Requirement 1, Requirement 4 | Algorithm | T003-T005 | table and multi-byte boundary tests | none expected |
+| CP-002 idempotent, 512-byte UTF-8 output | Requirement 1, Requirement 4 | Algorithm | T003-T005 | table, marker-only fallback, idempotence, and multi-byte boundary tests | none expected |
 | CP-003 structural failure invariance | Requirement 2, Requirement 4, Requirement 5 | Data Flow; Migration And Compatibility | T003-T005 | exact code/retry/meta/trust/data/next-action golden tests | none expected |
 | CP-004 every public sink classified | Requirement 1, Requirement 3 | Components And Changes; Slice Boundary | T002, T004, T005 | pre/post `rg` inventory and direct reads | non-public debug paths require explicit classification |
 | CP-005 cause-code behavior precedes redaction | Requirement 2, Requirement 4 | Data Flow; Error Handling | T003-T005 | unknown-impact cause-code regression | none expected |
@@ -52,7 +55,7 @@ implementation; this matrix is a routing index, not a substitute for the spec.
 | Design Section | Requirements | Tasks | Interfaces Or Files | Verification | Coverage State | Residual Destination |
 | --- | --- | --- | --- | --- | --- | --- |
 | Components And Changes | Requirement 1, Requirement 3, Requirement 5 | T002, T004 | redaction helper, shared envelope, resources, presenters, diagnostics | sink inventory and focused tests | complete | none |
-| Algorithm | Requirement 1, Requirement 4 | T003, T004 | `src/presentation/redaction.ts` | table, idempotence, and UTF-8 tests | complete | none |
+| Algorithm | Requirement 1, Requirement 4 | T003, T004 | `src/presentation/redaction.ts` | table, marker-only fallback, idempotence, and UTF-8 tests | complete | none |
 | Error Handling | Requirement 1, Requirement 2 | T003, T004 | shared envelope and typed builders | failure-class and cause-code golden tests | complete | none |
 | Security, Trust, And Access | Requirement 1 through Requirement 4 | T002-T005 | serialized public response boundary | security review and hostile sentinels | complete | none |
 | Migration And Compatibility | Requirement 2, Requirement 5 | T001, T003-T005 | runtime contracts and current schemas | typecheck, contract tests, review | complete | none |
