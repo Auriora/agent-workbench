@@ -467,6 +467,33 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-04 - 056-mcp-tool-sweep-production-extractor-parity
+
+- **Spec:** `docs/specs/056-mcp-tool-sweep-production-extractor-parity/`
+- **Title:** MCP tool-sweep production extractor parity requirements
+- **Final spec commit:** `a5002dd`
+- **Closure cleanup commit:** `6d87888`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/observability-debugging-design.md`
+  - `docs/backlog/README.md`
+  - `docs/reference/dogfood-evidence-ledger.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Typecheck, 63 focused graph/MCP tests, nine
+  architecture tests, ten documentation tests, the isolated 37-test installed
+  provider smoke, the bounded 111-file / 1,249-test full suite, diff hygiene,
+  package lint, evidence quality, task-state audit, low-risk closure review,
+  real-repository read-only dogfood, and archive reconciliation passed.
+- **Residual risks:**
+  - Go remains parser-backed partial-semantic evidence.
+  - C/C++ remains resource-backed heuristic evidence rather than compile-aware
+    semantic proof.
+  - Sweep declaration regexes remain bounded candidate discovery; the indexed
+    graph stays authoritative.
+- **Follow-up:** EB010 remains the owner for fixture-gated language promotion;
+  no separate follow-up is required for this parity repair.
+
 ### 2026-08-02 - 052-production-documentation-corpus-isolation-and-governing-owner-priority
 
 - **Spec:** `docs/specs/052-production-documentation-corpus-isolation-and-governing-owner-priority/`
