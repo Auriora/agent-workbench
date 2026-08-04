@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/058-git-submodule-repository-support/`
 - **Title:** Git submodule repository support requirements
 - **Final spec commit:** `b6b2b53`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `c9ddd69`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/reference/workspace-safety-contract.md`
