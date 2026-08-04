@@ -80,7 +80,7 @@ commands.
 | `docs/security/threat-model.md` | Repository containment, command execution, network access, and untrusted workspace evidence require explicit controls. | high | The implementation must preserve no-network and no-mutation behavior. |
 | `src/infrastructure/filesystem/file-catalog-scanner.ts` | Any directory containing `.git` below the launched root is currently classified as `nested_git_repository` and skipped. | high | Direct source evidence. |
 | `src/infrastructure/commands/index.ts` | Git evidence already uses a structured `CommandPort`, but the current command adapter does not itself expose all timeout, output-cap, environment, and cancellation controls required for broader Git metadata collection. | high | T001 must settle the safe bounded adapter seam before new Git invocations. |
-| `docs/specs/057-nested-project-unit-validation-evidence/` | Spec 057 defines project-unit selection and treats submodules as non-traversed boundaries. | high | T009 requires Spec 057 T001-T009 complete and verified. Spec 058 supersedes only the initialized-submodule traversal residual after implementation proof and T013 reconciliation. |
+| `docs/design/edit-and-validation-loop-design.md`, `docs/reference/runtime-contracts.md`, and `docs/history/spec-closure-log.md` | Closed Spec 057 delivered project-unit selection and non-traversed submodule boundaries. | high | Spec 058 supersedes only the initialized-submodule traversal residual; the promoted project-unit behavior remains current. |
 | `docs/backlog/README.md` | EB004 owns evidence-backed validation planning and structured blocked outcomes. | high | Submodule-scoped validation planning remains non-executing. |
 
 ## Durable Impact

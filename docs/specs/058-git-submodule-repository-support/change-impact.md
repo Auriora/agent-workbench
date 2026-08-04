@@ -87,7 +87,7 @@ read-only scope without an additional prompt.
 | Composition table, migration, prefix lookup, freshness fingerprint | `docs/design/graph-store-design.md` | pending T013 |
 | Per-repository project-unit planning and aggregation | `docs/design/edit-and-validation-loop-design.md` | pending T013 |
 | EB004/Spec 057 residual reconciliation | `docs/backlog/README.md` | pending T013 |
-| Active Spec 057 supersession boundary | `docs/specs/057-nested-project-unit-validation-evidence/` or its closure record when already closed | pending T013 |
+| Closed Spec 057 supersession boundary | `docs/history/spec-closure-log.md`, `docs/design/edit-and-validation-loop-design.md`, and `docs/reference/runtime-contracts.md` | reconciled by Spec 057 closure; confirm at T013 |
 
 ## Unchanged Durable Areas
 

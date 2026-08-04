@@ -467,6 +467,40 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-04 - 057-nested-project-unit-validation-evidence
+
+- **Spec:** `docs/specs/057-nested-project-unit-validation-evidence/`
+- **Title:** Nested project-unit validation evidence requirements
+- **Final spec commit:** `aaf8ec5`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/backlog/README.md`
+  - `docs/design/edit-and-validation-loop-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/reference/language-capability-matrix.md`
+  - `docs/security/threat-model.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Eight focused project-unit contract/application/MCP
+  files passed 108 tests, the review-fix slice passed 83 tests, and the full
+  suite passed 116 files / 1,288 tests. Typecheck, plugin validation, six-file
+  skills validation, the 264-entry package dry-run, ten documentation tests,
+  diff hygiene, lifecycle task/evidence/package checks, closure readiness,
+  active-spec inventory, and archive reconciliation passed. No target command,
+  Git command, environment probe, submodule operation, or fallback execution
+  was performed.
+- **Residual risks:**
+  - The initial project marker catalog is intentionally limited to `.csproj`,
+    `pom.xml`, `Cargo.toml`, and positively evidenced extensionless scripts.
+  - Broken Git metadata intentionally leaves Git-dependent cleanliness and diff
+    claims unavailable while retaining readable source evidence.
+  - Declared initialized submodules remain non-traversed boundaries.
+- **Follow-up:** Spec 058 owns read-only declared-submodule traversal,
+  repository identity, recursive bounds, and repository-scoped validation
+  planning. It does not authorize remote access, mutation, or target command
+  execution.
+
 ### 2026-08-04 - 056-mcp-tool-sweep-production-extractor-parity
 
 - **Spec:** `docs/specs/056-mcp-tool-sweep-production-extractor-parity/`
