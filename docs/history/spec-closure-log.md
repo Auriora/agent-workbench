@@ -467,6 +467,37 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-04 - 058-git-submodule-repository-support
+
+- **Spec:** `docs/specs/058-git-submodule-repository-support/`
+- **Title:** Git submodule repository support requirements
+- **Final spec commit:** `b6b2b53`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/reference/workspace-safety-contract.md`
+  - `docs/security/threat-model.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/design/layered-runtime-architecture.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/design/edit-and-validation-loop-design.md`
+  - `docs/backlog/README.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** Typecheck, 119 test files / 1,312 tests, plugin
+  validation, 6-skill validation, package dry-run, 2 documentation files / 37
+  tests, Markdown checking, lifecycle lint, task audit, and closure readiness
+  passed. Independent correctness and security reviews reported no blockers
+  after remediation.
+- **Residual risks:**
+  - Git behavior and metadata layouts vary by platform; bounded parse failures
+    remain structured degraded evidence.
+  - Older clients may ignore additive repository provenance.
+  - Remote access, submodule initialization/update, writes beneath submodules,
+    and target command execution remain out of scope.
+- **Follow-up:** Real-repository dogfood may extend the fixture-backed evidence;
+  it is not a closure gate.
+
 ### 2026-08-04 - 057-nested-project-unit-validation-evidence
 
 - **Spec:** `docs/specs/057-nested-project-unit-validation-evidence/`
