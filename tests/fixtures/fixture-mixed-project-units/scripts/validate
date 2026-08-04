@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Fixture evidence only. Do not execute.
+echo "planned-only fixture"

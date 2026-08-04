@@ -21,7 +21,7 @@ It never authorizes execution of commands in fixture or target repositories.
 
 | Gate | Required? | Status | Evidence |
 |------|-----------|--------|----------|
-| G1 Contract and compatibility | yes | pending | T001/T008 schema, parser, presenter, and compatibility tests |
+| G1 Contract and compatibility | yes | partial | T001 additive schema and compatibility tests passed; T008 parser/presenter integration remains pending |
 | G2 Unit discovery, markers, readiness, and determinism | yes | pending | T002-T005 focused tests and typecheck |
 | G3 Broken Git claim separation | yes | pending | T006 tests preserve source evidence and block cleanliness claims |
 | G4 Repository-boundary confinement | yes | pending | T007 tests prove no traversal, URL access, or submodule action |
@@ -102,7 +102,7 @@ created.
 
 | Task ID | Status | Evidence | Notes |
 |---------|--------|----------|-------|
-| T001 | pending | | Contract and fixture foundation. |
+| T001 | complete | Additive optional `project_units` contract; inert mixed-language fixture; 33 focused/runtime contract tests and `pnpm typecheck` passed; independent findings resolved. | Contract and fixture foundation only; production discovery/emission remains downstream. |
 | T002 | pending | | Discovery and deterministic selection. |
 | T003 | pending | | Marker recognizers. |
 | T004 | pending | | Per-unit readiness. |
@@ -124,6 +124,11 @@ created.
 | 2026-08-04 | Focused docs tests: `docs-links-metadata` and `markdown-quality` | passed, 10 tests | Spec-authoring validation only. |
 | 2026-08-04 | Independent requirements/design/tasks review | findings addressed | Narrowed script evidence, defined action projection, added broad-request proof, and separated review/validation/promotion/closure gates. |
 | 2026-08-04 | Canonical-context advisory review | waived | Durable authorities are explicit, current, non-conflicting, and mapped in requirements/change impact; duplicating them into a context artifact would add no authority clarification. |
+| 2026-08-04 | T001 additive project-unit contract and inert mixed-language fixture | passed | Contract `0.1` keeps flat `planned_commands` compatible and adds optional bounded `project_units`; fixture markers are catalog-visible, while `.gitmodules` parsing remains explicitly owned by T007. |
+| 2026-08-04 | `pnpm exec vitest run tests/contracts/validation-status-evidence.test.ts tests/contracts/runtime-contracts.test.ts` | passed, 33 tests | Covers compatibility, strictness, bounds, path normalization, blocker invariants, `not_executed`, and fixture structure/catalog visibility. |
+| 2026-08-04 | `pnpm typecheck` and `git diff --check` | passed | Type and whitespace validation for the T001 slice. |
+| 2026-08-04 | Independent T001 implementation review and focused re-review | findings resolved | Renamed the extensionless script so catalog policy admits it and required non-empty blocked claims; no remaining T001 blocker. |
+| 2026-08-04 | Agent Workbench verification planning | blocked, target commands not executed | Current aggregate planner mixed fixture ecosystems and proposed target commands; this is the downstream behavior Spec 057 addresses, not authorized T001 validation. |
 
 ## Manual Or External Verification
 

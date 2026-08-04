@@ -1,0 +1,3 @@
+[submodule "declared-submodule"]
+	path = boundaries/declared-submodule
+	url = ../declared-submodule-placeholder.git

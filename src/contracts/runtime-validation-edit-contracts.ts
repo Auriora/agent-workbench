@@ -29,6 +29,40 @@ export const verificationPlanRequestSchema = z
   .strict();
 export type VerificationPlanRequest = z.infer<typeof verificationPlanRequestSchema>;
 
+const MAX_REPO_RELATIVE_PATH_LENGTH = 500;
+const MAX_PROJECT_UNIT_COUNT = 20;
+const MAX_PROJECT_UNIT_MARKER_COUNT = 8;
+const MAX_PROJECT_UNIT_BLOCKER_COUNT = 8;
+const MAX_PROJECT_UNIT_BLOCKED_CLAIM_COUNT = 4;
+const MAX_PROJECT_UNIT_EVIDENCE_PATH_COUNT = 8;
+const MAX_PROJECT_UNIT_MESSAGE_LENGTH = 500;
+const MAX_PROJECT_UNIT_REASON_LENGTH = 300;
+const MAX_PROJECT_UNIT_COMMAND_ARGUMENT_COUNT = 12;
+
+const repoRelativePathSchema = z
+  .string()
+  .min(1)
+  .max(MAX_REPO_RELATIVE_PATH_LENGTH)
+  .refine((value) => {
+    if (value === ".") {
+      return !value.includes("\0");
+    }
+
+    if (
+      value.startsWith("/") ||
+      value.endsWith("/") ||
+      value.includes("\\") ||
+      value.includes("\0")
+    ) {
+      return false;
+    }
+
+    const segments = value.split("/");
+    return segments.every((segment) => segment.length > 0 && segment !== "." && segment !== "..");
+  }, {
+    message: "Expected a normalized repo-relative path."
+  });
+
 export const plannedValidationCommandSchema = z
   .object({
     command: z.string(),
@@ -40,6 +74,158 @@ export const plannedValidationCommandSchema = z
   })
   .strict();
 export type PlannedValidationCommand = z.infer<typeof plannedValidationCommandSchema>;
+
+export const projectUnitPlannedValidationCommandSchema = z
+  .object({
+    command: z.string().min(1).max(MAX_PROJECT_UNIT_REASON_LENGTH),
+    args: z
+      .array(z.string().max(MAX_PROJECT_UNIT_REASON_LENGTH))
+      .max(MAX_PROJECT_UNIT_COMMAND_ARGUMENT_COUNT),
+    display: z.string().min(1).max(MAX_PROJECT_UNIT_MESSAGE_LENGTH),
+    reason: z.string().min(1).max(MAX_PROJECT_UNIT_MESSAGE_LENGTH),
+    status: z.literal("planned"),
+    execution: z.literal("not_executed")
+  })
+  .strict();
+export type ProjectUnitPlannedValidationCommand = z.infer<
+  typeof projectUnitPlannedValidationCommandSchema
+>;
+
+export const projectUnitKindSchema = z.enum([
+  "dotnet",
+  "maven",
+  "cargo",
+  "repository_script"
+]);
+export type ProjectUnitKind = z.infer<typeof projectUnitKindSchema>;
+
+export const projectUnitMarkerKindSchema = z.enum([
+  "csproj",
+  "pom_xml",
+  "cargo_toml",
+  "extensionless_script"
+]);
+export type ProjectUnitMarkerKind = z.infer<typeof projectUnitMarkerKindSchema>;
+
+export const projectUnitMarkerEvidenceSourceSchema = z.enum([
+  "manifest",
+  "repository_guidance",
+  "validation_protocol"
+]);
+export type ProjectUnitMarkerEvidenceSource = z.infer<typeof projectUnitMarkerEvidenceSourceSchema>;
+
+export const projectUnitSelectionRelationshipSchema = z.enum([
+  "containing",
+  "intersects_subtree",
+  "explicit_aggregator"
+]);
+export type ProjectUnitSelectionRelationship = z.infer<
+  typeof projectUnitSelectionRelationshipSchema
+>;
+
+export const projectUnitBoundaryStateSchema = z.enum([
+  "same_repository",
+  "declared_submodule",
+  "repository_boundary_unknown"
+]);
+export type ProjectUnitBoundaryState = z.infer<typeof projectUnitBoundaryStateSchema>;
+
+export const projectUnitReadinessSchema = z.enum(["ready", "blocked", "limited"]);
+export type ProjectUnitReadiness = z.infer<typeof projectUnitReadinessSchema>;
+
+export const projectUnitBlockerKindSchema = z.enum([
+  "dependency_unknown",
+  "environment_unknown",
+  "marker_unreadable",
+  "marker_conflict",
+  "git_claim_unavailable",
+  "submodule_unavailable",
+  "repository_boundary_unknown",
+  "unsupported_unit"
+]);
+export type ProjectUnitBlockerKind = z.infer<typeof projectUnitBlockerKindSchema>;
+
+export const projectUnitBlockedClaimSchema = z.enum([
+  "validation_candidate",
+  "worktree_cleanliness",
+  "diff_completeness",
+  "repository_traversal"
+]);
+export type ProjectUnitBlockedClaim = z.infer<typeof projectUnitBlockedClaimSchema>;
+
+export const projectUnitMarkerSchema = z
+  .object({
+    path: repoRelativePathSchema,
+    kind: projectUnitMarkerKindSchema,
+    evidence_source: projectUnitMarkerEvidenceSourceSchema,
+    evidence_path: repoRelativePathSchema.optional()
+  })
+  .superRefine((value, context) => {
+    if (
+      (value.evidence_source === "repository_guidance" ||
+        value.evidence_source === "validation_protocol") &&
+      value.evidence_path === undefined
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Documented script marker evidence requires an evidence_path."
+      });
+    }
+
+    if (value.evidence_source === "manifest" && value.evidence_path !== undefined) {
+      context.addIssue({
+        code: "custom",
+        message: "Manifest marker evidence must not include an evidence_path."
+      });
+    }
+  })
+  .strict();
+export type ProjectUnitMarker = z.infer<typeof projectUnitMarkerSchema>;
+
+export const projectUnitBlockerSchema = z
+  .object({
+    kind: projectUnitBlockerKindSchema,
+    unit_root: repoRelativePathSchema,
+    evidence_paths: z.array(repoRelativePathSchema).max(MAX_PROJECT_UNIT_EVIDENCE_PATH_COUNT),
+    message: z.string().min(1).max(MAX_PROJECT_UNIT_MESSAGE_LENGTH),
+    blocked_claims: z
+      .array(projectUnitBlockedClaimSchema)
+      .min(1)
+      .max(MAX_PROJECT_UNIT_BLOCKED_CLAIM_COUNT),
+    next_action: nextActionSchema.optional()
+  })
+  .strict();
+export type ProjectUnitBlocker = z.infer<typeof projectUnitBlockerSchema>;
+
+export const projectUnitEvidenceSchema = z
+  .object({
+    root: repoRelativePathSchema,
+    kind: projectUnitKindSchema,
+    markers: z.array(projectUnitMarkerSchema).min(1).max(MAX_PROJECT_UNIT_MARKER_COUNT),
+    selection: projectUnitSelectionRelationshipSchema,
+    boundary: projectUnitBoundaryStateSchema,
+    readiness: projectUnitReadinessSchema,
+    blockers: z.array(projectUnitBlockerSchema).max(MAX_PROJECT_UNIT_BLOCKER_COUNT),
+    planned_commands: z
+      .array(projectUnitPlannedValidationCommandSchema)
+      .max(MAX_PROJECT_UNIT_COUNT)
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.readiness === "blocked" && value.blockers.length === 0) {
+      context.addIssue({
+        code: "custom",
+        message: "Blocked project units must include at least one blocker."
+      });
+    }
+    if (value.readiness === "blocked" && value.planned_commands.length > 0) {
+      context.addIssue({
+        code: "custom",
+        message: "Blocked project units must not include planned commands."
+      });
+    }
+  });
+export type ProjectUnitEvidence = z.infer<typeof projectUnitEvidenceSchema>;
 
 export const staticFeedbackFindingSchema = z
   .object({
@@ -67,6 +253,7 @@ export const verificationPlanSchema = z
     status: verificationStatusSchema,
     summary: z.string(),
     planned_commands: z.array(plannedValidationCommandSchema),
+    project_units: z.array(projectUnitEvidenceSchema).max(MAX_PROJECT_UNIT_COUNT).optional(),
     static_feedback: staticFeedbackSchema.optional(),
     risks: z.array(contextRiskSchema),
     skipped_path_summary: validationSkippedPathSummarySchema.optional(),

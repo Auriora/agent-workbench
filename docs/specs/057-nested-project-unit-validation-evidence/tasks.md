@@ -36,7 +36,7 @@ T012 -> T013
 
 ## Phase 1: Contract and fixture foundation
 
-- [ ] T001 Define the additive project-unit evidence contract and create the
+- [x] T001 Define the additive project-unit evidence contract and create the
   bounded mixed-language fixture skeleton.
   - Depends on: none
   - Requirements: Requirement 2, Requirement 3, Requirement 4, Requirement 7, Requirement 8
@@ -52,13 +52,20 @@ T012 -> T013
     requiring any target command execution.
   - Validation: Run the focused contract test and fixture-structure assertions.
   - Evidence mode: contract
-  - Evidence: Pending.
-  - [ ] T001.1 Decide and implement the smallest additive contract shape that
+  - Evidence: Added optional bounded project_units under contract 0.1 without changing flat planned_commands; created inert mixed-language fixture; 33 focused/runtime contract tests, pnpm typecheck, and git diff --check passed; independent findings resolved.
+  - [x] T001.1 Decide and implement the smallest additive contract shape that
     preserves existing `planned_commands` compatibility.
-  - [ ] T001.2 Add contract parsing, strictness, boundedness, and
+    - Evidence: Optional bounded `project_units` was added under contract `0.1`;
+      the existing flat `plannedValidationCommandSchema` remains unchanged.
+  - [x] T001.2 Add contract parsing, strictness, boundedness, and
     `not_executed` tests.
-  - [ ] T001.3 Create the inert mixed-language fixture structure and assert its
+    - Evidence: Focused and runtime contract suites passed 33 tests, including
+      strictness, bounds, path, blocker, compatibility, and execution-state cases.
+  - [x] T001.3 Create the inert mixed-language fixture structure and assert its
     evidence files without invoking anything inside it.
+    - Evidence: The bounded fixture contains .NET, Maven, Cargo, evidenced
+      extensionless-script, unknown-environment, broken-Git, and submodule-boundary
+      evidence; catalog visibility assertions passed without target execution.
 
 - [ ] T002 Implement the bounded project-unit discovery model and deterministic
   selection primitives.
