@@ -95,10 +95,19 @@ against repository-owned fixtures or committed-tree sandbox copies under `.tmp`
 or an Agent Workbench-named `/tmp` sandbox. Original external repositories are
 read-only inputs.
 
+Production startup and the checkout sweep compose extractors through the same
+canonical production-registry factory. Its parity regression covers C, C++,
+Go, JavaScript, TypeScript, Python, and Ruby so a consumer-local registration
+list cannot silently narrow dogfood proof.
+
 Graph-backed sweep probes select a deterministic symbol-bearing source file
 from the detected repository ecosystem. Rails-shaped mixed repositories prefer
-Ruby for symbol, reference, impact, and context probes so a successful sweep
-actually exercises the promoted Ruby adapter instead of incidental JavaScript.
+Ruby, Go modules prefer Go, and CMake-shaped native repositories prefer C++
+then C for symbol, reference, impact, and context probes. Candidate regexes are
+only bounded discovery aids: the published graph must contain the candidate,
+and public capability and evidence labels are derived from the selected graph
+node. A successful sweep therefore exercises the intended production adapter
+without promoting heuristic C/C++ evidence or selecting incidental tooling.
 
 Tool sweep quality labels describe harness result quality, not product
 severity:

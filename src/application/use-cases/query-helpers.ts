@@ -297,7 +297,7 @@ export function capabilityForLanguage(language: string): CapabilityLevel {
   return "unsupported";
 }
 
-function capabilityFromNode(node: GraphNode): CapabilityLevel {
+export function capabilityFromNode(node: GraphNode): CapabilityLevel {
   const value = node.metadata.capability_level;
   if (value === "semantic" || value === "partial_semantic" || value === "resource_backed" || value === "unsupported") {
     return value;
@@ -358,7 +358,7 @@ function lambdaTemplatePathFromQualifiedName(qualifiedName: string | undefined):
   return prefix.slice(0, logicalSeparator);
 }
 
-function evidenceFromNode(node: GraphNode): EvidenceKind[] {
+export function evidenceFromNode(node: GraphNode): EvidenceKind[] {
   const value = node.metadata.evidence_kinds;
   if (Array.isArray(value)) {
     return value.filter((item): item is EvidenceKind =>

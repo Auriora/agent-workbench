@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import type { ImpactRequest, ImpactResult, ResponseMetadata } from "../../contracts/index.js";
-import type { GraphEdge } from "../../domain/models/index.js";
+import type { EvidenceKind, ImpactRequest, ImpactResult, ResponseMetadata } from "../../contracts/index.js";
+import type { GraphEdge, GraphNode } from "../../domain/models/index.js";
 import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
 import type {
   FileCatalogPort,
@@ -22,6 +22,7 @@ import {
   snapshotValidityMeta,
   staleSnapshotMeta,
   toSymbolReference,
+  evidenceFromNode,
   validityForResolvedSnapshot
 } from "./query-helpers.js";
 import { capNextActions } from "./response-metadata.js";
@@ -168,6 +169,7 @@ export async function computeImpact(input: {
     edgeCount: traversal.edges.length,
     fileCount: new Set(traversal.nodes.map((node) => node.file_path)).size,
     edges: traversal.edges,
+    nodes: traversal.nodes,
     truncated: traversal.truncated
   });
 
@@ -219,14 +221,19 @@ function impactConfidence(input: {
   edgeCount: number;
   fileCount: number;
   edges: readonly GraphEdge[];
+  nodes: readonly GraphNode[];
   truncated: boolean;
 }): ImpactResult["confidence"] {
+  const evidenceKinds = impactEvidenceKinds(input.nodes);
+  const parserBacked = evidenceKinds.includes("parser");
   if (input.edgeCount === 0) {
     return {
       level: "low",
       scope: "empty",
-      reason: "Traversal found no parser-backed edges; blast-radius evidence is insufficient for broad edit planning.",
-      evidence_kinds: ["parser"]
+      reason: parserBacked
+        ? "Traversal found no parser-backed edges; blast-radius evidence is insufficient for broad edit planning."
+        : "Traversal found no graph edges; blast-radius evidence is insufficient for broad edit planning.",
+      evidence_kinds: evidenceKinds
     };
   }
   if (input.fileCount <= 1) {
@@ -234,7 +241,7 @@ function impactConfidence(input: {
       level: "low",
       scope: "local_only",
       reason: "Traversal stayed within one file; treat impact as local-only and verify broader usage before broad edits.",
-      evidence_kinds: ["parser"]
+      evidence_kinds: evidenceKinds
     };
   }
   if (input.edges.some((edge) => edge.provenance.includes("cloudformation"))) {
@@ -249,16 +256,26 @@ function impactConfidence(input: {
     return {
       level: "low",
       scope: "graph",
-      reason: "Traversal reached low-confidence parser-backed edges; verify the language-specific usage before broad edits.",
-      evidence_kinds: ["parser"]
+      reason: parserBacked
+        ? "Traversal reached low-confidence parser-backed edges; verify the language-specific usage before broad edits."
+        : "Traversal reached low-confidence routing edges; verify the language-specific usage before broad edits.",
+      evidence_kinds: evidenceKinds
     };
   }
   return {
     level: input.truncated ? "medium" : "high",
     scope: "graph",
-    reason: input.truncated
-      ? "Traversal reached cross-file parser-backed edges but hit the configured budget."
-      : "Traversal reached cross-file parser-backed edges within the configured budget.",
-    evidence_kinds: ["parser"]
+    reason: parserBacked
+      ? input.truncated
+        ? "Traversal reached cross-file parser-backed edges but hit the configured budget."
+        : "Traversal reached cross-file parser-backed edges within the configured budget."
+      : input.truncated
+        ? "Traversal reached cross-file routing edges but hit the configured budget."
+        : "Traversal reached cross-file routing edges within the configured budget.",
+    evidence_kinds: evidenceKinds
   };
+}
+
+function impactEvidenceKinds(nodes: readonly GraphNode[]): EvidenceKind[] {
+  return Array.from(new Set(nodes.flatMap((node) => evidenceFromNode(node)))).sort();
 }

@@ -29,6 +29,8 @@ import type {
 import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
 import {
   blockedMeta,
+  capabilityFromNode,
+  evidenceFromNode,
   publicationSelectionMeta,
   resolveSnapshot,
   snapshotValidityMeta,
@@ -386,7 +388,7 @@ async function loadParserRoute(
       reference_name: item.reference_name,
       reference_kind: item.reference_kind,
       confidence: item.candidate_metadata.resolution === "ambiguous" ? 0.4 : 0.35,
-      evidence_kinds: ["parser", "heuristic"],
+      evidence_kinds: unresolvedEvidenceKinds(input.target),
       provenance: "unresolved_reference",
       status: item.candidate_metadata.resolution === "ambiguous" ? "ambiguous" : "unresolved"
     }));
@@ -818,8 +820,8 @@ function evidenceResult(
         path: input.target.file_path,
         language: input.target.language,
         source_range: input.target.source_range,
-        capability_level: "partial_semantic",
-        evidence_kinds: ["parser"]
+        capability_level: capabilityFromNode(input.target),
+        evidence_kinds: evidenceFromNode(input.target)
       },
       references,
       cursor,
@@ -841,6 +843,15 @@ function evidenceResult(
       reference_coverage: effectiveCoverage
     }
   };
+}
+
+function unresolvedEvidenceKinds(target: GraphNode): EvidenceKind[] {
+  const targetEvidence = evidenceFromNode(target);
+  return targetEvidence.includes("parser")
+    ? ["parser", "heuristic"]
+    : targetEvidence.includes("heuristic")
+      ? ["heuristic"]
+      : targetEvidence;
 }
 
 function nonValidReferenceMeta(

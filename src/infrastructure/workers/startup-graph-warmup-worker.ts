@@ -13,16 +13,9 @@ import {
   WorkspaceFileAdapter
 } from "../filesystem/index.js";
 import {
-  ExtractorRegistryAdapter,
+  createProductionExtractorRegistry,
   ResourceExtractorAdapter
 } from "../extraction/index.js";
-import {
-  CppDeclarationExtractorAdapter,
-  GoDeclarationExtractorAdapter,
-  JavaScriptTypeScriptTreeSitterExtractorAdapter,
-  PythonTreeSitterExtractorAdapter,
-  RubyTreeSitterExtractorAdapter
-} from "../tree-sitter/index.js";
 import { SystemClockAdapter } from "../time/index.js";
 
 const COMMON_RAILS_FRONT_DOOR_PRIORITY_PATHS = [
@@ -61,14 +54,7 @@ const workerGraphStore = crashBarrierProbe === undefined
         await pauseAtCrashBarrier(crashBarrierProbe, barrier);
       }
     });
-const extractors = new ExtractorRegistryAdapter();
-extractors.register(new CppDeclarationExtractorAdapter({ language: "c" }));
-extractors.register(new CppDeclarationExtractorAdapter({ language: "cpp" }));
-extractors.register(new GoDeclarationExtractorAdapter());
-extractors.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "javascript" }));
-extractors.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "typescript" }));
-extractors.register(new PythonTreeSitterExtractorAdapter());
-extractors.register(new RubyTreeSitterExtractorAdapter());
+const extractors = createProductionExtractorRegistry();
 
 try {
   const result = await runRepositoryGraphBuildSlice({

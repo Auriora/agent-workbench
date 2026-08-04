@@ -43,7 +43,10 @@ import { describeCurrentIntegrationProfile } from "../application/use-cases/desc
 import { resolveIntegrationIdentity } from "../application/use-cases/resolve-integration-identity.js";
 import { JsonSyntaxDiagnosticsProviderAdapter } from "../infrastructure/diagnostics/index.js";
 import { InMemoryEditPreviewStoreAdapter } from "../infrastructure/edit-preview-store/index.js";
-import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../infrastructure/extraction/index.js";
+import {
+  createProductionExtractorRegistry,
+  ResourceExtractorAdapter
+} from "../infrastructure/extraction/index.js";
 import {
   FileCatalogScannerAdapter,
   FilesystemSnapshotPathValidatorAdapter,
@@ -53,12 +56,6 @@ import {
 import { MarkdownParserAdapter, MarkdownStructureCheckerAdapter } from "../infrastructure/markdown/index.js";
 import { SCHEMA_VERSION, SqliteGraphStoreAdapter } from "../infrastructure/sqlite/index.js";
 import { createDocsRankingCursorCodec, createReferenceCursorCodec } from "../infrastructure/runtime/index.js";
-import {
-  JavaScriptTypeScriptTreeSitterExtractorAdapter,
-  PythonParserAdapter,
-  PythonTreeSitterExtractorAdapter,
-  RubyTreeSitterExtractorAdapter
-} from "../infrastructure/tree-sitter/index.js";
 import { SystemClockAdapter } from "../infrastructure/time/index.js";
 import {
   mcpResources,
@@ -151,15 +148,18 @@ type RepoFacts = {
 
 type SupportedSweepLanguage = (typeof SWEEP_SYMBOL_LANGUAGES)[number];
 
-const SWEEP_SYMBOL_LANGUAGES = ["python", "typescript", "javascript", "ruby"] as const;
+const SWEEP_SYMBOL_LANGUAGES = ["python", "typescript", "javascript", "ruby", "go", "cpp", "c"] as const;
 const DEFAULT_GRAPH_SLICE_FILES = 500;
-const SWEEP_TEXT_FILE_LANGUAGES = ["ruby", "python", "typescript", "javascript"] as const;
+const SWEEP_TEXT_FILE_LANGUAGES = ["ruby", "python", "typescript", "javascript", "go", "cpp", "c"] as const;
 const SWEEP_TEXT_FILE_FALLBACK_LANGUAGES = ["markdown", "json", "text", "yaml"] as const;
 const SWEEP_SYMBOL_REGEX_BY_LANGUAGE: Record<SupportedSweepLanguage, RegExp> = {
   python: /(?:^|\n)\s*(?:def|class)\s+([A-Za-z_][A-Za-z0-9_!?]*)/gu,
   typescript: /(?:^|\n)\s*(?:class|interface|type|enum|def|function|const|let)\s+([A-Za-z_][A-Za-z0-9_!?]*)/gu,
   javascript: /(?:^|\n)\s*(?:class|function|const|let|def)\s+([A-Za-z_][A-Za-z0-9_!?]*)/gu,
-  ruby: /(?:^|\n)\s*(?:class|module|def)\s+([A-Za-z_][A-Za-z0-9_!?]*)/gu
+  ruby: /(?:^|\n)\s*(?:class|module|def)\s+([A-Za-z_][A-Za-z0-9_!?]*)/gu,
+  go: /(?:^|\n)\s*(?:func(?:\s+\([^)]*\))?|type)\s+([A-Za-z_][A-Za-z0-9_]*)/gu,
+  cpp: /(?:^|\n)\s*(?:(?:class|struct)\s+([A-Za-z_][A-Za-z0-9_]*)|(?:[A-Za-z_][\w:<>,*&\s]*\s+)?(?:[A-Za-z_][A-Za-z0-9_]*::)*([A-Za-z_][A-Za-z0-9_]*)\s*\([^;{}]*\)(?:\s+const)?\s*\{)/gu,
+  c: /(?:^|\n)\s*(?:[A-Za-z_][A-Za-z0-9_]*[\s*]+)+([A-Za-z_][A-Za-z0-9_]*)\s*\([^;{}]*\)\s*\{/gu
 };
 
 type RepoRuntime = {
@@ -462,11 +462,7 @@ function createRepoRuntime(input: { repoRoot: string; outputDir: string }): Repo
 }
 
 async function warmGraph(input: { repoRoot: string; runtime: RepoRuntime; sliceFiles: number }): Promise<void> {
-  const registry = new ExtractorRegistryAdapter();
-  registry.register(new PythonTreeSitterExtractorAdapter({ parser: new PythonParserAdapter() }));
-  registry.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "javascript" }));
-  registry.register(new JavaScriptTypeScriptTreeSitterExtractorAdapter({ language: "typescript" }));
-  registry.register(new RubyTreeSitterExtractorAdapter());
+  const registry = createProductionExtractorRegistry();
   let snapshotId = await input.runtime.graph.allocateBuildSnapshotId({
     repo_root: input.repoRoot,
     minimum_id: String(Math.max(1, Date.now()))
@@ -613,6 +609,9 @@ async function callTool(input: {
         max_docs: 20
       },
       scanner: input.runtime.scanner,
+      graph: input.runtime.graph,
+      snapshots: input.runtime.graph,
+      catalog: input.runtime.graph,
       workspace: input.runtime.workspace,
       default_repo_root: input.repoRoot
     }));
@@ -1050,7 +1049,7 @@ function discoverSourceSymbols(input: {
     for (const file of filesForLanguage) {
       const content = readSafe(path.join(input.repoRoot, file.path));
       for (const match of content.matchAll(symbolPattern)) {
-        const symbol = match[1];
+        const symbol = match.slice(1).find((candidate) => candidate !== undefined);
         if (symbol !== undefined && !symbols.includes(symbol)) {
           symbols.push(symbol);
         }
@@ -1089,15 +1088,39 @@ function preferredTextFile(
 }
 
 function sourceTextLanguageOrder(files: readonly FileCatalogEntry[]): string[] {
-  return isRubyTargetRepo(files)
-    ? [...SWEEP_TEXT_FILE_LANGUAGES]
-    : [...SWEEP_TEXT_FILE_LANGUAGES.slice(1), SWEEP_TEXT_FILE_LANGUAGES[0]];
+  if (isRubyTargetRepo(files)) {
+    return ["ruby", "python", "typescript", "javascript", "go", "cpp", "c"];
+  }
+  if (isGoTargetRepo(files)) {
+    return ["go", "python", "typescript", "javascript", "ruby", "cpp", "c"];
+  }
+  if (isCmakeCppTargetRepo(files)) {
+    return ["cpp", "c", "python", "typescript", "javascript", "ruby", "go"];
+  }
+  return [...SWEEP_TEXT_FILE_LANGUAGES.slice(1), SWEEP_TEXT_FILE_LANGUAGES[0]];
 }
 
 function sweepSymbolLanguageOrder(files: readonly FileCatalogEntry[]): string[] {
-  return isRubyTargetRepo(files)
-    ? ["ruby", "python", "typescript", "javascript"]
-    : [...SWEEP_SYMBOL_LANGUAGES];
+  if (isRubyTargetRepo(files)) {
+    return ["ruby", "python", "typescript", "javascript", "go", "cpp", "c"];
+  }
+  if (isGoTargetRepo(files)) {
+    return ["go", "python", "typescript", "javascript", "ruby", "cpp", "c"];
+  }
+  if (isCmakeCppTargetRepo(files)) {
+    return ["cpp", "c", "python", "typescript", "javascript", "ruby", "go"];
+  }
+  return [...SWEEP_SYMBOL_LANGUAGES];
+}
+
+function isGoTargetRepo(files: readonly FileCatalogEntry[]): boolean {
+  return files.some((file) => file.path.replaceAll("\\", "/") === "go.mod") &&
+    files.some((file) => file.file_identity.language === "go");
+}
+
+function isCmakeCppTargetRepo(files: readonly FileCatalogEntry[]): boolean {
+  return files.some((file) => file.path.replaceAll("\\", "/").endsWith("CMakeLists.txt")) &&
+    files.some((file) => file.file_identity.language === "cpp" || file.file_identity.language === "c");
 }
 
 function isRubyTargetRepo(files: readonly FileCatalogEntry[]): boolean {

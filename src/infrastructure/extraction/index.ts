@@ -4,4 +4,5 @@
  */
 
 export * from "./extractor-registry.js";
+export * from "./production-extractor-registry.js";
 export * from "./resource-extractor.js";

@@ -405,6 +405,10 @@ or runtime telemetry.
   HABTM and ambiguity-gated polymorphic/source-type associations. EB010 remains
   the single owner after Spec 050 adds source-distinct static routing-concern
   declarations and ambiguity-gated reuse through the existing graph path.
+  Spec 056 removes the debug proof gap by sharing production extractor
+  composition with the checkout sweep and adding fixture-backed Go and C/C++
+  graph probes. It does not promote Go or C/C++ capability: Go remains
+  partial-semantic/parser-backed and C/C++ remains resource-backed/heuristic.
   Callable or computed concerns, option-dependent route composition, cloned
   reuse-site route expansion, deeper Ruby constant lookup, dynamic dispatch,
   metaprogramming, refinements, autoload execution and Rails engine/runtime

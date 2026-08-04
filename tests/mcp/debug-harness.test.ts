@@ -30,6 +30,10 @@ import {
   mcpTools
 } from "../../src/interface-adapters/mcp/registries/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
+import {
+  createProductionExtractorRegistry,
+  PRODUCTION_EXTRACTOR_LANGUAGES
+} from "../../src/infrastructure/extraction/index.js";
 
 describe("repo-local MCP debug harness", () => {
   it("is exposed only through package scripts", () => {
@@ -56,6 +60,23 @@ describe("repo-local MCP debug harness", () => {
     expect(source).not.toContain("ranking_cursor_codec: createDocsRankingCursorCodec()");
     expect(source).toContain("runRepositoryGraphBuildSlice({");
     expect(source).not.toContain("max_extraction_files: 500");
+  });
+
+  it("uses one canonical production extractor composition in startup and sweep warm-up", async () => {
+    const registry = createProductionExtractorRegistry();
+    await expect(registry.availableLanguages()).resolves.toEqual(
+      [...PRODUCTION_EXTRACTOR_LANGUAGES].sort()
+    );
+
+    for (const sourcePath of [
+      "src/debug/mcp-tool-sweep.ts",
+      "src/infrastructure/workers/startup-graph-warmup-worker.ts"
+    ]) {
+      const source = fs.readFileSync(sourcePath, "utf8");
+      expect(source).toContain("createProductionExtractorRegistry()");
+      expect(source).not.toContain("new ExtractorRegistryAdapter()");
+      expect(source).not.toContain(".register(new");
+    }
   });
 
   it("refuses to resolve outside this repository checkout", () => {
@@ -517,6 +538,134 @@ describe("repo-local MCP debug harness", () => {
           })
         ])
       );
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    }
+  });
+
+  it("prefers indexed Go evidence for Go project sweeps", async () => {
+    const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep-go", String(Date.now()));
+    const targetRepo = path.resolve("tests/fixtures/fixture-go-service-repo");
+    try {
+      const report = await runMcpToolSweep({
+        repos: [targetRepo],
+        output_dir: outputDir,
+        call_timeout_ms: 30_000,
+        include_raw: true,
+        start_graph_warmup: true
+      });
+      const symbolSearch = report.results.find((result) => result.name === "symbol_search");
+      const findReferences = report.results.find((result) => result.name === "find_references");
+      const impact = report.results.find((result) => result.name === "impact");
+      const context = report.results.find((result) => result.name === "context_for_task");
+      const symbol = (symbolSearch?.raw_envelope as {
+        data?: { symbols?: Array<{ node_id?: string; language?: string; capability_level?: string; evidence_kinds?: string[] }> };
+      } | undefined)?.data?.symbols?.[0];
+      const target = (findReferences?.raw_envelope as {
+        data?: { target?: { node_id?: string; language?: string; capability_level?: string; evidence_kinds?: string[] } };
+      } | undefined)?.data?.target;
+      const startNodeIds = (impact?.raw_envelope as {
+        data?: { start_node_ids?: string[]; confidence?: { evidence_kinds?: string[] } };
+      } | undefined)?.data;
+      const requestedFiles = (context?.raw_envelope as {
+        data?: {
+          requested_files?: Array<{ language?: string }>;
+          ranked_symbols?: Array<{
+            symbol?: { node_id?: string; language?: string; evidence_kinds?: string[] };
+          }>;
+        };
+      } | undefined)?.data;
+
+      expect(symbolSearch?.status).toBe("ok");
+      expect(findReferences?.status).toBe("ok");
+      expect(impact?.status).toBe("ok");
+      expect(context?.status).toBe("ok");
+      expect(symbol).toMatchObject({
+        language: "go",
+        capability_level: "partial_semantic",
+        evidence_kinds: expect.arrayContaining(["parser"])
+      });
+      expect(target).toMatchObject({
+        node_id: symbol?.node_id,
+        language: "go",
+        capability_level: "partial_semantic",
+        evidence_kinds: expect.arrayContaining(["parser"])
+      });
+      expect(startNodeIds?.start_node_ids).toContain(symbol?.node_id);
+      expect(requestedFiles?.requested_files).toEqual(expect.arrayContaining([expect.objectContaining({ language: "go" })]));
+      expect(requestedFiles?.ranked_symbols).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({
+            language: "go",
+            evidence_kinds: expect.arrayContaining(["parser"])
+          })
+        })
+      ]));
+    } finally {
+      fs.rmSync(outputDir, { recursive: true, force: true });
+    }
+  });
+
+  it("prefers indexed resource-backed C++ evidence for CMake project sweeps", async () => {
+    const outputDir = path.resolve(".tmp", "test-mcp-tool-sweep-cpp", String(Date.now()));
+    const targetRepo = path.resolve("tests/fixtures/fixture-cmake-cpp-repo");
+    try {
+      const report = await runMcpToolSweep({
+        repos: [targetRepo],
+        output_dir: outputDir,
+        call_timeout_ms: 30_000,
+        include_raw: true,
+        start_graph_warmup: true
+      });
+      const symbolSearch = report.results.find((result) => result.name === "symbol_search");
+      const findReferences = report.results.find((result) => result.name === "find_references");
+      const impact = report.results.find((result) => result.name === "impact");
+      const context = report.results.find((result) => result.name === "context_for_task");
+      const symbol = (symbolSearch?.raw_envelope as {
+        data?: { symbols?: Array<{ node_id?: string; language?: string; capability_level?: string; evidence_kinds?: string[] }> };
+      } | undefined)?.data?.symbols?.[0];
+      const target = (findReferences?.raw_envelope as {
+        data?: { target?: { node_id?: string; language?: string; capability_level?: string; evidence_kinds?: string[] } };
+      } | undefined)?.data?.target;
+      const startNodeIds = (impact?.raw_envelope as {
+        data?: { start_node_ids?: string[]; confidence?: { evidence_kinds?: string[] } };
+      } | undefined)?.data;
+      const requestedFiles = (context?.raw_envelope as {
+        data?: {
+          requested_files?: Array<{ language?: string }>;
+          ranked_symbols?: Array<{
+            symbol?: { node_id?: string; language?: string; evidence_kinds?: string[] };
+          }>;
+        };
+      } | undefined)?.data;
+
+      expect(symbolSearch?.status).toBe("ok");
+      expect(findReferences?.status).toBe("ok");
+      expect(impact?.status).toBe("ok");
+      expect(context?.status).toBe("ok");
+      expect(symbol).toMatchObject({
+        language: "cpp",
+        capability_level: "resource_backed",
+        evidence_kinds: expect.arrayContaining(["heuristic"])
+      });
+      expect(target).toMatchObject({
+        node_id: symbol?.node_id,
+        language: "cpp",
+        capability_level: "resource_backed",
+        evidence_kinds: expect.arrayContaining(["heuristic"])
+      });
+      expect(startNodeIds?.start_node_ids).toContain(symbol?.node_id);
+      expect(startNodeIds?.confidence?.evidence_kinds).toEqual(expect.arrayContaining(["heuristic"]));
+      expect(startNodeIds?.confidence?.evidence_kinds).not.toContain("parser");
+      expect(requestedFiles?.requested_files).toEqual(expect.arrayContaining([expect.objectContaining({ language: "cpp" })]));
+      expect(requestedFiles?.ranked_symbols).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          symbol: expect.objectContaining({
+            language: "cpp",
+            evidence_kinds: expect.arrayContaining(["heuristic"])
+          })
+        })
+      ]));
     } finally {
       fs.rmSync(outputDir, { recursive: true, force: true });
     }
