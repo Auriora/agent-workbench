@@ -3,7 +3,17 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import type { PlannedValidationCommand } from "../../contracts/index.js";
+import type {
+  NextAction,
+  PlannedValidationCommand,
+  ProjectUnitBlockedClaim,
+  ProjectUnitBlocker,
+  ProjectUnitBoundaryState,
+  ProjectUnitEvidence,
+  ProjectUnitKind,
+  ProjectUnitMarker,
+  ProjectUnitSelectionRelationship
+} from "../../contracts/index.js";
 import { planCommand } from "../../domain/policies/command-safety.js";
 import type { WorkspaceFilePort } from "../../ports/index.js";
 import { isRecord, statIfPresent, uniqueSorted } from "./validation-utils.js";
@@ -34,6 +44,74 @@ type ValidationPolicy = {
   hostCommands: "allowed" | "blocked";
   commands: PlannedValidationCommand[];
 };
+
+const MAX_PROJECT_UNIT_BLOCKERS = 8;
+const MAX_PROJECT_UNIT_EVIDENCE_PATHS = 8;
+
+export type ProjectUnitReadinessSignal = {
+  status: "ready" | "unknown" | "unsupported";
+  detail?: string;
+  evidence_paths?: readonly string[];
+  next_action?: NextAction;
+};
+
+export type ProjectUnitReadinessInput = {
+  root: string;
+  kind: ProjectUnitKind;
+  markers: readonly ProjectUnitMarker[];
+  selection: ProjectUnitSelectionRelationship;
+  boundary: ProjectUnitBoundaryState;
+  planned_commands?: readonly PlannedValidationCommand[];
+  dependency: ProjectUnitReadinessSignal;
+  environment: ProjectUnitReadinessSignal;
+  blockers?: readonly ProjectUnitBlocker[];
+};
+
+export function assessProjectUnitReadiness(input: ProjectUnitReadinessInput): ProjectUnitEvidence {
+  const blockers = [
+    ...normalizeProjectUnitBlockers(input.blockers ?? []),
+    ...readinessSignalBlockers(input.root, input.kind, "dependency", input.dependency),
+    ...readinessSignalBlockers(input.root, input.kind, "environment", input.environment)
+  ].slice(0, MAX_PROJECT_UNIT_BLOCKERS);
+  const readiness = blockers.some(blocksValidationCandidate)
+    ? "blocked"
+    : blockers.length > 0
+      ? "limited"
+      : "ready";
+
+  return {
+    root: input.root,
+    kind: input.kind,
+    markers: [...input.markers],
+    selection: input.selection,
+    boundary: input.boundary,
+    readiness,
+    blockers,
+    planned_commands: readiness === "blocked"
+      ? []
+      : uniquePlannedCommands([...(input.planned_commands ?? [])])
+  };
+}
+
+export function projectUnitNextActions(units: readonly ProjectUnitEvidence[]): NextAction[] {
+  const byAction = new Map<string, NextAction>();
+  for (const unit of units) {
+    for (const blocker of unit.blockers) {
+      if (blocker.next_action === undefined) {
+        continue;
+      }
+      const action = {
+        ...blocker.next_action,
+        reason: unitScopedReason(unit.root, blocker.next_action.reason)
+      };
+      const key = JSON.stringify([action.tool, action.args]);
+      if (!byAction.has(key)) {
+        byAction.set(key, action);
+      }
+    }
+  }
+  return [...byAction.values()];
+}
 
 export async function discoverValidationProtocol(workspace: WorkspaceFilePort): Promise<ValidationProtocolDiscovery> {
   const evidencePaths: string[] = [];
@@ -162,6 +240,69 @@ export function hostCommandBlockedReason(protocol: ValidationProtocolDiscovery, 
       ? ` Evidence: ${protocol.evidencePaths.slice(0, 3).join(", ")}.`
       : "";
   return `Repository guidance requires ${environment} validation, so generic host ${family} commands were not planned.${evidence}`;
+}
+
+function blocksValidationCandidate(blocker: ProjectUnitBlocker): boolean {
+  return blocker.blocked_claims.includes("validation_candidate") ||
+    blocker.blocked_claims.includes("repository_traversal");
+}
+
+function normalizeProjectUnitBlockers(blockers: readonly ProjectUnitBlocker[]): ProjectUnitBlocker[] {
+  return blockers.map((blocker) => ({
+    ...blocker,
+    evidence_paths: boundedEvidencePaths(blocker.evidence_paths),
+    blocked_claims: uniqueBlockedClaims(blocker.blocked_claims)
+  }));
+}
+
+function readinessSignalBlockers(
+  root: string,
+  kind: ProjectUnitKind,
+  evidenceKind: "dependency" | "environment",
+  signal: ProjectUnitReadinessSignal
+): ProjectUnitBlocker[] {
+  if (signal.status === "ready") {
+    return [];
+  }
+
+  if (signal.status === "unsupported") {
+    return [{
+      kind: "unsupported_unit",
+      unit_root: root,
+      evidence_paths: boundedEvidencePaths(signal.evidence_paths),
+      message: signal.detail ??
+        `Project unit ${root} (${kind}) requires unsupported ${evidenceKind} evidence for validation planning.`,
+      blocked_claims: ["validation_candidate"],
+      ...(signal.next_action === undefined ? {} : { next_action: signal.next_action })
+    }];
+  }
+
+  return [{
+    kind: evidenceKind === "dependency" ? "dependency_unknown" : "environment_unknown",
+    unit_root: root,
+    evidence_paths: boundedEvidencePaths(signal.evidence_paths),
+    message: signal.detail ??
+      (evidenceKind === "dependency"
+        ? `Project unit ${root} requires dependency evidence that is not established from repository signals.`
+        : `Project unit ${root} requires execution-environment evidence that is not established from repository signals.`),
+    blocked_claims: ["validation_candidate"],
+    ...(signal.next_action === undefined ? {} : { next_action: signal.next_action })
+  }];
+}
+
+function boundedEvidencePaths(paths: readonly string[] | undefined): string[] {
+  return uniqueSorted([...(paths ?? [])]).slice(0, MAX_PROJECT_UNIT_EVIDENCE_PATHS);
+}
+
+function uniqueBlockedClaims(claims: readonly ProjectUnitBlockedClaim[]): ProjectUnitBlockedClaim[] {
+  return [...new Set(claims)];
+}
+
+function unitScopedReason(root: string, reason?: string): string {
+  if (reason === undefined || reason.trim().length === 0) {
+    return `Project unit ${root}: gather bounded repository evidence for the blocked validation prerequisite.`;
+  }
+  return `Project unit ${root}: ${reason}`;
 }
 
 function requiredEnvironmentLabel(protocol: ValidationProtocolDiscovery): string {

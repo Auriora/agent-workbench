@@ -7,6 +7,7 @@ import {
   contextRiskSchema,
   nextActionSchema,
   plannedValidationCommandSchema,
+  projectUnitEvidenceSchema,
   skippedPathSchema,
   validationSkippedPathSummarySchema,
   staticFeedbackFindingSchema,
@@ -75,6 +76,7 @@ function sanitizeVerificationPlan(
     status: plan.status,
     summary: redactPresentationText(plan.summary, { context: "message" }),
     planned_commands: plan.planned_commands.map(sanitizePlannedCommand),
+    project_units: plan.project_units?.map((unit) => sanitizeProjectUnit(unit, context)),
     static_feedback: plan.static_feedback === undefined ? undefined : sanitizeStaticFeedback(plan.static_feedback),
     risks: plan.risks.map(sanitizeRisk),
     skipped_path_summary: plan.skipped_path_summary === undefined
@@ -125,6 +127,40 @@ function sanitizePlannedCommand(
   });
 }
 
+function sanitizeProjectUnit(
+  unit: NonNullable<PlanVerificationResult["plan"]["project_units"]>[number],
+  context: PresentationSessionContext
+) {
+  return projectUnitEvidenceSchema.parse({
+    root: redactPresentationText(unit.root, { context: "path" }),
+    kind: unit.kind,
+    markers: unit.markers.map((marker) => ({
+      path: redactPresentationText(marker.path, { context: "path" }),
+      kind: marker.kind,
+      evidence_source: marker.evidence_source,
+      evidence_path: marker.evidence_path === undefined
+        ? undefined
+        : redactPresentationText(marker.evidence_path, { context: "path" })
+    })),
+    selection: unit.selection,
+    boundary: unit.boundary,
+    readiness: unit.readiness,
+    blockers: unit.blockers.map((blocker) => ({
+      kind: blocker.kind,
+      unit_root: redactPresentationText(blocker.unit_root, { context: "path" }),
+      evidence_paths: blocker.evidence_paths.map((evidencePath) =>
+        redactPresentationText(evidencePath, { context: "path" })
+      ),
+      message: redactPresentationText(blocker.message, { context: "message" }),
+      blocked_claims: blocker.blocked_claims,
+      next_action: blocker.next_action === undefined
+        ? undefined
+        : presentNextActions([blocker.next_action], context).map(sanitizeNextAction)[0]
+    })),
+    planned_commands: unit.planned_commands.map(sanitizePlannedCommand)
+  });
+}
+
 function sanitizeStaticFeedback(
   input: NonNullable<PlanVerificationResult["plan"]["static_feedback"]>
 ) {
@@ -158,6 +194,12 @@ function sanitizeRisk(input: PlanVerificationResult["plan"]["risks"][number]) {
 function sanitizeNextAction(input: PlanVerificationResult["plan"]["next_actions"][number]) {
   return nextActionSchema.parse({
     tool: input.tool,
-    args: input.args
+    args: input.args,
+    reason: input.reason === undefined
+      ? undefined
+      : redactPresentationText(input.reason, { context: "message" }),
+    expected_evidence: input.expected_evidence === undefined
+      ? undefined
+      : redactPresentationText(input.expected_evidence, { context: "message" })
   });
 }

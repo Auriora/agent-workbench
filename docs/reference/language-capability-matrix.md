@@ -3,7 +3,7 @@ title: Language capability matrix
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -34,6 +34,10 @@ promotion gates are owned by [Language adapter design](../design/language-adapte
   PoC, not a runtime-core assumption.
 - Mixed-language repositories should expose unsupported and resource-backed
   areas explicitly while semantic support matures adapter by adapter.
+- Project-unit recognition and validation planning for `.csproj`, `pom.xml`,
+  `Cargo.toml`, or an evidenced repository script is routing and validation
+  evidence only. It does not promote C#, Java, Rust, or shell extraction to a
+  higher semantic capability level.
 - Later priorities can change when representative repositories demand them.
 
 ## Reference Data

@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -76,6 +76,33 @@ separately from its bounded raw diagnostic sample. Task context consumes that
 same receipt for every encountered reason group. Presentation paths and details
 are redacted before strict public-schema validation; none of these output bounds
 controls scanning, classification, command planning, or extraction.
+
+## Validation Project Units
+
+Contract `0.1` keeps `verification_plan.planned_commands` and adds optional
+bounded `project_units`. Each unit contains:
+
+- a normalized repository-relative `root`;
+- `kind`: `dotnet`, `maven`, `cargo`, or `repository_script`;
+- one to eight markers with path, marker kind, evidence source, and a required
+  evidence path for repository-guidance or validation-protocol script markers;
+- `selection`: `containing`, `intersects_subtree`, or `explicit_aggregator`;
+- `boundary`: `same_repository`, `declared_submodule`, or
+  `repository_boundary_unknown`;
+- `readiness`: `ready`, `blocked`, or `limited`;
+- bounded blockers naming evidence paths, affected claims, an explanation, and
+  an optional canonical next action; and
+- bounded validation commands whose status is always `planned` and execution
+  is always `not_executed`.
+
+Blocked units require a blocker and cannot contain commands. Blocked claims are
+limited to `validation_candidate`, `worktree_cleanliness`,
+`diff_completeness`, and `repository_traversal`. Unit blocker actions are
+deduplicated into top-level `next_actions` with unit-specific reasons. The flat
+command list remains the compatibility projection from non-blocked selected
+units; it does not restore unrelated-sibling or first-project fallback
+behavior. Broken Git metadata may limit a unit and block Git-dependent claims
+without discarding source-backed markers or otherwise valid planned commands.
 
 ## Task Context Lifecycle Evidence
 

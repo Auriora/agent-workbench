@@ -3,7 +3,7 @@ title: Edit and validation loop design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-06-13
+last_reviewed: 2026-08-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -120,6 +120,33 @@ Validation architecture is split from the start:
   status consistently
 - feedback presentation suppresses no-op/no-finding results and non-blocking
   optional analyzer failures
+
+### Project-unit validation planning
+
+For selected files or subtrees, validation discovery first forms bounded
+project units from explicit local evidence. The initial markers are `.csproj`,
+`pom.xml`, `Cargo.toml`, and extensionless validation scripts named by a
+repository instruction or validation protocol. A basename, shebang, or
+executable bit is not sufficient script evidence.
+
+Each selected unit receives only its local catalog and selected paths before
+the existing ecosystem planner is used. Repository-approved policy or guidance
+commands remain authoritative planning evidence; blocked host environments do
+not produce generic host or manual-review commands. The compatibility
+`planned_commands` list is a stable deduplicated projection from non-blocked
+units, while structured unit evidence retains markers, selection relationship,
+readiness, blockers, boundary state, and planned-only commands. A broad request
+uses one coherent evidenced root when available; otherwise it returns a bounded
+collection limitation rather than combining unrelated projects.
+
+Git evidence is claim-specific. Missing or malformed local Git metadata does
+not erase readable source or validation markers, but it blocks cleanliness,
+diff-completeness, and unchanged-worktree claims. Declared submodules and
+embedded repositories are detected as non-traversed boundaries from bounded
+local path evidence; URLs are neither followed nor emitted. Recursive
+read-only handling of declared initialized submodules is deferred to Spec 058.
+No part of this planning path executes target commands, Git, package managers,
+containers, environment probes, or submodule operations.
 
 ## File-Change Feedback
 

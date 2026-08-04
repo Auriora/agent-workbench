@@ -3,7 +3,7 @@ title: Agent Workbench backlog
 doc_type: backlog
 status: draft
 owner: platform
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -230,6 +230,17 @@ or runtime telemetry.
     missing, and retain its exact reason in actionable skipped-path evidence.
   - Use a framework suite command for broad Rails requests with no selected
     file instead of choosing an arbitrary lexical test path.
+  - Discover bounded validation units around selected files or subtrees from
+    `.csproj`, `pom.xml`, `Cargo.toml`, and positively evidenced extensionless
+    validation scripts. Plan each unit independently and never merge unrelated
+    projects in a mixed-language collection into one synthetic build.
+  - Preserve readable source and project markers when Git metadata is broken,
+    while blocking cleanliness, diff-completeness, and unchanged-worktree
+    claims that the available metadata cannot prove.
+  - Treat declared submodules and embedded repositories as non-traversed
+    boundaries in the current planner. Full read-only declared-submodule
+    traversal and repository-scoped planning are owned by
+    [Spec 058](../specs/058-git-submodule-repository-support/requirements.md).
 - Validation:
   - Fixtures for host-allowed, Docker-required, missing-tool, package-manager,
     CMake, .NET, SAM, Go, Python, JavaScript, and docs-only repos.
@@ -238,8 +249,11 @@ or runtime telemetry.
     `validate:plugin`, `validate:skills`, and `pack:dry-run` exactly once with
     repository-backed reasons; a 50-path generated/vendor fixture returns one
     counted summary with a bounded sample.
-- Promotion target: continue current `verification_plan` work and promote weak
-  ecosystem evidence into focused adapter specs.
+- Promotion target: Spec 057 delivered selected-scope project-unit evidence,
+  structured readiness/blockers, broken-Git claim separation, boundary
+  confinement, and an additive compatibility projection. Continue weak
+  ecosystem evidence through focused adapter specs; Spec 058 owns the one
+  explicit initialized-submodule residual.
 
 ### EB005: Multi-File Post-Edit Repair Loop
 

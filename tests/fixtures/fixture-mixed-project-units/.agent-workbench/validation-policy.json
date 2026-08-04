@@ -1,0 +1,7 @@
+{
+  "validation": {
+    "environment": "docker",
+    "host_commands": "blocked",
+    "commands": []
+  }
+}

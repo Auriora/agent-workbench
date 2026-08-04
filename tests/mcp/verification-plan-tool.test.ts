@@ -726,6 +726,14 @@ describe("verification_plan use case", () => {
           })
         ])
       );
+      expect(result.plan.risks).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: "No validation command could be planned from current repository evidence."
+          })
+        ])
+      );
+      expect(result.plan.next_actions.map((action) => action.tool)).not.toContain("context_for_task");
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
@@ -1444,9 +1452,10 @@ describe("verification_plan use case", () => {
     expect(result.plan.status).toBe("planned");
     expect(result.plan.static_feedback).toBeUndefined();
     expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
-      "dotnet build src/WebApi/WebApi.csproj",
-      "dotnet build ModenaFixture.sln",
-      "dotnet test tests/WebApi.Tests/WebApi.Tests.csproj"
+      "dotnet build src/WebApi/WebApi.csproj"
+    ]);
+    expect(result.plan.project_units).toEqual([
+      expect.objectContaining({ root: "src/WebApi", kind: "dotnet", selection: "containing" })
     ]);
     expect(result.plan.planned_commands).toEqual(
       result.plan.planned_commands.map(() =>
@@ -1475,8 +1484,7 @@ describe("verification_plan use case", () => {
 
     expect(result.plan.status).toBe("planned");
     expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
-      "dotnet build src/WebApp/WebApp.csproj",
-      "dotnet build ModenaFixture.sln"
+      "dotnet build src/WebApp/WebApp.csproj"
     ]);
   });
 
@@ -1521,6 +1529,60 @@ describe("verification_plan use case", () => {
           })
         ])
       );
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves an approved Docker command for a nested .NET project unit", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-validation-dotnet-docker-command-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, ".agent-workbench"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, "src", "Service"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, ".agent-workbench", "validation-policy.json"),
+        JSON.stringify({
+          validation: {
+            environment: "docker",
+            host_commands: "blocked",
+            commands: [
+              {
+                command: "docker",
+                args: ["compose", "run", "--rm", "service", "dotnet", "test", "src/Service/Service.csproj"],
+                reason: "The repository validates the service project in Docker."
+              }
+            ]
+          }
+        })
+      );
+      fs.writeFileSync(path.join(repoRoot, "src", "Service", "Service.csproj"), "<Project Sdk=\"Microsoft.NET.Sdk\" />\n");
+      fs.writeFileSync(path.join(repoRoot, "src", "Service", "Worker.cs"), "namespace Service;\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["src/Service/Worker.cs"],
+          changed_files: ["src/Service/Worker.cs"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.planned_commands.map((command) => command.display)).toEqual([
+        "docker compose run --rm service dotnet test src/Service/Service.csproj"
+      ]);
+      expect(result.plan.planned_commands.map((command) => command.command)).not.toContain("dotnet");
+      expect(result.plan.project_units).toEqual([
+        expect.objectContaining({
+          root: "src/Service",
+          kind: "dotnet",
+          readiness: "limited"
+        })
+      ]);
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
@@ -2027,6 +2089,116 @@ describe("verification_plan MCP tool", () => {
     expect(JSON.stringify(parsed)).not.toContain("__backend_payload");
     expect(JSON.stringify(parsed)).not.toContain("__diagnostic_worker_artifacts");
     expect(JSON.stringify(parsed)).not.toContain("__worker_trace");
+  });
+
+  it("isolates mixed-project fixture units and preserves planning-only blockers", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-mixed-project-units");
+    const dependencies = {
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    };
+
+    const dotnet = await planVerification({
+      request: { repo_root: repoRoot, files: ["dotnet-service/App.csproj"], changed_files: [], include_static_feedback: false, max_commands: 10 },
+      ...dependencies
+    });
+    expect(dotnet.plan.status).toBe("blocked");
+    expect(dotnet.plan.planned_commands).toEqual([]);
+    expect(dotnet.plan.project_units).toEqual([
+      expect.objectContaining({
+        root: "dotnet-service",
+        kind: "dotnet",
+        readiness: "blocked",
+        planned_commands: [],
+        blockers: expect.arrayContaining([expect.objectContaining({ kind: "environment_unknown" })])
+      })
+    ]);
+
+    const script = await planVerification({
+      request: { repo_root: repoRoot, files: ["scripts/validate"], changed_files: [], include_static_feedback: false, max_commands: 10 },
+      ...dependencies
+    });
+    expect(script.plan.status).toBe("planned");
+    expect(script.plan.planned_commands).toEqual([
+      expect.objectContaining({ display: "scripts/validate", execution: "not_executed" })
+    ]);
+    expect(script.plan.project_units).toEqual([
+      expect.objectContaining({ root: "scripts", kind: "repository_script", readiness: "limited" })
+    ]);
+    expect(script.plan.project_units?.[0]?.blockers).toEqual([
+      expect.objectContaining({ kind: "git_claim_unavailable" })
+    ]);
+  });
+
+  it("blocks declared submodule units without traversing and presents structured evidence", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-mixed-project-units");
+    const result = await planVerification({
+      request: {
+        repo_root: repoRoot,
+        files: ["boundaries/declared-submodule/Cargo.toml"],
+        changed_files: [],
+        include_static_feedback: false,
+        max_commands: 10
+      },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+
+    expect(result.plan.status).toBe("blocked");
+    expect(result.plan.planned_commands).toEqual([]);
+    expect(result.plan.project_units).toEqual([
+      expect.objectContaining({
+        root: "boundaries/declared-submodule",
+        boundary: "declared_submodule",
+        readiness: "blocked",
+        blockers: expect.arrayContaining([expect.objectContaining({ kind: "submodule_unavailable" })])
+      })
+    ]);
+    const envelope = buildVerificationPlanEnvelope(result);
+    expect(envelope.data.project_units).toEqual(result.plan.project_units);
+    expect(JSON.stringify(envelope)).not.toContain("declared-submodule-placeholder.git");
+  });
+
+  it.each([
+    ["maven-service", "maven-service", "maven"],
+    ["cargo-service/Cargo.toml", "cargo-service", "cargo"]
+  ] as const)("isolates selected file or subtree %s to its project unit", async (selectedPath, root, kind) => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-mixed-project-units");
+    const result = await planVerification({
+      request: { repo_root: repoRoot, files: [selectedPath], changed_files: [], include_static_feedback: false, max_commands: 10 },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+    expect(result.plan.project_units).toEqual([
+      expect.objectContaining({ root, kind, selection: selectedPath === root ? "intersects_subtree" : "containing" })
+    ]);
+    expect(result.plan.project_units?.[0]?.planned_commands).toEqual([]);
+  });
+
+  it("returns bounded per-unit evidence for a broad mixed-project request", async () => {
+    const repoRoot = path.resolve("tests/fixtures/fixture-mixed-project-units");
+    const result = await planVerification({
+      request: { repo_root: repoRoot, files: [], changed_files: [], include_static_feedback: false, max_commands: 10 },
+      scanner: new FileCatalogScannerAdapter(),
+      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      default_repo_root: "."
+    });
+    expect(result.plan.status).toBe("blocked");
+    expect(result.plan.project_units?.map((unit) => unit.root)).toEqual([
+      "cargo-service",
+      "dotnet-service",
+      "maven-service",
+      "scripts",
+      "unknown-environment",
+      "boundaries/declared-submodule"
+    ]);
+    expect(result.plan.risks).toEqual(expect.arrayContaining([
+      expect.objectContaining({ message: expect.stringContaining("without merging unrelated units") })
+    ]));
+    expect(result.plan.project_units?.flatMap((unit) => unit.planned_commands).every((command) => command.execution === "not_executed")).toBe(true);
   });
 
   it("is registered by the composed server", () => {

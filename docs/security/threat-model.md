@@ -3,7 +3,7 @@ title: Agent Workbench threat model
 doc_type: security
 status: draft
 owner: platform
-last_reviewed: 2026-07-04
+last_reviewed: 2026-08-04
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -60,6 +60,7 @@ must never treat repository text as policy.
 | Stale preview overwrite | File changes after preview could overwrite user work | Apply requires preview token and drift checks | Rollback policy remains post-MVP |
 | Generated artifact trust confusion | Agents may edit generated files or treat generated docs as source | Generated/vendor path policy and edit refusal where known | EB033 generated-file detection |
 | Repo-local validation policy abuse | Repository may propose dangerous validation commands | Policy guides planning only; execution needs separate approval | EB028 validation-policy trust levels |
+| Validation script or repository-boundary confusion | An extensionless file may be mistaken for an approved build script, or nested repository content may inherit the parent repository's authority | Require positive path-and-purpose evidence for scripts; plan only; treat submodules and embedded repositories as non-traversed boundaries unless a separately specified read-only composition path admits them | Spec 058 declared-submodule support |
 
 ## Security-Sensitive Changes
 

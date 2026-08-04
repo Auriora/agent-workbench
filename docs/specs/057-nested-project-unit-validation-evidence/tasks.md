@@ -67,7 +67,7 @@ T012 -> T013
       extensionless-script, unknown-environment, broken-Git, and submodule-boundary
       evidence; catalog visibility assertions passed without target execution.
 
-- [ ] T002 Implement the bounded project-unit discovery model and deterministic
+- [x] T002 Implement the bounded project-unit discovery model and deterministic
   selection primitives.
   - Depends on: T001
   - Requirements: Requirement 1, Requirement 3
@@ -82,11 +82,11 @@ T012 -> T013
     collection-level limitation and never merges the collection into one build.
   - Validation: Run focused discovery and order-permutation tests.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: Added pure bounded deterministic project-unit discovery with nearest file selection, subtree intersection, explicit aggregators, broad-request coherent-root/collection behavior, caps, and path safety; 7 focused tests, pnpm typecheck, and git diff --check passed.
 
 ## Phase 2: Marker and readiness evidence
 
-- [ ] T003 Implement explicit manifest and extensionless-script recognizers.
+- [x] T003 Implement explicit manifest and extensionless-script recognizers.
   - Depends on: T002
   - Requirements: Requirement 2
   - Properties: CP-001, CP-004
@@ -99,9 +99,9 @@ T012 -> T013
     bounded.
   - Validation: Run positive and negative recognizer tests.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: Added explicit bounded manifest and positively evidenced extensionless-script recognition with deterministic limitations; 9 recognizer tests passed within the 33-test T002-T004 focused set, pnpm typecheck and git diff --check passed.
 
-- [ ] T004 Implement per-unit dependency and environment readiness.
+- [x] T004 Implement per-unit dependency and environment readiness.
   - Depends on: T002
   - Requirements: Requirement 4, Requirement 8
   - Properties: CP-004
@@ -114,9 +114,9 @@ T012 -> T013
     top-level `next_actions` with the unit named in its reason.
   - Validation: Run ready, blocked, and mixed-unit readiness tests.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: Added pure per-unit readiness assessment and canonical blocker next-action projection; ready, blocked, limited, and mixed-unit cases passed with existing validation protocol coverage (17 tests total), pnpm typecheck passed.
 
-- [ ] T005 Checkpoint - Validate project-unit foundation.
+- [x] T005 Checkpoint - Validate project-unit foundation.
   - Depends on: T003, T004
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
     Requirement 7, Requirement 8
@@ -127,11 +127,11 @@ T012 -> T013
     and planner integration begins.
   - Validation: Run the focused T001-T004 test set and `pnpm typecheck`.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Foundation checkpoint passed: project-unit contract, discovery, marker recognition, readiness, locality/isolation/determinism/non-execution tests passed (4 files, 33 tests); pnpm typecheck and git diff --check passed.
 
 ## Phase 3: Repository claim and boundary handling
 
-- [ ] T006 Separate readable-source evidence from unavailable Git claims.
+- [x] T006 Separate readable-source evidence from unavailable Git claims.
   - Depends on: T005
   - Requirements: Requirement 5
   - Properties: CP-005
@@ -143,9 +143,9 @@ T012 -> T013
     or shell fallback is introduced.
   - Validation: Run broken-`HEAD`, missing-metadata, and readable-source tests.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: Added bounded workspace-only HEAD/ref inspection and claim-specific git_claim_unavailable projection that retains readable source markers and planned commands; five HEAD-state tests passed without Git CLI or writes.
 
-- [ ] T007 Add Git submodule and embedded-repository boundary awareness.
+- [x] T007 Add Git submodule and embedded-repository boundary awareness.
   - Depends on: T005
   - Requirements: Requirement 6, Requirement 8
   - Properties: CP-004, CP-006
@@ -160,11 +160,14 @@ T012 -> T013
   - Validation: Run declared, unavailable, initialized, and incomplete-boundary
     tests with process/network/write spies.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: `tests/application/project-unit-boundaries.test.ts` passed four
+    declared, initialized, metadata-gap, malformed, and oversized boundary cases;
+    `pnpm typecheck` and `git diff --check` passed, with no Git/process/network
+    or write operation introduced.
 
 ## Phase 4: Planner and MCP integration
 
-- [ ] T008 Integrate unit-scoped planning and compatibility projection.
+- [x] T008 Integrate unit-scoped planning and compatibility projection.
   - Depends on: T006, T007
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
     Requirement 5, Requirement 6, Requirement 8
@@ -181,9 +184,9 @@ T012 -> T013
     `not_executed`.
   - Validation: Run planner rules, contract, presenter, and TypeScript checks.
   - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence: Integrated selected-scope marker discovery, unit-local command planning, readiness, Git-claim separation, boundary confinement, stable flat projection, blocker actions, and presenter preservation; focused planner/contract/application suite passed 108 tests, typecheck and diff check passed.
 
-- [ ] T009 Prove mixed-language behavior through application and MCP goldens.
+- [x] T009 Prove mixed-language behavior through application and MCP goldens.
   - Depends on: T008
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
     Requirement 5, Requirement 6, Requirement 7, Requirement 8
@@ -201,11 +204,11 @@ T012 -> T013
   - Validation: Run focused application and MCP suites twice with alternate
     catalog ordering where the test harness supports it.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Mixed fixture proves .NET, Maven, Cargo, evidenced-script and declared-boundary unit isolation, unknown environment blocking, Git-claim separation, broad collection limitation, presenter preservation, deterministic pure discovery permutations, and not_executed commands; 8 files and 108 tests passed.
 
 ## Phase 5: Review, validation, promotion, and closure readiness
 
-- [ ] T010 Resolve independent implementation-review findings.
+- [x] T010 Resolve independent implementation-review findings.
   - Depends on: T009
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
     Requirement 5, Requirement 6, Requirement 7, Requirement 8
@@ -215,9 +218,9 @@ T012 -> T013
     compatibility, or test-coverage finding remains.
   - Validation: Rerun focused tests affected by review fixes.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Independent re-review found no remaining blocker. Both warnings were resolved: unit-specific blocked plans no longer emit the generic no-command/context fallback, and verification/count records were synchronized. The affected 4-file suite passed 83 tests; typecheck and diff check passed.
 
-- [ ] T011 Run full repository and packaging validation.
+- [x] T011 Run full repository and packaging validation.
   - Depends on: T010
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
     Requirement 5, Requirement 6, Requirement 7, Requirement 8
@@ -231,9 +234,9 @@ T012 -> T013
   - Validation: Run every required command in `verification.md` and record exact
     results.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Full repository and packaging validation passed: pnpm test ran 116 files and 1,288 tests; typecheck passed; plugin validation passed; skills validation checked 6 files with 0 findings; package dry-run contained 264 entries; git diff --check passed. No target-repository or fixture command was executed.
 
-- [ ] T012 Promote accepted behavior and route full submodule support.
+- [x] T012 Promote accepted behavior and route full submodule support.
   - Depends on: T011
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
     Requirement 5, Requirement 6, Requirement 7, Requirement 8
@@ -250,17 +253,31 @@ T012 -> T013
   - Evidence mode: implementation
   - Follow-up: Full submodule initialization, traversal, and cross-repository
     validation planning.
-  - Destination: `docs/backlog/README.md` new focused item.
-  - Evidence: Pending.
-  - [ ] T012.1 Promote the implemented validation behavior and exact public
+  - Destination: existing `docs/specs/058-git-submodule-repository-support/`
+    package, linked from `docs/backlog/README.md` EB004.
+  - Evidence: Durable promotion completed across EB004, validation-loop design, runtime contracts, language capability matrix, and threat model. Existing Spec 058 is the single full-submodule destination. Focused docs tests passed 10 tests, diff check passed; Markdown set findings were pre-existing table-readability advisories.
+  - [x] T012.1 Promote the implemented validation behavior and exact public
     contract to their canonical owners.
-  - [ ] T012.2 Add one backlog item for full submodule repository-boundary
+    - Evidence: Updated `docs/backlog/README.md`,
+      `docs/design/edit-and-validation-loop-design.md`,
+      `docs/reference/runtime-contracts.md`, and
+      `docs/reference/language-capability-matrix.md`; focused docs validation
+      passed 10 tests.
+    - Evidence mode: implementation
+  - [x] T012.2 Add one backlog item for full submodule repository-boundary
     planning, covering explicit authority, identity, recursion, remote and
     credential rules, per-repository policy, and cleanliness claims.
-  - [ ] T012.3 Review the threat model and either update it or record why its
+    - Evidence: EB004 now links the existing
+      `docs/specs/058-git-submodule-repository-support/requirements.md` package;
+      repository search confirms no second follow-up item was added.
+    - Evidence mode: implementation
+  - [x] T012.3 Review the threat model and either update it or record why its
     existing untrusted-script and repository-boundary coverage is sufficient.
-
-- [ ] T013 Reconcile scope and prepare closure evidence.
+    - Evidence: Updated `docs/security/threat-model.md` with the validation
+      script and repository-boundary confusion threat; focused docs validation
+      passed 10 tests.
+    - Evidence mode: implementation
+- [x] T013 Reconcile scope and prepare closure evidence.
   - Depends on: T012
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
     Requirement 5, Requirement 6, Requirement 7, Requirement 8
@@ -276,7 +293,7 @@ T012 -> T013
     package lint checks; record cleanup and closure decisions without closing
     until separately authorized.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: Lifecycle reconciliation completed: task audit has 0 errors/warnings; evidence quality records 30 concrete task/verification records before this completion update; package lint has only the previously waived non-blocking canonical-context advisory; all D001-D003 decisions are resolved; full submodule support has exactly one destination in Spec 058; docs tests passed 10 tests and diff check passed.
 
 ## Execution Rules
 

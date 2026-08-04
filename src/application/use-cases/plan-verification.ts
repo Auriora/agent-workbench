@@ -6,6 +6,7 @@
 import path from "node:path";
 import type {
   PlannedValidationCommand,
+  ProjectUnitEvidence,
   ResponseMetadata,
   SkippedPath,
   StaticFeedback,
@@ -71,6 +72,23 @@ import {
 import { buildStaticFeedback } from "./validation-static-feedback.js";
 import { normalizeRepoPath, uniqueSorted } from "./validation-utils.js";
 import { detectRailsProjectShape, type RailsProjectShape } from "./rails-project-shape.js";
+import { discoverProjectUnits } from "./project-unit-discovery.js";
+import {
+  recognizeProjectUnitMarkers,
+  type ScriptMarkerGuidance
+} from "./project-unit-markers.js";
+import {
+  assessProjectUnitReadiness,
+  projectUnitNextActions
+} from "./validation-environment.js";
+import {
+  applyRepositoryGitClaimEvidence,
+  inspectRepositoryGitClaims
+} from "./project-unit-git-claims.js";
+import {
+  boundaryForPath,
+  discoverRepositoryBoundaries
+} from "./project-unit-boundaries.js";
 
 export type PlanVerificationResult = {
   plan: VerificationPlan;
@@ -101,26 +119,39 @@ export async function planVerification(input: {
     selectedPaths,
     workspace: input.workspace
   });
+  const selectedScope = await classifySelectedScope(input.workspace, selectedPaths);
   const railsDiscoveryFiles = files.filter((file) => !isEmbeddedFixturePath(file.path));
   const selectedEntries = selectEntries(files, selectedPaths);
   const railsShape = detectRailsProjectShape({
     files: railsDiscoveryFiles,
     scan_truncated: scanned.truncated
   });
-  const discovery = await discoverValidationEvidence({
-    files: railsDiscoveryFiles,
-    selectedEntries,
-    railsShape,
-    workspace: input.workspace
-  });
-  const commandPlan = planValidationCommands({
+  const projectUnitPlan = await planProjectUnitValidation({
     files,
-    selectedEntries,
-    discovery,
-    task: input.request.task,
+    selectedPaths: selectedScope.files,
+    selectedSubtrees: selectedScope.subtrees,
+    workspace: input.workspace,
+    skippedPaths: scanned.skipped_paths ?? [],
     maxCommands: input.request.max_commands
   });
-  const commands = commandPlan.commands;
+  const discovery = projectUnitPlan.applies
+    ? undefined
+    : await discoverValidationEvidence({
+        files: railsDiscoveryFiles,
+        selectedEntries,
+        railsShape,
+        workspace: input.workspace
+      });
+  const commandPlan = projectUnitPlan.applies
+    ? { commands: [], lowConfidenceReasons: [], blockerReasons: [] }
+    : planValidationCommands({
+        files,
+        selectedEntries,
+        discovery: discovery!,
+        task: input.request.task,
+        maxCommands: input.request.max_commands
+      });
+  const commands = projectUnitPlan.applies ? projectUnitPlan.commands : commandPlan.commands;
   const requestedExclusions = (scanned.skipped_paths ?? []).filter((skipped) => selectedPaths.includes(skipped.path));
   const excludedPathSet = new Set(requestedExclusions.map((skipped) => skipped.path));
   const staticFeedback =
@@ -131,17 +162,21 @@ export async function planVerification(input: {
         )
       : undefined;
   const missingPaths = selectedPaths.filter((filePath) =>
+    selectedScope.subtrees.includes(filePath) === false &&
     !excludedPathSet.has(filePath) && files.every((entry) => entry.path !== filePath)
   );
   const tooBroad = selectedPaths.length > 50;
+  const hasProjectUnitBlockedGuidance =
+    projectUnitPlan.blockerMessages.length > 0 || projectUnitPlan.nextActions.length > 0;
   const lowConfidence = scanned.truncated || commandPlan.lowConfidenceReasons.length > 0;
   const blocked =
     unsafePaths.length > 0 ||
     requestedExclusions.length > 0 ||
     missingPaths.length > 0 ||
     tooBroad ||
-    discovery.discoveryErrors.length > 0 ||
+    (discovery?.discoveryErrors.length ?? 0) > 0 ||
     commandPlan.blockerReasons.length > 0 ||
+    projectUnitPlan.units.some((unit) => unit.readiness === "blocked") ||
     commands.length === 0;
   const risks = [
     ...(unsafePaths.length > 0
@@ -208,7 +243,17 @@ export async function planVerification(input: {
       message: reason,
       why_this_matters: "Repo-local validation guidance takes precedence over generic language command planning."
     })),
-    ...(commands.length === 0 && commandPlan.blockerReasons.length === 0
+    ...projectUnitPlan.blockerMessages.map((message) => ({
+      severity: "blocker" as const,
+      message,
+      why_this_matters: "Project-unit evidence is bounded by its repository, dependency, and execution-environment authority."
+    })),
+    ...projectUnitPlan.limitations.map((message) => ({
+      severity: "warning" as const,
+      message,
+      why_this_matters: "Bounded project-unit discovery reports limitations instead of broadening scope or inventing a fallback."
+    })),
+    ...(commands.length === 0 && commandPlan.blockerReasons.length === 0 && !hasProjectUnitBlockedGuidance
       ? [
           {
             severity: "warning" as const,
@@ -235,7 +280,7 @@ export async function planVerification(input: {
           repo_root: scanned.repo_root
         }
       })),
-    ...(commands.length === 0 && commandPlan.blockerReasons.length === 0
+    ...(commands.length === 0 && commandPlan.blockerReasons.length === 0 && !hasProjectUnitBlockedGuidance
       ? [
           {
             tool: "context_for_task",
@@ -246,7 +291,8 @@ export async function planVerification(input: {
             }
           }
         ]
-      : [])
+      : []),
+    ...projectUnitPlan.nextActions
   ]);
   const plan: VerificationPlan = {
     task: input.request.task,
@@ -260,6 +306,7 @@ export async function planVerification(input: {
       nextActions
     }),
     planned_commands: commands,
+    ...(projectUnitPlan.applies ? { project_units: projectUnitPlan.units } : {}),
     ...(staticFeedback?.status === "actionable" ? { static_feedback: staticFeedback } : {}),
     skipped_path_summary: buildSkippedPathSummary({
       population: scanned.skipped_path_population,
@@ -282,6 +329,251 @@ export async function planVerification(input: {
       }
     }
   };
+}
+
+type ProjectUnitPlanningResult = {
+  applies: boolean;
+  units: ProjectUnitEvidence[];
+  commands: PlannedValidationCommand[];
+  blockerMessages: string[];
+  limitations: string[];
+  nextActions: VerificationPlan["next_actions"];
+};
+
+async function planProjectUnitValidation(input: {
+  files: readonly FileCatalogEntry[];
+  selectedPaths: readonly string[];
+  selectedSubtrees: readonly string[];
+  workspace: WorkspaceFilePort;
+  skippedPaths: readonly FileCatalogSkippedPath[];
+  maxCommands: number;
+}): Promise<ProjectUnitPlanningResult> {
+  const scriptGuidance = await discoverProjectUnitScriptGuidance(input.workspace, input.files);
+  const markerRecognition = recognizeProjectUnitMarkers({
+    files: input.files,
+    script_guidance: scriptGuidance
+  });
+  const boundaryDiscovery = await discoverRepositoryBoundaries({
+    workspace: input.workspace,
+    skipped_paths: input.skippedPaths
+  });
+  const discovery = discoverProjectUnits({
+    candidates: markerRecognition.candidates,
+    selected_paths: input.selectedPaths,
+    selected_subtrees: input.selectedSubtrees
+  });
+  const selectedBoundaries = uniqueSorted([...input.selectedPaths, ...input.selectedSubtrees])
+    .map((selectedPath) => boundaryForPath(selectedPath, boundaryDiscovery.boundaries))
+    .filter((boundary): boundary is NonNullable<typeof boundary> => boundary !== undefined);
+  const applies = discovery.units.length > 0 || selectedBoundaries.length > 0;
+  if (!applies) {
+    return { applies: false, units: [], commands: [], blockerMessages: [], limitations: [], nextActions: [] };
+  }
+
+  const protocol = await discoverValidationProtocol(input.workspace);
+  const plannedUnits: ProjectUnitEvidence[] = [];
+  for (const unit of discovery.units) {
+    const boundary = boundaryForPath(unit.root, boundaryDiscovery.boundaries) ??
+      unit.markers.map((marker) => boundaryForPath(marker.path, boundaryDiscovery.boundaries)).find((item) => item !== undefined);
+    const commandPlan = boundary === undefined
+      ? await planExistingProjectUnitCommands({
+          unit,
+          files: input.files,
+          selectedPaths: input.selectedPaths,
+          selectedSubtrees: input.selectedSubtrees,
+          workspace: input.workspace,
+          maxCommands: input.maxCommands
+        })
+      : { commands: [], blockerReasons: [] };
+    const fallbackCommand = commandPlan.commands.length === 0 &&
+      (unit.kind === "repository_script" || !hostCommandsBlocked(protocol))
+      ? projectUnitCommand(unit)
+      : undefined;
+    const commands = commandPlan.commands.length > 0
+      ? commandPlan.commands
+      : fallbackCommand === undefined ? [] : [fallbackCommand];
+    const environmentBlocked = boundary === undefined &&
+      unit.kind !== "repository_script" &&
+      hostCommandsBlocked(protocol) &&
+      commands.length === 0;
+    plannedUnits.push(assessProjectUnitReadiness({
+      root: unit.root,
+      kind: unit.kind,
+      markers: unit.markers,
+      selection: unit.selection === "broad_request_coherent_root" ? "explicit_aggregator" : unit.selection,
+      boundary: boundary?.boundary ?? "same_repository",
+      planned_commands: commands,
+      dependency: { status: "ready", evidence_paths: unit.markers.map((marker) => marker.path) },
+      environment: environmentBlocked
+        ? {
+            status: "unknown",
+            detail: commandPlan.blockerReasons[0] ?? hostCommandBlockedReason(protocol, projectUnitFamilyLabel(unit.kind)),
+            evidence_paths: protocol.evidencePaths
+          }
+        : { status: "ready", evidence_paths: unit.markers.map((marker) => marker.path) },
+      blockers: boundary === undefined ? [] : [boundary.blocker]
+    }));
+  }
+  const gitEvidence = await inspectRepositoryGitClaims(input.workspace);
+  const units = applyRepositoryGitClaimEvidence(plannedUnits, gitEvidence);
+  const commands = units
+    .filter((unit) => unit.readiness !== "blocked")
+    .flatMap((unit) => unit.planned_commands)
+    .filter((command, index, all) => all.findIndex((candidate) =>
+      candidate.command === command.command && JSON.stringify(candidate.args) === JSON.stringify(command.args)
+    ) === index)
+    .sort((left, right) => left.display.localeCompare(right.display))
+    .slice(0, input.maxCommands);
+  const blockerMessages = uniqueSorted([
+    ...units.filter((unit) => unit.readiness === "blocked").flatMap((unit) =>
+      unit.blockers
+        .filter((blocker) => blocker.blocked_claims.some((claim) => claim === "validation_candidate" || claim === "repository_traversal"))
+        .map((blocker) => blocker.message)
+    ),
+    ...selectedBoundaries.map((boundary) => boundary.blocker.message)
+  ]);
+  const limitations = uniqueSorted([
+    ...markerRecognition.limitations.map((item) => item.message),
+    ...boundaryDiscovery.limitations.map((item) => item.message),
+    ...discovery.limitations.map((item) => item.message)
+  ]);
+  return {
+    applies,
+    units,
+    commands,
+    blockerMessages,
+    limitations,
+    nextActions: projectUnitNextActions(units)
+  };
+}
+
+async function planExistingProjectUnitCommands(input: {
+  unit: ReturnType<typeof discoverProjectUnits>["units"][number];
+  files: readonly FileCatalogEntry[];
+  selectedPaths: readonly string[];
+  selectedSubtrees: readonly string[];
+  workspace: WorkspaceFilePort;
+  maxCommands: number;
+}): Promise<CommandPlanningResult> {
+  const unitFiles = input.files.filter((file) =>
+    input.unit.root === "." || file.path === input.unit.root || file.path.startsWith(`${input.unit.root}/`)
+  );
+  const selected = [...input.selectedPaths, ...input.selectedSubtrees].filter((selectedPath) =>
+    input.unit.root === "." || selectedPath === input.unit.root || selectedPath.startsWith(`${input.unit.root}/`)
+  );
+  const selectedEntries = selectEntries(unitFiles, selected);
+  const railsShape = detectRailsProjectShape({ files: unitFiles, scan_truncated: false });
+  const discovery = await discoverValidationEvidence({
+    files: unitFiles,
+    selectedEntries,
+    railsShape,
+    workspace: input.workspace
+  });
+  const planned = planValidationCommands({
+    files: unitFiles,
+    selectedEntries,
+    discovery,
+    maxCommands: input.maxCommands
+  });
+  return {
+    ...planned,
+    commands: planned.blockerReasons.length > 0
+      ? []
+      : planned.commands.filter((command) => command.command !== "manual_review")
+  };
+}
+
+function projectUnitFamilyLabel(kind: ProjectUnitEvidence["kind"]): string {
+  if (kind === "dotnet") return ".NET";
+  if (kind === "maven") return "Maven";
+  if (kind === "cargo") return "Cargo";
+  return "repository-script";
+}
+
+function projectUnitCommand(unit: ReturnType<typeof discoverProjectUnits>["units"][number]): PlannedValidationCommand | undefined {
+  const marker = unit.markers[0];
+  if (marker === undefined) return undefined;
+  const planned = (() => {
+    switch (unit.kind) {
+      case "dotnet":
+        return { command: "dotnet", args: ["build", marker.path] };
+      case "maven":
+        return { command: "mvn", args: ["-f", marker.path, "test"] };
+      case "cargo":
+        return { command: "cargo", args: ["test", "--manifest-path", marker.path] };
+      case "repository_script":
+        return { command: marker.path, args: [] };
+    }
+  })();
+  const decision = planCommand({ ...planned, source: "configured" });
+  if (!decision.allowed) return undefined;
+  const display = [decision.command.command, ...decision.command.args].join(" ");
+  return {
+    command: decision.command.command,
+    args: decision.command.args,
+    display,
+    reason: `Project unit ${unit.root} uses marker evidence ${marker.path}; this command is planned only and was not executed.`,
+    status: "planned",
+    execution: "not_executed"
+  };
+}
+
+async function discoverProjectUnitScriptGuidance(
+  workspace: WorkspaceFilePort,
+  files: readonly FileCatalogEntry[]
+): Promise<ScriptMarkerGuidance[]> {
+  const paths = new Set(files.map((file) => file.path));
+  const extensionlessPaths = [...paths].filter((filePath) =>
+    path.posix.extname(filePath) === "" && filePath.includes("/")
+  );
+  const guidancePaths = [...paths].filter((filePath) =>
+    path.posix.basename(filePath) === "AGENTS.md" ||
+    /(?:^|\/)validation-protocol\.md$/iu.test(filePath)
+  ).sort();
+  const guidance: ScriptMarkerGuidance[] = [];
+  for (const guidancePath of guidancePaths) {
+    const stat = await inputStat(workspace, guidancePath);
+    if (stat === undefined || stat.size_bytes > 128_000) continue;
+    let content: string;
+    try {
+      content = workspace.readTextPrefix === undefined
+        ? await workspace.readText({ path: guidancePath })
+        : await workspace.readTextPrefix({ path: guidancePath, max_bytes: 128_000 });
+    } catch {
+      continue;
+    }
+    for (const scriptPath of extensionlessPaths) {
+      if (!content.includes(`\`${scriptPath}\``)) continue;
+      const localEvidence = content.split(/\r?\n/u).filter((line, index, lines) =>
+        line.includes(scriptPath) || lines[index - 1]?.includes(scriptPath) || lines[index + 1]?.includes(scriptPath)
+      ).join(" ");
+      guidance.push({
+        script_path: scriptPath,
+        evidence_path: guidancePath,
+        evidence_source: /validation-protocol\.md$/iu.test(guidancePath) ? "validation_protocol" : "repository_guidance",
+        purpose: localEvidence
+      });
+    }
+  }
+  return guidance;
+}
+
+async function classifySelectedScope(
+  workspace: WorkspaceFilePort,
+  selectedPaths: readonly string[]
+): Promise<{ files: string[]; subtrees: string[] }> {
+  const files: string[] = [];
+  const subtrees: string[] = [];
+  for (const selectedPath of selectedPaths) {
+    const stat = await inputStat(workspace, selectedPath);
+    if (stat !== undefined && stat.exists && !stat.is_file) subtrees.push(selectedPath);
+    else files.push(selectedPath);
+  }
+  return { files: uniqueSorted(files), subtrees: uniqueSorted(subtrees) };
+}
+
+async function inputStat(workspace: WorkspaceFilePort, filePath: string) {
+  try { return await workspace.stat({ path: filePath }); } catch { return undefined; }
 }
 
 function buildSkippedPathSummary(input: {

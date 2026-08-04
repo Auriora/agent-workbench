@@ -30,7 +30,7 @@ matrix is the starting point for task execution and closure reconciliation.
 | T009 | Requirement 1, Requirement 2, Requirement 3, Requirement 4, Requirement 5, Requirement 6, Requirement 7, Requirement 8 | All acceptance criteria | Validation Strategy | Regression evidence | G2-G5 | none | none |
 | T010 | Requirement 1, Requirement 2, Requirement 3, Requirement 4, Requirement 5, Requirement 6, Requirement 7, Requirement 8 | All acceptance criteria | Validation Strategy; Security, Trust, and Access | Review findings | G6 | none | none |
 | T011 | Requirement 1, Requirement 2, Requirement 3, Requirement 4, Requirement 5, Requirement 6, Requirement 7, Requirement 8 | All acceptance criteria | Validation Strategy; Operational Considerations | Full validation evidence | G7 | none | none |
-| T012 | Requirement 1, Requirement 2, Requirement 3, Requirement 4, Requirement 5, Requirement 6, Requirement 7, Requirement 8 | Durable promotion criteria | Slice Boundary And Residual Architecture; Operational Considerations | All promotion targets | G8 | backlog, design, runtime contracts, capability matrix, conditional security doc | Assign follow-up backlog ID |
+| T012 | Requirement 1, Requirement 2, Requirement 3, Requirement 4, Requirement 5, Requirement 6, Requirement 7, Requirement 8 | Durable promotion criteria | Slice Boundary And Residual Architecture; Operational Considerations | All promotion targets | G8 | backlog, design, runtime contracts, capability matrix, security doc | Existing Spec 058 accepted as the single follow-up destination |
 | T013 | Requirement 1, Requirement 2, Requirement 3, Requirement 4, Requirement 5, Requirement 6, Requirement 7, Requirement 8 | All acceptance criteria | All design sections | Closure reconciliation | G1-G9 | all promoted targets | none |
 
 ## Requirement To Delivery Matrix
@@ -46,9 +46,8 @@ matrix is the starting point for task execution and closure reconciliation.
 | Requirement 7 Mixed-language fixture | must-have | AC1-AC5 | Components and Changes; Validation Strategy | T001, T005, T009, T011 | G2-G5 | dogfood ledger only if real-repo evidence is later accepted | complete | none |
 | Requirement 8 Planning-only boundary | must-have | AC1-AC4 | Security, Trust, and Access; Error Handling | T001, T003-T9, T011 | G1-G5, G7 | validation design and security docs if needed | complete | none |
 
-`complete` here means the specification maps each requirement through design,
-tasks, and planned verification. Implementation evidence remains pending in
-`verification.md` and is still required before promotion or closure.
+`complete` here means implementation, focused and full validation, independent
+review, and durable promotion evidence are recorded in `verification.md`.
 
 ## Correctness Property Coverage
 
@@ -79,9 +78,9 @@ tasks, and planned verification. Implementation evidence remains pending in
 
 | Decision ID | Blocks | Affected Requirements | Affected Tasks | Resolution Needed |
 |-------------|--------|-----------------------|----------------|-------------------|
-| D001 | T001 implementation | Requirement 3, Requirement 4 | T001, T008 | Choose the smallest additive contract shape allowed by current runtime compatibility rules. |
-| D002 | T006 implementation | Requirement 5, Requirement 8 | T006, T008 | Reuse existing repository-status evidence or define one narrow read-only port; process execution is prohibited. |
-| D003 | closure only | Requirement 6 | T012, T013 | Assign one durable backlog ID for full submodule repository-boundary planning. |
+| D001 | resolved | Requirement 3, Requirement 4 | T001, T008 | Optional bounded `project_units` under contract `0.1`; flat `planned_commands` remains compatible. |
+| D002 | resolved | Requirement 5, Requirement 8 | T006, T008 | Bounded workspace reads inspect local Git metadata; no process or Git CLI port was added. |
+| D003 | resolved | Requirement 6 | T012, T013 | Existing Spec 058 is the single durable full-submodule destination. |
 
 ## Maintenance Notes
 
