@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/057-nested-project-unit-validation-evidence/`
 - **Title:** Nested project-unit validation evidence requirements
 - **Final spec commit:** `aaf8ec5`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `b4379da`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/backlog/README.md`
