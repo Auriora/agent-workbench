@@ -2392,7 +2392,7 @@ Do not promote an item when:
 ### EB066: Public Failure Redaction Vocabulary Expansion
 
 - Priority: P1
-- Status: implemented in Spec 055; closure pending
+- Status: closed Spec 055
 - Friction signal: independent security review of Spec 054 found that the
   canonical sanitizer did not cover embedded home-relative paths, `/srv` and
   `/data` roots, UNC and extended Windows paths, JSON/YAML credential
@@ -2503,5 +2503,5 @@ Do not promote an item when:
 - Keep EB061 in backlog until the parser capability decision chooses explicit
   unsupported-form disclosure or canonical dynamic-import member-call
   extraction.
-- Close EB066/Spec 055 after committing its verified expanded host-path and
-  credential vocabulary and diagnostics failure classifications.
+- EB066/Spec 055 is closed after delivering and verifying its expanded
+  host-path and credential vocabulary plus diagnostics failure classifications.

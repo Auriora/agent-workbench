@@ -520,6 +520,34 @@ historical audit explicitly needs the original scaffolding.
 - **Follow-up:** EB014, EB059, EB061, and other raw skipped-path surfaces retain
   their existing independent ownership.
 
+### 2026-08-04 - 055-public-failure-redaction-vocabulary-expansion
+
+- **Spec:** `docs/specs/055-public-failure-redaction-vocabulary-expansion/`
+- **Title:** Public failure redaction vocabulary expansion
+- **Final spec commit:** `3888502`
+- **Closure cleanup commit:** `fc94761`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/reference/workspace-safety-contract.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/backlog/README.md`
+  - `AGENTS.md`
+  - `docs/history/spec-closure-log.md`
+  - `docs/history/spec-archive-index.md`
+- **Verification summary:** the focused redaction, diagnostics, and shared
+  envelope suite passed 3 files and 30 tests; `pnpm typecheck` passed; the
+  bounded full suite passed 241 files and 1,246 tests; plugin validation,
+  package dry run, diff hygiene, lifecycle lint, traceability, closure checks,
+  and independent security and correctness review passed after the surfaced
+  delimiter and authorization-boundary findings were fixed.
+- **Residual risks:**
+  - Pattern vocabularies intentionally do not claim detection of every future
+    credential or filesystem representation.
+  - New hostile forms require fixtures paired with safe counterexamples before
+    extending the canonical sanitizer.
+- **Follow-up:** none; future evidenced vocabulary additions require a new
+  fixture-gated backlog promotion.
+
 ### 2026-08-03 - 054-shared-mcp-failure-message-redaction
 
 - **Spec:** `docs/specs/054-shared-mcp-failure-message-redaction/`
