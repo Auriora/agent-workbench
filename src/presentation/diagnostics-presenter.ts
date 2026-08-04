@@ -83,6 +83,43 @@ export function buildInvalidDiagnosticsForFilesInputEnvelope(input: {
   });
 }
 
+export function buildDiagnosticsForFilesProviderFailureEnvelope(input: {
+  repoRoot: string;
+  message: string;
+  classification: "provider_unavailable" | "internal_error";
+}): ResponseEnvelope<DiagnosticsForFilesResult> {
+  const message = sanitizePublicMcpFailureMessage(
+    input.message,
+    "Diagnostics failed before completion; inspect the error code and retry guidance."
+  );
+  const summary = input.classification === "provider_unavailable"
+    ? "Diagnostics are unavailable because the provider is not configured."
+    : message;
+  return makeTrustedEnvelope({
+    data: {
+      repo_root: input.repoRoot,
+      status: "blocked",
+      summary,
+      checked_files: [],
+      findings: [],
+      provider_statuses: [],
+      next_actions: []
+    },
+    meta: invalidResponseMeta({
+      repoRoot: input.repoRoot,
+      analysis_validity: "invalid_due_to_environment"
+    }),
+    trust_policy: { surface_kind: "diagnostics_static" },
+    errors: [
+      {
+        code: input.classification,
+        message,
+        retryable: input.classification === "internal_error"
+      }
+    ]
+  });
+}
+
 function sanitizeDiagnosticsResult(
   input: DiagnosticsForFilesResult,
   context: PresentationSessionContext

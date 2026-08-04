@@ -842,9 +842,12 @@ the next safe recovery action.
 
 Every arbitrary public MCP failure message uses the canonical presentation
 sanitizer before schema validation or serialization. It redacts secret-like
-assignments, private-key material, absolute host paths, and workspace escapes,
-then bounds the result to at most 512 UTF-8 bytes without splitting a code
-point. Empty or marker-only output uses a fixed recovery-oriented fallback.
+equals/JSON/YAML assignments, Bearer or Basic authorization credentials,
+private-key material, home-relative and known-root Unix host paths, drive-letter
+and extended Windows paths, UNC share paths, and workspace escapes. It then
+bounds the result to at most 512 UTF-8 bytes without splitting a code point.
+Routes, URLs, repo-relative paths, and ordinary non-secret prose remain visible.
+Empty or marker-only output uses a fixed recovery-oriented fallback.
 The same sanitized value is reused in duplicated public summary, reason, or
 blocker fields. Error classification, cause-code selection, retryability,
 metadata, trust, typed data, and next actions are derived from internal
@@ -874,6 +877,14 @@ retain their bounded exclusion reason, while an absent safe path remains a
 non-blocking missing-path finding. Public requests accept at most 50 explicit
 files, keeping priority-path exclusion receipts within their bounded evidence
 budget.
+
+The manual `diagnostics_for_files` registry keeps provider failures distinct
+from request failures. A missing configured provider returns non-retryable
+`provider_unavailable`; an unexpected configured-provider exception returns
+retryable `internal_error`. Both use `invalid_due_to_environment`, unknown
+freshness, blocked verification, empty diagnostics evidence and recovery
+actions, and the `diagnostics_static` trust policy. Malformed arguments and
+blocked root overrides remain non-retryable `invalid_input`.
 
 ## Attention Item Shape
 

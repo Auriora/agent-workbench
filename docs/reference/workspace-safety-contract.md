@@ -124,8 +124,13 @@ ordinary source text such as `/api/orders`, route fragments, URL paths, and
 fixture strings unless the value contains secret-like material, an absolute host
 path, or a workspace-escape token. Repo-relative filesystem paths are preserved
 when they come from path-typed fields. Absolute host paths, traversal-like
-workspace escapes, private keys, and token/password/secret assignments are
-redacted in presentation output. The stricter workspace path resolver remains
+workspace escapes, private keys, and token/password/secret/API-key assignments
+are redacted in presentation output. Assignment redaction covers equals, JSON,
+and YAML separators; `Authorization` Bearer and Basic credentials are also
+redacted. Embedded host-path coverage includes home-relative paths, known Unix
+host roots including `/srv` and `/data`, drive-letter and extended Windows
+paths, and UNC share paths. Slash-prefixed routes and URLs remain visible unless
+they independently match unsafe evidence. The stricter workspace path resolver remains
 the authority for reads, writes, symlink handling, generated/vendor write
 refusal, and workspace-escape blocking.
 

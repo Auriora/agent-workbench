@@ -94,16 +94,9 @@ export function redactPresentationText(
 ): string {
   const context = options.context ?? "message";
   let redacted = redactSecretLikeText(value);
+  redacted = redactAbsolutePathText(redacted);
   redacted = redacted.replace(
-    /(^|[\s"'`=(:])((?:[A-Za-z]:[\\/])(?:[^\s"'`)]+))/gu,
-    "$1[REDACTED_ABSOLUTE_PATH]"
-  );
-  redacted = redacted.replace(
-    /(^|[\s"'`=(:])(\/(?:home|users|tmp|var|etc|opt|usr|mnt|private|workspace|workspaces|root)\/(?:[^\s"'`)]+))/giu,
-    "$1[REDACTED_ABSOLUTE_PATH]"
-  );
-  redacted = redacted.replace(
-    /(^|[\s"'`=(:])((?:\.\.[\\/])(?:[^\s"'`)]+))/gu,
+    /(^|[\s"'`=(:,;{\[])((?:\.\.[\\/])(?:[^\s"'`)]+))/gu,
     "$1[REDACTED_WORKSPACE_ESCAPE]"
   );
   if (context === "path") {
@@ -210,14 +203,51 @@ function redactOptionalSymbolText(value: string | undefined): string | undefined
 
 function redactSecretLikeText(value: string): string {
   return value
-    .replace(/(api[_-]?key|token|password|secret)=([^\s"'`),.;]+)/giu, "$1=[REDACTED]")
-    .replace(/-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+ )?PRIVATE KEY-----/gu, "[REDACTED_PRIVATE_KEY]");
+    .replace(/-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z ]+ )?PRIVATE KEY-----/gu, "[REDACTED_PRIVATE_KEY]")
+    .replace(
+      /(\bauthorization\b["']?\s*:\s*["']?\s*)(bearer|basic)(\s+)(?!\[REDACTED\])([^\s"'`,;)}\]]+?)(?=[.!?]?(?:\s|$|["'`,;)}\]]))/giu,
+      (
+        match,
+        prefix: string,
+        scheme: string,
+        spacing: string,
+        credential: string,
+        offset: number,
+        source: string
+      ) =>
+        isLikelyAuthorizationCredential(
+          scheme,
+          credential,
+          source.slice(offset + match.length)
+        )
+          ? `${prefix}${scheme}${spacing}[REDACTED]`
+          : match
+    )
+    .replace(
+      /(\b(?:api[_-]?key|token|password|secret)\b["']?\s*[:=]\s*["']?)(?!\[REDACTED\])(?!\b(?:api[_-]?key|token|password|secret)\b\s*[:=])([^\s"'`,;)}\]]+?)(?=[.!?]?(?:\s|$|["'`,;)}\]]))/giu,
+      "$1[REDACTED]"
+    );
+}
+
+function isLikelyAuthorizationCredential(
+  scheme: string,
+  value: string,
+  trailingText: string
+): boolean {
+  if (scheme.toLowerCase() === "basic") {
+    return value.length >= 4 && value.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/u.test(value);
+  }
+  return !(value.toLowerCase() === "access" && /^\s+required\b/iu.test(trailingText));
 }
 
 function isUsablePublicFailureMessage(value: string): boolean {
   const normalized = value
     .replace(
-      /\b(?:api[_-]?key|token|password|secret)\s*=\s*\[(?:REDACTED(?:_[A-Z_]+)?)\]/giu,
+      /\bauthorization\b["']?\s*:\s*["']?\s*(?:bearer|basic)\s+\[(?:REDACTED(?:_[A-Z_]+)?)\]["']?/giu,
+      " "
+    )
+    .replace(
+      /\b(?:api[_-]?key|token|password|secret)\b["']?\s*[:=]\s*["']?\[(?:REDACTED(?:_[A-Z_]+)?)\]["']?/giu,
       " "
     )
     .replace(/\[(?:REDACTED(?:_[A-Z_]+)?)\]/gu, " ")
@@ -230,10 +260,17 @@ function hasTraversalSegment(value: string): boolean {
 }
 
 function isAbsoluteHostPath(value: string): boolean {
-  if (/^[A-Za-z]:[\\/]/u.test(value) || value.startsWith("~/")) {
+  if (
+    /^[A-Za-z]:[\\/]/u.test(value) ||
+    /^~[\\/]/u.test(value) ||
+    /^\\\\\?\\UNC\\[^\\/\s"'`)]+[\\/][^\\/\s"'`)]+(?:[\\/]|$)/u.test(value) ||
+    /^\\\\\?\\[A-Za-z]:[\\/]/u.test(value) ||
+    /^\\\\\.\\[A-Za-z]:[\\/]/u.test(value) ||
+    /^\\\\[^\\/\s"'`)]+[\\/][^\\/\s"'`)]+(?:[\\/]|$)/u.test(value)
+  ) {
     return true;
   }
-  return /^\/(?:home|users|tmp|var|etc|opt|usr|mnt|private|workspace|workspaces|root)\//iu.test(value);
+  return /^\/(?:data|etc|home|mnt|opt|private|root|srv|tmp|usr|users|var|workspace|workspaces)[\\/]/iu.test(value);
 }
 
 function isRepoRelativePathLike(value: string): boolean {
@@ -246,4 +283,29 @@ function isRepoRelativePathLike(value: string): boolean {
 
 function normalizeSlashes(value: string): string {
   return value.replaceAll("\\", "/");
+}
+
+function redactAbsolutePathText(value: string): string {
+  let redacted = value;
+  redacted = redacted.replace(
+    /(^|[\s"'`=(:,;{\[])((?:\\\\\?\\UNC\\[^\\/\s"'`),;\]}]+[\\/][^\\/\s"'`),;\]}]+(?:[\\/][^\s"'`,;\]}]+)?|\\\\\?\\[A-Za-z]:[\\/][^\s"'`,;\]}]+|\\\\\.\\[A-Za-z]:[\\/][^\s"'`,;\]}]+))/giu,
+    "$1[REDACTED_ABSOLUTE_PATH]"
+  );
+  redacted = redacted.replace(
+    /(^|[\s"'`=(:,;{\[])((?:\\\\[^\\/\s"'`),;\]}]+[\\/][^\\/\s"'`),;\]}]+(?:[\\/][^\s"'`,;\]}]+)?))/gu,
+    "$1[REDACTED_ABSOLUTE_PATH]"
+  );
+  redacted = redacted.replace(
+    /(^|[\s"'`=(:,;{\[])((?:[A-Za-z]:[\\/][^\s"'`,;\]}]+))/gu,
+    "$1[REDACTED_ABSOLUTE_PATH]"
+  );
+  redacted = redacted.replace(
+    /(^|[\s"'`=(:,;{\[])((?:~[\\/][^\s"'`,;\]}]+))/gu,
+    "$1[REDACTED_ABSOLUTE_PATH]"
+  );
+  redacted = redacted.replace(
+    /(^|[\s"'`=(:,;{\[])(\/(?:data|etc|home|mnt|opt|private|root|srv|tmp|usr|users|var|workspace|workspaces)[\\/][^\s"'`),;\]}]+)/giu,
+    "$1[REDACTED_ABSOLUTE_PATH]"
+  );
+  return redacted;
 }

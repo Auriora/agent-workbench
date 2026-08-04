@@ -6,6 +6,7 @@
 import { describe, expect, it } from "vitest";
 import type { DiagnoseChangedFilesResult } from "../../src/application/use-cases/diagnose-changed-files.js";
 import type { DiagnosticsForFilesRequest } from "../../src/contracts/index.js";
+import { createRootAuthorityPolicy } from "../../src/interface-adapters/mcp/registries/root-authority.js";
 import { diagnosticsForFilesTool } from "../../src/interface-adapters/mcp/registries/tools/diagnostics-for-files.js";
 import {
   type RegisteredMcpTool,
@@ -134,25 +135,70 @@ describe("diagnostics_for_files MCP tool", () => {
     expect(parsed.errors[0]?.code).toBe("invalid_input");
   });
 
-  it("returns a structured envelope when no diagnostics provider is configured", async () => {
+  it("returns a provider-unavailable envelope when no diagnostics provider is configured", async () => {
     const registered = registerDiagnosticsTool({});
     const response = await registered.handler({
       files: ["package.json"]
     });
     const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
-      data: { status: string; summary: string };
-      errors: Array<{ message: string }>;
+      data: {
+        repo_root: string;
+        status: string;
+        summary: string;
+        checked_files: unknown[];
+        findings: unknown[];
+        provider_statuses: unknown[];
+        next_actions: unknown[];
+      };
+      meta: {
+        analysis_validity: string;
+        freshness: string;
+        verification_status: string;
+      };
+      errors: Array<{ code: string; retryable: boolean; message: string }>;
     };
 
     expect(parsed.data).toMatchObject({
+      repo_root: "/repo",
       status: "blocked",
-      summary: "Diagnostics input was invalid."
+      summary: "Diagnostics are unavailable because the provider is not configured.",
+      checked_files: [],
+      findings: [],
+      provider_statuses: [],
+      next_actions: []
+    });
+    expect(parsed.meta).toMatchObject({
+      analysis_validity: "invalid_due_to_environment",
+      freshness: "unknown",
+      verification_status: "blocked"
     });
     expect(parsed.errors).toEqual([
       expect.objectContaining({
+        code: "provider_unavailable",
+        retryable: false,
         message: "diagnostics_for_files provider is not configured."
       })
     ]);
+  });
+
+  it("uses the resolved request root in provider-unavailable envelopes", async () => {
+    const registered = registerDiagnosticsTool({
+      rootAuthorityPolicy: createRootAuthorityPolicy({
+        launchRoot: "/repo",
+        debugRepoRootOverride: true
+      })
+    });
+    const response = await registered.handler({
+      repo_root: "/tmp/debug-root",
+      files: ["package.json"]
+    });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: { repo_root: string };
+      errors: Array<{ code: string }>;
+    };
+
+    expect(parsed.data.repo_root).toBe("/tmp/debug-root");
+    expect(parsed.errors[0]?.code).toBe("provider_unavailable");
   });
 
   it("presents workspace-safety diagnostics refusals as typed non-retryable errors", async () => {
@@ -215,7 +261,7 @@ describe("diagnostics_for_files MCP tool", () => {
     ]);
   });
 
-  it("redacts hostile failures from the manual diagnostics adapter", async () => {
+  it("returns an internal-error envelope for unexpected provider failures", async () => {
     const registered = registerDiagnosticsTool({
       diagnoseChangedFiles: () => {
         throw new Error(
@@ -226,23 +272,40 @@ describe("diagnostics_for_files MCP tool", () => {
 
     const response = await registered.handler({ files: ["package.json"] });
     const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
-      data: { status: string; summary: string; next_actions: unknown[] };
+      data: {
+        repo_root: string;
+        status: string;
+        summary: string;
+        checked_files: unknown[];
+        findings: unknown[];
+        provider_statuses: unknown[];
+        next_actions: unknown[];
+      };
       meta: { analysis_validity: string; verification_status: string };
       errors: Array<{ code: string; retryable: boolean; message: string }>;
     };
 
-    expect(parsed.data.status).toBe("blocked");
+    expect(parsed.data).toMatchObject({
+      repo_root: "/repo",
+      status: "blocked",
+      checked_files: [],
+      findings: [],
+      provider_statuses: [],
+      next_actions: []
+    });
     expect(parsed.meta).toMatchObject({
-      analysis_validity: "invalid",
+      analysis_validity: "invalid_due_to_environment",
+      freshness: "unknown",
       verification_status: "blocked"
     });
     expect(parsed.errors).toEqual([
       expect.objectContaining({
-        code: "invalid_input",
-        retryable: false,
+        code: "internal_error",
+        retryable: true,
         message: expect.stringContaining("Retry diagnostics after fixing the provider.")
       })
     ]);
+    expect(parsed.data.summary).toBe(parsed.errors[0]?.message);
     expect(JSON.stringify(parsed)).not.toContain("/home/example");
     expect(JSON.stringify(parsed)).not.toContain("../outside");
     expect(JSON.stringify(parsed)).not.toContain("abc123");

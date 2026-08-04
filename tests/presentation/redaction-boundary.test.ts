@@ -65,9 +65,75 @@ describe("presentation redaction boundary", () => {
     });
   });
 
+  it("redacts embedded tilde, srv/data, UNC, and extended Windows paths", () => {
+    const redacted = redactPresentationText(
+      [
+        "Use ~/secrets/graph.sqlite",
+        "mirror /srv/cache/index.db",
+        "archive /data/exports/orders.json",
+        String.raw`\\fileserver\share\secrets\graph.sqlite`,
+        String.raw`\\?\C:\Users\example\secret.txt`,
+        String.raw`\\?\UNC\fileserver\share\secret.txt`
+      ].join(" "),
+      { context: "message" }
+    );
+
+    expect(redacted).toContain("[REDACTED_ABSOLUTE_PATH]");
+    expect(redacted).not.toContain("~/secrets/graph.sqlite");
+    expect(redacted).not.toContain("/srv/cache/index.db");
+    expect(redacted).not.toContain("/data/exports/orders.json");
+    expect(redacted).not.toContain(String.raw`\\fileserver\share\secrets\graph.sqlite`);
+    expect(redacted).not.toContain(String.raw`\\?\C:\Users\example\secret.txt`);
+    expect(redacted).not.toContain(String.raw`\\?\UNC\fileserver\share\secret.txt`);
+    expect(redactPresentationText(redacted, { context: "message" })).toBe(redacted);
+  });
+
+  it("redacts structured secret assignments and authorization headers", () => {
+    const redacted = redactPresentationText(
+      [
+        '{"token": "abc123"}',
+        "password: hunter2",
+        "secret = topsecret",
+        "api_key: key-123",
+        "Authorization: Bearer bearer-token",
+        "Authorization: Basic dXNlcjpwYXNz"
+      ].join(" "),
+      { context: "message" }
+    );
+
+    expect(redacted).toContain('"token": "[REDACTED]"');
+    expect(redacted).toContain("password: [REDACTED]");
+    expect(redacted).toContain("secret = [REDACTED]");
+    expect(redacted).toContain("api_key: [REDACTED]");
+    expect(redacted).toContain("Authorization: Bearer [REDACTED]");
+    expect(redacted).toContain("Authorization: Basic [REDACTED]");
+    expect(redacted).not.toContain("abc123");
+    expect(redacted).not.toContain("hunter2");
+    expect(redacted).not.toContain("topsecret");
+    expect(redacted).not.toContain("key-123");
+    expect(redacted).not.toContain("bearer-token");
+    expect(redacted).not.toContain("dXNlcjpwYXNz");
+    expect(redactPresentationText(redacted, { context: "message" })).toBe(redacted);
+  });
+
+  it("redacts host paths after bracket and comma delimiters", () => {
+    const hostile = String.raw`paths:[/data/secret.txt],~/private/key,[/srv/cache.db],\\fileserver\share\secret.txt,[\\?\C:\Users\example\secret.txt]`;
+    const redacted = redactPresentationText(hostile, { context: "message" });
+
+    expect(redacted).toBe(
+      "paths:[[REDACTED_ABSOLUTE_PATH]],[REDACTED_ABSOLUTE_PATH],[[REDACTED_ABSOLUTE_PATH]],[REDACTED_ABSOLUTE_PATH],[[REDACTED_ABSOLUTE_PATH]]"
+    );
+    expect(redacted).not.toContain("/data/secret.txt");
+    expect(redacted).not.toContain("~/private/key");
+    expect(redacted).not.toContain("/srv/cache.db");
+    expect(redacted).not.toContain(String.raw`\\fileserver\share\secret.txt`);
+    expect(redacted).not.toContain(String.raw`\\?\C:\Users\example\secret.txt`);
+    expect(redactPresentationText(redacted, { context: "message" })).toBe(redacted);
+  });
+
   it("redacts embedded unsafe tokens while preserving route fragments in source text", () => {
     const redacted = redactPresentationText(
-      "GET /api/orders from /home/example/.ssh/id_rsa via ../outside/secrets.txt with TOKEN=abc123",
+      "GET /api/orders from /home/example/.ssh/id_rsa via ../outside/secrets.txt with TOKEN=abc123 and Authorization: Bearer abc123",
       { context: "source" }
     );
 
@@ -75,8 +141,26 @@ describe("presentation redaction boundary", () => {
     expect(redacted).toContain("[REDACTED_ABSOLUTE_PATH]");
     expect(redacted).toContain("[REDACTED_WORKSPACE_ESCAPE]");
     expect(redacted).toContain("TOKEN=[REDACTED]");
+    expect(redacted).toContain("Authorization: Bearer [REDACTED]");
     expect(redacted).not.toContain("/home/example");
     expect(redacted).not.toContain("../outside");
+  });
+
+  it("keeps safe routes, URLs, repo-relative paths, prose, and non-secret authorization text unchanged", () => {
+    const source = redactPresentationText(
+      "GET /api/orders, /data, and /srv from https://example.com/api/orders in src/routes/orders.ts; Retry: later; authorization required for access; Authorization: Basic access required; Authorization: Bearer access required.",
+      { context: "source" }
+    );
+
+    expect(source).toContain("/api/orders");
+    expect(source).toContain("/data");
+    expect(source).toContain("/srv");
+    expect(source).toContain("https://example.com/api/orders");
+    expect(source).toContain("src/routes/orders.ts");
+    expect(source).toContain("Retry: later");
+    expect(source).toContain("authorization required for access;");
+    expect(source).toContain("Authorization: Basic access required");
+    expect(source).toContain("Authorization: Bearer access required");
   });
 
   it("sanitizes every free-text symbol field without changing typed paths or the input", () => {
@@ -149,6 +233,9 @@ describe("presentation redaction boundary", () => {
     expect(sanitizePublicMcpFailureMessage("", fallback)).toBe(fallback);
     expect(sanitizePublicMcpFailureMessage("/home/example/private.sqlite", fallback)).toBe(fallback);
     expect(sanitizePublicMcpFailureMessage("TOKEN=abc123", fallback)).toBe(fallback);
+    expect(sanitizePublicMcpFailureMessage('{"token":"abc123"}', fallback)).toBe(fallback);
+    expect(sanitizePublicMcpFailureMessage("Authorization: Bearer abc123", fallback)).toBe(fallback);
+    expect(sanitizePublicMcpFailureMessage("[REDACTED_ABSOLUTE_PATH]", fallback)).toBe(fallback);
     expect(() => sanitizePublicMcpFailureMessage("safe", "TOKEN=abc123")).toThrow(
       "Public MCP failure fallback must contain fixed actionable text."
     );

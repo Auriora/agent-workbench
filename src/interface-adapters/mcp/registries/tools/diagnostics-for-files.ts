@@ -11,9 +11,9 @@ import {
 } from "../../../../contracts/index.js";
 import {
   buildDiagnosticsForFilesEnvelope,
+  buildDiagnosticsForFilesProviderFailureEnvelope,
   buildInvalidDiagnosticsForFilesInputEnvelope
 } from "../../../../presentation/diagnostics-presenter.js";
-import { sanitizePublicMcpFailureMessage } from "../../../../presentation/redaction.js";
 import {
   formatMcpArgumentError,
   parseMcpArguments
@@ -92,9 +92,10 @@ export const diagnosticsForFilesTool: McpToolDeclaration = {
         }
 
         if (context.diagnoseChangedFiles === undefined) {
-          const envelope = buildInvalidDiagnosticsForFilesInputEnvelope({
-            repoRoot: context.repoRoot,
-            message: "diagnostics_for_files provider is not configured."
+          const envelope = buildDiagnosticsForFilesProviderFailureEnvelope({
+            repoRoot: rootDecision.request.repo_root,
+            message: "diagnostics_for_files provider is not configured.",
+            classification: "provider_unavailable"
           });
           return {
             content: [
@@ -112,12 +113,10 @@ export const diagnosticsForFilesTool: McpToolDeclaration = {
             request: rootDecision.request
           });
         } catch (error) {
-          const envelope = buildInvalidDiagnosticsForFilesInputEnvelope({
+          const envelope = buildDiagnosticsForFilesProviderFailureEnvelope({
             repoRoot: rootDecision.request.repo_root,
-            message: sanitizePublicMcpFailureMessage(
-              `diagnostics_for_files provider failed before diagnostics could complete: ${error instanceof Error ? error.message : String(error)}`,
-              "diagnostics_for_files provider failed before diagnostics could complete; inspect the error code and retry guidance."
-            )
+            message: `diagnostics_for_files provider failed before diagnostics could complete: ${error instanceof Error ? error.message : String(error)}`,
+            classification: "internal_error"
           });
           return {
             content: [

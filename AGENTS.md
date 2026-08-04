@@ -22,9 +22,9 @@ integrations, fixture-backed tests, and durable design/reference documentation.
   `docs/requirements/`, and `docs/adr/`: durable documentation. Use
   `docs/reference/documentation-map.md` to find the canonical owner before
   changing behavior or contracts.
-- `docs/specs/`: active and historical implementation spec packages. Current
-  active packages are numbered `026` through `033`; do not add new work to the
-  closed `001` MVP package.
+- `docs/specs/`: active and historical implementation spec packages. Inspect
+  the current directory inventory or lifecycle tooling for the active set; do
+  not add new work to the closed `001` MVP package.
 - `docs/templates/`: reusable documentation templates and spec-package
   templates.
 - `.cache/`: local generated runtime/index data. This directory is ignored and

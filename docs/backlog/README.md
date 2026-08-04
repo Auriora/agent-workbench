@@ -2389,6 +2389,31 @@ Do not promote an item when:
   extraction budget. EB014 completion, EB059 capacity, EB061 parser coverage,
   and other raw surfaces remain separately owned.
 
+### EB066: Public Failure Redaction Vocabulary Expansion
+
+- Priority: P1
+- Status: implemented in Spec 055; closure pending
+- Friction signal: independent security review of Spec 054 found that the
+  canonical sanitizer did not cover embedded home-relative paths, `/srv` and
+  `/data` roots, UNC and extended Windows paths, JSON/YAML credential
+  assignments, or authorization credentials. Correctness review also found the
+  manual `diagnostics_for_files` adapter classified missing and throwing
+  providers as invalid user input.
+- Runtime surface: canonical presentation redaction, public MCP failure
+  messages, diagnostics failure envelopes, workspace safety, and runtime
+  contracts.
+- Acceptance:
+  - Redact the evidenced path and credential forms through the one canonical
+    sanitizer while preserving routes, URLs, repo-relative paths, ordinary
+    prose, idempotence, and the 512-byte UTF-8 bound.
+  - Keep `diagnostics_for_files` invalid input, provider unavailable, and
+    unexpected provider failure distinct with matching retryability, metadata,
+    trust, empty evidence, and recovery semantics.
+  - Prove hostile and safe counterexamples with focused fixtures and full
+    regression validation; do not add per-tool patterns or fallback routes.
+- Promotion target: Spec 055, workspace-safety contract, runtime contracts, and
+  EB038 error-envelope consistency.
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |
@@ -2458,6 +2483,7 @@ Do not promote an item when:
 | Shared MCP failure-message redaction | EB063, under EB038 error-envelope consistency and workspace safety. |
 | Production documentation corpus isolation and governing-owner priority | EB064, under EB018 stale-doc filtering, EB054 authority-aware ranking, and EB060 first-read trust. |
 | Validation-plan skipped-path payload compaction | EB065, under EB004 validation planning and EB009 bounded observability. |
+| Public failure redaction vocabulary expansion | EB066, under EB063 delivery, EB038 error-envelope consistency, and workspace safety. |
 
 ## Immediate Next Specs
 
@@ -2477,5 +2503,5 @@ Do not promote an item when:
 - Keep EB061 in backlog until the parser capability decision chooses explicit
   unsupported-form disclosure or canonical dynamic-import member-call
   extraction.
-- Schedule EB063 as a direct shared-envelope hardening repair before treating
-  generic provider exception messages as uniformly redacted.
+- Close EB066/Spec 055 after committing its verified expanded host-path and
+  credential vocabulary and diagnostics failure classifications.
