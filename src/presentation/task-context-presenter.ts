@@ -119,7 +119,8 @@ function sanitizeFileReference(input: GetTaskContextResult["context"]["requested
     exists: input.exists,
     capability_level: input.capability_level,
     evidence_kinds: input.evidence_kinds,
-    reason: input.reason
+    reason: input.reason,
+    repository: input.repository === undefined ? undefined : sanitizeRepositoryReference(input.repository)
   });
 }
 
@@ -132,6 +133,7 @@ function sanitizeDocumentReference(input: GetTaskContextResult["context"]["gover
     doc_status: input.doc_status,
     authority: input.authority,
     authority_caveat: input.authority_caveat,
+    repository: input.repository === undefined ? undefined : sanitizeRepositoryReference(input.repository),
     currency_state: input.currency_state,
     currency_caveats: input.currency_caveats,
     canonical_owner: input.canonical_owner,
@@ -141,6 +143,16 @@ function sanitizeDocumentReference(input: GetTaskContextResult["context"]["gover
     git_first_seen: input.git_first_seen,
     git_last_touched: input.git_last_touched
   });
+}
+
+function sanitizeRepositoryReference(
+  input: NonNullable<GetTaskContextResult["context"]["requested_files"][number]["repository"]>
+) {
+  return {
+    repository_key: input.repository_key,
+    path_prefix: input.path_prefix,
+    state: input.state
+  };
 }
 
 function sanitizeValidationHint(input: GetTaskContextResult["context"]["validation_hints"][number]) {

@@ -60,12 +60,36 @@ classification to their own behavior:
 | `hidden_path` | Skip unless allowlisted as repository-shape evidence | Refuse by default |
 | `gitignore` | Skip or caveat as repository-ignored evidence | Refuse by default |
 | `secret` | Skip or redact secret-bearing paths | Refuse by default |
-| `nested_git_repository` | Skip nested checkout evidence | Refuse by default |
+| `nested_git_repository` | Skip nested checkout evidence unless it is admitted as a declared initialized submodule | Refuse by default |
 
 Root `.gitignore` and `.aiignore` files are loaded through the same ignore-rule
 parser for catalog scans, file identity checks, watcher filtering, and hook
 workspace signals. Matching paths are reported with the stable `gitignore`
 classification unless a later contract splits ignore-file diagnostics.
+
+## Declared Submodule Reads
+
+Declared Git submodules are the only nested repository form that the runtime may
+read beneath the launched repo root. Admission is read-only and requires local
+evidence from both `.gitmodules` and a matching Git gitlink entry. Repository
+URLs are ignored for planning, indexing, provenance, and public responses; the
+runtime must not fetch, initialize, update, or otherwise contact a remote
+submodule source.
+
+An admitted submodule remains a separate repository unit. Its paths are
+canonicalized, bounded to the launched superproject, and reported with a
+submodule path prefix. Child source evidence may be scanned with child-local
+ignore policy, but sibling repositories, undeclared nested `.git` directories,
+and declared-but-uninitialized paths remain blocked or skipped evidence. Writes
+under submodule paths are refused by default through the same generated/vendor
+and nested-repository write policy as other embedded repositories.
+
+Git-dependent claims are separated from readable source. A child with readable
+source but unavailable, broken, dirty, or revision-mismatched Git metadata may
+still contribute local file and marker evidence, while worktree-cleanliness,
+diff-completeness, unchanged-worktree, and cross-repository aggregation claims
+remain blocked or degraded with structured reasons. The planner must not borrow
+parent Git cleanliness for a child or use one submodule's evidence for another.
 
 Secret-bearing path detection includes `.env`, `.env.*` except safe examples
 such as `.env.example`, `.env.sample`, and `.env.template`, plus `.envrc`,
@@ -95,6 +119,12 @@ When commands are executed:
 
 Adapters must not spawn commands directly. All process execution goes through a
 single command runner that enforces this contract.
+
+The Git metadata path used for declared-submodule composition is the same
+hardened command boundary. It accepts only fixed local Git invocations selected
+by the runtime, uses structured argv, disables prompts and optional locks, and
+does not run hooks, remote operations, package managers, shells, or
+repo-authored commands.
 
 ## Network Policy
 

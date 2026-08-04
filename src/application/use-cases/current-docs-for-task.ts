@@ -12,6 +12,7 @@ import type {
   ResponseMetadata
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
+import type { SnapshotRepositoryComposition } from "../../domain/models/runtime.js";
 import type {
   FileCatalogScanPort,
   WorkspaceFilePort
@@ -29,6 +30,7 @@ import {
 import { markdownTitleFromPath, parseMarkdownHeadings } from "./markdown-docs.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 import { capNextActions } from "./response-metadata.js";
+import { repositoryReferenceForPath } from "./repository-provenance.js";
 
 const DOC_ROW_LIMIT = 15000;
 
@@ -42,13 +44,15 @@ export async function getCurrentDocsForTask(input: {
   scanner: FileCatalogScanPort;
   workspace: WorkspaceFilePort;
   default_repo_root: string;
+  repository_composition?: SnapshotRepositoryComposition;
 }): Promise<CurrentDocsForTaskUseCaseResult> {
   const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
   const scanned = await input.scanner.scan({
     repo_root: repoRoot,
     indexed_roots: ["."],
     skipped_roots: [],
-    max_files: DOC_ROW_LIMIT
+    max_files: DOC_ROW_LIMIT,
+    repository_composition: input.repository_composition
   });
   const markdownFiles = scanned.files.filter((file) => file.file_identity.language === "markdown");
   const corpus = partitionDocumentationCorpusPaths(markdownFiles.map((file) => file.path));
@@ -88,6 +92,7 @@ export async function getCurrentDocsForTask(input: {
         score: candidate.score + currencyRank(currency),
         ref: {
           path: candidate.file.path,
+          repository: repositoryReferenceForPath(input.repository_composition, candidate.file.path),
           title,
           reason: [
             "Matched task terms, explicit files, or documentation priority.",

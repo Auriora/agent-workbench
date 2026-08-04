@@ -14,6 +14,7 @@ import {
   fileReferenceSchema,
   freshnessSchema,
   nextActionSchema,
+  repositoryCompositionSummarySchema,
   skippedPathSchema,
   skippedWorkSchema,
   validationHintSchema
@@ -152,6 +153,7 @@ export const repoOverviewSchema = z
     key_docs: z.array(documentReferenceSchema),
     validation_hints: z.array(validationHintSchema),
     skipped_paths: z.array(skippedPathSchema).optional(),
+    repository_composition: repositoryCompositionSummarySchema.optional(),
     recommended_first_calls: z.array(nextActionSchema)
   })
   .strict();

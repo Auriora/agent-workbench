@@ -123,7 +123,8 @@ function sanitizePlannedCommand(
     display: redactPresentationText(command.display, { context: "source" }),
     reason: redactPresentationText(command.reason, { context: "message" }),
     status: command.status,
-    execution: command.execution
+    execution: command.execution,
+    repository: command.repository === undefined ? undefined : sanitizeRepositoryReference(command.repository)
   });
 }
 
@@ -144,6 +145,7 @@ function sanitizeProjectUnit(
     })),
     selection: unit.selection,
     boundary: unit.boundary,
+    repository: unit.repository === undefined ? undefined : sanitizeRepositoryReference(unit.repository),
     readiness: unit.readiness,
     blockers: unit.blockers.map((blocker) => ({
       kind: blocker.kind,
@@ -159,6 +161,14 @@ function sanitizeProjectUnit(
     })),
     planned_commands: unit.planned_commands.map(sanitizePlannedCommand)
   });
+}
+
+function sanitizeRepositoryReference(input: NonNullable<PlanVerificationResult["plan"]["planned_commands"][number]["repository"]>) {
+  return {
+    repository_key: redactPresentationText(input.repository_key, { context: "source" }),
+    path_prefix: redactPresentationText(input.path_prefix, { context: "path" }),
+    state: input.state
+  };
 }
 
 function sanitizeStaticFeedback(

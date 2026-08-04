@@ -191,7 +191,14 @@ export function sanitizeSymbolReference(input: SymbolReference): SymbolReference
           truncated: input.source_section.truncated,
           caveat: input.source_section.caveat,
           text: redactPresentationText(input.source_section.text, { context: "source" })
-        })
+        }),
+    repository: input.repository === undefined
+      ? undefined
+      : {
+          repository_key: redactPresentationText(input.repository.repository_key, { context: "source" }),
+          path_prefix: redactPresentationText(input.repository.path_prefix, { context: "path" }),
+          state: input.repository.state
+        }
   });
 }
 

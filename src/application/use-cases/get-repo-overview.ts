@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
 import type {
   DocumentReference,
   FileReference,
@@ -19,8 +20,14 @@ import type {
   SnapshotPort,
   WarmupCoordinatorPort
 } from "../../ports/index.js";
-import { classifyMarkdownDoc } from "../../domain/policies/index.js";
-import { getCatalogRepoStatus } from "./get-repo-status.js";
+import {
+  classifyMarkdownDoc,
+  type RepositoryCompositionAdmissionReceipt
+} from "../../domain/policies/index.js";
+import {
+  getCatalogRepoStatus,
+  summarizeRepositoryComposition
+} from "./get-repo-status.js";
 import {
   detectJsTsProjectShape,
   isJsTsProjectConfigPath,
@@ -51,17 +58,19 @@ export async function getRepoOverview(input: {
   workspace?: WorkspaceFilePort;
   snapshots?: SnapshotPort;
   warmups?: WarmupCoordinatorPort;
+  snapshot_validity?: SnapshotValidityReceipt;
 }): Promise<GetRepoOverviewResult> {
-  const [scanned, snapshot, warmup] = await Promise.all([
-    input.scanner.scan({
-      repo_root: input.repo_root,
-      indexed_roots: ["."],
-      skipped_roots: [],
-      max_files: 15000
-    }),
+  const [snapshot, warmup] = await Promise.all([
     input.snapshots?.getSnapshot({ repo_root: input.repo_root }) ?? Promise.resolve(undefined),
     input.warmups?.getState({ repo_root: input.repo_root }) ?? Promise.resolve(undefined)
   ]);
+  const scanned = await scanFileCatalog(input.scanner, {
+    repo_root: input.repo_root,
+    indexed_roots: ["."],
+    skipped_roots: [],
+    max_files: 15000,
+    repository_composition: snapshot?.repository_composition
+  });
   const languages = uniqueSorted(scanned.files.map((file) => file.file_identity.language));
   const overviewFiles = scanned.files.filter((file) => !isEmbeddedFixturePath(file.path));
   const railsShape = detectRailsProjectShape({
@@ -76,7 +85,8 @@ export async function getRepoOverview(input: {
     files: scanned.files,
     freshness: snapshot?.freshness ?? "unknown",
     snapshot: snapshot ?? undefined,
-    warmup: warmup ?? undefined
+    warmup: warmup ?? undefined,
+    snapshot_validity: input.snapshot_validity
   });
 
   return {
@@ -89,6 +99,7 @@ export async function getRepoOverview(input: {
       key_docs: selectKeyDocs(overviewFiles),
       validation_hints: await inferValidationHints(overviewFiles, railsShape, validationProtocol),
       skipped_paths: mapSkippedPaths(scanned.skipped_paths ?? []),
+      repository_composition: summarizeRepositoryComposition(snapshot?.repository_composition),
       recommended_first_calls: [
         { tool: "read_resource", args: { uri: "repo:///status" } },
         { tool: "read_resource", args: { uri: "repo:///scope" } },
@@ -99,11 +110,27 @@ export async function getRepoOverview(input: {
     meta: {
       ...status.meta,
       truncated: scanned.truncated,
+      repository_composition: summarizeRepositoryComposition(snapshot?.repository_composition),
       budget: {
         row_limit: 15000
       }
     }
   };
+}
+
+type CompositionAwareFileCatalogScanPort = {
+  scan(input: Parameters<FileCatalogScanPort["scan"]>[0] & {
+    repository_composition?: RepositoryCompositionAdmissionReceipt;
+  }): ReturnType<FileCatalogScanPort["scan"]>;
+};
+
+function scanFileCatalog(
+  scanner: FileCatalogScanPort,
+  input: Parameters<FileCatalogScanPort["scan"]>[0] & {
+    repository_composition?: RepositoryCompositionAdmissionReceipt;
+  }
+): ReturnType<FileCatalogScanPort["scan"]> {
+  return (scanner as CompositionAwareFileCatalogScanPort).scan(input);
 }
 
 function mapSkippedPaths(skippedPaths: readonly FileCatalogSkippedPath[]): SkippedPath[] | undefined {

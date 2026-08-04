@@ -856,4 +856,66 @@ describe("file catalog scanner", () => {
       result.skipped_path_population.groups.reduce((sum, group) => sum + group.count, 0)
     );
   });
+
+  it("federates admitted submodule scans under child-local ignore rules and keeps unrelated nested repos refused", async () => {
+    fs.mkdirSync(path.join(repoRoot, "modules", "app", ".git"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "modules", "app", "src"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "modules", "foreign", ".git"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, ".gitignore"), "modules/app/ignored-by-parent.ts\n");
+    fs.writeFileSync(path.join(repoRoot, "modules", "app", ".gitignore"), "ignored-by-child.ts\n");
+    fs.writeFileSync(path.join(repoRoot, "modules", "app", "ignored-by-parent.ts"), "export const parentIgnored = false;\n");
+    fs.writeFileSync(path.join(repoRoot, "modules", "app", "ignored-by-child.ts"), "export const childIgnored = true;\n");
+    fs.writeFileSync(path.join(repoRoot, "modules", "app", "src", "keep.ts"), "export const keep = true;\n");
+    fs.writeFileSync(path.join(repoRoot, "modules", "foreign", "foreign.ts"), "export const foreign = true;\n");
+
+    const scanner = new FileCatalogScannerAdapter();
+    const result = await scanner.scan({
+      repo_root: repoRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      max_files: 100,
+      repository_composition: {
+        repositories: [
+          {
+            path_prefix: ".",
+            state: "superproject",
+            source_available: true
+          },
+          {
+            path_prefix: "modules/app",
+            state: "initialized",
+            source_available: true,
+            declaration_path: ".gitmodules",
+            head_gitlink_oid: "abc123"
+          }
+        ]
+      }
+    });
+
+    expect(result.files.map((file) => file.path)).toEqual(
+      expect.arrayContaining([
+        "modules/app/.gitignore",
+        "modules/app/ignored-by-parent.ts",
+        "modules/app/src/keep.ts"
+      ])
+    );
+    expect(result.files.map((file) => file.path)).not.toEqual(
+      expect.arrayContaining([
+        "modules/app/ignored-by-child.ts",
+        "modules/foreign/foreign.ts"
+      ])
+    );
+    expect(result.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "modules/app/ignored-by-child.ts",
+          reason: "gitignore"
+        }),
+        expect.objectContaining({
+          path: "modules/foreign",
+          reason: "nested_git_repository"
+        })
+      ])
+    );
+  });
 });

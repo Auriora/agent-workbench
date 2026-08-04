@@ -124,6 +124,11 @@ watcher or scan event
 - `ranked_docs_universes` and `ranked_docs_universe_hits`: immutable ordered
   documentation-search universes, their identity and count receipt, canonical
   creation/expiry times, stable document IDs, and frozen hit evidence.
+- `snapshot_repository_units`: optional additive repository-composition receipt
+  for a snapshot, including the superproject unit and any admitted declared
+  submodule units, their path prefixes, source availability, declaration and
+  gitlink evidence, Git metadata state, bounded blockers, lineage, and aggregate
+  claim support.
 
 ## Snapshot Publication
 
@@ -208,6 +213,18 @@ coverage.
   qualified name, and source range where available.
 - `files.path` is unique within a snapshot.
 - `docs_documents.path` is unique within a snapshot.
+- Repository-composition rows are scoped to one snapshot. A path resolves to
+  the owning repository unit by deterministic longest-prefix match; ties are
+  invalid input because one path cannot be owned by two units in the same
+  snapshot.
+- Snapshots without repository-composition rows are legacy snapshots. They may
+  serve same-repository source evidence, but composition-dependent freshness and
+  submodule-completeness claims remain degraded until a refreshed snapshot
+  stores a receipt.
+- The stored composition fingerprint must change when local declaration,
+  gitlink, admitted-unit, source-availability, blocker, or bounded-limit
+  evidence changes. A live mismatch makes composition-dependent claims stale
+  and uses the normal refresh path.
 - Concern, term, and owner identities include `snapshot_id`; duplicate concern
   rows merge by normalized concern key and duplicate owner links collapse by
   concern and canonical mapped-owner path while retaining the lowest source
@@ -260,6 +277,12 @@ catalog scan, generated/vendor skip, unsupported language, provider failure, or
 stale snapshot is still useful routing evidence, but it must not be presented
 as complete graph or docs coverage. Public responses should summarize skipped
 paths by reason and bounded sample instead of dumping unbounded file lists.
+
+Repository-composition evidence is carried with the same snapshot boundary.
+Status, graph, docs, context, diagnostics, and verification-planning surfaces
+may use stored longest-prefix lookup to attach repository-unit provenance to
+path-bearing results. They must not infer child repository ownership from path
+shape alone and must not join composition from another snapshot.
 
 ## Indexes
 

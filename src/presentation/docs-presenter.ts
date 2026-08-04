@@ -492,6 +492,7 @@ function sanitizeRankedSearchHit(input: RankedDocsSearchHit): RankedDocsSearchHi
     authority_caveat: parsed.authority_caveat === undefined
       ? undefined
       : redactPresentationText(parsed.authority_caveat, { context: "source" }),
+    repository: parsed.repository === undefined ? undefined : sanitizeRepositoryReference(parsed.repository),
     canonical_owner: parsed.canonical_owner === undefined
       ? undefined
       : redactPresentationText(parsed.canonical_owner, { context: "source" }),
@@ -574,6 +575,7 @@ function sanitizeDocument(input: DocsDocument): DocsDocument {
     doc_status: input.doc_status,
     authority: input.authority,
     authority_caveat: input.authority_caveat,
+    repository: input.repository === undefined ? undefined : sanitizeRepositoryReference(input.repository),
     currency_state: input.currency_state,
     currency_caveats: input.currency_caveats,
     canonical_owner: input.canonical_owner,
@@ -616,6 +618,7 @@ function sanitizeSearchHit(input: DocsSearchHit): DocsSearchHit {
     doc_status: input.doc_status,
     authority: input.authority,
     authority_caveat: input.authority_caveat,
+    repository: input.repository === undefined ? undefined : sanitizeRepositoryReference(input.repository),
     currency_state: input.currency_state,
     currency_caveats: input.currency_caveats,
     canonical_owner: input.canonical_owner,
@@ -627,6 +630,14 @@ function sanitizeSearchHit(input: DocsSearchHit): DocsSearchHit {
   });
 }
 
+function sanitizeRepositoryReference(input: NonNullable<DocsDocument["repository"]>) {
+  return {
+    repository_key: redactPresentationText(input.repository_key, { context: "source" }),
+    path_prefix: redactPresentationText(input.path_prefix, { context: "path" }),
+    state: input.state
+  };
+}
+
 function sanitizeDocumentReference(input: DocumentReference): DocumentReference {
   return documentReferenceSchema.parse({
     path: normalizeRepoPath(input.path),
@@ -636,6 +647,7 @@ function sanitizeDocumentReference(input: DocumentReference): DocumentReference 
     doc_status: input.doc_status,
     authority: input.authority,
     authority_caveat: input.authority_caveat,
+    repository: input.repository === undefined ? undefined : sanitizeRepositoryReference(input.repository),
     currency_state: input.currency_state,
     currency_caveats: input.currency_caveats,
     canonical_owner: input.canonical_owner,

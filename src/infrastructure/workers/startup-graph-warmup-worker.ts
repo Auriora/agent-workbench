@@ -7,7 +7,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { parentPort, workerData } from "node:worker_threads";
 import { runRepositoryGraphBuildSlice } from "../../application/use-cases/index-repository-graph.js";
+import { discoverRepositoryComposition } from "../../application/use-cases/repository-composition.js";
 import { SCHEMA_VERSION, openGraphStore } from "../sqlite/index.js";
+import { GitMetadataCommandAdapter } from "../commands/index.js";
 import {
   FileCatalogScannerAdapter,
   WorkspaceFileAdapter
@@ -57,6 +59,12 @@ const workerGraphStore = crashBarrierProbe === undefined
 const extractors = createProductionExtractorRegistry();
 
 try {
+  const repositoryComposition = await discoverRepositoryComposition({
+    workspace,
+    git: new GitMetadataCommandAdapter(),
+    repo_root: input.repoRoot,
+    canonicalize_repo_root: (repoRoot) => fs.realpathSync.native(repoRoot)
+  });
   const result = await runRepositoryGraphBuildSlice({
     repo_root: input.repoRoot,
     scanner,
@@ -82,7 +90,8 @@ try {
     max_extraction_files: input.maxFiles,
     priority_paths: COMMON_RAILS_FRONT_DOOR_PRIORITY_PATHS,
     controller_generation: input.controllerGeneration,
-    invalidation_generation: input.invalidationGeneration
+    invalidation_generation: input.invalidationGeneration,
+    repository_composition: repositoryComposition
   });
   await graphStore.pruneRepositorySnapshots({
     repo_root: input.repoRoot,

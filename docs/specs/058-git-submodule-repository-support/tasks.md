@@ -17,6 +17,10 @@ read-only. No task may initialize, update, fetch, clone, repair, mutate, or
 execute build/test commands in a submodule. There is one Git metadata path and
 no fallback implementation.
 
+The 2026-08-04 downstream review after Spec 057 closure confirmed that its
+reference-only requirements update does not change this task graph or any task
+acceptance criterion.
+
 ## Task Dependency Graph
 
 ```text
@@ -30,7 +34,7 @@ Spec 057 T001-T009 complete and verified ------------> T009
 
 ## Phase 1: Safe repository-composition foundation
 
-- [ ] T001 Settle the additive repository contract and single bounded Git
+- [x] T001 Settle the additive repository contract and single bounded Git
   command seam.
   - Depends on: none
   - Requirements: Requirement 2, Requirement 4, Requirement 6, Requirement 7
@@ -44,14 +48,24 @@ Spec 057 T001-T009 complete and verified ------------> T009
     redaction, and no shell/stdin. Existing Git history moves to that seam if
     required; no parallel or compatibility runner remains.
   - Validation: Run focused contract/runner tests and `pnpm typecheck`.
-  - Evidence mode: contract
-  - Evidence: Pending.
-  - [ ] T001.1 Define the smallest additive repository-composition contract.
-  - [ ] T001.2 Harden the canonical runner and migrate existing Git history.
-  - [ ] T001.3 Prove bounds, cancellation, environment, redaction, and rejected
+  - Evidence mode: command
+  - Evidence: Implemented the additive repository-composition contract and one hardened bounded command seam; focused Phase 1 suite passed 3 files / 10 tests and pnpm typecheck passed.
+  - Status: Completed and verified in the Phase 1 focused checkpoint.
+  - [x] T001.1 Define the smallest additive repository-composition contract.
+  - Evidence: Additive repository keys, states, lineage, blockers, limits, aggregate claims, and receipt contracts implemented in the shared port/application model.
+  - Status: Completed and verified in the Phase 1 focused checkpoint.
+  - Evidence mode: command
+  - [x] T001.2 Harden the canonical runner and migrate existing Git history.
+  - Evidence: GitHistoryAdapter and Git metadata inspection now share the single bounded CommandPort implementation.
+  - Status: Completed and verified in the Phase 1 focused checkpoint.
+  - Evidence mode: command
+  - [x] T001.3 Prove bounds, cancellation, environment, redaction, and rejected
     arbitrary arguments.
 
-- [ ] T002 Implement the fixed read-only Git metadata adapter.
+  - Evidence: Focused command tests prove structured argv, defined Git environment, timeout/cancellation/output caps, sanitized blockers, and no shell/stdin path.
+  - Status: Completed and verified in the Phase 1 focused checkpoint.
+  - Evidence mode: command
+- [x] T002 Implement the fixed read-only Git metadata adapter.
   - Depends on: T001
   - Requirements: Requirement 2, Requirement 6, Requirement 7
   - Properties: CP-004, CP-005
@@ -64,10 +78,11 @@ Spec 057 T001-T009 complete and verified ------------> T009
     success-shaped inference are absent.
   - Validation: Run exact-argv, parser, failure, process, network, and write-spy
     tests.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: command
+  - Evidence: Fixed local-only Git metadata adapter implemented with exact semantic operations, bounded parsing, structured unavailable states, and fixed-argv tests; Phase 1 suite passed.
 
-- [ ] T003 Implement declaration/gitlink reconciliation and the state model.
+  - Status: Completed and verified in the Phase 1 focused checkpoint.
+- [x] T003 Implement declaration/gitlink reconciliation and the state model.
   - Depends on: T002
   - Requirements: Requirement 1, Requirement 2, Requirement 7, Requirement 8
   - Properties: CP-001, CP-003, CP-004
@@ -80,10 +95,11 @@ Spec 057 T001-T009 complete and verified ------------> T009
     escaping, symlink-escaping, and conflicting paths never traverse.
   - Validation: Run state truth-table, evidence-permutation, containment, and
     malformed-input tests.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: command
+  - Evidence: Declaration/gitlink reconciliation implements initialized, uninitialized, mismatch, metadata-unavailable, declaration-only, orphan, invalid/duplicate/canonical-escape blocked states; focused truth-table tests passed.
 
-- [ ] T004 Implement recursive discovery, lineage, budgets, and cycle guards.
+  - Status: Completed and verified in the Phase 1 focused checkpoint.
+- [x] T004 Implement recursive discovery, lineage, budgets, and cycle guards.
   - Depends on: T003
   - Requirements: Requirement 1, Requirement 3, Requirement 7
   - Properties: CP-001, CP-003, CP-004, CP-007
@@ -95,10 +111,11 @@ Spec 057 T001-T009 complete and verified ------------> T009
     limits identify skipped work; blocked descendants do not erase sibling or
     ancestor evidence and never appear complete.
   - Validation: Run recursive, bound, cycle, order, and sibling-isolation tests.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: command
+  - Evidence: Recursive deterministic discovery implements lineage, shared repository/depth bounds, canonical-root cycle detection, sibling preservation, and explicit skipped work; focused tests passed.
 
-- [ ] T005 Checkpoint - validate the repository-composition foundation.
+  - Status: Completed and verified in the Phase 1 focused checkpoint.
+- [x] T005 Checkpoint - validate the repository-composition foundation.
   - Depends on: T004
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 6,
     Requirement 7, Requirement 8
@@ -108,12 +125,13 @@ Spec 057 T001-T009 complete and verified ------------> T009
     confinement, non-mutation, no-network, determinism, and limit evidence is
     recorded before scanner and storage integration.
   - Validation: Run the T001-T004 focused suite and `pnpm typecheck`.
-  - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence mode: command
+  - Evidence: Phase 1 checkpoint passed: 3 focused files / 10 tests and pnpm typecheck; no network, mutation, target command, shell, stdin, or fallback path was introduced.
 
+  - Status: Completed and verified in the Phase 1 focused checkpoint.
 ## Phase 2: Catalog and snapshot composition
 
-- [ ] T006 Add the evidence-aware declared-submodule path-policy exception.
+- [x] T006 Add the evidence-aware declared-submodule path-policy exception.
   - Depends on: T005
   - Requirements: Requirement 1, Requirement 7, Requirement 8
   - Properties: CP-001, CP-004, CP-005
@@ -123,10 +141,11 @@ Spec 057 T001-T009 complete and verified ------------> T009
     keep `nested_git_repository` refusal and every nested-repo write remains
     refused. The policy performs no Git or process operation itself.
   - Validation: Run declared/unrelated/read/write/escape policy tests.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: command
+  - Evidence: Evidence-aware policy admits only safe declaration/gitlink-backed source-readable composition units, retains unrelated nested-repo refusal and all nested write refusal; focused combined suite passed 5 files / 36 tests and typecheck.
 
-- [ ] T007 Federate catalog scanning across admitted repository units.
+  - Status: Completed after requirement-level mismatch/metadata-readable correction.
+- [x] T007 Federate catalog scanning across admitted repository units.
   - Depends on: T006
   - Requirements: Requirement 1, Requirement 3, Requirement 4, Requirement 8
   - Properties: CP-001-CP-005, CP-007
@@ -138,10 +157,11 @@ Spec 057 T001-T009 complete and verified ------------> T009
     infer submodules, cross containment, or weaken unrelated-repo/write safety.
   - Validation: Run scanner federation, regression, bound, and mutation-spy
     tests.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: command
+  - Evidence: Catalog scanner federates admitted source-readable child repositories under child-local ignore evidence, preserves parent-relative paths, shared max_files, and unrelated nested refusal; focused combined suite passed 5 files / 36 tests and typecheck.
 
-- [ ] T008 Persist composition receipts and make freshness composition-aware.
+  - Status: Completed and verified.
+- [x] T008 Persist composition receipts and make freshness composition-aware.
   - Depends on: T007
   - Requirements: Requirement 2, Requirement 4, Requirement 7, Requirement 8
   - Properties: CP-002, CP-003, CP-006
@@ -154,12 +174,13 @@ Spec 057 T001-T009 complete and verified ------------> T009
     submodule-complete claims.
   - Validation: Run schema migration, round-trip, prefix, compatibility, and
     freshness tests.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: command
+  - Evidence: Normalized snapshot_repository_units schema and migration, composition receipt round-trip, deterministic longest-prefix lookup, legacy no-composition behavior, and composition-fingerprint freshness classification implemented; 2 focused files / 62 tests and typecheck passed. Runtime discovery consumption is owned by T009/T010.
 
+  - Status: Storage contract complete; public/build consumers follow in T009/T010.
 ## Phase 3: Public evidence and validation planning
 
-- [ ] T009 Integrate repository-scoped Spec 057 validation planning.
+- [x] T009 Integrate repository-scoped Spec 057 validation planning.
   - Depends on: T007
   - Upstream spec gate: Spec 057 T001-T009 complete and verified, including the
     project-unit contract, discovery, marker/readiness, planner integration,
@@ -175,10 +196,11 @@ Spec 057 T001-T009 complete and verified ------------> T009
     generic-command fallback is absent. Aggregation requires explicit evidence.
   - Validation: Run selected-submodule, sibling-isolation, mixed-state,
     aggregation, blocker, and no-execution tests.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: validation
+  - Evidence: Repository-scoped validation planning now discovers one bounded composition receipt, federates the scanner, isolates selected submodule evidence, preserves repository/project-unit identity, blocks dependent claims, and keeps commands not_executed. The verification-plan suite passed 53 tests and the combined Spec 058 checkpoint passed 16 files / 329 tests.
 
-- [ ] T010 Expose bounded repository provenance across graph, docs, context,
+  - Status: Completed and independently reviewable.
+- [x] T010 Expose bounded repository provenance across graph, docs, context,
   status, and MCP results.
   - Depends on: T008, T009
   - Requirements: Requirement 2, Requirement 4, Requirement 5, Requirement 7,
@@ -192,12 +214,13 @@ Spec 057 T001-T009 complete and verified ------------> T009
     from every requested repository. Payload bounds and compatibility are
     tested and absolute paths/URLs never appear.
   - Validation: Run cross-surface contracts, presenter tests, and MCP goldens.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: validation
+  - Evidence: Graph builds persist and scan through one composition receipt; status/overview expose bounded composition summaries; context/docs/symbol/reference/impact hits carry compact submodule provenance; snapshot validity detects changed composition. Typecheck and the combined Spec 058 checkpoint passed 16 files / 329 tests.
 
+  - Status: Completed pending independent T011 findings resolution.
 ## Phase 4: Review, regression, promotion, and closure readiness
 
-- [ ] T011 Resolve independent implementation-review findings.
+- [x] T011 Resolve independent implementation-review findings.
   - Depends on: T010
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
     Requirement 5, Requirement 6, Requirement 7, Requirement 8
@@ -207,10 +230,11 @@ Spec 057 T001-T009 complete and verified ------------> T009
     one explicit destination; no blocking safety, correctness, compatibility,
     storage, authority, or test finding remains.
   - Validation: Rerun all focused tests affected by review.
-  - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence mode: review
+  - Evidence: Independent correctness and security reviews identified scan-surface composition gaps, discarded degraded freshness, and Git helper/index-mutation risks. All findings were addressed and re-reviewed; final correctness and security passes reported no blockers. Focused remediation tests and typecheck passed.
 
-- [ ] T012 Run full repository, plugin, skill, and package validation.
+  - Status: Completed; no unresolved independent-review blocker.
+- [x] T012 Run full repository, plugin, skill, and package validation.
   - Depends on: T011
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
     Requirement 5, Requirement 6, Requirement 7, Requirement 8
@@ -221,9 +245,10 @@ Spec 057 T001-T009 complete and verified ------------> T009
     operation occurred.
   - Validation: Run and record the complete verification set.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: pnpm typecheck passed; full Vitest suite passed 119 files / 1,312 tests with maxWorkers=4 after fixture reconciliation; validate:plugin passed; validate:skills passed with 6 owned skills, 0 errors and 0 warnings; pack:dry-run succeeded for @auriora/agent-workbench 0.6.7. Focused command/security, docs/context provenance, validation planning, storage, graph, and daemon recovery suites passed.
 
-- [ ] T013 Promote accepted contracts, safety, architecture, storage, and
+  - Status: Full repository, plugin, skill, and package validation passed.
+- [x] T013 Promote accepted contracts, safety, architecture, storage, and
   validation behavior to durable owners.
   - Depends on: T012
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
@@ -238,10 +263,11 @@ Spec 057 T001-T009 complete and verified ------------> T009
     residual; if closed, the closure record and durable owners identify Spec
     058 as the successor. No two active authorities claim opposite behavior.
   - Validation: Check the explicit Markdown set and run docs tests.
-  - Evidence mode: implementation
-  - Evidence: Pending.
+  - Evidence mode: automated and direct review
+  - Evidence: Promoted declared-submodule authority and safety, public composition contracts, runtime layer ownership, snapshot storage/freshness, repository-local validation behavior, and backlog state to seven canonical documents. Two documentation test files (37 tests) passed; bounded Markdown checking found no blocking issue; git diff --check passed.
 
-- [ ] T014 Reconcile scope and prepare closure evidence.
+  - Status: Durable promotion complete
+- [x] T014 Reconcile scope and prepare closure evidence.
   - Depends on: T013
   - Requirements: Requirement 1, Requirement 2, Requirement 3, Requirement 4,
     Requirement 5, Requirement 6, Requirement 7, Requirement 8
@@ -254,8 +280,9 @@ Spec 057 T001-T009 complete and verified ------------> T009
   - Validation: Run package lint, coverage, evidence-quality, closure-risk, and
     cleanup checks.
   - Evidence mode: validation
-  - Evidence: Pending.
+  - Evidence: `lint_spec_package` returned 0 errors, 0 warnings, and 0 informational diagnostics; `stage_readiness` returned 0 blocking, context, acceptance, property, and requirement gaps; `task_state_audit` passed with 0 findings after completion; `closure_check` returned ready=true with 0 blockers and complete coverage for all eight must-have requirements. CP-001 through CP-007, promotion, independent review, and residual risks are recorded in verification.md.
 
+  - Status: Closure checks passed; authorized closure may proceed
 ## Execution Rules
 
 - Use lifecycle task context before starting each task and mark only one task

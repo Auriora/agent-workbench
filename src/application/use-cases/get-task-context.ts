@@ -6,12 +6,15 @@
 import path from "node:path";
 import type {
   CapabilityLevel,
+  DocumentReference,
+  EvidenceRepositoryReference,
   EvidenceKind,
   FileReference,
   NextAction,
   RankedSymbolCandidate,
   ResponseMetadata,
   SkippedWork,
+  SymbolReference,
   TaskContext,
   TaskContextRequest,
   ValidationHint
@@ -34,6 +37,7 @@ import type {
   FileCatalogScanPort,
   FileCatalogScanResult,
   GraphQueryPort,
+  SnapshotRepositoryCompositionPort,
   SnapshotPort,
   SnapshotPublicationPort,
   WorkspaceFilePort
@@ -80,7 +84,7 @@ export async function getTaskContext(input: {
   request: TaskContextRequest;
   scanner: FileCatalogScanPort;
   graph?: GraphQueryPort;
-  snapshots?: SnapshotPort & SnapshotPublicationPort;
+  snapshots?: SnapshotPort & SnapshotPublicationPort & Partial<SnapshotRepositoryCompositionPort>;
   catalog?: FileCatalogPort;
   workspace?: WorkspaceFilePort;
   snapshot_validity?: SnapshotValidityReceipt;
@@ -90,11 +94,17 @@ export async function getTaskContext(input: {
   const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
   const maxFiles = input.request.max_files;
   const maxDocs = input.request.max_docs;
+  const repositoryComposition = input.selected_snapshot_id !== undefined &&
+    input.selected_snapshot_id !== null &&
+    input.snapshots?.getRepositoryComposition !== undefined
+    ? await input.snapshots.getRepositoryComposition({ snapshot_id: input.selected_snapshot_id })
+    : null;
   const scanned = await input.scanner.scan({
     repo_root: repoRoot,
     indexed_roots: ["."],
     skipped_roots: [],
-    max_files: 15000
+    max_files: 15000,
+    repository_composition: repositoryComposition ?? undefined
   });
   const byPath = new Map(scanned.files.map((file) => [file.path, file]));
   const jsTsShape = detectJsTsProjectShape(scanned.files);
@@ -150,6 +160,23 @@ export async function getTaskContext(input: {
         repo_root: scanned.repo_root,
         snapshot_id: input.selected_snapshot_id
       });
+  const repositoryResolver = compositionResolver(input.snapshots);
+  const repositorySnapshotId = snapshot?.id ?? input.selected_snapshot_id ?? input.snapshot_validity?.snapshot_id;
+  const requestedFilesWithRepository = await attachRepositoriesToFileReferences({
+    files: requestedFiles,
+    resolver: repositoryResolver,
+    snapshot_id: repositorySnapshotId
+  });
+  const relatedFilesWithRepository = await attachRepositoriesToFileReferences({
+    files: relatedFiles,
+    resolver: repositoryResolver,
+    snapshot_id: repositorySnapshotId
+  });
+  const governingDocsWithRepository = await attachRepositoriesToDocumentReferences({
+    documents: governingDocs,
+    resolver: repositoryResolver,
+    snapshot_id: repositorySnapshotId
+  });
   const status = getCatalogRepoStatus({
     repo_root: scanned.repo_root,
     indexed_roots: scanned.indexed_roots,
@@ -216,15 +243,15 @@ export async function getTaskContext(input: {
       task: input.request.task,
       repo_root: scanned.repo_root,
       summary: buildSummary({
-        requestedCount: requestedFiles.length,
-        relatedCount: relatedFiles.length,
-        docCount: governingDocs.length,
+        requestedCount: requestedFilesWithRepository.length,
+        relatedCount: relatedFilesWithRepository.length,
+        docCount: governingDocsWithRepository.length,
         validationCount: validationHints.length
       }),
-      requested_files: requestedFiles,
-      related_files: relatedFiles,
+      requested_files: requestedFilesWithRepository,
+      related_files: relatedFilesWithRepository,
       ranked_symbols: rankedSymbolResult.ranked_symbols,
-      governing_docs: governingDocs,
+      governing_docs: governingDocsWithRepository,
       lifecycle_evidence: specRouting.lifecycle_evidence,
       validation_hints: validationHints,
       skipped_work: skippedWork,
@@ -232,8 +259,8 @@ export async function getTaskContext(input: {
       risks,
       next_actions: buildTaskNextActions({
         request: input.request,
-        requestedFiles,
-        relatedFiles,
+        requestedFiles: requestedFilesWithRepository,
+        relatedFiles: relatedFilesWithRepository,
         rankedSymbols: rankedSymbolResult.ranked_symbols,
         lifecycleActions: specRouting.next_actions,
         lifecycleEvidence: specRouting.lifecycle_evidence
@@ -906,7 +933,7 @@ async function selectRankedSymbols(input: {
   requestedPaths: readonly string[];
   repo_root: string;
   graph?: GraphQueryPort;
-  snapshots?: SnapshotPort & SnapshotPublicationPort;
+  snapshots?: SnapshotPort & SnapshotPublicationPort & Partial<SnapshotRepositoryCompositionPort>;
   catalog?: FileCatalogPort;
   workspace?: WorkspaceFilePort;
   snapshot_id?: string | null;
@@ -1002,10 +1029,14 @@ async function selectRankedSymbols(input: {
       .map(async (candidate, index) => ({
         rank: index + 1,
         score: candidate.score,
-        symbol: await toSymbolReference({
-          node: candidate.node,
-          workspace: input.workspace,
-          source_byte_limit: 0
+        symbol: await attachRepositoryToSymbolReference({
+          symbol: await toSymbolReference({
+            node: candidate.node,
+            workspace: input.workspace,
+            source_byte_limit: 0
+          }),
+          resolver: compositionResolver(input.snapshots),
+          snapshot_id: resolved.snapshot_id
         }),
         reason: candidate.reason
       }))
@@ -1350,6 +1381,93 @@ function toFileReference(pathInput: string, entry?: FileCatalogEntry, reason = "
     evidence_kinds: entry.adapter_evidence?.evidence_kinds ?? evidenceFromLanguage(entry.file_identity.language),
     reason
   };
+}
+
+function compositionResolver(
+  candidate: (Partial<SnapshotRepositoryCompositionPort> | undefined)
+): SnapshotRepositoryCompositionPort | undefined {
+  return typeof candidate?.resolveRepositoryForPath === "function"
+    ? candidate as SnapshotRepositoryCompositionPort
+    : undefined;
+}
+
+async function attachRepositoriesToFileReferences(input: {
+  files: readonly FileReference[];
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id?: string | null;
+}): Promise<FileReference[]> {
+  const cache = new Map<string, Promise<EvidenceRepositoryReference | undefined>>();
+  return Promise.all(input.files.map(async (file) => ({
+    ...file,
+    repository: await resolveEvidenceRepository({
+      resolver: input.resolver,
+      snapshot_id: input.snapshot_id,
+      path: file.path,
+      cache
+    })
+  })));
+}
+
+async function attachRepositoriesToDocumentReferences(input: {
+  documents: readonly DocumentReference[];
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id?: string | null;
+}): Promise<DocumentReference[]> {
+  const cache = new Map<string, Promise<EvidenceRepositoryReference | undefined>>();
+  return Promise.all(input.documents.map(async (document) => ({
+    ...document,
+    repository: await resolveEvidenceRepository({
+      resolver: input.resolver,
+      snapshot_id: input.snapshot_id,
+      path: document.path,
+      cache
+    })
+  })));
+}
+
+async function attachRepositoryToSymbolReference(input: {
+  symbol: SymbolReference;
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id: string;
+}): Promise<SymbolReference> {
+  return {
+    ...input.symbol,
+    repository: await resolveEvidenceRepository({
+      resolver: input.resolver,
+      snapshot_id: input.snapshot_id,
+      path: input.symbol.path,
+      cache: new Map()
+    })
+  };
+}
+
+function resolveEvidenceRepository(input: {
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id?: string | null;
+  path: string;
+  cache: Map<string, Promise<EvidenceRepositoryReference | undefined>>;
+}): Promise<EvidenceRepositoryReference | undefined> {
+  if (input.resolver === undefined || input.snapshot_id === undefined || input.snapshot_id === null) {
+    return Promise.resolve(undefined);
+  }
+  const cached = input.cache.get(input.path);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const resolved = input.resolver
+    .resolveRepositoryForPath({ snapshot_id: input.snapshot_id, path: input.path })
+    .then((unit) => {
+      if (unit === null || unit.path_prefix === ".") {
+        return undefined;
+      }
+      return {
+        repository_key: unit.repository_key,
+        path_prefix: unit.path_prefix,
+        state: unit.state
+      };
+    });
+  input.cache.set(input.path, resolved);
+  return resolved;
 }
 
 function scoreFile(file: FileCatalogEntry, terms: Set<string>): number {

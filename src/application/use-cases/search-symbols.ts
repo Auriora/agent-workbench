@@ -4,13 +4,16 @@
  */
 
 import type {
+  EvidenceRepositoryReference,
   ResponseMetadata,
+  SymbolReference,
   SymbolSearchRequest,
   SymbolSearchResult
 } from "../../contracts/index.js";
 import type {
   FileCatalogPort,
   GraphQueryPort,
+  SnapshotRepositoryCompositionPort,
   SnapshotPort,
   SnapshotPublicationPort,
   WorkspaceFilePort
@@ -37,7 +40,7 @@ export type SearchSymbolsResult = {
 export async function searchSymbols(input: {
   request: SymbolSearchRequest;
   graph: GraphQueryPort;
-  snapshots: SnapshotPort & SnapshotPublicationPort;
+  snapshots: SnapshotPort & SnapshotPublicationPort & Partial<SnapshotRepositoryCompositionPort>;
   catalog: FileCatalogPort;
   workspace?: WorkspaceFilePort;
   snapshot_validity?: SnapshotValidityReceipt;
@@ -139,11 +142,16 @@ export async function searchSymbols(input: {
       repo_root: resolved.repo_root,
       snapshot_id: resolved.snapshot_id,
       symbols: await Promise.all(
-        filtered.map((node) =>
-          toSymbolReference({
-            node,
-            workspace: input.workspace,
-            source_byte_limit: input.request.source_byte_limit
+        filtered.map(async (node) =>
+          attachRepositoryToSymbolReference({
+            symbol: await toSymbolReference({
+              node,
+              workspace: input.workspace,
+              source_byte_limit: input.request.source_byte_limit
+            }),
+            resolver: compositionResolver(input.snapshots),
+            snapshot_id: resolved.snapshot_id,
+            path: node.file_path
           })
         )
       ),
@@ -182,6 +190,47 @@ export async function searchSymbols(input: {
       },
       truncated: nodes.length >= input.request.max_results
     }
+  };
+}
+
+function compositionResolver(candidate: Partial<SnapshotRepositoryCompositionPort>): SnapshotRepositoryCompositionPort | undefined {
+  return typeof candidate.resolveRepositoryForPath === "function"
+    ? candidate as SnapshotRepositoryCompositionPort
+    : undefined;
+}
+
+async function attachRepositoryToSymbolReference(input: {
+  symbol: SymbolReference;
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id: string;
+  path: string;
+}): Promise<SymbolReference> {
+  return {
+    ...input.symbol,
+    repository: await resolveEvidenceRepository({
+      resolver: input.resolver,
+      snapshot_id: input.snapshot_id,
+      path: input.path
+    })
+  };
+}
+
+async function resolveEvidenceRepository(input: {
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id: string;
+  path: string;
+}): Promise<EvidenceRepositoryReference | undefined> {
+  const unit = await input.resolver?.resolveRepositoryForPath({
+    snapshot_id: input.snapshot_id,
+    path: input.path
+  });
+  if (unit === undefined || unit === null || unit.path_prefix === ".") {
+    return undefined;
+  }
+  return {
+    repository_key: unit.repository_key,
+    path_prefix: unit.path_prefix,
+    state: unit.state
   };
 }
 

@@ -21,6 +21,7 @@ import type {
   DocsWarning,
   DocsRankingCursorPayload,
   DocsRankingCountReceipt,
+  EvidenceRepositoryReference,
   IndexCoverage,
   RankedDocsSearchResult,
   RankedDocsSearchHit,
@@ -35,7 +36,10 @@ import {
   DOCS_RANKING_SCHEMA_VERSION
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
-import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
+import type {
+  SnapshotRepositoryComposition,
+  SnapshotValidityReceipt
+} from "../../domain/models/runtime.js";
 import {
   DOCUMENTATION_CORPUS_POLICY_VERSION,
   partitionDocumentationCorpusPaths,
@@ -56,6 +60,7 @@ import type {
   RankedDocsUniverseIdentity,
   RankedDocsUniversePort,
   RankedDocsUniverseRecord,
+  SnapshotRepositoryCompositionPort,
   WorkspaceFilePort
 } from "../../ports/index.js";
 import { DocsRankingUnavailableError } from "../../ports/index.js";
@@ -74,6 +79,7 @@ import { capNextActions } from "./response-metadata.js";
 import { getCatalogRepoStatus } from "./get-repo-status.js";
 import { readDocumentationRankingReadiness } from "./documentation-ranking-readiness.js";
 import type { DocumentationRankingReadiness } from "./documentation-ranking-readiness.js";
+import { repositoryReferenceForPath } from "./repository-provenance.js";
 
 const DOC_ROW_LIMIT = 15000;
 const DIRECT_READ_CAVEAT = "Docs search is routing evidence; use docs_read_section for precise claims.";
@@ -115,12 +121,14 @@ export async function getDocsOverview(input: {
   scanner: FileCatalogScanPort;
   workspace: WorkspaceFilePort;
   default_repo_root: string;
+  repository_composition?: SnapshotRepositoryComposition;
 }): Promise<DocsOverviewUseCaseResult> {
   const index = await loadDocsIndex({
     request: input.request,
     scanner: input.scanner,
     workspace: input.workspace,
     default_repo_root: input.default_repo_root,
+    repository_composition: input.repository_composition,
     order: "importance"
   });
   const page = paginate(index.documents, {
@@ -152,12 +160,14 @@ export async function getDocsMap(input: {
   scanner: FileCatalogScanPort;
   workspace: WorkspaceFilePort;
   default_repo_root: string;
+  repository_composition?: SnapshotRepositoryComposition;
 }): Promise<DocsMapUseCaseResult> {
   const index = await loadDocsIndex({
     request: input.request,
     scanner: input.scanner,
     workspace: input.workspace,
     default_repo_root: input.default_repo_root,
+    repository_composition: input.repository_composition,
     order: "path"
   });
   const page = paginate(index.documents, {
@@ -185,7 +195,7 @@ export async function getDocsMap(input: {
 
 export async function searchDocs(input: {
   request: DocsSearchRequest;
-  docs_index: DocsIndexPort;
+  docs_index: DocsIndexPort & Partial<SnapshotRepositoryCompositionPort>;
   snapshot_validity?: SnapshotValidityReceipt;
   selected_snapshot_id?: string | null;
   default_repo_root: string;
@@ -258,7 +268,12 @@ export async function searchDocs(input: {
         }
       ]
     : [];
-  const hits = [...result.hits];
+  const snapshotId = input.selected_snapshot_id ?? input.snapshot_validity?.snapshot_id;
+  const hits = await attachRepositoriesToDocsSearchHits({
+    hits: result.hits,
+    resolver: compositionResolver(input.docs_index),
+    snapshot_id: snapshotId
+  });
 
   return {
     search: {
@@ -300,7 +315,7 @@ export async function searchDocs(input: {
 export async function searchRankedDocs(input: {
   request: DocsSearchRequest;
   selected_snapshot_id: string;
-  docs_index: DocsIndexPort;
+  docs_index: DocsIndexPort & Partial<SnapshotRepositoryCompositionPort>;
   documentation_concerns: DocumentationConcernIndexPort;
   ranking_candidates: DocsRankingCandidateQueryPort;
   ranking_cursor_codec: DocsRankingCursorCodecPort;
@@ -460,21 +475,25 @@ export async function searchRankedDocs(input: {
         ownerCount
       });
     }
-    const ranked = rankDocumentationCandidates({
-      query: input.request.query,
-      concern_resolution: resolution,
-      candidates: [...union.values()].map((candidate) => {
-        if (candidate.hit.authority === undefined || candidate.hit.currency_state === undefined) {
-          throw new Error(`Ranking candidate ${candidate.stable_document_id} lacks authority or currency evidence.`);
-        }
-        return {
-          stable_document_id: candidate.stable_document_id,
-          hit: { ...candidate.hit, authority: candidate.hit.authority, currency_state: candidate.hit.currency_state },
-          ...(candidate.lexical_score === undefined ? {} : { lexical_score: candidate.lexical_score }),
-          title_heading_text: candidate.title_heading_text,
-          body_text: candidate.body_text
-        };
-      })
+    const ranked = await attachRepositoriesToRankedDocsSearchHits({
+      hits: rankDocumentationCandidates({
+        query: input.request.query,
+        concern_resolution: resolution,
+        candidates: [...union.values()].map((candidate) => {
+          if (candidate.hit.authority === undefined || candidate.hit.currency_state === undefined) {
+            throw new Error(`Ranking candidate ${candidate.stable_document_id} lacks authority or currency evidence.`);
+          }
+          return {
+            stable_document_id: candidate.stable_document_id,
+            hit: { ...candidate.hit, authority: candidate.hit.authority, currency_state: candidate.hit.currency_state },
+            ...(candidate.lexical_score === undefined ? {} : { lexical_score: candidate.lexical_score }),
+            title_heading_text: candidate.title_heading_text,
+            body_text: candidate.body_text
+          };
+        })
+      }),
+      resolver: compositionResolver(input.docs_index),
+      snapshot_id: input.selected_snapshot_id
     });
     const identity = rankedUniverseIdentity({
       snapshotId: input.selected_snapshot_id,
@@ -667,13 +686,15 @@ async function loadDocsIndex(input: {
   workspace: WorkspaceFilePort;
   default_repo_root: string;
   order: "importance" | "path";
+  repository_composition?: SnapshotRepositoryComposition;
 }): Promise<LoadedDocsIndex> {
   const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
   const scanned = await input.scanner.scan({
     repo_root: repoRoot,
     indexed_roots: ["."],
     skipped_roots: [],
-    max_files: DOC_ROW_LIMIT
+    max_files: DOC_ROW_LIMIT,
+    repository_composition: input.repository_composition
   });
   const markdownFiles = scanned.files.filter((file) => file.file_identity.language === "markdown");
   const corpus = partitionDocumentationCorpusPaths(markdownFiles.map((file) => file.path));
@@ -716,6 +737,7 @@ async function loadDocsIndex(input: {
         capability_level: "resource_backed",
         evidence_kinds: ["docs"],
         direct_read_caveat: DIRECT_READ_CAVEAT,
+        repository: repositoryReferenceForPath(input.repository_composition, file.path),
         ...publicAuthority(authority),
         ...publicCurrency(authority),
         content
@@ -1252,6 +1274,7 @@ function publicDocument(doc: DocsDocument & { content?: string }): DocsDocument 
     doc_status: doc.doc_status,
     authority: doc.authority,
     authority_caveat: doc.authority_caveat,
+    repository: doc.repository,
     currency_state: doc.currency_state,
     currency_caveats: doc.currency_caveats,
     canonical_owner: doc.canonical_owner,
@@ -1261,6 +1284,78 @@ function publicDocument(doc: DocsDocument & { content?: string }): DocsDocument 
     git_first_seen: doc.git_first_seen,
     git_last_touched: doc.git_last_touched
   };
+}
+
+function compositionResolver(
+  candidate: Partial<SnapshotRepositoryCompositionPort>
+): SnapshotRepositoryCompositionPort | undefined {
+  return typeof candidate.resolveRepositoryForPath === "function"
+    ? candidate as SnapshotRepositoryCompositionPort
+    : undefined;
+}
+
+async function attachRepositoriesToDocsSearchHits(input: {
+  hits: readonly DocsSearchResult["hits"][number][];
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id?: string | null;
+}): Promise<DocsSearchResult["hits"]> {
+  const cache = new Map<string, Promise<EvidenceRepositoryReference | undefined>>();
+  return Promise.all(input.hits.map(async (hit) => ({
+    ...hit,
+    repository: await resolveEvidenceRepository({
+      resolver: input.resolver,
+      snapshot_id: input.snapshot_id,
+      path: hit.path,
+      cache
+    })
+  })));
+}
+
+async function attachRepositoriesToRankedDocsSearchHits(input: {
+  hits: readonly RankedDocsSearchHit[];
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id: string;
+}): Promise<RankedDocsSearchHit[]> {
+  const cache = new Map<string, Promise<EvidenceRepositoryReference | undefined>>();
+  return Promise.all(input.hits.map(async (hit) => ({
+    ...hit,
+    repository: await resolveEvidenceRepository({
+      resolver: input.resolver,
+      snapshot_id: input.snapshot_id,
+      path: hit.path,
+      cache
+    })
+  })));
+}
+
+function resolveEvidenceRepository(input: {
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id?: string | null;
+  path: string;
+  cache: Map<string, Promise<EvidenceRepositoryReference | undefined>>;
+}): Promise<EvidenceRepositoryReference | undefined> {
+  if (input.resolver === undefined || input.snapshot_id === undefined || input.snapshot_id === null) {
+    return Promise.resolve(undefined);
+  }
+  const cached = input.cache.get(input.path);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const resolved = input.resolver.resolveRepositoryForPath({
+    snapshot_id: input.snapshot_id,
+    path: input.path
+  }).then((unit) => {
+    if (unit === null || unit.path_prefix === ".") {
+      return undefined;
+    }
+    return {
+      repository_key: unit.repository_key,
+      path_prefix: unit.path_prefix,
+      state: unit.state
+    };
+  });
+  input.cache.set(input.path, resolved);
+  return resolved;
 }
 
 function publicAuthority(input: ReturnType<typeof classifyMarkdownDoc>) {

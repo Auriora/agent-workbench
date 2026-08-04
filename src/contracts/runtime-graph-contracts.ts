@@ -6,6 +6,7 @@
 import { z } from "zod";
 import {
   capabilityLevelSchema,
+  evidenceRepositoryReferenceSchema,
   evidenceKindSchema,
   fileReferenceSchema,
   nextActionSchema
@@ -37,7 +38,8 @@ export const symbolReferenceSchema = z
     docstring: z.string().optional(),
     capability_level: capabilityLevelSchema,
     evidence_kinds: z.array(evidenceKindSchema),
-    source_section: sourceSectionSchema.optional()
+    source_section: sourceSectionSchema.optional(),
+    repository: evidenceRepositoryReferenceSchema.optional()
   })
   .strict();
 export type SymbolReference = z.infer<typeof symbolReferenceSchema>;
@@ -94,7 +96,8 @@ export const referenceHitSchema = z
     confidence: z.number().min(0).max(1).optional(),
     evidence_kinds: z.array(evidenceKindSchema),
     provenance: z.string(),
-    status: z.enum(["resolved", "unresolved", "ambiguous"])
+    status: z.enum(["resolved", "unresolved", "ambiguous"]),
+    repository: evidenceRepositoryReferenceSchema.optional()
   })
   .strict();
 export type ReferenceHit = z.infer<typeof referenceHitSchema>;

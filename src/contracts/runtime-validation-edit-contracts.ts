@@ -39,6 +39,20 @@ const MAX_PROJECT_UNIT_MESSAGE_LENGTH = 500;
 const MAX_PROJECT_UNIT_REASON_LENGTH = 300;
 const MAX_PROJECT_UNIT_COMMAND_ARGUMENT_COUNT = 12;
 
+export const validationRepositoryStateSchema = z.enum([
+  "superproject",
+  "initialized",
+  "uninitialized",
+  "worktree_revision_mismatch",
+  "metadata_unavailable",
+  "declaration_without_gitlink",
+  "orphan_gitlink",
+  "path_blocked",
+  "cycle_blocked",
+  "limit_blocked"
+]);
+export type ValidationRepositoryState = z.infer<typeof validationRepositoryStateSchema>;
+
 const repoRelativePathSchema = z
   .string()
   .min(1)
@@ -70,7 +84,15 @@ export const plannedValidationCommandSchema = z
     display: z.string(),
     reason: z.string(),
     status: z.literal("planned"),
-    execution: z.literal("not_executed")
+    execution: z.literal("not_executed"),
+    repository: z
+      .object({
+        repository_key: z.string().min(1).max(300),
+        path_prefix: repoRelativePathSchema,
+        state: validationRepositoryStateSchema
+      })
+      .strict()
+      .optional()
   })
   .strict();
 export type PlannedValidationCommand = z.infer<typeof plannedValidationCommandSchema>;
@@ -84,7 +106,15 @@ export const projectUnitPlannedValidationCommandSchema = z
     display: z.string().min(1).max(MAX_PROJECT_UNIT_MESSAGE_LENGTH),
     reason: z.string().min(1).max(MAX_PROJECT_UNIT_MESSAGE_LENGTH),
     status: z.literal("planned"),
-    execution: z.literal("not_executed")
+    execution: z.literal("not_executed"),
+    repository: z
+      .object({
+        repository_key: z.string().min(1).max(300),
+        path_prefix: repoRelativePathSchema,
+        state: validationRepositoryStateSchema
+      })
+      .strict()
+      .optional()
   })
   .strict();
 export type ProjectUnitPlannedValidationCommand = z.infer<
@@ -204,6 +234,14 @@ export const projectUnitEvidenceSchema = z
     markers: z.array(projectUnitMarkerSchema).min(1).max(MAX_PROJECT_UNIT_MARKER_COUNT),
     selection: projectUnitSelectionRelationshipSchema,
     boundary: projectUnitBoundaryStateSchema,
+    repository: z
+      .object({
+        repository_key: z.string().min(1).max(300),
+        path_prefix: repoRelativePathSchema,
+        state: validationRepositoryStateSchema
+      })
+      .strict()
+      .optional(),
     readiness: projectUnitReadinessSchema,
     blockers: z.array(projectUnitBlockerSchema).max(MAX_PROJECT_UNIT_BLOCKER_COUNT),
     planned_commands: z

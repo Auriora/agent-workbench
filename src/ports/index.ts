@@ -29,9 +29,12 @@ import type {
   WorkspaceWatchRequest
 } from "../domain/models/index.js";
 import type { SkippedPathPopulation } from "../domain/policies/skipped-path-summary.js";
+import type { RepositoryCompositionAdmissionReceipt } from "../domain/policies/path-policy.js";
 import type {
   RuntimeContext,
   RuntimeContextInput,
+  SnapshotRepositoryComposition,
+  SnapshotRepositoryUnit,
   SnapshotFreshness,
   SnapshotOwnershipRecord,
   SnapshotValidityReceipt,
@@ -177,6 +180,14 @@ export interface SnapshotPort {
   }): Promise<void>;
 }
 
+export interface SnapshotRepositoryCompositionPort {
+  getRepositoryComposition(input: { snapshot_id: string }): Promise<SnapshotRepositoryComposition | null>;
+  resolveRepositoryForPath(input: {
+    snapshot_id: string;
+    path: string;
+  }): Promise<SnapshotRepositoryUnit | null>;
+}
+
 export interface FileCatalogPort {
   listFiles(input: {
     snapshot_id: string;
@@ -227,6 +238,7 @@ export interface FileCatalogScanPort {
     after_path?: string;
     priority_paths?: readonly string[];
     priority_path_patterns?: readonly string[];
+    repository_composition?: RepositoryCompositionAdmissionReceipt;
   }): Promise<FileCatalogScanResult>;
 }
 
@@ -690,6 +702,103 @@ export interface GitHistoryPort {
     path: string;
     include_first_seen?: boolean;
   }): Promise<GitFileHistoryResult>;
+}
+
+export type CommandCancellation = {
+  aborted?: boolean;
+  reason?: string;
+  signal?: AbortSignal;
+};
+
+export type CommandExecutionInput = {
+  executable: string;
+  args: readonly string[];
+  cwd?: string;
+  env?: Record<string, string>;
+  timeout_ms?: number;
+  max_stdout_bytes?: number;
+  max_stderr_bytes?: number;
+  cancellation?: CommandCancellation;
+};
+
+export type CommandExecutionResult = {
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+  timed_out: boolean;
+  cancelled: boolean;
+  stdout_truncated: boolean;
+  stderr_truncated: boolean;
+};
+
+export interface CommandPort {
+  execute(input: CommandExecutionInput): Promise<CommandExecutionResult>;
+}
+
+export type GitRepositoryInspectionFailureReason =
+  | "git_unavailable"
+  | "not_git_repository"
+  | "command_failed"
+  | "timeout"
+  | "cancelled"
+  | "output_overflow"
+  | "parse_failed";
+
+export type GitGitlinkRecord = {
+  path: string;
+  object_id: string;
+};
+
+export type GitGitlinkInspectionResult =
+  | {
+      status: "available";
+      committed_gitlinks: readonly GitGitlinkRecord[];
+      index_gitlinks: readonly GitGitlinkRecord[];
+    }
+  | {
+      status: "blocked";
+      reason: GitRepositoryInspectionFailureReason;
+      message: string;
+    };
+
+export type GitHeadInspectionResult =
+  | {
+      status: "available";
+      head_object_id: string;
+      evidence_paths: readonly string[];
+    }
+  | {
+      status: "blocked";
+      reason: GitRepositoryInspectionFailureReason;
+      message: string;
+      evidence_paths: readonly string[];
+    };
+
+export type GitCleanlinessInspectionResult =
+  | {
+      status: "available";
+      cleanliness: "clean" | "dirty";
+      changed_paths: readonly string[];
+    }
+  | {
+      status: "blocked";
+      reason: GitRepositoryInspectionFailureReason;
+      message: string;
+    };
+
+export interface GitRepositoryCompositionPort {
+  inspectSuperprojectGitlinks(input: {
+    repo_root: string;
+    cancellation?: CommandCancellation;
+  }): Promise<GitGitlinkInspectionResult>;
+  inspectRepositoryHead(input: {
+    repo_root: string;
+    cancellation?: CommandCancellation;
+  }): Promise<GitHeadInspectionResult>;
+  inspectRepositoryCleanliness(input: {
+    repo_root: string;
+    cancellation?: CommandCancellation;
+  }): Promise<GitCleanlinessInspectionResult>;
 }
 
 export interface EditPreviewStorePort {

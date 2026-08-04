@@ -14,6 +14,8 @@ import {
 import { graphStorePath, repositoryOwnershipPath } from "../../src/server.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/graph-store.js";
 import { indexRepositoryGraph } from "../../src/application/use-cases/index-repository-graph.js";
+import { discoverRepositoryComposition } from "../../src/application/use-cases/repository-composition.js";
+import { GitMetadataCommandAdapter } from "../../src/infrastructure/commands/index.js";
 import {
   FileCatalogScannerAdapter,
   WorkspaceFileAdapter
@@ -748,10 +750,17 @@ async function seedPublishedBarrierSnapshot(repoRoot: string, databasePath: stri
   const extractors = new ExtractorRegistryAdapter();
   extractors.register(new PythonTreeSitterExtractorAdapter());
   try {
+    const workspace = new WorkspaceFileAdapter({ repoRoot });
+    const repositoryComposition = await discoverRepositoryComposition({
+      workspace,
+      git: new GitMetadataCommandAdapter(),
+      repo_root: repoRoot,
+      canonicalize_repo_root: (candidate) => fs.realpathSync.native(candidate)
+    });
     await indexRepositoryGraph({
       repo_root: repoRoot,
       scanner: new FileCatalogScannerAdapter(),
-      workspace: new WorkspaceFileAdapter({ repoRoot }),
+      workspace,
       extractors,
       resource_extractor: new ResourceExtractorAdapter(),
       graph: store,
@@ -761,7 +770,8 @@ async function seedPublishedBarrierSnapshot(repoRoot: string, databasePath: stri
       snapshots: store,
       clock: new SystemClockAdapter(),
       schema_version: SCHEMA_VERSION,
-      snapshot_id: "80"
+      snapshot_id: "80",
+      repository_composition: repositoryComposition
     });
   } finally {
     store.close();

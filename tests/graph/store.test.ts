@@ -10,7 +10,7 @@ import { Worker } from "node:worker_threads";
 import Database from "better-sqlite3";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ExtractionBatch } from "../../src/domain/models/index.js";
-import type { SnapshotState } from "../../src/domain/models/runtime.js";
+import type { SnapshotRepositoryComposition, SnapshotState } from "../../src/domain/models/runtime.js";
 import type {
   GraphBuildProgress,
   GraphBuildProgressStatus,
@@ -60,6 +60,112 @@ describe("graph store", () => {
         .all() as Array<{ name: string }>;
 
       expect(snapshotColumns.map((column) => column.name)).toContain("publication_state");
+    } finally {
+      store.close();
+    }
+  });
+
+  it("round-trips snapshot repository composition and resolves the longest matching path prefix", async () => {
+    const store = openGraphStore(path.join(dir, "snapshot-repository-composition.sqlite"));
+    const snapshot = {
+      ...snapshotState("1200"),
+      repository_composition: repositoryComposition()
+    };
+
+    try {
+      await store.upsertSnapshot({ snapshot });
+
+      await expect(store.getSnapshot({ repo_root: snapshot.repo_root, snapshot_id: snapshot.id })).resolves.toMatchObject({
+        id: snapshot.id,
+        composition_fingerprint: "composition:v1",
+        repository_composition: {
+          composition_fingerprint: "composition:v1",
+          aggregate_claims: {
+            worktree_cleanliness: "dirty",
+            pinned_composition: "mismatch"
+          },
+          repositories: expect.arrayContaining([
+            expect.objectContaining({ repository_key: "superproject", path_prefix: "." }),
+            expect.objectContaining({ repository_key: "submodule:libs/child", path_prefix: "libs/child" }),
+            expect.objectContaining({ repository_key: "submodule:libs/child/vendor/deep", path_prefix: "libs/child/vendor/deep" })
+          ]),
+          skipped_or_blocked: expect.arrayContaining([
+            expect.objectContaining({ repository_key: "submodule:libs/missing", state: "uninitialized" })
+          ])
+        }
+      });
+
+      await expect(store.getRepositoryComposition({ snapshot_id: snapshot.id })).resolves.toMatchObject({
+        composition_fingerprint: "composition:v1",
+        repositories: expect.arrayContaining([
+          expect.objectContaining({ repository_key: "submodule:libs/child/vendor/deep", path_prefix: "libs/child/vendor/deep" })
+        ])
+      });
+      await expect(store.resolveRepositoryForPath({
+        snapshot_id: snapshot.id,
+        path: "libs/child/vendor/deep/src/module.py"
+      })).resolves.toMatchObject({
+        repository_key: "submodule:libs/child/vendor/deep",
+        path_prefix: "libs/child/vendor/deep"
+      });
+      await expect(store.resolveRepositoryForPath({
+        snapshot_id: snapshot.id,
+        path: "README.md"
+      })).resolves.toMatchObject({
+        repository_key: "superproject",
+        path_prefix: "."
+      });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("preserves legacy snapshots without a composition receipt", async () => {
+    const databasePath = path.join(dir, "legacy-no-composition.sqlite");
+    const legacy = new Database(databasePath);
+    try {
+      legacy.exec(`
+        CREATE TABLE schema_migrations (
+          version INTEGER PRIMARY KEY,
+          applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE TABLE snapshots (
+          id INTEGER PRIMARY KEY,
+          repo_identity TEXT NOT NULL,
+          config_identity TEXT NOT NULL,
+          freshness TEXT NOT NULL,
+          schema_version INTEGER NOT NULL,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          publication_state TEXT NOT NULL DEFAULT 'published',
+          controller_generation INTEGER NOT NULL DEFAULT 0,
+          invalidation_generation INTEGER NOT NULL DEFAULT 0,
+          publication_updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        INSERT INTO schema_migrations(version) VALUES (${SCHEMA_VERSION});
+        INSERT INTO snapshots(
+          id, repo_identity, config_identity, freshness, schema_version, created_at,
+          publication_state, controller_generation, invalidation_generation, publication_updated_at
+        ) VALUES (
+          1201, '/tmp/repo', 'default', 'fresh', ${SCHEMA_VERSION}, '2026-08-04T00:00:00.000Z',
+          'published', 0, 0, '2026-08-04T00:00:00.000Z'
+        );
+      `);
+    } finally {
+      legacy.close();
+    }
+
+    const store = openGraphStore(databasePath);
+    try {
+      await expect(store.getSnapshot({ repo_root: "/tmp/repo", snapshot_id: "1201" })).resolves.toMatchObject({
+        id: "1201",
+        composition_fingerprint: undefined,
+        repository_composition: undefined
+      });
+      await expect(store.getRepositoryComposition({ snapshot_id: "1201" })).resolves.toBeNull();
+      await expect(store.resolveRepositoryForPath({
+        snapshot_id: "1201",
+        path: "src/app.ts"
+      })).resolves.toBeNull();
     } finally {
       store.close();
     }
@@ -3101,6 +3207,104 @@ function snapshotState(id: string): SnapshotState {
     owner_state: "owner",
     created_at: "2026-05-08T00:00:00.000Z",
     updated_at: "2026-05-08T00:00:00.000Z"
+  };
+}
+
+function repositoryComposition(): SnapshotRepositoryComposition {
+  return {
+    superproject_key: "superproject",
+    repositories: [
+      {
+        repository_key: "superproject",
+        path_prefix: ".",
+        depth: 0,
+        state: "superproject",
+        pinned_revision_matches: "unknown",
+        cleanliness: "clean",
+        source_available: true,
+        evidence_paths: [],
+        claim_blockers: []
+      },
+      {
+        repository_key: "submodule:libs/child",
+        parent_repository_key: "superproject",
+        path_prefix: "libs/child",
+        depth: 1,
+        state: "initialized",
+        declaration_path: ".gitmodules",
+        head_gitlink_oid: "a".repeat(40),
+        index_gitlink_oid: "a".repeat(40),
+        worktree_head_oid: "b".repeat(40),
+        pinned_revision_matches: false,
+        cleanliness: "dirty",
+        source_available: true,
+        evidence_paths: [".gitmodules", "libs/child/.git"],
+        claim_blockers: [
+          {
+            kind: "git_metadata_unavailable",
+            path_prefix: "libs/child",
+            message: "Pinned composition no longer matches the local worktree.",
+            evidence_paths: ["libs/child/.git"],
+            blocked_claims: ["pinned_composition"]
+          }
+        ]
+      },
+      {
+        repository_key: "submodule:libs/child/vendor/deep",
+        parent_repository_key: "submodule:libs/child",
+        path_prefix: "libs/child/vendor/deep",
+        depth: 2,
+        state: "initialized",
+        declaration_path: "libs/child/.gitmodules",
+        head_gitlink_oid: "c".repeat(40),
+        index_gitlink_oid: "c".repeat(40),
+        worktree_head_oid: "c".repeat(40),
+        pinned_revision_matches: true,
+        cleanliness: "clean",
+        source_available: true,
+        evidence_paths: ["libs/child/.gitmodules"],
+        claim_blockers: []
+      }
+    ],
+    aggregate_claims: {
+      worktree_cleanliness: "dirty",
+      pinned_composition: "mismatch"
+    },
+    skipped_or_blocked: [
+      {
+        repository_key: "submodule:libs/missing",
+        parent_repository_key: "superproject",
+        path_prefix: "libs/missing",
+        depth: 1,
+        state: "uninitialized",
+        declaration_path: ".gitmodules",
+        head_gitlink_oid: "d".repeat(40),
+        pinned_revision_matches: "unknown",
+        cleanliness: "unavailable",
+        source_available: false,
+        evidence_paths: [".gitmodules"],
+        claim_blockers: [
+          {
+            kind: "git_metadata_unavailable",
+            path_prefix: "libs/missing",
+            message: "Declared submodule is not initialized in the local worktree.",
+            evidence_paths: [".gitmodules"],
+            blocked_claims: ["source_availability", "repository_traversal", "pinned_composition"]
+          }
+        ]
+      }
+    ],
+    source_complete: false,
+    truncated: true,
+    composition_fingerprint: "composition:v1",
+    limits: [
+      {
+        kind: "max_depth_exceeded",
+        path_prefix: "libs/child/vendor/deep",
+        limit: 2,
+        message: "Repository composition depth exceeded 2 at libs/child/vendor/deep."
+      }
+    ]
   };
 }
 

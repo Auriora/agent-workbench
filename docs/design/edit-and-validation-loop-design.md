@@ -141,12 +141,20 @@ collection limitation rather than combining unrelated projects.
 
 Git evidence is claim-specific. Missing or malformed local Git metadata does
 not erase readable source or validation markers, but it blocks cleanliness,
-diff-completeness, and unchanged-worktree claims. Declared submodules and
-embedded repositories are detected as non-traversed boundaries from bounded
-local path evidence; URLs are neither followed nor emitted. Recursive
-read-only handling of declared initialized submodules is deferred to Spec 058.
-No part of this planning path executes target commands, Git, package managers,
-containers, environment probes, or submodule operations.
+diff-completeness, and unchanged-worktree claims. Declared initialized
+submodules are admitted only when local `.gitmodules` declaration and gitlink
+evidence agree, then planned as separate read-only repository units with
+child-local catalog and ignore evidence. Unrelated embedded repositories,
+declared-but-uninitialized submodules, escaped paths, cycles, and exhausted
+composition bounds remain structured blockers or skipped evidence.
+
+A request targeting a child unit receives repository-local candidates for that
+child and must not borrow sibling or parent validation evidence. A request that
+spans several repository units preserves per-unit candidates and reports a
+cross-repository aggregation blocker unless one coherent validation scope is
+proven from durable evidence. No part of this planning path executes target
+commands, package managers, containers, environment probes, remote Git
+operations, submodule initialization, or submodule update.
 
 ## File-Change Feedback
 

@@ -15,6 +15,7 @@ import {
   evidenceCoverageStateSchema,
   freshnessSchema,
   nextActionSchema,
+  repositoryCompositionSummarySchema,
   type RuntimeError,
   runtimeErrorSchema,
   runtimeStatusCaveatSchema,
@@ -181,6 +182,7 @@ export const responseMetadataSchema = z
     budget: budgetMetadataSchema.optional(),
     index_coverage: z.array(indexCoverageSchema).optional(),
     reference_coverage: referenceCoverageReceiptSchema.optional(),
+    repository_composition: repositoryCompositionSummarySchema.optional(),
     caveats: z.array(runtimeStatusCaveatSchema).optional(),
     trust: trustCalibrationSchema.optional()
   })

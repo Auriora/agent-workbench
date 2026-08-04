@@ -16,7 +16,10 @@ import {
 import type { IndexRepositoryGraphResult } from "../../src/application/use-cases/index-repository-graph.js";
 import type { ClockPort, DocsIndexPort, ExtractorPort, FileCatalogScanPort, WorkspaceFilePort } from "../../src/ports/index.js";
 import type { ExtractionRequest } from "../../src/domain/models/index.js";
-import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
+import type { SnapshotRepositoryComposition } from "../../src/domain/models/runtime.js";
+import {
+  buildFileCatalogEntry
+} from "../../src/domain/policies/index.js";
 import { ExtractorRegistryAdapter, ResourceExtractorAdapter } from "../../src/infrastructure/extraction/index.js";
 import { FileCatalogScannerAdapter, WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
@@ -149,6 +152,59 @@ describe("repository graph extraction pipeline", () => {
           })
         ])
       );
+    } finally {
+      store.close();
+    }
+  });
+
+  it("passes repository composition into graph scans and persists it on the build snapshot", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(dir, "composition-graph-repo-"));
+    fs.writeFileSync(path.join(repoRoot, "README.md"), "# Fixture\n");
+    const store = openGraphStore(path.join(dir, "composition-graph.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    const observedCompositions: unknown[] = [];
+    const composition = repositoryCompositionFixture();
+    const scanner: FileCatalogScanPort = {
+      async scan(input) {
+        observedCompositions.push((input as { repository_composition?: unknown }).repository_composition);
+        return {
+          repo_root: repoRoot,
+          indexed_roots: input.indexed_roots,
+          skipped_roots: input.skipped_roots,
+          skipped_paths: [],
+          skipped_path_population: { total_count: 0, groups: [] },
+          files: [],
+          truncated: false
+        };
+      }
+    };
+
+    try {
+      await buildRepositoryGraph({
+        repo_root: repoRoot,
+        scanner,
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "1101",
+        repository_composition: composition
+      });
+
+      expect(observedCompositions).toEqual([composition]);
+      await expect(store.getRepositoryComposition({ snapshot_id: "1101" })).resolves.toMatchObject({
+        composition_fingerprint: "composition:fingerprint",
+        repositories: expect.arrayContaining([
+          expect.objectContaining({
+            repository_key: "submodule:engines/billing",
+            path_prefix: "engines/billing"
+          })
+        ])
+      });
     } finally {
       store.close();
     }
@@ -2705,6 +2761,50 @@ function fakeScanner(fileCount: number): FileCatalogScanPort {
         )
       };
     }
+  };
+}
+
+function repositoryCompositionFixture(): SnapshotRepositoryComposition {
+  return {
+    superproject_key: "superproject",
+    repositories: [
+      {
+        repository_key: "superproject",
+        path_prefix: ".",
+        depth: 0,
+        state: "superproject",
+        pinned_revision_matches: "unknown",
+        cleanliness: "clean",
+        source_available: true,
+        evidence_paths: [],
+        claim_blockers: []
+      },
+      {
+        repository_key: "submodule:engines/billing",
+        parent_repository_key: "superproject",
+        path_prefix: "engines/billing",
+        depth: 1,
+        state: "initialized",
+        declaration_path: ".gitmodules",
+        head_gitlink_oid: "a".repeat(40),
+        index_gitlink_oid: "a".repeat(40),
+        worktree_head_oid: "a".repeat(40),
+        pinned_revision_matches: true,
+        cleanliness: "clean",
+        source_available: true,
+        evidence_paths: [".gitmodules", "engines/billing/.git"],
+        claim_blockers: []
+      }
+    ],
+    aggregate_claims: {
+      worktree_cleanliness: "clean",
+      pinned_composition: "complete"
+    },
+    skipped_or_blocked: [],
+    source_complete: true,
+    truncated: false,
+    composition_fingerprint: "composition:fingerprint",
+    limits: []
   };
 }
 

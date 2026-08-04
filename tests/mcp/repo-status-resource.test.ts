@@ -8,7 +8,10 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { repoStatusResource } from "../../src/interface-adapters/mcp/registries/resources/repo-status.js";
-import type { GetRepoStatusResult } from "../../src/application/use-cases/get-repo-status.js";
+import {
+  getSnapshotMetadataRepoStatus,
+  type GetRepoStatusResult
+} from "../../src/application/use-cases/get-repo-status.js";
 import {
   buildFileCatalogEntry,
   DOCUMENTATION_CORPUS_POLICY_VERSION
@@ -28,6 +31,7 @@ import {
   parseMcpTextContent,
   registerMcpResource
 } from "../helpers/mcp-harness.js";
+import type { SnapshotRepositoryComposition } from "../../src/domain/models/runtime.js";
 
 describe("repo status MCP resource", () => {
   it("uses the injected status provider for repo:///status", async () => {
@@ -268,6 +272,64 @@ describe("repo status MCP resource", () => {
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
+  });
+
+  it("publishes bounded repository composition provenance on snapshot status", async () => {
+    const repoRoot = "/tmp/agent-workbench-status-composition";
+    const result = getSnapshotMetadataRepoStatus({
+      repo_root: repoRoot,
+      indexed_roots: ["."],
+      skipped_roots: [],
+      snapshot: {
+        ...testSnapshot("composition-status", repoRoot),
+        repository_composition: repositoryCompositionFixture()
+      },
+      files: []
+    });
+    const registered = registerMcpResource(repoStatusResource, {
+      repoRoot,
+      getRepoStatus: () => result
+    });
+
+    const response = await registered.handler({});
+    const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
+      data: GetRepoStatusResult["status"];
+      meta: GetRepoStatusResult["meta"];
+    };
+
+    expect(parsed.data.repository_composition).toMatchObject({
+      composition_fingerprint: "composition:status",
+      aggregate_claims: {
+        worktree_cleanliness: "blocked",
+        pinned_composition: "mismatch"
+      },
+      repositories: expect.arrayContaining([
+        expect.objectContaining({
+          repository_key: "submodule:engines/billing",
+          parent_repository_key: "superproject",
+          path_prefix: "engines/billing",
+          state: "worktree_revision_mismatch",
+          source_available: true,
+          claim_blockers: [
+            expect.objectContaining({
+              kind: "git_metadata_unavailable",
+              path_prefix: "engines/billing",
+              blocked_claims: ["pinned_composition"]
+            })
+          ]
+        })
+      ]),
+      limits: [
+        {
+          kind: "max_depth_exceeded",
+          path_prefix: "engines/billing/vendor/deep",
+          limit: 2
+        }
+      ]
+    });
+    expect(parsed.meta.repository_composition).toEqual(parsed.data.repository_composition);
+    expect(JSON.stringify(parsed.data.repository_composition)).not.toContain(repoRoot);
+    expect(JSON.stringify(parsed.data.repository_composition)).not.toContain("https://");
   });
 
   it("makes first-read surfaces agree when a persisted snapshot path was deleted before startup", async () => {
@@ -598,7 +660,11 @@ describe("repo status MCP resource", () => {
       const initial = JSON.parse(initialResponse.contents[0]?.text ?? "{}") as {
         data: GetRepoStatusResult["status"];
       };
-      expect(initial.data.freshness).toBe("fresh");
+      expect(initial.data.freshness).toBe("unknown");
+      expect(initial.data.snapshot_validity).toMatchObject({
+        state: "degraded",
+        reason: "Snapshot lacks a persisted repository composition receipt."
+      });
       expect(initial.data.watcher_freshness).toMatchObject({
         status: "fresh",
         queue_state: "drained"
@@ -944,6 +1010,65 @@ function testSnapshot(id: string, repoRoot: string) {
     owner_state: "owner" as const,
     created_at: "2026-07-19T12:00:00.000Z",
     updated_at: "2026-07-19T12:00:00.000Z"
+  };
+}
+
+function repositoryCompositionFixture(): SnapshotRepositoryComposition {
+  return {
+    superproject_key: "superproject",
+    repositories: [
+      {
+        repository_key: "superproject",
+        path_prefix: ".",
+        depth: 0,
+        state: "superproject",
+        pinned_revision_matches: "unknown",
+        cleanliness: "clean",
+        source_available: true,
+        evidence_paths: [],
+        claim_blockers: []
+      },
+      {
+        repository_key: "submodule:engines/billing",
+        parent_repository_key: "superproject",
+        path_prefix: "engines/billing",
+        depth: 1,
+        state: "worktree_revision_mismatch",
+        declaration_path: ".gitmodules",
+        head_gitlink_oid: "a".repeat(40),
+        index_gitlink_oid: "a".repeat(40),
+        worktree_head_oid: "b".repeat(40),
+        pinned_revision_matches: false,
+        cleanliness: "dirty",
+        source_available: true,
+        evidence_paths: ["/tmp/agent-workbench-status-composition/.gitmodules", "https://example.invalid/repo"],
+        claim_blockers: [
+          {
+            kind: "git_metadata_unavailable",
+            path_prefix: "engines/billing",
+            message: "Pinned composition differs from local source.",
+            evidence_paths: ["/tmp/agent-workbench-status-composition/engines/billing/.git"],
+            blocked_claims: ["pinned_composition"]
+          }
+        ]
+      }
+    ],
+    aggregate_claims: {
+      worktree_cleanliness: "blocked",
+      pinned_composition: "mismatch"
+    },
+    skipped_or_blocked: [],
+    source_complete: false,
+    truncated: false,
+    composition_fingerprint: "composition:status",
+    limits: [
+      {
+        kind: "max_depth_exceeded",
+        path_prefix: "engines/billing/vendor/deep",
+        limit: 2,
+        message: "Depth exceeded."
+      }
+    ]
   };
 }
 

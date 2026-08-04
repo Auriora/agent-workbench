@@ -188,6 +188,107 @@ describe("shared path policy consistency", () => {
     });
   });
 
+  it("admits only receipt-backed initialized submodule paths for reads while keeping writes refused", () => {
+    const repositoryComposition = {
+      repositories: [
+        {
+          path_prefix: ".",
+          state: "superproject",
+          source_available: true
+        },
+        {
+          path_prefix: "modules/app",
+          state: "initialized",
+          source_available: true,
+          declaration_path: ".gitmodules",
+          head_gitlink_oid: "abc123"
+        },
+        {
+          path_prefix: "modules/uninitialized",
+          state: "uninitialized",
+          source_available: false,
+          declaration_path: ".gitmodules",
+          head_gitlink_oid: "def456"
+        },
+        {
+          path_prefix: "modules/mismatch",
+          state: "worktree_revision_mismatch",
+          source_available: true,
+          declaration_path: ".gitmodules",
+          head_gitlink_oid: "fedcba"
+        }
+      ]
+    };
+
+    expect(
+      classifyPathPolicy({
+        relativePath: "modules/app",
+        isDirectory: true,
+        hasNestedGitRepository: true,
+        repositoryComposition
+      })
+    ).toMatchObject({
+      reason: "source",
+      readPolicy: "allow",
+      writePolicy: "refuse"
+    });
+    expect(
+      classifyPathPolicy({
+        relativePath: "modules/app/src/main.ts",
+        isDirectory: false,
+        repositoryComposition
+      })
+    ).toMatchObject({
+      reason: "source",
+      readPolicy: "allow",
+      writePolicy: "refuse"
+    });
+    expect(
+      classifyPathPolicy({
+        relativePath: "modules/uninitialized",
+        isDirectory: true,
+        hasNestedGitRepository: true,
+        repositoryComposition
+      }).reason
+    ).toBe("nested_git_repository");
+    expect(
+      classifyPathPolicy({
+        relativePath: "modules/mismatch",
+        isDirectory: true,
+        hasNestedGitRepository: true,
+        repositoryComposition
+      })
+    ).toMatchObject({
+      reason: "source",
+      readPolicy: "allow",
+      writePolicy: "refuse"
+    });
+    expect(
+      classifyPathPolicy({
+        relativePath: "../outside",
+        isDirectory: true,
+        hasNestedGitRepository: true,
+        repositoryComposition: {
+          repositories: [{
+            path_prefix: "../outside",
+            state: "initialized",
+            source_available: true,
+            declaration_path: ".gitmodules",
+            head_gitlink_oid: "bad"
+          }]
+        }
+      }).reason
+    ).toBe("nested_git_repository");
+    expect(
+      classifyPathPolicy({
+        relativePath: "nested",
+        isDirectory: true,
+        hasNestedGitRepository: true,
+        repositoryComposition
+      }).reason
+    ).toBe("nested_git_repository");
+  });
+
   it("requires an explicit Rails credentials carve-out for encrypted Rails credential files", async () => {
     const scanner = new FileCatalogScannerAdapter();
     const scan = await scanner.scan({

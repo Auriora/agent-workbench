@@ -25,6 +25,7 @@ import {
   getRegisteredResource,
   registerMcpResource
 } from "../helpers/mcp-harness.js";
+import type { SnapshotRepositoryComposition } from "../../src/domain/models/runtime.js";
 
 describe("repo scope MCP resource", () => {
   it("uses the injected scope provider for repo:///scope", async () => {
@@ -935,6 +936,67 @@ describe("repo scope and overview composed server resources", () => {
     expect(parsed.meta.capability_level).toBe("partial_semantic");
     expect(parsed.meta.evidence_kinds).toContain("parser");
   });
+
+  it("passes snapshot repository composition into overview scans and publishes bounded provenance", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-overview-composition-"));
+    const composition = repositoryCompositionFixture();
+    const observedCompositions: unknown[] = [];
+    try {
+      const result = await getRepoOverview({
+        repo_root: repoRoot,
+        scanner: {
+          async scan(input) {
+            observedCompositions.push((input as { repository_composition?: unknown }).repository_composition);
+            return {
+              repo_root: repoRoot,
+              indexed_roots: input.indexed_roots,
+              skipped_roots: input.skipped_roots,
+              skipped_paths: [],
+              skipped_path_population: { total_count: 0, groups: [] },
+              files: [],
+              truncated: false
+            };
+          }
+        },
+        snapshots: snapshotPort({
+          ...snapshot({ repoRoot, freshness: "fresh" }),
+          repository_composition: composition
+        })
+      });
+      const envelope = buildRepoOverviewEnvelope(result);
+
+      expect(observedCompositions).toEqual([composition]);
+      expect(envelope.data.repository_composition).toMatchObject({
+        composition_fingerprint: "composition:overview",
+        repositories: [
+          expect.objectContaining({
+            repository_key: "superproject",
+            path_prefix: "."
+          }),
+          expect.objectContaining({
+            repository_key: "submodule:apps/admin",
+            parent_repository_key: "superproject",
+            path_prefix: "apps/admin",
+            state: "metadata_unavailable",
+            source_available: true
+          })
+        ],
+        skipped_or_blocked: [
+          expect.objectContaining({
+            repository_key: "submodule:apps/mobile",
+            path_prefix: "apps/mobile",
+            state: "uninitialized",
+            source_available: false
+          })
+        ]
+      });
+      expect(envelope.meta.repository_composition).toEqual(envelope.data.repository_composition);
+      expect(JSON.stringify(envelope.data.repository_composition)).not.toContain(repoRoot);
+      expect(JSON.stringify(envelope.data.repository_composition)).not.toContain("https://");
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
 });
 
 function snapshot(input: {
@@ -953,6 +1015,79 @@ function snapshot(input: {
     owner_state: "owner",
     created_at: "2026-06-05T12:00:00.000Z",
     updated_at: "2026-06-05T12:00:00.000Z"
+  };
+}
+
+function repositoryCompositionFixture(): SnapshotRepositoryComposition {
+  return {
+    superproject_key: "superproject",
+    repositories: [
+      {
+        repository_key: "superproject",
+        path_prefix: ".",
+        depth: 0,
+        state: "superproject",
+        pinned_revision_matches: "unknown",
+        cleanliness: "clean",
+        source_available: true,
+        evidence_paths: [],
+        claim_blockers: []
+      },
+      {
+        repository_key: "submodule:apps/admin",
+        parent_repository_key: "superproject",
+        path_prefix: "apps/admin",
+        depth: 1,
+        state: "metadata_unavailable",
+        declaration_path: ".gitmodules",
+        head_gitlink_oid: "c".repeat(40),
+        pinned_revision_matches: "unknown",
+        cleanliness: "unknown",
+        source_available: true,
+        evidence_paths: ["/tmp/agent-workbench-overview-composition/.gitmodules", "https://example.invalid/private"],
+        claim_blockers: [
+          {
+            kind: "git_metadata_unavailable",
+            path_prefix: "apps/admin",
+            message: "Git metadata could not be read.",
+            evidence_paths: ["/tmp/agent-workbench-overview-composition/apps/admin/.git"],
+            blocked_claims: ["pinned_composition", "worktree_cleanliness"]
+          }
+        ]
+      }
+    ],
+    aggregate_claims: {
+      worktree_cleanliness: "blocked",
+      pinned_composition: "blocked"
+    },
+    skipped_or_blocked: [
+      {
+        repository_key: "submodule:apps/mobile",
+        parent_repository_key: "superproject",
+        path_prefix: "apps/mobile",
+        depth: 1,
+        state: "uninitialized",
+        declaration_path: ".gitmodules",
+        head_gitlink_oid: "d".repeat(40),
+        pinned_revision_matches: "unknown",
+        cleanliness: "unavailable",
+        source_available: false,
+        evidence_paths: [".gitmodules"],
+        claim_blockers: [
+          {
+            kind: "git_metadata_unavailable",
+            path_prefix: "apps/mobile",
+            message: "Submodule worktree is unavailable.",
+            evidence_paths: [".gitmodules"],
+            blocked_claims: ["source_availability", "repository_traversal"]
+          }
+        ]
+      }
+    ],
+    source_complete: false,
+    truncated: false,
+    composition_fingerprint: "composition:overview",
+    limits: []
   };
 }
 

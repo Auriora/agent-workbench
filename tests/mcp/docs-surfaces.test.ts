@@ -7,6 +7,9 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
+import { discoverRepositoryComposition } from "../../src/application/use-cases/repository-composition.js";
+import { GitMetadataCommandAdapter } from "../../src/infrastructure/commands/index.js";
+import { WorkspaceFileAdapter } from "../../src/infrastructure/filesystem/index.js";
 import type {
   CheckMarkdownDocumentRequest,
   CheckMarkdownSetRequest,
@@ -925,6 +928,12 @@ async function seedDocsSnapshot(
   selectedText: string
 ): Promise<void> {
   const indexedAt = "2026-07-19T12:00:00.000Z";
+  const repositoryComposition = await discoverRepositoryComposition({
+    workspace: new WorkspaceFileAdapter({ repoRoot }),
+    git: new GitMetadataCommandAdapter(),
+    repo_root: repoRoot,
+    canonicalize_repo_root: (candidate) => fs.realpathSync.native(candidate)
+  });
   await store.createBuildSnapshot({
     snapshot: {
       id: snapshotId,
@@ -935,6 +944,8 @@ async function seedDocsSnapshot(
       schema_version: SCHEMA_VERSION,
       freshness: "refreshing",
       owner_state: "owner",
+      composition_fingerprint: repositoryComposition.composition_fingerprint,
+      repository_composition: repositoryComposition,
       created_at: indexedAt,
       updated_at: indexedAt
     },

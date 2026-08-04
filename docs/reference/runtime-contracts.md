@@ -104,6 +104,35 @@ units; it does not restore unrelated-sibling or first-project fallback
 behavior. Broken Git metadata may limit a unit and block Git-dependent claims
 without discarding source-backed markers or otherwise valid planned commands.
 
+### Repository Composition Provenance
+
+Contract `0.1` also allows additive repository-composition provenance on
+snapshot-backed and scanner-backed responses. A composition receipt describes
+the launched superproject plus admitted child repository units. Child admission
+is limited to declared initialized submodules proven by local `.gitmodules`
+path evidence and a matching Git gitlink. URLs are ignored and never emitted.
+Undeclared nested repositories, uninitialized declarations, canonical path
+escapes, cycles, depth or count exhaustion, and unavailable Git metadata are
+reported as structured blockers or degraded evidence instead of being traversed
+as ordinary source.
+
+Composition receipts carry deterministic unit identity and lineage fields, a
+bounded composition fingerprint, per-unit source availability, Git metadata
+state, declaration and gitlink evidence when available, aggregate claims, and
+limit or blocker receipts. Public path-bearing results from graph, docs,
+context, status, diagnostics, and validation planning may include the owning
+repository unit or path prefix as optional provenance. Older snapshots without
+a composition receipt remain usable for same-repository evidence but are
+degraded for composition, submodule-completeness, and cross-repository
+freshness claims until refreshed.
+
+Validation project units inside admitted children use the child unit's local
+catalog and ignore policy. Planned commands remain `planned` and
+`not_executed`; the compatibility flat command list is a projection only from
+selected non-blocked units. A plan spanning more than one repository unit must
+preserve per-unit candidates and report a cross-repository aggregation blocker
+when it cannot prove one coherent validation scope.
+
 ## Task Context Lifecycle Evidence
 
 `context_for_task` separates repository evidence from lifecycle evidence.
@@ -228,6 +257,14 @@ to be drained, scope to be synchronized, ignore rules to be synchronized, and no
 background rescan to be pending. Watcher processing maps to `refreshing`;
 overflow, scope drift, ignore-rule drift, or required rescan maps to `stale`;
 watcher startup or processing failure maps to degraded evidence with a caveat.
+
+Repository-composition freshness is evaluated with snapshot path validity, not
+as a replacement for it. A current composition fingerprint mismatch makes
+composition-dependent claims stale and schedules the normal refresh path.
+Unavailable current composition evidence degrades freshness for
+composition-dependent claims. Legacy snapshots without a receipt cannot claim
+submodule completeness, child cleanliness, or cross-repository diff
+completeness.
 
 ## Analysis Validity
 

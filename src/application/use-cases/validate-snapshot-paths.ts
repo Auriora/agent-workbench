@@ -17,6 +17,11 @@ import type {
 
 export const DEFAULT_SNAPSHOT_VALIDITY_MAX_PATHS = 2_000;
 
+export type SnapshotCompositionFreshness =
+  | { state: "valid" }
+  | { state: "stale"; refresh_required: true; reason: string }
+  | { state: "degraded"; refresh_required: false; reason: string };
+
 export class SnapshotValidityService implements SnapshotValidityPort {
   public constructor(
     private readonly catalog: FileCatalogPort,
@@ -76,6 +81,36 @@ export async function validateSnapshotPaths(input: {
     max_paths: maxPaths,
     expectations: mapExpectations(observed)
   });
+}
+
+export function classifySnapshotCompositionFreshness(input: {
+  snapshot: Pick<SnapshotState, "composition_fingerprint" | "repository_composition">;
+  current_composition_fingerprint?: string;
+}): SnapshotCompositionFreshness {
+  const storedFingerprint = input.snapshot.repository_composition?.composition_fingerprint
+    ?? input.snapshot.composition_fingerprint;
+  if (storedFingerprint === undefined) {
+    return {
+      state: "degraded",
+      refresh_required: false,
+      reason: "Snapshot lacks a persisted repository composition receipt."
+    };
+  }
+  if (input.current_composition_fingerprint === undefined) {
+    return {
+      state: "degraded",
+      refresh_required: false,
+      reason: "Current repository composition fingerprint is unavailable."
+    };
+  }
+  if (input.current_composition_fingerprint !== storedFingerprint) {
+    return {
+      state: "stale",
+      refresh_required: true,
+      reason: "Repository composition fingerprint changed after the snapshot was published."
+    };
+  }
+  return { state: "valid" };
 }
 
 async function validateObservedPaths(input: {

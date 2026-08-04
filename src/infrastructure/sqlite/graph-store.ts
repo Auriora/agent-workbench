@@ -17,7 +17,13 @@ import type {
   ResolvedReference,
   UnresolvedReferenceReadModel
 } from "../../domain/models/index.js";
-import type { SnapshotState } from "../../domain/models/runtime.js";
+import type {
+  SnapshotRepositoryClaimBlocker,
+  SnapshotRepositoryComposition,
+  SnapshotRepositoryCompositionLimit,
+  SnapshotRepositoryUnit,
+  SnapshotState
+} from "../../domain/models/runtime.js";
 import type {
   DocsRankingCandidate,
   DocsRankingCandidateQueryResult,
@@ -72,6 +78,7 @@ import type {
   SnapshotOrphanReconciliationResult,
   SnapshotBuildPort,
   SnapshotPathInventoryPort,
+  SnapshotRepositoryCompositionPort,
   SnapshotPort
 } from "../../ports/index.js";
 import { DocsRankingUnavailableError } from "../../ports/index.js";
@@ -80,7 +87,9 @@ export const SCHEMA_VERSION = GRAPH_STORE_IDENTITY_VERSION;
 
 const SNAPSHOT_SELECT_COLUMNS = `
   SELECT id, repo_identity, config_identity, freshness, schema_version, created_at,
-         publication_state, controller_generation, invalidation_generation, publication_updated_at
+         publication_state, controller_generation, invalidation_generation, publication_updated_at,
+         composition_fingerprint, composition_source_complete, composition_truncated,
+         composition_aggregate_claims_json, composition_limits_json
 `;
 
 type SnapshotRow = {
@@ -94,6 +103,30 @@ type SnapshotRow = {
   controller_generation: number;
   invalidation_generation: number;
   publication_updated_at: string;
+  composition_fingerprint: string | null;
+  composition_source_complete: number | null;
+  composition_truncated: number | null;
+  composition_aggregate_claims_json: string | null;
+  composition_limits_json: string | null;
+};
+
+type SnapshotRepositoryUnitRow = {
+  snapshot_id: number;
+  repository_key: SnapshotRepositoryUnit["repository_key"];
+  parent_repository_key: SnapshotRepositoryUnit["parent_repository_key"] | null;
+  path_prefix: string;
+  depth: number;
+  state: SnapshotRepositoryUnit["state"];
+  declaration_path: string | null;
+  head_gitlink_oid: string | null;
+  index_gitlink_oid: string | null;
+  worktree_head_oid: string | null;
+  pinned_revision_matches: number | null;
+  cleanliness: SnapshotRepositoryUnit["cleanliness"];
+  source_available: number;
+  evidence_paths_json: string;
+  claim_blockers_json: string;
+  receipt_group: "repository" | "skipped_or_blocked";
 };
 
 type FileRow = {
@@ -270,6 +303,7 @@ export interface GraphStore
     GraphBuildResolutionWritePort,
     FileCatalogPort,
     SnapshotPathInventoryPort,
+    SnapshotRepositoryCompositionPort,
     DocsIndexPort,
     DocumentationConcernIndexPort,
     DocsRankingCandidateQueryPort,
@@ -1221,6 +1255,49 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     return latest ? this.mapSnapshotRow(latest) : null;
   }
 
+  public async getRepositoryComposition(input: {
+    snapshot_id: string;
+  }): Promise<SnapshotRepositoryComposition | null> {
+    const snapshotId = this.resolveExistingSnapshotId(input.snapshot_id);
+    if (snapshotId == null) {
+      return null;
+    }
+    return this.readRepositoryComposition(snapshotId);
+  }
+
+  public async resolveRepositoryForPath(input: {
+    snapshot_id: string;
+    path: string;
+  }): Promise<SnapshotRepositoryUnit | null> {
+    const snapshotId = this.resolveExistingSnapshotId(input.snapshot_id);
+    if (snapshotId == null) {
+      return null;
+    }
+    const normalizedPath = normalizeRepositoryLookupPath(input.path);
+    const row = this.db.prepare(`
+      SELECT
+        snapshot_id, repository_key, parent_repository_key, path_prefix, depth, state,
+        declaration_path, head_gitlink_oid, index_gitlink_oid, worktree_head_oid,
+        pinned_revision_matches, cleanliness, source_available, evidence_paths_json,
+        claim_blockers_json, receipt_group
+      FROM snapshot_repository_units
+      WHERE snapshot_id = @snapshotId
+        AND receipt_group = 'repository'
+        AND (
+          path_prefix = '.'
+          OR path_prefix = @path
+          OR @path LIKE path_prefix || '/%'
+        )
+      ORDER BY CASE WHEN path_prefix = '.' THEN 0 ELSE length(path_prefix) END DESC,
+               repository_key ASC
+      LIMIT 1
+    `).get({
+      snapshotId,
+      path: normalizedPath
+    }) as SnapshotRepositoryUnitRow | undefined;
+    return row === undefined ? null : mapSnapshotRepositoryUnitRow(row);
+  }
+
   public async listSnapshots(input: { repo_root: string }): Promise<readonly SnapshotState[]> {
     const rows = this.db
       .prepare(
@@ -1245,22 +1322,45 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     if (input.snapshot.freshness === "refreshing") {
       throw new Error("Bootstrap snapshot seeding cannot create a controlled build.");
     }
-    this.db.prepare(`
-      INSERT INTO snapshots (
-        id, repo_identity, config_identity, freshness, schema_version, created_at,
-        publication_state, controller_generation, invalidation_generation, publication_updated_at
-      ) VALUES (
-        @id, @repoIdentity, @configIdentity, @freshness, @schemaVersion, @createdAt,
-        'published', 0, 0, @createdAt
-      )
-    `).run({
-      id: requestedId,
-      repoIdentity: input.snapshot.repo_root,
-      configIdentity: input.snapshot.config_identity,
-      freshness: input.snapshot.freshness,
-      schemaVersion: input.snapshot.schema_version,
-      createdAt: input.snapshot.created_at
+    const insert = this.db.transaction(() => {
+      this.db.prepare(`
+        INSERT INTO snapshots (
+          id, repo_identity, config_identity, freshness, schema_version, created_at,
+          publication_state, controller_generation, invalidation_generation, publication_updated_at,
+          composition_fingerprint, composition_source_complete, composition_truncated,
+          composition_aggregate_claims_json, composition_limits_json
+        ) VALUES (
+          @id, @repoIdentity, @configIdentity, @freshness, @schemaVersion, @createdAt,
+          'published', 0, 0, @createdAt,
+          @compositionFingerprint, @compositionSourceComplete, @compositionTruncated,
+          @compositionAggregateClaimsJson, @compositionLimitsJson
+        )
+      `).run({
+        id: requestedId,
+        repoIdentity: input.snapshot.repo_root,
+        configIdentity: input.snapshot.config_identity,
+        freshness: input.snapshot.freshness,
+        schemaVersion: input.snapshot.schema_version,
+        createdAt: input.snapshot.created_at,
+        compositionFingerprint: input.snapshot.repository_composition?.composition_fingerprint
+          ?? input.snapshot.composition_fingerprint
+          ?? null,
+        compositionSourceComplete: input.snapshot.repository_composition === undefined
+          ? null
+          : input.snapshot.repository_composition.source_complete ? 1 : 0,
+        compositionTruncated: input.snapshot.repository_composition === undefined
+          ? null
+          : input.snapshot.repository_composition.truncated ? 1 : 0,
+        compositionAggregateClaimsJson: input.snapshot.repository_composition === undefined
+          ? null
+          : JSON.stringify(input.snapshot.repository_composition.aggregate_claims),
+        compositionLimitsJson: input.snapshot.repository_composition === undefined
+          ? null
+          : JSON.stringify(input.snapshot.repository_composition.limits)
+      });
+      this.replaceSnapshotRepositoryComposition(requestedId, input.snapshot.repository_composition);
     });
+    insert.immediate();
   }
 
   public async createBuildSnapshot(input: {
@@ -1280,24 +1380,47 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       throw new TypeError("invalidation_generation must be a non-negative safe integer.");
     }
     try {
-      this.db.prepare(`
-        INSERT INTO snapshots (
-          id, repo_identity, config_identity, freshness, schema_version, created_at,
-          publication_state, controller_generation, invalidation_generation, publication_updated_at
-        ) VALUES (
-          @snapshotId, @repoRoot, @configIdentity, @freshness, @schemaVersion, @createdAt,
-          'building', @controllerGeneration, @invalidationGeneration, @createdAt
-        )
-      `).run({
-        snapshotId,
-        repoRoot: input.snapshot.repo_root,
-        configIdentity: input.snapshot.config_identity,
-        freshness: input.snapshot.freshness,
-        schemaVersion: input.snapshot.schema_version,
-        createdAt: input.created_at,
-        controllerGeneration: input.controller_generation,
-        invalidationGeneration: input.invalidation_generation
+      const insert = this.db.transaction(() => {
+        this.db.prepare(`
+          INSERT INTO snapshots (
+            id, repo_identity, config_identity, freshness, schema_version, created_at,
+            publication_state, controller_generation, invalidation_generation, publication_updated_at,
+            composition_fingerprint, composition_source_complete, composition_truncated,
+            composition_aggregate_claims_json, composition_limits_json
+          ) VALUES (
+            @snapshotId, @repoRoot, @configIdentity, @freshness, @schemaVersion, @createdAt,
+            'building', @controllerGeneration, @invalidationGeneration, @createdAt,
+            @compositionFingerprint, @compositionSourceComplete, @compositionTruncated,
+            @compositionAggregateClaimsJson, @compositionLimitsJson
+          )
+        `).run({
+          snapshotId,
+          repoRoot: input.snapshot.repo_root,
+          configIdentity: input.snapshot.config_identity,
+          freshness: input.snapshot.freshness,
+          schemaVersion: input.snapshot.schema_version,
+          createdAt: input.created_at,
+          controllerGeneration: input.controller_generation,
+          invalidationGeneration: input.invalidation_generation,
+          compositionFingerprint: input.snapshot.repository_composition?.composition_fingerprint
+            ?? input.snapshot.composition_fingerprint
+            ?? null,
+          compositionSourceComplete: input.snapshot.repository_composition === undefined
+            ? null
+            : input.snapshot.repository_composition.source_complete ? 1 : 0,
+          compositionTruncated: input.snapshot.repository_composition === undefined
+            ? null
+            : input.snapshot.repository_composition.truncated ? 1 : 0,
+          compositionAggregateClaimsJson: input.snapshot.repository_composition === undefined
+            ? null
+            : JSON.stringify(input.snapshot.repository_composition.aggregate_claims),
+          compositionLimitsJson: input.snapshot.repository_composition === undefined
+            ? null
+            : JSON.stringify(input.snapshot.repository_composition.limits)
+        });
+        this.replaceSnapshotRepositoryComposition(snapshotId, input.snapshot.repository_composition);
       });
+      insert.immediate();
     } catch (error) {
       if (this.getSnapshotRowById(snapshotId) !== undefined) {
         throw new Error(`Snapshot id already exists: ${input.snapshot.id}`, { cause: error });
@@ -3376,6 +3499,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       .run(...snapshotIds);
     this.db.prepare(`DELETE FROM docs_documents WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
     this.db.prepare(`DELETE FROM snapshot_index_coverage WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
+    this.db.prepare(`DELETE FROM snapshot_repository_units WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
     this.db
       .prepare(`DELETE FROM edges WHERE file_id IN (SELECT id FROM files WHERE snapshot_id IN (${placeholders}))`)
       .run(...snapshotIds);
@@ -3453,6 +3577,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   }
 
   private mapSnapshotRow(row: SnapshotRow): SnapshotState {
+    const repositoryComposition = this.readRepositoryComposition(row.id, row);
     return {
       id: String(row.id),
       repo_root: row.repo_identity,
@@ -3464,8 +3589,74 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       owner_state: "observer",
       created_at: row.created_at,
       updated_at: row.created_at,
-      reason: undefined
+      reason: undefined,
+      composition_fingerprint: row.composition_fingerprint ?? undefined,
+      repository_composition: repositoryComposition ?? undefined
     };
+  }
+
+  private readRepositoryComposition(
+    snapshotId: number,
+    snapshotRow: SnapshotRow | undefined = this.getSnapshotRowById(snapshotId)
+  ): SnapshotRepositoryComposition | null {
+    if (snapshotRow === undefined || snapshotRow.composition_fingerprint === null) {
+      return null;
+    }
+    const rows = this.db.prepare(`
+      SELECT
+        snapshot_id, repository_key, parent_repository_key, path_prefix, depth, state,
+        declaration_path, head_gitlink_oid, index_gitlink_oid, worktree_head_oid,
+        pinned_revision_matches, cleanliness, source_available, evidence_paths_json,
+        claim_blockers_json, receipt_group
+      FROM snapshot_repository_units
+      WHERE snapshot_id = @snapshotId
+      ORDER BY receipt_group ASC, depth ASC, path_prefix ASC, repository_key ASC
+    `).all({ snapshotId }) as SnapshotRepositoryUnitRow[];
+    const repositories = rows
+      .filter((row) => row.receipt_group === "repository")
+      .map((row) => mapSnapshotRepositoryUnitRow(row));
+    const skippedOrBlocked = rows
+      .filter((row) => row.receipt_group === "skipped_or_blocked")
+      .map((row) => mapSnapshotRepositoryUnitRow(row));
+    return {
+      superproject_key: "superproject",
+      repositories,
+      aggregate_claims: parseSnapshotRepositoryAggregateClaimsJson(snapshotRow.composition_aggregate_claims_json),
+      skipped_or_blocked: skippedOrBlocked,
+      source_complete: snapshotRow.composition_source_complete === 1,
+      truncated: snapshotRow.composition_truncated === 1,
+      composition_fingerprint: snapshotRow.composition_fingerprint,
+      limits: parseSnapshotRepositoryCompositionLimitsJson(snapshotRow.composition_limits_json)
+    };
+  }
+
+  private replaceSnapshotRepositoryComposition(
+    snapshotId: number,
+    composition: SnapshotRepositoryComposition | undefined
+  ): void {
+    this.db.prepare("DELETE FROM snapshot_repository_units WHERE snapshot_id = @snapshotId").run({ snapshotId });
+    if (composition === undefined) {
+      return;
+    }
+    const insert = this.db.prepare(`
+      INSERT INTO snapshot_repository_units (
+        snapshot_id, repository_key, parent_repository_key, path_prefix, depth, state,
+        declaration_path, head_gitlink_oid, index_gitlink_oid, worktree_head_oid,
+        pinned_revision_matches, cleanliness, source_available, evidence_paths_json,
+        claim_blockers_json, receipt_group
+      ) VALUES (
+        @snapshotId, @repositoryKey, @parentRepositoryKey, @pathPrefix, @depth, @state,
+        @declarationPath, @headGitlinkOid, @indexGitlinkOid, @worktreeHeadOid,
+        @pinnedRevisionMatches, @cleanliness, @sourceAvailable, @evidencePathsJson,
+        @claimBlockersJson, @receiptGroup
+      )
+    `);
+    for (const unit of composition.repositories) {
+      insertSnapshotRepositoryUnit(insert, snapshotId, unit, "repository");
+    }
+    for (const unit of composition.skipped_or_blocked) {
+      insertSnapshotRepositoryUnit(insert, snapshotId, unit, "skipped_or_blocked");
+    }
   }
 
   private mapPublicationRecord(row: SnapshotRow): SnapshotPublicationRecord {
@@ -4437,7 +4628,37 @@ function migrate(db: Database.Database): void {
       publication_state TEXT NOT NULL DEFAULT 'published',
       controller_generation INTEGER NOT NULL DEFAULT 0,
       invalidation_generation INTEGER NOT NULL DEFAULT 0,
-      publication_updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      publication_updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      composition_fingerprint TEXT,
+      composition_source_complete INTEGER,
+      composition_truncated INTEGER,
+      composition_aggregate_claims_json TEXT,
+      composition_limits_json TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS snapshot_repository_units (
+      snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE CASCADE,
+      repository_key TEXT NOT NULL,
+      parent_repository_key TEXT,
+      path_prefix TEXT NOT NULL,
+      depth INTEGER NOT NULL,
+      state TEXT NOT NULL,
+      declaration_path TEXT,
+      head_gitlink_oid TEXT,
+      index_gitlink_oid TEXT,
+      worktree_head_oid TEXT,
+      pinned_revision_matches INTEGER,
+      cleanliness TEXT NOT NULL,
+      source_available INTEGER NOT NULL,
+      evidence_paths_json TEXT NOT NULL DEFAULT '[]',
+      claim_blockers_json TEXT NOT NULL DEFAULT '[]',
+      receipt_group TEXT NOT NULL DEFAULT 'repository' CHECK (receipt_group IN ('repository', 'skipped_or_blocked')),
+      PRIMARY KEY(snapshot_id, repository_key),
+      UNIQUE(snapshot_id, path_prefix),
+      CHECK (depth >= 0),
+      CHECK (pinned_revision_matches IN (0, 1) OR pinned_revision_matches IS NULL),
+      CHECK (cleanliness IN ('clean', 'dirty', 'unknown', 'unavailable')),
+      CHECK (source_available IN (0, 1))
     );
 
     CREATE TABLE IF NOT EXISTS files (
@@ -4705,6 +4926,8 @@ function migrate(db: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_docs_documents_snapshot_path ON docs_documents(snapshot_id, path);
     CREATE INDEX IF NOT EXISTS idx_docs_headings_document ON docs_headings(document_id, line);
     CREATE INDEX IF NOT EXISTS idx_snapshot_index_coverage_snapshot ON snapshot_index_coverage(snapshot_id);
+    CREATE INDEX IF NOT EXISTS idx_snapshot_repository_units_snapshot_prefix
+      ON snapshot_repository_units(snapshot_id, path_prefix);
     CREATE INDEX IF NOT EXISTS idx_documentation_concern_terms_snapshot_term
       ON documentation_concern_terms(snapshot_id, normalized_term);
     CREATE INDEX IF NOT EXISTS idx_documentation_concern_owners_snapshot_concern
@@ -4749,6 +4972,21 @@ function migrate(db: Database.Database): void {
     }
     if (!snapshotColumns.has("publication_updated_at")) {
       db.exec("ALTER TABLE snapshots ADD COLUMN publication_updated_at TEXT NOT NULL DEFAULT ''");
+    }
+    if (!snapshotColumns.has("composition_fingerprint")) {
+      db.exec("ALTER TABLE snapshots ADD COLUMN composition_fingerprint TEXT");
+    }
+    if (!snapshotColumns.has("composition_source_complete")) {
+      db.exec("ALTER TABLE snapshots ADD COLUMN composition_source_complete INTEGER");
+    }
+    if (!snapshotColumns.has("composition_truncated")) {
+      db.exec("ALTER TABLE snapshots ADD COLUMN composition_truncated INTEGER");
+    }
+    if (!snapshotColumns.has("composition_aggregate_claims_json")) {
+      db.exec("ALTER TABLE snapshots ADD COLUMN composition_aggregate_claims_json TEXT");
+    }
+    if (!snapshotColumns.has("composition_limits_json")) {
+      db.exec("ALTER TABLE snapshots ADD COLUMN composition_limits_json TEXT");
     }
     if (!coverageColumns.has("admitted_files")) {
       db.exec("ALTER TABLE snapshot_index_coverage ADD COLUMN admitted_files INTEGER");
@@ -4999,6 +5237,7 @@ function validateSchema(db: Database.Database): boolean {
     "docs_documents",
     "docs_headings",
     "docs_fts",
+    "snapshot_repository_units",
     "snapshot_index_coverage",
     "documentation_concern_index_state",
     "documentation_concerns",
@@ -5027,6 +5266,51 @@ function parseMetadataJson(text: string): Record<string, unknown> {
   return {};
 }
 
+function mapSnapshotRepositoryUnitRow(row: SnapshotRepositoryUnitRow): SnapshotRepositoryUnit {
+  return {
+    repository_key: row.repository_key,
+    parent_repository_key: row.parent_repository_key ?? undefined,
+    path_prefix: row.path_prefix,
+    depth: row.depth,
+    state: row.state,
+    declaration_path: row.declaration_path ?? undefined,
+    head_gitlink_oid: row.head_gitlink_oid ?? undefined,
+    index_gitlink_oid: row.index_gitlink_oid ?? undefined,
+    worktree_head_oid: row.worktree_head_oid ?? undefined,
+    pinned_revision_matches: row.pinned_revision_matches === null ? "unknown" : row.pinned_revision_matches === 1,
+    cleanliness: row.cleanliness,
+    source_available: row.source_available === 1,
+    evidence_paths: parseStringArrayJson(row.evidence_paths_json) ?? [],
+    claim_blockers: parseSnapshotRepositoryClaimBlockersJson(row.claim_blockers_json)
+  };
+}
+
+function insertSnapshotRepositoryUnit(
+  statement: Database.Statement,
+  snapshotId: number,
+  unit: SnapshotRepositoryUnit,
+  receiptGroup: SnapshotRepositoryUnitRow["receipt_group"]
+): void {
+  statement.run({
+    snapshotId,
+    repositoryKey: unit.repository_key,
+    parentRepositoryKey: unit.parent_repository_key ?? null,
+    pathPrefix: unit.path_prefix,
+    depth: unit.depth,
+    state: unit.state,
+    declarationPath: unit.declaration_path ?? null,
+    headGitlinkOid: unit.head_gitlink_oid ?? null,
+    indexGitlinkOid: unit.index_gitlink_oid ?? null,
+    worktreeHeadOid: unit.worktree_head_oid ?? null,
+    pinnedRevisionMatches: unit.pinned_revision_matches === "unknown" ? null : unit.pinned_revision_matches ? 1 : 0,
+    cleanliness: unit.cleanliness,
+    sourceAvailable: unit.source_available ? 1 : 0,
+    evidencePathsJson: JSON.stringify(unit.evidence_paths),
+    claimBlockersJson: JSON.stringify(unit.claim_blockers),
+    receiptGroup
+  });
+}
+
 function parseStringArrayJson(text: string | null): string[] | undefined {
   if (text === null) {
     return undefined;
@@ -5038,6 +5322,85 @@ function parseStringArrayJson(text: string | null): string[] | undefined {
       : undefined;
   } catch {
     return undefined;
+  }
+}
+
+function parseSnapshotRepositoryAggregateClaimsJson(
+  text: string | null
+): SnapshotRepositoryComposition["aggregate_claims"] {
+  if (text === null) {
+    return {
+      worktree_cleanliness: "blocked",
+      pinned_composition: "blocked"
+    };
+  }
+  try {
+    const value = JSON.parse(text) as SnapshotRepositoryComposition["aggregate_claims"];
+    if (
+      value !== null &&
+      typeof value === "object" &&
+      (value.worktree_cleanliness === "clean" ||
+        value.worktree_cleanliness === "dirty" ||
+        value.worktree_cleanliness === "blocked") &&
+      (value.pinned_composition === "complete" ||
+        value.pinned_composition === "mismatch" ||
+        value.pinned_composition === "blocked")
+    ) {
+      return value;
+    }
+  } catch {
+    return {
+      worktree_cleanliness: "blocked",
+      pinned_composition: "blocked"
+    };
+  }
+  return {
+    worktree_cleanliness: "blocked",
+    pinned_composition: "blocked"
+  };
+}
+
+function parseSnapshotRepositoryCompositionLimitsJson(
+  text: string | null
+): SnapshotRepositoryCompositionLimit[] {
+  if (text === null) {
+    return [];
+  }
+  try {
+    const value = JSON.parse(text) as unknown;
+    return Array.isArray(value) &&
+        value.every((item) =>
+          typeof item === "object" &&
+          item !== null &&
+          (((item as { kind?: unknown }).kind === "max_depth_exceeded") ||
+            ((item as { kind?: unknown }).kind === "max_repositories_exceeded")) &&
+          typeof (item as { path_prefix?: unknown }).path_prefix === "string" &&
+          Number.isInteger((item as { limit?: unknown }).limit) &&
+          typeof (item as { message?: unknown }).message === "string")
+      ? value as SnapshotRepositoryCompositionLimit[]
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseSnapshotRepositoryClaimBlockersJson(text: string): SnapshotRepositoryClaimBlocker[] {
+  try {
+    const value = JSON.parse(text) as unknown;
+    return Array.isArray(value) &&
+        value.every((item) =>
+          typeof item === "object" &&
+          item !== null &&
+          typeof (item as { kind?: unknown }).kind === "string" &&
+          typeof (item as { path_prefix?: unknown }).path_prefix === "string" &&
+          typeof (item as { message?: unknown }).message === "string" &&
+          Array.isArray((item as { evidence_paths?: unknown }).evidence_paths) &&
+          Array.isArray((item as { blocked_claims?: unknown }).blocked_claims)
+        )
+      ? value as SnapshotRepositoryClaimBlocker[]
+      : [];
+  } catch {
+    return [];
   }
 }
 
@@ -5057,4 +5420,12 @@ function parseDocumentationCorpusExclusionsJson(text: string | null): Documentat
   } catch {
     return undefined;
   }
+}
+
+function normalizeRepositoryLookupPath(candidate: string): string {
+  const normalized = candidate.replaceAll("\\", "/").replace(/^\.\/+/u, "").replace(/^\/+/u, "");
+  if (normalized === "" || normalized === ".") {
+    return ".";
+  }
+  return normalized.replace(/\/+/gu, "/").replace(/\/$/u, "");
 }

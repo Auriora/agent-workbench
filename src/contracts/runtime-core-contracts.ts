@@ -163,6 +163,7 @@ export const snapshotValidityReceiptSchema = z
     missing_paths: z.array(z.string()),
     inaccessible_paths: z.array(z.string()),
     changed_paths: z.array(z.string()).optional(),
+    composition_changed: z.boolean().optional(),
     refresh_required: z.boolean(),
     reason: z.string().optional()
   })
@@ -187,7 +188,8 @@ export const snapshotValidityReceiptSchema = z
       });
     }
     const staleChangedOrMissing = value.missing_paths.length + (value.changed_paths ?? []).length;
-    if (value.state === "stale" && (staleChangedOrMissing === 0 || !value.refresh_required)) {
+    if (value.state === "stale" &&
+      ((staleChangedOrMissing === 0 && value.composition_changed !== true) || !value.refresh_required)) {
       context.addIssue({
         code: "custom",
         message: "A stale snapshot receipt requires missing or changed paths and refresh_required."
@@ -201,6 +203,84 @@ export const snapshotValidityReceiptSchema = z
     }
   });
 export type SnapshotValidityReceipt = z.infer<typeof snapshotValidityReceiptSchema>;
+
+export const repositoryCompositionClaimBlockerSchema = z
+  .object({
+    kind: z.enum([
+      "git_metadata_unavailable",
+      "declaration_without_gitlink",
+      "orphan_gitlink",
+      "path_blocked",
+      "cycle_blocked",
+      "limit_blocked"
+    ]),
+    path_prefix: z.string(),
+    evidence_paths: z.array(z.string()),
+    blocked_claims: z.array(z.enum([
+      "source_availability",
+      "repository_traversal",
+      "pinned_composition",
+      "worktree_cleanliness"
+    ]))
+  })
+  .strict();
+export type RepositoryCompositionClaimBlocker = z.infer<typeof repositoryCompositionClaimBlockerSchema>;
+
+export const repositoryCompositionUnitSummarySchema = z
+  .object({
+    repository_key: z.string(),
+    parent_repository_key: z.string().optional(),
+    path_prefix: z.string(),
+    depth: z.number().int().nonnegative(),
+    state: z.string(),
+    declaration_path: z.string().optional(),
+    head_gitlink_oid: z.string().optional(),
+    index_gitlink_oid: z.string().optional(),
+    worktree_head_oid: z.string().optional(),
+    pinned_revision_matches: z.union([z.boolean(), z.literal("unknown")]),
+    cleanliness: z.enum(["clean", "dirty", "unknown", "unavailable"]),
+    source_available: z.boolean(),
+    evidence_paths: z.array(z.string()),
+    claim_blockers: z.array(repositoryCompositionClaimBlockerSchema)
+  })
+  .strict();
+export type RepositoryCompositionUnitSummary = z.infer<typeof repositoryCompositionUnitSummarySchema>;
+
+export const repositoryCompositionLimitSummarySchema = z
+  .object({
+    kind: z.enum(["max_depth_exceeded", "max_repositories_exceeded"]),
+    path_prefix: z.string(),
+    limit: z.number().int().nonnegative()
+  })
+  .strict();
+export type RepositoryCompositionLimitSummary = z.infer<typeof repositoryCompositionLimitSummarySchema>;
+
+export const repositoryCompositionSummarySchema = z
+  .object({
+    composition_fingerprint: z.string(),
+    source_complete: z.boolean(),
+    truncated: z.boolean(),
+    aggregate_claims: z
+      .object({
+        worktree_cleanliness: z.enum(["clean", "dirty", "blocked"]),
+        pinned_composition: z.enum(["complete", "mismatch", "blocked"])
+      })
+      .strict(),
+    repositories: z.array(repositoryCompositionUnitSummarySchema),
+    skipped_or_blocked: z.array(repositoryCompositionUnitSummarySchema),
+    limits: z.array(repositoryCompositionLimitSummarySchema)
+  })
+  .strict();
+export type RepositoryCompositionSummary = z.infer<typeof repositoryCompositionSummarySchema>;
+
+export const evidenceRepositoryReferenceSchema = z
+  .object({
+    repository_key: z.string().min(1).max(300),
+    path_prefix: z.string().min(1).max(500),
+    state: z.string().min(1).max(100)
+  })
+  .strict();
+export type EvidenceRepositoryReference = z.infer<typeof evidenceRepositoryReferenceSchema>;
 
 export const DEFAULT_WORKSPACE_WATCHER_ENABLED = false as const;
 export const DEFAULT_WORKSPACE_WATCHER_DEBOUNCE_MS = 250;
@@ -222,7 +302,8 @@ export const fileReferenceSchema = z
     exists: z.boolean(),
     capability_level: capabilityLevelSchema,
     evidence_kinds: z.array(evidenceKindSchema),
-    reason: z.string()
+    reason: z.string(),
+    repository: evidenceRepositoryReferenceSchema.optional()
   })
   .strict();
 export type FileReference = z.infer<typeof fileReferenceSchema>;
@@ -266,6 +347,7 @@ export const documentReferenceSchema = z
     doc_status: documentStatusSchema.optional(),
     authority: documentAuthoritySchema.optional(),
     authority_caveat: z.string().optional(),
+    repository: evidenceRepositoryReferenceSchema.optional(),
     ...documentCurrencyFieldsSchema.shape
   })
   .strict();

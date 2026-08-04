@@ -14,7 +14,14 @@ import {
   FileCatalogScannerAdapter,
   WorkspaceFileAdapter
 } from "../../src/infrastructure/filesystem/index.js";
-import type { FileCatalogScanPort } from "../../src/ports/index.js";
+import type {
+  CommandCancellation,
+  GitCleanlinessInspectionResult,
+  GitGitlinkInspectionResult,
+  GitHeadInspectionResult,
+  GitRepositoryCompositionPort,
+  FileCatalogScanPort
+} from "../../src/ports/index.js";
 import { verificationPlanTool } from "../../src/interface-adapters/mcp/registries/tools/verification-plan.js";
 import { verificationPlanSchema } from "../../src/contracts/index.js";
 import { buildVerificationPlanEnvelope } from "../../src/presentation/verification-plan-presenter.js";
@@ -1868,6 +1875,67 @@ describe("verification_plan use case", () => {
   });
 });
 
+class StaticSubmoduleGitPort implements GitRepositoryCompositionPort {
+  private readonly superprojectRoot: string;
+  private readonly submodulePath: string;
+  private readonly pinnedObjectId: string;
+
+  public constructor(input: {
+    superprojectRoot: string;
+    submodulePath: string;
+    pinnedObjectId: string;
+  }) {
+    this.superprojectRoot = path.resolve(input.superprojectRoot);
+    this.submodulePath = input.submodulePath;
+    this.pinnedObjectId = input.pinnedObjectId;
+  }
+
+  public async inspectSuperprojectGitlinks(input: {
+    repo_root: string;
+    cancellation?: CommandCancellation;
+  }): Promise<GitGitlinkInspectionResult> {
+    void input.cancellation;
+    return path.resolve(input.repo_root) === this.superprojectRoot
+      ? {
+          status: "available",
+          committed_gitlinks: [{ path: this.submodulePath, object_id: this.pinnedObjectId }],
+          index_gitlinks: [{ path: this.submodulePath, object_id: this.pinnedObjectId }]
+        }
+      : {
+          status: "available",
+          committed_gitlinks: [],
+          index_gitlinks: []
+        };
+  }
+
+  public async inspectRepositoryHead(input: {
+    repo_root: string;
+    cancellation?: CommandCancellation;
+  }): Promise<GitHeadInspectionResult> {
+    void input.cancellation;
+    return {
+      status: "available",
+      head_object_id: path.resolve(input.repo_root) === this.superprojectRoot
+        ? "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        : this.pinnedObjectId,
+      evidence_paths: [".git/HEAD"]
+    };
+  }
+
+  public async inspectRepositoryCleanliness(input: {
+    repo_root: string;
+    cancellation?: CommandCancellation;
+  }): Promise<GitCleanlinessInspectionResult> {
+    void input.repo_root;
+    void input.cancellation;
+    return {
+      status: "available",
+      cleanliness: "clean",
+      changed_paths: []
+    };
+  }
+}
+
 describe("verification_plan MCP tool", () => {
   it("uses the injected verification provider", async () => {
     const fixtureResult: PlanVerificationResult = {
@@ -2159,6 +2227,106 @@ describe("verification_plan MCP tool", () => {
     const envelope = buildVerificationPlanEnvelope(result);
     expect(envelope.data.project_units).toEqual(result.plan.project_units);
     expect(JSON.stringify(envelope)).not.toContain("declared-submodule-placeholder.git");
+  });
+
+  it("scopes selected initialized submodule validation to repository-local evidence", async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-submodule-validation-"));
+    try {
+      fs.mkdirSync(path.join(repoRoot, "vendor", "widget", "src"), { recursive: true });
+      fs.mkdirSync(path.join(repoRoot, ".git"), { recursive: true });
+      fs.writeFileSync(
+        path.join(repoRoot, ".gitmodules"),
+        [
+          "[submodule \"vendor/widget\"]",
+          "\tpath = vendor/widget",
+          "\turl = https://example.invalid/widget.git"
+        ].join("\n")
+      );
+      fs.writeFileSync(
+        path.join(repoRoot, "package.json"),
+        JSON.stringify({ scripts: { test: "vitest run", typecheck: "tsc --noEmit" } }, null, 2)
+      );
+      fs.writeFileSync(
+        path.join(repoRoot, "AGENTS.md"),
+        "Run project commands through Docker. Use `docker compose run --rm test`.\n"
+      );
+      fs.writeFileSync(path.join(repoRoot, "vendor", "widget", ".git"), "gitdir: ../../.git/modules/vendor/widget\n");
+      fs.writeFileSync(
+        path.join(repoRoot, "vendor", "widget", "package.json"),
+        JSON.stringify({ scripts: { lint: "eslint src" } }, null, 2)
+      );
+      fs.writeFileSync(path.join(repoRoot, "vendor", "widget", "src", "app.ts"), "export const value = 1;\n");
+
+      const result = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["vendor/widget/src/app.ts"],
+          changed_files: ["vendor/widget/src/app.ts"],
+          include_static_feedback: true,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        git: new StaticSubmoduleGitPort({
+          superprojectRoot: repoRoot,
+          submodulePath: "vendor/widget",
+          pinnedObjectId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }),
+        default_repo_root: "."
+      });
+
+      expect(result.plan.status).toBe("planned");
+      expect(result.plan.static_feedback).toBeUndefined();
+      expect(result.plan.planned_commands).toEqual([
+        expect.objectContaining({
+          display: "pnpm run lint",
+          execution: "not_executed",
+          repository: {
+            repository_key: "submodule:vendor/widget",
+            path_prefix: "vendor/widget",
+            state: "initialized"
+          }
+        })
+      ]);
+      expect(result.plan.planned_commands.map((command) => command.display)).not.toContain("pnpm run test");
+      expect(result.plan.planned_commands.map((command) => command.display)).not.toContain("pnpm run typecheck");
+      expect(result.plan.planned_commands.map((command) => command.display)).not.toContain("docker compose run --rm test");
+
+      const envelope = buildVerificationPlanEnvelope(result);
+      expect(envelope.data.planned_commands[0]?.repository).toEqual({
+        repository_key: "submodule:vendor/widget",
+        path_prefix: "vendor/widget",
+        state: "initialized"
+      });
+
+      const mixed = await planVerification({
+        request: {
+          repo_root: repoRoot,
+          files: ["package.json", "vendor/widget/src/app.ts"],
+          changed_files: ["package.json", "vendor/widget/src/app.ts"],
+          include_static_feedback: false,
+          max_commands: 10
+        },
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        git: new StaticSubmoduleGitPort({
+          superprojectRoot: repoRoot,
+          submodulePath: "vendor/widget",
+          pinnedObjectId: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }),
+        default_repo_root: "."
+      });
+      expect(mixed.plan.status).toBe("blocked");
+      expect(mixed.plan.planned_commands).toEqual([]);
+      expect(mixed.plan.risks).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          severity: "blocker",
+          message: "Selected paths span multiple repositories without explicit repository aggregation evidence."
+        })
+      ]));
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 
   it.each([

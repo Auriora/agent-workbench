@@ -12,7 +12,9 @@ import {
   createSkippedPathPopulationAccumulator,
   mergeSkippedRoots,
   normalizeCatalogPath,
-  type GitignoreRule
+  type GitignoreRule,
+  type RepositoryCompositionAdmissionReceipt,
+  type RepositoryCompositionAdmissionUnit
 } from "../../domain/policies/index.js";
 import type {
   FileCatalogScanPort,
@@ -40,6 +42,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     after_path?: string;
     priority_paths?: readonly string[];
     priority_path_patterns?: readonly string[];
+    repository_composition?: RepositoryCompositionAdmissionReceipt;
   }): Promise<FileCatalogScanResult> {
     if (!Number.isSafeInteger(input.max_files) || input.max_files <= 0) {
       throw new TypeError("max_files must be a positive safe integer.");
@@ -50,12 +53,12 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     const skippedPaths: FileCatalogSkippedPath[] = [];
     const skippedPathPopulation = createSkippedPathPopulationAccumulator<FileCatalogSkippedPath["reason"]>();
     const skippedRoots = new Set(input.skipped_roots);
-    const gitignoreRules = readRootIgnoreRules(repoRoot);
     const recordSkippedPath = skippedPathRecorder(skippedPaths, skippedPathPopulation);
     const prioritizedPaths = normalizeCatalogPaths(input.priority_paths ?? []);
     const prioritizedPathPatterns = normalizeCatalogPatterns(input.priority_path_patterns ?? []);
     const prioritySet = new Set<string>();
     const admittedPriorityPaths: string[] = [];
+    const scanUnits = buildScanUnits(repoRoot, indexedRoots, input.repository_composition);
     let truncated = false;
     let continuationCursor: string | undefined;
     const normalizedAfterPath = input.after_path === undefined
@@ -79,11 +82,13 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       if (!fs.existsSync(absolutePath)) {
         continue;
       }
+      const owner = findOwningScanUnit(scanUnits, requestedPath);
+      const ownerRelativePath = toOwnerRelativePath(owner, requestedPath);
       const reason = catalogSkipReason({
-        relativePath: requestedPath,
+        relativePath: ownerRelativePath,
         isDirectory: false,
         skippedRoots: input.skipped_roots,
-        gitignoreRules,
+        gitignoreRules: owner.gitignoreRules,
         hasNestedGitRepository: false
       });
       if (reason !== null) {
@@ -96,53 +101,59 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     const discoveredPaths = new Set<string>(admittedPriorityPaths);
     const discoveredFiles: string[] = [];
 
-    for (const indexedRoot of indexedRoots) {
-      const absoluteRoot = path.resolve(repoRoot, indexedRoot);
-      if (!isInsideRepo(repoRoot, absoluteRoot) || fs.existsSync(absoluteRoot) === false) {
-        continue;
-      }
-
-      const rootStats = fs.statSync(absoluteRoot);
-      if (rootStats.isFile()) {
-        const candidatePath = normalizeCatalogPath(path.relative(repoRoot, absoluteRoot));
-        if (!discoveredPaths.has(candidatePath)) {
-          const reason = catalogSkipReason({
-            relativePath: candidatePath,
-            isDirectory: false,
-            skippedRoots: input.skipped_roots,
-            gitignoreRules,
-            hasNestedGitRepository: false
-          });
-          if (reason !== null) {
-            recordSkippedPath({
-              path: candidatePath,
-              reason,
-              detail: catalogSkipDetail(reason)
-            });
-          } else {
-            discoveredFiles.push(candidatePath);
-            discoveredPaths.add(candidatePath);
-          }
-        }
-        continue;
-      }
-
-      const candidates = await this.scanDirectory({
-        repoRoot,
-        directory: absoluteRoot,
-        indexedRoots,
-        skippedRoots: input.skipped_roots,
-        gitignoreRules,
-        recordSkippedRoot: (root) => skippedRoots.add(root),
-        recordSkippedPath
-      });
-      for (const candidatePath of candidates) {
-        if (discoveredPaths.has(candidatePath)) {
+    for (const unit of scanUnits) {
+      for (const indexedRoot of unit.indexedRoots) {
+        const absoluteRoot = path.resolve(unit.absoluteRoot, indexedRoot);
+        if (!isInsideRepo(repoRoot, absoluteRoot) || fs.existsSync(absoluteRoot) === false) {
           continue;
         }
-        discoveredFiles.push(candidatePath);
-        discoveredPaths.add(candidatePath);
+
+        const rootStats = fs.statSync(absoluteRoot);
+        if (rootStats.isFile()) {
+          const candidatePath = toGlobalPath(unit, normalizeCatalogPath(path.relative(unit.absoluteRoot, absoluteRoot)));
+          if (!discoveredPaths.has(candidatePath)) {
+            const reason = catalogSkipReason({
+              relativePath: normalizeCatalogPath(path.relative(unit.absoluteRoot, absoluteRoot)),
+              isDirectory: false,
+              skippedRoots: input.skipped_roots,
+              gitignoreRules: unit.gitignoreRules,
+              hasNestedGitRepository: false
+            });
+            if (reason !== null) {
+              recordSkippedPath({
+                path: candidatePath,
+                reason,
+                detail: catalogSkipDetail(reason)
+              });
+            } else {
+              discoveredFiles.push(candidatePath);
+              discoveredPaths.add(candidatePath);
+            }
+          }
+          continue;
+        }
+
+        const candidates = await this.scanDirectory({
+          repoRoot,
+          unit,
+          directory: absoluteRoot,
+          skippedRoots: input.skipped_roots,
+          recordSkippedRoot: (root) => skippedRoots.add(root),
+          recordSkippedPath,
+          admittedRepositoryRoots: unit.admittedRepositoryRoots
+        });
+        for (const candidatePath of candidates) {
+          if (discoveredPaths.has(candidatePath)) {
+            continue;
+          }
+          discoveredFiles.push(candidatePath);
+          discoveredPaths.add(candidatePath);
+        }
       }
+    }
+
+    if (input.repository_composition !== undefined) {
+      discoveredFiles.sort((left, right) => left.localeCompare(right));
     }
 
     const { prioritizedPaths: discoveredPriorityPaths, remainingPaths } = prioritizeDiscoveredPathsByPattern(
@@ -163,15 +174,15 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
         break;
       }
       const relativePath = normalizeCatalogPath(combinedPaths[index]);
+      const owner = findOwningScanUnit(scanUnits, relativePath);
       const absolutePath = path.resolve(repoRoot, relativePath);
       const beforeCount = entries.length;
 
       await this.scanFile({
         repoRoot,
+        unit: owner,
         absolutePath,
-        indexedRoots,
         skippedRoots: input.skipped_roots,
-        gitignoreRules,
         recordSkippedRoot: (root) => {
           skippedRoots.add(root);
         },
@@ -205,12 +216,12 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
 
   private async scanDirectory(input: {
     repoRoot: string;
+    unit: ScanUnit;
     directory: string;
-    indexedRoots: readonly string[];
     skippedRoots: readonly string[];
-    gitignoreRules: readonly GitignoreRule[];
     recordSkippedRoot: (root: string) => void;
     recordSkippedPath: (skipped: FileCatalogSkippedPath) => void;
+    admittedRepositoryRoots: ReadonlySet<string>;
   }): Promise<string[]> {
     const discoveredPaths: string[] = [];
 
@@ -227,12 +238,16 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
 
     for (const child of children) {
       const absolutePath = path.join(input.directory, child.name);
-      const relativePath = normalizeCatalogPath(path.relative(input.repoRoot, absolutePath));
+      const localRelativePath = normalizeCatalogPath(path.relative(input.unit.absoluteRoot, absolutePath));
+      const relativePath = toGlobalPath(input.unit, localRelativePath);
+      if (child.isDirectory() && input.admittedRepositoryRoots.has(relativePath)) {
+        continue;
+      }
       const skipReason = catalogSkipReason({
-        relativePath,
+        relativePath: localRelativePath,
         isDirectory: child.isDirectory(),
         skippedRoots: input.skippedRoots,
-        gitignoreRules: input.gitignoreRules,
+        gitignoreRules: input.unit.gitignoreRules,
         hasNestedGitRepository: child.isDirectory() && isNestedGitRepository(input.repoRoot, absolutePath)
       });
       if (skipReason !== null) {
@@ -262,10 +277,9 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
 
   private async scanFile(input: {
     repoRoot: string;
+    unit: ScanUnit;
     absolutePath: string;
-    indexedRoots: readonly string[];
     skippedRoots: readonly string[];
-    gitignoreRules: readonly GitignoreRule[];
     recordSkippedRoot: (root: string) => void;
     recordSkippedPath: (skipped: FileCatalogSkippedPath) => void;
     maxFiles: number;
@@ -278,11 +292,12 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     }
 
     const relativePath = normalizeCatalogPath(path.relative(input.repoRoot, input.absolutePath));
+    const localRelativePath = normalizeCatalogPath(path.relative(input.unit.absoluteRoot, input.absolutePath));
     const skipReason = catalogSkipReason({
-      relativePath,
+      relativePath: localRelativePath,
       isDirectory: false,
       skippedRoots: input.skippedRoots,
-      gitignoreRules: input.gitignoreRules,
+      gitignoreRules: input.unit.gitignoreRules,
       hasNestedGitRepository: false
     });
     if (skipReason !== null) {
@@ -316,6 +331,182 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       })
     );
   }
+}
+
+type ScanUnit = {
+  pathPrefix: string;
+  absoluteRoot: string;
+  gitignoreRules: readonly GitignoreRule[];
+  indexedRoots: readonly string[];
+  admittedRepositoryRoots: ReadonlySet<string>;
+};
+
+function buildScanUnits(
+  repoRoot: string,
+  indexedRoots: readonly string[],
+  repositoryComposition?: RepositoryCompositionAdmissionReceipt
+): readonly ScanUnit[] {
+  const admittedUnits = listAdmittedUnits(repositoryComposition);
+  const admittedRoots = new Set(admittedUnits.map((unit) => unit.pathPrefix).filter((pathPrefix) => pathPrefix.length > 0));
+  const units = admittedUnits.length === 0
+    ? [{ pathPrefix: "", absoluteRoot: repoRoot }]
+    : admittedUnits.map((unit) => ({
+        pathPrefix: unit.pathPrefix,
+        absoluteRoot: path.resolve(repoRoot, unit.pathPrefix)
+      }));
+
+  return units
+    .map((unit) => ({
+      pathPrefix: unit.pathPrefix,
+      absoluteRoot: unit.absoluteRoot,
+      gitignoreRules: readRootIgnoreRules(unit.absoluteRoot),
+      indexedRoots: indexedRootsForUnit(unit.pathPrefix, indexedRoots, admittedRoots),
+      admittedRepositoryRoots: descendantRepositoryRoots(unit.pathPrefix, admittedRoots)
+    }))
+    .filter((unit) => unit.indexedRoots.length > 0);
+}
+
+function listAdmittedUnits(
+  repositoryComposition?: RepositoryCompositionAdmissionReceipt
+): readonly { pathPrefix: string; source_available: boolean }[] {
+  if (repositoryComposition === undefined) {
+    return [];
+  }
+
+  const units = repositoryComposition.repositories
+    .filter((unit) => isInitializedDeclaredSubmoduleUnit(unit) || normalizeCompositionPathPrefix(unit.path_prefix) === "")
+    .map((unit) => ({
+      pathPrefix: normalizeCompositionPathPrefix(unit.path_prefix),
+      source_available: unit.source_available
+    }))
+    .filter((unit) => unit.pathPrefix === "" || unit.source_available)
+    .sort((left, right) => left.pathPrefix.localeCompare(right.pathPrefix));
+
+  return units.some((unit) => unit.pathPrefix === "")
+    ? units
+    : [{ pathPrefix: "", source_available: true }, ...units];
+}
+
+function isInitializedDeclaredSubmoduleUnit(unit: RepositoryCompositionAdmissionUnit): boolean {
+  return (
+    normalizeCompositionPathPrefix(unit.path_prefix).length > 0 &&
+    (unit.state === "initialized" || unit.state === "worktree_revision_mismatch" || unit.state === "metadata_unavailable") &&
+    unit.source_available === true &&
+    typeof unit.declaration_path === "string" &&
+    unit.declaration_path.length > 0 &&
+    typeof unit.head_gitlink_oid === "string" &&
+    unit.head_gitlink_oid.length > 0
+  );
+}
+
+function normalizeCompositionPathPrefix(pathPrefix: string): string {
+  const normalized = normalizeCatalogPath(pathPrefix).replace(/^\.\/+/u, "").replace(/\/+$/u, "");
+  return normalized === "." ? "" : normalized;
+}
+
+function indexedRootsForUnit(
+  unitPathPrefix: string,
+  indexedRoots: readonly string[],
+  admittedRoots: ReadonlySet<string>
+): string[] {
+  const requestedRoots = indexedRoots.length > 0 ? indexedRoots : ["."];
+  const localRoots = new Set<string>();
+
+  for (const requestedRoot of requestedRoots) {
+    const normalizedRoot = normalizeRelativeSelector(requestedRoot);
+    if (unitPathPrefix.length === 0) {
+      if (normalizedRoot.length === 0) {
+        localRoots.add(".");
+        continue;
+      }
+      if (pathBelongsToNestedUnit(normalizedRoot, admittedRoots)) {
+        continue;
+      }
+      localRoots.add(normalizedRoot);
+      continue;
+    }
+
+    if (normalizedRoot.length === 0 || isPathPrefix(normalizedRoot, unitPathPrefix)) {
+      localRoots.add(".");
+      continue;
+    }
+    if (isPathPrefix(unitPathPrefix, normalizedRoot)) {
+      const suffix = normalizedRoot.slice(unitPathPrefix.length).replace(/^\/+/u, "");
+      localRoots.add(suffix.length === 0 ? "." : suffix);
+    }
+  }
+
+  return Array.from(localRoots).sort();
+}
+
+function descendantRepositoryRoots(
+  unitPathPrefix: string,
+  admittedRoots: ReadonlySet<string>
+): ReadonlySet<string> {
+  const descendants = new Set<string>();
+  for (const admittedRoot of admittedRoots) {
+    if (admittedRoot.length === 0 || admittedRoot === unitPathPrefix) {
+      continue;
+    }
+    if (unitPathPrefix.length === 0 || admittedRoot.startsWith(`${unitPathPrefix}/`)) {
+      descendants.add(admittedRoot);
+    }
+  }
+  return descendants;
+}
+
+function pathBelongsToNestedUnit(pathValue: string, admittedRoots: ReadonlySet<string>): boolean {
+  for (const admittedRoot of admittedRoots) {
+    if (admittedRoot.length > 0 && (pathValue === admittedRoot || pathValue.startsWith(`${admittedRoot}/`))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function findOwningScanUnit(units: readonly ScanUnit[], relativePath: string): ScanUnit {
+  const normalizedPath = normalizeCatalogPath(relativePath).replace(/^\.\/+/u, "").replace(/\/+$/u, "");
+  let owner = units[0];
+  for (const unit of units) {
+    if (
+      unit.pathPrefix.length > owner.pathPrefix.length &&
+      (normalizedPath === unit.pathPrefix || normalizedPath.startsWith(`${unit.pathPrefix}/`))
+    ) {
+      owner = unit;
+    }
+  }
+  return owner;
+}
+
+function toOwnerRelativePath(unit: ScanUnit, relativePath: string): string {
+  if (unit.pathPrefix.length === 0) {
+    return normalizeCatalogPath(relativePath);
+  }
+  const normalized = normalizeCatalogPath(relativePath);
+  if (normalized === unit.pathPrefix) {
+    return ".";
+  }
+  return normalized.slice(unit.pathPrefix.length + 1);
+}
+
+function toGlobalPath(unit: ScanUnit, localRelativePath: string): string {
+  const normalizedLocalPath = normalizeCatalogPath(localRelativePath).replace(/^\.\/+/u, "").replace(/\/+$/u, "");
+  if (unit.pathPrefix.length === 0) {
+    return normalizedLocalPath.length === 0 ? "." : normalizedLocalPath;
+  }
+  if (normalizedLocalPath.length === 0 || normalizedLocalPath === ".") {
+    return unit.pathPrefix;
+  }
+  return `${unit.pathPrefix}/${normalizedLocalPath}`;
+}
+
+function isPathPrefix(prefix: string, candidate: string): boolean {
+  return candidate === prefix || candidate.startsWith(`${prefix}/`);
+}
+
+function normalizeRelativeSelector(value: string): string {
+  const normalized = normalizeCatalogPath(value).replace(/^\.\/+/u, "").replace(/\/+$/u, "");
+  return normalized === "." ? "" : normalized;
 }
 
 function readDirectoryOrSkip(input: {

@@ -113,6 +113,9 @@ other external tools.
   refactor planning use case.
 - Validation planning, command discovery, command safety, execution, result
   capture, and result presentation are separate responsibilities.
+- Repository-composition discovery is an application use case backed by
+  workspace and Git metadata ports. It must not live in MCP adapters,
+  presenters, extractors, or scanner policy.
 - Reports consume graph read models through reporting ports; they do not query
   raw SQLite tables directly.
 - Refresh policy is an application/runtime service behind narrow operation
@@ -184,6 +187,9 @@ MVP ports:
 - `ExtractorRegistryPort`
 - `ReferenceResolverPort`
 - `ValidationPlannerPort`
+- `CommandPort`
+- `GitMetadataPort`
+- `RepositoryCompositionPort`
 - `EditPreviewStorePort`
 - `WorkspaceSafetyPolicy`
 - `FreshnessPolicy`

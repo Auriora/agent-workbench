@@ -14,6 +14,7 @@ import type {
   IntegrationHealth,
   IntegrationSurfaceHealth,
   NextAction,
+  RepositoryCompositionSummary,
   ResponseEnvelope,
   ResponseMetadata,
   RuntimeError,
@@ -799,6 +800,7 @@ export function buildRuntimeResponseMeta(input: {
   verification_status?: VerificationStatus;
   truncated?: boolean;
   budget?: ResponseMetadata["budget"];
+  repositoryComposition?: RepositoryCompositionSummary;
 }): {
   classification: RuntimeTrustClassification;
   meta: ResponseMetadata;
@@ -840,6 +842,7 @@ export function buildRuntimeResponseMeta(input: {
         input.verification_status ?? (input.watcher?.refresh_admission === undefined ? "needed" : "blocked"),
       truncated: input.truncated ?? false,
       budget: input.budget,
+      repositoryComposition: input.repositoryComposition,
       caveats
     })
   };
@@ -1048,6 +1051,7 @@ export function buildResponseMeta(input: {
   verification_status: VerificationStatus;
   truncated?: boolean;
   budget?: ResponseMetadata["budget"];
+  repositoryComposition?: RepositoryCompositionSummary;
   caveats?: readonly RuntimeStatusCaveat[];
 }): ResponseMetadata {
   const fileCapabilities = input.files?.map((file) => file.capability_level) ?? [];
@@ -1063,6 +1067,7 @@ export function buildResponseMeta(input: {
     verification_status: input.verification_status,
     truncated: input.truncated ?? false,
     ...(input.budget === undefined ? {} : { budget: input.budget }),
+    ...(input.repositoryComposition === undefined ? {} : { repository_composition: input.repositoryComposition }),
     ...(input.caveats === undefined || input.caveats.length === 0 ? {} : { caveats: [...input.caveats] })
   };
 }

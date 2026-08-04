@@ -3,12 +3,21 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import type { EvidenceKind, ImpactRequest, ImpactResult, ResponseMetadata } from "../../contracts/index.js";
+import type {
+  EvidenceKind,
+  EvidenceRepositoryReference,
+  FileReference,
+  ImpactRequest,
+  ImpactResult,
+  ResponseMetadata,
+  SymbolReference
+} from "../../contracts/index.js";
 import type { GraphEdge, GraphNode } from "../../domain/models/index.js";
 import type { SnapshotValidityReceipt } from "../../domain/models/runtime.js";
 import type {
   FileCatalogPort,
   GraphQueryPort,
+  SnapshotRepositoryCompositionPort,
   SnapshotPort,
   SnapshotPublicationPort,
   WorkspaceFilePort
@@ -47,7 +56,7 @@ export class ImpactStartNodeNotFoundError extends Error {
 export async function computeImpact(input: {
   request: ImpactRequest;
   graph: GraphQueryPort;
-  snapshots: SnapshotPort & SnapshotPublicationPort;
+  snapshots: SnapshotPort & SnapshotPublicationPort & Partial<SnapshotRepositoryCompositionPort>;
   catalog: FileCatalogPort;
   workspace?: WorkspaceFilePort;
   snapshot_validity?: SnapshotValidityReceipt;
@@ -173,25 +182,38 @@ export async function computeImpact(input: {
     truncated: traversal.truncated
   });
 
+  const repositoryResolver = compositionResolver(input.snapshots);
+  const affectedSymbols = await Promise.all(
+    traversal.nodes.map(async (node) =>
+      attachRepositoryToSymbolReference({
+        symbol: await toSymbolReference({
+          node,
+          workspace: input.workspace,
+          source_byte_limit: 0
+        }),
+        resolver: repositoryResolver,
+        snapshot_id: resolved.snapshot_id,
+        path: node.file_path
+      })
+    )
+  );
+  const affectedFiles = await attachRepositoriesToFileReferences({
+    files: await fileReferencesForNodes({
+      nodes: traversal.nodes,
+      catalog: input.catalog,
+      snapshot_id: resolved.snapshot_id
+    }),
+    resolver: repositoryResolver,
+    snapshot_id: resolved.snapshot_id
+  });
+
   return {
     impact: {
       repo_root: resolved.repo_root,
       snapshot_id: resolved.snapshot_id,
       start_node_ids: [...traversal.start_node_ids],
-      affected_symbols: await Promise.all(
-        traversal.nodes.map((node) =>
-          toSymbolReference({
-            node,
-            workspace: input.workspace,
-            source_byte_limit: 0
-          })
-        )
-      ),
-      affected_files: await fileReferencesForNodes({
-        nodes: traversal.nodes,
-        catalog: input.catalog,
-        snapshot_id: resolved.snapshot_id
-      }),
+      affected_symbols: affectedSymbols,
+      affected_files: affectedFiles,
       edge_count: traversal.edges.length,
       reached_depth: traversal.reached_depth,
       traversal_truncated: traversal.truncated,
@@ -215,6 +237,76 @@ export async function computeImpact(input: {
       }
     }
   };
+}
+
+function compositionResolver(candidate: Partial<SnapshotRepositoryCompositionPort>): SnapshotRepositoryCompositionPort | undefined {
+  return typeof candidate.resolveRepositoryForPath === "function"
+    ? candidate as SnapshotRepositoryCompositionPort
+    : undefined;
+}
+
+async function attachRepositoriesToFileReferences(input: {
+  files: readonly FileReference[];
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id: string;
+}): Promise<FileReference[]> {
+  const cache = new Map<string, Promise<EvidenceRepositoryReference | undefined>>();
+  return Promise.all(input.files.map(async (file) => ({
+    ...file,
+    repository: await resolveEvidenceRepository({
+      resolver: input.resolver,
+      snapshot_id: input.snapshot_id,
+      path: file.path,
+      cache
+    })
+  })));
+}
+
+async function attachRepositoryToSymbolReference(input: {
+  symbol: SymbolReference;
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id: string;
+  path: string;
+}): Promise<SymbolReference> {
+  return {
+    ...input.symbol,
+    repository: await resolveEvidenceRepository({
+      resolver: input.resolver,
+      snapshot_id: input.snapshot_id,
+      path: input.path,
+      cache: new Map()
+    })
+  };
+}
+
+function resolveEvidenceRepository(input: {
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id: string;
+  path: string;
+  cache: Map<string, Promise<EvidenceRepositoryReference | undefined>>;
+}): Promise<EvidenceRepositoryReference | undefined> {
+  if (input.resolver === undefined) {
+    return Promise.resolve(undefined);
+  }
+  const cached = input.cache.get(input.path);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const resolved = input.resolver.resolveRepositoryForPath({
+    snapshot_id: input.snapshot_id,
+    path: input.path
+  }).then((unit) => {
+    if (unit === null || unit.path_prefix === ".") {
+      return undefined;
+    }
+    return {
+      repository_key: unit.repository_key,
+      path_prefix: unit.path_prefix,
+      state: unit.state
+    };
+  });
+  input.cache.set(input.path, resolved);
+  return resolved;
 }
 
 function impactConfidence(input: {

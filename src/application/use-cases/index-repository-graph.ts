@@ -15,7 +15,10 @@ import type {
   UnresolvedReference,
   UnresolvedReferenceWriteModel
 } from "../../domain/models/index.js";
-import type { SnapshotState } from "../../domain/models/runtime.js";
+import type {
+  SnapshotRepositoryComposition,
+  SnapshotState
+} from "../../domain/models/runtime.js";
 import type {
   ClockPort,
   DocumentationConcernIndexPort,
@@ -50,7 +53,8 @@ import {
 import { extractDocumentationConcernIndex } from "./document-currency-routing.js";
 import {
   partitionDocumentationCorpusPaths,
-  type DocumentationCorpusDecisionPartition
+  type DocumentationCorpusDecisionPartition,
+  type RepositoryCompositionAdmissionReceipt
 } from "../../domain/policies/index.js";
 import { type RailsDiscoveryMetadata } from "./rails-project-shape.js";
 import {
@@ -118,6 +122,7 @@ export type BuildRepositoryGraphInput = {
   append_to_existing_build?: boolean;
   mark_fresh?: boolean;
   rails_shape_files?: readonly FileCatalogEntry[];
+  repository_composition?: SnapshotRepositoryComposition;
 };
 
 const RAILS_ROUTE_PRIORITY_PATTERNS = [
@@ -169,6 +174,7 @@ export async function buildRepositoryGraph(
       config_identity: configIdentity,
       schema_version: input.schema_version,
       freshness: "refreshing",
+      repository_composition: input.repository_composition,
       now
     });
     await input.snapshots.createBuildSnapshot({
@@ -183,14 +189,15 @@ export async function buildRepositoryGraph(
     ...(input.priority_paths ?? []),
     ...DEFAULT_GRAPH_PRIORITY_PATHS
   ].map(normalizePriorityPath));
-  const scanned = await input.scanner.scan({
+  const scanned = await scanFileCatalog(input.scanner, {
     repo_root: input.repo_root,
     indexed_roots: ["."],
     skipped_roots: [],
     max_files: input.max_files ?? 2000,
     after_path: input.after_path,
     priority_paths: requestedPriorityPaths,
-    priority_path_patterns: RAILS_ROUTE_PRIORITY_PATTERNS
+    priority_path_patterns: RAILS_ROUTE_PRIORITY_PATTERNS,
+    repository_composition: input.repository_composition
   });
 
   const railsShape = detectRailsProjectShape({
@@ -287,11 +294,12 @@ export async function buildRepositoryGraph(
 
   const docsScan = input.docs_index === undefined
     ? undefined
-    : await input.scanner.scan({
+    : await scanFileCatalog(input.scanner, {
         repo_root: input.repo_root,
         indexed_roots: DOCS_INDEX_ROOTS,
         skipped_roots: [],
-        max_files: input.max_files ?? 2000
+        max_files: input.max_files ?? 2000,
+        repository_composition: input.repository_composition
       });
 
   const markdownContentByPath = new Map<string, string>();
@@ -612,13 +620,14 @@ export async function runRepositoryGraphBuildSlice(
     throw new Error("Incomplete graph build progress has no continuation cursor.");
   }
 
-  const railsShapeFiles = (await input.scanner.scan({
+  const railsShapeFiles = (await scanFileCatalog(input.scanner, {
     repo_root: input.repo_root,
     indexed_roots: ["."],
     skipped_roots: [],
     max_files: Math.max(input.max_files ?? 2000, RAILS_SHAPE_PROBE_MIN_FILES),
     priority_paths: ["Gemfile", "config/application.rb", "config/routes.rb"],
-    priority_path_patterns: RAILS_ROUTE_PRIORITY_PATTERNS
+    priority_path_patterns: RAILS_ROUTE_PRIORITY_PATTERNS,
+    repository_composition: input.repository_composition
   })).files;
   const result = await buildRepositoryGraph({
     ...input,
@@ -735,6 +744,7 @@ function graphGenerationSourceHash(input: RepositoryGraphBuildSliceInput): strin
     schema_version: input.schema_version,
     controller_generation: input.controller_generation,
     invalidation_generation: input.invalidation_generation,
+    composition_fingerprint: input.repository_composition?.composition_fingerprint ?? null,
     admission_policy: "graph-priority-v1"
   })).digest("hex");
 }
@@ -1396,6 +1406,7 @@ export async function warmupRepositoryGraph(input: {
   config_identity?: string;
   max_files?: number;
   max_extraction_files?: number;
+  repository_composition?: SnapshotRepositoryComposition;
   controller_generation?: number;
   invalidation_generation?: number;
   cache?: CachePort;
@@ -1428,6 +1439,7 @@ export async function warmupRepositoryGraph(input: {
       config_identity: input.config_identity,
       max_files: input.max_files,
       max_extraction_files: input.max_extraction_files,
+      repository_composition: input.repository_composition,
       controller_generation: input.controller_generation,
       invalidation_generation: input.invalidation_generation
     });
@@ -1482,6 +1494,7 @@ function buildSnapshot(input: {
   config_identity: string;
   schema_version: number;
   freshness: SnapshotState["freshness"];
+  repository_composition?: SnapshotRepositoryComposition;
   now: string;
 }): SnapshotState {
   return {
@@ -1494,8 +1507,25 @@ function buildSnapshot(input: {
     freshness: input.freshness,
     owner_state: "owner",
     created_at: input.now,
-    updated_at: input.now
+    updated_at: input.now,
+    composition_fingerprint: input.repository_composition?.composition_fingerprint,
+    repository_composition: input.repository_composition
   };
+}
+
+type CompositionAwareFileCatalogScanPort = {
+  scan(input: Parameters<FileCatalogScanPort["scan"]>[0] & {
+    repository_composition?: RepositoryCompositionAdmissionReceipt;
+  }): ReturnType<FileCatalogScanPort["scan"]>;
+};
+
+function scanFileCatalog(
+  scanner: FileCatalogScanPort,
+  input: Parameters<FileCatalogScanPort["scan"]>[0] & {
+    repository_composition?: SnapshotRepositoryComposition;
+  }
+): ReturnType<FileCatalogScanPort["scan"]> {
+  return (scanner as CompositionAwareFileCatalogScanPort).scan(input);
 }
 
 function resolveExtractor(input: {

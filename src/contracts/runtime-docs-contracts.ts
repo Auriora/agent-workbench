@@ -11,6 +11,7 @@ import {
   documentCurrencyStateSchema,
   documentCurrencyFieldsSchema,
   documentReferenceSchema,
+  evidenceRepositoryReferenceSchema,
   documentStatusSchema,
   evidenceKindSchema,
   evidenceCoverageStateSchema,
@@ -146,6 +147,7 @@ export const docsDocumentSchema = z
     doc_status: documentStatusSchema.optional(),
     authority: documentAuthoritySchema.optional(),
     authority_caveat: z.string().optional(),
+    repository: evidenceRepositoryReferenceSchema.optional(),
     ...documentCurrencyFieldsSchema.shape
   })
   .strict();
@@ -164,6 +166,7 @@ export const docsSearchHitSchema = z
     doc_status: documentStatusSchema.optional(),
     authority: documentAuthoritySchema.optional(),
     authority_caveat: z.string().optional(),
+    repository: evidenceRepositoryReferenceSchema.optional(),
     ...documentCurrencyFieldsSchema.shape
   })
   .strict();

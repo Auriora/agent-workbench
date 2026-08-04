@@ -14,11 +14,15 @@ import type {
   VerificationPlanRequest
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
-import { isExplicitHiddenCatalogPathAllowed } from "../../domain/policies/index.js";
+import {
+  isExplicitHiddenCatalogPathAllowed,
+  type RepositoryCompositionAdmissionReceipt
+} from "../../domain/policies/index.js";
 import type {
   FileCatalogScanPort,
   FileCatalogScanResult,
   FileCatalogSkippedPath,
+  GitRepositoryCompositionPort,
   WorkspaceFilePort
 } from "../../ports/index.js";
 import { capNextActions } from "./response-metadata.js";
@@ -89,10 +93,23 @@ import {
   boundaryForPath,
   discoverRepositoryBoundaries
 } from "./project-unit-boundaries.js";
+import { discoverRepositoryComposition } from "./repository-composition.js";
+import type {
+  RepositoryCompositionReceipt,
+  RepositoryUnitEvidence
+} from "./repository-composition-model.js";
 
 export type PlanVerificationResult = {
   plan: VerificationPlan;
   meta: ResponseMetadata;
+};
+
+type RepositoryReference = NonNullable<PlannedValidationCommand["repository"]>;
+
+type RepositoryAwareFileCatalogScanPort = Omit<FileCatalogScanPort, "scan"> & {
+  scan(input: Parameters<FileCatalogScanPort["scan"]>[0] & {
+    repository_composition?: RepositoryCompositionAdmissionReceipt;
+  }): Promise<FileCatalogScanResult>;
 };
 
 export async function planVerification(input: {
@@ -100,6 +117,8 @@ export async function planVerification(input: {
   scanner: FileCatalogScanPort;
   workspace: WorkspaceFilePort;
   default_repo_root: string;
+  git?: GitRepositoryCompositionPort;
+  canonicalize_repo_root?: (repo_root: string) => string;
 }): Promise<PlanVerificationResult> {
   const repoRoot = path.resolve(input.request.repo_root ?? input.default_repo_root);
   const selectedPaths = uniqueSorted([
@@ -107,32 +126,74 @@ export async function planVerification(input: {
     ...input.request.changed_files.map(normalizeRepoPath)
   ]);
   const unsafePaths = selectedPaths.filter(isUnsafeValidationTarget);
-  const scanned = await input.scanner.scan({
+  const composition = input.git === undefined
+    ? undefined
+    : await discoverRepositoryComposition({
+        workspace: input.workspace,
+        git: input.git,
+        repo_root: repoRoot,
+        canonicalize_repo_root: input.canonicalize_repo_root
+      });
+  const planningScope = buildRepositoryPlanningScope({
+    composition,
+    selectedPaths
+  });
+  const crossesRepositoryBoundary = selectionCrossesRepositoryBoundary({
+    composition,
+    selectedPaths
+  });
+  const scanned = await (input.scanner as RepositoryAwareFileCatalogScanPort).scan({
     repo_root: repoRoot,
     indexed_roots: ["."],
     skipped_roots: [],
     max_files: 15000,
-    priority_paths: selectedPaths.filter((filePath) => !unsafePaths.includes(filePath))
+    priority_paths: selectedPaths.filter((filePath) => !unsafePaths.includes(filePath)),
+    repository_composition: composition === undefined
+      ? undefined
+      : repositoryCompositionAdmission(composition)
   });
+  const selectedPathsForPlanning = planningScope === undefined
+    ? selectedPaths
+    : selectedPaths.map((filePath) => unprefixRepositoryPath(planningScope.path_prefix, filePath));
+  const workspaceForPlanning = planningScope === undefined
+    ? input.workspace
+    : scopedWorkspace(input.workspace, planningScope.path_prefix);
+  const scannedFilesForPlanning = planningScope === undefined
+    ? composition !== undefined && selectedPaths.length === 0
+      ? superprojectCatalogEntries(scanned.files, composition)
+      : scanned.files
+    : localizeCatalogEntries(scanned.files, planningScope.path_prefix);
   const files = await mergeDirectValidationEntries({
-    scannedFiles: scanned.files,
-    selectedPaths,
-    workspace: input.workspace
+    scannedFiles: scannedFilesForPlanning,
+    selectedPaths: selectedPathsForPlanning,
+    workspace: workspaceForPlanning
   });
-  const selectedScope = await classifySelectedScope(input.workspace, selectedPaths);
+  const selectedScope = await classifySelectedScope(workspaceForPlanning, selectedPathsForPlanning);
   const railsDiscoveryFiles = files.filter((file) => !isEmbeddedFixturePath(file.path));
-  const selectedEntries = selectEntries(files, selectedPaths);
+  const selectedEntries = selectEntries(files, selectedPathsForPlanning);
   const railsShape = detectRailsProjectShape({
     files: railsDiscoveryFiles,
     scan_truncated: scanned.truncated
   });
-  const projectUnitPlan = await planProjectUnitValidation({
+  const projectUnitPlan = crossesRepositoryBoundary
+    ? {
+        applies: true,
+        commands: [],
+        units: [],
+        limitations: [],
+        blockerMessages: [
+          "Selected paths span multiple repositories without explicit repository aggregation evidence."
+        ],
+        nextActions: []
+      }
+    : await planProjectUnitValidation({
     files,
     selectedPaths: selectedScope.files,
     selectedSubtrees: selectedScope.subtrees,
-    workspace: input.workspace,
+    workspace: workspaceForPlanning,
     skippedPaths: scanned.skipped_paths ?? [],
-    maxCommands: input.request.max_commands
+    maxCommands: input.request.max_commands,
+    repositoryUnit: planningScope?.unit
   });
   const discovery = projectUnitPlan.applies
     ? undefined
@@ -140,7 +201,7 @@ export async function planVerification(input: {
         files: railsDiscoveryFiles,
         selectedEntries,
         railsShape,
-        workspace: input.workspace
+        workspace: workspaceForPlanning
       });
   const commandPlan = projectUnitPlan.applies
     ? { commands: [], lowConfidenceReasons: [], blockerReasons: [] }
@@ -152,19 +213,35 @@ export async function planVerification(input: {
         maxCommands: input.request.max_commands
       });
   const commands = projectUnitPlan.applies ? projectUnitPlan.commands : commandPlan.commands;
+  const repositoryCommands = attachRepositoryToCommands(commands, planningScope?.reference);
   const requestedExclusions = (scanned.skipped_paths ?? []).filter((skipped) => selectedPaths.includes(skipped.path));
   const excludedPathSet = new Set(requestedExclusions.map((skipped) => skipped.path));
+  const changedFilesForPlanning = planningScope === undefined
+    ? input.request.changed_files
+    : input.request.changed_files.map((filePath) => unprefixRepositoryPath(planningScope.path_prefix, normalizeRepoPath(filePath)));
   const staticFeedback =
     input.request.include_static_feedback && input.request.changed_files.length > 0
-      ? buildStaticFeedback(
-          input.request.changed_files.filter((filePath) => !excludedPathSet.has(normalizeRepoPath(filePath))),
-          files
+      ? prefixStaticFeedback(
+          buildStaticFeedback(
+            changedFilesForPlanning.filter((filePath, index) =>
+              !excludedPathSet.has(normalizeRepoPath(input.request.changed_files[index] ?? filePath))
+            ),
+            files
+          ),
+          planningScope?.path_prefix
         )
       : undefined;
   const missingPaths = selectedPaths.filter((filePath) =>
-    selectedScope.subtrees.includes(filePath) === false &&
-    !excludedPathSet.has(filePath) && files.every((entry) => entry.path !== filePath)
+    selectedScope.subtrees.includes(planningScope === undefined ? filePath : unprefixRepositoryPath(planningScope.path_prefix, filePath)) === false &&
+    !excludedPathSet.has(filePath) &&
+    files.every((entry) => entry.path !== (planningScope === undefined ? filePath : unprefixRepositoryPath(planningScope.path_prefix, filePath)))
   );
+  const repositoryRisks = repositoryCompositionRisks(planningScope?.unit);
+  const projectUnits = prefixProjectUnits({
+    units: projectUnitPlan.units,
+    pathPrefix: planningScope?.path_prefix,
+    repository: planningScope?.reference
+  });
   const tooBroad = selectedPaths.length > 50;
   const hasProjectUnitBlockedGuidance =
     projectUnitPlan.blockerMessages.length > 0 || projectUnitPlan.nextActions.length > 0;
@@ -177,7 +254,8 @@ export async function planVerification(input: {
     (discovery?.discoveryErrors.length ?? 0) > 0 ||
     commandPlan.blockerReasons.length > 0 ||
     projectUnitPlan.units.some((unit) => unit.readiness === "blocked") ||
-    commands.length === 0;
+    repositoryRisks.blocksValidation ||
+    repositoryCommands.length === 0;
   const risks = [
     ...(unsafePaths.length > 0
       ? [
@@ -253,7 +331,8 @@ export async function planVerification(input: {
       message,
       why_this_matters: "Bounded project-unit discovery reports limitations instead of broadening scope or inventing a fallback."
     })),
-    ...(commands.length === 0 && commandPlan.blockerReasons.length === 0 && !hasProjectUnitBlockedGuidance
+    ...repositoryRisks.risks,
+    ...(repositoryCommands.length === 0 && commandPlan.blockerReasons.length === 0 && !hasProjectUnitBlockedGuidance
       ? [
           {
             severity: "warning" as const,
@@ -280,7 +359,7 @@ export async function planVerification(input: {
           repo_root: scanned.repo_root
         }
       })),
-    ...(commands.length === 0 && commandPlan.blockerReasons.length === 0 && !hasProjectUnitBlockedGuidance
+    ...(repositoryCommands.length === 0 && commandPlan.blockerReasons.length === 0 && !hasProjectUnitBlockedGuidance
       ? [
           {
             tool: "context_for_task",
@@ -305,8 +384,8 @@ export async function planVerification(input: {
       risks,
       nextActions
     }),
-    planned_commands: commands,
-    ...(projectUnitPlan.applies ? { project_units: projectUnitPlan.units } : {}),
+    planned_commands: repositoryCommands,
+    ...(projectUnitPlan.applies ? { project_units: projectUnits } : {}),
     ...(staticFeedback?.status === "actionable" ? { static_feedback: staticFeedback } : {}),
     skipped_path_summary: buildSkippedPathSummary({
       population: scanned.skipped_path_population,
@@ -340,6 +419,316 @@ type ProjectUnitPlanningResult = {
   nextActions: VerificationPlan["next_actions"];
 };
 
+type RepositoryPlanningScope = {
+  unit: RepositoryUnitEvidence;
+  path_prefix: string;
+  reference: RepositoryReference;
+};
+
+function repositoryCompositionAdmission(
+  receipt: RepositoryCompositionReceipt
+): RepositoryCompositionAdmissionReceipt {
+  return {
+    repositories: receipt.repositories.map((unit) => ({
+      path_prefix: unit.path_prefix,
+      state: unit.state,
+      source_available: unit.source_available,
+      declaration_path: unit.declaration_path,
+      head_gitlink_oid: unit.head_gitlink_oid
+    }))
+  };
+}
+
+function buildRepositoryPlanningScope(input: {
+  composition?: RepositoryCompositionReceipt;
+  selectedPaths: readonly string[];
+}): RepositoryPlanningScope | undefined {
+  if (input.composition === undefined || input.selectedPaths.length === 0) {
+    return undefined;
+  }
+  const units = [...input.composition.repositories, ...input.composition.skipped_or_blocked];
+  const selectedUnits = input.selectedPaths.map((filePath) => repositoryUnitForPath(units, filePath));
+  if (selectedUnits.some((unit) => unit === undefined)) {
+    return undefined;
+  }
+  const keys = new Set(selectedUnits.map((unit) => unit!.repository_key));
+  if (keys.size !== 1) {
+    return undefined;
+  }
+  const unit = selectedUnits[0];
+  if (unit === undefined || unit.path_prefix === ".") {
+    return undefined;
+  }
+  return {
+    unit,
+    path_prefix: unit.path_prefix,
+    reference: repositoryReference(unit)
+  };
+}
+
+function selectionCrossesRepositoryBoundary(input: {
+  composition?: RepositoryCompositionReceipt;
+  selectedPaths: readonly string[];
+}): boolean {
+  if (input.composition === undefined || input.selectedPaths.length < 2) return false;
+  const units = [...input.composition.repositories, ...input.composition.skipped_or_blocked];
+  const keys = new Set(input.selectedPaths
+    .map((filePath) => repositoryUnitForPath(units, filePath)?.repository_key)
+    .filter((key): key is RepositoryUnitEvidence["repository_key"] => key !== undefined));
+  return keys.size > 1;
+}
+
+function superprojectCatalogEntries(
+  entries: readonly FileCatalogEntry[],
+  composition: RepositoryCompositionReceipt
+): FileCatalogEntry[] {
+  const units = [...composition.repositories, ...composition.skipped_or_blocked];
+  return entries.filter((entry) => repositoryUnitForPath(units, entry.path)?.repository_key === "superproject");
+}
+
+function repositoryUnitForPath(
+  units: readonly RepositoryUnitEvidence[],
+  filePath: string
+): RepositoryUnitEvidence | undefined {
+  return [...units]
+    .filter((unit) => pathContainsRepositoryPrefix(unit.path_prefix, filePath))
+    .sort((left, right) => repositoryPrefixLength(right.path_prefix) - repositoryPrefixLength(left.path_prefix))
+    [0];
+}
+
+function repositoryReference(unit: RepositoryUnitEvidence): RepositoryReference {
+  return {
+    repository_key: unit.repository_key,
+    path_prefix: unit.path_prefix,
+    state: unit.state
+  };
+}
+
+function localizeCatalogEntries(
+  entries: readonly FileCatalogEntry[],
+  pathPrefix: string
+): FileCatalogEntry[] {
+  return entries
+    .filter((entry) => pathContainsRepositoryPrefix(pathPrefix, entry.path))
+    .map((entry) => ({
+      ...entry,
+      path: unprefixRepositoryPath(pathPrefix, entry.path)
+    }))
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function scopedWorkspace(
+  workspace: WorkspaceFilePort,
+  pathPrefix: string
+): WorkspaceFilePort {
+  const toGlobal = (filePath: string) => prefixRepositoryPath(pathPrefix, normalizeRepoPath(filePath));
+  return {
+    readText: (input) => workspace.readText({ path: toGlobal(input.path) }),
+    readTextPrefix: workspace.readTextPrefix === undefined
+      ? undefined
+      : (input) => workspace.readTextPrefix!({ path: toGlobal(input.path), max_bytes: input.max_bytes }),
+    readBinary: (input) => workspace.readBinary({ path: toGlobal(input.path) }),
+    writeText: (input) => workspace.writeText({
+      path: toGlobal(input.path),
+      content: input.content,
+      overwrite: input.overwrite
+    }),
+    writeBinary: (input) => workspace.writeBinary({
+      path: toGlobal(input.path),
+      content: input.content,
+      overwrite: input.overwrite
+    }),
+    stat: (input) => workspace.stat({ path: toGlobal(input.path) }),
+    deletePath: (input) => workspace.deletePath({ path: toGlobal(input.path) }),
+    ensureDirectory: (input) => workspace.ensureDirectory({ path: toGlobal(input.path) })
+  };
+}
+
+function applyRepositoryCompositionClaimEvidence(
+  units: readonly ProjectUnitEvidence[],
+  repositoryUnit: RepositoryUnitEvidence
+): ProjectUnitEvidence[] {
+  if (repositoryUnit.source_available === false) {
+    return units.map((unit) => ({
+      ...cloneProjectUnit(unit),
+      readiness: "blocked",
+      blockers: [
+        ...unit.blockers,
+        {
+          kind: "submodule_unavailable" as const,
+          unit_root: unit.root,
+          evidence_paths: [...repositoryUnit.evidence_paths],
+          message: `Repository ${repositoryUnit.path_prefix} has no locally available source; validation candidates are blocked.`,
+          blocked_claims: ["validation_candidate", "repository_traversal"] as const
+        }
+      ],
+      planned_commands: []
+    }));
+  }
+  if (repositoryUnit.claim_blockers.length === 0 && repositoryUnit.state === "initialized") {
+    return units.map(cloneProjectUnit);
+  }
+  return units.map((unit) => {
+    const blockedClaims = repositoryUnit.claim_blockers.flatMap((blocker) => blocker.blocked_claims);
+    const mappedClaims = uniqueSorted([
+      ...(blockedClaims.includes("worktree_cleanliness") ? ["worktree_cleanliness"] : []),
+      ...(blockedClaims.includes("pinned_composition") || repositoryUnit.state === "worktree_revision_mismatch"
+        ? ["diff_completeness"]
+        : [])
+    ]) as Array<"worktree_cleanliness" | "diff_completeness">;
+    if (mappedClaims.length === 0 && repositoryUnit.state !== "worktree_revision_mismatch") {
+      return cloneProjectUnit(unit);
+    }
+    return {
+      ...cloneProjectUnit(unit),
+      readiness: unit.readiness === "ready" ? "limited" : unit.readiness,
+      blockers: [
+        ...unit.blockers,
+        {
+          kind: "git_claim_unavailable" as const,
+          unit_root: unit.root,
+          evidence_paths: uniqueSorted(repositoryUnit.evidence_paths),
+          message: repositoryUnit.state === "worktree_revision_mismatch"
+            ? `Repository ${repositoryUnit.path_prefix} source is readable, but its worktree revision does not match the parent gitlink; pinned-composition and diff-completeness claims are blocked.`
+            : `Repository ${repositoryUnit.path_prefix} source is readable, but Git metadata is incomplete; dependent repository claims are blocked.`,
+          blocked_claims: mappedClaims.length === 0 ? ["diff_completeness"] : mappedClaims
+        }
+      ]
+    };
+  });
+}
+
+function repositoryCompositionRisks(unit?: RepositoryUnitEvidence): {
+  blocksValidation: boolean;
+  risks: VerificationPlan["risks"];
+} {
+  if (unit === undefined) {
+    return { blocksValidation: false, risks: [] };
+  }
+  if (unit.source_available === false) {
+    return {
+      blocksValidation: true,
+      risks: [{
+        severity: "blocker" as const,
+        message: `Selected repository ${unit.path_prefix} has no locally available source.`,
+        why_this_matters: "Validation planning cannot invent commands for an uninitialized or blocked submodule."
+      }]
+    };
+  }
+  if (unit.state === "worktree_revision_mismatch" || unit.state === "metadata_unavailable" || unit.claim_blockers.length > 0) {
+    return {
+      blocksValidation: false,
+      risks: [{
+        severity: "warning" as const,
+        message: `Selected repository ${unit.path_prefix} has readable source but limited Git claim authority.`,
+        why_this_matters: "The plan can use repository-local source evidence, but pinned-composition, diff, or worktree-cleanliness claims may remain blocked."
+      }]
+    };
+  }
+  return { blocksValidation: false, risks: [] };
+}
+
+function attachRepositoryToCommands(
+  commands: readonly PlannedValidationCommand[],
+  repository?: RepositoryReference
+): PlannedValidationCommand[] {
+  return commands.map((command) => ({
+    ...command,
+    repository: command.repository ?? repository
+  }));
+}
+
+function prefixProjectUnits(input: {
+  units: readonly ProjectUnitEvidence[];
+  pathPrefix?: string;
+  repository?: RepositoryReference;
+}): ProjectUnitEvidence[] {
+  return input.units.map((unit) => ({
+    ...unit,
+    root: input.pathPrefix === undefined ? unit.root : prefixRepositoryPath(input.pathPrefix, unit.root),
+    repository: unit.repository ?? input.repository,
+    markers: unit.markers.map((marker) => ({
+      ...marker,
+      path: input.pathPrefix === undefined ? marker.path : prefixRepositoryPath(input.pathPrefix, marker.path),
+      evidence_path: marker.evidence_path === undefined || input.pathPrefix === undefined
+        ? marker.evidence_path
+        : prefixRepositoryPath(input.pathPrefix, marker.evidence_path)
+    })),
+    blockers: unit.blockers.map((blocker) => ({
+      ...blocker,
+      unit_root: input.pathPrefix === undefined ? blocker.unit_root : prefixRepositoryPath(input.pathPrefix, blocker.unit_root),
+      evidence_paths: input.pathPrefix === undefined
+        ? blocker.evidence_paths
+        : blocker.evidence_paths.map((evidencePath) => prefixRepositoryPath(input.pathPrefix!, evidencePath))
+    })),
+    planned_commands: attachRepositoryToCommands(unit.planned_commands, input.repository)
+  }));
+}
+
+function prefixStaticFeedback(
+  feedback: StaticFeedback,
+  pathPrefix?: string
+): StaticFeedback {
+  if (pathPrefix === undefined) {
+    return feedback;
+  }
+  return {
+    status: feedback.status,
+    checked_files: feedback.checked_files.map((filePath) => prefixRepositoryPath(pathPrefix, filePath)),
+    findings: feedback.findings.map((finding) => ({
+      ...finding,
+      path: prefixRepositoryPath(pathPrefix, finding.path)
+    }))
+  };
+}
+
+function cloneProjectUnit(unit: ProjectUnitEvidence): ProjectUnitEvidence {
+  return {
+    ...unit,
+    markers: [...unit.markers],
+    blockers: [...unit.blockers],
+    planned_commands: [...unit.planned_commands]
+  };
+}
+
+function prefixRepositoryPath(pathPrefix: string, filePath: string): string {
+  const normalizedPrefix = normalizeRepoPath(pathPrefix);
+  const normalizedPath = normalizeRepoPath(filePath);
+  if (normalizedPrefix === ".") {
+    return normalizedPath;
+  }
+  if (normalizedPath === ".") {
+    return normalizedPrefix;
+  }
+  return `${normalizedPrefix}/${normalizedPath}`;
+}
+
+function unprefixRepositoryPath(pathPrefix: string, filePath: string): string {
+  const normalizedPrefix = normalizeRepoPath(pathPrefix);
+  const normalizedPath = normalizeRepoPath(filePath);
+  if (normalizedPrefix === ".") {
+    return normalizedPath;
+  }
+  if (normalizedPath === normalizedPrefix) {
+    return ".";
+  }
+  return normalizedPath.startsWith(`${normalizedPrefix}/`)
+    ? normalizedPath.slice(normalizedPrefix.length + 1)
+    : normalizedPath;
+}
+
+function pathContainsRepositoryPrefix(pathPrefix: string, filePath: string): boolean {
+  const normalizedPrefix = normalizeRepoPath(pathPrefix);
+  const normalizedPath = normalizeRepoPath(filePath);
+  return normalizedPrefix === "." ||
+    normalizedPath === normalizedPrefix ||
+    normalizedPath.startsWith(`${normalizedPrefix}/`);
+}
+
+function repositoryPrefixLength(pathPrefix: string): number {
+  return pathPrefix === "." ? 0 : pathPrefix.split("/").length;
+}
+
 async function planProjectUnitValidation(input: {
   files: readonly FileCatalogEntry[];
   selectedPaths: readonly string[];
@@ -347,6 +736,7 @@ async function planProjectUnitValidation(input: {
   workspace: WorkspaceFilePort;
   skippedPaths: readonly FileCatalogSkippedPath[];
   maxCommands: number;
+  repositoryUnit?: RepositoryUnitEvidence;
 }): Promise<ProjectUnitPlanningResult> {
   const scriptGuidance = await discoverProjectUnitScriptGuidance(input.workspace, input.files);
   const markerRecognition = recognizeProjectUnitMarkers({
@@ -414,8 +804,9 @@ async function planProjectUnitValidation(input: {
       blockers: boundary === undefined ? [] : [boundary.blocker]
     }));
   }
-  const gitEvidence = await inspectRepositoryGitClaims(input.workspace);
-  const units = applyRepositoryGitClaimEvidence(plannedUnits, gitEvidence);
+  const units = input.repositoryUnit === undefined
+    ? applyRepositoryGitClaimEvidence(plannedUnits, await inspectRepositoryGitClaims(input.workspace))
+    : applyRepositoryCompositionClaimEvidence(plannedUnits, input.repositoryUnit);
   const commands = units
     .filter((unit) => unit.readiness !== "blocked")
     .flatMap((unit) => unit.planned_commands)

@@ -20,6 +20,86 @@ export type SnapshotPathValidityState = "valid" | "stale" | "degraded";
 
 export type SnapshotValidityReceipt = SnapshotValidityReceiptContract;
 
+export type SnapshotRepositoryKey = "superproject" | `submodule:${string}`;
+
+export type SnapshotRepositoryCompositionState =
+  | "superproject"
+  | "initialized"
+  | "uninitialized"
+  | "worktree_revision_mismatch"
+  | "metadata_unavailable"
+  | "declaration_without_gitlink"
+  | "orphan_gitlink"
+  | "path_blocked"
+  | "cycle_blocked"
+  | "limit_blocked";
+
+export type SnapshotRepositoryClaimBlocker = {
+  kind:
+    | "git_metadata_unavailable"
+    | "declaration_without_gitlink"
+    | "orphan_gitlink"
+    | "path_blocked"
+    | "cycle_blocked"
+    | "limit_blocked";
+  path_prefix: string;
+  message: string;
+  evidence_paths: readonly string[];
+  blocked_claims: readonly (
+    | "source_availability"
+    | "repository_traversal"
+    | "pinned_composition"
+    | "worktree_cleanliness"
+  )[];
+};
+
+export type SnapshotRepositoryUnit = {
+  repository_key: SnapshotRepositoryKey;
+  parent_repository_key?: SnapshotRepositoryKey;
+  path_prefix: string;
+  depth: number;
+  state: SnapshotRepositoryCompositionState;
+  declaration_path?: string;
+  head_gitlink_oid?: string;
+  index_gitlink_oid?: string;
+  worktree_head_oid?: string;
+  pinned_revision_matches: boolean | "unknown";
+  cleanliness: "clean" | "dirty" | "unknown" | "unavailable";
+  source_available: boolean;
+  evidence_paths: readonly string[];
+  claim_blockers: readonly SnapshotRepositoryClaimBlocker[];
+};
+
+export type SnapshotRepositoryAggregateClaims = {
+  worktree_cleanliness: "clean" | "dirty" | "blocked";
+  pinned_composition: "complete" | "mismatch" | "blocked";
+};
+
+export type SnapshotRepositoryCompositionLimit =
+  | {
+      kind: "max_depth_exceeded";
+      path_prefix: string;
+      limit: number;
+      message: string;
+    }
+  | {
+      kind: "max_repositories_exceeded";
+      path_prefix: string;
+      limit: number;
+      message: string;
+    };
+
+export type SnapshotRepositoryComposition = {
+  superproject_key: "superproject";
+  repositories: readonly SnapshotRepositoryUnit[];
+  aggregate_claims: SnapshotRepositoryAggregateClaims;
+  skipped_or_blocked: readonly SnapshotRepositoryUnit[];
+  source_complete: boolean;
+  truncated: boolean;
+  composition_fingerprint: string;
+  limits: readonly SnapshotRepositoryCompositionLimit[];
+};
+
 export interface SnapshotState {
   id: SnapshotId;
   repo_root: RepoRoot;
@@ -33,6 +113,8 @@ export interface SnapshotState {
   created_at: string;
   updated_at: string;
   reason?: string;
+  composition_fingerprint?: string;
+  repository_composition?: SnapshotRepositoryComposition;
 }
 
 export interface FileContentHashBinding {

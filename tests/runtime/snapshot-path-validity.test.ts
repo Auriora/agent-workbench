@@ -8,6 +8,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import {
+  classifySnapshotCompositionFreshness,
   SnapshotValidityService,
   validateSnapshotPaths
 } from "../../src/application/use-cases/validate-snapshot-paths.js";
@@ -158,6 +159,40 @@ describe("snapshot path validity", () => {
     expect(result.state).toBe("degraded");
     expect(result.refresh_required).toBe(false);
     expect(result.state).not.toBe("valid");
+  });
+
+  it("treats snapshots without a persisted composition receipt as degraded for composition-aware freshness", () => {
+    expect(classifySnapshotCompositionFreshness({
+      snapshot: snapshot()
+    })).toEqual({
+      state: "degraded",
+      refresh_required: false,
+      reason: "Snapshot lacks a persisted repository composition receipt."
+    });
+  });
+
+  it("treats composition fingerprint drift as stale", () => {
+    expect(classifySnapshotCompositionFreshness({
+      snapshot: {
+        ...snapshot(),
+        composition_fingerprint: "stored-fingerprint"
+      },
+      current_composition_fingerprint: "current-fingerprint"
+    })).toEqual({
+      state: "stale",
+      refresh_required: true,
+      reason: "Repository composition fingerprint changed after the snapshot was published."
+    });
+  });
+
+  it("accepts matching composition fingerprints as valid", () => {
+    expect(classifySnapshotCompositionFreshness({
+      snapshot: {
+        ...snapshot(),
+        composition_fingerprint: "same-fingerprint"
+      },
+      current_composition_fingerprint: "same-fingerprint"
+    })).toEqual({ state: "valid" });
   });
 });
 

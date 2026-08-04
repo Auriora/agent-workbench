@@ -7,6 +7,7 @@ import { createHash } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import type {
   EvidenceKind,
+  EvidenceRepositoryReference,
   FindReferencesRequest,
   FindReferencesResult,
   ReferenceAccounting,
@@ -14,13 +15,15 @@ import type {
   ReferenceCursorPayload,
   ReferenceHit,
   RuntimeError,
-  ResponseMetadata
+  ResponseMetadata,
+  SymbolReference
 } from "../../contracts/index.js";
 import type { FileCatalogEntry, GraphNode } from "../../domain/models/index.js";
 import type {
   FileCatalogPort,
   GraphQueryPort,
   ReferenceCursorCodecPort,
+  SnapshotRepositoryCompositionPort,
   SnapshotPort,
   SnapshotPublicationPort,
   WorkspaceFilePort,
@@ -54,7 +57,7 @@ const DEFAULT_REFERENCE_LIMITS = {
 export async function findReferences(input: {
   request: FindReferencesRequest;
   graph: GraphQueryPort;
-  snapshots: SnapshotPort & SnapshotPublicationPort;
+  snapshots: SnapshotPort & SnapshotPublicationPort & Partial<SnapshotRepositoryCompositionPort>;
   catalog: FileCatalogPort;
   workspace?: WorkspaceFilePort;
   workspace_safety: WorkspaceSafetyPort;
@@ -186,7 +189,8 @@ export async function findReferences(input: {
           }
         })
       : resolved.meta,
-    snapshot_validity_verified: snapshotValidity?.state === "valid" && snapshotValidity.complete
+    snapshot_validity_verified: snapshotValidity?.state === "valid" && snapshotValidity.complete,
+    repository_resolver: compositionResolver(input.snapshots)
   });
 }
 
@@ -209,6 +213,7 @@ type EvidenceBackedInput = {
   snapshot_id: string;
   base_meta: ResponseMetadata;
   snapshot_validity_verified: boolean;
+  repository_resolver?: SnapshotRepositoryCompositionPort;
 };
 
 type ReferenceBounds = ReferenceCursorPayload["bounds"];
@@ -692,12 +697,12 @@ async function replayResultFile(
   };
 }
 
-function failedResultReplay(
+async function failedResultReplay(
   input: EvidenceBackedInput,
   cursor: Extract<ReferenceCursorPayload, { kind: "lexical_result" }>,
   replay: Awaited<ReturnType<typeof replayResultFile>>,
   failure: "missing" | "changed" | "read_failure"
-): FindReferencesUseCaseResult {
+): Promise<FindReferencesUseCaseResult> {
   const pageUnresolved = [{ reason: failure, count: 1 }];
   const sequenceUnresolved = mergeReasons(cursor.totals.unresolved_searchable_candidates, pageUnresolved);
   const sequence = sumAccounting(cursor.totals.accounting, replay.accounting);
@@ -768,12 +773,12 @@ function lexicalResultCursor(
   };
 }
 
-function evidenceResult(
+async function evidenceResult(
   input: EvidenceBackedInput,
   references: ReferenceHit[],
   coverage: ReferenceCoverageReceipt,
   cursor?: string
-): FindReferencesUseCaseResult {
+): Promise<FindReferencesUseCaseResult> {
   const effectiveCoverage = coverage.state === "complete" && !input.snapshot_validity_verified
     ? withoutCompleteMatch(coverage)
     : coverage;
@@ -807,23 +812,40 @@ function evidenceResult(
           args: { node_id: input.target.id, snapshot_id: input.snapshot_id, repo_root: input.repo_root }
         }
       ];
+  const target = await attachRepositoryToSymbolReference({
+    symbol: {
+      node_id: input.target.id,
+      kind: input.target.kind,
+      name: input.target.name,
+      qualified_name: input.target.qualified_name,
+      path: input.target.file_path,
+      language: input.target.language,
+      source_range: input.target.source_range,
+      capability_level: capabilityFromNode(input.target),
+      evidence_kinds: evidenceFromNode(input.target)
+    },
+    resolver: input.repository_resolver,
+    snapshot_id: input.snapshot_id,
+    path: input.target.file_path,
+    cache: new Map()
+  });
+  const repositoryCache = new Map<string, Promise<EvidenceRepositoryReference | undefined>>();
+  const referencesWithRepository = await Promise.all(references.map(async (reference) => ({
+    ...reference,
+    repository: await resolveEvidenceRepository({
+      resolver: input.repository_resolver,
+      snapshot_id: input.snapshot_id,
+      path: reference.source_file_path ?? reference.target_file_path,
+      cache: repositoryCache
+    })
+  })));
   return {
     references: {
       repo_root: input.repo_root,
       snapshot_id: input.snapshot_id,
       coverage_status: "evidence_backed",
-      target: {
-        node_id: input.target.id,
-        kind: input.target.kind,
-        name: input.target.name,
-        qualified_name: input.target.qualified_name,
-        path: input.target.file_path,
-        language: input.target.language,
-        source_range: input.target.source_range,
-        capability_level: capabilityFromNode(input.target),
-        evidence_kinds: evidenceFromNode(input.target)
-      },
-      references,
+      target,
+      references: referencesWithRepository,
       cursor,
       result_count: effectiveCoverage.complete_matches ?? effectiveCoverage.matched_so_far,
       result_count_basis: complete ? "complete_matches" : "matched_so_far",
@@ -843,6 +865,60 @@ function evidenceResult(
       reference_coverage: effectiveCoverage
     }
   };
+}
+
+function compositionResolver(candidate: Partial<SnapshotRepositoryCompositionPort>): SnapshotRepositoryCompositionPort | undefined {
+  return typeof candidate.resolveRepositoryForPath === "function"
+    ? candidate as SnapshotRepositoryCompositionPort
+    : undefined;
+}
+
+async function attachRepositoryToSymbolReference(input: {
+  symbol: SymbolReference;
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id: string;
+  path: string;
+  cache: Map<string, Promise<EvidenceRepositoryReference | undefined>>;
+}): Promise<SymbolReference> {
+  return {
+    ...input.symbol,
+    repository: await resolveEvidenceRepository({
+      resolver: input.resolver,
+      snapshot_id: input.snapshot_id,
+      path: input.path,
+      cache: input.cache
+    })
+  };
+}
+
+function resolveEvidenceRepository(input: {
+  resolver?: SnapshotRepositoryCompositionPort;
+  snapshot_id: string;
+  path?: string;
+  cache: Map<string, Promise<EvidenceRepositoryReference | undefined>>;
+}): Promise<EvidenceRepositoryReference | undefined> {
+  if (input.resolver === undefined || input.path === undefined) {
+    return Promise.resolve(undefined);
+  }
+  const cached = input.cache.get(input.path);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const resolved = input.resolver.resolveRepositoryForPath({
+    snapshot_id: input.snapshot_id,
+    path: input.path
+  }).then((unit) => {
+    if (unit === null || unit.path_prefix === ".") {
+      return undefined;
+    }
+    return {
+      repository_key: unit.repository_key,
+      path_prefix: unit.path_prefix,
+      state: unit.state
+    };
+  });
+  input.cache.set(input.path, resolved);
+  return resolved;
 }
 
 function unresolvedEvidenceKinds(target: GraphNode): EvidenceKind[] {

@@ -11,6 +11,10 @@ last_reviewed: 2026-08-04
 
 ## Overview
 
+The 2026-08-04 downstream review after Spec 057 closure confirmed that the
+requirements-only follow-up changed predecessor references, not the accepted
+authority, data, safety, or implementation design in this document.
+
 Add a repository-composition layer ahead of catalog, graph, documentation, and
 validation discovery. The layer reconciles working-tree `.gitmodules` path
 declarations with superproject `HEAD` and index gitlinks through one bounded

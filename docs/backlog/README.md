@@ -237,10 +237,11 @@ or runtime telemetry.
   - Preserve readable source and project markers when Git metadata is broken,
     while blocking cleanliness, diff-completeness, and unchanged-worktree
     claims that the available metadata cannot prove.
-  - Treat declared submodules and embedded repositories as non-traversed
-    boundaries in the current planner. Full read-only declared-submodule
-    traversal and repository-scoped planning are owned by
-    [Spec 058](../specs/058-git-submodule-repository-support/requirements.md).
+  - Treat unrelated embedded repositories as non-traversed boundaries.
+  - Admit only declared initialized submodules from local `.gitmodules` plus
+    gitlink evidence, scan them read-only with child-local ignore policy, attach
+    repository-unit provenance, and keep Git-dependent claims blocked when child
+    metadata is unavailable, dirty, or revision-mismatched.
 - Validation:
   - Fixtures for host-allowed, Docker-required, missing-tool, package-manager,
     CMake, .NET, SAM, Go, Python, JavaScript, and docs-only repos.
@@ -251,9 +252,11 @@ or runtime telemetry.
     counted summary with a bounded sample.
 - Promotion target: Spec 057 delivered selected-scope project-unit evidence,
   structured readiness/blockers, broken-Git claim separation, boundary
-  confinement, and an additive compatibility projection. Continue weak
-  ecosystem evidence through focused adapter specs; Spec 058 owns the one
-  explicit initialized-submodule residual.
+  confinement, and an additive compatibility projection. Spec 058 delivered the
+  explicit initialized-submodule residual with read-only composition discovery,
+  stored freshness provenance, repository-local validation candidates, and a
+  cross-repository aggregation blocker. Continue weak ecosystem evidence
+  through focused adapter specs.
 
 ### EB005: Multi-File Post-Edit Repair Loop
 

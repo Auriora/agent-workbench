@@ -4,6 +4,7 @@
  */
 
 import path from "node:path";
+import fs from "node:fs";
 import { randomUUID } from "node:crypto";
 import { applyWorkspaceEdit } from "./application/use-cases/apply-workspace-edit.js";
 import {
@@ -24,9 +25,11 @@ import { getRepoOrientation } from "./application/use-cases/get-repo-orientation
 import { getRepoScope } from "./application/use-cases/get-repo-scope.js";
 import { getSnapshotRepoStatus } from "./application/use-cases/get-repo-status.js";
 import {
+  classifySnapshotCompositionFreshness,
   DEFAULT_SNAPSHOT_VALIDITY_MAX_PATHS,
   SnapshotValidityService
 } from "./application/use-cases/validate-snapshot-paths.js";
+import { discoverRepositoryComposition } from "./application/use-cases/repository-composition.js";
 import { planVerification } from "./application/use-cases/plan-verification.js";
 import { processWorkspaceChangeQueue, type WorkspaceChangeQueueProcessResult } from "./application/use-cases/process-workspace-change-queue.js";
 import {
@@ -59,6 +62,7 @@ import {
   WorkspaceFileAdapter,
   WorkspaceSafetyAdapter
 } from "./infrastructure/filesystem/index.js";
+import { GitMetadataCommandAdapter } from "./infrastructure/commands/index.js";
 import {
   MarkdownParserAdapter,
   MarkdownStructureCheckerAdapter
@@ -154,6 +158,14 @@ const DEFAULT_STARTUP_WARMUP_MAX_FILES = 2000;
 const DEFAULT_STARTUP_WARMUP_RETAIN_LATEST_SNAPSHOTS = 3;
 const DEFAULT_STARTUP_WARMUP_RETAIN_LATEST_FRESH_SNAPSHOTS = 2;
 
+function canonicalizeRepoRoot(repoRoot: string): string {
+  try {
+    return fs.realpathSync.native(repoRoot);
+  } catch (_error) {
+    return path.resolve(repoRoot);
+  }
+}
+
 export function createAgentWorkbenchServer(
   repoRoot: string,
   options: AgentWorkbenchServerOptions = {}
@@ -164,6 +176,7 @@ export function createAgentWorkbenchServer(
     env: process.env
   });
   const scanner = new FileCatalogScannerAdapter();
+  const gitComposition = new GitMetadataCommandAdapter();
   const clock = new SystemClockAdapter();
   const runtime = new InMemoryRuntimeOperationsAdapter({ clock });
   const previews = new InMemoryEditPreviewStoreAdapter();
@@ -222,17 +235,50 @@ export function createAgentWorkbenchServer(
       ? await store.getLatestPublished({ repo_root: repoRoot })
       : await store.readExplicit({ repo_root: repoRoot, snapshot_id: snapshotId });
     if (selection.status === "blocked") {
-      return { snapshot_id: snapshotId, validity: undefined };
+      return { snapshot_id: snapshotId, validity: undefined, repository_composition: undefined };
     }
     if (selection.status === "missing") {
-      return { snapshot_id: null, validity: undefined };
+      return { snapshot_id: null, validity: undefined, repository_composition: undefined };
     }
     const snapshot = selection.snapshot;
-    const validity = await new SnapshotValidityService(
+    const pathValidity = await new SnapshotValidityService(
       store,
       new FilesystemSnapshotPathValidatorAdapter({ repoRoot }),
       store
     ).validate({ snapshot, max_paths: DEFAULT_SNAPSHOT_VALIDITY_MAX_PATHS });
+    let currentCompositionFingerprint: string | undefined;
+    try {
+      currentCompositionFingerprint = (await discoverRepositoryComposition({
+        workspace: workspaceForRepoRoot(repoRoot),
+        git: new GitMetadataCommandAdapter(),
+        repo_root: repoRoot,
+        canonicalize_repo_root: (candidate) => fs.realpathSync.native(candidate)
+      })).composition_fingerprint;
+    } catch {
+      currentCompositionFingerprint = undefined;
+    }
+    const compositionFreshness = classifySnapshotCompositionFreshness({
+      snapshot,
+      current_composition_fingerprint: currentCompositionFingerprint
+    });
+    const validity = compositionFreshness.state === "stale"
+        ? {
+            ...pathValidity,
+            state: "stale" as const,
+            complete: false,
+            composition_changed: true,
+            refresh_required: true,
+            reason: compositionFreshness.reason
+          }
+        : compositionFreshness.state === "degraded" && pathValidity.state !== "stale"
+          ? {
+              ...pathValidity,
+              state: "degraded" as const,
+              complete: false,
+              refresh_required: false,
+              reason: compositionFreshness.reason
+            }
+          : pathValidity;
     let refreshBlocker: WatcherFreshnessState | undefined;
     if (validity.state === "stale" && snapshotId === undefined) {
       try {
@@ -245,7 +291,12 @@ export function createAgentWorkbenchServer(
         refreshBlocker = refreshTriggerFailureWatcher();
       }
     }
-    return { snapshot_id: snapshot.id, validity, refresh_blocker: refreshBlocker };
+    return {
+      snapshot_id: snapshot.id,
+      validity,
+      refresh_blocker: refreshBlocker,
+      repository_composition: snapshot.repository_composition
+    };
   }
 
   const server = createAgentWorkbenchMcpServer(absoluteRepoRoot, {
@@ -300,28 +351,38 @@ export function createAgentWorkbenchServer(
     },
     getRepoOverview: async ({ repo_root }) => {
       const store = await graphStore();
+      const selected = await selectValidatedSnapshot(repo_root, store);
       return getRepoOverview({
         repo_root,
         scanner,
         workspace: workspaceForRepoRoot(repo_root),
         snapshots: store,
-        warmups: warmupView
+        warmups: warmupView,
+        snapshot_validity: selected.validity
       });
     },
-    getDocsOverview: ({ request }) =>
-      getDocsOverview({
+    getDocsOverview: async ({ request }) => {
+      const store = await graphStore();
+      const selected = await selectValidatedSnapshot(request.repo_root ?? absoluteRepoRoot, store);
+      return getDocsOverview({
         request,
         scanner,
         workspace: workspaceForRepoRoot(request.repo_root),
-        default_repo_root: absoluteRepoRoot
-      }),
-    getDocsMap: ({ request }) =>
-      getDocsMap({
+        default_repo_root: absoluteRepoRoot,
+        repository_composition: selected.repository_composition
+      });
+    },
+    getDocsMap: async ({ request }) => {
+      const store = await graphStore();
+      const selected = await selectValidatedSnapshot(request.repo_root ?? absoluteRepoRoot, store);
+      return getDocsMap({
         request,
         scanner,
         workspace: workspaceForRepoRoot(request.repo_root),
-        default_repo_root: absoluteRepoRoot
-      }),
+        default_repo_root: absoluteRepoRoot,
+        repository_composition: selected.repository_composition
+      });
+    },
     searchRankedDocs: async ({ request }) => {
       const store = await graphStore();
       const selected = await selectValidatedSnapshot(
@@ -354,13 +415,17 @@ export function createAgentWorkbenchServer(
       telemetry.record("docs.ranking.result", rankedDocsTelemetryAttributes(result));
       return result;
     },
-    getCurrentDocsForTask: ({ request }) =>
-      getCurrentDocsForTask({
+    getCurrentDocsForTask: async ({ request }) => {
+      const store = await graphStore();
+      const selected = await selectValidatedSnapshot(request.repo_root ?? absoluteRepoRoot, store);
+      return getCurrentDocsForTask({
         request,
         scanner,
         workspace: workspaceForRepoRoot(request.repo_root),
-        default_repo_root: absoluteRepoRoot
-      }),
+        default_repo_root: absoluteRepoRoot,
+        repository_composition: selected.repository_composition
+      });
+    },
     getDocsOutline: ({ request }) =>
       getDocsOutline({
         request,
@@ -497,7 +562,9 @@ export function createAgentWorkbenchServer(
         request,
         scanner,
         workspace: workspaceForRepoRoot(request.repo_root),
-        default_repo_root: absoluteRepoRoot
+        default_repo_root: absoluteRepoRoot,
+        git: gitComposition,
+        canonicalize_repo_root: canonicalizeRepoRoot
       }),
     getIntegrationHealth: ({ request, connection_identity }) =>
       getIntegrationHealth({

@@ -7,11 +7,16 @@ import type {
   AdapterEvidence,
   DocumentationRankingReceipt,
   Freshness,
+  RepositoryCompositionSummary,
   ResponseMetadata
 } from "../../contracts/index.js";
 import type { FileCatalogEntry } from "../../domain/models/index.js";
 import type {
   SnapshotState,
+  SnapshotRepositoryClaimBlocker,
+  SnapshotRepositoryComposition,
+  SnapshotRepositoryCompositionLimit,
+  SnapshotRepositoryUnit,
   SnapshotValidityReceipt,
   WarmupExecution
 } from "../../domain/models/runtime.js";
@@ -62,6 +67,7 @@ export type RuntimeStatus = {
   watcher_freshness?: WatcherFreshnessState;
   snapshot_validity?: SnapshotValidityReceipt;
   documentation_ranking?: DocumentationRankingReceipt;
+  repository_composition?: RepositoryCompositionSummary;
   reason?: string;
 };
 
@@ -99,6 +105,7 @@ export function getCatalogRepoStatus(input: {
     watcher: input.watcher,
     freshness: input.freshness,
     truncated: input.truncated,
+    repositoryComposition: summarizeRepositoryComposition(input.snapshot?.repository_composition),
     budget: input.row_limit === undefined ? undefined : { row_limit: input.row_limit }
   });
   const classified = runtimePresentation.classification;
@@ -125,6 +132,10 @@ export function getCatalogRepoStatus(input: {
   }
   if (input.snapshot_validity !== undefined) {
     status.snapshot_validity = input.snapshot_validity;
+  }
+  const repositoryComposition = summarizeRepositoryComposition(input.snapshot?.repository_composition);
+  if (repositoryComposition !== undefined) {
+    status.repository_composition = repositoryComposition;
   }
   const reason = input.snapshot?.reason ?? input.warmup?.reason;
   if (reason !== undefined) {
@@ -277,6 +288,7 @@ export function getSnapshotMetadataRepoStatus(input: {
     freshness: input.snapshot?.freshness ?? "cold",
     hasEvidence: input.snapshot !== null,
     truncated: input.truncated,
+    repositoryComposition: summarizeRepositoryComposition(input.snapshot?.repository_composition),
     budget: {
       row_limit: input.row_limit
     }
@@ -305,6 +317,10 @@ export function getSnapshotMetadataRepoStatus(input: {
   if (input.snapshot_validity !== undefined) {
     status.snapshot_validity = input.snapshot_validity;
   }
+  const repositoryComposition = summarizeRepositoryComposition(input.snapshot?.repository_composition);
+  if (repositoryComposition !== undefined) {
+    status.repository_composition = repositoryComposition;
+  }
   const reason = input.snapshot?.reason ?? input.warmup?.reason;
   if (reason !== undefined) {
     status.reason = reason;
@@ -314,4 +330,104 @@ export function getSnapshotMetadataRepoStatus(input: {
     status,
     meta: runtimePresentation.meta
   };
+}
+
+const MAX_PUBLIC_REPOSITORY_UNITS = 50;
+const MAX_PUBLIC_EVIDENCE_PATHS_PER_UNIT = 8;
+const MAX_PUBLIC_CLAIM_BLOCKERS_PER_UNIT = 8;
+const MAX_PUBLIC_LIMITS = 20;
+
+export function summarizeRepositoryComposition(
+  composition?: SnapshotRepositoryComposition
+): RepositoryCompositionSummary | undefined {
+  if (composition === undefined) {
+    return undefined;
+  }
+  return {
+    composition_fingerprint: composition.composition_fingerprint,
+    source_complete: composition.source_complete,
+    truncated: composition.truncated,
+    aggregate_claims: { ...composition.aggregate_claims },
+    repositories: composition.repositories
+      .slice(0, MAX_PUBLIC_REPOSITORY_UNITS)
+      .map(summarizeRepositoryUnit),
+    skipped_or_blocked: composition.skipped_or_blocked
+      .slice(0, MAX_PUBLIC_REPOSITORY_UNITS)
+      .map(summarizeRepositoryUnit),
+    limits: composition.limits
+      .slice(0, MAX_PUBLIC_LIMITS)
+      .map(summarizeRepositoryLimit)
+  };
+}
+
+function summarizeRepositoryUnit(unit: SnapshotRepositoryUnit): RepositoryCompositionSummary["repositories"][number] {
+  return removeUndefinedProperties({
+    repository_key: unit.repository_key,
+    parent_repository_key: unit.parent_repository_key,
+    path_prefix: publicRelativePath(unit.path_prefix),
+    depth: unit.depth,
+    state: unit.state,
+    declaration_path: publicOptionalRelativePath(unit.declaration_path),
+    head_gitlink_oid: unit.head_gitlink_oid,
+    index_gitlink_oid: unit.index_gitlink_oid,
+    worktree_head_oid: unit.worktree_head_oid,
+    pinned_revision_matches: unit.pinned_revision_matches,
+    cleanliness: unit.cleanliness,
+    source_available: unit.source_available,
+    evidence_paths: unit.evidence_paths
+      .map(publicRelativePath)
+      .filter((value) => value.length > 0)
+      .slice(0, MAX_PUBLIC_EVIDENCE_PATHS_PER_UNIT),
+    claim_blockers: unit.claim_blockers
+      .slice(0, MAX_PUBLIC_CLAIM_BLOCKERS_PER_UNIT)
+      .map(summarizeClaimBlocker)
+  });
+}
+
+function summarizeClaimBlocker(
+  blocker: SnapshotRepositoryClaimBlocker
+): RepositoryCompositionSummary["repositories"][number]["claim_blockers"][number] {
+  return {
+    kind: blocker.kind,
+    path_prefix: publicRelativePath(blocker.path_prefix),
+    evidence_paths: blocker.evidence_paths
+      .map(publicRelativePath)
+      .filter((value) => value.length > 0)
+      .slice(0, MAX_PUBLIC_EVIDENCE_PATHS_PER_UNIT),
+    blocked_claims: [...blocker.blocked_claims]
+  };
+}
+
+function summarizeRepositoryLimit(
+  limit: SnapshotRepositoryCompositionLimit
+): RepositoryCompositionSummary["limits"][number] {
+  return {
+    kind: limit.kind,
+    path_prefix: publicRelativePath(limit.path_prefix),
+    limit: limit.limit
+  };
+}
+
+function publicOptionalRelativePath(value: string | undefined): string | undefined {
+  return value === undefined ? undefined : publicRelativePath(value);
+}
+
+function publicRelativePath(value: string): string {
+  const normalized = value.replaceAll("\\", "/").replace(/^\.\/+/u, "");
+  if (normalized === "" || normalized === ".") {
+    return ".";
+  }
+  if (normalized.startsWith("/") || /^[a-z][a-z0-9+.-]*:/iu.test(normalized)) {
+    return "[redacted]";
+  }
+  const safeSegments = normalized
+    .split("/")
+    .filter((segment) => segment.length > 0 && segment !== "." && segment !== "..");
+  return safeSegments.length === 0 ? "." : safeSegments.join("/");
+}
+
+function removeUndefinedProperties<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entryValue]) => entryValue !== undefined)
+  ) as T;
 }

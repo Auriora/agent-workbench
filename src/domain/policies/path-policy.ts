@@ -96,6 +96,18 @@ export type RootIgnoreFileContent = {
   content: string;
 };
 
+export type RepositoryCompositionAdmissionUnit = {
+  path_prefix: string;
+  state: string;
+  source_available: boolean;
+  declaration_path?: string;
+  head_gitlink_oid?: string;
+};
+
+export type RepositoryCompositionAdmissionReceipt = {
+  repositories: readonly RepositoryCompositionAdmissionUnit[];
+};
+
 export type PathPolicyCategory =
   | "source"
   | "generated"
@@ -198,6 +210,7 @@ export function classifyPathPolicy(input: {
   vendorRoots?: readonly string[];
   gitignoreRules?: readonly GitignoreRule[];
   hasNestedGitRepository?: boolean;
+  repositoryComposition?: RepositoryCompositionAdmissionReceipt;
 }): PathClassification {
   const relativePath = normalizeCatalogPath(input.relativePath).replace(/^\.\/+/, "");
   const baseInput = {
@@ -207,14 +220,19 @@ export function classifyPathPolicy(input: {
     generatedRoots: input.generatedRoots ?? [],
     vendorRoots: input.vendorRoots ?? [],
     gitignoreRules: input.gitignoreRules ?? [],
-    hasNestedGitRepository: input.hasNestedGitRepository ?? false
+    hasNestedGitRepository: input.hasNestedGitRepository ?? false,
+    repositoryComposition: input.repositoryComposition
   };
+  const admittedSubmodulePath = admittedDeclaredSubmodulePath(relativePath, baseInput.repositoryComposition);
 
   if (relativePath.length === 0 || relativePath === ".") {
     return sourceClassification(relativePath);
   }
   if (isSecretPath(relativePath)) {
     return skippedClassification(relativePath, "secret", "secret");
+  }
+  if (admittedSubmodulePath !== null) {
+    return admittedSubmoduleClassification(relativePath);
   }
   if (baseInput.hasNestedGitRepository) {
     return skippedClassification(relativePath, "nested_repo", "nested_git_repository");
@@ -274,6 +292,7 @@ export function shouldSkipCatalogPath(input: {
   vendorRoots?: readonly string[];
   gitignoreRules?: readonly GitignoreRule[];
   hasNestedGitRepository?: boolean;
+  repositoryComposition?: RepositoryCompositionAdmissionReceipt;
 }): boolean {
   return catalogSkipReason(input) !== null;
 }
@@ -286,6 +305,7 @@ export function catalogSkipReason(input: {
   vendorRoots?: readonly string[];
   gitignoreRules?: readonly GitignoreRule[];
   hasNestedGitRepository?: boolean;
+  repositoryComposition?: RepositoryCompositionAdmissionReceipt;
 }): CatalogSkipReason | null {
   const classification = classifyPathPolicy(input);
   return classification.reason === "source" ? null : classification.reason;
@@ -318,6 +338,17 @@ function sourceClassification(relativePath: string): PathClassification {
     reason: "source",
     readPolicy: "allow",
     writePolicy: "allow",
+    redactionPolicy: "none"
+  };
+}
+
+function admittedSubmoduleClassification(relativePath: string): PathClassification {
+  return {
+    relativePath,
+    category: "source",
+    reason: "source",
+    readPolicy: "allow",
+    writePolicy: "refuse",
     redactionPolicy: "none"
   };
 }
@@ -393,6 +424,53 @@ function isSecretPath(relativePath: string): boolean {
     normalized.startsWith("config/credentials/") ||
     normalized.includes("/config/credentials/")
   );
+}
+
+function admittedDeclaredSubmodulePath(
+  relativePath: string,
+  repositoryComposition?: RepositoryCompositionAdmissionReceipt
+): string | null {
+  if (repositoryComposition === undefined) {
+    return null;
+  }
+
+  for (const unit of repositoryComposition.repositories) {
+    const pathPrefix = normalizeCompositionPathPrefix(unit.path_prefix);
+    if (
+      !isSafeCompositionPathPrefix(pathPrefix) ||
+      !isReadableSubmoduleState(unit.state) ||
+      unit.source_available !== true ||
+      typeof unit.declaration_path !== "string" ||
+      unit.declaration_path.length === 0 ||
+      typeof unit.head_gitlink_oid !== "string" ||
+      unit.head_gitlink_oid.length === 0
+    ) {
+      continue;
+    }
+    if (relativePath === pathPrefix || relativePath.startsWith(`${pathPrefix}/`)) {
+      return pathPrefix;
+    }
+  }
+  return null;
+}
+
+function isReadableSubmoduleState(state: string): boolean {
+  return state === "initialized" || state === "worktree_revision_mismatch" || state === "metadata_unavailable";
+}
+
+function isSafeCompositionPathPrefix(pathPrefix: string): boolean {
+  return (
+    pathPrefix.length > 0 &&
+    !pathPrefix.startsWith("/") &&
+    !pathPrefix.includes("\\") &&
+    !pathPrefix.includes("\0") &&
+    pathPrefix.split("/").every((segment) => segment.length > 0 && segment !== "." && segment !== "..")
+  );
+}
+
+function normalizeCompositionPathPrefix(pathPrefix: string): string {
+  const normalized = normalizeCatalogPath(pathPrefix).replace(/^\.\/+/u, "").replace(/\/+$/u, "");
+  return normalized === "." ? "" : normalized;
 }
 
 function hasSkippedRoot(relativePath: string, skippedRoots: readonly string[]): boolean {
