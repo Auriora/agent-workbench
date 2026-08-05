@@ -93,6 +93,7 @@ export function getCatalogRepoStatus(input: {
 }): GetRepoStatusResult {
   const coverage = summarizeAdapterEvidence(input.files);
   const languages = uniqueSorted(input.files.map((file) => file.file_identity.language));
+  const visibleWarmup = visibleWarmupExecution(input.snapshot ?? null, input.warmup ?? null);
   const runtimePresentation = buildRuntimeResponseMeta({
     repoRoot: input.repo_root,
     indexedRoots: input.indexed_roots,
@@ -101,7 +102,7 @@ export function getCatalogRepoStatus(input: {
     coverage,
     snapshot: input.snapshot,
     snapshotValidity: input.snapshot_validity,
-    warmup: input.warmup,
+    warmup: visibleWarmup,
     watcher: input.watcher,
     freshness: input.freshness,
     truncated: input.truncated,
@@ -124,8 +125,8 @@ export function getCatalogRepoStatus(input: {
   if (input.snapshot?.owner_state !== undefined) {
     status.owner_state = input.snapshot.owner_state;
   }
-  if (input.warmup?.state !== undefined) {
-    status.warmup_state = input.warmup.state;
+  if (visibleWarmup?.state !== undefined) {
+    status.warmup_state = visibleWarmup.state;
   }
   if (input.watcher !== undefined) {
     status.watcher_freshness = input.watcher;
@@ -137,7 +138,7 @@ export function getCatalogRepoStatus(input: {
   if (repositoryComposition !== undefined) {
     status.repository_composition = repositoryComposition;
   }
-  const reason = input.snapshot?.reason ?? input.warmup?.reason;
+  const reason = input.snapshot?.reason ?? visibleWarmup?.reason;
   if (reason !== undefined) {
     status.reason = reason;
   }
@@ -275,6 +276,7 @@ export function getSnapshotMetadataRepoStatus(input: {
   const files = input.files ?? [];
   const coverage = summarizeAdapterEvidence(files);
   const languages = uniqueSorted(files.map((file) => file.file_identity.language));
+  const visibleWarmup = visibleWarmupExecution(input.snapshot, input.warmup ?? null);
   const runtimePresentation = buildRuntimeResponseMeta({
     repoRoot: input.snapshot?.repo_root ?? input.repo_root,
     indexedRoots: input.indexed_roots,
@@ -283,7 +285,7 @@ export function getSnapshotMetadataRepoStatus(input: {
     coverage,
     snapshot: input.snapshot,
     snapshotValidity: input.snapshot_validity,
-    warmup: input.warmup,
+    warmup: visibleWarmup,
     watcher: input.watcher,
     freshness: input.snapshot?.freshness ?? "cold",
     hasEvidence: input.snapshot !== null,
@@ -308,8 +310,8 @@ export function getSnapshotMetadataRepoStatus(input: {
   if (input.snapshot?.owner_state !== undefined) {
     status.owner_state = input.snapshot.owner_state;
   }
-  if (input.warmup?.state !== undefined) {
-    status.warmup_state = input.warmup.state;
+  if (visibleWarmup?.state !== undefined) {
+    status.warmup_state = visibleWarmup.state;
   }
   if (input.watcher !== undefined) {
     status.watcher_freshness = input.watcher;
@@ -321,7 +323,7 @@ export function getSnapshotMetadataRepoStatus(input: {
   if (repositoryComposition !== undefined) {
     status.repository_composition = repositoryComposition;
   }
-  const reason = input.snapshot?.reason ?? input.warmup?.reason;
+  const reason = input.snapshot?.reason ?? visibleWarmup?.reason;
   if (reason !== undefined) {
     status.reason = reason;
   }
@@ -329,6 +331,24 @@ export function getSnapshotMetadataRepoStatus(input: {
   return {
     status,
     meta: runtimePresentation.meta
+  };
+}
+
+function visibleWarmupExecution(
+  snapshot: SnapshotState | null | undefined,
+  warmup: WarmupExecution | null
+): WarmupExecution | null {
+  if (
+    warmup === null ||
+    warmup.state !== "complete" ||
+    warmup.snapshot_id === snapshot?.id
+  ) {
+    return warmup;
+  }
+
+  return {
+    ...warmup,
+    state: "running"
   };
 }
 

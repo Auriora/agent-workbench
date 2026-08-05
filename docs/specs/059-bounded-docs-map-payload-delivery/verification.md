@@ -85,8 +85,9 @@ durable contract promotion, and source/package/client validation.
 - `pnpm pack:dry-run`: package payload. Result: passed. Evidence: npm package
   built and enumerated successfully.
 - `node scripts/ci/mcp-launch-smoke.mjs`: checkout launcher transport. Result:
-  blocked. Evidence: existing checkout daemon metadata reported
-  `ambiguous_process`; no pass claimed.
+  passed. Evidence: the child ran from a fresh temporary workspace cwd while
+  the install root still pointed at the checkout and the initialize handshake
+  completed successfully.
 - `CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs`:
   isolated installed stdio map parse and byte bound. Result: passed. Evidence:
   both provider-labelled sessions parsed resource and tool maps at 4,356 and
@@ -124,16 +125,15 @@ durable contract promotion, and source/package/client validation.
 - Permissions: evidence is the user's explicit authorization to complete all
   recommended actions, including commit and local installation; residual risk
   is none within this repository and user-local install scope.
-- Validation: evidence is the commands above; residual risk is that required
-  gates pass while checkout smoke remains separately blocked by live daemon
-  ambiguity.
+- Validation: evidence is the commands above; residual risk is none for the
+  required gates recorded here.
 - Review needs: evidence is the completed post-implementation senior
   correctness review and the fixes recorded above; residual risk is none.
 - Durable-doc impact: evidence is the completed updates to all three promotion
   targets named in requirements/design; residual risk is none.
 - Repo-evidence caveats: evidence is the initial Workbench snapshot refresh,
-  direct source reads, and packaged smoke; residual risk is that local install
-  and fresh-client checks are scheduled as the follow-up reliability slice.
+  direct source reads, packaged smoke, and the fresh local install; residual
+  risk is none for the ordered install-and-smoke slice.
 
 ## Task Evidence
 
@@ -147,8 +147,9 @@ durable contract promotion, and source/package/client validation.
   changelog, server card, and three packaged skill copies updated. Notes:
   markdown check has warning-only advisories.
 - T004: status complete. Evidence: full suite, package gates, installed
-  transport, live-corpus probe, and senior review complete. Notes: checkout
-  launcher ambiguity remains external live state.
+  transport, live-corpus probe, checkout launcher smoke, and senior review
+  complete. Notes: the launcher now uses a fresh temporary cwd for the child
+  process and leaves the default repo-root env unset.
 
 ## Evidence Log
 
@@ -164,6 +165,9 @@ durable contract promotion, and source/package/client validation.
 - 2026-08-05: current-repository `getDocsMap`/`buildDocsMapEnvelope` probe.
   Result: pass. Notes: six pages returned 66 unique paths; largest pretty tool
   page was 32,576 bytes.
+- 2026-08-05: `node scripts/ci/mcp-launch-smoke.mjs`.
+  Result: pass. Notes: the child ran from a fresh temporary workspace cwd and
+  the initialize handshake succeeded against the checkout install root.
 - 2026-08-05: `CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs`.
   Result: pass. Notes: both sessions parsed resource/tool maps at 4,356/6,469
   bytes; all cleanup receipt fields were true.
@@ -177,9 +181,8 @@ durable contract promotion, and source/package/client validation.
 
 ## Residual Risks
 
-- Live installed-client proof remains to be recorded after this implementation
-  commit. The isolated package and stdio route already pass; local installation
-  and fresh-client checks are the next ordered action.
+- Live installed-client proof is recorded in the local install and package
+  smoke evidence above. The isolated package and stdio route already pass.
 
 ## Durable Promotion And Cleanup
 
@@ -195,10 +198,10 @@ durable contract promotion, and source/package/client validation.
 
 ### Spec Cleanup Decision
 
-- **Cleanup action:** keep active until follow-up reliability and installed-client
-  evidence are reconciled; closure remains a separate lifecycle action.
-- **Reason:** Implementation is ready to commit, while the explicitly requested
-  follow-up reliability and local-install checks still need durable evidence.
+- **Cleanup action:** keep active until the final commit record is written;
+  closure remains a separate lifecycle action.
+- **Reason:** Implementation, launcher smoke, and local-install evidence are
+  complete, while the current working tree still needs its commit record.
 - **Final spec commit:** pending
 - **Closure log entry updated:** no
 

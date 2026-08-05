@@ -9,6 +9,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { repoStatusResource } from "../../src/interface-adapters/mcp/registries/resources/repo-status.js";
 import {
+  getSnapshotRepoStatus,
   getSnapshotMetadataRepoStatus,
   type GetRepoStatusResult
 } from "../../src/application/use-cases/get-repo-status.js";
@@ -467,6 +468,112 @@ describe("repo status MCP resource", () => {
         fs.rmSync(repoRoot, { recursive: true, force: true });
       }
     }
+  });
+
+  it("keeps warmup progress visible until the selected snapshot catches the completed target", async () => {
+    const result = await getSnapshotRepoStatus({
+      repo_root: "/repo",
+      snapshots: {
+        async getSnapshot({ snapshot_id }) {
+          if (snapshot_id === "snap-2") {
+            return testSnapshot("snap-2", "/repo");
+          }
+          return testSnapshot("snap-1", "/repo");
+        },
+        async listSnapshots() {
+          throw new Error("listSnapshots should not run");
+        },
+        async upsertSnapshot() {
+          throw new Error("upsertSnapshot should not run");
+        },
+        async markSnapshotFreshness() {
+          throw new Error("markSnapshotFreshness should not run");
+        }
+      },
+      catalog: {
+        async listFiles() {
+          return [buildFileCatalogEntry({
+            file_identity: {
+              path: "src/app.ts",
+              language: "typescript",
+              content_hash: "sha256:status",
+              size_bytes: 24,
+              mtime_ms: 1
+            }
+          })];
+        },
+        async getFile() {
+          throw new Error("getFile should not run");
+        },
+        async upsertEntry() {
+          throw new Error("upsertEntry should not run");
+        },
+        async removeEntry() {
+          throw new Error("removeEntry should not run");
+        }
+      },
+      documentation_concerns: {
+        async getDocumentationConcernIndexState() {
+          return {
+            status: "ready" as const,
+            snapshot_id: "snap-1",
+            state: "complete" as const
+          };
+        },
+        async replaceSnapshotDocumentationConcerns() {
+          throw new Error("replaceSnapshotDocumentationConcerns should not run");
+        },
+        async listDocumentationConcernTerms() {
+          throw new Error("listDocumentationConcernTerms should not run");
+        },
+        async listDocumentationConcernOwners() {
+          throw new Error("listDocumentationConcernOwners should not run");
+        }
+      },
+      warmups: {
+        async getState() {
+          return {
+            execution_id: "warm-1",
+            repo_root: "/repo",
+            snapshot_id: "snap-2",
+            state: "complete" as const,
+            owner_id: "controller:1",
+            queued_jobs: 0,
+            started_at: "2026-08-05T12:00:00.000Z",
+            updated_at: "2026-08-05T12:00:01.000Z"
+          };
+        },
+        async requestWarmup() {
+          return "warm-1";
+        },
+        async markOwner() {},
+        async completeWarmup() {}
+      },
+      refresh_triggers: {
+        async startup() {
+          throw new Error("unexpected startup refresh");
+        },
+        async staleFirstRead() {
+          throw new Error("unexpected first-read refresh");
+        },
+        async watcherBatch() {
+          throw new Error("unexpected watcher refresh");
+        },
+        async hasPendingGeneration() {
+          return false;
+        },
+        getGenerationReceipt() {
+          return { generation: 0 };
+        }
+      },
+      selected_snapshot_id: "snap-1"
+    });
+
+    expect(result.status.snapshot_id).toBe("snap-1");
+    expect(result.status.warmup_state).toBe("running");
+    expect(result.status.runtime_state).toBe("refreshing");
+    expect(result.status.freshness).toBe("refreshing");
+    expect(result.meta.freshness).toBe("refreshing");
   });
 
   it("executes one background refresh after first-read deletion detection", async () => {
