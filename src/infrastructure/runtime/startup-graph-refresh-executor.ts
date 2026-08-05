@@ -9,6 +9,7 @@ import type {
   RefreshExecutorPort,
   RefreshWorkerResult
 } from "../../ports/index.js";
+import type { RefreshWorkerProgress } from "../../contracts/index.js";
 
 export type StartupGraphRefreshExecutorOptions = {
   database_path: string;
@@ -41,7 +42,9 @@ export class StartupGraphRefreshExecutor implements RefreshExecutorPort {
       retainLatestSnapshots: this.options.retain_latest_snapshots,
       retainLatestFreshSnapshots: this.options.retain_latest_fresh_snapshots,
       controllerGeneration: this.options.controller_generation,
-      invalidationGeneration: input.generation
+      invalidationGeneration: input.generation,
+      deadlineAt: input.deadline.deadline_at,
+      timeoutMs: input.deadline.timeout_ms
     };
     const worker = this.options.worker_factory?.({ workerData }) ?? new Worker(
       new URL("../workers/startup-graph-warmup-worker-entrypoint.mjs", import.meta.url),
@@ -61,6 +64,15 @@ export class StartupGraphRefreshExecutor implements RefreshExecutorPort {
         worker.off("exit", onExit);
       };
       const onMessage = (message: unknown): void => {
+        const progress = getRefreshWorkerProgress(
+          message,
+          input.target_snapshot_id,
+          input.execution_id
+        );
+        if (progress !== undefined) {
+          input.on_progress?.(progress);
+          return;
+        }
         if (results.length >= 2) return;
         const result = getRefreshWorkerResult(
           message,
@@ -102,6 +114,32 @@ export class StartupGraphRefreshExecutor implements RefreshExecutorPort {
     }
     await termination;
   }
+}
+
+function getRefreshWorkerProgress(
+  message: unknown,
+  snapshotId: string,
+  executionId: string
+): RefreshWorkerProgress | undefined {
+  if (typeof message !== "object" || message === null) return undefined;
+  const envelope = message as { type?: unknown; progress?: unknown };
+  if (envelope.type !== "progress" || typeof envelope.progress !== "object" || envelope.progress === null) {
+    return undefined;
+  }
+  const progress = envelope.progress as Record<string, unknown>;
+  const fields = new Set(["execution_id", "target_snapshot_id", "phase", "completed_units"]);
+  if (
+    progress.execution_id !== executionId ||
+    progress.target_snapshot_id !== snapshotId ||
+    (progress.phase !== "composition" && progress.phase !== "catalog" && progress.phase !== "extraction" &&
+      progress.phase !== "docs" && progress.phase !== "graph_write" && progress.phase !== "resolution" &&
+      progress.phase !== "finalizing") ||
+    typeof progress.completed_units !== "number" ||
+    !Number.isSafeInteger(progress.completed_units) ||
+    progress.completed_units < 0 ||
+    !Object.keys(progress).every((key) => fields.has(key))
+  ) return undefined;
+  return progress as RefreshWorkerProgress;
 }
 
 function getRefreshWorkerResult(

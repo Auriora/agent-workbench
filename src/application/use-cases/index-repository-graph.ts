@@ -121,6 +121,12 @@ export type BuildRepositoryGraphInput = {
   invalidation_generation?: number;
   append_to_existing_build?: boolean;
   mark_fresh?: boolean;
+  should_yield_extraction?: () => boolean;
+  report_build_progress?: (
+    phase: "catalog" | "extraction" | "docs" | "graph_write" | "resolution",
+    completed_units: number
+  ) => void;
+  max_resolution_references?: number;
   rails_shape_files?: readonly FileCatalogEntry[];
   repository_composition?: SnapshotRepositoryComposition;
 };
@@ -130,6 +136,7 @@ const RAILS_ROUTE_PRIORITY_PATTERNS = [
   "**/config/routes/*.rb"
 ] as const;
 const RAILS_SHAPE_PROBE_MIN_FILES = 32;
+const MAX_RESOLUTION_REFERENCES_PER_PASS = 5_000;
 
 export type RepositoryGraphBuildSliceResult = {
   outcome: "partial" | "complete";
@@ -199,6 +206,7 @@ export async function buildRepositoryGraph(
     priority_path_patterns: RAILS_ROUTE_PRIORITY_PATTERNS,
     repository_composition: input.repository_composition
   });
+  input.report_build_progress?.("catalog", scanned.files.length);
 
   const railsShape = detectRailsProjectShape({
     files: mergeRailsShapeFiles({
@@ -216,16 +224,25 @@ export async function buildRepositoryGraph(
     priorityPaths
   });
   const maxExtractionFiles = input.max_extraction_files;
-  const extractionFiles = maxExtractionFiles === undefined
+  const plannedExtractionFiles = maxExtractionFiles === undefined
     ? prioritizedExtractionFiles
     : prioritizedExtractionFiles.slice(0, maxExtractionFiles);
-  const extractionTruncated = maxExtractionFiles !== undefined && prioritizedExtractionFiles.length > maxExtractionFiles;
+  const extractionFiles: FileCatalogEntry[] = [];
+  let cooperativeDeadlineReached = false;
 
   const batches: ExtractionBatch[] = [];
   let unsupportedFiles = 0;
   let resourceBackedFiles = 0;
 
-  for (const [index, file] of extractionFiles.entries()) {
+  for (const [index, file] of plannedExtractionFiles.entries()) {
+    if (extractionFiles.length > 0 && input.should_yield_extraction?.() === true) {
+      cooperativeDeadlineReached = true;
+      break;
+    }
+    extractionFiles.push(file);
+    if (extractionFiles.length === 1 || extractionFiles.length % 25 === 0) {
+      input.report_build_progress?.("extraction", extractionFiles.length);
+    }
     await yieldToEventLoop(index);
     const extractor = resolveExtractor({
       file,
@@ -291,6 +308,9 @@ export async function buildRepositoryGraph(
       extracted_at: now
     });
   }
+  const extractionTruncated =
+    cooperativeDeadlineReached ||
+    (maxExtractionFiles !== undefined && prioritizedExtractionFiles.length > maxExtractionFiles);
 
   const docsScan = input.docs_index === undefined
     ? undefined
@@ -335,6 +355,9 @@ export async function buildRepositoryGraph(
         indexed_at: now,
         truncated: selected.truncated || contentTruncated
       });
+      if (documents.length === 1 || documents.length % 25 === 0) {
+        input.report_build_progress?.("docs", documents.length);
+      }
     }
   }
 
@@ -384,6 +407,7 @@ export async function buildRepositoryGraph(
         extracted_files: batches.length,
         truncated: extractionTruncated,
         budget: maxExtractionFiles,
+        cooperative_deadline_reached: cooperativeDeadlineReached,
         continuation_cursor: extractionContinuationCursor({
           scanned,
           extractionFiles,
@@ -397,6 +421,7 @@ export async function buildRepositoryGraph(
       documents,
       coverage
     });
+    input.report_build_progress?.("docs", documents.length);
   }
 
   if (input.documentation_concerns !== undefined && concernIndex !== undefined) {
@@ -418,6 +443,10 @@ export async function buildRepositoryGraph(
       batch,
       replace: true
     });
+    const completed = index + 1;
+    if (completed === 1 || completed % 25 === 0 || completed === resolved.batches.length) {
+      input.report_build_progress?.("graph_write", completed);
+    }
   }
   const allEdges = [...resolved.edges, ...augmentedRouting.edges];
   for (const [index, edgesForFile] of allEdges.entries()) {
@@ -439,6 +468,7 @@ export async function buildRepositoryGraph(
       extracted_files: resolved.batches.length,
       truncated: extractionTruncated,
       budget: maxExtractionFiles,
+      cooperative_deadline_reached: cooperativeDeadlineReached,
       continuation_cursor: extractionContinuationCursor({
         scanned,
         extractionFiles,
@@ -616,6 +646,9 @@ export async function runRepositoryGraphBuildSlice(
       coverage: [completeGraphCoverage(progress)]
     };
   }
+  if (progress.phase === "resolving") {
+    return await resolveAccumulatedBuildReferencesSlice(input, progress);
+  }
   if (progress.scan_cursor === undefined) {
     throw new Error("Incomplete graph build progress has no continuation cursor.");
   }
@@ -655,7 +688,10 @@ export async function runRepositoryGraphBuildSlice(
       counters,
       updated_at: input.clock.nowIso8601()
     };
-    const coverage = partialGraphCoverage(nextProgress);
+    const coverage = partialGraphCoverage(nextProgress, {
+      scan_truncated: graphCoverage.scan_truncated,
+      extraction_truncated: graphCoverage.extraction_truncated
+    });
     await input.build_coverage.upsertGraphBuildCoverage({
       snapshot_id: input.snapshot_id,
       controller_generation: input.controller_generation,
@@ -675,16 +711,103 @@ export async function runRepositoryGraphBuildSlice(
   const resolvingProgress: GraphBuildProgress = {
     ...progress,
     phase: "resolving",
-    scan_cursor: undefined,
+    scan_cursor: "resolve:0",
     counters,
     updated_at: input.clock.nowIso8601()
   };
   await input.build_progress.upsertGraphBuildProgress({ progress: resolvingProgress });
-  await reconcileAccumulatedBuildReferences(input);
+  const coverage = partialGraphCoverage(resolvingProgress, {
+    scan_truncated: false,
+    extraction_truncated: false
+  });
+  await input.build_coverage.upsertGraphBuildCoverage({
+    snapshot_id: input.snapshot_id,
+    controller_generation: input.controller_generation,
+    invalidation_generation: input.invalidation_generation,
+    coverage
+  });
+  return {
+    outcome: "partial",
+    snapshot_id: input.snapshot_id,
+    continuation_cursor: resolvingProgress.scan_cursor,
+    partial_kind: "continue_build",
+    coverage: [coverage]
+  };
+}
+
+async function resolveAccumulatedBuildReferencesSlice(
+  input: RepositoryGraphBuildSliceInput,
+  progress: GraphBuildProgress
+): Promise<RepositoryGraphBuildSliceResult> {
+  const afterId = parseResolutionCursor(progress.scan_cursor);
+  const maxResolutionReferences = input.max_resolution_references ?? MAX_RESOLUTION_REFERENCES_PER_PASS;
+  if (!Number.isSafeInteger(maxResolutionReferences) || maxResolutionReferences <= 0) {
+    throw new TypeError("max_resolution_references must be a positive safe integer.");
+  }
+  const nodes = await readAllBuildNodes(input);
+  const unresolved = await input.build_read.listBuildUnresolvedReferences({
+    snapshot_id: input.snapshot_id,
+    controller_generation: input.controller_generation,
+    invalidation_generation: input.invalidation_generation,
+    after_id: afterId === "0" ? undefined : afterId,
+    max_rows: maxResolutionReferences
+  });
+  const resolvedReferences: Array<{
+    unresolved_reference_id: string;
+    file_path: string;
+    edge: GraphEdgeWriteModel;
+  }> = [];
+  for (const reference of unresolved) {
+    const resolution = resolveOneReference({ reference, allNodes: nodes, finalization: true });
+    if (resolution !== undefined) {
+      resolvedReferences.push({
+        unresolved_reference_id: reference.id,
+        file_path: reference.source_file_path,
+        edge: resolution
+      });
+    }
+  }
+  await input.build_resolution.applyBuildResolutionSlice({
+    snapshot_id: input.snapshot_id,
+    controller_generation: input.controller_generation,
+    invalidation_generation: input.invalidation_generation,
+    provenance: "graph-build-final-resolution",
+    resolved_references: resolvedReferences
+  });
+  input.report_build_progress?.("resolution", unresolved.length);
+
+  if (unresolved.length === maxResolutionReferences) {
+    const cursor = `resolve:${unresolved.at(-1)!.id}`;
+    const nextProgress: GraphBuildProgress = {
+      ...progress,
+      scan_cursor: cursor,
+      updated_at: input.clock.nowIso8601()
+    };
+    const coverage = partialGraphCoverage(nextProgress, {
+      scan_truncated: false,
+      extraction_truncated: false
+    });
+    await input.build_coverage.upsertGraphBuildCoverage({
+      snapshot_id: input.snapshot_id,
+      controller_generation: input.controller_generation,
+      invalidation_generation: input.invalidation_generation,
+      coverage
+    });
+    await input.build_progress.upsertGraphBuildProgress({ progress: nextProgress });
+    return {
+      outcome: "partial",
+      snapshot_id: input.snapshot_id,
+      continuation_cursor: cursor,
+      partial_kind: "continue_build",
+      coverage: [coverage]
+    };
+  }
+
   const completeProgress: GraphBuildProgress = {
-    ...resolvingProgress,
+    ...progress,
     phase: "complete",
     status: "completed",
+    scan_cursor: undefined,
     updated_at: input.clock.nowIso8601()
   };
   const coverage = completeGraphCoverage(completeProgress);
@@ -704,6 +827,12 @@ export async function runRepositoryGraphBuildSlice(
     snapshot_id: input.snapshot_id,
     coverage: [coverage]
   };
+}
+
+function parseResolutionCursor(cursor: string | undefined): string {
+  const match = /^resolve:(\d+)$/u.exec(cursor ?? "");
+  if (match === null) throw new Error("Resolving graph build progress has an invalid cursor.");
+  return match[1];
 }
 
 function buildProgressFromResult(input: {
@@ -766,7 +895,10 @@ function addBuildCounters(
   };
 }
 
-function partialGraphCoverage(progress: GraphBuildProgress): IndexCoverage & { evidence_class: "graph" } {
+function partialGraphCoverage(
+  progress: GraphBuildProgress,
+  truncation: Pick<IndexCoverage, "scan_truncated" | "extraction_truncated">
+): IndexCoverage & { evidence_class: "graph" } {
   return {
     evidence_class: "graph",
     state: "partial",
@@ -774,13 +906,15 @@ function partialGraphCoverage(progress: GraphBuildProgress): IndexCoverage & { e
     eligible_files_seen: progress.counters.eligible_files,
     admitted_files: progress.counters.admitted_files,
     extracted_files: progress.counters.extracted_files,
-    scan_truncated: true,
-    extraction_truncated: false,
+    scan_truncated: truncation.scan_truncated,
+    extraction_truncated: truncation.extraction_truncated,
     continuation_available: progress.scan_cursor !== undefined,
     continuation_kind: progress.scan_cursor === undefined ? undefined : "graph_build",
     continuation_cursor: progress.scan_cursor,
     indexed_roots: ["."],
-    reason: "Graph completion remains bounded and can resume from its durable scan cursor."
+    reason: progress.phase === "resolving"
+      ? "Graph completion is resolving accumulated references from a durable resolution cursor."
+      : "Graph completion remains bounded and can resume from its durable scan cursor."
   };
 }
 
@@ -808,29 +942,6 @@ function requireGraphCoverage(coverage: readonly IndexCoverage[]): IndexCoverage
   return graphCoverage;
 }
 
-async function reconcileAccumulatedBuildReferences(input: RepositoryGraphBuildSliceInput): Promise<void> {
-  const nodes = await readAllBuildNodes(input);
-  const unresolved = await readAllBuildUnresolved(input);
-  const resolvedReferences: Array<{ file_path: string; edge: GraphEdgeWriteModel }> = [];
-  const remaining: UnresolvedReference[] = [];
-  for (const reference of unresolved) {
-    const resolution = resolveOneReference({ reference, allNodes: nodes, finalization: true });
-    if (resolution === undefined) {
-      remaining.push(reference);
-    } else {
-      resolvedReferences.push({ file_path: reference.source_file_path, edge: resolution });
-    }
-  }
-  await input.build_resolution.replaceBuildResolution({
-    snapshot_id: input.snapshot_id,
-    controller_generation: input.controller_generation,
-    invalidation_generation: input.invalidation_generation,
-    provenance: "graph-build-final-resolution",
-    resolved_references: resolvedReferences,
-    unresolved_references: remaining
-  });
-}
-
 async function readAllBuildNodes(input: RepositoryGraphBuildSliceInput): Promise<GraphNode[]> {
   const rows: GraphNode[] = [];
   let after: string | undefined;
@@ -840,23 +951,6 @@ async function readAllBuildNodes(input: RepositoryGraphBuildSliceInput): Promise
       controller_generation: input.controller_generation,
       invalidation_generation: input.invalidation_generation,
       after_node_id: after,
-      max_rows: 5_000
-    });
-    rows.push(...page);
-    if (page.length < 5_000) return rows;
-    after = page.at(-1)?.id;
-  }
-}
-
-async function readAllBuildUnresolved(input: RepositoryGraphBuildSliceInput): Promise<UnresolvedReference[]> {
-  const rows: UnresolvedReference[] = [];
-  let after: string | undefined;
-  for (;;) {
-    const page = await input.build_read.listBuildUnresolvedReferences({
-      snapshot_id: input.snapshot_id,
-      controller_generation: input.controller_generation,
-      invalidation_generation: input.invalidation_generation,
-      after_id: after,
       max_rows: 5_000
     });
     rows.push(...page);
@@ -1007,6 +1101,7 @@ function buildIndexCoverage(input: {
     extracted_files: number;
     truncated: boolean;
     budget?: number;
+    cooperative_deadline_reached?: boolean;
     continuation_cursor?: string;
   };
   docsScan?: {
@@ -1021,7 +1116,8 @@ function buildIndexCoverage(input: {
   const graphCoverageReasonMessage = graphCoverageReason({
     graphScanTruncated: input.graphScan.truncated,
     graphExtractionTruncated: input.graphExtraction.truncated,
-    graphExtractionBudget: input.graphExtraction.budget
+    graphExtractionBudget: input.graphExtraction.budget,
+    cooperativeDeadlineReached: input.graphExtraction.cooperative_deadline_reached === true
   });
   const graphCoverage = {
     evidence_class: "graph" as const,
@@ -1101,16 +1197,21 @@ function graphCoverageReason(input: {
   graphScanTruncated: boolean;
   graphExtractionTruncated: boolean;
   graphExtractionBudget?: number;
+  cooperativeDeadlineReached: boolean;
 }): string {
   const reasons: string[] = [];
   if (input.graphScanTruncated) {
     reasons.push("Graph seed scan reached its file budget before covering the full repository.");
   }
   if (input.graphExtractionTruncated) {
-    const configuredBudget = input.graphExtractionBudget === undefined
-      ? "configured file budget"
-      : `max_extraction_files=${input.graphExtractionBudget}`;
-    reasons.push(`Graph extraction reached its ${configuredBudget} before processing all scanned files.`);
+    if (input.cooperativeDeadlineReached) {
+      reasons.push("Graph extraction yielded before the worker deadline and exposed a durable continuation.");
+    } else {
+      const configuredBudget = input.graphExtractionBudget === undefined
+        ? "configured file budget"
+        : `max_extraction_files=${input.graphExtractionBudget}`;
+      reasons.push(`Graph extraction reached its ${configuredBudget} before processing all scanned files.`);
+    }
   }
   if (reasons.length === 0) {
     return "Graph seed scan covered the requested roots.";

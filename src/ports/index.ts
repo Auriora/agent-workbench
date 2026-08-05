@@ -64,6 +64,7 @@ import type {
   RefreshDeadline,
   RefreshExecutionState,
   RefreshFailure,
+  RefreshWorkerProgress,
   ReferenceCursorPayload,
   RankedDocsSearchHit,
   SnapshotPublicationState,
@@ -882,6 +883,7 @@ export interface RefreshExecutorPort {
     target_snapshot_id: string;
     generation: InvalidationGeneration;
     deadline: RefreshDeadline;
+    on_progress?: (progress: RefreshWorkerProgress) => void;
   }): Promise<RefreshExecutorCompletion>;
   terminate(input: {
     execution_id: string;
@@ -1088,6 +1090,13 @@ export interface GraphBuildResolutionWritePort {
     resolved_references: readonly BuildResolvedReferenceWrite[];
     unresolved_references: readonly UnresolvedReference[];
   }): Promise<void>;
+  applyBuildResolutionSlice(input: {
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: InvalidationGeneration;
+    provenance: string;
+    resolved_references: readonly (BuildResolvedReferenceWrite & { unresolved_reference_id: string })[];
+  }): Promise<void>;
 }
 
 export type RepositoryOwnershipLease = {
@@ -1243,6 +1252,7 @@ export type SnapshotRefreshControllerReceipt = {
   worker_invocations: number;
   worker_termination_state: "not_required" | "unconfirmed" | "confirmed";
   last_failure?: RefreshFailure;
+  last_worker_progress?: RefreshWorkerProgress;
 };
 
 export interface SnapshotRefreshControllerPort

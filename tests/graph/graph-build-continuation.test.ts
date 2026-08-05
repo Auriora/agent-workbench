@@ -21,7 +21,7 @@ describe("durable repository graph completion", () => {
     for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true });
   });
 
-  it("publishes a truthful partial seed, resumes one target, and resolves references across chunks", async () => {
+  it("publishes a truthful deadline-yielded seed, resumes one target, and resolves references across chunks", async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "awb-graph-continuation-repo-"));
     const stateRoot = fs.mkdtempSync(path.join(os.tmpdir(), "awb-graph-continuation-state-"));
     roots.push(repoRoot, stateRoot);
@@ -58,7 +58,9 @@ describe("durable repository graph completion", () => {
       controller_generation: 7,
       invalidation_generation: 11,
       owner_id: "continuation-owner-7",
-      max_files: 1
+      max_files: 100,
+      max_resolution_references: 1,
+      should_yield_extraction: () => true
     } as const;
 
     try {
@@ -80,13 +82,14 @@ describe("durable repository graph completion", () => {
       });
       await expect(store.getFile({ snapshot_id: seedId, path: "AGENTS.md" })).resolves.toMatchObject({ indexed: true });
       expect(store.db.prepare(`
-        SELECT state, continuation_available, continuation_cursor
+        SELECT state, continuation_available, continuation_cursor, reason
         FROM snapshot_index_coverage
         WHERE snapshot_id = ? AND evidence_class = 'graph'
       `).get(Number(seedId))).toMatchObject({
         state: "partial",
         continuation_available: 1,
-        continuation_cursor: "AGENTS.md"
+        continuation_cursor: "AGENTS.md",
+        reason: expect.stringContaining("yielded before the worker deadline")
       });
 
       const completionId = await store.allocateBuildSnapshotId({ repo_root: repoRoot, minimum_id: "7002" });
@@ -96,11 +99,47 @@ describe("durable repository graph completion", () => {
         owner_id: "different-owner"
       })).rejects.toThrow("owner does not match");
       const second = await runRepositoryGraphBuildSlice({ ...common, snapshot_id: completionId });
-      expect(second).toMatchObject({ outcome: "partial", partial_kind: "continue_build" });
+      expect(second).toMatchObject({
+        outcome: "partial",
+        partial_kind: "continue_build",
+        coverage: [expect.objectContaining({
+          scan_truncated: false,
+          extraction_truncated: true
+        })]
+      });
       const third = await runRepositoryGraphBuildSlice({ ...common, snapshot_id: completionId });
-      expect(third).toMatchObject({ outcome: "partial", partial_kind: "continue_build" });
+      expect(third).toMatchObject({
+        outcome: "partial",
+        partial_kind: "continue_build",
+        coverage: [expect.objectContaining({
+          scan_truncated: false,
+          extraction_truncated: true
+        })]
+      });
       const fourth = await runRepositoryGraphBuildSlice({ ...common, snapshot_id: completionId });
-      expect(fourth).toMatchObject({ outcome: "complete" });
+      expect(fourth).toMatchObject({
+        outcome: "partial",
+        partial_kind: "continue_build",
+        continuation_cursor: "resolve:0",
+        coverage: [expect.objectContaining({
+          scan_truncated: false,
+          extraction_truncated: false,
+          reason: expect.stringContaining("durable resolution cursor")
+        })]
+      });
+      const fifth = await runRepositoryGraphBuildSlice({ ...common, snapshot_id: completionId });
+      expect(fifth).toMatchObject({
+        outcome: "partial",
+        partial_kind: "continue_build",
+        continuation_cursor: expect.stringMatching(/^resolve:\d+$/u),
+        coverage: [expect.objectContaining({
+          scan_truncated: false,
+          extraction_truncated: false,
+          reason: expect.stringContaining("durable resolution cursor")
+        })]
+      });
+      const sixth = await runRepositoryGraphBuildSlice({ ...common, snapshot_id: completionId });
+      expect(sixth).toMatchObject({ outcome: "complete" });
 
       await expect(store.getFile({ snapshot_id: completionId, path: "z.py" })).resolves.toBeNull();
       await store.transitionBuild({

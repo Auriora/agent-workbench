@@ -153,6 +153,21 @@ class ControlledRefreshExecutor implements RefreshExecutorPort {
     this.pending[index]?.reject(new Error("unsafe worker detail"));
   }
 
+  public reportProgress(
+    index: number,
+    phase: "composition" | "catalog" | "extraction" | "docs" | "graph_write" | "resolution" | "finalizing",
+    completedUnits: number
+  ): void {
+    const call = this.calls[index];
+    if (call === undefined) throw new Error(`Worker invocation ${index} was not observed.`);
+    call.on_progress?.({
+      execution_id: call.execution_id,
+      target_snapshot_id: call.target_snapshot_id,
+      phase,
+      completed_units: completedUnits
+    });
+  }
+
   public async waitForCalls(count: number): Promise<void> {
     if (this.calls.length >= count) {
       return;
@@ -415,6 +430,64 @@ function createControlledController(options?: {
 }
 
 describe("runtime operation adapters", () => {
+  it("passes the controller deadline to the production worker for cooperative slicing", async () => {
+    const worker = new ProtocolWorker();
+    let observedWorkerData: Record<string, unknown> | undefined;
+    const progress: unknown[] = [];
+    const executor = new StartupGraphRefreshExecutor({
+      database_path: "/tmp/test.sqlite",
+      config_identity: "test",
+      max_files: 2000,
+      retain_latest_snapshots: 1,
+      retain_latest_fresh_snapshots: 1,
+      controller_generation: 4,
+      worker_factory: ({ workerData }) => {
+        observedWorkerData = workerData;
+        return worker as unknown as Worker;
+      }
+    });
+    const completion = executor.run({
+      repo_root: "/repo",
+      execution_id: "exec-deadline",
+      target_snapshot_id: "43",
+      generation: 6,
+      deadline: { timeout_ms: 60_000, deadline_at: "2026-07-20T10:01:00.000Z" },
+      on_progress: (item) => progress.push(item)
+    });
+
+    expect(observedWorkerData).toMatchObject({
+      deadlineAt: "2026-07-20T10:01:00.000Z",
+      timeoutMs: 60_000,
+      maxFiles: 2000
+    });
+    worker.emit("message", {
+      type: "progress",
+      progress: {
+        execution_id: "exec-deadline",
+        target_snapshot_id: "43",
+        phase: "graph_write",
+        completed_units: 27
+      }
+    });
+    worker.emit("message", {
+      type: "complete",
+      result: {
+        outcome: "complete",
+        execution_id: "exec-deadline",
+        target_snapshot_id: "43",
+        completed_generation: 6
+      }
+    });
+    worker.emit("exit", 0);
+    await expect(completion).resolves.toMatchObject({ exit_code: 0 });
+    expect(progress).toEqual([{
+      execution_id: "exec-deadline",
+      target_snapshot_id: "43",
+      phase: "graph_write",
+      completed_units: 27
+    }]);
+  });
+
   it("settles the production worker protocol only after exit with every emitted message", async () => {
     const worker = new ProtocolWorker();
     const executor = createProtocolExecutor(worker);
@@ -1426,6 +1499,40 @@ describe("runtime operation adapters", () => {
     await executor.waitForCalls(1);
   });
 
+  it("clears prior worker progress when a later admission fails", async () => {
+    const publication = new ControlledPublicationPort();
+    const { controller, executor } = createControlledController({ publication });
+    const terminal = observeTerminal(controller);
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    executor.reportProgress(0, "resolution", 9);
+    executor.complete(0);
+    await terminal;
+    expect(controller.getReceipt().last_worker_progress).toMatchObject({
+      phase: "resolution",
+      completed_units: 9
+    });
+
+    publication.failNextAllocation();
+    await expect(controller.request({
+      repo_root: "/repo",
+      reason: "watcher_invalidation",
+      source: "watcher",
+      invalidation_generation: 2
+    })).resolves.toMatchObject({ outcome: "blocked", reason: "store_failure" });
+
+    await expect(controller.getDiagnostics({ repo_root: "/repo" })).resolves.toMatchObject({
+      execution_state: "failed",
+      last_worker_progress: undefined,
+      last_failure: { code: "store_failure" }
+    });
+  });
+
   it("classifies permission-denied allocation through the closed safe failure envelope", async () => {
     const publication = new ControlledPublicationPort();
     publication.failNextAllocation("EACCES");
@@ -1655,6 +1762,11 @@ describe("runtime operation adapters", () => {
       invalidation_generation: 4
     });
     await executor.waitForCalls(1);
+    executor.reportProgress(0, "graph_write", 12);
+    expect(controller.getReceipt().last_worker_progress).toMatchObject({
+      phase: "graph_write",
+      completed_units: 12
+    });
     const first = executor.calls[0] as (typeof executor.calls)[0];
     executor.complete(0, {
       exit_code: 0,

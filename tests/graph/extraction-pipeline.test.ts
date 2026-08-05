@@ -2612,12 +2612,22 @@ type StartupGraphWorkerRun = {
 
 function runStartupGraphWorker(workerData: Record<string, unknown>): Promise<StartupGraphWorkerRun> {
   return new Promise((resolve, reject) => {
+    const timeoutMs = 30_000;
     const worker = new Worker(
       new URL("../../src/infrastructure/workers/startup-graph-warmup-worker-entrypoint.mjs", import.meta.url),
-      { workerData }
+      {
+        workerData: {
+          ...workerData,
+          timeoutMs,
+          deadlineAt: new Date(Date.now() + timeoutMs).toISOString()
+        }
+      }
     );
     const messages: StartupGraphWorkerMessage[] = [];
     const onMessage = (message: unknown): void => {
+      if (typeof message === "object" && message !== null && (message as { type?: unknown }).type === "progress") {
+        return;
+      }
       if (!isStartupGraphWorkerMessage(message)) {
         reject(new Error("Startup graph worker returned an invalid result."));
         return;

@@ -546,7 +546,8 @@ or runtime telemetry.
 ### EB014: Large-Repo Graph Warmup Scale And Progress
 
 - Priority: P1
-- Status: proposed spec
+- Status: delivered by closed Spec 051; deadline-convergence regression repaired
+  and revalidated on 2026-08-05
 - Friction signal: large-repo startup warmup no longer stack-overflows after
   traversal fixes, but full graph warmup remained CPU-bound for more than four
   minutes while the snapshot stayed
@@ -555,6 +556,14 @@ or runtime telemetry.
   non-complete graph coverage for bounded first-pass warmup; persisted
   completion semantics for files beyond the first-pass graph budget are owned
   by Spec 051 under this EB014 backlog item.
+- Delivery evidence: production refresh now separates the catalog window from
+  bounded 250-file extraction passes, automatically consumes durable
+  continuations, and completes final unresolved-reference reconciliation in
+  durable pages of at most 5,000 rows. Aggregate phase progress remains visible
+  after worker failure. An isolated source-runtime refresh against the
+  aws-datalake checkout completed 1,616 extracted files and roughly 77,000
+  unresolved-reference candidates to a published fresh snapshot without
+  changing the checkout or its live cache.
 - Runtime surface: MCP startup warmup, `repo:///status`, graph extraction,
   graph write batching, docs indexing, runtime telemetry, and cache/snapshot
   state.

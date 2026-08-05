@@ -144,6 +144,7 @@ export async function getIntegrationHealth(input: GetIntegrationHealthInput): Pr
     graph_freshness: diagnostics.graph_freshness,
     activity_lease_held: diagnostics.activity_lease_held,
     worker_termination_state: diagnostics.worker_termination_state,
+    last_worker_progress: diagnostics.last_worker_progress,
     last_failure: diagnostics.last_failure
   };
   return {

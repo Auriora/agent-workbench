@@ -14,6 +14,7 @@ import {
 } from "../../src/domain/policies/index.js";
 import { FileCatalogScannerAdapter } from "../../src/infrastructure/filesystem/file-catalog-scanner.js";
 import { FileIdentityAdapter } from "../../src/infrastructure/filesystem/file-identity.js";
+import { classifyWorkspaceEventPath } from "../../src/infrastructure/filesystem/workspace-event-policy.js";
 import { resolveWorkspacePath } from "../../src/infrastructure/filesystem/workspace-safety.js";
 
 type HookModule = {
@@ -40,6 +41,10 @@ describe("shared path policy consistency", () => {
     fs.mkdirSync(path.join(repoRoot, ".vscode"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "ignored-dir"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "nested", ".git"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "nested-empty", ".git"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "nested-gitfile-valid"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "nested-gitfile-invalid"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "gitdir-store", "nested-gitfile-valid"), { recursive: true });
     fs.writeFileSync(path.join(repoRoot, "src", "app.ts"), "export const app = true;\n");
     fs.writeFileSync(path.join(repoRoot, "dist", "bundle.js"), "export const dist = true;\n");
     fs.writeFileSync(path.join(repoRoot, "generated", "out.ts"), "export const generated = true;\n");
@@ -62,6 +67,18 @@ describe("shared path policy consistency", () => {
     fs.writeFileSync(path.join(repoRoot, "ignored-dir", "state.json"), "{}\n");
     fs.writeFileSync(path.join(repoRoot, "nested", ".git", "HEAD"), "ref: refs/heads/main\n");
     fs.writeFileSync(path.join(repoRoot, "nested", "foreign.ts"), "export const foreign = true;\n");
+    fs.writeFileSync(path.join(repoRoot, "nested-empty", "local.ts"), "export const local = true;\n");
+    fs.writeFileSync(
+      path.join(repoRoot, "nested-gitfile-valid", ".git"),
+      "gitdir: ../gitdir-store/nested-gitfile-valid\n"
+    );
+    fs.writeFileSync(
+      path.join(repoRoot, "gitdir-store", "nested-gitfile-valid", "HEAD"),
+      "ref: refs/heads/main\n"
+    );
+    fs.writeFileSync(path.join(repoRoot, "nested-gitfile-valid", "foreign.ts"), "export const foreignGitfile = true;\n");
+    fs.writeFileSync(path.join(repoRoot, "nested-gitfile-invalid", ".git"), "gitdir:\n");
+    fs.writeFileSync(path.join(repoRoot, "nested-gitfile-invalid", "local.ts"), "export const localGitfile = true;\n");
     fs.writeFileSync(path.join(repoRoot, ".gitignore"), "*.log\n!keep.log\nignored-dir/\n");
     fs.writeFileSync(path.join(repoRoot, ".aiignore"), "assistant.*\n!assistant.keep\n");
   });
@@ -131,6 +148,9 @@ describe("shared path policy consistency", () => {
     expect(skippedByPath.get("assistant.log")).toBe("gitignore");
     expect(skippedByPath.get("ignored-dir")).toBe("gitignore");
     expect(skippedByPath.get("nested")).toBe("nested_git_repository");
+    expect(skippedByPath.get("nested-gitfile-valid")).toBe("nested_git_repository");
+    expect(skippedByPath.get("nested-empty")).toBeUndefined();
+    expect(skippedByPath.get("nested-gitfile-invalid")).toBeUndefined();
 
     const fileIdentity = new FileIdentityAdapter();
     await expect(
@@ -159,12 +179,81 @@ describe("shared path policy consistency", () => {
     ).resolves.toBe(false);
     await expect(
       fileIdentity.isSkipped({
+        path: path.join(repoRoot, "nested-gitfile-valid"),
+        repo_root: repoRoot,
+        indexed_roots: ["."],
+        skipped_roots: ["configured-skip"]
+      })
+    ).resolves.toBe(true);
+    await expect(
+      fileIdentity.isSkipped({
+        path: path.join(repoRoot, "nested-empty"),
+        repo_root: repoRoot,
+        indexed_roots: ["."],
+        skipped_roots: ["configured-skip"]
+      })
+    ).resolves.toBe(false);
+    await expect(
+      fileIdentity.isSkipped({
+        path: path.join(repoRoot, "nested-gitfile-invalid"),
+        repo_root: repoRoot,
+        indexed_roots: ["."],
+        skipped_roots: ["configured-skip"]
+      })
+    ).resolves.toBe(false);
+    await expect(
+      fileIdentity.isSkipped({
         path: path.join(repoRoot, "nested"),
         repo_root: repoRoot,
         indexed_roots: ["."],
         skipped_roots: ["configured-skip"]
       })
     ).resolves.toBe(true);
+
+    expect(
+      classifyWorkspaceEventPath({
+        repoRoot,
+        path: "nested",
+        indexedRoots: ["."],
+        skippedRoots: ["configured-skip"]
+      })
+    ).toMatchObject({
+      included: false,
+      reason: "nested_git_repository"
+    });
+    expect(
+      classifyWorkspaceEventPath({
+        repoRoot,
+        path: "nested-gitfile-valid",
+        indexedRoots: ["."],
+        skippedRoots: ["configured-skip"]
+      })
+    ).toMatchObject({
+      included: false,
+      reason: "nested_git_repository"
+    });
+    expect(
+      classifyWorkspaceEventPath({
+        repoRoot,
+        path: "nested-empty/local.ts",
+        indexedRoots: ["."],
+        skippedRoots: ["configured-skip"]
+      })
+    ).toMatchObject({
+      included: true,
+      relativePath: "nested-empty/local.ts"
+    });
+    expect(
+      classifyWorkspaceEventPath({
+        repoRoot,
+        path: "nested-gitfile-invalid/local.ts",
+        indexedRoots: ["."],
+        skippedRoots: ["configured-skip"]
+      })
+    ).toMatchObject({
+      included: true,
+      relativePath: "nested-gitfile-invalid/local.ts"
+    });
 
     for (const target of [
       ".env",

@@ -47,6 +47,7 @@ describe("filesystem workspace watcher", () => {
     fs.mkdirSync(path.join(repoRoot, "src", "nested", ".git"), { recursive: true });
     fs.mkdirSync(path.join(repoRoot, "node_modules", "pkg"), { recursive: true });
     fs.writeFileSync(path.join(repoRoot, "src", "included", "app.ts~"), "editor temp\n");
+    fs.writeFileSync(path.join(repoRoot, "src", "nested", ".git", "HEAD"), "ref: refs/heads/main\n");
     fs.writeFileSync(path.join(repoRoot, ".gitignore"), "src/ignored-dir/\n*.log\n");
     fs.writeFileSync(path.join(repoRoot, ".aiignore"), "scratch/\n");
   });

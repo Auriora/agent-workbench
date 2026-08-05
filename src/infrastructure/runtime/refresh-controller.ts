@@ -25,6 +25,7 @@ import type {
   InvalidationGeneration,
   RefreshFailure,
   RefreshFailureCode,
+  RefreshWorkerProgress,
   SnapshotPublicationState,
   SnapshotRefreshDiagnosticsReceipt
 } from "../../contracts/index.js";
@@ -98,6 +99,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
   private startedGeneration: InvalidationGeneration = 0;
   private workerInvocations = 0;
   private lastFailure: RefreshFailure | undefined;
+  private lastWorkerProgress: SnapshotRefreshControllerReceipt["last_worker_progress"];
   private pass = 0;
   private mutationTail: Promise<void> = Promise.resolve();
   private terminationUnconfirmedExecutionId: string | undefined;
@@ -217,6 +219,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
     this.terminationConfirmedExecutionId = undefined;
     this.terminationConfirmationNotified = false;
     this.targetPublicationState = "building";
+    this.lastWorkerProgress = undefined;
     this.active = {
       execution_id: executionId,
       target_snapshot_id: targetSnapshotId,
@@ -266,7 +269,8 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
       activity_lease: this.active?.lease ?? null,
       worker_invocations: this.workerInvocations,
       worker_termination_state: this.workerTerminationState,
-      last_failure: this.lastFailure
+      last_failure: this.lastFailure,
+      last_worker_progress: this.lastWorkerProgress
     };
   }
 
@@ -333,6 +337,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
         activity_lease_held: this.active?.lease.state === "held",
         worker_invocations: this.workerInvocations,
         worker_termination_state: this.workerTerminationState,
+        last_worker_progress: this.lastWorkerProgress,
         last_failure: this.lastFailure
       });
     });
@@ -453,13 +458,14 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
           }
           this.targetSnapshotId = targetSnapshotId;
           this.targetPublicationState = "building";
-        this.active = {
-          ...pass,
-          target_snapshot_id: targetSnapshotId,
-          started_generation: this.startedGeneration,
-          state: "running",
-          publication_state: "building"
-        };
+          this.lastWorkerProgress = undefined;
+          this.active = {
+            ...pass,
+            target_snapshot_id: targetSnapshotId,
+            started_generation: this.startedGeneration,
+            state: "running",
+            publication_state: "building"
+          };
           this.bumpDiagnosticRevision();
           return true;
         }
@@ -509,6 +515,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
 
     this.targetSnapshotId = targetSnapshotId;
     this.targetPublicationState = "building";
+    this.lastWorkerProgress = undefined;
     this.startedGeneration = startedGeneration;
     this.pass += 1;
     if (this.active !== undefined) {
@@ -584,7 +591,15 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
           execution_id: execution.execution_id,
           target_snapshot_id: execution.target_snapshot_id,
           generation: execution.started_generation,
-          deadline
+          deadline,
+          on_progress: (progress: RefreshWorkerProgress) => {
+            if (
+              progress.execution_id !== execution.execution_id ||
+              progress.target_snapshot_id !== execution.target_snapshot_id
+            ) return;
+            this.lastWorkerProgress = progress;
+            this.bumpDiagnosticRevision();
+          }
         };
         workerRun = this.executor.run(runInput);
       } catch {
@@ -776,6 +791,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
     this.targetPublicationState = input.code === "orphaned_build" ? "failed" : undefined;
     this.executionState = "failed";
     this.workerTerminationState = "not_required";
+    this.lastWorkerProgress = undefined;
     this.lastFailure = createRefreshFailure({
       code: input.code,
       execution_id: executionId,

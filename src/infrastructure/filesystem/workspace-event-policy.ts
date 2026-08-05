@@ -11,6 +11,7 @@ import {
   type CatalogSkipReason
 } from "../../domain/policies/index.js";
 import { readRootIgnoreRules } from "./ignore-file-policy.js";
+import { isNestedGitRepository } from "./nested-git-repository.js";
 
 export type WorkspaceEventPathDecision =
   | {
@@ -118,11 +119,4 @@ function realPathIsInsideRepo(repoRoot: string, absolutePath: string): boolean {
   } catch (_error) {
     return false;
   }
-}
-
-function isNestedGitRepository(repoRoot: string, absolutePath: string): boolean {
-  if (path.resolve(repoRoot) === path.resolve(absolutePath)) {
-    return false;
-  }
-  return fs.existsSync(path.join(absolutePath, ".git"));
 }

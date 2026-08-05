@@ -866,6 +866,7 @@ describe("file catalog scanner", () => {
     fs.writeFileSync(path.join(repoRoot, "modules", "app", "ignored-by-parent.ts"), "export const parentIgnored = false;\n");
     fs.writeFileSync(path.join(repoRoot, "modules", "app", "ignored-by-child.ts"), "export const childIgnored = true;\n");
     fs.writeFileSync(path.join(repoRoot, "modules", "app", "src", "keep.ts"), "export const keep = true;\n");
+    fs.writeFileSync(path.join(repoRoot, "modules", "foreign", ".git", "HEAD"), "ref: refs/heads/main\n");
     fs.writeFileSync(path.join(repoRoot, "modules", "foreign", "foreign.ts"), "export const foreign = true;\n");
 
     const scanner = new FileCatalogScannerAdapter();
@@ -913,6 +914,66 @@ describe("file catalog scanner", () => {
         }),
         expect.objectContaining({
           path: "modules/foreign",
+          reason: "nested_git_repository"
+        })
+      ])
+    );
+  });
+
+  it("ignores invalid nested git markers but still refuses valid directory and gitfile metadata", async () => {
+    fs.mkdirSync(path.join(repoRoot, "markers", "empty-dotgit", ".git"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "markers", "bad-gitfile"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "markers", "good-gitfile"), { recursive: true });
+    fs.mkdirSync(path.join(repoRoot, "git-metadata", "modules", "good-gitfile"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "markers", "empty-dotgit", "keep.ts"), "export const emptyDotgit = true;\n");
+    fs.writeFileSync(path.join(repoRoot, "markers", "bad-gitfile", ".git"), "gitdir:\n");
+    fs.writeFileSync(path.join(repoRoot, "markers", "bad-gitfile", "keep.ts"), "export const badGitfile = true;\n");
+    fs.writeFileSync(
+      path.join(repoRoot, "markers", "good-gitfile", ".git"),
+      "gitdir: ../../git-metadata/modules/good-gitfile\n"
+    );
+    fs.writeFileSync(
+      path.join(repoRoot, "git-metadata", "modules", "good-gitfile", "HEAD"),
+      "ref: refs/heads/main\n"
+    );
+    fs.writeFileSync(path.join(repoRoot, "markers", "good-gitfile", "foreign.ts"), "export const foreign = true;\n");
+
+    const result = await new FileCatalogScannerAdapter().scan({
+      repo_root: repoRoot,
+      indexed_roots: ["markers"],
+      skipped_roots: [],
+      max_files: 100
+    });
+
+    expect(result.files.map((file) => file.path)).toEqual(
+      expect.arrayContaining([
+        "markers/bad-gitfile/keep.ts",
+        "markers/empty-dotgit/keep.ts"
+      ])
+    );
+    expect(result.files.map((file) => file.path)).not.toEqual(
+      expect.arrayContaining(["markers/good-gitfile/foreign.ts"])
+    );
+    expect(result.skipped_paths).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "markers/empty-dotgit/.git",
+          reason: "generated_or_vendor"
+        }),
+        expect.objectContaining({
+          path: "markers/good-gitfile",
+          reason: "nested_git_repository"
+        })
+      ])
+    );
+    expect(result.skipped_paths).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: "markers/empty-dotgit",
+          reason: "nested_git_repository"
+        }),
+        expect.objectContaining({
+          path: "markers/bad-gitfile",
           reason: "nested_git_repository"
         })
       ])

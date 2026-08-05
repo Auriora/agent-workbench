@@ -84,6 +84,13 @@ and declared-but-uninitialized paths remain blocked or skipped evidence. Writes
 under submodule paths are refused by default through the same generated/vendor
 and nested-repository write policy as other embedded repositories.
 
+A directory is classified as an undeclared nested Git repository only when its
+`.git` metadata is structurally evidenced: a `.git` directory contains a `HEAD`
+file, or a `.git` gitfile contains a valid `gitdir:` pointer whose target
+contains `HEAD`. Empty `.git` directories and malformed gitfiles are not
+repository evidence and do not exclude the surrounding ordinary source tree;
+the marker itself remains subject to normal hidden/generated path policy.
+
 Git-dependent claims are separated from readable source. A child with readable
 source but unavailable, broken, dirty, or revision-mismatched Git metadata may
 still contribute local file and marker evidence, while worktree-cleanliness,

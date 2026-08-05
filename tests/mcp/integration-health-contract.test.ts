@@ -153,6 +153,40 @@ describe("integration health contract fixtures", () => {
     )).toEqual(legalReceipts);
   });
 
+  it("requires worker progress to match the diagnostics execution target", () => {
+    const diagnostics = {
+      repo_identity: "repo-identity",
+      controller_generation: 7,
+      diagnostic_revision: 12,
+      worker_invocations: 3,
+      execution_id: "exec-complete",
+      started_generation: 13,
+      requested_generation: 13,
+      target_snapshot_id: "snap-current",
+      visible_snapshot_id: "snap-current",
+      execution_state: "complete" as const,
+      publication_state: "published" as const,
+      graph_freshness: "fresh" as const,
+      activity_lease_held: false,
+      worker_termination_state: "not_required" as const,
+      last_worker_progress: {
+        execution_id: "exec-complete",
+        target_snapshot_id: "snap-current",
+        phase: "resolution" as const,
+        completed_units: 5000
+      }
+    };
+
+    expect(snapshotRefreshDiagnosticsReceiptSchema.parse(diagnostics)).toEqual(diagnostics);
+    expect(snapshotRefreshDiagnosticsReceiptSchema.safeParse({
+      ...diagnostics,
+      last_worker_progress: {
+        ...diagnostics.last_worker_progress,
+        execution_id: "exec-stale"
+      }
+    }).success).toBe(false);
+  });
+
   it("rejects invalid diagnostics pairs and missing correlation identities", () => {
     const base = {
       repo_identity: "repo-identity",

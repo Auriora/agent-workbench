@@ -27,6 +27,7 @@ const COMMON_RAILS_FRONT_DOOR_PRIORITY_PATHS = [
   "config/application.rb",
   "config/routes.rb"
 ] as const;
+const MAX_REFRESH_EXTRACTION_FILES_PER_PASS = 250;
 
 type StartupGraphWarmupWorkerData = {
   executionId: string;
@@ -39,23 +40,25 @@ type StartupGraphWarmupWorkerData = {
   retainLatestFreshSnapshots: number;
   controllerGeneration: number;
   invalidationGeneration: number;
+  deadlineAt: string;
+  timeoutMs: number;
 };
 
 const input = workerData as StartupGraphWarmupWorkerData;
 assertGeneration("controllerGeneration", input.controllerGeneration);
 assertGeneration("invalidationGeneration", input.invalidationGeneration);
+const cooperativeExtractionDeadline = resolveCooperativeExtractionDeadline(input);
 const scanner = new FileCatalogScannerAdapter();
 const workspace = new WorkspaceFileAdapter({ repoRoot: input.repoRoot });
 const graphStore = openGraphStore(input.databasePath);
 const crashBarrierProbe = readCrashBarrierProbe();
-const workerGraphStore = crashBarrierProbe === undefined
-  ? graphStore
-  : decorateGraphStore(graphStore, async (method, args) => {
-      const barrier = matchingCrashBarrier(method, args);
-      if (barrier !== undefined && barrier === crashBarrierProbe.barrier) {
-        await pauseAtCrashBarrier(crashBarrierProbe, barrier);
-      }
-    });
+const workerGraphStore = decorateGraphStore(graphStore, async (method, args) => {
+  if (crashBarrierProbe === undefined) return;
+  const barrier = matchingCrashBarrier(method, args);
+  if (barrier !== undefined && barrier === crashBarrierProbe.barrier) {
+    await pauseAtCrashBarrier(crashBarrierProbe, barrier);
+  }
+});
 const extractors = createProductionExtractorRegistry();
 
 try {
@@ -65,6 +68,7 @@ try {
     repo_root: input.repoRoot,
     canonicalize_repo_root: (repoRoot) => fs.realpathSync.native(repoRoot)
   });
+  reportProgress("composition", repositoryComposition.repositories.length);
   const result = await runRepositoryGraphBuildSlice({
     repo_root: input.repoRoot,
     scanner,
@@ -87,12 +91,17 @@ try {
     owner_id: input.executionId,
     config_identity: input.configIdentity,
     max_files: input.maxFiles,
-    max_extraction_files: input.maxFiles,
+    max_extraction_files: Math.min(input.maxFiles, MAX_REFRESH_EXTRACTION_FILES_PER_PASS),
     priority_paths: COMMON_RAILS_FRONT_DOOR_PRIORITY_PATHS,
     controller_generation: input.controllerGeneration,
     invalidation_generation: input.invalidationGeneration,
-    repository_composition: repositoryComposition
+    repository_composition: repositoryComposition,
+    should_yield_extraction: () => Date.now() >= cooperativeExtractionDeadline,
+    report_build_progress: reportProgress
   });
+  if (result.outcome === "complete") {
+    reportProgress("finalizing", 1);
+  }
   await graphStore.pruneRepositorySnapshots({
     repo_root: input.repoRoot,
     retain_latest_snapshots: input.retainLatestSnapshots,
@@ -136,6 +145,30 @@ function assertGeneration(name: string, value: number): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new TypeError(`${name} must be a non-negative safe integer.`);
   }
+}
+
+function resolveCooperativeExtractionDeadline(input: StartupGraphWarmupWorkerData): number {
+  const hardDeadline = Date.parse(input.deadlineAt);
+  if (!Number.isFinite(hardDeadline) || !Number.isSafeInteger(input.timeoutMs) || input.timeoutMs <= 0) {
+    throw new TypeError("Refresh worker deadline must be a valid future deadline.");
+  }
+  const settlementReserve = Math.max(5_000, Math.floor(input.timeoutMs * 5 / 6));
+  return hardDeadline - settlementReserve;
+}
+
+function reportProgress(
+  phase: "composition" | "catalog" | "extraction" | "docs" | "graph_write" | "resolution" | "finalizing",
+  completedUnits: number
+): void {
+  parentPort?.postMessage({
+    type: "progress",
+    progress: {
+      execution_id: input.executionId,
+      target_snapshot_id: input.snapshotId,
+      phase,
+      completed_units: completedUnits
+    }
+  });
 }
 
 type TestCrashBarrier = "generation" | "catalog" | "docs" | "graph" | "prepublication";

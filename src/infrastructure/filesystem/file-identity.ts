@@ -10,6 +10,7 @@ import type { FileIdentityPort } from "../../ports/index.js";
 import type { FileIdentity } from "../../domain/models/index.js";
 import { catalogSkipReason, normalizeCatalogPath } from "../../domain/policies/index.js";
 import { readRootIgnoreRules } from "./ignore-file-policy.js";
+import { isNestedGitRepository } from "./nested-git-repository.js";
 
 function hashText(value: string): string {
   return `sha256:${crypto.createHash("sha256").update(value).digest("hex")}`;
@@ -193,11 +194,4 @@ function statPathOrNull(absolutePath: string): fs.Stats | null {
   } catch (_error) {
     return null;
   }
-}
-
-function isNestedGitRepository(repoRoot: string, absolutePath: string): boolean {
-  if (path.resolve(repoRoot) === path.resolve(absolutePath)) {
-    return false;
-  }
-  return fs.existsSync(path.join(absolutePath, ".git"));
 }

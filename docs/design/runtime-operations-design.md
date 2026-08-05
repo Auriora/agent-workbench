@@ -135,6 +135,21 @@ ordinary queries. A newer invalidation generation supersedes the current target
 before either partial publication or continuation. Only a generation-matching
 `complete` result permits the final atomic publish.
 
+Production refresh passes bound source extraction separately from the catalog
+window so cross-file resolution cannot consume the whole worker deadline. The
+controller automatically consumes every durable extraction continuation; the
+per-pass bound never caps total repository extraction. After extraction is
+exhausted, accumulated unresolved references advance through their own durable
+numeric cursor in bounded pages. Resolved edges and removal of their unresolved
+rows are atomic, genuinely unresolved rows remain available as evidence, and a
+fresh deadline is armed for every resolution page.
+
+Workers emit validated aggregate progress for composition, catalog,
+extraction, documentation, graph-write, resolution, and finalization phases.
+The controller retains the latest phase and completed-unit lower bound in its
+diagnostics receipt, including after timeout or failure. Progress contains no
+repository paths, source text, raw exceptions, or store details.
+
 Persisted `fresh` state is necessary but not sufficient for first-read reuse.
 The runtime performs bounded path validation against the indexed catalog. A
 complete receipt may preserve freshness only when every indexed path is still

@@ -24,6 +24,7 @@ import type {
 } from "../../ports/index.js";
 import { FileIdentityAdapter } from "./file-identity.js";
 import { readRootIgnoreRules } from "./ignore-file-policy.js";
+import { isNestedGitRepository } from "./nested-git-repository.js";
 
 const MAX_SKIPPED_PATHS = 100;
 
@@ -718,13 +719,6 @@ function relativeCatalogPath(repoRoot: string, absolutePath: string): string {
 function isInsideRepo(repoRoot: string, absolutePath: string): boolean {
   const relative = path.relative(repoRoot, absolutePath);
   return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
-}
-
-function isNestedGitRepository(repoRoot: string, absolutePath: string): boolean {
-  if (path.resolve(repoRoot) === path.resolve(absolutePath)) {
-    return false;
-  }
-  return fs.existsSync(path.join(absolutePath, ".git"));
 }
 
 function compareCatalogEntries(left: fs.Dirent, right: fs.Dirent): number {

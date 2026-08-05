@@ -353,6 +353,10 @@ normal task context. It contains:
 - `graph_freshness`
 - `activity_lease_held`
 - `worker_termination_state`
+- optional `last_worker_progress`, containing the validated worker execution
+  and target identities, one aggregate phase (`composition`, `catalog`,
+  `extraction`, `docs`, `graph_write`, `resolution`, or `finalizing`), and a
+  nonnegative completed-unit lower bound
 - structured `last_failure` when available
 
 The detached daemon process accepts
@@ -449,7 +453,9 @@ repository identity, positive `controller_generation`, monotonic
 `diagnostic_revision`, cumulative `worker_invocations`, optional execution and
 snapshot identities when they exist, started/requested invalidation
 generations, execution/publication/freshness states, activity lease and worker
-termination state, and optional structured failure. Invalid state combinations
+termination state, optional aggregate worker progress, and optional structured
+failure. Worker progress must identify the same execution and target as the
+receipt. Invalid state combinations
 or inability to obtain this awaited receipt degrade top-level trust rather than
 being presented as healthy status.
 

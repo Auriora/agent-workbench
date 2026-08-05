@@ -2255,6 +2255,110 @@ describe("graph store", () => {
     }
   });
 
+  it("applies each build resolution slice atomically", async () => {
+    const store = openGraphStore(path.join(dir, "graph-build-resolution-slice.sqlite"));
+    const snapshot = { ...snapshotState("951"), freshness: "refreshing" as const };
+
+    try {
+      await createBuildingSnapshot(store, snapshot);
+      await store.replaceSnapshotExtraction({
+        batch: extractionBatch({
+          snapshot_id: snapshot.id,
+          source_path: "app/models/source.rb",
+          node_id: "source-node",
+          name: "Source"
+        }),
+        replace: true
+      });
+      await store.replaceSnapshotExtraction({
+        batch: {
+          ...extractionBatch({
+            snapshot_id: snapshot.id,
+            source_path: "app/models/target.rb",
+            node_id: "target-node",
+            name: "Target"
+          }),
+          unresolved_references: ["First", "Second"].map((referenceName, index) => ({
+            id: `input-${index}`,
+            source_node_id: "target-node",
+            source_file_path: "app/models/target.rb",
+            reference_name: referenceName,
+            reference_kind: "call" as const,
+            source_range: {
+              start_line: 5 + index,
+              start_column: 2,
+              end_line: 5 + index,
+              end_column: 8
+            },
+            candidate_metadata: {}
+          }))
+        },
+        replace: true
+      });
+      const unresolved = await store.listBuildUnresolvedReferences({
+        snapshot_id: snapshot.id,
+        controller_generation: 0,
+        invalidation_generation: 0,
+        max_rows: 10
+      });
+      expect(unresolved).toHaveLength(2);
+      const before = snapshotEvidenceRows(store.db, Number(snapshot.id));
+      const edge = {
+        id: "resolved-edge",
+        source_node_id: "target-node",
+        target_node_id: "source-node",
+        kind: "call" as const,
+        provenance: "ignored-input-provenance",
+        confidence: 0.9,
+        metadata: { reference_name: "Source" }
+      };
+
+      await expect(store.applyBuildResolutionSlice({
+        snapshot_id: snapshot.id,
+        controller_generation: 0,
+        invalidation_generation: 0,
+        provenance: "graph-build-final-resolution",
+        resolved_references: [
+          {
+            unresolved_reference_id: unresolved[0]!.id,
+            file_path: "app/models/target.rb",
+            edge
+          },
+          {
+            unresolved_reference_id: "999999",
+            file_path: "app/models/target.rb",
+            edge: { ...edge, id: "rolled-back-edge" }
+          }
+        ]
+      })).rejects.toThrow("Unknown unresolved reference for build resolution slice");
+      expect(snapshotEvidenceRows(store.db, Number(snapshot.id))).toEqual(before);
+
+      await expect(store.applyBuildResolutionSlice({
+        snapshot_id: snapshot.id,
+        controller_generation: 0,
+        invalidation_generation: 0,
+        provenance: "graph-build-final-resolution",
+        resolved_references: [{
+          unresolved_reference_id: unresolved[0]!.id,
+          file_path: "app/models/target.rb",
+          edge
+        }]
+      })).resolves.toBeUndefined();
+      const after = snapshotEvidenceRows(store.db, Number(snapshot.id));
+      expect(after.edges).toEqual([
+        expect.objectContaining({
+          source_node_id: "target-node",
+          target_node_id: "source-node"
+        })
+      ]);
+      expect(after.unresolved).toEqual([
+        expect.objectContaining({ reference_name: "Second" })
+      ]);
+    } finally {
+      store.close();
+    }
+  });
+
   it("selects the latest published snapshot while a newer build remains invisible", async () => {
     const store = openGraphStore(path.join(dir, "index.sqlite"));
     const fresh = snapshotState("100");

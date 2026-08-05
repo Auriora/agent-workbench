@@ -263,6 +263,14 @@ export function createRefreshFailure(input: {
   });
 }
 
+export const refreshWorkerProgressSchema = z.object({
+  execution_id: z.string().min(1).max(200),
+  target_snapshot_id: z.string().min(1).max(200),
+  phase: z.enum(["composition", "catalog", "extraction", "docs", "graph_write", "resolution", "finalizing"]),
+  completed_units: z.number().int().nonnegative()
+}).strict();
+export type RefreshWorkerProgress = z.infer<typeof refreshWorkerProgressSchema>;
+
 export const snapshotRefreshDiagnosticsReceiptSchema = z
   .object({
     repo_identity: z.string().min(1).max(512),
@@ -279,6 +287,7 @@ export const snapshotRefreshDiagnosticsReceiptSchema = z
     graph_freshness: authoritativeGraphFreshnessSchema,
     activity_lease_held: z.boolean(),
     worker_termination_state: workerTerminationStateSchema,
+    last_worker_progress: refreshWorkerProgressSchema.optional(),
     last_failure: refreshFailureSchema.optional()
   })
   .strict()
@@ -288,6 +297,13 @@ export const snapshotRefreshDiagnosticsReceiptSchema = z
     };
     const hasExecutionIdentity = value.execution_id !== undefined;
     const hasTargetIdentity = value.target_snapshot_id !== undefined;
+
+    if (value.last_worker_progress !== undefined && (
+      value.last_worker_progress.execution_id !== value.execution_id ||
+      value.last_worker_progress.target_snapshot_id !== value.target_snapshot_id
+    )) {
+      issue("Worker progress must belong to the reported execution target.", "last_worker_progress");
+    }
 
     if (value.started_generation !== undefined && value.requested_generation !== undefined &&
         value.started_generation > value.requested_generation) {
@@ -417,6 +433,7 @@ export const integrationDaemonHealthSchema = z
     graph_freshness: authoritativeGraphFreshnessSchema,
     activity_lease_held: z.boolean(),
     worker_termination_state: workerTerminationStateSchema,
+    last_worker_progress: refreshWorkerProgressSchema.optional(),
     last_failure: refreshFailureSchema.optional()
   })
   .strict()
@@ -436,6 +453,7 @@ export const integrationDaemonHealthSchema = z
       graph_freshness: value.graph_freshness,
       activity_lease_held: value.activity_lease_held,
       worker_termination_state: value.worker_termination_state,
+      last_worker_progress: value.last_worker_progress,
       last_failure: value.last_failure
     });
     if (!diagnostics.success) {

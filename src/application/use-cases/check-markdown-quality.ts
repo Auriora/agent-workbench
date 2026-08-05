@@ -243,8 +243,18 @@ export async function checkMarkdownSet(input: {
       scannedFiles: scanned.files,
       warnings,
       truncated,
-      verificationStatus: status === "blocked" ? "blocked" : findings.length === 0 ? "done" : "needed",
-      analysisValidity: status === "blocked" ? "invalid" : truncated ? "partial" : "valid"
+      verificationStatus: status === "blocked"
+        ? "blocked"
+        : status === "skipped"
+          ? "not_applicable"
+          : findings.length === 0
+            ? "done"
+            : "needed",
+      analysisValidity: status === "blocked"
+        ? "invalid"
+        : status === "skipped" || truncated
+          ? "partial"
+          : "valid"
     })
   };
 }

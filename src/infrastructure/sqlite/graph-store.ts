@@ -1871,6 +1871,69 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     tx.immediate();
   }
 
+  public async applyBuildResolutionSlice(input: {
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: number;
+    provenance: string;
+    resolved_references: readonly {
+      unresolved_reference_id: string;
+      file_path: string;
+      edge: GraphEdgeReadModel;
+    }[];
+  }): Promise<void> {
+    if (input.provenance.trim().length === 0) {
+      throw new TypeError("provenance is required for build resolution slices.");
+    }
+    const snapshot = this.requireBuildingSnapshotForGeneration(input);
+    const tx = this.db.transaction(() => {
+      const insertEdge = this.db.prepare(`
+        INSERT INTO edges (
+          source_node_id, target_node_id, kind, file_id, start_line,
+          start_column, end_line, end_column, provenance, confidence,
+          metadata_json
+        ) VALUES (
+          @sourceNodeId, @targetNodeId, @kind, @fileId, @startLine,
+          @startColumn, @endLine, @endColumn, @provenance, @confidence,
+          @metadata
+        )
+      `);
+      const deleteUnresolved = this.db.prepare(`
+        DELETE FROM unresolved_refs
+        WHERE id = @id
+          AND file_id IN (SELECT id FROM files WHERE snapshot_id = @snapshotId)
+      `);
+      for (const resolved of input.resolved_references) {
+        const unresolvedId = this.parseNumericId(resolved.unresolved_reference_id);
+        if (unresolvedId === null) {
+          throw new TypeError("unresolved_reference_id must be numeric.");
+        }
+        const fileRow = this.getFileRow(snapshot.id, resolved.file_path);
+        if (!fileRow) {
+          throw new Error(`Unknown file for build resolution edge: ${resolved.file_path}`);
+        }
+        insertEdge.run({
+          sourceNodeId: resolved.edge.source_node_id,
+          targetNodeId: resolved.edge.target_node_id ?? null,
+          kind: resolved.edge.kind,
+          fileId: fileRow.id,
+          startLine: resolved.edge.source_range?.start_line ?? null,
+          startColumn: resolved.edge.source_range?.start_column ?? null,
+          endLine: resolved.edge.source_range?.end_line ?? null,
+          endColumn: resolved.edge.source_range?.end_column ?? null,
+          provenance: input.provenance,
+          confidence: resolved.edge.confidence,
+          metadata: JSON.stringify(resolved.edge.metadata)
+        });
+        const deleted = deleteUnresolved.run({ id: unresolvedId, snapshotId: snapshot.id });
+        if (deleted.changes !== 1) {
+          throw new Error(`Unknown unresolved reference for build resolution slice: ${resolved.unresolved_reference_id}`);
+        }
+      }
+    });
+    tx.immediate();
+  }
+
   public async allocateBuildSnapshotId(input: {
     repo_root: string;
     minimum_id: string;

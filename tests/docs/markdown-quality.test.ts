@@ -221,6 +221,34 @@ describe("Markdown quality checker", () => {
       fixture.dispose();
     }
   });
+
+  it("does not claim verification when every requested document is skipped", async () => {
+    const fixture = copyFixture();
+    try {
+      const result = await checkFixtureSet(fixture.root, {
+        paths: ["dist/generated.md"]
+      });
+
+      expect(checkMarkdownSetResultSchema.parse(result.check)).toMatchObject({
+        status: "skipped",
+        checked_documents: [],
+        skipped_documents: ["dist/generated.md"],
+        findings: [],
+        warnings: [
+          expect.objectContaining({
+            path: "dist",
+            reason: "generated_or_vendor"
+          })
+        ]
+      });
+      expect(result.meta).toMatchObject({
+        verification_status: "not_applicable",
+        analysis_validity: "partial"
+      });
+    } finally {
+      fixture.dispose();
+    }
+  });
 });
 
 async function checkFixtureDocument(
