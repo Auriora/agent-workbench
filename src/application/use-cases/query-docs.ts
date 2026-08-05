@@ -9,6 +9,8 @@ import type {
   DocsDocument,
   DocsHeading,
   DocsMap,
+  DocsMapDocument,
+  DocsMapHeading,
   DocsMapRequest,
   DocsOutlineRequest,
   DocsOutlineResult,
@@ -84,6 +86,7 @@ import { repositoryReferenceForPath } from "./repository-provenance.js";
 const DOC_ROW_LIMIT = 15000;
 const DIRECT_READ_CAVEAT = "Docs search is routing evidence; use docs_read_section for precise claims.";
 const DOCS_CURSOR_KIND = "docs";
+const DOCS_MAP_FIELD_SAMPLE_BYTES = 240;
 const RANKED_DOCS_UNIVERSE_TTL_MS = 15 * 60 * 1000;
 
 export type DocsOverviewUseCaseResult = {
@@ -94,6 +97,14 @@ export type DocsOverviewUseCaseResult = {
 export type DocsMapUseCaseResult = {
   map: DocsMap;
   meta: ResponseMetadata;
+  presentation?: {
+    cursor_offset: number;
+    has_more: boolean;
+    source_truncated: boolean;
+    scope_path?: string;
+    max_docs: number;
+    max_headings_per_doc: number;
+  };
 };
 
 export type DocsSearchUseCaseResult = {
@@ -162,6 +173,7 @@ export async function getDocsMap(input: {
   default_repo_root: string;
   repository_composition?: SnapshotRepositoryComposition;
 }): Promise<DocsMapUseCaseResult> {
+  const cursorOffset = decodeRequiredCursor(input.request.cursor, DOCS_CURSOR_KIND);
   const index = await loadDocsIndex({
     request: input.request,
     scanner: input.scanner,
@@ -170,26 +182,48 @@ export async function getDocsMap(input: {
     repository_composition: input.repository_composition,
     order: "path"
   });
+  if (input.request.cursor !== undefined && cursorOffset >= index.documents.length) {
+    throw invalidDocsMapCursorError();
+  }
   const page = paginate(index.documents, {
     cursor: input.request.cursor,
+    offset: cursorOffset,
     limit: input.request.max_docs,
     kind: DOCS_CURSOR_KIND
   });
-  const docs = page.items
-    .map((doc) => publicDocument(limitDocumentHeadings(doc, input.request.max_headings_per_doc)));
+  const docs = page.items.map((document) => toDocsMapDocument(document, input.request.max_headings_per_doc));
+  const warningCount = index.warnings.length;
 
   return {
     map: {
       repo_root: index.repoRoot,
       status: index.warnings.length > 0 ? "needed" : docs.length > 0 ? "done" : "not_applicable",
+      direct_read_caveat: DIRECT_READ_CAVEAT,
       docs,
       warnings: index.warnings,
+      warning_count: warningCount,
+      warning_samples_truncated: false,
       truncated: index.truncated || page.hasMore,
       cursor: page.nextCursor,
       result_count: index.totalDocuments,
-      next_actions: docs.length > 0 ? docsNextActions(index.repoRoot, docs[0]?.path) : []
+      next_actions: docsMapNextActions({
+        repoRoot: index.repoRoot,
+        filePath: docs[0]?.path,
+        cursor: page.nextCursor,
+        scopePath: normalizeDocsScopePath(input.request.scope_path),
+        maxDocs: input.request.max_docs,
+        maxHeadingsPerDoc: input.request.max_headings_per_doc
+      })
     },
-    meta: docsMeta({ ...index, truncated: index.truncated || page.hasMore })
+    meta: docsMeta({ ...index, truncated: index.truncated || page.hasMore }),
+    presentation: {
+      cursor_offset: cursorOffset,
+      has_more: page.hasMore,
+      source_truncated: index.truncated,
+      scope_path: normalizeDocsScopePath(input.request.scope_path),
+      max_docs: input.request.max_docs,
+      max_headings_per_doc: input.request.max_headings_per_doc
+    }
   };
 }
 
@@ -294,7 +328,8 @@ export async function searchDocs(input: {
         repoRoot: result.repo_root,
         filePath: hits[0]?.path,
         headingId: hits[0]?.heading_id,
-        partial: result.docs_index_state === "partial" || result.freshness === "refreshing"
+        partial: result.docs_index_state === "partial" || result.freshness === "refreshing",
+        scopePath: normalizeDocsScopePath(input.request.scope_path)
       })
     },
     meta: docsSearchMeta({
@@ -671,7 +706,7 @@ export async function readDocsSection(input: {
 
 type LoadedDocsIndex = {
   repoRoot: string;
-  documents: Array<DocsDocument & { content: string }>;
+  documents: Array<DocsDocument & { content: string; total_heading_count: number; total_link_count: number }>;
   warnings: DocsWarning[];
   skippedPaths: readonly FileCatalogSkippedPath[];
   truncated: boolean;
@@ -707,7 +742,7 @@ async function loadDocsIndex(input: {
     ? [...eligibleMarkdownFiles].sort((left, right) => docRank(right.path) - docRank(left.path) || left.path.localeCompare(right.path))
     : eligibleMarkdownFiles;
   const warnings = mapSkippedPaths(scanned.skipped_paths ?? []);
-  const documents: Array<DocsDocument & { content: string }> = [];
+  const documents: Array<DocsDocument & { content: string; total_heading_count: number; total_link_count: number }> = [];
   const owners = await loadDocumentationMapOwners({
     files: markdownFiles.filter((file) => eligibleMarkdownPaths.has(file.path)),
     workspace: input.workspace
@@ -721,6 +756,7 @@ async function loadDocsIndex(input: {
     try {
       const content = await input.workspace.readText({ path: file.path });
       const headings = parseMarkdownHeadings(content);
+      const links = extractMarkdownDocLinks({ fromPath: file.path, content, docs: eligibleMarkdownFiles });
       const title = headings[0]?.text ?? markdownTitleFromPath(file.path);
       const authority = classifyMarkdownEntryCurrency({
         path: file.path,
@@ -732,15 +768,17 @@ async function loadDocsIndex(input: {
       documents.push({
         path: file.path,
         title,
-        headings: headings.slice(0, Math.max(input.request.max_headings_per_doc, 100)),
-        links: extractMarkdownDocLinks({ fromPath: file.path, content, docs: eligibleMarkdownFiles }),
+        headings,
+        links,
         capability_level: "resource_backed",
         evidence_kinds: ["docs"],
         direct_read_caveat: DIRECT_READ_CAVEAT,
         repository: repositoryReferenceForPath(input.repository_composition, file.path),
         ...publicAuthority(authority),
         ...publicCurrency(authority),
-        content
+        content,
+        total_heading_count: headings.length,
+        total_link_count: links.length
       });
     } catch {
       warnings.push({
@@ -919,21 +957,48 @@ function docsNextActions(repoRoot: string, filePath?: string, headingId?: string
   ]);
 }
 
+function docsMapNextActions(input: {
+  repoRoot: string;
+  filePath?: string;
+  cursor?: string;
+  scopePath?: string;
+  maxDocs: number;
+  maxHeadingsPerDoc: number;
+}) {
+  return capNextActions([
+    ...(input.cursor === undefined
+      ? []
+      : [{
+          tool: "docs_map",
+          args: {
+            repo_root: input.repoRoot,
+            cursor: input.cursor,
+            max_docs: input.maxDocs,
+            max_headings_per_doc: input.maxHeadingsPerDoc,
+            ...(input.scopePath === undefined ? {} : { scope_path: input.scopePath })
+          },
+          reason: "Continue the truncated documentation map from this cursor."
+        }]),
+    ...docsNextActions(input.repoRoot, input.filePath)
+  ]);
+}
+
 function docsSearchNextActions(input: {
   repoRoot: string;
   filePath?: string;
   headingId?: string;
   partial: boolean;
+  scopePath?: string;
 }) {
   return capNextActions([
     ...(input.partial
       ? [
           {
-            tool: "read_resource",
+            tool: "docs_map",
             args: {
               repo_root: input.repoRoot,
-              uri: "repo:///docs/map",
-              max_docs: 50
+              max_docs: 50,
+              ...(input.scopePath === undefined ? {} : { scope_path: input.scopePath })
             }
           }
         ]
@@ -1213,6 +1278,7 @@ function docRank(filePath: string): number {
 
 function paginate<T>(items: readonly T[], input: {
   cursor?: string;
+  offset?: number;
   limit: number;
   kind: string;
 }): {
@@ -1220,13 +1286,78 @@ function paginate<T>(items: readonly T[], input: {
   hasMore: boolean;
   nextCursor?: string;
 } {
-  const offset = decodeCursor(input.cursor, input.kind);
+  const offset = input.offset ?? decodeCursor(input.cursor, input.kind);
   const page = items.slice(offset, offset + input.limit);
   const hasMore = items.length > offset + input.limit;
   return {
-    items: page,
+    items: [...page],
     hasMore,
     nextCursor: hasMore ? encodeCursor({ kind: input.kind, offset: offset + page.length }) : undefined
+  };
+}
+
+function toDocsMapDocument(
+  document: DocsDocument & { total_heading_count?: number; total_link_count?: number },
+  maxHeadings: number
+): DocsMapDocument {
+  const headingSamples = document.headings
+    .slice(0, maxHeadings)
+    .map((heading) => truncateDocsMapHeading(heading));
+  return {
+    path: document.path,
+    ...truncateDocsMapTitle(document.title),
+    headings: headingSamples,
+    heading_sample_count: headingSamples.length,
+    heading_samples_truncated: headingSamples.length < (document.total_heading_count ?? document.headings.length),
+    total_heading_count: document.total_heading_count ?? document.headings.length,
+    total_link_count: document.total_link_count ?? document.links.length,
+    doc_status: document.doc_status,
+    authority: document.authority,
+    currency_state: document.currency_state,
+    canonical_owner: document.canonical_owner,
+    superseded_by: document.superseded_by
+  };
+}
+
+function truncateDocsMapTitle(title: string): Pick<DocsMapDocument, "title" | "title_truncated"> {
+  const truncated = truncateUtf8CodePointSafe(title, DOCS_MAP_FIELD_SAMPLE_BYTES);
+  return {
+    title: truncated.value,
+    title_truncated: truncated.truncated
+  };
+}
+
+function truncateDocsMapHeading(heading: DocsHeading): DocsMapHeading {
+  const id = truncateUtf8CodePointSafe(heading.id, DOCS_MAP_FIELD_SAMPLE_BYTES);
+  const text = truncateUtf8CodePointSafe(heading.text, DOCS_MAP_FIELD_SAMPLE_BYTES);
+  return {
+    id: id.value,
+    id_truncated: id.truncated,
+    text: text.value,
+    text_truncated: text.truncated
+  };
+}
+
+function truncateUtf8CodePointSafe(value: string, maxBytes: number): {
+  value: string;
+  truncated: boolean;
+} {
+  if (Buffer.byteLength(value, "utf8") <= maxBytes) {
+    return { value, truncated: false };
+  }
+  let bytes = 0;
+  let result = "";
+  for (const codePoint of value) {
+    const nextBytes = Buffer.byteLength(codePoint, "utf8");
+    if (bytes + nextBytes > maxBytes) {
+      break;
+    }
+    result += codePoint;
+    bytes += nextBytes;
+  }
+  return {
+    value: result,
+    truncated: result.length !== value.length
   };
 }
 
@@ -1250,6 +1381,40 @@ function decodeCursor(cursor: string | undefined, kind: string): number {
   } catch {
     return 0;
   }
+}
+
+function decodeRequiredCursor(cursor: string | undefined, kind: string): number {
+  if (cursor === undefined) {
+    return 0;
+  }
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
+      kind?: unknown;
+      offset?: unknown;
+    };
+    if (
+      parsed.kind !== kind ||
+      typeof parsed.offset !== "number" ||
+      !Number.isInteger(parsed.offset) ||
+      parsed.offset < 0
+    ) {
+      throw invalidDocsMapCursorError();
+    }
+    return parsed.offset;
+  } catch (error) {
+    if (isInvalidCursorError(error)) {
+      throw error;
+    }
+    throw invalidDocsMapCursorError();
+  }
+}
+
+function invalidDocsMapCursorError(): Error & { code: string } {
+  return Object.assign(new Error("Invalid docs_map cursor."), { code: "invalid_cursor" });
+}
+
+function isInvalidCursorError(error: unknown): error is Error & { code: string } {
+  return error instanceof Error && "code" in error && error.code === "invalid_cursor";
 }
 
 function limitDocumentHeadings<T extends DocsDocument & { content?: string }>(

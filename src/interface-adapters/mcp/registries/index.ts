@@ -68,6 +68,7 @@ import { repoStatusResource } from "./resources/repo-status.js";
 import { contextForTaskTool } from "./tools/context-for-task.js";
 import { diagnosticsForFilesTool } from "./tools/diagnostics-for-files.js";
 import { docsScopeTool } from "./tools/docs-scope.js";
+import { docsMapTool } from "./tools/docs-map.js";
 import { docsOutlineTool } from "./tools/docs-outline.js";
 import { docsReadSectionTool } from "./tools/docs-read-section.js";
 import { docsSearchTool } from "./tools/docs-search.js";
@@ -174,6 +175,7 @@ export const publicSurfaceTrustPolicies = {
   "tool:integration_health": { surface_kind: "integration_health" },
   "tool:diagnostics_for_files": { surface_kind: "diagnostics_static" },
   "tool:docs_scope": { surface_kind: "docs_session_scope" },
+  "tool:docs_map": { surface_kind: "docs_routing" },
   "tool:docs_search": { surface_kind: "docs_routing" },
   "tool:docs_current_for_task": { surface_kind: "docs_routing" },
   "tool:docs_outline": { surface_kind: "docs_routing" },
@@ -204,6 +206,7 @@ export const mcpTools: McpToolDeclaration[] = normalizePublicMetadata([
   contextForTaskTool,
   diagnosticsForFilesTool,
   docsScopeTool,
+  docsMapTool,
   docsSearchTool,
   docsCurrentForTaskTool,
   docsOutlineTool,

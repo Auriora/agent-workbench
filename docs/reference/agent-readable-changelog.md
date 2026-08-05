@@ -3,7 +3,7 @@ title: Agent-readable changelog
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -25,6 +25,38 @@ Each version or dated entry should include:
 - Contract changes
 - Required agent behavior changes
 - Migration notes
+
+## 2026-08-05: Bounded Documentation Map Delivery
+
+### Agent-Visible Changes
+
+- `repo:///docs/map` now returns a compact first-page routing index whose
+  complete JSON envelope is bounded to 32 KiB.
+- The read-only `docs_map` tool continues a truncated map by cursor and accepts
+  the same documentation scope as the other docs surfaces.
+- Detailed headings and source content remain available through `docs_outline`
+  and `docs_read_section`.
+
+### Contract Changes
+
+- Map entries preserve exact paths, bounded UTF-8 display/heading samples,
+  full heading/link counts, and authority/currency routing without repeating
+  full links, provenance, timestamps, or per-document caveats.
+- Result and warning totals describe the pre-compaction universe. Truncation
+  includes an executable cursor to the first unreturned document.
+
+### Required Agent Behavior Changes
+
+- Do not pass cursor or scope pseudo-arguments to `read_resource` for the static
+  URI. Call `docs_map` with the returned cursor instead.
+- Treat the compact map as routing evidence and use targeted direct reads for
+  precise claims.
+
+### Migration Notes
+
+- Consumers of full per-document `links` or timestamp/provenance fields from
+  the map must move to targeted documentation reads. The URI remains stable;
+  the continuation tool is additive under contract `0.1`.
 
 ## 2026-08-02: Repository-Guided Validation Repairs
 

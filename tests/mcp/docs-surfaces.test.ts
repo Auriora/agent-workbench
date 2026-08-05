@@ -38,6 +38,7 @@ import { checkMarkdownDocumentTool } from "../../src/interface-adapters/mcp/regi
 import { checkMarkdownSetTool } from "../../src/interface-adapters/mcp/registries/tools/check-markdown-set.js";
 import { docsMapResource } from "../../src/interface-adapters/mcp/registries/resources/docs-map.js";
 import { docsOverviewResource } from "../../src/interface-adapters/mcp/registries/resources/docs-overview.js";
+import { docsMapTool } from "../../src/interface-adapters/mcp/registries/tools/docs-map.js";
 import { docsOutlineTool } from "../../src/interface-adapters/mcp/registries/tools/docs-outline.js";
 import { docsReadSectionTool } from "../../src/interface-adapters/mcp/registries/tools/docs-read-section.js";
 import { docsScopeTool } from "../../src/interface-adapters/mcp/registries/tools/docs-scope.js";
@@ -87,7 +88,7 @@ describe("docs MCP resources", () => {
     });
   });
 
-  it("uses the injected docs map provider and returns stable map envelopes", async () => {
+  it("uses the injected docs map provider with safe resource defaults and returns stable map envelopes", async () => {
     let parsedRequest: DocsMapRequest | undefined;
     const registered = registerResource(docsMapResource, {
       getDocsMap: ({ request }) => {
@@ -108,43 +109,29 @@ describe("docs MCP resources", () => {
 
     expect(parsedRequest).toMatchObject({
       repo_root: "/repo",
-      max_docs: 2,
-      max_headings_per_doc: 1,
-      cursor: "next-page",
-      scope_path: "docs/specs/032-example"
+      max_docs: 50,
+      max_headings_per_doc: 20
     });
-    expect(parsed.data.docs.map((doc) => doc.path)).toEqual(["README.md", "docs/guide.md"]);
+    expect(parsed.data.docs.map((doc) => doc.path)).toEqual(["docs/guide.md", "README.md"]);
     expect(parsed.data.truncated).toBe(false);
   });
 
-  it("returns structured invalid input before docs resource providers run", async () => {
+  it("ignores pseudo-arguments on the static docs map resource", async () => {
     let providerCalled = false;
     const registered = registerResource(docsMapResource, {
       getDocsMap: () => {
         providerCalled = true;
-        throw new Error("provider should not run");
+        return mapResult("/repo");
       }
     });
 
     const response = await registered.handler({ max_docs: 1000 });
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
       data: DocsMapUseCaseResult["map"];
-      meta: { analysis_validity: string; verification_status: string };
-      errors: Array<{ code: string; retryable: boolean }>;
     };
 
-    expect(providerCalled).toBe(false);
-    expect(parsed.data.status).toBe("blocked");
-    expect(parsed.meta).toMatchObject({
-      analysis_validity: "invalid",
-      verification_status: "blocked"
-    });
-    expect(parsed.errors).toEqual([
-      expect.objectContaining({
-        code: "invalid_input",
-        retryable: false
-      })
-    ]);
+    expect(providerCalled).toBe(true);
+    expect(parsed.data.status).toBe("done");
   });
 });
 
@@ -292,6 +279,61 @@ describe("docs MCP tools", () => {
     expect(parsed.data.hits[0]).toMatchObject({
       path: "docs/guide.md",
       direct_read_caveat: expect.stringContaining("docs_read_section")
+    });
+  });
+
+  it("uses the injected docs_map provider with cursor paging and explicit scope", async () => {
+    let parsedRequest: DocsMapRequest | undefined;
+    const registered = registerTool(docsMapTool, {
+      getDocsMap: ({ request }) => {
+        parsedRequest = request;
+        return mapResult(request.repo_root ?? "/missing");
+      }
+    });
+
+    const response = await registered.handler({
+      scope_path: "docs/specs/032-example",
+      max_docs: 2,
+      max_headings_per_doc: 1,
+      cursor: "next-page"
+    });
+    const parsed = JSON.parse(response.content[0]?.text ?? "{}") as {
+      data: DocsMapUseCaseResult["map"];
+    };
+
+    expect(parsedRequest).toMatchObject({
+      repo_root: "/repo",
+      scope_path: "docs/specs/032-example",
+      max_docs: 2,
+      max_headings_per_doc: 1,
+      cursor: "next-page"
+    });
+    expect(parsed.data.direct_read_caveat).toContain("docs_read_section");
+  });
+
+  it("classifies invalid docs_map cursors as invalid input", async () => {
+    const registered = registerTool(docsMapTool, {
+      getDocsMap: () => {
+        throw Object.assign(new Error("Invalid docs_map cursor."), { code: "invalid_cursor" });
+      }
+    });
+
+    const response = await registered.handler({ cursor: "malformed" });
+    expect(JSON.parse(response.content[0]?.text ?? "{}")).toMatchObject({
+      data: {
+        status: "blocked",
+        docs: [],
+        truncated: false
+      },
+      meta: {
+        verification_status: "blocked"
+      },
+      errors: [
+        expect.objectContaining({
+          code: "invalid_input",
+          retryable: false
+        })
+      ]
     });
   });
 
@@ -665,8 +707,25 @@ function mapResult(repoRoot: string): DocsMapUseCaseResult {
     map: {
       repo_root: repoRoot,
       status: "done",
-      docs: [guideDoc(), readmeDoc()],
+      direct_read_caveat: "Docs search is routing evidence; use docs_read_section for precise claims.",
+      docs: [guideDoc(), readmeDoc()].map((doc) => ({
+        path: doc.path,
+        title: doc.title,
+        title_truncated: false,
+        headings: doc.headings.map((heading) => ({
+          id: heading.id,
+          id_truncated: false,
+          text: heading.text,
+          text_truncated: false
+        })),
+        heading_sample_count: doc.headings.length,
+        heading_samples_truncated: false,
+        total_heading_count: doc.headings.length,
+        total_link_count: doc.links.length
+      })),
       warnings: [],
+      warning_count: 0,
+      warning_samples_truncated: false,
       truncated: false,
       next_actions: []
     },

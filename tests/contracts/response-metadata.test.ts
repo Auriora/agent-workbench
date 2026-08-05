@@ -424,7 +424,7 @@ describe("response metadata helpers", () => {
     ]);
   });
 
-  it("allows docs map resource reads while hiding nonexistent docs_map tools", () => {
+  it("allows both static docs map reads and callable docs_map continuation", () => {
     expect(
       presentNextActions([
         {
@@ -447,7 +447,12 @@ describe("response metadata helpers", () => {
       {
         tool: "read_resource",
         args: {
-          uri: "repo:///docs/map",
+          uri: "repo:///docs/map"
+        }
+      },
+      {
+        tool: "docs_map",
+        args: {
           max_docs: 50
         }
       }

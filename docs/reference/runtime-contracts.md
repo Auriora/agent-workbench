@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-08-04
+last_reviewed: 2026-08-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -622,6 +622,37 @@ status and direct-read caveat. Missing, archived, and superseded map to
 with no matched-owner relation is `non_owner`. Multiple mapped owners alone are
 not conflict evidence. A stable document ID is the same canonical repo-relative
 POSIX path as the hit.
+
+### Compact Documentation Map Delivery
+
+`repo:///docs/map` and the read-only `docs_map` continuation tool return the
+same `DocsMap` envelope. The complete serialized JSON envelope is bounded to
+32,768 UTF-8 bytes. The presentation boundary packs typed whole entries and
+warning samples before serialization; it never slices serialized JSON.
+
+Each map entry preserves its exact repo-relative path. Display titles and
+heading samples are UTF-8-safe bounded routing text with explicit truncation
+state, while heading and link counts describe the full source document.
+Document status, authority, currency, canonical-owner, and supersession fields
+remain available where evidenced. Full links, provenance, timestamps, and
+repeated per-document caveats are excluded from the compact projection;
+`docs_outline` and `docs_read_section` provide targeted detail, and one
+map-level caveat states that direct reads are required for precise claims.
+
+`result_count` describes the complete eligible map universe and does not shrink
+when a response page is compacted. Warning totals likewise precede sampling,
+and `warning_samples_truncated` declares whether the returned warning list is only a
+sample. If row or envelope-byte packing omits a document, `truncated` is true
+and the cursor identifies the first unreturned document. `docs_map` accepts
+that cursor plus the same session or per-call `scope_path`; following cursors
+enumerates the deterministic universe without introducing a documentation
+scan, index, or extraction limit.
+
+Static resource reads do not accept pseudo-arguments. `repo:///docs/map`
+therefore returns the safe first page, while `docs_map` owns cursor, row, and
+scope arguments. If no typed response can fit the envelope bound, the result is
+structured and blocked with zero useful-looking partial entries and explicit
+recovery; invalid byte-sliced JSON is never a result variant.
 
 ### Documentation Corpus Receipt
 

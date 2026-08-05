@@ -65,10 +65,10 @@
     {
       "name": "docs-map",
       "uri": "repo:///docs/map",
-      "description": "Bounded repository documentation map with paths, headings, warnings, truncation, and direct-read caveats.",
+      "description": "Static bounded documentation map for the current repo root and session docs_scope. Use docs_map when you need cursor paging, a narrower scope_path, or different sample sizes.",
       "capability_class": "read_only",
       "mutation_class": "none",
-      "budget_policy": "Bounded by optional scope_path, max_docs, and max_headings_per_doc; scans Markdown docs without source mutation."
+      "budget_policy": "Bounded to a fixed JSON envelope no larger than 32768 UTF-8 bytes using safe defaults; use the docs_map tool for cursor or scope continuation."
     },
     {
       "name": "codex-integration-profile",
@@ -112,10 +112,17 @@
     },
     {
       "name": "docs_scope",
-      "description": "Use this to show, set, or clear the default docs scope_path for this MCP session before docs_search, docs_current_for_task, or section reads. It only changes in-memory session state and never scans or mutates files.",
+      "description": "Use this to show, set, or clear the default docs scope_path for this MCP session before docs_search, docs_map, repo:///docs/map, docs_current_for_task, or section reads. It only changes in-memory session state and never scans or mutates files.",
       "capability_class": "read_only",
       "mutation_class": "none",
       "budget_policy": "Bounded in-memory MCP session state only; no repository scan and no source mutation."
+    },
+    {
+      "name": "docs_map",
+      "description": "Use this to page or narrow the bounded documentation map when repo:///docs/map truncates. It returns compact routing entries with exact repo-relative paths, authority and currency routing, truthful warning totals, and an opaque cursor to the first unreturned document.",
+      "capability_class": "read_only",
+      "mutation_class": "none",
+      "budget_policy": "Bounded to a JSON envelope no larger than 32768 UTF-8 bytes; packs complete docs-map entries and warning samples, then continues with an opaque cursor."
     },
     {
       "name": "docs_search",

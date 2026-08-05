@@ -147,7 +147,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         uri: "repo:///docs/map",
         kind: "resource",
         capability_class: "read_only",
-        description: "Bounded documentation map with repo-relative paths, headings, warnings, truncation, and direct-read caveats."
+        description: "Compact 32 KiB documentation map first page with exact repo-relative paths, bounded routing samples, warning totals, and cursor continuation through docs_map."
       },
       {
         name: "codex-integration-profile",
@@ -180,6 +180,12 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         kind: "tool",
         capability_class: "read_only",
         description: "Configured session default docs scope_path for bounded documentation queries."
+      },
+      {
+        name: "docs_map",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Configured cursor and scope continuation for the compact 32 KiB documentation map."
       },
       {
         name: "docs_search",

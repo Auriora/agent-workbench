@@ -3,7 +3,7 @@ title: MCP surface design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-21
+last_reviewed: 2026-08-05
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -147,7 +147,7 @@ The public surface policy coverage is:
 | Surface family | Trust policy |
 | --- | --- |
 | `repo:///orientation`, `repo:///status`, `repo:///scope`, `repo:///overview` | `repository_status` |
-| `repo:///docs/overview`, `repo:///docs/map`, `docs_search`, `docs_current_for_task`, `docs_outline` | `docs_routing` |
+| `repo:///docs/overview`, `repo:///docs/map`, `docs_map`, `docs_search`, `docs_current_for_task`, `docs_outline` | `docs_routing` |
 | `docs_read_section` | `docs_direct_read`; `precise_direct_read_claim` is safe only when returned metadata includes direct-read evidence |
 | `docs_scope` | `docs_session_scope` |
 | `check_markdown_document`, `check_markdown_set` | `markdown_quality` with bounded direct-read evidence when present |
@@ -279,18 +279,32 @@ MCP-specific evidence is present. Generated, vendor, fixture, cache, and temp
 paths must not create MCP-server detection by themselves.
 
 `repo:///docs/overview` and `repo:///docs/map` expose bounded Markdown
-documentation routing evidence. They return repo-relative paths, titles,
-heading outlines, links where available, skipped/unreadable path warnings,
-truncation metadata, and direct-read caveats. They are routing surfaces, not
+documentation routing evidence. Overview returns selected document detail.
+The map returns a compact index: exact repo-relative paths, bounded title and
+heading samples with full source counts, authority/currency routing, bounded
+warning samples with full warning counts, truncation metadata, and one
+map-level direct-read caveat. It does not repeat full links, provenance,
+timestamps, or caveats for every entry. Both are routing surfaces, not
 generated documentation reports and not semantic proof for precise claims.
 
 `repo:///docs/overview` ranks important docs such as repository guidance,
 README files, durable design/reference docs, and task-relevant guides ahead of
 templates, update notes, generated output, vendor docs, and fixture material.
-`repo:///docs/map` returns a deterministic bounded map of docs paths and
-headings. Both resources preserve skipped-path evidence for unreadable,
-generated, vendor, hidden, gitignored, missing, or permission-denied docs
-without failing the whole resource.
+`repo:///docs/map` returns the first deterministic map page as valid JSON no
+larger than 32,768 UTF-8 bytes. Static MCP resources have no portable argument
+channel, so cursor and per-call scope continuation uses the read-only
+`docs_map` tool rather than pseudo-arguments on `read_resource`. The resource
+and tool use the same compact contract and presenter. Byte packing removes only
+complete trailing entries, points the cursor at the first unreturned document,
+and leaves the eligible scan/index universe unchanged. Successive `docs_map`
+calls can therefore enumerate the complete ordered map. If even a minimal
+typed envelope cannot fit, the surface returns a bounded structured blocked
+response rather than sliced JSON or partial success.
+
+Both resources preserve skipped-path evidence for unreadable, generated,
+vendor, hidden, gitignored, missing, or permission-denied docs without failing
+the whole resource. The compact map may sample warnings, but it preserves the
+pre-compaction warning total and declares sample truncation.
 
 `integration:///health/agent-workbench` is the stable static read-only MCP
 health resource. MCP resource reads carry no pseudo-arguments, so it reports
@@ -337,6 +351,7 @@ and version remain a separate observed artifact identity.
 - `find_references`
 - `impact` with explicit traversal and result caps
 - `diagnostics_for_files`
+- `docs_map`
 - `docs_search`
 - `docs_current_for_task`
 - `docs_outline`
@@ -560,7 +575,7 @@ bounded section by repo-relative path and heading identifier. Both tools refuse
 workspace escapes and generated/vendor paths through structured blocked
 responses rather than best-effort reads.
 
-`repo:///docs/overview`, `repo:///docs/map`, `docs_outline`, and
+`repo:///docs/overview`, `repo:///docs/map`, `docs_map`, `docs_outline`, and
 `docs_read_section` remain direct scanner/read surfaces. Overview and map apply
 the production corpus before reads and accept the same `scope_path` prefix for
 bounded documentation subtree inventories. They are separate from the FTS search hot path because

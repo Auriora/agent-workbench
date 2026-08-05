@@ -82,7 +82,7 @@ session default with `docs_scope`:
 { "action": "set", "scope_path": "docs/specs/[###-slug]" }
 ```
 
-Then `docs_search`, `repo:///docs/overview`, and `repo:///docs/map` use that
+Then `docs_search`, `docs_map`, `repo:///docs/overview`, and `repo:///docs/map` use that
 scope by default until `docs_scope` changes or clears it. A per-call
 `scope_path` overrides the session default. Clear the default with:
 

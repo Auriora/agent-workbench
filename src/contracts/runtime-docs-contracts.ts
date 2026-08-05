@@ -860,18 +860,88 @@ export const docsOverviewSchema = z
   .strict();
 export type DocsOverview = z.infer<typeof docsOverviewSchema>;
 
+/** Compact routing entry used by the bounded docs-map resource. */
+export const docsMapHeadingSchema = z
+  .object({
+    id: z.string().max(1024),
+    id_truncated: z.boolean(),
+    text: z.string().max(1024),
+    text_truncated: z.boolean()
+  })
+  .strict();
+export type DocsMapHeading = z.infer<typeof docsMapHeadingSchema>;
+
+export const docsMapDocumentSchema = z
+  .object({
+    path: z.string(),
+    title: z.string().max(1024),
+    title_truncated: z.boolean(),
+    headings: z.array(docsMapHeadingSchema),
+    heading_sample_count: z.number().int().nonnegative(),
+    heading_samples_truncated: z.boolean(),
+    total_heading_count: z.number().int().nonnegative(),
+    total_link_count: z.number().int().nonnegative(),
+    doc_status: documentStatusSchema.optional(),
+    authority: documentAuthoritySchema.optional(),
+    currency_state: documentCurrencyStateSchema.optional(),
+    canonical_owner: z.string().optional(),
+    superseded_by: z.string().optional()
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.heading_sample_count !== value.headings.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Heading sample count must equal the number of returned heading samples."
+      });
+    }
+    if (value.heading_samples_truncated !== (value.heading_sample_count < value.total_heading_count)) {
+      context.addIssue({
+        code: "custom",
+        message: "Heading sample truncation must agree with total heading count."
+      });
+    }
+  });
+export type DocsMapDocument = z.infer<typeof docsMapDocumentSchema>;
+
 export const docsMapSchema = z
   .object({
     repo_root: z.string(),
     status: verificationStatusSchema,
-    docs: z.array(docsDocumentSchema),
+    direct_read_caveat: z.string(),
+    docs: z.array(docsMapDocumentSchema),
     warnings: z.array(docsWarningSchema),
+    warning_count: z.number().int().nonnegative(),
+    warning_samples_truncated: z.boolean(),
     truncated: z.boolean(),
     cursor: z.string().optional(),
     result_count: z.number().int().nonnegative().optional(),
+    blocker: z.enum(["payload_too_large"]).optional(),
+    blocking_message: z.string().optional(),
     next_actions: z.array(nextActionSchema)
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.warning_samples_truncated !== (value.warnings.length < value.warning_count)) {
+      context.addIssue({
+        code: "custom",
+        message: "Warning sample truncation must agree with warning_count."
+      });
+    }
+    const payloadBlocked = value.blocker === "payload_too_large";
+    if (payloadBlocked !== (value.blocking_message !== undefined)) {
+      context.addIssue({
+        code: "custom",
+        message: "Payload blockers require a blocking_message and vice versa."
+      });
+    }
+    if (payloadBlocked && value.status !== "blocked") {
+      context.addIssue({
+        code: "custom",
+        message: "Payload blockers must report blocked status."
+      });
+    }
+  });
 export type DocsMap = z.infer<typeof docsMapSchema>;
 
 export const docsSearchResultSchema = z

@@ -646,6 +646,18 @@ async function callTool(input: {
       }
     });
   }
+  if (input.toolName === "docs_map") {
+    return buildDocsMapEnvelope(await getDocsMap({
+      request: {
+        repo_root: input.repoRoot,
+        max_docs: 50,
+        max_headings_per_doc: 20
+      },
+      scanner: input.runtime.scanner,
+      workspace: input.runtime.workspace,
+      default_repo_root: input.repoRoot
+    }));
+  }
   if (input.toolName === "integration_health") {
     const identity = resolveIntegrationIdentity({});
     return buildIntegrationHealthEnvelope(await getIntegrationHealth({

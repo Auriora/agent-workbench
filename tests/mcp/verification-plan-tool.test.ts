@@ -2383,6 +2383,7 @@ describe("verification_plan MCP tool", () => {
       "context_for_task",
       "diagnostics_for_files",
       "docs_current_for_task",
+      "docs_map",
       "docs_outline",
       "docs_read_section",
       "docs_scope",

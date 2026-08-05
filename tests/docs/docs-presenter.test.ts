@@ -23,36 +23,41 @@ describe("docs presenter", () => {
       map: {
         repo_root: "/repo",
         status: "needed",
+        direct_read_caveat: "Use docs_read_section for precise claims.",
         docs: [
           {
             path: ".\\docs\\z.md",
             title: "Z",
+            title_truncated: false,
             headings: [
-              { id: "late", text: "Late", depth: 2, line: 10 },
-              { id: "early", text: "Early", depth: 1, line: 1 }
+              { id: "late", id_truncated: false, text: "Late", text_truncated: false },
+              { id: "early", id_truncated: false, text: "Early", text_truncated: false }
             ],
-            links: [
-              { label: "B", target: "b.md", resolved_path: ".\\docs\\b.md", exists: true },
-              { label: "A", target: "a.md", resolved_path: ".\\docs\\a.md", exists: false }
-            ],
-            capability_level: "resource_backed",
-            evidence_kinds: ["direct_read", "docs"],
-            direct_read_caveat: "Use docs_read_section for precise claims."
+            heading_sample_count: 2,
+            heading_samples_truncated: false,
+            total_heading_count: 2,
+            total_link_count: 1,
+            authority: "canonical",
+            currency_state: "current",
+            canonical_owner: ".\\docs\\z.md"
           },
           {
             path: "README.md",
             title: "Readme",
-            headings: [],
-            links: [],
-            capability_level: "resource_backed",
-            evidence_kinds: ["docs"],
-            direct_read_caveat: "Use docs_read_section for precise claims."
+            title_truncated: false,
+            heading_sample_count: 0,
+            heading_samples_truncated: false,
+            total_heading_count: 0,
+            total_link_count: 0,
+            headings: []
           }
         ],
         warnings: [
           { path: "vendor", reason: "generated_or_vendor", message: "Vendor docs skipped." },
           { path: "dist", reason: "generated_or_vendor", message: "Generated docs skipped." }
         ],
+        warning_count: 2,
+        warning_samples_truncated: false,
         truncated: true,
         next_actions: [{ tool: "docs_search", args: { query: "guide" } }]
       },
@@ -60,12 +65,119 @@ describe("docs presenter", () => {
     } satisfies DocsMapUseCaseResult);
 
     expect(envelope.data.truncated).toBe(true);
-    expect(envelope.data.docs.map((doc) => doc.path)).toEqual(["README.md", "docs/z.md"]);
-    expect(envelope.data.docs[1]?.headings.map((heading) => heading.id)).toEqual(["early", "late"]);
-    expect(envelope.data.docs[1]?.links.map((link) => link.resolved_path)).toEqual(["docs/a.md", "docs/b.md"]);
-    expect(envelope.data.docs[1]?.direct_read_caveat).toContain("docs_read_section");
+    expect(envelope.data.cursor).toBeUndefined();
+    expect(envelope.data.docs.map((doc) => doc.path)).toEqual(["docs/z.md", "README.md"]);
+    expect(envelope.data.docs[0]?.headings.map((heading) => heading.id)).toEqual(["early", "late"]);
+    expect(envelope.data.docs[0]).toMatchObject({
+      authority: "canonical",
+      currency_state: "current",
+      canonical_owner: "docs/z.md"
+    });
+    expect(envelope.data.direct_read_caveat).toContain("docs_read_section");
     expect(envelope.data.warnings.map((warning) => warning.path)).toEqual(["dist", "vendor"]);
     expect(envelope.meta.budget).toEqual({ row_limit: 20 });
+  });
+
+  it("bounds docs-map envelopes with a cursor and preserves UTF-8 code points", () => {
+    const repeated = "😀".repeat(200);
+    const envelope = buildDocsMapEnvelope({
+      map: {
+        repo_root: "/repo",
+        status: "done",
+        direct_read_caveat: "Use docs_read_section for precise claims.",
+        docs: Array.from({ length: 20 }, (_, index) => ({
+          path: `docs/page-${String(index).padStart(2, "0")}.md`,
+          title: repeated,
+          title_truncated: true,
+          headings: [{
+            id: repeated,
+            id_truncated: true,
+            text: repeated,
+            text_truncated: true
+          }],
+          heading_sample_count: 1,
+          heading_samples_truncated: true,
+          total_heading_count: 4,
+          total_link_count: 0
+        })),
+        warnings: Array.from({ length: 20 }, (_, index) => ({
+          path: `vendor/${index}`,
+          reason: "generated_or_vendor" as const,
+          message: repeated
+        })),
+        warning_count: 20,
+        warning_samples_truncated: false,
+        truncated: true,
+        next_actions: []
+      },
+      meta: {
+        ...meta(),
+        truncated: true
+      },
+      presentation: {
+        cursor_offset: 0,
+        has_more: false,
+        source_truncated: false,
+        max_docs: 20,
+        max_headings_per_doc: 10
+      }
+    });
+
+    const serialized = JSON.stringify(envelope, null, 2);
+    expect(new TextEncoder().encode(serialized).byteLength).toBeLessThanOrEqual(32_768);
+    expect(envelope.data.cursor).toEqual(expect.any(String));
+    expect(envelope.data.docs.length).toBeGreaterThan(0);
+    expect(envelope.data.docs.length).toBeLessThan(20);
+    expect(envelope.data.docs[0]?.title).not.toContain("\uFFFD");
+    expect(envelope.data.docs[0]?.headings[0]?.text).not.toContain("\uFFFD");
+    expect(envelope.data.warning_count).toBe(20);
+    expect(envelope.data.warning_samples_truncated).toBe(true);
+    expect(envelope.meta.truncated).toBe(true);
+  });
+
+  it("returns a bounded blocked envelope when one exact path cannot be represented", () => {
+    const exactPath = `docs/${"a".repeat(33_000)}.md`;
+    const envelope = buildDocsMapEnvelope({
+      map: {
+        repo_root: "/repo",
+        status: "done",
+        direct_read_caveat: "Use docs_read_section for precise claims.",
+        docs: [{
+          path: exactPath,
+          title: "Oversized path",
+          title_truncated: false,
+          headings: [],
+          heading_sample_count: 0,
+          heading_samples_truncated: false,
+          total_heading_count: 0,
+          total_link_count: 0
+        }],
+        warnings: [],
+        warning_count: 0,
+        warning_samples_truncated: false,
+        truncated: false,
+        result_count: 1,
+        next_actions: []
+      },
+      meta: meta(),
+      presentation: {
+        cursor_offset: 0,
+        has_more: false,
+        source_truncated: false,
+        max_docs: 1,
+        max_headings_per_doc: 1
+      }
+    });
+
+    const serialized = JSON.stringify(envelope, null, 2);
+    expect(new TextEncoder().encode(serialized).byteLength).toBeLessThanOrEqual(32_768);
+    expect(envelope.data).toMatchObject({
+      status: "blocked",
+      blocker: "payload_too_large",
+      docs: [],
+      truncated: false
+    });
+    expect(serialized).not.toContain(exactPath);
   });
 
   it("sorts search hits by score while preserving snippets and caveats", () => {

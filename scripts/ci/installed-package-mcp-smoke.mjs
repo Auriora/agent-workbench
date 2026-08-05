@@ -392,6 +392,10 @@ async function runSmoke() {
     queries: {
       find_references: stableReferences,
       docs_search: stableDocsHits,
+      docs_map: {
+        codex: codexBaseline.docs_map,
+        claude_code: claudeBaseline.docs_map
+      },
       deleted_symbol_count: deletedSymbol.data.symbols.length,
       deleted_docs_count: deletedDocs.data.hits.length,
       docs_authority_ranking: authorityRanking
@@ -860,7 +864,9 @@ async function initializeAndProbeSession({ session, provider, expectedVersion })
     status,
     scope,
     health,
-    probe
+    probe,
+    docsMapResource,
+    docsMapTool
   ] = await Promise.all([
     listTools(session, provider),
     listResources(session, provider),
@@ -871,18 +877,34 @@ async function initializeAndProbeSession({ session, provider, expectedVersion })
       symbol: "helper",
       max_depth: 1,
       max_results: 1
-    })
+    }),
+    readResourceWithBytes(session, "repo:///docs/map"),
+    callToolWithBytes(session, "docs_map", {})
   ]);
   assert(scope.data?.repo_root === path.resolve(workspaceRoot), `${provider} scoped repo_root matches fixture`);
   assert(status.data?.repo_root === path.resolve(workspaceRoot), `${provider} status repo_root matches fixture`);
   assert(Array.isArray(tools), `${provider} tools/list returns tool results`);
   assert(Array.isArray(resources), `${provider} resources/list returns resource results`);
   assert(tools.some((tool) => tool.name === "docs_search"), `${provider} advertises docs_search`);
+  assert(tools.some((tool) => tool.name === "docs_map"), `${provider} advertises docs_map`);
   assert(resources.some((resource) => resource.uri === "repo:///scope"), `${provider} exposes repo:///scope`);
+  assert(resources.some((resource) => resource.uri === "repo:///docs/map"), `${provider} exposes repo:///docs/map`);
+  assert(docsMapResource.bytes <= 32_768, `${provider} docs-map resource stays within 32768 UTF-8 bytes`);
+  assert(docsMapTool.bytes <= 32_768, `${provider} docs_map tool stays within 32768 UTF-8 bytes`);
+  assert(Array.isArray(docsMapResource.envelope.data?.docs), `${provider} docs-map resource parses as a typed envelope`);
+  assert(Array.isArray(docsMapTool.envelope.data?.docs), `${provider} docs_map tool parses as a typed envelope`);
   assert(typeof probe.data?.snapshot_id === "string", `${provider} probe call returns a snapshot id`);
   assert(health.data?.repo_root === path.resolve(workspaceRoot), `${provider} health repo_root matches fixture`);
   assertProviderIdentity(health, provider, expectedVersion);
-  return { status, health };
+  return {
+    status,
+    health,
+    docs_map: {
+      resource_bytes: docsMapResource.bytes,
+      tool_bytes: docsMapTool.bytes,
+      result_count: docsMapResource.envelope.data?.result_count
+    }
+  };
 }
 
 async function listTools(session, provider) {
@@ -915,14 +937,29 @@ async function callTool(session, name, args) {
   return parseEnvelope(await session.call("tools/call", { name, arguments: args }, 30_000));
 }
 
+async function callToolWithBytes(session, name, args) {
+  return parseEnvelopeWithBytes(await session.call("tools/call", { name, arguments: args }, 30_000));
+}
+
 async function readResource(session, uri) {
   return parseEnvelope(await session.call("resources/read", { uri }, 30_000));
 }
 
+async function readResourceWithBytes(session, uri) {
+  return parseEnvelopeWithBytes(await session.call("resources/read", { uri }, 30_000));
+}
+
 function parseEnvelope(message) {
+  return parseEnvelopeWithBytes(message).envelope;
+}
+
+function parseEnvelopeWithBytes(message) {
   const text = message.result?.content?.[0]?.text ?? message.result?.contents?.[0]?.text;
   assert(typeof text === "string", "MCP response contains a JSON envelope");
-  return JSON.parse(text);
+  return {
+    envelope: JSON.parse(text),
+    bytes: Buffer.byteLength(text, "utf8")
+  };
 }
 
 async function waitForFreshStatus(session, previousSnapshotId, timeoutMs) {

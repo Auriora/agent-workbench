@@ -18,7 +18,8 @@ import type {
   DocsWarning,
   RankedDocsSearchHit,
   RankedDocsSearchResult,
-  ResponseEnvelope
+  ResponseEnvelope,
+  ResponseMetadata
 } from "../contracts/index.js";
 import {
   documentReferenceSchema,
@@ -27,6 +28,7 @@ import {
   docsHeadingSchema,
   docsLinkSchema,
   docsMapSchema,
+  docsMapDocumentSchema,
   docsOutlineResultSchema,
   docsOverviewSchema,
   docsReadSectionResultSchema,
@@ -61,6 +63,10 @@ import {
   sanitizePublicMcpFailureMessage
 } from "./redaction.js";
 
+const DOCS_MAP_DIRECT_READ_CAVEAT = "Docs search is routing evidence; use docs_read_section for precise claims.";
+const DOCS_MAP_MAX_SERIALIZED_BYTES = 32_768;
+const DOCS_MAP_CURSOR_KIND = "docs";
+
 export function buildDocsOverviewEnvelope(
   result: DocsOverviewUseCaseResult,
   context: PresentationSessionContext = {}
@@ -76,10 +82,12 @@ export function buildDocsMapEnvelope(
   result: DocsMapUseCaseResult,
   context: PresentationSessionContext = {}
 ): ResponseEnvelope<DocsMap> {
-  return makeTrustedEnvelope({
-    data: sanitizeDocsMap(result.map, context),
-    meta: responseMetadataSchema.strip().parse(result.meta),
-    trust_policy: { surface_kind: "docs_routing" }
+  const sanitized = sanitizeDocsMap(result.map, context);
+  const meta = responseMetadataSchema.strip().parse(result.meta);
+  return boundDocsMapEnvelope({
+    data: sanitized,
+    meta,
+    presentation: result.presentation
   });
 }
 
@@ -273,8 +281,11 @@ export function buildInvalidDocsMapInputEnvelope(input: {
     data: {
       repo_root: input.repoRoot,
       status: "blocked",
+      direct_read_caveat: DOCS_MAP_DIRECT_READ_CAVEAT,
       docs: [],
       warnings: [],
+      warning_count: 0,
+      warning_samples_truncated: false,
       truncated: false,
       next_actions: []
     },
@@ -292,8 +303,11 @@ export function buildDocsMapProviderFailureEnvelope(input: {
     data: {
       repo_root: input.repoRoot,
       status: "blocked",
+      direct_read_caveat: DOCS_MAP_DIRECT_READ_CAVEAT,
       docs: [],
       warnings: [],
+      warning_count: 0,
+      warning_samples_truncated: false,
       truncated: false,
       next_actions: []
     },
@@ -393,13 +407,357 @@ function sanitizeDocsMap(
   return docsMapSchema.parse({
     repo_root: input.repo_root,
     status: input.status,
-    docs: [...input.docs].sort(compareDocuments).map(sanitizeDocument),
+    direct_read_caveat: redactPresentationText(input.direct_read_caveat),
+    docs: input.docs.map((document) =>
+      docsMapDocumentSchema.parse({
+        path: normalizeRepoPath(document.path),
+        title: redactPresentationText(document.title),
+        headings: [...document.headings]
+          .sort((left, right) => left.id.localeCompare(right.id))
+          .map((heading) => ({
+            id: redactPresentationText(heading.id),
+            id_truncated: heading.id_truncated,
+            text: redactPresentationText(heading.text),
+            text_truncated: heading.text_truncated
+          })),
+        title_truncated: document.title_truncated,
+        heading_sample_count: document.heading_sample_count,
+        heading_samples_truncated: document.heading_samples_truncated,
+        total_heading_count: document.total_heading_count,
+        total_link_count: document.total_link_count,
+        doc_status: document.doc_status,
+        authority: document.authority,
+        currency_state: document.currency_state,
+        canonical_owner: document.canonical_owner === undefined
+          ? undefined
+          : normalizeRepoPath(document.canonical_owner),
+        superseded_by: document.superseded_by === undefined
+          ? undefined
+          : normalizeRepoPath(document.superseded_by)
+      })
+    ),
     warnings: sortWarnings(input.warnings).map(sanitizeWarning),
+    warning_count: input.warning_count,
+    warning_samples_truncated: input.warning_samples_truncated,
     truncated: input.truncated,
     cursor: input.cursor,
     result_count: input.result_count,
+    blocker: input.blocker,
+    blocking_message: input.blocking_message === undefined
+      ? undefined
+      : redactPresentationText(input.blocking_message, { context: "message" }),
     next_actions: presentNextActions(input.next_actions, context).map((action) => nextActionSchema.parse(action))
   });
+}
+
+function boundDocsMapEnvelope(input: {
+  data: DocsMap;
+  meta: ResponseMetadata;
+  presentation?: DocsMapUseCaseResult["presentation"];
+}): ResponseEnvelope<DocsMap> {
+  const docs = input.data.docs;
+  const warnings = input.data.warnings;
+  const docsPage = packDocsMapEntries({
+    docs,
+    warnings,
+    base: input.data,
+    presentation: input.presentation,
+    meta: input.meta
+  });
+
+  if (docs.length > 0 && docsPage.docs.length === 0) {
+    const firstPath = docs[0]?.path;
+    const blockedData = docsMapSchema.parse({
+      repo_root: input.data.repo_root,
+      status: "blocked",
+      direct_read_caveat: input.data.direct_read_caveat,
+      docs: [],
+      warnings: docsPage.warnings,
+      warning_count: input.data.warning_count,
+      warning_samples_truncated: docsPage.warning_samples_truncated,
+      truncated: false,
+      blocker: "payload_too_large",
+      blocking_message: firstPath === undefined
+        ? "The bounded docs map could not fit a minimal typed envelope within 32768 UTF-8 bytes."
+        : `The docs-map entry for ${firstPath} could not fit a minimal typed envelope within 32768 UTF-8 bytes.`,
+      next_actions: firstPath === undefined
+        ? []
+        : [
+            {
+              tool: "docs_outline",
+              args: { path: firstPath }
+            }
+          ]
+    });
+    return boundedBlockedDocsMapEnvelope(blockedData, input.meta);
+  }
+
+  return buildDocsMapPageEnvelope({
+    base: input.data,
+    docs: docsPage.docs,
+    warnings: docsPage.warnings,
+    warning_samples_truncated: docsPage.warning_samples_truncated,
+    hasMoreDocs: docsPage.has_more_docs,
+    presentation: input.presentation,
+    meta: input.meta
+  });
+}
+
+function docsMapTrustedEnvelope(
+  data: DocsMap,
+  meta: ResponseMetadata
+): ResponseEnvelope<DocsMap> {
+  return makeTrustedEnvelope({
+    data,
+    meta,
+    trust_policy: { surface_kind: "docs_routing" }
+  });
+}
+
+function packDocsMapEntries(input: {
+  docs: DocsMap["docs"];
+  warnings: DocsMap["warnings"];
+  base: DocsMap;
+  presentation?: DocsMapUseCaseResult["presentation"];
+  meta: ResponseMetadata;
+}): {
+  docs: DocsMap["docs"];
+  warnings: DocsMap["warnings"];
+  warning_samples_truncated: boolean;
+  has_more_docs: boolean;
+} {
+  const docs: DocsMap["docs"] = [];
+  let warnings: DocsMap["warnings"] = [];
+  let warningSamplesTruncated = input.base.warning_samples_truncated || input.base.warning_count > 0;
+
+  for (let index = 0; index < input.docs.length; index += 1) {
+    const candidate = input.docs[index];
+    const nextDocs = [...docs, candidate];
+    const hasMoreDocs = index + 1 < input.docs.length || input.presentation?.has_more === true;
+    if (!fitsBoundedDocsMap({
+      base: input.base,
+      docs: nextDocs,
+      warnings,
+      warningSamplesTruncated,
+      hasMoreDocs,
+      presentation: input.presentation,
+      meta: input.meta
+    })) {
+      break;
+    }
+    docs.push(candidate);
+  }
+
+  for (const candidate of input.warnings) {
+    const nextWarnings = [...warnings, candidate];
+    const nextWarningSamplesTruncated = input.base.warning_count > nextWarnings.length;
+    const hasMoreDocs = docs.length < input.docs.length || input.presentation?.has_more === true;
+    if (!fitsBoundedDocsMap({
+      base: input.base,
+      docs,
+      warnings: nextWarnings,
+      warningSamplesTruncated: nextWarningSamplesTruncated,
+      hasMoreDocs,
+      presentation: input.presentation,
+      meta: input.meta
+    })) {
+      warningSamplesTruncated = true;
+      break;
+    }
+    warnings = nextWarnings;
+    warningSamplesTruncated = nextWarningSamplesTruncated;
+  }
+
+  return {
+    docs,
+    warnings,
+    warning_samples_truncated: warningSamplesTruncated,
+    has_more_docs: docs.length < input.docs.length || input.presentation?.has_more === true
+  };
+}
+
+function fitsBoundedDocsMap(input: {
+  base: DocsMap;
+  docs: DocsMap["docs"];
+  warnings: DocsMap["warnings"];
+  warningSamplesTruncated: boolean;
+  hasMoreDocs: boolean;
+  presentation?: DocsMapUseCaseResult["presentation"];
+  meta: ResponseMetadata;
+}): boolean {
+  const candidate = buildDocsMapCandidate(input);
+  return serializedDocsMapBytes(
+    candidate,
+    docsMapMeta(input.meta, candidate.truncated, candidate.status)
+  ) <= DOCS_MAP_MAX_SERIALIZED_BYTES;
+}
+
+function serializedDocsMapBytes(data: DocsMap, meta: ResponseMetadata): number {
+  return new TextEncoder().encode(JSON.stringify(docsMapTrustedEnvelope(
+    docsMapSchema.parse(data),
+    meta
+  ), null, 2)).byteLength;
+}
+
+function buildDocsMapPageEnvelope(input: {
+  base: DocsMap;
+  docs: DocsMap["docs"];
+  warnings: DocsMap["warnings"];
+  warning_samples_truncated: boolean;
+  hasMoreDocs: boolean;
+  presentation?: DocsMapUseCaseResult["presentation"];
+  meta: ResponseMetadata;
+}): ResponseEnvelope<DocsMap> {
+  const data = buildDocsMapCandidate({
+    base: input.base,
+    docs: input.docs,
+    warnings: input.warnings,
+    warningSamplesTruncated: input.warning_samples_truncated,
+    hasMoreDocs: input.hasMoreDocs,
+    presentation: input.presentation,
+    meta: input.meta
+  });
+  return docsMapTrustedEnvelope(data, docsMapMeta(input.meta, data.truncated, data.status));
+}
+
+function buildDocsMapCandidate(input: {
+  base: DocsMap;
+  docs: DocsMap["docs"];
+  warnings: DocsMap["warnings"];
+  warningSamplesTruncated: boolean;
+  hasMoreDocs: boolean;
+  presentation?: DocsMapUseCaseResult["presentation"];
+  meta: ResponseMetadata;
+}): DocsMap {
+  const returnedDocCount = input.docs.length;
+  const cursor = input.hasMoreDocs
+    ? encodeDocsMapCursor((input.presentation?.cursor_offset ?? decodeDocsMapCursor(input.base.cursor)) + returnedDocCount)
+    : undefined;
+  return docsMapSchema.parse({
+    ...input.base,
+    docs: input.docs,
+    warnings: input.warnings,
+    warning_samples_truncated: input.warningSamplesTruncated,
+    truncated: input.hasMoreDocs || input.presentation?.source_truncated === true ||
+      (input.presentation === undefined && input.base.truncated),
+    cursor,
+    blocker: undefined,
+    blocking_message: undefined,
+    next_actions: buildDocsMapNextActions({
+      repoRoot: input.base.repo_root,
+      filePath: input.docs[0]?.path,
+      cursor,
+      scopePath: input.presentation?.scope_path,
+      maxDocs: input.presentation?.max_docs ?? 50,
+      maxHeadingsPerDoc: input.presentation?.max_headings_per_doc ?? 20
+    })
+  });
+}
+
+function boundedBlockedDocsMapEnvelope(data: DocsMap, meta: ResponseMetadata): ResponseEnvelope<DocsMap> {
+  const actualMeta = docsMapMeta(meta, false, "blocked");
+  if (serializedDocsMapBytes(data, actualMeta) <= DOCS_MAP_MAX_SERIALIZED_BYTES) {
+    return docsMapTrustedEnvelope(data, actualMeta);
+  }
+  const minimal = docsMapSchema.parse({
+    repo_root: data.repo_root,
+    status: "blocked",
+    direct_read_caveat: data.direct_read_caveat,
+    docs: [],
+    warnings: [],
+    warning_count: data.warning_count,
+    warning_samples_truncated: data.warning_count > 0,
+    truncated: false,
+    blocker: "payload_too_large",
+    blocking_message: "The bounded docs map could not fit within 32768 UTF-8 bytes.",
+    next_actions: []
+  });
+  return docsMapTrustedEnvelope(
+    minimal,
+    docsMapMeta(
+      invalidResponseMeta({ repoRoot: data.repo_root }),
+      false,
+      "blocked"
+    )
+  );
+}
+
+function docsMapMeta(
+  meta: ResponseMetadata,
+  truncated: boolean,
+  status: DocsMap["status"]
+): ResponseMetadata {
+  return responseMetadataSchema.strip().parse({
+    ...meta,
+    verification_status: status,
+    truncated
+  });
+}
+
+function buildDocsMapNextActions(input: {
+  repoRoot: string;
+  filePath?: string;
+  cursor?: string;
+  scopePath?: string;
+  maxDocs: number;
+  maxHeadingsPerDoc: number;
+}): DocsMap["next_actions"] {
+  const actions: Array<{ tool: string; args: Record<string, unknown>; reason?: string }> = [];
+  if (input.cursor !== undefined) {
+    actions.push({
+      tool: "docs_map",
+      args: {
+        repo_root: input.repoRoot,
+        cursor: input.cursor,
+        max_docs: input.maxDocs,
+        max_headings_per_doc: input.maxHeadingsPerDoc,
+        ...(input.scopePath === undefined ? {} : { scope_path: input.scopePath })
+      },
+      reason: "Continue the truncated documentation map from this cursor."
+    });
+  }
+  if (input.filePath !== undefined) {
+    actions.push({
+      tool: "docs_outline",
+      args: {
+        repo_root: input.repoRoot,
+        path: input.filePath
+      }
+    });
+  }
+  return actions.map((action) => nextActionSchema.parse(action));
+}
+
+function decodeDocsMapCursor(cursor: string | undefined): number {
+  if (cursor === undefined) return 0;
+  try {
+    const parsed = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as {
+      kind?: unknown;
+      offset?: unknown;
+    };
+    if (
+      parsed.kind !== DOCS_MAP_CURSOR_KIND ||
+      typeof parsed.offset !== "number" ||
+      !Number.isInteger(parsed.offset) ||
+      parsed.offset < 0
+    ) {
+      throw invalidDocsMapCursorError();
+    }
+    return parsed.offset;
+  } catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "invalid_cursor") {
+      throw error;
+    }
+    throw invalidDocsMapCursorError();
+  }
+}
+
+function invalidDocsMapCursorError(): Error & { code: string } {
+  return Object.assign(new Error("Invalid docs_map cursor."), { code: "invalid_cursor" });
+}
+
+function encodeDocsMapCursor(offset: number): string {
+  return Buffer.from(JSON.stringify({ kind: DOCS_MAP_CURSOR_KIND, offset }), "utf8").toString("base64url");
 }
 
 function sanitizeDocsSearch(

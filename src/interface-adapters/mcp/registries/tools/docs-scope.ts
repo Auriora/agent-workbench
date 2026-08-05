@@ -18,7 +18,7 @@ const docsScopeRawShape = {
   scope_path: z.string().min(1).optional().describe("Repo-relative docs scope prefix to set, such as docs/specs/032-example; required when action is set.")
 };
 
-const docsScopeDescription = "Use this to show, set, or clear the default docs scope_path for this MCP session before docs_search, docs_current_for_task, or section reads. It only changes in-memory session state and never scans or mutates files.";
+const docsScopeDescription = "Use this to show, set, or clear the default docs scope_path for this MCP session before docs_search, docs_map, repo:///docs/map, docs_current_for_task, or section reads. It only changes in-memory session state and never scans or mutates files.";
 
 type DocsScopeResponse = {
   status: "set" | "cleared" | "unchanged";

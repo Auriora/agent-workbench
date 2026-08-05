@@ -442,6 +442,7 @@ export function strongestCapabilityLevel(levels: readonly CapabilityLevel[]): Ca
 export const PUBLIC_NEXT_ACTION_TOOLS = [
   "context_for_task",
   "diagnostics_for_files",
+  "docs_map",
   "docs_current_for_task",
   "docs_outline",
   "docs_read_section",
@@ -964,6 +965,12 @@ function integrationSurfaceByTool(
 }
 
 function publicNextAction(action: NextAction): NextAction {
+  if (action.tool === "read_resource" && typeof action.args.uri === "string") {
+    return {
+      ...action,
+      args: { uri: action.args.uri }
+    };
+  }
   if (!Object.prototype.hasOwnProperty.call(action.args, "repo_root")) {
     return action;
   }

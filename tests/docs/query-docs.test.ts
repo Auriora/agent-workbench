@@ -34,6 +34,8 @@ import { openGraphStore, SCHEMA_VERSION, type GraphStore } from "../../src/infra
 import type { DocsIndexPort, DocsIndexSearchResult } from "../../src/ports/index.js";
 import type { FileCatalogScanPort, WorkspaceFilePort } from "../../src/ports/index.js";
 import { buildFileCatalogEntry } from "../../src/domain/policies/index.js";
+import { buildDocsMapEnvelope } from "../../src/presentation/docs-presenter.js";
+import { DOCS_MAP_RESOURCE_MAX_SERIALIZED_BYTES } from "../../src/interface-adapters/mcp/registries/resources/docs-map.js";
 
 const fixtureRoot = path.resolve("tests/fixtures/fixture-docs-query-repo");
 const scanner = new FileCatalogScannerAdapter();
@@ -96,6 +98,18 @@ describe("docs query application contracts", () => {
       const guide = map.docs.find((doc) => doc.path === "docs/guide.md");
 
       expect(map.docs.length).toBeGreaterThan(10);
+      const serializedEnvelope = JSON.stringify(buildDocsMapEnvelope(result));
+      expect(JSON.parse(serializedEnvelope).data.docs).toHaveLength(map.docs.length);
+      expect(new TextEncoder().encode(serializedEnvelope).byteLength).toBeLessThanOrEqual(
+        DOCS_MAP_RESOURCE_MAX_SERIALIZED_BYTES
+      );
+      expect(guide).toMatchObject({
+        title_truncated: false,
+        heading_sample_count: 6,
+        heading_samples_truncated: false,
+        total_heading_count: 6,
+        total_link_count: expect.any(Number)
+      });
       expect(guide?.headings.map((heading) => heading.id)).toEqual([
         "guide",
         "install",
@@ -176,10 +190,7 @@ describe("docs query application contracts", () => {
       const map = docsMapSchema.parse(mapResult.map);
       expect(map.docs.find((doc) => doc.path === "docs/design/current.md")).toMatchObject({
         currency_state: "current",
-        modified_at: expect.any(String),
-        currency_caveats: expect.arrayContaining([
-          expect.stringContaining("Documentation map lists this document as owner")
-        ])
+        canonical_owner: "docs/design/current.md"
       });
       expect(map.docs.find((doc) => doc.path === "docs/design/old.md")).toMatchObject({
         currency_state: "superseded",
@@ -251,12 +262,50 @@ describe("docs query application contracts", () => {
       expect(first.map.truncated).toBe(true);
       expect(first.map.cursor).toEqual(expect.any(String));
       expect(first.map.result_count).toBe(5);
+      expect(first.map.next_actions).toEqual(expect.arrayContaining([
+        expect.objectContaining({
+          tool: "docs_map",
+          args: expect.objectContaining({
+            cursor: first.map.cursor,
+            max_docs: 2,
+            max_headings_per_doc: 2
+          })
+        })
+      ]));
       expect(second.map.docs.map((doc) => doc.path)).toEqual([
         "docs/page-02.md",
         "docs/page-03.md"
       ]);
       expect(second.map.truncated).toBe(true);
       expect(second.map.cursor).toEqual(expect.any(String));
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects malformed docs-map cursors instead of restarting pagination", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-docs-invalid-cursor-"));
+    try {
+      fs.mkdirSync(path.join(root, "docs"), { recursive: true });
+      fs.writeFileSync(path.join(root, "docs", "guide.md"), "# Guide\n");
+
+      const invalidCursors = [
+        "not-a-docs-map-cursor",
+        Buffer.from(JSON.stringify({ kind: "docs", offset: 999 }), "utf8").toString("base64url")
+      ];
+      for (const cursor of invalidCursors) {
+        await expect(getDocsMap({
+          request: {
+            repo_root: root,
+            max_docs: 2,
+            max_headings_per_doc: 2,
+            cursor
+          },
+          scanner: new FileCatalogScannerAdapter(),
+          workspace: new WorkspaceFileAdapter({ repoRoot: root }),
+          default_repo_root: "."
+        })).rejects.toMatchObject({ code: "invalid_cursor" });
+      }
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
@@ -380,9 +429,9 @@ describe("docs query application contracts", () => {
       expect(search.next_actions).toEqual(
         expect.arrayContaining([
           expect.objectContaining({
-            tool: "read_resource",
+            tool: "docs_map",
             args: expect.objectContaining({
-              uri: "repo:///docs/map"
+              max_docs: 50
             })
           })
         ])
@@ -454,6 +503,65 @@ describe("docs query application contracts", () => {
     } finally {
       store.close();
       fixture.dispose();
+    }
+  });
+
+  it("keeps the final docs-map envelope bounded, UTF-8 safe, and fully recoverable across cursor pages", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-docs-map-bounded-"));
+    try {
+      fs.mkdirSync(path.join(root, "docs"), { recursive: true });
+      for (let index = 0; index < 18; index += 1) {
+        const fileName = `doc-${String(index).padStart(2, "0")}.md`;
+        fs.writeFileSync(
+          path.join(root, "docs", fileName),
+          [
+            `# ${"多".repeat(180)} ${index}`,
+            "",
+            "## " + "😀".repeat(120),
+            "",
+            "## " + "ß".repeat(200),
+            "",
+            `[Link ${index}](./${fileName})`
+          ].join("\n")
+        );
+      }
+
+      const seenPaths: string[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await getDocsMap({
+          request: {
+            repo_root: root,
+            max_docs: 18,
+            max_headings_per_doc: 10,
+            cursor
+          },
+          scanner: new FileCatalogScannerAdapter(),
+          workspace: new WorkspaceFileAdapter({ repoRoot: root }),
+          default_repo_root: "."
+        });
+        const envelope = buildDocsMapEnvelope(page);
+        const serialized = JSON.stringify(envelope);
+        expect(JSON.parse(serialized).data.docs).toHaveLength(envelope.data.docs.length);
+        expect(new TextEncoder().encode(serialized).byteLength).toBeLessThanOrEqual(
+          DOCS_MAP_RESOURCE_MAX_SERIALIZED_BYTES
+        );
+        for (const doc of envelope.data.docs) {
+          expect(doc.path).toMatch(/^docs\/doc-\d{2}\.md$/u);
+          expect(doc.title).not.toContain("\uFFFD");
+          expect(doc.headings.every((heading) => !heading.text.includes("\uFFFD"))).toBe(true);
+          expect(doc.heading_sample_count).toBe(doc.headings.length);
+        }
+        seenPaths.push(...envelope.data.docs.map((doc) => doc.path));
+        cursor = envelope.data.cursor;
+      } while (cursor !== undefined);
+
+      expect(seenPaths).toEqual(
+        Array.from({ length: 18 }, (_, index) => `docs/doc-${String(index).padStart(2, "0")}.md`)
+      );
+      expect(new Set(seenPaths).size).toBe(seenPaths.length);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
     }
   });
 

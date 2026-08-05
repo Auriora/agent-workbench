@@ -4,23 +4,18 @@
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import {
-  docsMapRequestSchema,
-  type DocsMapRequest
-} from "../../../../contracts/index.js";
+import { docsMapRequestSchema } from "../../../../contracts/index.js";
 import {
   buildDocsMapEnvelope,
   buildDocsMapProviderFailureEnvelope,
   buildInvalidDocsMapInputEnvelope
 } from "../../../../presentation/docs-presenter.js";
-import {
-  formatMcpArgumentError,
-  parseMcpArguments
-} from "../../arguments/index.js";
 import { requestWithSessionDocsScope } from "../docs-session-scope.js";
 import type { McpResourceDeclaration } from "../index.js";
 import { resolveMcpRequestRepoRoot } from "../root-authority.js";
 import { providerFailureMessage } from "./provider-failure.js";
+
+export const DOCS_MAP_RESOURCE_MAX_SERIALIZED_BYTES = 32_768;
 
 export const docsMapResource: McpResourceDeclaration = {
   kind: "resource",
@@ -29,34 +24,14 @@ export const docsMapResource: McpResourceDeclaration = {
   metadata: {
     capability_class: "read_only",
     mutation_class: "none",
-    budget_policy: "Bounded by optional scope_path, max_docs, and max_headings_per_doc; scans Markdown docs without source mutation.",
-    description: "Bounded repository documentation map with paths, headings, warnings, truncation, and direct-read caveats.",
-    parameters: [
-      { name: "repo_root", description: "Optional repository root. Defaults to the MCP server repo root.", required: false },
-      { name: "scope_path", description: "Optional repo-relative docs scope prefix, for example one docs/specs package.", required: false },
-      { name: "max_docs", description: "Maximum docs to return.", required: false },
-      { name: "max_headings_per_doc", description: "Maximum headings to return per document.", required: false },
-      { name: "cursor", description: "Opaque cursor returned by a previous truncated docs map page.", required: false }
-    ],
+    budget_policy: "Bounded to a fixed JSON envelope no larger than 32768 UTF-8 bytes using safe defaults; use the docs_map tool for cursor or scope continuation.",
+    description: "Static bounded documentation map for the current repo root and session docs_scope. Use docs_map when you need cursor paging, a narrower scope_path, or different sample sizes.",
+    parameters: [],
     returns: "ResponseEnvelope<DocsMap>"
   },
   register(server: McpServer, context) {
-    server.resource("docs-map", "repo:///docs/map", async (request: unknown) => {
-      let parsedRequest: DocsMapRequest;
-      try {
-        parsedRequest = parseMcpArguments(
-          docsMapRequestSchema,
-          getDocsResourceArgumentInput(request)
-        );
-      } catch (error) {
-        const envelope = buildInvalidDocsMapInputEnvelope({
-          repoRoot: context.repoRoot,
-          message: formatMcpArgumentError(error, "Invalid docs map resource arguments.")
-        });
-        return docsResourceResponse("repo:///docs/map", envelope);
-      }
-
-      const rootDecision = resolveMcpRequestRepoRoot(parsedRequest, context);
+    server.resource("docs-map", "repo:///docs/map", async () => {
+      const rootDecision = resolveMcpRequestRepoRoot(docsMapRequestSchema.parse({}), context);
       if (!rootDecision.ok) {
         const envelope = buildInvalidDocsMapInputEnvelope({
           repoRoot: rootDecision.repoRoot,
@@ -94,28 +69,13 @@ export const docsMapResource: McpResourceDeclaration = {
   }
 };
 
-function getDocsResourceArgumentInput(request: unknown): unknown {
-  if (typeof request !== "object" || request === null) {
-    return undefined;
-  }
-
-  const input = request as Record<string, unknown>;
-  return {
-    repo_root: input.repo_root,
-    scope_path: input.scope_path,
-    max_docs: input.max_docs,
-    max_headings_per_doc: input.max_headings_per_doc,
-    cursor: input.cursor
-  };
-}
-
 function docsResourceResponse(uri: string, envelope: unknown) {
   return {
     contents: [
       {
         uri,
         mimeType: "application/json",
-        text: JSON.stringify(envelope, null, 2)
+        text: JSON.stringify(envelope)
       }
     ]
   };
