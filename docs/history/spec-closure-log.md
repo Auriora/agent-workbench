@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/059-bounded-docs-map-payload-delivery/`
 - **Title:** Bounded docs map payload delivery requirements
 - **Final spec commit:** `741609e`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `349ce3a`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/mcp-surface-design.md`
