@@ -67,6 +67,8 @@ import {
   type LifecycleDaemonMetadata
 } from "./daemon-client.js";
 
+const DAEMON_SIGTERM_GRACE_MS = 1_000;
+
 export * from "./daemon-client.js";
 
 const DEFAULT_DAEMON_PENDING_CLIENT_TIMEOUT_MS = 30_000;
@@ -361,6 +363,9 @@ export async function startAgentWorkbenchDaemon(input: {
   if (existingState.state === "ready") {
     throw new Error("Agent Workbench daemon is already running for this runtime identity.");
   }
+  if (existingState.state === "mismatched") {
+    throw new Error(`Agent Workbench daemon is blocked: ${existingState.reason}.`);
+  }
   if (existingState.state === "blocked" && !ownStartingReceipt) {
     throw new Error(`Agent Workbench daemon is blocked: ${existingState.reason}.`);
   }
@@ -585,7 +590,7 @@ export async function runDaemonFromEnv(env: NodeJS.ProcessEnv = process.env): Pr
   const launchToken = env[DAEMON_LAUNCH_TOKEN_ENV];
   const launchStartedAt = new Date().toISOString();
   try {
-    await startAgentWorkbenchDaemon({
+    const daemon = await startAgentWorkbenchDaemon({
       repoRoot,
       debugRepoRootOverride: env.AGENT_WORKBENCH_DAEMON_DEBUG_REPO_ROOT_OVERRIDE === "1",
       idleGraceMs: readIdleGraceMs(env),
@@ -595,6 +600,17 @@ export async function runDaemonFromEnv(env: NodeJS.ProcessEnv = process.env): Pr
         startupRefreshDelayMs: daemonStartupRefreshDelayMsFromEnv(env)
       }
     });
+    if (isDaemonProcess(env)) {
+      let shuttingDown = false;
+      process.once("SIGTERM", () => {
+        if (shuttingDown) {
+          return;
+        }
+        shuttingDown = true;
+        void closeDaemonForTermination(daemon)
+          .then((clean) => process.exit(clean ? 0 : 1));
+      });
+    }
   } catch (error) {
     recordEntrypointDaemonFailure({
       metadataPath,
@@ -604,6 +620,25 @@ export async function runDaemonFromEnv(env: NodeJS.ProcessEnv = process.env): Pr
       launchStartedAt
     });
     throw error;
+  }
+}
+
+async function closeDaemonForTermination(
+  daemon: Pick<StartedAgentWorkbenchDaemon, "close">
+): Promise<boolean> {
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      daemon.close().then(() => true, () => false),
+      new Promise<false>((resolve) => {
+        timeout = setTimeout(() => resolve(false), DAEMON_SIGTERM_GRACE_MS);
+        timeout.unref();
+      })
+    ]);
+  } finally {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
   }
 }
 

@@ -277,8 +277,16 @@ and snapshot identity. There is no public manual-refresh route. All ordinary
 triggers follow the same ownership rule and report `owner_active` when another
 process owns the repo.
 
-Daemon identity is derived from canonical repo root, runtime version, graph
-schema version, and daemon protocol version. The IPC endpoint is local-only:
+Daemon compatibility identity is derived from canonical repo root, runtime
+version, graph schema version, daemon protocol version, and the runtime build
+fingerprint. Installed bundles derive it from the packaged build
+receipt; checkout-backed source entrypoints derive it from current runtime
+source inputs so an unrebuilt `dist/` receipt cannot hide source changes. A
+missing installed receipt blocks startup. The canonical admission hash and IPC
+path exclude the build fingerprint so reinstalling a different build under the
+same version converges on the existing endpoint and performs one serialized
+handoff instead of leaving the older process authoritative. The IPC endpoint is
+local-only:
 Unix domain sockets on POSIX and named pipes on Windows. Repo-local lifecycle
 receipts and startup locks under `.cache/agent-workbench/daemon/` use the short
 identity hash in their filenames and record PID, socket or pipe path, and
@@ -289,10 +297,17 @@ avoid path-length failures; Windows named pipes use it in the pipe name.
 
 Cold daemon startup is serialized with an identity-scoped repo-local startup
 lock so parallel agent clients and same-session sub-agents using the same
-runtime identity elect one daemon starter. During a rolling upgrade, an older
-runtime identity may continue serving retained bridges while the current
-identity starts independently; their graph-refresh work remains serialized by
-the repository ownership lease. A new identity may publish a ready observer
+runtime identity elect one daemon starter. When the base identity matches but
+the packaged build fingerprint differs or is absent from legacy metadata, a
+launcher verifies the canonical metadata and endpoint, asks the exact recorded
+PID to shut down with `SIGTERM`, waits for launch-aware cleanup, and re-enters
+the same startup election. Graceful drain is bounded so a stalled worker cannot
+hold replacement indefinitely; positive dead-process recovery remains the only
+cleanup route if that bound expires. Other identity mismatches remain blocked
+and never authorize process signalling. During a rolling version, schema, or
+protocol upgrade, an older base identity may continue serving retained bridges
+while the current identity starts independently; their graph-refresh work
+remains serialized by the repository ownership lease. A new identity may publish a ready observer
 endpoint while the older identity retains that lease; its refresh triggers
 return structured `owner_active` evidence and do not enter local `planned`
 state. Legacy unsuffixed admission files remain owned

@@ -24,7 +24,7 @@ import {
   startAgentWorkbenchDaemon,
   type StartedAgentWorkbenchDaemon
 } from "../../src/mcp/daemon.js";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createPhase1DaemonLifetimeReproduction } from "../helpers/spec041-refresh-reproductions.js";
 import {
   FileRepositoryOwnershipAdapter,
@@ -678,7 +678,12 @@ describe("Agent Workbench daemon launcher", () => {
       runtimeVersion: "0.0.0-legacy",
       id: `alternate-${identity.id.slice(12)}`
     };
+    const rebuiltSameVersionIdentity = {
+      ...identity,
+      buildFingerprint: `${identity.buildFingerprint ?? "missing"}-rebuilt`
+    };
     const alternate = daemonPaths(alternateIdentity);
+    const rebuiltSameVersion = daemonPaths(rebuiltSameVersionIdentity);
     const shortHash = identity.id.slice(0, 24);
     const alternateHash = alternateIdentity.id.slice(0, 24);
     const expectedIdentityId = crypto.createHash("sha256").update([
@@ -708,6 +713,8 @@ describe("Agent Workbench daemon launcher", () => {
       ));
       expect(sameIdentity.metadataPath).not.toBe(alternate.metadataPath);
       expect(sameIdentity.startupLockPath).not.toBe(alternate.startupLockPath);
+      expect(rebuiltSameVersion.metadataPath).toBe(sameIdentity.metadataPath);
+      expect(rebuiltSameVersion.startupLockPath).toBe(sameIdentity.startupLockPath);
       expect(daemonPaths(createDaemonIdentity(repoRoot)).metadataPath).toBe(sameIdentity.metadataPath);
       expect(sameIdentity.metadataDir).toBe(alternate.metadataDir);
     } finally {
@@ -1881,6 +1888,158 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
+  it("gracefully replaces a live same-base legacy daemon only after verified health proof", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-build-fingerprint-replace-");
+    const identity = createDaemonIdentity(repoRoot);
+    const paths = daemonPaths(identity);
+    const daemons: StartedAgentWorkbenchDaemon[] = [];
+    const oldPid = process.pid;
+    let starts = 0;
+    const signaled: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    const previousIdentity = {
+      ...identity,
+      buildFingerprint: undefined
+    };
+
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+    fs.writeFileSync(
+      paths.metadataPath,
+      `${JSON.stringify({
+        identity: previousIdentity,
+        pid: oldPid,
+        socketPath: paths.socketPath,
+        createdAt: "2026-08-01T00:00:00.000Z"
+      })}\n`
+    );
+    if (process.platform !== "win32") {
+      fs.mkdirSync(paths.ipcDir, { recursive: true });
+    }
+    const proofServer = await createReplaceableProofServer({
+      socketPath: paths.socketPath,
+      expectedIdentity: previousIdentity,
+      health: {
+        pid: oldPid,
+        socket_path: paths.socketPath,
+        repo_root: repoRoot
+      }
+    });
+
+    try {
+      const socket = await connectOrStartDaemon({
+        repoRoot,
+        debugRepoRootOverride: false,
+        startTimeoutMs: 2500,
+        signalProcess: (pid, signal) => {
+          signaled.push({ pid, signal });
+          fs.rmSync(paths.metadataPath, { force: true });
+          void proofServer.close();
+        },
+        spawnDaemon: (spawnInput) => {
+          starts += 1;
+          void startAgentWorkbenchDaemon({
+            launchToken: spawnInput.launchToken,
+            repoRoot,
+            idleGraceMs: 100,
+            serverOptions: { startupRefreshDelayMs: 60_000 }
+          }).then((daemon) => daemons.push(daemon));
+          return fakeChildProcess();
+        }
+      });
+      socket.destroy();
+
+      expect(starts).toBe(1);
+      expect(signaled).toEqual([{ pid: oldPid, signal: "SIGTERM" }]);
+      expect(proofServer.state.handshakeCount).toBe(1);
+      expect(proofServer.state.healthReadCount).toBe(1);
+      expect(safeReadJson(paths.metadataPath)).toMatchObject({
+        identity: {
+          id: identity.id,
+          runtimeVersion: identity.runtimeVersion,
+          buildFingerprint: identity.buildFingerprint
+        },
+        pid: process.pid
+      });
+    } finally {
+      await proofServer.close();
+      await closeDaemons(daemons);
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses replaceable handoff when the canonical daemon proof reports mismatched pid or socket", async () => {
+    const cases = [
+      {
+        label: "pid",
+        health: (repoRoot: string, socketPath: string) => ({
+          pid: 999_999,
+          socket_path: socketPath,
+          repo_root: repoRoot
+        })
+      },
+      {
+        label: "socket",
+        health: (repoRoot: string, socketPath: string) => ({
+          pid: 424_242,
+          socket_path: `${socketPath}.other`,
+          repo_root: repoRoot
+        })
+      }
+    ] as const;
+
+    for (const testCase of cases) {
+      const repoRoot = makeRepoRoot(`agent-workbench-daemon-build-fingerprint-refuse-${testCase.label}-`);
+      const identity = createDaemonIdentity(repoRoot);
+      const paths = daemonPaths(identity);
+      const previousIdentity = {
+        ...identity,
+        buildFingerprint: undefined
+      };
+      const signalProcess = vi.fn<(pid: number, signal: NodeJS.Signals) => void>();
+      let starts = 0;
+
+      fs.mkdirSync(paths.metadataDir, { recursive: true });
+      fs.writeFileSync(
+        paths.metadataPath,
+        `${JSON.stringify({
+          identity: previousIdentity,
+          pid: process.pid,
+          socketPath: paths.socketPath,
+          createdAt: "2026-08-01T00:00:00.000Z"
+        })}\n`
+      );
+      if (process.platform !== "win32") {
+        fs.mkdirSync(paths.ipcDir, { recursive: true });
+      }
+
+      const proofServer = await createReplaceableProofServer({
+        socketPath: paths.socketPath,
+        expectedIdentity: previousIdentity,
+        health: testCase.health(repoRoot, paths.socketPath)
+      });
+
+      try {
+        await expect(connectOrStartDaemon({
+          repoRoot,
+          debugRepoRootOverride: false,
+          startTimeoutMs: 1500,
+          signalProcess,
+          spawnDaemon: () => {
+            starts += 1;
+            return fakeChildProcess();
+          }
+        })).rejects.toThrow("blocked: ambiguous_process");
+
+        expect(signalProcess).not.toHaveBeenCalled();
+        expect(starts).toBe(0);
+        expect(proofServer.state.handshakeCount).toBe(1);
+        expect(proofServer.state.healthReadCount).toBe(1);
+      } finally {
+        await proofServer.close();
+        fs.rmSync(repoRoot, { recursive: true, force: true });
+      }
+    }
+  });
+
   it("serializes stale-owner cleanup across parallel clients", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-parallel-stale-");
     const identity = createDaemonIdentity(repoRoot);
@@ -2100,6 +2259,29 @@ describe("Agent Workbench daemon launcher", () => {
           socketExists: () => true
         })
       ).toMatchObject({ state: "blocked", reason: "ambiguous_process" });
+
+      const priorBuildIdentity = {
+        ...identity,
+        buildFingerprint: `${identity.buildFingerprint ?? "missing"}-prior`
+      };
+      fs.writeFileSync(
+        paths.metadataPath,
+        `${JSON.stringify({
+          identity: priorBuildIdentity,
+          pid: process.pid,
+          socketPath: paths.socketPath,
+          createdAt: "2026-07-05T00:00:00.000Z"
+        })}\n`
+      );
+      expect(
+        classifyDaemonState({
+          metadataPath: paths.metadataPath,
+          expectedIdentity: identity,
+          socketPath: paths.socketPath,
+          isProcessAlive: () => true,
+          socketExists: () => true
+        })
+      ).toMatchObject({ state: "mismatched", reason: "build_fingerprint_mismatch" });
 
       fs.writeFileSync(
         paths.metadataPath,
@@ -2668,6 +2850,124 @@ async function connectSocketEventually(socketPath: string, timeoutMs = 1000): Pr
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
+
+async function createReplaceableProofServer(input: {
+  socketPath: string;
+  expectedIdentity: ReturnType<typeof createDaemonIdentity>;
+  health: {
+    pid: number;
+    socket_path: string;
+    repo_root: string;
+  };
+}): Promise<{
+  close(): Promise<void>;
+  state: { handshakeCount: number; healthReadCount: number };
+}> {
+  const state = {
+    handshakeCount: 0,
+    healthReadCount: 0
+  };
+  const server = net.createServer((socket) => {
+    let buffer = "";
+    let handshakeAccepted = false;
+    socket.setEncoding("utf8");
+    socket.on("data", (chunk: string) => {
+      buffer += chunk;
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines.filter(Boolean)) {
+        const message = JSON.parse(line) as {
+          protocol?: string;
+          protocolVersion?: number;
+          identity?: ReturnType<typeof createDaemonIdentity>;
+          id?: number;
+          method?: string;
+        };
+        if (!handshakeAccepted) {
+          const identity = message.identity;
+          const validHandshake =
+            message.protocol === "agent-workbench-daemon" &&
+            message.protocolVersion === DAEMON_PROTOCOL_VERSION &&
+            identity !== undefined &&
+            identity.repoRoot === input.expectedIdentity.repoRoot &&
+            identity.runtimeVersion === input.expectedIdentity.runtimeVersion &&
+            identity.schemaVersion === input.expectedIdentity.schemaVersion &&
+            identity.protocolVersion === input.expectedIdentity.protocolVersion &&
+            identity.id === input.expectedIdentity.id &&
+            identity.buildFingerprint === input.expectedIdentity.buildFingerprint;
+          if (!validHandshake) {
+            socket.destroy(new Error(`unexpected replaceable proof handshake: ${line}`));
+            return;
+          }
+          handshakeAccepted = true;
+          state.handshakeCount += 1;
+          continue;
+        }
+        if (message.method === "initialize" && typeof message.id === "number") {
+          socket.write(`${JSON.stringify({
+            jsonrpc: "2.0",
+            id: message.id,
+            result: {
+              protocolVersion: "2025-06-18",
+              capabilities: {},
+              serverInfo: { name: "agent-workbench-test", version: "1.0.0" }
+            }
+          })}\n`);
+          continue;
+        }
+        if (message.method === "notifications/initialized") {
+          continue;
+        }
+        if (message.method === "resources/read" && typeof message.id === "number") {
+          state.healthReadCount += 1;
+          socket.write(`${JSON.stringify({
+            jsonrpc: "2.0",
+            id: message.id,
+            result: {
+              contents: [{
+                text: JSON.stringify({
+                  data: {
+                    daemon: input.health
+                  }
+                })
+              }]
+            }
+          })}\n`);
+          continue;
+        }
+        socket.destroy(new Error(`unexpected replaceable proof message: ${line}`));
+        return;
+      }
+    });
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(input.socketPath, () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
+
+  return {
+    close() {
+      return new Promise((resolve, reject) => {
+        if (!server.listening) {
+          resolve();
+          return;
+        }
+        server.close((error) => {
+          if (error !== undefined) {
+            reject(error);
+            return;
+          }
+          resolve();
+        });
+      });
+    },
+    state
+  };
 }
 
 function createSocketSession(socket: net.Socket): {

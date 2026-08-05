@@ -128,12 +128,11 @@ describe("daemon-backed stdio entrypoint integration", () => {
     const result = await session.waitForExit(3_000);
     await waitForProcessExit(daemonPid!);
     const paths = daemonPaths(createDaemonIdentity(repoRoot));
-    fs.rmSync(paths.metadataPath, { force: true });
-    if (process.platform !== "win32") {
-      fs.rmSync(paths.socketPath, { force: true });
-    }
+    await waitForDaemonMetadata(repoRoot, false, 3_000);
 
     expect(result).toEqual({ code: 0, signal: null });
+    expect(fs.existsSync(paths.metadataPath)).toBe(false);
+    expect(fs.existsSync(paths.socketPath)).toBe(false);
     expect(session.stderr()).toBe("");
   }, 15_000);
 

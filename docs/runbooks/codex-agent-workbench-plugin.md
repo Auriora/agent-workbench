@@ -180,11 +180,12 @@ The plugin should not create a host-level Agent Workbench MCP block in
 
 ### Bridge process interpretation
 
-Expect one daemon per active repository and compatible runtime identity, plus
-one stdio bridge per open client or sub-agent session. Four repository daemons
-can therefore be correct in a multi-repository workspace. During a rolling
-upgrade, retained older-runtime sessions can temporarily keep an older daemon
-beside the current daemon for the same repository; identity-scoped receipts,
+Expect one daemon per active repository and compatible runtime build identity,
+plus one stdio bridge per open client or sub-agent session. Four repository
+daemons can therefore be correct in a multi-repository workspace. During a
+rolling version, schema, or protocol upgrade, retained older-runtime sessions
+can temporarily keep an older daemon beside the current daemon for the same
+repository; identity-scoped receipts,
 startup locks, and endpoints prevent admission collisions while the repository
 graph lease still serializes refresh ownership. A bridge with a live writer on
 file descriptor 0 and a connected daemon socket is active; a bridge with
@@ -213,6 +214,15 @@ the new daemon exited with `Repository refresh owner is active`, again closing
 initialize. The corrected runtime starts a ready observer, serves the compatible
 published graph, and reports `owner_active` only for refresh admission until
 the lease becomes available.
+
+Reinstalling a different packaged build under the same version is not a rolling
+version upgrade. The build receipt fingerprint changes while the canonical
+endpoint remains stable, so the first new bridge gracefully replaces the exact
+older daemon with `SIGTERM`, waits for its launch-aware cleanup, and starts the
+new build through the ordinary election path. A missing fingerprint in legacy
+metadata is handled by the same bounded handoff. Ambiguous identity, process,
+or endpoint evidence remains blocked and must be investigated; do not delete
+metadata or kill processes by name.
 
 Inspect an exact PID with `ls -l /proc/<pid>/fd/0` and correlate Unix sockets
 with `ss -xnp`. Only send `SIGTERM` to an exact, confirmed orphan bridge PID.

@@ -14,7 +14,10 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import type { IntegrationLauncherIdentity } from "../contracts/index.js";
 import { GRAPH_STORE_IDENTITY_VERSION } from "../contracts/graph-store-identity-contracts.js";
-import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../runtime/version.js";
+import {
+  AGENT_WORKBENCH_RUNTIME_BUILD_FINGERPRINT,
+  AGENT_WORKBENCH_RUNTIME_VERSION
+} from "../runtime/version.js";
 
 export const DAEMON_PROTOCOL_VERSION = 1;
 const DAEMON_METADATA_FILE = "daemon.json";
@@ -38,6 +41,7 @@ const NATIVE_MODULE_LOAD_ERROR_PATTERN =
 export type AgentWorkbenchDaemonIdentity = {
   repoRoot: string;
   runtimeVersion: string;
+  buildFingerprint?: string;
   schemaVersion: number;
   protocolVersion: number;
   id: string;
@@ -75,7 +79,7 @@ export type DaemonStartupFailureCode =
 export type DaemonState =
   | { state: "absent"; reason: "missing" }
   | { state: "stale"; reason: "malformed_metadata" | "dead_process" | "missing_socket" | "identity_mismatch"; metadata?: AgentWorkbenchDaemonMetadata }
-  | { state: "mismatched"; reason: "identity_mismatch"; metadata: AgentWorkbenchDaemonMetadata }
+  | { state: "mismatched"; reason: "build_fingerprint_mismatch"; metadata: AgentWorkbenchDaemonMetadata }
   | { state: "blocked"; reason: "ambiguous_process" | "ambiguous_metadata" | "starting" | "failed"; metadata?: AgentWorkbenchDaemonMetadata }
   | { state: "ready"; metadata: AgentWorkbenchDaemonMetadata };
 
@@ -95,6 +99,7 @@ export type ConnectOrStartDaemonOptions = {
   handshakeTimeoutMs?: number;
   env?: NodeJS.ProcessEnv;
   spawnDaemon?: (input: SpawnDaemonInput) => ChildProcess;
+  signalProcess?: (pid: number, signal: NodeJS.Signals) => void;
 };
 
 export type SpawnDaemonInput = {
@@ -113,6 +118,16 @@ export type DaemonHandshake = {
   integrationIdentity?: IntegrationLauncherIdentity;
 };
 
+type DaemonHealthEnvelope = {
+  data?: {
+    daemon?: {
+      pid?: unknown;
+      socket_path?: unknown;
+      repo_root?: unknown;
+    };
+  };
+};
+
 export function isDaemonProcess(env: NodeJS.ProcessEnv = process.env): boolean {
   return env[DAEMON_ENV_FLAG] === "1";
 }
@@ -120,11 +135,13 @@ export function isDaemonProcess(env: NodeJS.ProcessEnv = process.env): boolean {
 export function createDaemonIdentity(repoRoot: string): AgentWorkbenchDaemonIdentity {
   const absoluteRepoRoot = path.resolve(repoRoot);
   const runtimeVersion = AGENT_WORKBENCH_RUNTIME_VERSION;
+  const buildFingerprint = AGENT_WORKBENCH_RUNTIME_BUILD_FINGERPRINT;
   const schemaVersion = GRAPH_STORE_IDENTITY_VERSION;
   const protocolVersion = DAEMON_PROTOCOL_VERSION;
   return {
     repoRoot: absoluteRepoRoot,
     runtimeVersion,
+    buildFingerprint,
     schemaVersion,
     protocolVersion,
     id: stableHash([
@@ -173,7 +190,8 @@ export function classifyDaemonState(input: {
   if (processState === "ambiguous") {
     return { state: "blocked", reason: "ambiguous_process", metadata };
   }
-  if (!daemonIdentityMatches(metadata.identity, input.expectedIdentity)) {
+  const identityRelationship = daemonIdentityRelationship(metadata.identity, input.expectedIdentity);
+  if (identityRelationship === "base_mismatch") {
     return processState
       ? { state: "blocked", reason: "ambiguous_process", metadata }
       : { state: "stale", reason: "identity_mismatch", metadata };
@@ -196,6 +214,9 @@ export function classifyDaemonState(input: {
   if (metadata.socketPath !== input.socketPath || !socketExists(metadata.socketPath)) {
     return { state: "blocked", reason: "ambiguous_process", metadata };
   }
+  if (identityRelationship === "build_fingerprint_mismatch") {
+    return { state: "mismatched", reason: "build_fingerprint_mismatch", metadata };
+  }
   return { state: "ready", metadata };
 }
 
@@ -207,6 +228,9 @@ export async function connectOrStartDaemon(
   const paths = daemonPaths(identity);
   const env = options.env ?? process.env;
   const spawnDaemon = options.spawnDaemon ?? spawnDaemonProcess;
+  const signalProcess = options.signalProcess ?? ((pid, signal) => {
+    process.kill(pid, signal);
+  });
   ensureDaemonDirectories(paths);
   const timeoutMs = options.startTimeoutMs ?? DEFAULT_DAEMON_START_TIMEOUT_MS;
   const deadlineMs = performance.now() + timeoutMs;
@@ -300,7 +324,6 @@ export async function connectOrStartDaemon(
       keepStartupLock = false;
       throw new Error(`Agent Workbench daemon is ${state.state}: ${state.reason}.`);
     }
-
     if (state.state === "absent" || state.state === "stale" || state.state === "mismatched") {
       const startupLockAdmission = acquireDaemonStartupLock(paths.startupLockPath);
       if (startupLockAdmission === "ambiguous") {
@@ -310,6 +333,17 @@ export async function connectOrStartDaemon(
       const haveStartupLock = startupLock !== null;
       keepStartupLock = haveStartupLock;
       if (!haveStartupLock) {
+        if (state.state === "mismatched") {
+          return await waitForReplaceableDaemonHandoff({
+            identity,
+            integrationIdentity: options.integrationIdentity,
+            paths,
+            timeoutMs,
+            deadlineMs,
+            handshakeTimeoutMs,
+            retryStartup
+          });
+        }
         return await waitForDaemonConnection({
           identity,
           integrationIdentity: options.integrationIdentity,
@@ -350,6 +384,35 @@ export async function connectOrStartDaemon(
         }
         keepStartupLock = false;
         throw new Error(`Agent Workbench daemon is ${state.state}: ${state.reason}.`);
+      }
+      if (state.state === "mismatched") {
+        try {
+          await verifyReplaceableDaemonOwnership({
+            metadata: state.metadata,
+            expectedIdentity: identity,
+            socketPath: paths.socketPath,
+            deadlineMs,
+            handshakeTimeoutMs
+          });
+          signalReplaceableDaemon({
+            metadata: state.metadata,
+            expectedIdentity: identity,
+            socketPath: paths.socketPath,
+            signalProcess
+          });
+        } finally {
+          keepStartupLock = false;
+          releaseStartupLock();
+        }
+        return await waitForReplaceableDaemonHandoff({
+          identity,
+          integrationIdentity: options.integrationIdentity,
+          paths,
+          timeoutMs,
+          deadlineMs,
+          handshakeTimeoutMs,
+          retryStartup
+        });
       }
       if (state.state === "absent") {
         const launchToken = crypto.randomUUID();
@@ -595,6 +658,248 @@ async function waitForDaemonConnection(input: {
   }
   pendingSocket?.destroy();
   throw new Error(`Timed out connecting to Agent Workbench daemon: ${String(lastError)}`);
+}
+
+async function waitForReplaceableDaemonHandoff(input: {
+  identity: AgentWorkbenchDaemonIdentity;
+  integrationIdentity?: IntegrationLauncherIdentity;
+  paths: DaemonPaths;
+  timeoutMs: number;
+  handshakeTimeoutMs: number;
+  deadlineMs: number;
+  retryStartup: () => Promise<Socket>;
+}): Promise<Socket> {
+  while (performance.now() <= input.deadlineMs) {
+    const state = normalizeLaunchState(classifyDaemonState({
+      metadataPath: input.paths.metadataPath,
+      expectedIdentity: input.identity,
+      socketPath: input.paths.socketPath
+    }), input.paths);
+    if (state.state === "absent" || state.state === "stale") {
+      return input.retryStartup();
+    }
+    if (state.state === "ready") {
+      return waitForDaemonConnection({
+        identity: input.identity,
+        integrationIdentity: input.integrationIdentity,
+        socketPath: input.paths.socketPath,
+        metadataPath: input.paths.metadataPath,
+        startupLockPath: input.paths.startupLockPath,
+        timeoutMs: input.timeoutMs,
+        deadlineMs: input.deadlineMs,
+        handshakeTimeoutMs: input.handshakeTimeoutMs,
+        retryStartup: input.retryStartup
+      });
+    }
+    if (state.state === "mismatched") {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      continue;
+    }
+    if (state.state === "blocked") {
+      if (state.reason === "starting") {
+        return waitForDaemonConnection({
+          identity: input.identity,
+          integrationIdentity: input.integrationIdentity,
+          socketPath: input.paths.socketPath,
+          metadataPath: input.paths.metadataPath,
+          startupLockPath: input.paths.startupLockPath,
+          timeoutMs: input.timeoutMs,
+          deadlineMs: input.deadlineMs,
+          handshakeTimeoutMs: input.handshakeTimeoutMs,
+          retryStartup: input.retryStartup
+        });
+      }
+      if (state.reason === "failed" && state.metadata !== undefined) {
+        throw startupFailureFromMetadata(state.metadata);
+      }
+      throw new Error(`Agent Workbench daemon is ${state.state}: ${state.reason}.`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error("Timed out waiting for Agent Workbench daemon replacement handoff.");
+}
+
+async function verifyReplaceableDaemonOwnership(input: {
+  metadata: AgentWorkbenchDaemonMetadata;
+  expectedIdentity: AgentWorkbenchDaemonIdentity;
+  socketPath: string;
+  deadlineMs: number;
+  handshakeTimeoutMs: number;
+}): Promise<void> {
+  if (
+    !daemonBaseIdentityMatches(input.metadata.identity, input.expectedIdentity) ||
+    daemonIdentityMatches(input.metadata.identity, input.expectedIdentity) ||
+    input.metadata.socketPath !== input.socketPath
+  ) {
+    throw new Error("Agent Workbench daemon is blocked: ambiguous_process.");
+  }
+
+  const remainingMs = Math.min(
+    input.handshakeTimeoutMs,
+    Math.max(0, Math.floor(input.deadlineMs - performance.now()))
+  );
+  if (remainingMs <= 0) {
+    throw new Error("Agent Workbench daemon is blocked: ambiguous_process.");
+  }
+
+  let socket: Socket | undefined;
+  try {
+    socket = await connectSocket(input.socketPath, remainingMs);
+    const session = createDaemonProbeSession(socket, input.deadlineMs);
+    session.notify({
+      protocol: "agent-workbench-daemon",
+      protocolVersion: DAEMON_PROTOCOL_VERSION,
+      identity: input.metadata.identity
+    } satisfies DaemonHandshake);
+    await session.call({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: {
+        protocolVersion: "2025-06-18",
+        capabilities: {},
+        clientInfo: {
+          name: "agent-workbench-daemon-replacement",
+          version: input.expectedIdentity.runtimeVersion
+        }
+      }
+    });
+    session.notify({
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+      params: {}
+    });
+    const response = await session.call({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "resources/read",
+      params: { uri: "integration:///health/agent-workbench" }
+    });
+    if (!replaceableDaemonHealthMatches(response, input.metadata)) {
+      throw new Error("Agent Workbench daemon is blocked: ambiguous_process.");
+    }
+  } catch {
+    throw new Error("Agent Workbench daemon is blocked: ambiguous_process.");
+  } finally {
+    socket?.destroy();
+  }
+}
+
+function createDaemonProbeSession(socket: Socket, deadlineMs: number): {
+  call(message: { id: number } & Record<string, unknown>): Promise<any>;
+  notify(message: Record<string, unknown>): void;
+} {
+  let stdout = "";
+  let closed = false;
+  let closeError: Error | undefined;
+  const pendingCalls = new Map<number, {
+    resolve: (message: any) => void;
+    reject: (error: Error) => void;
+  }>();
+
+  const rejectPending = (error: Error): void => {
+    closed = true;
+    closeError = error;
+    for (const pending of pendingCalls.values()) {
+      pending.reject(error);
+    }
+    pendingCalls.clear();
+  };
+
+  socket.setEncoding("utf8");
+  socket.on("data", (chunk: string) => {
+    stdout += chunk;
+    const lines = stdout.split("\n");
+    stdout = lines.pop() ?? "";
+    for (const line of lines.filter(Boolean)) {
+      let parsed: { id?: number };
+      try {
+        parsed = JSON.parse(line) as { id?: number };
+      } catch {
+        rejectPending(new Error("Agent Workbench daemon is blocked: ambiguous_process."));
+        socket.destroy();
+        return;
+      }
+      if (typeof parsed.id !== "number") {
+        continue;
+      }
+      const pending = pendingCalls.get(parsed.id);
+      if (pending !== undefined) {
+        pendingCalls.delete(parsed.id);
+        pending.resolve(parsed);
+      }
+    }
+  });
+  socket.once("error", (error) => {
+    rejectPending(error instanceof Error ? error : new Error(String(error)));
+  });
+  socket.once("close", () => {
+    rejectPending(closeError ?? new Error("Agent Workbench daemon is blocked: ambiguous_process."));
+  });
+
+  return {
+    call(message: { id: number } & Record<string, unknown>) {
+      if (closed) {
+        return Promise.reject(closeError ?? new Error("Agent Workbench daemon is blocked: ambiguous_process."));
+      }
+      return new Promise((resolve, reject) => {
+        const remainingMs = Math.max(0, Math.floor(deadlineMs - performance.now()));
+        if (remainingMs <= 0) {
+          reject(new Error("Agent Workbench daemon is blocked: ambiguous_process."));
+          return;
+        }
+        const timeout = setTimeout(() => {
+          pendingCalls.delete(message.id);
+          reject(new Error("Agent Workbench daemon is blocked: ambiguous_process."));
+        }, remainingMs);
+        pendingCalls.set(message.id, {
+          resolve: (response) => {
+            clearTimeout(timeout);
+            resolve(response);
+          },
+          reject: (error) => {
+            clearTimeout(timeout);
+            reject(error);
+          }
+        });
+        socket.write(`${JSON.stringify(message)}\n`);
+      });
+    },
+    notify(message: Record<string, unknown>) {
+      if (closed) {
+        return;
+      }
+      socket.write(`${JSON.stringify(message)}\n`);
+    }
+  };
+}
+
+function replaceableDaemonHealthMatches(
+  response: unknown,
+  metadata: AgentWorkbenchDaemonMetadata
+): boolean {
+  if (
+    typeof response !== "object" ||
+    response === null ||
+    !("result" in response)
+  ) {
+    return false;
+  }
+  const result = (response as { result?: { contents?: Array<{ text?: unknown }> } }).result;
+  const text = result?.contents?.[0]?.text;
+  if (typeof text !== "string") {
+    return false;
+  }
+  let envelope: DaemonHealthEnvelope;
+  try {
+    envelope = JSON.parse(text) as DaemonHealthEnvelope;
+  } catch {
+    return false;
+  }
+  const daemon = envelope.data?.daemon;
+  return daemon?.pid === metadata.pid &&
+    daemon.socket_path === metadata.socketPath &&
+    daemon.repo_root === metadata.identity.repoRoot;
 }
 
 function startupFailureFromMetadata(metadata: AgentWorkbenchDaemonMetadata): Error {
@@ -999,6 +1304,13 @@ export function daemonIdentityMatches(
   actual: AgentWorkbenchDaemonIdentity,
   expected: AgentWorkbenchDaemonIdentity
 ): boolean {
+  return daemonIdentityRelationship(actual, expected) === "full_match";
+}
+
+export function daemonBaseIdentityMatches(
+  actual: AgentWorkbenchDaemonIdentity,
+  expected: AgentWorkbenchDaemonIdentity
+): boolean {
   return (
     actual.repoRoot === expected.repoRoot &&
     actual.runtimeVersion === expected.runtimeVersion &&
@@ -1006,6 +1318,18 @@ export function daemonIdentityMatches(
     actual.protocolVersion === expected.protocolVersion &&
     actual.id === expected.id
   );
+}
+
+function daemonIdentityRelationship(
+  actual: AgentWorkbenchDaemonIdentity,
+  expected: AgentWorkbenchDaemonIdentity
+): "full_match" | "build_fingerprint_mismatch" | "base_mismatch" {
+  if (!daemonBaseIdentityMatches(actual, expected)) {
+    return "base_mismatch";
+  }
+  return actual.buildFingerprint === expected.buildFingerprint
+    ? "full_match"
+    : "build_fingerprint_mismatch";
 }
 
 function isDaemonMetadata(value: unknown): value is AgentWorkbenchDaemonMetadata {
@@ -1069,6 +1393,7 @@ function isDaemonIdentity(value: unknown): value is AgentWorkbenchDaemonIdentity
     value !== null &&
     typeof identity.repoRoot === "string" &&
     typeof identity.runtimeVersion === "string" &&
+    (identity.buildFingerprint === undefined || typeof identity.buildFingerprint === "string") &&
     typeof identity.schemaVersion === "number" &&
     typeof identity.protocolVersion === "number" &&
     typeof identity.id === "string"
@@ -1081,6 +1406,15 @@ function isMissingFileError(error: unknown): boolean {
     error !== null &&
     "code" in error &&
     (error as { code?: unknown }).code === "ENOENT"
+  );
+}
+
+function isNoSuchProcessError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "ESRCH"
   );
 }
 
@@ -1099,6 +1433,29 @@ function sameDaemonLaunch(
     current.socketPath === expected.socketPath &&
     daemonIdentityMatches(current.identity, expected.identity)
   );
+}
+
+function signalReplaceableDaemon(input: {
+  metadata: AgentWorkbenchDaemonMetadata;
+  expectedIdentity: AgentWorkbenchDaemonIdentity;
+  socketPath: string;
+  signalProcess: (pid: number, signal: NodeJS.Signals) => void;
+}): void {
+  if (
+    !daemonBaseIdentityMatches(input.metadata.identity, input.expectedIdentity) ||
+    daemonIdentityMatches(input.metadata.identity, input.expectedIdentity) ||
+    input.metadata.socketPath !== input.socketPath
+  ) {
+    throw new Error("Agent Workbench daemon is blocked: ambiguous_process.");
+  }
+  try {
+    input.signalProcess(input.metadata.pid, "SIGTERM");
+  } catch (error) {
+    if (isNoSuchProcessError(error)) {
+      return;
+    }
+    throw error instanceof Error ? error : new Error(String(error));
+  }
 }
 
 export function removeCanonicalFile(filePath: string): void {

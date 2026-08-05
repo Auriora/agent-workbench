@@ -366,9 +366,16 @@ valid, malformed values refuse daemon startup, and the default is 1000. It is
 not a provider-specific mode or a second refresh path.
 
 Repo-local daemon metadata is a complete atomic lifecycle receipt scoped to one
-daemon identity. Its filename and matching startup lock contain the same short
-identity hash used by the IPC endpoint, so retained older-runtime sessions
-cannot block or overwrite admission for a newly installed runtime. Legacy
+daemon identity. Full compatibility includes the runtime build fingerprint.
+Installed bundles hash the packaged build receipt and refuse startup when it is
+missing. Checkout-backed source entrypoints hash current runtime source inputs
+instead of trusting a possibly stale `dist/` receipt. Its filename and matching
+startup lock contain the same short base
+identity hash used by the IPC endpoint: canonical repo root, runtime version,
+graph schema version, and daemon protocol version. A different build installed
+under that same base identity therefore uses a graceful exact-owner handoff;
+version, schema, protocol, or repository mismatches remain isolated and do not
+authorize signalling. Legacy
 unsuffixed receipts and locks remain owned by their creating runtime and are
 ignored, not destructively migrated, by current admission. Each receipt has
 exactly one of these states:
@@ -392,6 +399,17 @@ permits guarded cleanup and re-election within the original deadline. Loss of a
 previously ready receipt also returns the caller to the same guarded election
 path. Shutdown cleanup holds same-identity startup exclusion and removes
 metadata only when its launch-attempt token still matches.
+
+A live receipt whose base identity matches but whose build fingerprint differs,
+or is absent because an older runtime wrote it, is replaceable only through the
+canonical endpoint and exact recorded PID. The current launcher sends
+`SIGTERM`, waits for launch-aware shutdown to release metadata and the socket,
+and then re-enters ordinary startup election within the original monotonic
+deadline. Graceful shutdown is bounded; if a stalled worker prevents cleanup,
+the process exits and positive dead-owner recovery governs the remaining state.
+Ambiguous process, endpoint, or base-identity evidence blocks the handoff. No
+broad process discovery, forced termination, cache deletion, or parallel
+fallback daemon is permitted.
 
 The repo-wide refresh lease gates transition into refresh `planned` state, not
 daemon endpoint readiness. If another runtime identity owns that lease, a
