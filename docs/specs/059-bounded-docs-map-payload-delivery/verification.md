@@ -175,6 +175,13 @@ durable contract promotion, and source/package/client validation.
 - 2026-08-05: `CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs`.
   Result: pass. Notes: both sessions parsed resource/tool maps at 4,356/6,469
   bytes; all cleanup receipt fields were true.
+- 2026-08-05: final installed-package rerun after local installation. Result:
+  initial fail, then pass after root-cause repair in `b2cef53`. Notes: concurrent
+  client initialization could let the deliberately 60-second-delayed client
+  own daemon startup; sequential ownership now removes that scheduling race.
+  The `post-initialize-pre-health` injected failure also returned true for all
+  cleanup fields, and the normal rerun again parsed 4,356/6,469-byte map
+  payloads with all cleanup fields true.
 - 2026-08-05: senior review of `query-docs.ts`, `docs-presenter.ts`, and
   package guidance. Result: pass after fixes. Notes: invalid cursors block;
   scope descriptions and static resource actions agree.
@@ -221,7 +228,8 @@ durable contract promotion, and source/package/client validation.
   and fresh-client evidence are complete and committed; closure remains a
   separately recorded lifecycle transition.
 - **Final spec commit:** `a853ea5` (implementation), with reliability evidence
-  in `8c77996` and residual routing in `158466a`
+  in `8c77996`, residual routing in `158466a`, and installed-smoke reliability
+  in `b2cef53`
 - **Closure log entry updated:** no
 
 ## Ship Or Closure Risk
