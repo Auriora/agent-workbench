@@ -467,6 +467,27 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-05 - 059-bounded-docs-map-payload-delivery
+
+- **Spec:** `docs/specs/059-bounded-docs-map-payload-delivery/`
+- **Title:** Bounded docs map payload delivery requirements
+- **Final spec commit:** `741609e`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/mcp-surface-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/reference/agent-readable-changelog.md`
+- **Verification summary:** Lifecycle lint, evidence quality, closure readiness,
+  archive/reference scanning, and low-risk review passed without blockers. The
+  implementation record includes the 121-file / 1,330-test serial suite,
+  typecheck, plugin/package checks, installed-package map transport, and real
+  Codex and Claude provider smokes. Closure documentation validation passed 2
+  files / 11 tests plus diff hygiene.
+- **Residual risks:**
+  - none
+- **Follow-up:** none
+
 ### 2026-08-04 - 058-git-submodule-repository-support
 
 - **Spec:** `docs/specs/058-git-submodule-repository-support/`
