@@ -153,21 +153,23 @@ async function runSmoke() {
     startupRefreshDelayMs: 60_000
   }));
   currentPhase = "sessions_init";
-  const [
-    codexBaseline,
-    claudeBaseline
-  ] = await Promise.all([
-    initializeAndProbeSession({
-      session: codex,
-      provider: "codex",
-      expectedVersion: installedManifest.version
-    }),
-    initializeAndProbeSession({
-      session: claude,
-      provider: "claude_code",
-      expectedVersion: installedManifest.version
-    })
-  ]);
+  if (injectedFailure === "post-initialize-pre-health") {
+    await initializeSession(codex, "codex");
+    throw new Error("Injected post-initialize pre-health failure.");
+  }
+  // The first connection owns daemon startup configuration. Establish the
+  // zero-delay Codex baseline before attaching the deliberately delayed
+  // second client so process scheduling cannot select the 60-second delay.
+  const codexBaseline = await initializeAndProbeSession({
+    session: codex,
+    provider: "codex",
+    expectedVersion: installedManifest.version
+  });
+  const claudeBaseline = await initializeAndProbeSession({
+    session: claude,
+    provider: "claude_code",
+    expectedVersion: installedManifest.version
+  });
   const codexBaselineStatus = codexBaseline.status;
   const codexBaselineHealth = codexBaseline.health;
   const claudeBaselineHealth = claudeBaseline.health;
@@ -1155,6 +1157,7 @@ function discoverDaemonMetadata(metadataDir) {
   if (!fs.existsSync(metadataDir)) return;
   for (const file of listFiles(metadataDir, 100)) {
     if (!file.endsWith(".json")) continue;
+    if (file === legacyReceipts?.daemonJsonPath) continue;
     try {
       const metadata = JSON.parse(fs.readFileSync(file, "utf8"));
       if (
