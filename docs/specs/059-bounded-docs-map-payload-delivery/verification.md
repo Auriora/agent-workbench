@@ -77,9 +77,8 @@ durable contract promotion, and source/package/client validation.
 - `pnpm typecheck`: TypeScript contract integrity. Result: passed. Evidence:
   completed after the final presenter and package-smoke changes.
 - `pnpm exec vitest run --maxWorkers=1`: full regression suite without worker
-  concurrency. Result: passed with isolated load-sensitive proof. Evidence:
-  one run passed 120 files and 1,328 tests; the final rerun passed 1,327
-  tests plus the sole stdio warm-up test in isolation (1 passed, 15 skipped).
+  concurrency. Result: passed. Evidence: the committed implementation and
+  reliability fixes passed 121 files and 1,330 tests in 269.53 seconds.
 - `pnpm validate:plugin`: public registry/plugin metadata. Result: passed.
   Evidence: packaged plugin and server metadata agree.
 - `pnpm pack:dry-run`: package payload. Result: passed. Evidence: npm package
@@ -92,6 +91,10 @@ durable contract promotion, and source/package/client validation.
   isolated installed stdio map parse and byte bound. Result: passed. Evidence:
   both provider-labelled sessions parsed resource and tool maps at 4,356 and
   6,469 bytes respectively.
+- Real installed-provider smokes for Codex CLI 0.146.0 and Claude Code 2.1.221:
+  plugin discovery and runtime identity. Result: passed. Evidence: both fresh
+  isolated clients discovered plugin/runtime version 0.6.7, exercised the MCP
+  route, and reported complete cleanup receipts.
 
 ## Scope Reconciliation Before Closure
 
@@ -99,10 +102,11 @@ durable contract promotion, and source/package/client validation.
   state is complete; deferred or rejected work is none; destination is none;
   blocks closure is no; evidence is that six live pages cover all 66 exact
   paths and the largest pretty tool page is 32,576 bytes.
-- Markdown table readability advisories: not implemented in this spec;
-  coverage state is out-of-scope; deferred work is pre-existing advisory
-  cleanup; destination is documentation maintenance/backlog when prioritised;
-  blocks closure is no; evidence is the tool sweep.
+- Spec-package Markdown quality: implemented in this spec; coverage state is
+  complete; deferred work is the pre-existing readability advisories in large
+  durable-owner tables; destination is routine documentation maintenance;
+  blocks closure is no; evidence is the zero-finding five-file spec check and
+  the unchanged durable-table warning inventory.
 - No registered prompts: not implemented in this spec; coverage state is
   out-of-scope; deferred work is no evidenced prompt use case; destination is
   none and intentional; blocks closure is no; evidence is the registry
@@ -113,8 +117,8 @@ durable contract promotion, and source/package/client validation.
   runtime contract and current tests.
 - Debug sweep parameter-space limits: not implemented in this spec; coverage
   state is out-of-scope; deferred work is the broader scenario matrix;
-  destination is observability/debug harness backlog when prioritised; blocks
-  closure is no; evidence is the debug harness design and tests.
+  destination is EB067; blocks closure is no; evidence is the debug harness
+  design, tests, and the recorded evidence-led promotion gate.
 
 ## Agent Readiness Evidence
 
@@ -178,11 +182,21 @@ durable contract promotion, and source/package/client validation.
   advisory. Notes: historical pre-cleanup advisory had 78
   `markdown.table.readability` warnings; the current five-file targeted check
   has zero `markdown.table.readability` findings.
+- 2026-08-05: full single-worker Vitest suite. Result: pass. Notes: 121 files
+  and 1,330 tests passed, including the warm-up status/snapshot coherence
+  regression.
+- 2026-08-05: `node scripts/ci/installed-provider-plugin-smoke.mjs --provider
+  codex --expected-version 0.6.7` and the equivalent `--provider claude`
+  command. Result: pass with exit status 0 for Codex CLI 0.146.0 and Claude
+  Code 2.1.221. Notes: both clients discovered plugin/runtime version 0.6.7,
+  exercised MCP through the packaged plugin, and returned true for every
+  process, daemon, socket, metadata, plugin, marketplace, install-root,
+  client-state, and temporary-root cleanup field.
 
 ## Residual Risks
 
-- Live installed-client proof is recorded in the local install and package
-  smoke evidence above. The isolated package and stdio route already pass.
+- No known residual risk remains in the accepted Spec 059 slice. EB067 owns
+  the separately gated broader debug-sweep matrix.
 
 ## Durable Promotion And Cleanup
 
@@ -193,16 +207,21 @@ durable contract promotion, and source/package/client validation.
 - Agent-visible behavior change: durable destination is
   `docs/reference/agent-readable-changelog.md`; status is complete; evidence is
   T003.
+- Packaged-client consumption baseline: durable owner is
+  `docs/design/coding-agent-integration-design.md`; status is reviewed with no
+  change required because the installed-runtime consumption route is unchanged;
+  evidence is the two real installed-provider smokes.
 - Other findings: durable destination or deferral is the scope reconciliation
   section above; status is recorded; evidence is this artifact.
 
 ### Spec Cleanup Decision
 
-- **Cleanup action:** keep active until the final commit record is written;
-  closure remains a separate lifecycle action.
-- **Reason:** Implementation, launcher smoke, and local-install evidence are
-  complete, while the current working tree still needs its commit record.
-- **Final spec commit:** pending
+- **Cleanup action:** keep active until an explicit lifecycle closure action.
+- **Reason:** Implementation, review, reliability follow-up, local install,
+  and fresh-client evidence are complete and committed; closure remains a
+  separately recorded lifecycle transition.
+- **Final spec commit:** `a853ea5` (implementation), with reliability evidence
+  in `8c77996` and residual routing in `158466a`
 - **Closure log entry updated:** no
 
 ## Ship Or Closure Risk
@@ -217,8 +236,8 @@ durable contract promotion, and source/package/client validation.
 ## Readiness Decision
 
 - **Ready for promotion:** yes
-- **Ready for release:** yes after commit/package versioning
-- **Ready for closure:** no
+- **Ready for release:** yes
+- **Ready for closure:** yes; not yet closed
 
 ## Related Artifacts
 
