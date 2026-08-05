@@ -2444,6 +2444,37 @@ Do not promote an item when:
 - Promotion target: Spec 055, workspace-safety contract, runtime contracts, and
   EB038 error-envelope consistency.
 
+### EB067: Bounded Debug-Sweep Scenario Matrix
+
+- Priority: P2
+- Status: backlog; promote only when a concrete repository scenario proves the
+  current single-path sweep missed a production-visible failure
+- Friction signal: the debug MCP sweep now uses the production language
+  extractor registry and exercises `docs_map`, but it still samples one narrow
+  argument path per tool. That proves registry reachability, not representative
+  behavior across bounded scopes, cursor continuation, degraded states, and
+  language-specific evidence shapes.
+- Runtime surface: `src/debug/mcp-tool-sweep.ts`, production tool and language
+  registries, fixture repositories, and dogfood evidence reporting.
+- Acceptance:
+  - Define a small, evidence-led scenario set covering material scope, cursor,
+    maximum-result, degraded-state, and registered-language variations without
+    constructing a Cartesian product.
+  - Keep every scenario read-only and deterministic. The sweep SHALL NOT run
+    target-repository commands, mutate workspaces, invent fallback routes, or
+    convert missing evidence into partial success.
+  - Derive supported tools and language routes from the production registries,
+    and return a structured skip or blocked reason when a scenario lacks the
+    required fixture or runtime evidence.
+  - Add fixture-backed regressions proving scenario selection is bounded,
+    registry-aligned, and capable of detecting an evidenced failure that the
+    current single-path sweep misses.
+  - Preserve the current no-prompt state. Prompt coverage requires a separate
+    evidenced product use case rather than placeholder registrations.
+- Promotion target: a focused debug-harness specification after the promotion
+  gate is met; durable owners are the MCP surface design and dogfood evidence
+  ledger.
+
 ## Extension Idea Coverage
 
 | Extension idea | Backlog coverage |
@@ -2514,6 +2545,7 @@ Do not promote an item when:
 | Production documentation corpus isolation and governing-owner priority | EB064, under EB018 stale-doc filtering, EB054 authority-aware ranking, and EB060 first-read trust. |
 | Validation-plan skipped-path payload compaction | EB065, under EB004 validation planning and EB009 bounded observability. |
 | Public failure redaction vocabulary expansion | EB066, under EB063 delivery, EB038 error-envelope consistency, and workspace safety. |
+| Debug-sweep scenarios | EB067, under EB009 and registry parity. |
 
 ## Immediate Next Specs
 
