@@ -1486,7 +1486,7 @@ Do not promote an item when:
 ### EB044: Changed-Files Workbench Entry Point
 
 - Priority: P1
-- Status: delivered by active Spec 060; verification and lifecycle closure pending
+- Status: delivered by closed Spec 060
 - Friction signal: session-scoped plugin feedback reported that Agent Workbench
   was available but not naturally used. The agent defaulted to shell, lifecycle
   tooling, subagents, and validation commands because the visible Workbench
@@ -1530,13 +1530,13 @@ Do not promote an item when:
   - Dogfood rerun on a lifecycle-driven task to check whether an agent uses the
     Workbench entry point before falling back to shell-only status and
     validation planning.
-- Promotion target: active Spec 060 owns delivery, durable promotion, and
-  lifecycle closure; route only newly evidenced adoption gaps to EB005 or a
-  focused follow-up.
+- Promotion target: closed Spec 060 owns delivery evidence; route only newly
+  evidenced adoption gaps to EB005 or a focused follow-up.
 - Delivery evidence: `changed_files_context` now provides the bounded public
   packet, Git-category evidence, explicit component states, launch-root
   authority, packaged provider guidance, and fixture-backed MCP coverage. Spec
-  060 owns final verification, durable promotion, and closure evidence.
+  060 owns final verification, durable promotion, and closure evidence in the
+  spec closure log and archive index.
 
 ### EB045: Native Installer Deprecation Debt
 

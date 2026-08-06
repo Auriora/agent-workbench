@@ -467,6 +467,34 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-06 - 060-changed-files-workbench-entry-point
+
+- **Spec:** `docs/specs/060-changed-files-workbench-entry-point/`
+- **Title:** Changed-files Workbench entry point requirements
+- **Final spec commit:** `6e884a6`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/requirements/runtime-requirements.md`
+  - `docs/design/edit-and-validation-loop-design.md`
+  - `docs/design/coding-agent-integration-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/backlog/README.md`
+  - `.well-known/mcp/server-card.json`
+  - packaged Codex, Claude Code, and Kiro guidance
+- **Verification summary:** Typecheck, focused application/MCP/integration
+  tests, plugin and skill validation, package dry-run, lifecycle lint and
+  closure checks, and independent correctness and security/operations reviews
+  passed. The bounded full suite passed 123 files and 1,338 tests; the
+  unrestricted concurrency run exposed scheduler-pressure timeouts and was not
+  used as the final regression verdict.
+- **Residual risks:**
+  - Git behavior and metadata layouts vary by platform; malformed or
+    unavailable evidence remains a structured blocked component.
+  - Installed agents may ignore additive guidance until refreshed.
+- **Follow-up:** Route only evidenced adoption gaps to EB005 or a focused
+  follow-up; no residual blocks closure.
+
 ### 2026-08-05 - 059-bounded-docs-map-payload-delivery
 
 - **Spec:** `docs/specs/059-bounded-docs-map-payload-delivery/`
