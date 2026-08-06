@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/062-markdown-document-audit-scale-and-chunking/`
 - **Title:** Markdown document audit scale and chunking requirements
 - **Final spec commit:** `e316849`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `8f2fd93`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/reference/runtime-contracts.md`
