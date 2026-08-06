@@ -1,0 +1,6 @@
+{
+  "tools": [
+    {"name": "inspect", "capability_class": "read_only", "mutation_class": "none"},
+    {"name": "apply", "capability_class": "workspace_write", "mutation_class": "workspace_write"}
+  ]
+}

@@ -743,7 +743,8 @@ or runtime telemetry.
 ### EB018: Stale Documentation Filtering
 
 - Priority: P1
-- Status: delivered by closed Spec 034 `034-doc-currency-routing`
+- Status: delivered by closed Spec 034-doc-currency-routing: Doc currency
+  routing
 - Friction signal: agents can over-trust archived specs, superseded design
   notes, removed-spec references, stale open decisions, and closure breadcrumbs
   when docs search or first-read context surfaces them without lifecycle state.
@@ -784,7 +785,8 @@ or runtime telemetry.
     archived material with historical caveats.
   - Regression tests proving no `ctime` dependency and optional Git-history
     enrichment behavior.
-- Promotion target: closed Spec 034 `034-doc-currency-routing` delivery evidence in the
+- Promotion target: closed [Spec 034-doc-currency-routing: Doc currency
+  routing](../history/spec-closure-log.md) delivery evidence in the
   [Spec closure log](../history/spec-closure-log.md), with current behavior
   owned by EB003, EB006, and the documentation routing design.
 
@@ -1073,7 +1075,7 @@ or runtime telemetry.
 ### EB029: Protocol And Contract Drift Tests
 
 - Priority: P1
-- Status: proposed spec
+- Status: delivered by active Spec 061; validation and lifecycle closure pending
 - Friction signal: docs, MCP registries, examples, enum values, next actions,
   and safety-policy claims can drift independently as the product matures.
 - Runtime surface: contract schemas, MCP registry, docs examples, package
@@ -1087,7 +1089,9 @@ or runtime telemetry.
   - Keep checks deterministic and local; do not require network access.
 - Validation:
   - CI/local script tests with fixture docs and intentional drift cases.
-- Promotion target: create a future contract-drift-check spec.
+- Promotion target: active Spec 061 owns delivery, durable promotion, and
+  lifecycle closure; route only newly evidenced drift categories to a focused
+  follow-up.
 
 ### EB030: Review Mode
 

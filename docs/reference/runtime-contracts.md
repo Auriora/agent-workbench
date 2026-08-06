@@ -42,6 +42,42 @@ compatibility barrels for public imports. New contract definitions should live
 in the context module that owns the runtime behavior, then be exported through
 the existing barrels.
 
+## Contract Drift Snapshot
+
+`pnpm check:contracts` compares this managed projection with the source schemas.
+The source schemas remain authoritative.
+
+<!-- contract-drift:begin -->
+```json
+{
+  "capability_level": [
+    "semantic",
+    "partial_semantic",
+    "resource_backed",
+    "unsupported"
+  ],
+  "verification_status": [
+    "done",
+    "planned",
+    "needed",
+    "blocked",
+    "not_applicable"
+  ],
+  "tool_capability_class": [
+    "read_only",
+    "planning",
+    "workspace_write",
+    "process_execute",
+    "generated_write"
+  ]
+}
+```
+<!-- contract-drift:end -->
+
+The same check validates valid JSON examples in this document, the documented
+MCP tool projection in `.well-known/mcp/server-card.json`, next-action tool
+names, and mutating-tool safety metadata. It is deterministic and local.
+
 ## Contract Versioning
 
 Every MCP response must include a contract version.

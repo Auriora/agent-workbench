@@ -54,6 +54,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "check:contracts": "tsx scripts/check-contracts.ts",
     "test": "vitest run",
     "build-runtime": "node scripts/build-runtime.mjs",
     "build-runtime:check": "node scripts/build-runtime.mjs --check",

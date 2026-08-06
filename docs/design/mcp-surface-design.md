@@ -723,6 +723,11 @@ agent request
 
 ## Tool Naming And Descriptions
 
+Public registry and documentation drift is checked locally by
+`pnpm check:contracts`. The MCP registry remains the runtime authority and the
+server card is its durable documented projection; workspace-mutating tools must
+also carry explicit applied-mutation trust metadata.
+
 Public MCP names must be stable, obvious, and task-oriented. Descriptions should
 answer:
 
