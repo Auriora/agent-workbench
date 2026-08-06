@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/060-changed-files-workbench-entry-point/`
 - **Title:** Changed-files Workbench entry point requirements
 - **Final spec commit:** `6e884a6`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `0447301`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/requirements/runtime-requirements.md`
