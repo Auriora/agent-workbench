@@ -1075,7 +1075,7 @@ or runtime telemetry.
 ### EB029: Protocol And Contract Drift Tests
 
 - Priority: P1
-- Status: delivered by active Spec 061; validation and lifecycle closure pending
+- Status: delivered by closed Spec 061
 - Friction signal: docs, MCP registries, examples, enum values, next actions,
   and safety-policy claims can drift independently as the product matures.
 - Runtime surface: contract schemas, MCP registry, docs examples, package
@@ -1089,9 +1089,8 @@ or runtime telemetry.
   - Keep checks deterministic and local; do not require network access.
 - Validation:
   - CI/local script tests with fixture docs and intentional drift cases.
-- Promotion target: active Spec 061 owns delivery, durable promotion, and
-  lifecycle closure; route only newly evidenced drift categories to a focused
-  follow-up.
+- Promotion target: closed Spec 061 owns delivery evidence; route only newly
+  evidenced drift categories to a focused follow-up.
 
 ### EB030: Review Mode
 

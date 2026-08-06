@@ -467,6 +467,26 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-06 - 061-protocol-and-contract-drift-tests
+
+- **Spec:** `docs/specs/061-protocol-and-contract-drift-tests/`
+- **Title:** Protocol and contract drift tests requirements
+- **Final spec commit:** `9f9ddbb`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/reference/runtime-contracts.md`
+  - `docs/design/mcp-surface-design.md`
+  - `docs/backlog/README.md`
+  - `package.json`
+- **Verification summary:** `pnpm check:contracts`, typecheck, 23 focused
+  tests, plugin and skill validation, package dry-run, lifecycle checks, and an
+  independently reviewed bounded full run of 124 files and 1,341 tests passed.
+- **Residual risks:** The checker intentionally covers managed shared enums and
+  valid JSON examples; newly public enum families require explicit extension.
+- **Follow-up:** Route only evidenced new drift categories to a focused backlog
+  item; no residual blocks closure.
+
 ### 2026-08-06 - 060-changed-files-workbench-entry-point
 
 - **Spec:** `docs/specs/060-changed-files-workbench-entry-point/`
