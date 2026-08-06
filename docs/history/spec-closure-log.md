@@ -467,6 +467,26 @@ historical audit explicitly needs the original scaffolding.
 
 ## Entries
 
+### 2026-08-06 - 062-markdown-document-audit-scale-and-chunking
+
+- **Spec:** `docs/specs/062-markdown-document-audit-scale-and-chunking/`
+- **Title:** Markdown document audit scale and chunking requirements
+- **Final spec commit:** `e316849`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/reference/runtime-contracts.md`
+  - `docs/design/mcp-surface-design.md`
+  - `.well-known/mcp/server-card.json`
+  - `docs/backlog/README.md`
+- **Verification summary:** Contract check, typecheck, 76 focused tests,
+  plugin/skill validation, package dry-run, lifecycle checks, independent
+  review/fix confirmation, and bounded full 125-file/1,349-test suite passed.
+- **Residual risks:** Candidate changes invalidate cursors and require restart;
+  callers accumulate exact page receipts for cross-page summaries.
+- **Follow-up:** Route only evidenced new scale gaps through EB009 or a focused
+  follow-up; no residual blocks closure.
+
 ### 2026-08-06 - 061-protocol-and-contract-drift-tests
 
 - **Spec:** `docs/specs/061-protocol-and-contract-drift-tests/`
