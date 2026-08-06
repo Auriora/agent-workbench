@@ -262,13 +262,21 @@ export class GitMetadataCommandAdapter implements GitRepositoryCompositionPort {
     repo_root: string;
     cancellation?: CommandExecutionInput["cancellation"];
   }): Promise<GitCleanlinessInspectionResult> {
-    const tracked = await this.git(
+    const staged = await this.git(
       input.repo_root,
-      ["diff-index", "--name-only", "--no-ext-diff", "-z", "HEAD", "--"],
+      ["diff", "--cached", "--name-only", "--no-ext-diff", "-z", "HEAD", "--"],
       input.cancellation
     );
-    if (blockedCommandResult(tracked)) {
-      return gitBlockedResult(tracked, "Unable to inspect tracked repository cleanliness.");
+    if (blockedCommandResult(staged)) {
+      return gitBlockedResult(staged, "Unable to inspect staged repository changes.");
+    }
+    const unstaged = await this.git(
+      input.repo_root,
+      ["diff", "--name-only", "--no-ext-diff", "-z", "--"],
+      input.cancellation
+    );
+    if (blockedCommandResult(unstaged)) {
+      return gitBlockedResult(unstaged, "Unable to inspect unstaged repository changes.");
     }
     const untracked = await this.git(
       input.repo_root,
@@ -278,14 +286,21 @@ export class GitMetadataCommandAdapter implements GitRepositoryCompositionPort {
     if (blockedCommandResult(untracked)) {
       return gitBlockedResult(untracked, "Unable to inspect untracked repository cleanliness.");
     }
+    const stagedPaths = parseNulPaths(staged.stdout);
+    const unstagedPaths = parseNulPaths(unstaged.stdout);
+    const untrackedPaths = parseNulPaths(untracked.stdout);
     const changedPaths = [...new Set([
-      ...parseNulPaths(tracked.stdout),
-      ...parseNulPaths(untracked.stdout)
+      ...stagedPaths,
+      ...unstagedPaths,
+      ...untrackedPaths
     ])].sort();
     return {
       status: "available",
       cleanliness: changedPaths.length === 0 ? "clean" : "dirty",
-      changed_paths: changedPaths
+      changed_paths: changedPaths,
+      staged_paths: stagedPaths,
+      unstaged_paths: unstagedPaths,
+      untracked_paths: untrackedPaths
     };
   }
 

@@ -170,6 +170,12 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
         description: "Configured claim-focused MCP workflow for ranked file and symbol evidence, governing-document authority and currency, risks, validation hints, and explicit trust boundaries."
       },
       {
+        name: "changed_files_context",
+        kind: "tool",
+        capability_class: "read_only",
+        description: "Configured first post-edit or pre-handoff workflow joining bounded Git changes, repository status, diagnostics, and validation planning."
+      },
+      {
         name: "diagnostics_for_files",
         kind: "tool",
         capability_class: "read_only",
@@ -304,7 +310,8 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
           "Read repo:///orientation for a compact trust and freshness receipt.",
           "Invoke context_for_task before repository claims that are not already verified in-session, including quick overviews.",
           "Pass authoritative spec-lifecycle-manager outputs into context_for_task.lifecycle_context when spec-driven work is active.",
-          "Inspect documentation authority and currency, ranked file and symbol evidence, and meta.trust; perform the direct reads it requires."
+          "Inspect documentation authority and currency, ranked file and symbol evidence, and meta.trust; perform the direct reads it requires.",
+          "Invoke changed_files_context as the first post-edit or pre-handoff action, then use diagnostics_for_files or verification_plan for focused follow-up."
         ],
         constraints: [
           "Do not bypass MCP schemas.",

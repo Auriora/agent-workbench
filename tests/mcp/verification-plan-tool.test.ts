@@ -1931,7 +1931,10 @@ class StaticSubmoduleGitPort implements GitRepositoryCompositionPort {
     return {
       status: "available",
       cleanliness: "clean",
-      changed_paths: []
+      changed_paths: [],
+      staged_paths: [],
+      unstaged_paths: [],
+      untracked_paths: []
     };
   }
 }
@@ -2378,6 +2381,7 @@ describe("verification_plan MCP tool", () => {
 
       expect(registeredToolNames(server)).toEqual([
       "apply_workspace_edit",
+      "changed_files_context",
       "check_markdown_document",
       "check_markdown_set",
       "context_for_task",

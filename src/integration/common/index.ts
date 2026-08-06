@@ -21,6 +21,7 @@ const MCP_BINDINGS: IntegrationProfile["mcp_bindings"] = [
   { name: "overview", kind: "resource", capability_class: "read_only" },
   { name: "integration-health", kind: "resource", capability_class: "read_only" },
   { name: "context_for_task", kind: "tool", capability_class: "read_only" },
+  { name: "changed_files_context", kind: "tool", capability_class: "read_only" },
   { name: "diagnostics_for_files", kind: "tool", capability_class: "read_only" },
   { name: "symbol_search", kind: "tool", capability_class: "read_only" },
   { name: "find_references", kind: "tool", capability_class: "read_only" },

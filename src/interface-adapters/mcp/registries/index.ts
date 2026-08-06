@@ -12,6 +12,7 @@ import type {
   ApplyWorkspaceEditRequest,
   CheckMarkdownDocumentRequest,
   CheckMarkdownSetRequest,
+  ChangedFilesContextRequest,
   DiagnosticsForFilesRequest,
   DocsMapRequest,
   DocsCurrentForTaskRequest,
@@ -36,6 +37,7 @@ import type {
   CheckMarkdownSetUseCaseResult
 } from "../../../application/use-cases/check-markdown-quality.js";
 import type { ComputeImpactResult } from "../../../application/use-cases/compute-impact.js";
+import type { ChangedFilesContextUseCaseResult } from "../../../application/use-cases/get-changed-files-context.js";
 import type { DiagnoseChangedFilesResult } from "../../../application/use-cases/diagnose-changed-files.js";
 import type {
   DocsMapUseCaseResult,
@@ -67,6 +69,7 @@ import { repoScopeResource } from "./resources/repo-scope.js";
 import { repoStatusResource } from "./resources/repo-status.js";
 import { contextForTaskTool } from "./tools/context-for-task.js";
 import { diagnosticsForFilesTool } from "./tools/diagnostics-for-files.js";
+import { changedFilesContextTool } from "./tools/changed-files-context.js";
 import { docsScopeTool } from "./tools/docs-scope.js";
 import { docsMapTool } from "./tools/docs-map.js";
 import { docsOutlineTool } from "./tools/docs-outline.js";
@@ -105,6 +108,7 @@ export type McpRegistryContext = {
   checkMarkdownSet?: (input: { request: CheckMarkdownSetRequest }) => Promise<CheckMarkdownSetUseCaseResult> | CheckMarkdownSetUseCaseResult;
   getTaskContext?: (input: { request: TaskContextRequest }) => Promise<GetTaskContextResult> | GetTaskContextResult;
   diagnoseChangedFiles?: (input: { request: DiagnosticsForFilesRequest }) => Promise<DiagnoseChangedFilesResult> | DiagnoseChangedFilesResult;
+  getChangedFilesContext?: (input: { request: ChangedFilesContextRequest }) => Promise<ChangedFilesContextUseCaseResult> | ChangedFilesContextUseCaseResult;
   searchSymbols?: (input: { request: SymbolSearchRequest }) => Promise<SearchSymbolsResult> | SearchSymbolsResult;
   findReferences?: (input: { request: FindReferencesRequest }) => Promise<FindReferencesUseCaseResult> | FindReferencesUseCaseResult;
   computeImpact?: (input: { request: ImpactRequest }) => Promise<ComputeImpactResult> | ComputeImpactResult;
@@ -174,6 +178,7 @@ export const publicSurfaceTrustPolicies = {
   "tool:context_for_task": { surface_kind: "context_routing" },
   "tool:integration_health": { surface_kind: "integration_health" },
   "tool:diagnostics_for_files": { surface_kind: "diagnostics_static" },
+  "tool:changed_files_context": { surface_kind: "context_routing" },
   "tool:docs_scope": { surface_kind: "docs_session_scope" },
   "tool:docs_map": { surface_kind: "docs_routing" },
   "tool:docs_search": { surface_kind: "docs_routing" },
@@ -204,6 +209,7 @@ export const mcpResources: McpResourceDeclaration[] = normalizePublicMetadata([
 
 export const mcpTools: McpToolDeclaration[] = normalizePublicMetadata([
   contextForTaskTool,
+  changedFilesContextTool,
   diagnosticsForFilesTool,
   docsScopeTool,
   docsMapTool,

@@ -780,6 +780,9 @@ export type GitCleanlinessInspectionResult =
       status: "available";
       cleanliness: "clean" | "dirty";
       changed_paths: readonly string[];
+      staged_paths: readonly string[];
+      unstaged_paths: readonly string[];
+      untracked_paths: readonly string[];
     }
   | {
       status: "blocked";

@@ -18,8 +18,8 @@ import { resolveIntegrationIdentity } from "../../application/use-cases/resolve-
 
 export const AGENT_WORKBENCH_MCP_INSTRUCTIONS = [
   "Use Agent Workbench before making repository claims not already verified in-session, including quick overviews: read repo:///orientation, call context_for_task to identify authoritative and current documentation plus ranked file and symbol evidence, then follow meta.trust claim boundaries and direct-read requirements.",
-  "If Agent Workbench tool schemas are deferred or not visible in the current client, discover them first with tool_search for agent-workbench context_for_task verification_plan diagnostics_for_files docs_search.",
-  "Use verification_plan before validation commands and prefer symbol_search, find_references, impact, and docs tools for targeted follow-up evidence."
+  "If Agent Workbench tool schemas are deferred or not visible in the current client, discover them first with tool_search for agent-workbench context_for_task changed_files_context verification_plan diagnostics_for_files docs_search.",
+  "Use changed_files_context as the first post-edit or pre-handoff action. Use verification_plan before validation commands and prefer symbol_search, find_references, impact, and docs tools for targeted follow-up evidence."
 ].join(" ");
 
 export function createAgentWorkbenchServer(

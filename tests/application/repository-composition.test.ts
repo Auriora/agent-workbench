@@ -276,7 +276,10 @@ function availableCleanliness(cleanliness: "clean" | "dirty", changed_paths: str
   return {
     status: "available" as const,
     cleanliness,
-    changed_paths
+    changed_paths,
+    staged_paths: [],
+    unstaged_paths: changed_paths,
+    untracked_paths: []
   };
 }
 

@@ -13,6 +13,7 @@ import type { FileCatalogEntry, GraphNode } from "../domain/models/index.js";
 import { checkMarkdownDocument, checkMarkdownSet } from "../application/use-cases/check-markdown-quality.js";
 import { computeImpact } from "../application/use-cases/compute-impact.js";
 import { diagnoseChangedFiles } from "../application/use-cases/diagnose-changed-files.js";
+import { getChangedFilesContext } from "../application/use-cases/get-changed-files-context.js";
 import { findReferences } from "../application/use-cases/find-references.js";
 import { getIntegrationHealth, type IntegrationSurfaceInput } from "../application/use-cases/get-integration-health.js";
 import { getRepoOrientation } from "../application/use-cases/get-repo-orientation.js";
@@ -42,6 +43,7 @@ import { describeCodexIntegrationProfile } from "../application/use-cases/descri
 import { describeCurrentIntegrationProfile } from "../application/use-cases/describe-current-integration-profile.js";
 import { resolveIntegrationIdentity } from "../application/use-cases/resolve-integration-identity.js";
 import { JsonSyntaxDiagnosticsProviderAdapter } from "../infrastructure/diagnostics/index.js";
+import { GitMetadataCommandAdapter } from "../infrastructure/commands/index.js";
 import { InMemoryEditPreviewStoreAdapter } from "../infrastructure/edit-preview-store/index.js";
 import {
   createProductionExtractorRegistry,
@@ -72,6 +74,7 @@ import { buildImpactEnvelope } from "../presentation/impact-presenter.js";
 import { buildIntegrationHealthEnvelope } from "../presentation/integration-health-presenter.js";
 import { buildCheckMarkdownDocumentEnvelope, buildCheckMarkdownSetEnvelope } from "../presentation/markdown-quality-presenter.js";
 import { buildDiagnosticsForFilesEnvelope } from "../presentation/diagnostics-presenter.js";
+import { buildChangedFilesContextEnvelope } from "../presentation/changed-files-context-presenter.js";
 import { buildRepoOverviewEnvelope } from "../presentation/repo-overview-presenter.js";
 import { buildRepoOrientationEnvelope } from "../presentation/repo-orientation-presenter.js";
 import { buildRepoScopeEnvelope } from "../presentation/repo-scope-presenter.js";
@@ -621,6 +624,32 @@ async function callTool(input: {
       request: { repo_root: input.repoRoot, files: input.facts.json_path ? [input.facts.json_path] : [], max_files: 20 },
       scanner: input.runtime.scanner,
       providers: [new JsonSyntaxDiagnosticsProviderAdapter()],
+      default_repo_root: input.repoRoot
+    }));
+  }
+  if (input.toolName === "changed_files_context") {
+    return buildChangedFilesContextEnvelope(await getChangedFilesContext({
+      request: {
+        repo_root: input.repoRoot,
+        files: file ? [file] : [],
+        task: "Inspect MCP sweep fixture changes.",
+        max_files: 20,
+        max_commands: 5
+      },
+      git: new GitMetadataCommandAdapter(),
+      getRepoStatus: ({ repo_root }) => getScannedRepoStatus({ repo_root, scanner: input.runtime.scanner }),
+      diagnoseChangedFiles: ({ request }) => diagnoseChangedFiles({
+        request,
+        scanner: input.runtime.scanner,
+        providers: [new JsonSyntaxDiagnosticsProviderAdapter()],
+        default_repo_root: input.repoRoot
+      }),
+      planVerification: ({ request }) => planVerification({
+        request,
+        scanner: input.runtime.scanner,
+        workspace: input.runtime.workspace,
+        default_repo_root: input.repoRoot
+      }),
       default_repo_root: input.repoRoot
     }));
   }

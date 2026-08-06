@@ -29,6 +29,11 @@ describe("common integration profile", () => {
           capability_class: "read_only"
         }),
         expect.objectContaining({
+          name: "changed_files_context",
+          kind: "tool",
+          capability_class: "read_only"
+        }),
+        expect.objectContaining({
           name: "verification_plan",
           kind: "tool",
           capability_class: "planning"

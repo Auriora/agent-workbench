@@ -43,7 +43,7 @@ Read these fields from the response; do not assume or hardcode their values.
    when the task needs that detailed evidence.
 2. If Agent Workbench tool schemas are deferred or not visible in the current
    client, call tool discovery for `agent-workbench context_for_task
-   verification_plan diagnostics_for_files docs_search`. Do not hardcode
+   changed_files_context verification_plan diagnostics_for_files docs_search`. Do not hardcode
    client-specific wrapper names.
 3. Use `context_for_task` before making a repository claim not already verified
    in the current session, including a quick repository overview.
@@ -51,8 +51,9 @@ Read these fields from the response; do not assume or hardcode their values.
    evidence, and `meta.trust`. Perform the direct reads it requires.
 5. Use targeted symbol, reference, and impact surfaces for implementation work.
 6. Use preview/apply surfaces for workspace writes when available.
-7. Use `verification_plan` for validation planning and quiet post-edit static
-   feedback.
+7. Use `changed_files_context` as the first post-edit or pre-handoff action; use
+   its focused `diagnostics_for_files` and `verification_plan` surfaces when
+   deeper evidence is needed. Planned commands are never executed by Workbench.
 
 ## Cheap-task example
 

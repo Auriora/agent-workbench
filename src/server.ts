@@ -13,6 +13,7 @@ import {
 } from "./application/use-cases/check-markdown-quality.js";
 import { computeImpact } from "./application/use-cases/compute-impact.js";
 import { diagnoseChangedFiles } from "./application/use-cases/diagnose-changed-files.js";
+import { getChangedFilesContext } from "./application/use-cases/get-changed-files-context.js";
 import { findReferences } from "./application/use-cases/find-references.js";
 import { getCurrentDocsForTask } from "./application/use-cases/current-docs-for-task.js";
 import {
@@ -299,6 +300,24 @@ export function createAgentWorkbenchServer(
     };
   }
 
+  const currentRepoStatus = async (repo_root: string) => {
+    const store = await graphStore();
+    const watcher = await pollWorkspaceWatcher();
+    const selected = await selectValidatedSnapshot(repo_root, store);
+    return getSnapshotRepoStatus({
+      repo_root,
+      snapshots: store,
+      catalog: store,
+      documentation_concerns: store,
+      docs_index: store,
+      refresh_triggers: refreshTriggers,
+      warmups: warmupView,
+      watcher: selected.refresh_blocker ?? watcher,
+      selected_snapshot_id: selected.snapshot_id,
+      snapshot_validity: selected.validity
+    });
+  };
+
   const server = createAgentWorkbenchMcpServer(absoluteRepoRoot, {
     rootAuthorityPolicy: createRootAuthorityPolicy({
       launchRoot: absoluteRepoRoot,
@@ -306,23 +325,7 @@ export function createAgentWorkbenchServer(
     }),
     telemetry,
     launcherIdentity: options.integrationIdentity,
-    getRepoStatus: async ({ repo_root }) => {
-      const store = await graphStore();
-      const watcher = await pollWorkspaceWatcher();
-      const selected = await selectValidatedSnapshot(repo_root, store);
-      return getSnapshotRepoStatus({
-        repo_root,
-        snapshots: store,
-        catalog: store,
-        documentation_concerns: store,
-        docs_index: store,
-        refresh_triggers: refreshTriggers,
-        warmups: warmupView,
-        watcher: selected.refresh_blocker ?? watcher,
-        selected_snapshot_id: selected.snapshot_id,
-        snapshot_validity: selected.validity
-      });
-    },
+    getRepoStatus: ({ repo_root }) => currentRepoStatus(repo_root),
     getRepoOrientation: async ({ repo_root }) => {
       const store = await graphStore();
       const watcher = await pollWorkspaceWatcher();
@@ -481,6 +484,29 @@ export function createAgentWorkbenchServer(
         request,
         scanner,
         providers: diagnosticsProviders,
+        default_repo_root: absoluteRepoRoot
+      }),
+    getChangedFilesContext: ({ request }) =>
+      getChangedFilesContext({
+        request,
+        git: gitComposition,
+        getRepoStatus: ({ repo_root }) => currentRepoStatus(repo_root),
+        diagnoseChangedFiles: ({ request: diagnosticsRequest }) =>
+          diagnoseChangedFiles({
+            request: diagnosticsRequest,
+            scanner,
+            providers: diagnosticsProviders,
+            default_repo_root: absoluteRepoRoot
+          }),
+        planVerification: ({ request: verificationRequest }) =>
+          planVerification({
+            request: verificationRequest,
+            scanner,
+            workspace: workspaceForRepoRoot(verificationRequest.repo_root),
+            default_repo_root: absoluteRepoRoot,
+            git: gitComposition,
+            canonicalize_repo_root: canonicalizeRepoRoot
+          }),
         default_repo_root: absoluteRepoRoot
       }),
     searchSymbols: async ({ request }) => {

@@ -135,6 +135,12 @@ describe("Codex integration profile", () => {
           description: expect.stringContaining("governing-document authority and currency"),
         }),
         expect.objectContaining({
+          name: "changed_files_context",
+          kind: "tool",
+          capability_class: "read_only",
+          description: expect.stringContaining("first post-edit or pre-handoff")
+        }),
+        expect.objectContaining({
           name: "verification_plan",
           kind: "tool",
           capability_class: "planning"
@@ -694,8 +700,8 @@ describe("Codex plugin artifacts", () => {
       "Check Agent Workbench status for this repo.": {
         resources: ["repo:///status", "repo:///scope", "repo:///overview"]
       },
-      "Plan context and validation with Agent Workbench.": {
-        tools: ["context_for_task", "verification_plan"]
+      "Inspect changed files before handoff with Agent Workbench.": {
+        tools: ["changed_files_context", "diagnostics_for_files", "verification_plan"]
       },
       "Show the Codex integration profile.": {
         resources: ["integration:///profiles/codex"]
@@ -727,6 +733,7 @@ describe("Codex plugin artifacts", () => {
     expect(skill).toContain("repo:///scope");
     expect(skill).toContain("repo:///overview");
     expect(skill).toContain("context_for_task");
+    expect(skill).toContain("changed_files_context");
     expect(skill).toContain("verification_plan");
     expect(skill).toContain("integration:///profiles/codex");
     expect(skill).toContain("spec-lifecycle-manager");

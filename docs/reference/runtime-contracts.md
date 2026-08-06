@@ -1005,6 +1005,22 @@ freshness, blocked verification, empty diagnostics evidence and recovery
 actions, and the `diagnostics_static` trust policy. Malformed arguments and
 blocked root overrides remain non-retryable `invalid_input`.
 
+## Changed-Files Context
+
+`changed_files_context` accepts an optional task, up to 50 explicit
+repo-relative files, an optional bounded lifecycle summary, and file/command
+budgets. The runtime merges those files with deterministic staged, unstaged,
+and untracked Git evidence. Partially staged paths may appear in more than one
+category; `changed_files` is the sorted unique union bounded by `max_files`.
+
+The result state is `ready`, `no_changes`, `degraded`, or `blocked`. Git,
+repository status, diagnostics, and verification retain separate component
+states and optional reasons. A required blocked component cannot produce a
+ready packet, and unavailable or stale evidence produces degraded output.
+Validation commands remain `planned` and `not_executed`. Caller lifecycle
+context is copied as observational companion evidence and cannot select or
+update tasks, accept requirements, promote documentation, or close specs.
+
 ## Attention Item Shape
 
 Attention is MVP-limited to blockers and warnings.
@@ -1367,6 +1383,7 @@ keeps future formatter work previewable and presentation-compatible.
 | `repo:///scope` | `read_only` | yes |
 | `repo:///overview` | `read_only` | yes |
 | `context_for_task` | `read_only` | yes |
+| `changed_files_context` | `read_only` | yes |
 | `symbol_search` | `read_only` | yes |
 | `find_references` | `read_only` | yes |
 | `impact` | `read_only` | bounded MVP |

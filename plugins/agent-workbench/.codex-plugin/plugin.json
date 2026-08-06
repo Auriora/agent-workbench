@@ -33,7 +33,7 @@
     "termsOfServiceURL": "https://www.gnu.org/licenses/gpl-3.0.html",
     "defaultPrompt": [
       "Check Agent Workbench status for this repo.",
-      "Plan context and validation with Agent Workbench.",
+      "Inspect changed files before handoff with Agent Workbench.",
       "Show the Codex integration profile."
     ],
     "brandColor": "#2563EB"

@@ -78,8 +78,8 @@ task requires no repository evidence.
    claim.
 4. Use targeted symbol, reference, and impact surfaces for implementation work.
 5. Use preview/apply surfaces for workspace writes when available.
-6. Use `verification_plan` for validation planning and quiet post-edit static
-   feedback.
+6. Use `changed_files_context` as the first post-edit or pre-handoff action; use
+   `diagnostics_for_files` and `verification_plan` for focused follow-up.
 
 ## Boundaries
 

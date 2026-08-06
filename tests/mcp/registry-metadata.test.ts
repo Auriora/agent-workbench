@@ -29,6 +29,7 @@ describe("MCP registry metadata", () => {
       "resource:scope",
       "resource:status",
       "tool:apply_workspace_edit",
+      "tool:changed_files_context",
       "tool:check_markdown_document",
       "tool:check_markdown_set",
       "tool:context_for_task",
@@ -69,6 +70,7 @@ describe("MCP registry metadata", () => {
   it("documents every MCP tool with actionable usage guidance", () => {
     const requiredTermsByTool: Record<string, string[]> = {
       apply_workspace_edit: ["Use only after preview_workspace_edit", "mutates files only when"],
+      changed_files_context: ["first read-only post-edit", "without executing commands"],
       check_markdown_document: ["Use this before committing", "without changing the file"],
       check_markdown_set: ["Use this before docs-wide commits", "without mutation"],
       context_for_task: ["Use this before making repository claims", "authority and currency"],

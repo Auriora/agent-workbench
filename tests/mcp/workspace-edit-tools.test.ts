@@ -371,6 +371,7 @@ describe("workspace edit MCP tools", () => {
 
       expect(registeredToolNames(server)).toEqual([
       "apply_workspace_edit",
+      "changed_files_context",
       "check_markdown_document",
       "check_markdown_set",
       "context_for_task",

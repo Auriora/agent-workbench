@@ -21,8 +21,9 @@ describe("GitMetadataCommandAdapter", () => {
       ok("160000 commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\tlibs/child\0"),
       ok("160000 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa 0\tlibs/child\0"),
       ok("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"),
+      ok("src/staged.ts\0src/shared.ts\0"),
       ok("src/changed.ts\0"),
-      ok("")
+      ok("src/shared.ts\0src/untracked.ts\0")
     ]);
     const adapter = new GitMetadataCommandAdapter(commands);
 
@@ -57,7 +58,11 @@ describe("GitMetadataCommandAdapter", () => {
       }),
       expect.objectContaining({
         executable: "git",
-        args: [...fixedGitPrefix(), "-C", "/repo", "diff-index", "--name-only", "--no-ext-diff", "-z", "HEAD", "--"]
+        args: [...fixedGitPrefix(), "-C", "/repo", "diff", "--cached", "--name-only", "--no-ext-diff", "-z", "HEAD", "--"]
+      }),
+      expect.objectContaining({
+        executable: "git",
+        args: [...fixedGitPrefix(), "-C", "/repo", "diff", "--name-only", "--no-ext-diff", "-z", "--"]
       }),
       expect.objectContaining({
         executable: "git",
@@ -123,7 +128,10 @@ describe("GitMetadataCommandAdapter", () => {
         .resolves.toMatchObject({
           status: "available",
           cleanliness: "dirty",
-          changed_paths: expect.arrayContaining(["tracked.txt", "untracked.txt"])
+          changed_paths: expect.arrayContaining(["tracked.txt", "untracked.txt"]),
+          staged_paths: [],
+          unstaged_paths: ["tracked.txt"],
+          untracked_paths: expect.arrayContaining(["untracked.txt"])
         });
 
       expect(fs.existsSync(marker)).toBe(false);

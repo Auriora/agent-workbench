@@ -47,7 +47,8 @@ repo:///orientation, then detailed status/scope only when needed
 -> context_for_task
 -> direct source read only for selected edit targets or low-confidence context
 -> preview/apply edits
--> verification_plan
+-> changed_files_context
+-> focused diagnostics_for_files or verification_plan when its packet requires follow-up
 -> manual or future allowlisted command execution
 ```
 
@@ -172,6 +173,15 @@ runtime, but the restart should make it less distracting:
   tool promised analysis for those files.
 - Keep check selection focused on touched files and known impact; do not expand
   into broad diagnostics or test execution without an explicit tool call.
+
+`changed_files_context` is the public first post-edit or pre-handoff entry
+point. It uses fixed, non-mutating Git commands to classify bounded staged,
+unstaged, and untracked paths, merges safe explicit files, then composes current
+repository status, diagnostics, and validation planning. Each component keeps
+an explicit available, not-applicable, unavailable, or blocked state; overall
+blocked outranks degraded, and a clean worktree returns `no_changes` without
+inventing diagnostics or executed validation. Optional lifecycle context is
+caller-supplied observational evidence only and has no lifecycle writer.
 
 `diagnostics_for_files` is the public changed-file diagnostics MCP surface. It
 is bounded by explicit file input and provider budgets, never executes

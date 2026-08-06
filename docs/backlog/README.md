@@ -338,7 +338,8 @@ or runtime telemetry.
 ### EB008: Workspace Hygiene And Wrong-Repo Guard
 
 - Priority: P1
-- Status: active in Spec 051
+- Status: residual proposed follow-up; Spec 051 is closed and did not make this
+  item an active spec
 - Friction signal: agents created or discussed work in the wrong repository,
   risked generated `.cache` artifacts, or needed correction around local
   workspace boundaries.
@@ -595,8 +596,9 @@ or runtime telemetry.
     reporting, and subsequent restart behavior.
   - Telemetry or debug harness output that records phase timings and row-count
     growth without requiring a live external tracing service.
-- Promotion target: complete and close Spec 051 after runtime, graph-store,
-  debug-parity, cross-repository, and telemetry evidence is recorded.
+- Promotion target: closed Spec 051 delivered the bounded continuation and
+  completion path. Route only newly evidenced scale or progress regressions to
+  a focused follow-up instead of reopening the closed package.
 
 ### EB015: Markdown Document Audit Scale And Chunking
 
@@ -741,7 +743,7 @@ or runtime telemetry.
 ### EB018: Stale Documentation Filtering
 
 - Priority: P1
-- Status: delivered by closed Spec 034
+- Status: delivered by closed Spec 034 `034-doc-currency-routing`
 - Friction signal: agents can over-trust archived specs, superseded design
   notes, removed-spec references, stale open decisions, and closure breadcrumbs
   when docs search or first-read context surfaces them without lifecycle state.
@@ -782,7 +784,7 @@ or runtime telemetry.
     archived material with historical caveats.
   - Regression tests proving no `ctime` dependency and optional Git-history
     enrichment behavior.
-- Promotion target: closed Spec 034 delivery evidence in the
+- Promotion target: closed Spec 034 `034-doc-currency-routing` delivery evidence in the
   [Spec closure log](../history/spec-closure-log.md), with current behavior
   owned by EB003, EB006, and the documentation routing design.
 
@@ -1451,7 +1453,9 @@ Do not promote an item when:
 - Validation:
   - Markdown review and link/path checks.
   - Fresh-install or dry-run evidence where operator steps reference commands.
-- Promotion target: create a docs/runbook spec or pair with doctor work.
+- Promotion target: closed Spec 040 delivered the operator-path documentation.
+  Future doctor-specific operational guidance belongs to EB026 rather than a
+  reopened documentation slice.
 
 ### EB043: Release-Readiness Gates
 
@@ -1482,7 +1486,7 @@ Do not promote an item when:
 ### EB044: Changed-Files Workbench Entry Point
 
 - Priority: P1
-- Status: proposed spec
+- Status: delivered by active Spec 060; verification and lifecycle closure pending
 - Friction signal: session-scoped plugin feedback reported that Agent Workbench
   was available but not naturally used. The agent defaulted to shell, lifecycle
   tooling, subagents, and validation commands because the visible Workbench
@@ -1526,9 +1530,13 @@ Do not promote an item when:
   - Dogfood rerun on a lifecycle-driven task to check whether an agent uses the
     Workbench entry point before falling back to shell-only status and
     validation planning.
-- Promotion target: create a focused post-edit or agent-adoption spec after
-  active P0 MCP hardening specs, or fold into EB005 follow-up work if the
-  implementation is only a presenter/guidance extension.
+- Promotion target: active Spec 060 owns delivery, durable promotion, and
+  lifecycle closure; route only newly evidenced adoption gaps to EB005 or a
+  focused follow-up.
+- Delivery evidence: `changed_files_context` now provides the bounded public
+  packet, Git-category evidence, explicit component states, launch-root
+  authority, packaged provider guidance, and fixture-backed MCP coverage. Spec
+  060 owns final verification, durable promotion, and closure evidence.
 
 ### EB045: Native Installer Deprecation Debt
 
@@ -1574,7 +1582,7 @@ Do not promote an item when:
 ### EB046: Kiro Shell-Free Launcher
 
 - Priority: P1
-- Status: proposed spec
+- Status: delivered by closed Spec 040
 - Friction signal: cross-platform packaging converted the primary runtime
   launcher to the portable Node shim, but the Kiro package still needs a
   verified shell-free entry point.

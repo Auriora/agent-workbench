@@ -104,6 +104,13 @@
       "budget_policy": "Bounded by max_files and max_docs; scans local file catalog only."
     },
     {
+      "name": "changed_files_context",
+      "description": "Use this as the first read-only post-edit or pre-handoff Workbench action. It discovers bounded Git changes and joins repository status, diagnostics, and validation planning without executing commands or mutating lifecycle state.",
+      "capability_class": "read_only",
+      "mutation_class": "none",
+      "budget_policy": "Bounded by max_files, max_commands, Git command limits, and existing provider budgets; never executes planned commands."
+    },
+    {
       "name": "diagnostics_for_files",
       "description": "Use this for cheap static diagnostics on explicit repo files before or after edits. It reports provider-backed findings without running tests, typechecks, linters, or mutating files.",
       "capability_class": "read_only",

@@ -218,10 +218,12 @@ logger output unless the failure blocks the current user-visible workflow.
 
 Post-edit feedback is modeled as an internal runtime workflow that hooks can
 call through agent-specific adapters. It combines diagnostics findings,
-edit-risk signals, validation status, and next actions, but it is not a public
-MCP tool in the current surface. Public diagnostics and validation remain
-available through `diagnostics_for_files` and `verification_plan`; hooks should
-only surface the concise visible message when actionable findings exist.
+edit-risk signals, validation status, and next actions, but it is not itself a
+public MCP tool. Installed Codex, Claude Code, and Kiro guidance names
+`changed_files_context` as the first public post-edit or pre-handoff action;
+`diagnostics_for_files` and `verification_plan` remain focused follow-ups.
+Hooks should only surface the concise visible message when actionable findings
+exist.
 When inline diagnostics cannot fully run, adapters should preserve structured
 deferred checks with reasons such as over-budget file count, unsupported file,
 provider failure, unavailable analyzer, or skipped large file. These reasons
