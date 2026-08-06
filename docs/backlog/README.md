@@ -603,7 +603,7 @@ or runtime telemetry.
 ### EB015: Markdown Document Audit Scale And Chunking
 
 - Priority: P1
-- Status: candidate spec
+- Status: delivered by active Spec 062; validation and lifecycle closure pending
 - Friction signal: large documentation-set dogfooding found roughly 150 durable
   Markdown docs outside `docs/specs`. A first Markdown quality call was too
   broad for the current `check_markdown_set` limit, forcing a filesystem
@@ -638,9 +638,9 @@ or runtime telemetry.
     structured calls without direct filesystem fallback.
   - Performance test or debug harness showing set checks do not rescan the full
     repository once per selected document.
-- Promotion target: create a future Markdown document audit scale spec under
-  EB003 and the Markdown quality design, with telemetry evidence routed through
-  EB009.
+- Promotion target: active Spec 062 owns delivery, durable promotion, and
+  lifecycle closure under EB003 and the Markdown quality design; route only
+  newly evidenced scale gaps through EB009 or a focused follow-up.
 
 ### EB016: Portable Hook Intent Guardrails
 

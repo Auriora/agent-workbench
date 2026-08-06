@@ -912,6 +912,7 @@ function markdownCheckResult(repoRoot: string, docPath: string): CheckMarkdownDo
       path: docPath,
       status: "done",
       summary: "Markdown document has 1 quality finding.",
+      finding_count: 1,
       findings: [
         {
           category: "heading_structure",
@@ -945,6 +946,28 @@ function markdownSetResult(repoRoot: string): CheckMarkdownSetUseCaseResult {
       summary: "Markdown set check examined 1 document.",
       checked_documents: ["docs/guide.md"],
       skipped_documents: [],
+      document_results: [{ path: "docs/guide.md", status: "checked_clean", finding_count: 0 }],
+      coverage: {
+        total_documents: 1,
+        offset: 0,
+        chunk_size: 1,
+        checked_count: 1,
+        skipped_count: 0,
+        checked_clean_count: 1,
+        checked_with_findings_count: 0,
+        budget_truncated_count: 0,
+        finding_count: 0,
+        returned_finding_count: 0,
+        unchecked_count: 0,
+        excluded_active_spec_count: 0,
+        complete: true
+      },
+      continuation: {
+        offset: 0,
+        has_more: false,
+        candidate_fingerprint: "fixture",
+        exclude_active_specs: false
+      },
       findings: [],
       warnings: [],
       truncated: false,

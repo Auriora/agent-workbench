@@ -180,10 +180,13 @@ describe("Markdown quality checker", () => {
       });
       const check = checkMarkdownSetResultSchema.parse(result.check);
 
-      expect(check.status).toBe("done");
+      expect(check.status).toBe("partial");
       expect(check.checked_documents).toEqual(["docs/clean.md", "docs/problem.md"]);
       expect(check.skipped_documents).toEqual([]);
       expect(check.findings).toHaveLength(3);
+      expect(check.coverage.returned_finding_count).toBe(3);
+      expect(check.coverage.finding_count).toBeGreaterThan(3);
+      expect(check.summary).toContain(`${check.coverage.finding_count} issue(s)`);
       expect(check.truncated).toBe(true);
       expect(result.meta).toMatchObject({
         verification_status: "needed",
@@ -204,7 +207,7 @@ describe("Markdown quality checker", () => {
       const blocked = await checkFixtureSet(fixture.root, {});
 
       expect(checkMarkdownSetResultSchema.parse(scoped.check)).toMatchObject({
-        status: "done",
+        status: "partial",
         checked_documents: expect.arrayContaining([expect.stringMatching(/^docs\//u)]),
         truncated: true
       });
@@ -282,6 +285,7 @@ async function checkFixtureSet(
     request: {
       repo_root: root,
       paths: [],
+      exclude_active_specs: false,
       max_documents: 20,
       max_findings: 100,
       max_evidence_bytes: 240,

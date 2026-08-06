@@ -4,6 +4,7 @@
  */
 
 import path from "node:path";
+import { createHash } from "node:crypto";
 import type {
   CheckMarkdownDocumentRequest,
   CheckMarkdownDocumentResult,
@@ -30,6 +31,7 @@ const MARKDOWN_QUALITY_ROW_LIMIT = 15000;
 export type CheckMarkdownDocumentUseCaseResult = {
   check: CheckMarkdownDocumentResult;
   meta: ResponseMetadata;
+  document_truncated?: boolean;
 };
 
 export type CheckMarkdownSetUseCaseResult = {
@@ -59,6 +61,25 @@ export async function checkMarkdownDocument(input: {
     skipped_roots: [],
     max_files: MARKDOWN_QUALITY_ROW_LIMIT
   });
+  return checkMarkdownDocumentFromCatalog({
+    request,
+    normalizedPath,
+    scanned,
+    workspace: input.workspace,
+    parser: input.parser,
+    checker: input.checker
+  });
+}
+
+async function checkMarkdownDocumentFromCatalog(input: {
+  request: CheckMarkdownDocumentRequest;
+  normalizedPath: string;
+  scanned: Awaited<ReturnType<FileCatalogScanPort["scan"]>>;
+  workspace: WorkspaceFilePort;
+  parser: MarkdownParserPort;
+  checker: MarkdownStructureCheckPort;
+}): Promise<CheckMarkdownDocumentUseCaseResult> {
+  const { request, normalizedPath, scanned } = input;
   const markdownFiles = scanned.files
     .filter((file) => file.file_identity.language === "markdown")
     .sort((left, right) => left.path.localeCompare(right.path));
@@ -121,7 +142,8 @@ export async function checkMarkdownDocument(input: {
       status: "done",
       summary: checked.findings.length === 0
         ? `Markdown document ${normalizedPath} has no quality findings.`
-        : `Markdown document ${normalizedPath} has ${checked.findings.length} quality finding(s).`,
+        : `Markdown document ${normalizedPath} has ${checked.finding_count} quality finding(s).`,
+      finding_count: checked.finding_count,
       findings: [...checked.findings],
       warnings,
       truncated,
@@ -134,7 +156,8 @@ export async function checkMarkdownDocument(input: {
       truncated,
       verificationStatus: checked.findings.length === 0 ? "done" : "needed",
       analysisValidity: truncated ? "partial" : "valid"
-    })
+    }),
+    document_truncated: checked.truncated
   };
 }
 
@@ -173,21 +196,58 @@ export async function checkMarkdownSet(input: {
     skipped_roots: [],
     max_files: MARKDOWN_QUALITY_ROW_LIMIT
   });
-  const markdownPaths = normalizedScope === undefined
+  const scopedMarkdownPaths = normalizedScope === undefined
     ? []
     : scanned.files
         .filter((file) => file.file_identity.language === "markdown")
         .map((file) => file.path)
         .filter((filePath) => filePath === normalizedScope || normalizedScope === "." || filePath.startsWith(`${normalizedScope}/`));
-  const selectedPaths = uniqueSorted([
+  const excludedActiveSpecPaths = request.exclude_active_specs
+    ? scopedMarkdownPaths.filter(isActiveSpecDocument)
+    : [];
+  const markdownPaths = request.exclude_active_specs
+    ? scopedMarkdownPaths.filter((filePath) => !isActiveSpecDocument(filePath))
+    : scopedMarkdownPaths;
+  const candidatePaths = uniqueSorted([
     ...normalizedPaths,
-    ...markdownPaths.slice(0, request.max_documents)
-  ]).slice(0, request.max_documents);
+    ...markdownPaths
+  ]);
+  const candidateFingerprint = createHash("sha256")
+    .update(JSON.stringify({
+      paths: candidatePaths,
+      scope_path: normalizedScope,
+      explicit_paths: normalizedPaths,
+      exclude_active_specs: request.exclude_active_specs
+    }))
+    .digest("hex");
+  const cursor = decodeMarkdownAuditCursor(request.cursor);
+  if (cursor === "invalid" || (cursor !== undefined && cursor.fingerprint !== candidateFingerprint)) {
+    return blockedSetResult({
+      repoRoot: scanned.repo_root,
+      warning: {
+        reason: "configured_skip",
+        message: "Markdown audit cursor is invalid or no longer matches the selected document set."
+      },
+      scannedFiles: scanned.files
+    });
+  }
+  const offset = cursor?.offset ?? 0;
+  if (offset > candidatePaths.length || (offset === candidatePaths.length && candidatePaths.length > 0)) {
+    return blockedSetResult({
+      repoRoot: scanned.repo_root,
+      warning: {
+        reason: "configured_skip",
+        message: "Markdown audit cursor offset is outside the selected document set."
+      },
+      scannedFiles: scanned.files
+    });
+  }
+  const selectedPaths = candidatePaths.slice(offset, offset + request.max_documents);
 
   const checks = [];
   for (const filePath of selectedPaths) {
     checks.push(
-      await checkMarkdownDocument({
+      await checkMarkdownDocumentFromCatalog({
         request: {
           repo_root: scanned.repo_root,
           path: filePath,
@@ -196,16 +256,18 @@ export async function checkMarkdownSet(input: {
           max_file_bytes: request.max_file_bytes,
           required_frontmatter: request.required_frontmatter
         },
-        scanner: input.scanner,
+        normalizedPath: filePath,
+        scanned,
         workspace: input.workspace,
         parser: input.parser,
-        checker: input.checker,
-        default_repo_root: scanned.repo_root
+        checker: input.checker
       })
     );
   }
 
-  const findings = checks.flatMap((result) => result.check.findings).slice(0, request.max_findings);
+  const allReturnedFindings = checks.flatMap((result) => result.check.findings);
+  const findingCount = checks.reduce((sum, result) => sum + result.check.finding_count, 0);
+  const findings = allReturnedFindings.slice(0, request.max_findings);
   const warnings = checks.flatMap((result) => result.check.warnings);
   const checkedDocuments = checks
     .filter((result) => result.check.status === "done")
@@ -215,26 +277,89 @@ export async function checkMarkdownSet(input: {
     .filter((result) => result.check.status !== "done")
     .map((result) => result.check.path)
     .sort();
+  const nextOffset = offset + selectedPaths.length;
+  const hasMore = nextOffset < candidatePaths.length;
+  const nextCursor = hasMore
+    ? encodeMarkdownAuditCursor({ offset: nextOffset, fingerprint: candidateFingerprint })
+    : undefined;
+  const documentResults = checks.map((result) => ({
+    path: result.check.path,
+    status: result.check.status !== "done"
+      ? "skipped" as const
+      : result.document_truncated === true
+        ? "budget_truncated" as const
+        : result.check.findings.length > 0
+          ? "checked_with_findings" as const
+          : "checked_clean" as const,
+    finding_count: result.check.findings.length
+  }));
+  const uncheckedPreview = candidatePaths
+    .slice(nextOffset, nextOffset + request.max_documents)
+    .map((pathValue) => ({ path: pathValue, status: "unchecked" as const, finding_count: 0 }));
+  const budgetTruncatedCount = documentResults.filter((receipt) => receipt.status === "budget_truncated").length;
   const truncated =
     scanned.truncated ||
-    checks.some((result) => result.check.truncated) ||
-    findings.length < checks.flatMap((result) => result.check.findings).length ||
-    markdownPaths.length > request.max_documents;
+    budgetTruncatedCount > 0 ||
+    findingCount > findings.length ||
+    hasMore;
   const status = selectedPaths.length === 0
-    ? "blocked"
-    : checkedDocuments.length === 0
-      ? "skipped"
-      : "done";
+    ? "done"
+    : hasMore
+      ? "partial"
+      : checkedDocuments.length === 0
+        ? "skipped"
+        : truncated
+          ? "partial"
+          : "done";
   const setCheck: CheckMarkdownSetResult = {
     repo_root: scanned.repo_root,
     status,
-    summary: `Markdown set check examined ${checkedDocuments.length} document(s), skipped ${skippedDocuments.length}, and found ${findings.length} issue(s).`,
+    summary: `Markdown set check examined ${checkedDocuments.length} document(s), skipped ${skippedDocuments.length}, and found ${findingCount} issue(s).`,
     checked_documents: checkedDocuments,
     skipped_documents: skippedDocuments,
+    document_results: [...documentResults, ...uncheckedPreview],
+    coverage: {
+      total_documents: candidatePaths.length,
+      offset,
+      chunk_size: selectedPaths.length,
+      checked_count: checkedDocuments.length,
+      skipped_count: skippedDocuments.length,
+      checked_clean_count: documentResults.filter((receipt) => receipt.status === "checked_clean").length,
+      checked_with_findings_count: documentResults.filter((receipt) => receipt.status === "checked_with_findings").length,
+      budget_truncated_count: budgetTruncatedCount,
+      finding_count: findingCount,
+      returned_finding_count: findings.length,
+      unchecked_count: candidatePaths.length - nextOffset,
+      excluded_active_spec_count: excludedActiveSpecPaths.length,
+      complete: !hasMore
+    },
+    continuation: {
+      ...(normalizedScope === undefined ? {} : { scope_path: normalizedScope }),
+      offset,
+      ...(nextCursor === undefined ? {} : { next_cursor: nextCursor }),
+      has_more: hasMore,
+      candidate_fingerprint: candidateFingerprint,
+      exclude_active_specs: request.exclude_active_specs
+    },
     findings,
     warnings,
     truncated,
-    next_actions: []
+    next_actions: nextCursor === undefined ? [] : [{
+      tool: "check_markdown_set",
+      args: {
+        paths: normalizedPaths,
+        ...(normalizedScope === undefined ? {} : { scope_path: normalizedScope }),
+        cursor: nextCursor,
+        exclude_active_specs: request.exclude_active_specs,
+        max_documents: request.max_documents,
+        max_findings: request.max_findings,
+        max_evidence_bytes: request.max_evidence_bytes,
+        max_file_bytes: request.max_file_bytes,
+        required_frontmatter: request.required_frontmatter
+      },
+      reason: "Continue the same deterministic Markdown audit with the next bounded chunk.",
+      expected_evidence: "The next document chunk with updated coverage and continuation state."
+    }]
   };
   return {
     check: setCheck,
@@ -243,16 +368,14 @@ export async function checkMarkdownSet(input: {
       scannedFiles: scanned.files,
       warnings,
       truncated,
-      verificationStatus: status === "blocked"
-        ? "blocked"
-        : status === "skipped"
+      verificationStatus: status === "skipped"
           ? "not_applicable"
-          : findings.length === 0
+          : status === "partial"
+            ? "needed"
+            : findings.length === 0
             ? "done"
             : "needed",
-      analysisValidity: status === "blocked"
-        ? "invalid"
-        : status === "skipped" || truncated
+      analysisValidity: status === "skipped" || status === "partial" || truncated
           ? "partial"
           : "valid"
     })
@@ -272,6 +395,7 @@ function skippedResult(input: {
       path: input.path,
       status: "skipped",
       summary: `Markdown document ${input.path} was skipped: ${input.warning.message}`,
+      finding_count: 0,
       findings: [],
       warnings: [input.warning],
       truncated: input.truncated ?? false,
@@ -284,7 +408,8 @@ function skippedResult(input: {
       truncated: input.truncated ?? false,
       verificationStatus: "not_applicable",
       analysisValidity: "partial"
-    })
+    }),
+    document_truncated: false
   };
 }
 
@@ -301,6 +426,7 @@ function blockedResult(input: {
       path: input.path,
       status: "blocked",
       summary: `Markdown document ${input.path} could not be checked: ${input.warning.message}`,
+      finding_count: 0,
       findings: [],
       warnings: [input.warning],
       truncated: input.truncated ?? false,
@@ -313,7 +439,8 @@ function blockedResult(input: {
       truncated: input.truncated ?? false,
       verificationStatus: "blocked",
       analysisValidity: "invalid"
-    })
+    }),
+    document_truncated: false
   };
 }
 
@@ -330,6 +457,28 @@ function blockedSetResult(input: {
       summary: `Markdown set could not be checked: ${input.warning.message}`,
       checked_documents: [],
       skipped_documents: [],
+      document_results: [],
+      coverage: {
+        total_documents: 0,
+        offset: 0,
+        chunk_size: 0,
+        checked_count: 0,
+        skipped_count: 0,
+        checked_clean_count: 0,
+        checked_with_findings_count: 0,
+        budget_truncated_count: 0,
+        finding_count: 0,
+        returned_finding_count: 0,
+        unchecked_count: 0,
+        excluded_active_spec_count: 0,
+        complete: false
+      },
+      continuation: {
+        offset: 0,
+        has_more: false,
+        candidate_fingerprint: "",
+        exclude_active_specs: false
+      },
       findings: [],
       warnings: [input.warning],
       truncated: input.truncated ?? false,
@@ -344,6 +493,36 @@ function blockedSetResult(input: {
       analysisValidity: "invalid"
     })
   };
+}
+
+type MarkdownAuditCursor = { offset: number; fingerprint: string };
+
+function encodeMarkdownAuditCursor(cursor: MarkdownAuditCursor): string {
+  return Buffer.from(JSON.stringify({ version: 1, ...cursor }), "utf8").toString("base64url");
+}
+
+function decodeMarkdownAuditCursor(value: string | undefined): MarkdownAuditCursor | "invalid" | undefined {
+  if (value === undefined) return undefined;
+  try {
+    const decoded: unknown = JSON.parse(Buffer.from(value, "base64url").toString("utf8"));
+    if (
+      typeof decoded !== "object" || decoded === null ||
+      (decoded as { version?: unknown }).version !== 1 ||
+      !Number.isInteger((decoded as { offset?: unknown }).offset) ||
+      Number((decoded as { offset?: unknown }).offset) < 0 ||
+      typeof (decoded as { fingerprint?: unknown }).fingerprint !== "string"
+    ) return "invalid";
+    return {
+      offset: Number((decoded as { offset: number }).offset),
+      fingerprint: (decoded as { fingerprint: string }).fingerprint
+    };
+  } catch {
+    return "invalid";
+  }
+}
+
+function isActiveSpecDocument(pathValue: string): boolean {
+  return /^docs\/specs\/[^/]+\//.test(pathValue);
 }
 
 function markdownQualityMeta(input: {

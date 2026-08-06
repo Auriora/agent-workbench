@@ -390,6 +390,7 @@ export interface MarkdownStructureCheckPort {
     max_evidence_bytes: number;
   }): {
     findings: readonly MarkdownQualityFinding[];
+    finding_count: number;
     truncated: boolean;
   };
 }

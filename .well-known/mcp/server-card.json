@@ -168,10 +168,10 @@
     },
     {
       "name": "check_markdown_set",
-      "description": "Use this before docs-wide commits, spec closure, or documentation promotion to check explicit Markdown files or a bounded docs scope. Keep paths or scope_path narrow; it returns aggregate bounded findings without mutation.",
+      "description": "Use this before docs-wide commits, spec closure, or documentation promotion to audit explicit Markdown files or a large docs scope through deterministic cursor chunks. It reports measurable document coverage, can exclude active spec packages by intent, and returns aggregate bounded findings without mutation.",
       "capability_class": "read_only",
       "mutation_class": "none",
-      "budget_policy": "Bounded by explicit paths or scope_path plus max_documents, max_findings, file-size, and evidence limits."
+      "budget_policy": "Scans Markdown inventory once per call and is bounded by explicit paths or scope_path, cursor, max_documents, max_findings, file-size, and evidence limits."
     },
     {
       "name": "integration_health",

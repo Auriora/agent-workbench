@@ -802,6 +802,7 @@ async function callTool(input: {
       request: {
         repo_root: input.repoRoot,
         paths: [input.facts.markdown_path],
+        exclude_active_specs: false,
         max_documents: 5,
         max_findings: 100,
         max_evidence_bytes: 240,

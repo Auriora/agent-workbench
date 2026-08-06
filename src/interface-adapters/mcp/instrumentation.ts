@@ -102,6 +102,7 @@ function instrumentHandler(input: {
         cache_state: envelope.cache_state,
         quiet_feedback_suppression_count: countQuietFeedbackSuppressions(envelope.warnings),
         ...buildDeferredCheckTelemetryProperties(envelope.post_edit_feedback ?? {}),
+        ...envelope.markdown_audit,
         repo_root: envelope.repo_root,
         status: envelope.status,
         truncated: envelope.meta?.truncated,
@@ -141,6 +142,7 @@ function extractResponseEnvelope(response: unknown): {
   repo_root?: unknown;
   status?: unknown;
   post_edit_feedback?: unknown;
+  markdown_audit?: Record<string, string | number | boolean>;
   errors: unknown[];
   warnings: unknown[];
 } {
@@ -182,11 +184,53 @@ function extractResponseEnvelope(response: unknown): {
       runtime_state: runtimeState,
       repo_root: repoRoot ?? extractNestedDataValue(data, "repo_root"),
       status: status ?? extractNestedDataValue(data, "status"),
-      post_edit_feedback: extractPostEditFeedback(data)
+      post_edit_feedback: extractPostEditFeedback(data),
+      markdown_audit: extractMarkdownAuditTelemetry(data)
     };
   } catch (_error) {
     return { errors: [], warnings: [] };
   }
+}
+
+function extractMarkdownAuditTelemetry(data: unknown): Record<string, string | number | boolean> {
+  const candidate = findObjectWithKey(data, "coverage");
+  if (candidate === undefined || !isRecord(candidate.coverage)) return {};
+  const coverage = candidate.coverage;
+  const properties: Record<string, string | number | boolean> = {};
+  for (const key of [
+    "total_documents",
+    "chunk_size",
+    "checked_count",
+    "skipped_count",
+    "checked_clean_count",
+    "checked_with_findings_count",
+    "budget_truncated_count",
+    "finding_count",
+    "returned_finding_count",
+    "unchecked_count",
+    "excluded_active_spec_count",
+    "complete"
+  ]) {
+    const value = coverage[key];
+    if (typeof value === "number" || typeof value === "boolean") {
+      properties[`markdown_audit_${key}`] = value;
+    }
+  }
+  return properties;
+}
+
+function findObjectWithKey(value: unknown, key: string): Record<string, unknown> | undefined {
+  if (!isRecord(value)) return undefined;
+  if (key in value) return value;
+  for (const child of Object.values(value)) {
+    const found = findObjectWithKey(child, key);
+    if (found !== undefined) return found;
+  }
+  return undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function extractPostEditFeedback(data: unknown): unknown {

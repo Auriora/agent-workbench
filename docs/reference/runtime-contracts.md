@@ -1380,6 +1380,19 @@ Markdown quality findings are executable read-only checker outputs from
 `check_markdown_document` and `check_markdown_set`. The contract shape also
 keeps future formatter work previewable and presentation-compatible.
 
+Large `check_markdown_set` audits use a lexically ordered candidate universe
+and an opaque cursor bound to its fingerprint. Each call scans repository
+Markdown inventory once, checks at most `max_documents`, and reports exact
+chunk coverage: total, offset, checked-clean, checked-with-findings, skipped,
+budget-truncated, and remaining unchecked counts. A partial page returns the
+next cursor and a `check_markdown_set` action; a changed universe blocks the
+stale cursor instead of silently shifting the audit. `exclude_active_specs`
+removes scope-discovered `docs/specs/<package>/` documents while explicit spec
+paths remain eligible. Coverage separates exact discovered finding counts from
+the bounded returned finding list and keeps catalog truncation distinct from
+per-document budget truncation. Telemetry records only counts, truncation, and
+duration, never document bodies.
+
 ```json
 {
   "category": "table_readability",

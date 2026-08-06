@@ -71,6 +71,53 @@ function createInstrumentedEndpoints(telemetry: InMemoryTelemetryAdapter): {
 }
 
 describe("MCP telemetry instrumentation", () => {
+  it("records Markdown audit counts without document bodies", async () => {
+    const telemetry = new InMemoryTelemetryAdapter();
+    const { registeredTools, server } = createInstrumentedEndpoints(telemetry);
+    server.tool("check_markdown_set", "", {}, async () => ({
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          data: {
+            repo_root: "/repo",
+            status: "partial",
+            findings: [{ path: "docs/a.md", evidence: "sensitive document body" }],
+            coverage: {
+              total_documents: 150,
+              chunk_size: 25,
+              checked_count: 24,
+              skipped_count: 1,
+              checked_clean_count: 20,
+              checked_with_findings_count: 4,
+              budget_truncated_count: 0,
+              finding_count: 7,
+              returned_finding_count: 1,
+              unchecked_count: 125,
+              excluded_active_spec_count: 12,
+              complete: false
+            }
+          },
+          meta: { analysis_validity: "partial", verification_status: "needed", truncated: true },
+          warnings: [],
+          errors: []
+        })
+      }]
+    }));
+
+    await registeredTools.check_markdown_set.handler({ scope_path: "docs" });
+    expect(telemetry.records[0]?.properties).toMatchObject({
+      markdown_audit_total_documents: 150,
+      markdown_audit_chunk_size: 25,
+      markdown_audit_checked_count: 24,
+      markdown_audit_skipped_count: 1,
+      markdown_audit_finding_count: 7,
+      markdown_audit_returned_finding_count: 1,
+      markdown_audit_unchecked_count: 125,
+      markdown_audit_complete: false
+    });
+    expect(JSON.stringify(telemetry.records)).not.toContain("sensitive document body");
+  });
+
   it("records tool dispatch outcomes without changing the MCP response schema", async () => {
     const telemetry = new InMemoryTelemetryAdapter();
     const { registeredTools, server } = createInstrumentedEndpoints(telemetry);

@@ -60,6 +60,7 @@ export function buildInvalidCheckMarkdownDocumentInputEnvelope(input: {
       path: input.path ?? "",
       status: "blocked",
       summary: "Markdown quality check input was invalid.",
+      finding_count: 0,
       findings: [],
       warnings: [],
       truncated: false,
@@ -91,6 +92,28 @@ export function buildInvalidCheckMarkdownSetInputEnvelope(input: {
       summary: "Markdown set quality check input was invalid.",
       checked_documents: [],
       skipped_documents: [],
+      document_results: [],
+      coverage: {
+        total_documents: 0,
+        offset: 0,
+        chunk_size: 0,
+        checked_count: 0,
+        skipped_count: 0,
+        checked_clean_count: 0,
+        checked_with_findings_count: 0,
+        budget_truncated_count: 0,
+        finding_count: 0,
+        returned_finding_count: 0,
+        unchecked_count: 0,
+        excluded_active_spec_count: 0,
+        complete: false
+      },
+      continuation: {
+        offset: 0,
+        has_more: false,
+        candidate_fingerprint: "",
+        exclude_active_specs: false
+      },
       findings: [],
       warnings: [],
       truncated: false,
@@ -120,6 +143,7 @@ function sanitizeCheckMarkdownDocument(
     path: normalizeRepoPath(input.path),
     status: input.status,
     summary: redactPresentationText(input.summary, { context: "message" }),
+    finding_count: input.finding_count,
     findings: [...input.findings]
       .sort((left, right) =>
         left.path.localeCompare(right.path) ||
@@ -153,6 +177,12 @@ function sanitizeCheckMarkdownSet(
     summary: redactPresentationText(input.summary, { context: "message" }),
     checked_documents: [...input.checked_documents].sort().map(normalizeRepoPath),
     skipped_documents: [...input.skipped_documents].sort().map(normalizeRepoPath),
+    document_results: input.document_results.map((receipt) => ({
+      ...receipt,
+      path: normalizeRepoPath(receipt.path)
+    })),
+    coverage: input.coverage,
+    continuation: input.continuation,
     findings: [...input.findings]
       .sort((left, right) =>
         left.path.localeCompare(right.path) ||

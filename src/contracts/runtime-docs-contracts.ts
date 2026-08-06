@@ -802,6 +802,7 @@ export type MarkdownQualityRule = z.infer<typeof markdownQualityRuleSchema>;
 
 export const markdownQualityCheckStatusSchema = z.enum([
   "done",
+  "partial",
   "skipped",
   "blocked"
 ]);
@@ -830,6 +831,8 @@ export const checkMarkdownSetRequestSchema = z
     repo_root: z.string().optional(),
     paths: z.array(z.string().min(1)).default([]),
     scope_path: z.string().min(1).optional(),
+    cursor: z.string().min(1).optional(),
+    exclude_active_specs: z.boolean().default(false),
     max_documents: z.number().int().positive().max(100).default(20),
     max_findings: z.number().int().positive().max(500).default(100),
     max_evidence_bytes: z.number().int().positive().max(2000).default(240),
@@ -1049,6 +1052,7 @@ export const checkMarkdownDocumentResultSchema = z
     path: z.string(),
     status: markdownQualityCheckStatusSchema,
     summary: z.string(),
+    finding_count: z.number().int().nonnegative(),
     findings: z.array(markdownQualityFindingSchema),
     warnings: z.array(markdownQualityWarningSchema),
     truncated: z.boolean(),
@@ -1057,6 +1061,58 @@ export const checkMarkdownDocumentResultSchema = z
   .strict();
 export type CheckMarkdownDocumentResult = z.infer<typeof checkMarkdownDocumentResultSchema>;
 
+export const markdownAuditDocumentStatusSchema = z.enum([
+  "unchecked",
+  "skipped",
+  "checked_clean",
+  "checked_with_findings",
+  "budget_truncated"
+]);
+
+export const markdownAuditDocumentReceiptSchema = z.object({
+  path: z.string(),
+  status: markdownAuditDocumentStatusSchema,
+  finding_count: z.number().int().nonnegative()
+}).strict();
+
+export const markdownAuditCoverageSchema = z.object({
+  total_documents: z.number().int().nonnegative(),
+  offset: z.number().int().nonnegative(),
+  chunk_size: z.number().int().nonnegative(),
+  checked_count: z.number().int().nonnegative(),
+  skipped_count: z.number().int().nonnegative(),
+  checked_clean_count: z.number().int().nonnegative(),
+  checked_with_findings_count: z.number().int().nonnegative(),
+  budget_truncated_count: z.number().int().nonnegative(),
+  finding_count: z.number().int().nonnegative(),
+  returned_finding_count: z.number().int().nonnegative(),
+  unchecked_count: z.number().int().nonnegative(),
+  excluded_active_spec_count: z.number().int().nonnegative(),
+  complete: z.boolean()
+}).strict().superRefine((coverage, context) => {
+  if (coverage.checked_count !== coverage.checked_clean_count + coverage.checked_with_findings_count + coverage.budget_truncated_count) {
+    context.addIssue({ code: "custom", message: "Markdown audit checked counts must conserve checked_count." });
+  }
+  if (coverage.chunk_size !== coverage.checked_count + coverage.skipped_count) {
+    context.addIssue({ code: "custom", message: "Markdown audit chunk counts must conserve chunk_size." });
+  }
+  if (coverage.total_documents !== coverage.offset + coverage.chunk_size + coverage.unchecked_count) {
+    context.addIssue({ code: "custom", message: "Markdown audit coverage must conserve total_documents." });
+  }
+  if (coverage.returned_finding_count > coverage.finding_count) {
+    context.addIssue({ code: "custom", message: "Returned findings cannot exceed discovered findings." });
+  }
+});
+
+export const markdownAuditContinuationSchema = z.object({
+  scope_path: z.string().optional(),
+  offset: z.number().int().nonnegative(),
+  next_cursor: z.string().optional(),
+  has_more: z.boolean(),
+  candidate_fingerprint: z.string(),
+  exclude_active_specs: z.boolean()
+}).strict();
+
 export const checkMarkdownSetResultSchema = z
   .object({
     repo_root: z.string(),
@@ -1064,12 +1120,29 @@ export const checkMarkdownSetResultSchema = z
     summary: z.string(),
     checked_documents: z.array(z.string()),
     skipped_documents: z.array(z.string()),
+    document_results: z.array(markdownAuditDocumentReceiptSchema),
+    coverage: markdownAuditCoverageSchema,
+    continuation: markdownAuditContinuationSchema,
     findings: z.array(markdownQualityFindingSchema),
     warnings: z.array(markdownQualityWarningSchema),
     truncated: z.boolean(),
     next_actions: z.array(nextActionSchema)
   })
-  .strict();
+  .strict()
+  .superRefine((result, context) => {
+    if (result.continuation.offset !== result.coverage.offset) {
+      context.addIssue({ code: "custom", message: "Markdown audit continuation and coverage offsets must match." });
+    }
+    if (result.continuation.has_more !== (result.continuation.next_cursor !== undefined)) {
+      context.addIssue({ code: "custom", message: "Markdown audit next cursor must match has_more." });
+    }
+    if (result.coverage.returned_finding_count !== result.findings.length) {
+      context.addIssue({ code: "custom", message: "Markdown audit returned finding count must match findings." });
+    }
+    if (result.status !== "blocked" && result.coverage.complete !== (result.coverage.unchecked_count === 0)) {
+      context.addIssue({ code: "custom", message: "Markdown audit completion must match unchecked_count." });
+    }
+  });
 export type CheckMarkdownSetResult = z.infer<typeof checkMarkdownSetResultSchema>;
 
 export const markdownFormatStrategySchema = z.enum([

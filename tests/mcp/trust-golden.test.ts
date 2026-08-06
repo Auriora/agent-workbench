@@ -351,6 +351,7 @@ describe("public MCP trust golden responses", () => {
           path: request.path,
           status: "done",
           summary: "Markdown document has 1 quality finding.",
+          finding_count: 1,
           findings: [
             {
               category: "heading_structure",

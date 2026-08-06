@@ -619,6 +619,13 @@ states for generated, hidden, oversized, missing, or unsafe paths. They do not
 format, mutate, generate reports, or replace `docs_read_section` as precise
 source evidence.
 
+Set audits scan the Markdown catalog once per call and reuse that inventory for
+every selected document. Large scopes continue through fingerprint-bound opaque
+cursors and explicit partial states, with per-document receipts and exact
+coverage counts. Callers may intentionally exclude active spec packages from a
+durable-doc audit; explicitly requested spec documents are never hidden by that
+scope filter. Audit telemetry is aggregate-only.
+
 ## Post-MVP Resources And Tools
 
 - `repo:///mcp-surface`

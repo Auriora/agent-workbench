@@ -27,7 +27,7 @@ export class MarkdownStructureCheckerAdapter implements MarkdownStructureCheckPo
     required_frontmatter: readonly string[];
     max_findings: number;
     max_evidence_bytes: number;
-  }): { findings: readonly MarkdownQualityFinding[]; truncated: boolean } {
+  }): { findings: readonly MarkdownQualityFinding[]; finding_count: number; truncated: boolean } {
     const findings = [
       ...checkFrontmatter(input),
       ...checkHeadings(input),
@@ -37,6 +37,7 @@ export class MarkdownStructureCheckerAdapter implements MarkdownStructureCheckPo
     ];
     return {
       findings: findings.slice(0, input.max_findings),
+      finding_count: findings.length,
       truncated: findings.length > input.max_findings
     };
   }
