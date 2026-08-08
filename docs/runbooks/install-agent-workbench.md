@@ -40,14 +40,14 @@ the npm registry). Install the release tarball directly by URL — npm builds th
 native modules and runs the package's `postinstall` the same as any package:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.7/auriora-agent-workbench-0.6.7.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.8/auriora-agent-workbench-0.6.8.tgz
 ```
 
 For a different version, take the tarball URL from the matching release on
 <https://github.com/Auriora/agent-workbench/releases>. Offline/air-gapped: download
-the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.6.7.tgz`.
+the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.6.8.tgz`.
 
-The commands above install release `0.6.7`, including the compiled lightweight
+The commands above install release `0.6.8`, including the compiled lightweight
 bridge, daemon-owned refresh convergence, and schema-isolated publication.
 
 This builds the native modules in place and records a runtime-root pointer under
@@ -90,7 +90,7 @@ name `agent-workbench-local`).
 PKG="$(npm root -g)/@auriora/agent-workbench"
 claude plugin marketplace add "$PKG/plugins/agent-workbench"
 claude plugin install agent-workbench@agent-workbench-local --scope user
-claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.7  enabled
+claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.8  enabled
 ```
 
 **Windows (PowerShell):**
@@ -99,7 +99,7 @@ claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.7  enabled
 $pkg = "$(npm root -g)\@auriora\agent-workbench"
 claude plugin marketplace add "$pkg\plugins\agent-workbench"
 claude plugin install agent-workbench@agent-workbench-local --scope user
-claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.7  enabled
+claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.8  enabled
 ```
 
 Start a new Claude Code session so the skill, hooks, and MCP server are
@@ -132,7 +132,7 @@ The npm package ships a package-scoped Codex marketplace
 PKG="$(npm root -g)/@auriora/agent-workbench"
 codex plugin marketplace add "$PKG/plugins/agent-workbench"
 codex plugin add agent-workbench@agent-workbench-local
-codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.7  installed, enabled
+codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.8  installed, enabled
 ```
 
 **Windows (PowerShell):**
@@ -141,7 +141,7 @@ codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.7  installe
 $pkg = "$(npm root -g)\@auriora\agent-workbench"
 codex plugin marketplace add "$pkg\plugins\agent-workbench"
 codex plugin add agent-workbench@agent-workbench-local
-codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.7  installed, enabled
+codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.8  installed, enabled
 ```
 
 Start a new Codex session so the skill, hooks, and MCP server are discovered. See
