@@ -57,6 +57,9 @@ jobs:
       - name: Install dependencies (builds tree-sitter + native modules)
         run: pnpm install --frozen-lockfile
 
+      - name: Build distributed runtime
+        run: pnpm build-runtime
+
       - name: Postinstall pointer smoke — records the in-place runtime root
         run: node scripts/ci/install-smoke.mjs
 

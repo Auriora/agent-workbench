@@ -1008,6 +1008,7 @@ describe("Codex plugin artifacts", () => {
     const containerfilePath = path.resolve("packaging/agent-workbench/Containerfile");
     const workflowPath = path.resolve(".github/workflows/release-ghcr.yml");
     const ciWorkflowPath = path.resolve(".github/workflows/ci.yml");
+    const crossPlatformWorkflowPath = path.resolve(".github/workflows/cross-platform-packaging.yml");
     const pluginValidatorPath = path.resolve("scripts/validate-agent-workbench-plugin.mjs");
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8")) as {
       registry: string;
@@ -1049,6 +1050,7 @@ describe("Codex plugin artifacts", () => {
     const containerfile = fs.readFileSync(containerfilePath, "utf8");
     const workflow = fs.readFileSync(workflowPath, "utf8");
     const ciWorkflow = fs.readFileSync(ciWorkflowPath, "utf8");
+    const crossPlatformWorkflow = fs.readFileSync(crossPlatformWorkflowPath, "utf8");
     const pluginValidator = fs.readFileSync(pluginValidatorPath, "utf8");
     const latestReleasedInstallCommand = `npm install -g https://github.com/Auriora/agent-workbench/releases/download/v${manifest.latest_released_version}/auriora-agent-workbench-${manifest.latest_released_version}.tgz`;
 
@@ -1164,6 +1166,14 @@ describe("Codex plugin artifacts", () => {
     expect(ciBuildRuntime).toBeLessThan(ciContracts);
     expect(ciContracts).toBeLessThan(ciTest);
     expect(ciBuildRuntime).toBeLessThan(ciValidate);
+    const crossPlatformInstall = crossPlatformWorkflow.indexOf("pnpm install --frozen-lockfile");
+    const crossPlatformBuild = crossPlatformWorkflow.indexOf("pnpm build-runtime");
+    const crossPlatformLaunch = crossPlatformWorkflow.indexOf("node scripts/ci/mcp-launch-smoke.mjs");
+    expect(crossPlatformInstall).toBeGreaterThan(-1);
+    expect(crossPlatformBuild).toBeGreaterThan(-1);
+    expect(crossPlatformLaunch).toBeGreaterThan(-1);
+    expect(crossPlatformInstall).toBeLessThan(crossPlatformBuild);
+    expect(crossPlatformBuild).toBeLessThan(crossPlatformLaunch);
   });
 
   it("keeps cross-repo debug harnesses checkout-only", () => {
