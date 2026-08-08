@@ -15,11 +15,17 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   package:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      release_tag: ${{ steps.release.outputs.tag }}
+      release_version: ${{ steps.release.outputs.version }}
+      publish_latest: ${{ steps.release.outputs.publish_latest }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -54,8 +60,21 @@ jobs:
             exit 1
           fi
           version="${tag#v}"
+          latest_tag=""
+          while IFS= read -r candidate; do
+            if [[ "${candidate}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              latest_tag="${candidate}"
+              break
+            fi
+          done < <(git tag --list 'v*' --sort=-version:refname)
+          if [ "${tag}" = "${latest_tag}" ]; then
+            publish_latest=true
+          else
+            publish_latest=false
+          fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "publish_latest=${publish_latest}" >> "${GITHUB_OUTPUT}"
           echo "notes=docs/release-notes/${tag}.md" >> "${GITHUB_OUTPUT}"
           echo "tarball=auriora-agent-workbench-${version}.tgz" >> "${GITHUB_OUTPUT}"
 
@@ -116,6 +135,9 @@ jobs:
       - name: Build runtime
         run: pnpm build-runtime
 
+      - name: Check runtime contracts
+        run: pnpm check:contracts
+
       - name: Test dev CLI
         run: pnpm test:devcli
 
@@ -153,3 +175,15 @@ jobs:
           else
             gh release create "${TAG}" "${TARBALL}" --title "${TAG}" --notes-file "${GITHUB_RELEASE_NOTES}"
           fi
+
+  publish-ghcr:
+    needs: package
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/release-ghcr.yml
+    with:
+      ref: ${{ needs.package.outputs.release_tag }}
+      version: ${{ needs.package.outputs.release_version }}
+      publish_latest: ${{ needs.package.outputs.publish_latest == 'true' }}
+    secrets: inherit

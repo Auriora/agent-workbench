@@ -27,7 +27,7 @@ hook/MCP details, see
 - **Node.js 22 (recommended).** Node 24 builds the native core (tree-sitter) only
   with a C++20 toolchain, so a default `npm install -g` on Node 24 hits a build
   error first. Use Node 22, or rebuild with `CXXFLAGS=-std=c++20` (GCC/Clang) /
-  `CL=/std:c++20` (MSVC).
+  `_CL_=/std:c++20` (MSVC, appended after project-supplied options).
 - A C/C++ build toolchain and Python 3 for `node-gyp` (Linux: build-essential +
   python3; macOS: Xcode Command Line Tools; Windows: Visual Studio Build Tools
   with the C++ workload). A failing native build is a local toolchain issue to

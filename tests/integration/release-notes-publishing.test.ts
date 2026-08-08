@@ -40,19 +40,23 @@ describe("GitHub release-note publishing", () => {
 
   it("renders a temporary body before both GitHub release create and edit paths", () => {
     const workflow = fs.readFileSync(path.resolve(".github/workflows/release.yml"), "utf8");
+    const ghcrWorkflow = fs.readFileSync(path.resolve(".github/workflows/release-ghcr.yml"), "utf8");
     const releaseTypecheck = workflow.indexOf("pnpm typecheck");
     const releaseBuild = workflow.indexOf("pnpm build-runtime");
+    const releaseContracts = workflow.indexOf("pnpm check:contracts");
     const releaseDevCliTest = workflow.indexOf("pnpm test:devcli");
     const releaseTest = workflow.indexOf("pnpm test\n");
     const releaseValidate = workflow.indexOf("pnpm run validate:plugin");
 
     expect(releaseTypecheck).toBeGreaterThan(-1);
     expect(releaseBuild).toBeGreaterThan(-1);
+    expect(releaseContracts).toBeGreaterThan(-1);
     expect(releaseDevCliTest).toBeGreaterThan(-1);
     expect(releaseTest).toBeGreaterThan(-1);
     expect(releaseValidate).toBeGreaterThan(-1);
     expect(releaseTypecheck).toBeLessThan(releaseBuild);
-    expect(releaseBuild).toBeLessThan(releaseDevCliTest);
+    expect(releaseBuild).toBeLessThan(releaseContracts);
+    expect(releaseContracts).toBeLessThan(releaseDevCliTest);
     expect(releaseBuild).toBeLessThan(releaseTest);
     expect(releaseBuild).toBeLessThan(releaseValidate);
 
@@ -66,5 +70,12 @@ describe("GitHub release-note publishing", () => {
       'gh release create "${TAG}" "${TARBALL}" --title "${TAG}" --notes-file "${GITHUB_RELEASE_NOTES}"'
     );
     expect(workflow).not.toContain('--notes-file "${NOTES}"');
+    expect(workflow).toContain("publish-ghcr:\n    needs: package");
+    expect(workflow).toContain("uses: ./.github/workflows/release-ghcr.yml");
+    expect(workflow).toContain("publish_latest: ${{ needs.package.outputs.publish_latest == 'true' }}");
+    expect(ghcrWorkflow).toContain("workflow_call:");
+    expect(ghcrWorkflow).not.toContain("workflow_dispatch:");
+    expect(ghcrWorkflow).toContain("type=raw,value=${{ inputs.version }}");
+    expect(ghcrWorkflow).toContain("type=raw,value=latest,enable=${{ inputs.publish_latest }}");
   });
 });

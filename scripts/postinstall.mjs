@@ -65,7 +65,7 @@ try {
       "  This is a local toolchain/build issue, not a packaging bug. Ensure Python 3 and a",
       "  C/C++ build toolchain are installed, then run: npm rebuild tree-sitter better-sqlite3",
       "  On Node 24 the tree-sitter core needs C++20 — use Node 22, or rebuild with",
-      "  CXXFLAGS=-std=c++20 (CL=/std:c++20 on Windows).",
+      "  CXXFLAGS=-std=c++20 (_CL_=/std:c++20 on Windows).",
       `  (${error.message})`
     ].join("\n")
   );

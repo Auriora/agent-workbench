@@ -47,6 +47,9 @@ jobs:
       - name: Build runtime
         run: pnpm build-runtime
 
+      - name: Check runtime contracts
+        run: pnpm check:contracts
+
       - name: Test
         run: pnpm test
 

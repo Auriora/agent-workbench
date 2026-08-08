@@ -1144,6 +1144,7 @@ describe("Codex plugin artifacts", () => {
     expect(ciWorkflow).toContain("pnpm install --frozen-lockfile");
     expect(ciWorkflow).toContain("pnpm typecheck");
     expect(ciWorkflow).toContain("pnpm build-runtime");
+    expect(ciWorkflow).toContain("pnpm check:contracts");
     expect(ciWorkflow).toContain("pnpm test");
     expect(ciWorkflow).toContain("pnpm run validate:plugin");
     expect(ciWorkflow).toContain("node scripts/ci/install-smoke.mjs");
@@ -1151,14 +1152,17 @@ describe("Codex plugin artifacts", () => {
     expect(ciWorkflow).toContain("pnpm pack:dry-run");
     const ciTypecheck = ciWorkflow.indexOf("pnpm typecheck");
     const ciBuildRuntime = ciWorkflow.indexOf("pnpm build-runtime");
+    const ciContracts = ciWorkflow.indexOf("pnpm check:contracts");
     const ciTest = ciWorkflow.indexOf("pnpm test");
     const ciValidate = ciWorkflow.indexOf("pnpm run validate:plugin");
     expect(ciTypecheck).toBeGreaterThan(-1);
     expect(ciBuildRuntime).toBeGreaterThan(-1);
+    expect(ciContracts).toBeGreaterThan(-1);
     expect(ciTest).toBeGreaterThan(-1);
     expect(ciValidate).toBeGreaterThan(-1);
     expect(ciTypecheck).toBeLessThan(ciBuildRuntime);
-    expect(ciBuildRuntime).toBeLessThan(ciTest);
+    expect(ciBuildRuntime).toBeLessThan(ciContracts);
+    expect(ciContracts).toBeLessThan(ciTest);
     expect(ciBuildRuntime).toBeLessThan(ciValidate);
   });
 
