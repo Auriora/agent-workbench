@@ -6,10 +6,14 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it } from "vitest";
 
 // @ts-expect-error -- ESM .mjs smoke helper imported into the TS test via esbuild.
-import { buildMcpLaunchSmokePlan } from "../../scripts/ci/mcp-launch-smoke.mjs";
+import {
+  buildMcpLaunchSmokePlan,
+  terminateChildForCleanup
+} from "../../scripts/ci/mcp-launch-smoke.mjs";
 
 describe("mcp-launch smoke plan", () => {
   const workspaces: string[] = [];
@@ -33,5 +37,30 @@ describe("mcp-launch smoke plan", () => {
     expect(plan.child.args).toEqual([
       path.join(checkoutRoot, "plugins", "agent-workbench", "mcp-launch.mjs")
     ]);
+  });
+
+  it("waits for the launcher to exit before allowing workspace cleanup", async () => {
+    const events: string[] = [];
+    const child = new EventEmitter() as EventEmitter & {
+      exitCode: number | null;
+      signalCode: NodeJS.Signals | null;
+      kill: () => boolean;
+    };
+    child.exitCode = null;
+    child.signalCode = null;
+    child.kill = () => {
+      events.push("kill");
+      queueMicrotask(() => {
+        events.push("exit");
+        child.exitCode = 0;
+        child.emit("exit", 0, null);
+      });
+      return true;
+    };
+
+    await terminateChildForCleanup(child);
+    events.push("cleanup");
+
+    expect(events).toEqual(["kill", "exit", "cleanup"]);
   });
 });

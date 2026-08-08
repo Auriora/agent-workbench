@@ -44,6 +44,29 @@ export function buildMcpLaunchSmokePlan({ checkoutRoot, workspaceRoot }) {
   };
 }
 
+export async function terminateChildForCleanup(child) {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+
+  await new Promise((resolve, reject) => {
+    const onExit = () => {
+      child.off("error", onError);
+      resolve();
+    };
+    const onError = (err) => {
+      child.off("exit", onExit);
+      reject(new Error(`failed to terminate launcher: ${err.message}`));
+    };
+
+    child.once("exit", onExit);
+    child.once("error", onError);
+    if (!child.kill()) {
+      child.off("exit", onExit);
+      child.off("error", onError);
+      reject(new Error("failed to terminate launcher"));
+    }
+  });
+}
+
 export async function runMcpLaunchSmoke({ checkoutRoot = checkoutRootFromScript } = {}) {
   const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-mcp-launch-smoke-"));
   const { child: plan } = buildMcpLaunchSmokePlan({ checkoutRoot, workspaceRoot });
@@ -54,8 +77,11 @@ export async function runMcpLaunchSmoke({ checkoutRoot = checkoutRootFromScript 
       let settled = false;
       const timer = setTimeout(() => {
         if (!settled) {
-          child.kill();
-          reject(new Error(`no initialize response within ${TIMEOUT_MS}ms`));
+          settled = true;
+          void terminateChildForCleanup(child).then(
+            () => reject(new Error(`no initialize response within ${TIMEOUT_MS}ms`)),
+            reject
+          );
         }
       }, TIMEOUT_MS);
 
@@ -83,8 +109,10 @@ export async function runMcpLaunchSmoke({ checkoutRoot = checkoutRootFromScript 
           if (message.id === 1 && message.result && message.result.serverInfo) {
             settled = true;
             clearTimeout(timer);
-            child.kill();
-            resolve(message.result.serverInfo.name);
+            void terminateChildForCleanup(child).then(
+              () => resolve(message.result.serverInfo.name),
+              reject
+            );
           }
         }
       });
