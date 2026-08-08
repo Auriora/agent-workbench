@@ -15,6 +15,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const TIMEOUT_MS = 60_000;
+const DAEMON_SHUTDOWN_TIMEOUT_MS = 10_000;
 const checkoutRootFromScript = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
@@ -37,11 +38,49 @@ export function buildMcpLaunchSmokePlan({ checkoutRoot, workspaceRoot }) {
       args: [launcher],
       options: {
         cwd: workspaceRoot,
-        env: { ...env, AGENT_WORKBENCH_INSTALL_ROOT: checkoutRoot },
+        env: {
+          ...env,
+          AGENT_WORKBENCH_INSTALL_ROOT: checkoutRoot,
+          AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS: "0",
+          AGENT_WORKBENCH_DAEMON_STARTUP_REFRESH_DELAY_MS: "60000"
+        },
         stdio: ["pipe", "pipe", "inherit"]
       }
     }
   };
+}
+
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    if (error?.code === "ESRCH") return false;
+    throw new Error(`cannot verify daemon process ${pid}: ${error?.message ?? String(error)}`);
+  }
+}
+
+export async function waitForDaemonExit(pid, timeoutMs = DAEMON_SHUTDOWN_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs;
+  while (isProcessAlive(pid)) {
+    if (Date.now() >= deadline) {
+      throw new Error(`daemon process ${pid} did not stop within ${timeoutMs}ms`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+function readDaemonPid(message, workspaceRoot) {
+  const text = message?.result?.contents?.[0]?.text;
+  const envelope = typeof text === "string" ? JSON.parse(text) : undefined;
+  const daemon = envelope?.data?.daemon;
+  if (!Number.isInteger(daemon?.pid) || daemon.pid <= 1) {
+    throw new Error("integration health did not identify the launched daemon process");
+  }
+  if (path.resolve(daemon.repo_root) !== path.resolve(workspaceRoot)) {
+    throw new Error("integration health daemon repository did not match the smoke workspace");
+  }
+  return daemon.pid;
 }
 
 export async function terminateChildForCleanup(child) {
@@ -70,22 +109,30 @@ export async function runMcpLaunchSmoke({ checkoutRoot = checkoutRootFromScript 
   const { child: plan } = buildMcpLaunchSmokePlan({ checkoutRoot, workspaceRoot });
   const child = spawn(plan.command, plan.args, plan.options);
 
-  try {
-    return await new Promise((resolve, reject) => {
+  const result = await new Promise((resolve, reject) => {
       let settled = false;
+      let serverName;
+      const failAfterChildClose = (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        void terminateChildForCleanup(child).then(() => reject(error), reject);
+      };
       const timer = setTimeout(() => {
-        if (!settled) {
-          settled = true;
-          void terminateChildForCleanup(child).then(
-            () => reject(new Error(`no initialize response within ${TIMEOUT_MS}ms`)),
-            reject
-          );
-        }
+        failAfterChildClose(new Error(`MCP launch smoke did not complete within ${TIMEOUT_MS}ms`));
       }, TIMEOUT_MS);
 
-      child.on("error", (err) => reject(new Error(`failed to spawn launcher: ${err.message}`)));
-    child.on("exit", (code, signal) => {
+      child.on("error", (err) => {
         if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(new Error(`failed to spawn launcher: ${err.message}`));
+        }
+      });
+      child.on("exit", (code, signal) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
           reject(new Error(`launcher exited early (code=${code}, signal=${signal})`));
         }
       });
@@ -105,12 +152,31 @@ export async function runMcpLaunchSmoke({ checkoutRoot = checkoutRootFromScript 
             continue; // tolerate non-JSON banner lines
           }
           if (message.id === 1 && message.result && message.result.serverInfo) {
-            settled = true;
-            clearTimeout(timer);
-            void terminateChildForCleanup(child).then(
-              () => resolve(message.result.serverInfo.name),
-              reject
-            );
+            serverName = message.result.serverInfo.name;
+            child.stdin.write(`${JSON.stringify({
+              jsonrpc: "2.0",
+              method: "notifications/initialized",
+              params: {}
+            })}\n`);
+            child.stdin.write(`${JSON.stringify({
+              jsonrpc: "2.0",
+              id: 2,
+              method: "resources/read",
+              params: { uri: "integration:///health/agent-workbench" }
+            })}\n`);
+          }
+          if (message.id === 2 && message.result) {
+            try {
+              const daemonPid = readDaemonPid(message, workspaceRoot);
+              settled = true;
+              clearTimeout(timer);
+              void terminateChildForCleanup(child).then(
+                () => resolve({ serverName, daemonPid }),
+                reject
+              );
+            } catch (error) {
+              failAfterChildClose(error instanceof Error ? error : new Error(String(error)));
+            }
           }
         }
       });
@@ -127,9 +193,10 @@ export async function runMcpLaunchSmoke({ checkoutRoot = checkoutRootFromScript 
       };
       child.stdin.write(`${JSON.stringify(initialize)}\n`);
     });
-  } finally {
-    fs.rmSync(workspaceRoot, { recursive: true, force: true });
-  }
+
+  await waitForDaemonExit(result.daemonPid);
+  fs.rmSync(workspaceRoot, { recursive: true, force: true });
+  return result.serverName;
 }
 
 const isDirectExecution = process.argv[1]
