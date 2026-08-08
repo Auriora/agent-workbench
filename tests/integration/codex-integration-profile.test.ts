@@ -236,7 +236,7 @@ describe("Codex integration profile", () => {
     expect(profile.plugin.update_model.dependency_changes).toMatch(/rebuilt dependencies/i);
     expect(profile.install_package).toMatchObject({
       registry: "ghcr.io",
-      image: "ghcr.io/bcherrington/agent-workbench",
+      image: "ghcr.io/auriora/agent-workbench",
       containerfile_path: "packaging/agent-workbench/Containerfile",
       release_workflow_path: ".github/workflows/release-ghcr.yml"
     });
@@ -1056,7 +1056,7 @@ describe("Codex plugin artifacts", () => {
 
     expect(manifest).toMatchObject({
       registry: "ghcr.io",
-      image: "ghcr.io/bcherrington/agent-workbench",
+      image: "ghcr.io/auriora/agent-workbench",
       containerfile: "packaging/agent-workbench/Containerfile",
       release_status: "released"
     });
@@ -1133,6 +1133,7 @@ describe("Codex plugin artifacts", () => {
     expect(packageJson.bin["agent-workbench-mcp"]).toBe("packaging/agent-workbench/mcp-bin.mjs");
     expect(packageJson.scripts.postinstall).toBe("node scripts/postinstall.mjs");
     expect(workflow).toContain("registry: ghcr.io");
+    expect(workflow).toContain("images: ghcr.io/auriora/agent-workbench");
     expect(workflow).toContain("packaging/agent-workbench/Containerfile");
     expect(packageJson.scripts["validate:plugin"]).toBe(
       "node scripts/validate-agent-workbench-plugin.mjs"

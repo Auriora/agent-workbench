@@ -42,7 +42,7 @@ jobs:
       - uses: docker/metadata-action@v5
         id: meta
         with:
-          images: ghcr.io/${{ github.repository_owner }}/agent-workbench
+          images: ghcr.io/auriora/agent-workbench
           tags: |
             type=raw,value=${{ inputs.version }}
             type=raw,value=latest,enable=${{ inputs.publish_latest }}

@@ -18,7 +18,7 @@ Workbench from Codex without creating a second executable runtime path.
 ## Supported Model
 
 Agent Workbench has one executable Codex runtime path per packaged install.
-The latest released install payload is `v0.6.8`.
+The latest released install payload is `v0.6.9`.
 
 - Use install URLs explicitly tied to the latest published release for live bootstrap.
 
@@ -51,7 +51,7 @@ Workbench plugin should not package or proxy those companion runtimes.
 
 This keeps source updates explicit and keeps release state explicit:
 
-- `0.6.8` is the published install baseline.
+- `0.6.9` is the published install baseline.
 - The candidate worktree can still be developed, validated, and verified without
   changing install URLs.
 
@@ -379,12 +379,12 @@ contract lives at `packaging/agent-workbench/npm-package.json`. It is an
 ordinary npm package: `npm install` builds the native modules
 (`tree-sitter`, `better-sqlite3`) from source the normal way — there is no
 custom installer, no copy-to-prefix step, and no POSIX shell on the path.
-Use the latest published release URL (`v0.6.8`) in install commands.
+Use the latest published release URL (`v0.6.9`) in install commands.
 
 Install or refresh the runtime with:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.8/auriora-agent-workbench-0.6.8.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.9/auriora-agent-workbench-0.6.9.tgz
 ```
 
 This runs `scripts/postinstall.mjs`, which records the runtime-root pointer file
@@ -477,7 +477,7 @@ node /opt/agent-workbench/dist/mcp/stdio-entrypoint.mjs
 Build and publish use the package containerfile:
 
 ```bash
-docker build -f packaging/agent-workbench/Containerfile -t ghcr.io/bcherrington/agent-workbench:0.1.0 .
+docker build -f packaging/agent-workbench/Containerfile -t ghcr.io/auriora/agent-workbench:0.1.0 .
 ```
 
 Tagged GitHub releases publish through the GHCR workflow.

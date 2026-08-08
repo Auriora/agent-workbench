@@ -45,22 +45,20 @@ export function buildMcpLaunchSmokePlan({ checkoutRoot, workspaceRoot }) {
 }
 
 export async function terminateChildForCleanup(child) {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-
   await new Promise((resolve, reject) => {
-    const onExit = () => {
+    const onClose = () => {
       child.off("error", onError);
       resolve();
     };
     const onError = (err) => {
-      child.off("exit", onExit);
+      child.off("close", onClose);
       reject(new Error(`failed to terminate launcher: ${err.message}`));
     };
 
-    child.once("exit", onExit);
+    child.once("close", onClose);
     child.once("error", onError);
-    if (!child.kill()) {
-      child.off("exit", onExit);
+    if (child.exitCode === null && child.signalCode === null && !child.kill()) {
+      child.off("close", onClose);
       child.off("error", onError);
       reject(new Error("failed to terminate launcher"));
     }
@@ -86,7 +84,7 @@ export async function runMcpLaunchSmoke({ checkoutRoot = checkoutRootFromScript 
       }, TIMEOUT_MS);
 
       child.on("error", (err) => reject(new Error(`failed to spawn launcher: ${err.message}`)));
-      child.on("exit", (code, signal) => {
+    child.on("exit", (code, signal) => {
         if (!settled) {
           reject(new Error(`launcher exited early (code=${code}, signal=${signal})`));
         }

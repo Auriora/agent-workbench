@@ -11,10 +11,14 @@ import {
 } from "../src/contracts/index.js";
 import { checkPublicContractDrift } from "../src/application/use-cases/check-public-contract-drift.js";
 import { mcpTools } from "../src/interface-adapters/mcp/registries/index.js";
+import type { ContractDriftFinding } from "../src/application/use-cases/check-public-contract-drift.js";
 
 const runtimeContractsPath = "docs/reference/runtime-contracts.md";
 const serverCardPath = ".well-known/mcp/server-card.json";
-const findings = checkPublicContractDrift({
+const packageManifestPath = "packaging/agent-workbench/package-manifest.json";
+const releaseWorkflowPath = ".github/workflows/release-ghcr.yml";
+const expectedImage = "ghcr.io/auriora/agent-workbench";
+const findings: ContractDriftFinding[] = checkPublicContractDrift({
   runtime_contracts_path: runtimeContractsPath,
   runtime_contracts_markdown: fs.readFileSync(runtimeContractsPath, "utf8"),
   server_card_path: serverCardPath,
@@ -31,6 +35,26 @@ const findings = checkPublicContractDrift({
     mutation_applied: tool.metadata.trust_policy?.mutation_applied === true
   }))
 });
+
+const packageManifest = JSON.parse(fs.readFileSync(packageManifestPath, "utf8")) as {
+  image?: unknown;
+};
+if (packageManifest.image !== expectedImage) {
+  findings.push({
+    code: "CONTRACT_DISTRIBUTION_IMAGE_DRIFT",
+    path: packageManifestPath,
+    message: `Image is ${JSON.stringify(packageManifest.image)}, expected ${JSON.stringify(expectedImage)}.`
+  });
+}
+
+const releaseWorkflow = fs.readFileSync(releaseWorkflowPath, "utf8");
+if (!releaseWorkflow.includes(`images: ${expectedImage}`)) {
+  findings.push({
+    code: "CONTRACT_DISTRIBUTION_IMAGE_DRIFT",
+    path: releaseWorkflowPath,
+    message: `Release workflow does not publish the contracted image ${JSON.stringify(expectedImage)}.`
+  });
+}
 
 if (findings.length > 0) {
   for (const finding of findings) {

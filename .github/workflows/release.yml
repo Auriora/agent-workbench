@@ -98,6 +98,7 @@ jobs:
             [".well-known/mcp/server-card.json", ["version"], version],
             ["plugins/agent-workbench/.codex-plugin/plugin.json", ["version"], version],
             ["plugins/agent-workbench/claude-plugin/.claude-plugin/plugin.json", ["version"], version],
+            ["packaging/agent-workbench/package-manifest.json", ["image"], "ghcr.io/auriora/agent-workbench"],
             ["packaging/agent-workbench/package-manifest.json", ["install_command"], expectedInstall],
             ["packaging/agent-workbench/package-manifest.json", ["codex", "plugin_install_model"], expectedInstall],
             ["packaging/agent-workbench/npm-package.json", ["install_command"], expectedInstall]

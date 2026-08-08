@@ -281,7 +281,7 @@ export function describeCodexIntegrationProfile(): CodexIntegrationProfile {
     },
     install_package: {
       registry: "ghcr.io",
-      image: "ghcr.io/bcherrington/agent-workbench",
+      image: "ghcr.io/auriora/agent-workbench",
       containerfile_path: "packaging/agent-workbench/Containerfile",
       manifest_path: "packaging/agent-workbench/package-manifest.json",
       release_workflow_path: ".github/workflows/release-ghcr.yml",

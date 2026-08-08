@@ -10,10 +10,7 @@ import { EventEmitter } from "node:events";
 import { afterEach, describe, expect, it } from "vitest";
 
 // @ts-expect-error -- ESM .mjs smoke helper imported into the TS test via esbuild.
-import {
-  buildMcpLaunchSmokePlan,
-  terminateChildForCleanup
-} from "../../scripts/ci/mcp-launch-smoke.mjs";
+import { buildMcpLaunchSmokePlan, terminateChildForCleanup } from "../../scripts/ci/mcp-launch-smoke.mjs";
 
 describe("mcp-launch smoke plan", () => {
   const workspaces: string[] = [];
@@ -54,6 +51,10 @@ describe("mcp-launch smoke plan", () => {
         events.push("exit");
         child.exitCode = 0;
         child.emit("exit", 0, null);
+        queueMicrotask(() => {
+          events.push("close");
+          child.emit("close", 0, null);
+        });
       });
       return true;
     };
@@ -61,6 +62,6 @@ describe("mcp-launch smoke plan", () => {
     await terminateChildForCleanup(child);
     events.push("cleanup");
 
-    expect(events).toEqual(["kill", "exit", "cleanup"]);
+    expect(events).toEqual(["kill", "exit", "close", "cleanup"]);
   });
 });

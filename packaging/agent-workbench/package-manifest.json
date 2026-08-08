@@ -1,17 +1,17 @@
 {
   "name": "agent-workbench",
-  "version": "0.6.8",
+  "version": "0.6.9",
   "release_status": "released",
-  "latest_released_version": "0.6.8",
+  "latest_released_version": "0.6.9",
   "registry": "ghcr.io",
   "distribution": {
     "npm_contract": "packaging/agent-workbench/npm-package.json",
     "npm_package": "@auriora/agent-workbench",
     "npm_publish_status": "github-release"
   },
-  "image": "ghcr.io/bcherrington/agent-workbench",
+  "image": "ghcr.io/auriora/agent-workbench",
   "containerfile": "packaging/agent-workbench/Containerfile",
-  "install_command": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.8/auriora-agent-workbench-0.6.8.tgz",
+  "install_command": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.9/auriora-agent-workbench-0.6.9.tgz",
   "npm_bin": "packaging/agent-workbench/mcp-bin.mjs",
   "entrypoint": "node /opt/agent-workbench/dist/mcp/stdio-entrypoint.mjs",
   "dependency_install": {
@@ -89,7 +89,7 @@
     "plugin_manifest": "plugins/agent-workbench/.codex-plugin/plugin.json",
     "plugin_mcp_config": "plugins/agent-workbench/.mcp.json",
     "hook_installer": "scripts/install-codex-hooks.mjs",
-    "plugin_install_model": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.8/auriora-agent-workbench-0.6.8.tgz"
+    "plugin_install_model": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.9/auriora-agent-workbench-0.6.9.tgz"
   },
   "kiro": {
     "power_root": "plugins/agent-workbench/kiro-power",
