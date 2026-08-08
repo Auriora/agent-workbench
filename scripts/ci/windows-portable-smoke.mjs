@@ -50,7 +50,7 @@ export function validatePortableManifest(manifest, { expectedVersion, gitSha }) 
     }
   }
   if (!/^22\./.test(manifest.node_version ?? "")) throw new Error("manifest Node version is not Node 22");
-  for (const key of ["source_package_sha256", "deployment_lock_sha256", "payload_sha256"]) {
+  for (const key of ["source_package_sha256", "source_lock_sha256", "deployment_lock_sha256", "payload_sha256"]) {
     if (!/^[0-9a-f]{64}$/.test(manifest[key] ?? "")) throw new Error(`manifest ${key} is not SHA-256`);
   }
   if (JSON.stringify(manifest.payload_hash_exclusions) !== JSON.stringify(PAYLOAD_HASH_EXCLUSIONS)) {

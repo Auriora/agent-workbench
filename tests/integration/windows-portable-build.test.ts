@@ -79,8 +79,10 @@ describe("Windows portable bundle contract", () => {
     fs.writeFileSync(path.join(root, "manifest.json"), "ignored");
     const tarball = path.join(root, "source.tgz");
     const lockfile = path.join(root, "pnpm-lock.yaml");
+    const deploymentLockfile = path.join(root, "deployment-lock.yaml");
     fs.writeFileSync(tarball, "source");
     fs.writeFileSync(lockfile, "lockfileVersion: '9.0'\n");
+    fs.writeFileSync(deploymentLockfile, "lockfileVersion: '9.0'\npackages: {}\n");
 
     const firstHash = hashPayload(root);
     fs.writeFileSync(path.join(root, "manifest.json"), "different but still ignored");
@@ -104,6 +106,7 @@ describe("Windows portable bundle contract", () => {
       bundleRoot: root,
       packageTarball: tarball,
       lockfilePath: lockfile,
+      deploymentLockfilePath: deploymentLockfile,
       gitSha: "b".repeat(40),
       nodeVersion: "22.23.1",
       nodeModulesAbi: "127"
@@ -119,7 +122,9 @@ describe("Windows portable bundle contract", () => {
     });
     expect(manifest.payload_sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(manifest.source_package_sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(manifest.source_lock_sha256).toMatch(/^[0-9a-f]{64}$/);
     expect(manifest.deployment_lock_sha256).toMatch(/^[0-9a-f]{64}$/);
+    expect(manifest.deployment_lock_sha256).not.toBe(manifest.source_lock_sha256);
     expect(manifest.payload_hash_exclusions).toEqual(PAYLOAD_HASH_EXCLUSIONS);
   });
 

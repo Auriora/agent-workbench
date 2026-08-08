@@ -100,7 +100,7 @@ export function hashPayload(rootPath, exclusions = PAYLOAD_HASH_EXCLUSIONS) {
   return hash.digest("hex");
 }
 
-export function createManifest({ packageRoot, bundleRoot, packageTarball, lockfilePath, gitSha, nodeVersion, nodeModulesAbi }) {
+export function createManifest({ packageRoot, bundleRoot, packageTarball, lockfilePath, deploymentLockfilePath, gitSha, nodeVersion, nodeModulesAbi }) {
   const packageManifest = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
   if (packageManifest.name !== "@auriora/agent-workbench" || typeof packageManifest.version !== "string") {
     throw new Error("Installed package identity is not @auriora/agent-workbench with a version");
@@ -118,7 +118,8 @@ export function createManifest({ packageRoot, bundleRoot, packageTarball, lockfi
     entrypoint: "agent-workbench.cmd",
     configure: "configure.cmd",
     source_package_sha256: sha256File(packageTarball),
-    deployment_lock_sha256: sha256File(lockfilePath),
+    source_lock_sha256: sha256File(lockfilePath),
+    deployment_lock_sha256: sha256File(deploymentLockfilePath),
     payload_hash_exclusions: PAYLOAD_HASH_EXCLUSIONS,
     payload_sha256: hashPayload(bundleRoot)
   };
@@ -172,8 +173,8 @@ export function buildPortableBundle({ packagePath, deploymentPath, lockfilePath,
     throw new Error(`Production deployment is missing node_modules: ${deployedNodeModules}`);
   }
   const deployedLockfile = path.join(deploymentRoot, "pnpm-lock.yaml");
-  if (!fs.existsSync(deployedLockfile) || sha256File(deployedLockfile) !== sha256File(lockfile)) {
-    throw new Error("Production deployment lockfile does not match the committed release lockfile");
+  if (!fs.existsSync(deployedLockfile) || !fs.statSync(deployedLockfile).isFile()) {
+    throw new Error(`Production deployment is missing its pruned lockfile: ${deployedLockfile}`);
   }
   const runtimeNodeModules = path.join(runtimeRoot, "node_modules");
   fs.renameSync(deployedNodeModules, runtimeNodeModules);
@@ -205,6 +206,7 @@ export function buildPortableBundle({ packagePath, deploymentPath, lockfilePath,
     bundleRoot,
     packageTarball,
     lockfilePath: lockfile,
+    deploymentLockfilePath: path.join(packageRoot, "pnpm-lock.yaml"),
     gitSha,
     nodeVersion: process.versions.node,
     nodeModulesAbi: process.versions.modules

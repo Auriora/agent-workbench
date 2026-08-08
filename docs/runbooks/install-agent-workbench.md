@@ -85,7 +85,8 @@ codex plugin list
 
 The portable asset contains `manifest.json` with the package version, immutable
 Git commit, Windows architecture, exact Node version and module ABI,
-source-package and committed-lock identities, and an immutable payload hash.
+source-package, committed source-lock, and pruned deployment-lock identities,
+and an immutable payload hash.
 Files that `configure.cmd` must materialize are declared outside that immutable
 hash set, so normal first-run configuration does not invalidate the manifest.
 GitHub publishes the ZIP checksum separately and publishes build provenance

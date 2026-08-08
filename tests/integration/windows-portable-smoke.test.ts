@@ -46,6 +46,7 @@ describe("Windows portable consumer smoke contract", () => {
       entrypoint: "agent-workbench.cmd",
       configure: "configure.cmd",
       source_package_sha256: "d".repeat(64),
+      source_lock_sha256: "a".repeat(64),
       deployment_lock_sha256: "f".repeat(64),
       payload_hash_exclusions: PAYLOAD_HASH_EXCLUSIONS,
       payload_sha256: "e".repeat(64)
