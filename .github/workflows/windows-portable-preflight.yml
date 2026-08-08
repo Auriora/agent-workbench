@@ -177,7 +177,7 @@ jobs:
           $env:USERPROFILE = $stateDir
           $env:LOCALAPPDATA = Join-Path $stateDir "AppData\\Local"
           New-Item -ItemType Directory -Force -Path $env:LOCALAPPDATA | Out-Null
-          pnpm --filter . deploy --prod $env:DEPLOYMENT_DIR
+          pnpm --config.node-linker=hoisted --filter . deploy --prod $env:DEPLOYMENT_DIR
 
       - name: Build Windows portable candidate
         shell: pwsh

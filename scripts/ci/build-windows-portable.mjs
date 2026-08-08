@@ -153,6 +153,20 @@ export function assertDisjointPaths(leftPath, rightPath, label) {
   }
 }
 
+export function assertNoSymbolicLinks(rootPath) {
+  const pending = [path.resolve(rootPath)];
+  while (pending.length > 0) {
+    const directory = pending.pop();
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const target = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) {
+        throw new Error(`Portable deployment contains a symbolic link or junction: ${target}`);
+      }
+      if (entry.isDirectory()) pending.push(target);
+    }
+  }
+}
+
 export function buildPortableBundle({ packagePath, deploymentPath, lockfilePath, outputPath, gitSha }) {
   validateBuildHost();
   const packageTarball = path.resolve(packagePath);
@@ -184,6 +198,8 @@ export function buildPortableBundle({ packagePath, deploymentPath, lockfilePath,
   assertInside(bundleRoot, packageRoot, "Installed package root");
   assertRealPathInside(bundleRoot, runtimeNodeModules, "Runtime node_modules");
   assertRealPathInside(bundleRoot, packageRoot, "Installed package root");
+  assertNoSymbolicLinks(runtimeNodeModules);
+  assertNoSymbolicLinks(packageRoot);
   for (const requiredPath of [
     path.join(packageRoot, "package.json"),
     path.join(packageRoot, "dist", "mcp", "stdio-entrypoint.mjs"),

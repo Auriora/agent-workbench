@@ -13,8 +13,9 @@ last_reviewed: 2026-08-08
 
 The release adds a Windows-only directory bundle, not a second runtime
 implementation. Actions checks out the package gate's immutable commit and
-uses `pnpm deploy --prod` with the committed lockfile to create an isolated,
-self-contained production tree on `windows-2022`. It packages that tree with
+uses `pnpm deploy --prod` with the committed lockfile and the hoisted node
+linker to create an isolated, link-free production tree on `windows-2022`. It
+packages that tree with
 the exact Node 22 executable used to build and validate the native modules.
 The extracted bundle contains launch and configure entry points that always
 invoke that Node executable. The source npm tarball remains an identity input
@@ -103,7 +104,7 @@ and materializes supported plugin commands using the bundled executable.
 ## Interfaces
 
 ```text
-pnpm --filter . deploy --prod <deployment-dir>
+pnpm --config.node-linker=hoisted --filter . deploy --prod <deployment-dir>
 node scripts/ci/build-windows-portable.mjs --package <tgz> --deployment <deployment-dir> --output <dir>
 configure.cmd
 agent-workbench.cmd [MCP arguments]

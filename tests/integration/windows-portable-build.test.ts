@@ -13,6 +13,7 @@ import * as portableBuild from "../../scripts/ci/build-windows-portable.mjs";
 
 const {
   assertInside,
+  assertNoSymbolicLinks,
   assertDisjointPaths,
   assertRealPathInside,
   configureLauncherText,
@@ -139,6 +140,7 @@ describe("Windows portable bundle contract", () => {
     fs.symlinkSync(outside, linked, "dir");
     expect(() => validateDeploymentRoot(linked)).toThrow("symlink or junction");
     expect(() => assertRealPathInside(root, linked, "linked deployment")).toThrow("resolves outside");
+    expect(() => assertNoSymbolicLinks(root)).toThrow("symbolic link or junction");
   });
 });
 

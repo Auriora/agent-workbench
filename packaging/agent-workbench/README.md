@@ -34,7 +34,8 @@ only from the owning repository checkout.
 `agent-workbench-vX.Y.Z-windows-x64.zip` contains the package payload and its
 production dependencies deployed from the exact release commit with the
 committed pnpm lock, with both the source and pruned deployment lock identities
-recorded, compiled on `windows-2022`, plus a pinned Node 22
+recorded and a link-free hoisted deployment materialized on `windows-2022`,
+plus a pinned Node 22
 `node.exe`, the Node license, cmd entry points, and an identity manifest. The
 source npm tarball is retained as a separately hashed identity input and release
 asset; Windows construction does not perform a second unlocked npm resolution.

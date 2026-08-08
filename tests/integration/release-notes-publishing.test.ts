@@ -265,7 +265,9 @@ describe("GitHub release-note publishing", () => {
     expect(deployRuntime.run).toContain("$env:HOME = $stateDir");
     expect(deployRuntime.run).toContain("$env:USERPROFILE = $stateDir");
     expect(deployRuntime.run).toContain('$env:LOCALAPPDATA = Join-Path $stateDir "AppData\\\\Local"');
-    expect(deployRuntime.run).toContain("pnpm --filter . deploy --prod $env:DEPLOYMENT_DIR");
+    expect(deployRuntime.run).toContain(
+      "pnpm --config.node-linker=hoisted --filter . deploy --prod $env:DEPLOYMENT_DIR"
+    );
 
     const buildCandidate = workflowStep(windowsPreflightImpl, "Build Windows portable candidate");
     expect(buildCandidate.shell).toBe("pwsh");
