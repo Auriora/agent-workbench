@@ -1,0 +1,216 @@
+# Copyright (C) 2026 Auriora
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+name: Windows portable preflight
+
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Git ref to validate. Defaults to the triggering commit SHA."
+        required: false
+        type: string
+  workflow_call:
+    inputs:
+      ref:
+        description: "Immutable Git commit SHA to validate. Defaults to the triggering commit SHA when omitted."
+        required: false
+        default: ""
+        type: string
+      release_version:
+        description: "Release version without the v prefix. Defaults to package.json when omitted."
+        required: false
+        default: ""
+        type: string
+      release_git_sha:
+        description: "Resolved immutable release Git SHA. Defaults to the checked-out commit when omitted."
+        required: false
+        default: ""
+        type: string
+      source_inputs_artifact:
+        description: "Artifact name containing staged release source inputs. When omitted, this workflow packs the checkout."
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  windows-portable-preflight:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref || github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: "22.23.1"
+
+      - name: Enable pnpm (corepack)
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.18.1 --activate
+
+      - name: Verify Windows portable toolchain identities
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $nodeVersion = node --version
+          if ($nodeVersion -ne "v22.23.1") {
+            throw "Expected Node v22.23.1, got $nodeVersion"
+          }
+          Write-Host "node=$nodeVersion"
+          Write-Host "npm=$(npm --version)"
+          Write-Host "pnpm=$(pnpm --version)"
+          Write-Host "pwsh=$($PSVersionTable.PSVersion.ToString())"
+          Write-Host "git=$(git --version)"
+
+      - name: Resolve Windows portable inputs
+        id: release
+        shell: bash
+        env:
+          INPUT_RELEASE_VERSION: ${{ inputs.release_version }}
+          INPUT_RELEASE_GIT_SHA: ${{ inputs.release_git_sha }}
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          if [ -n "${INPUT_RELEASE_GIT_SHA}" ] && [ "${INPUT_RELEASE_GIT_SHA}" != "${checked_out_sha}" ]; then
+            echo "Checked-out commit ${checked_out_sha} did not match requested ${INPUT_RELEASE_GIT_SHA}" >&2
+            exit 1
+          fi
+          release_git_sha="${INPUT_RELEASE_GIT_SHA:-${checked_out_sha}}"
+          if [[ ! "${release_git_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Expected a full 40-character release git SHA, got ${release_git_sha}" >&2
+            exit 1
+          fi
+          release_version="${INPUT_RELEASE_VERSION:-$(node -p "require('./package.json').version")}"
+          source_inputs_dir="artifacts/release-source-inputs"
+          deployment_dir="artifacts/windows-portable-deployment"
+          candidate_dir="artifacts/windows-portable-candidate"
+          bundle_dir="agent-workbench-v${release_version}-windows-x64"
+          zip_name="${bundle_dir}.zip"
+          tarball_name="auriora-agent-workbench-${release_version}.tgz"
+          echo "release_version=${release_version}" >> "${GITHUB_OUTPUT}"
+          echo "release_git_sha=${release_git_sha}" >> "${GITHUB_OUTPUT}"
+          echo "source_inputs_dir=${source_inputs_dir}" >> "${GITHUB_OUTPUT}"
+          echo "deployment_dir=${deployment_dir}" >> "${GITHUB_OUTPUT}"
+          echo "candidate_dir=${candidate_dir}" >> "${GITHUB_OUTPUT}"
+          echo "bundle_dir=${bundle_dir}" >> "${GITHUB_OUTPUT}"
+          echo "zip_name=${zip_name}" >> "${GITHUB_OUTPUT}"
+          echo "tarball_name=${tarball_name}" >> "${GITHUB_OUTPUT}"
+
+      - name: Download staged release source inputs
+        if: ${{ inputs.source_inputs_artifact != '' }}
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ${{ inputs.source_inputs_artifact }}
+          path: ${{ steps.release.outputs.source_inputs_dir }}
+
+      - name: Install locked Windows dependencies
+        env:
+          CXXFLAGS: -std=c++20
+          _CL_: /std:c++20
+        run: pnpm install --frozen-lockfile
+
+      - name: Stage workspace release source inputs
+        if: ${{ inputs.source_inputs_artifact == '' }}
+        shell: bash
+        env:
+          SOURCE_INPUTS_DIR: ${{ steps.release.outputs.source_inputs_dir }}
+          RELEASE_TARBALL_NAME: ${{ steps.release.outputs.tarball_name }}
+        run: |
+          set -euo pipefail
+          rm -rf "${SOURCE_INPUTS_DIR}"
+          mkdir -p "${SOURCE_INPUTS_DIR}"
+          tarball="$(npm_config_cache="${RUNNER_TEMP}/agent-workbench-npm-cache" npm pack)"
+          if [ "${tarball}" != "${RELEASE_TARBALL_NAME}" ]; then
+            echo "Expected ${RELEASE_TARBALL_NAME} from npm pack, got ${tarball}" >&2
+            exit 1
+          fi
+          mv "${tarball}" "${SOURCE_INPUTS_DIR}/${tarball}"
+
+      - name: Verify staged release source inputs
+        shell: bash
+        env:
+          SOURCE_INPUTS_ARTIFACT: ${{ inputs.source_inputs_artifact }}
+          SOURCE_INPUTS_DIR: ${{ steps.release.outputs.source_inputs_dir }}
+          RELEASE_TARBALL_NAME: ${{ steps.release.outputs.tarball_name }}
+        run: |
+          set -euo pipefail
+          test -f "${SOURCE_INPUTS_DIR}/${RELEASE_TARBALL_NAME}" || {
+            echo "Missing staged tarball ${SOURCE_INPUTS_DIR}/${RELEASE_TARBALL_NAME}" >&2
+            find "${SOURCE_INPUTS_DIR}" -maxdepth 2 -type f | sort >&2 || true
+            exit 1
+          }
+          if [ -n "${SOURCE_INPUTS_ARTIFACT}" ]; then
+            test -f "${SOURCE_INPUTS_DIR}/agent-workbench-github-release-notes.md" || {
+              echo "Missing staged GitHub release notes under ${SOURCE_INPUTS_DIR}" >&2
+              find "${SOURCE_INPUTS_DIR}" -maxdepth 2 -type f | sort >&2 || true
+              exit 1
+            }
+          fi
+
+      - name: Deploy production runtime for Windows portable build
+        shell: pwsh
+        env:
+          DEPLOYMENT_DIR: ${{ steps.release.outputs.deployment_dir }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $stateDir = Join-Path $env:RUNNER_TEMP "agent-workbench-portable-deploy-state"
+          Remove-Item -Recurse -Force $stateDir -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force $env:DEPLOYMENT_DIR -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+          $env:HOME = $stateDir
+          $env:USERPROFILE = $stateDir
+          $env:LOCALAPPDATA = Join-Path $stateDir "AppData\\Local"
+          New-Item -ItemType Directory -Force -Path $env:LOCALAPPDATA | Out-Null
+          pnpm --filter . deploy --prod $env:DEPLOYMENT_DIR
+
+      - name: Build Windows portable candidate
+        shell: pwsh
+        env:
+          RELEASE_GIT_SHA: ${{ steps.release.outputs.release_git_sha }}
+          RELEASE_TARBALL_NAME: ${{ steps.release.outputs.tarball_name }}
+          SOURCE_INPUTS_DIR: ${{ steps.release.outputs.source_inputs_dir }}
+          DEPLOYMENT_DIR: ${{ steps.release.outputs.deployment_dir }}
+          CANDIDATE_DIR: ${{ steps.release.outputs.candidate_dir }}
+          BUNDLE_DIR: ${{ steps.release.outputs.bundle_dir }}
+          ZIP_NAME: ${{ steps.release.outputs.zip_name }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Remove-Item -Recurse -Force $env:BUNDLE_DIR -ErrorAction SilentlyContinue
+          Remove-Item -Recurse -Force $env:CANDIDATE_DIR -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $env:CANDIDATE_DIR | Out-Null
+          $tarballPath = Join-Path $env:SOURCE_INPUTS_DIR $env:RELEASE_TARBALL_NAME
+          node scripts/ci/build-windows-portable.mjs --package $tarballPath --deployment $env:DEPLOYMENT_DIR --lockfile pnpm-lock.yaml --output $env:BUNDLE_DIR --git-sha $env:RELEASE_GIT_SHA
+          $zipPath = Join-Path $env:CANDIDATE_DIR $env:ZIP_NAME
+          Compress-Archive -Path $env:BUNDLE_DIR -DestinationPath $zipPath
+          $checksum = (Get-FileHash -Algorithm SHA256 $zipPath).Hash.ToLowerInvariant()
+          Set-Content -Path "${zipPath}.sha256" -Value "${checksum}  $($env:ZIP_NAME)"
+
+      - name: Smoke Windows portable candidate
+        shell: pwsh
+        env:
+          RELEASE_VERSION: ${{ steps.release.outputs.release_version }}
+          RELEASE_GIT_SHA: ${{ steps.release.outputs.release_git_sha }}
+          CANDIDATE_DIR: ${{ steps.release.outputs.candidate_dir }}
+          BUNDLE_DIR: ${{ steps.release.outputs.bundle_dir }}
+          ZIP_NAME: ${{ steps.release.outputs.zip_name }}
+          EXTRACT_ROOT: ${{ runner.temp }}/windows-portable-smoke-extract
+        run: |
+          $ErrorActionPreference = "Stop"
+          Remove-Item -Recurse -Force $env:EXTRACT_ROOT -ErrorAction SilentlyContinue
+          New-Item -ItemType Directory -Force -Path $env:EXTRACT_ROOT | Out-Null
+          Expand-Archive -Path (Join-Path $env:CANDIDATE_DIR $env:ZIP_NAME) -DestinationPath $env:EXTRACT_ROOT
+          $bundleRoot = Join-Path $env:EXTRACT_ROOT $env:BUNDLE_DIR
+          & (Join-Path $bundleRoot "node.exe") scripts/ci/windows-portable-smoke.mjs --bundle-root $bundleRoot --expected-version "${env:RELEASE_VERSION}" --git-sha "${env:RELEASE_GIT_SHA}"
+
+      - name: Upload Windows portable candidate
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-portable-candidate
+          path: ${{ steps.release.outputs.candidate_dir }}/*
+          if-no-files-found: error

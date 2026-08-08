@@ -9,11 +9,11 @@ This package definition supports the npm package and the GHCR image for the
 Agent Workbench MCP runtime, documentation, Codex/Claude plugin wrappers, skill,
 and hook scripts.
 
-The supported distribution channel is the **GitHub release tarball** (package
-name `@auriora/agent-workbench`; it is **not** published to the npm registry). It
-is a normal npm package: installing the tarball builds the native modules and
-launches in place — there is no copy-to-prefix installer, no shell on the install
-or runtime path. The latest published baseline is `0.6.9`:
+GitHub Releases carry two application forms: the source-oriented npm tarball
+for all supported platforms and a self-contained Windows x64 ZIP. The package
+name is `@auriora/agent-workbench`; it is not published to the npm registry.
+Installing the tarball builds native modules in place. The latest published
+source-package baseline is `0.6.9`:
 
 ```bash
 npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.9/auriora-agent-workbench-0.6.9.tgz
@@ -29,7 +29,37 @@ containerized package. (npm tarballs already exclude `docs/specs` via the
 `files` allowlist.) Cross-repo dogfood and tool-sweep commands are available
 only from the owning repository checkout.
 
-## Native build is npm's job (and the user's toolchain)
+## Windows portable artifact
+
+`agent-workbench-vX.Y.Z-windows-x64.zip` contains the package payload and its
+production dependencies deployed from the exact release commit with the
+committed pnpm lock, compiled on `windows-2022`, plus a pinned Node 22
+`node.exe`, the Node license, cmd entry points, and an identity manifest. The
+source npm tarball is retained as a separately hashed identity input and release
+asset; Windows construction does not perform a second unlocked npm resolution.
+The ZIP is an additive distribution of the same runtime, not a parser, storage,
+launcher, or command fallback.
+
+A reusable, non-publishing Windows workflow builds and smokes the same candidate
+for pull requests, manual preflight, and governed releases. The smoke constrains
+`PATH`, invokes `configure.cmd`, verifies the manifest and immutable payload
+hash, loads tree-sitter grammars and better-sqlite3, executes the installed
+Codex and Claude integration paths, completes the MCP initialize/health
+handshake through the bundled executable, and enforces bounded process-tree
+cleanup. A governed release then publishes GHCR, attests the ZIP, and creates
+the public GitHub release last. Existing release assets are never clobbered by
+an automated rerun. The published ZIP has a separate SHA-256 release asset;
+GitHub publishes build provenance through artifact attestations rather than as
+another release asset. Authenticode signing remains external to this contract
+until a release-signing certificate is governed and available.
+
+Portable configuration records the in-place package root and materializes
+Codex and Claude MCP/hook commands with the absolute bundled `node.exe`. Codex
+hook configuration includes an explicit Windows command and honors
+`CODEX_HOME`; moving the extracted directory requires rerunning
+`configure.cmd`.
+
+## Native build for the npm source-package path
 
 `npm install` prepares native modules the same way it does for any native
 dependency. A compatible prebuilt binary may be used when a package provides

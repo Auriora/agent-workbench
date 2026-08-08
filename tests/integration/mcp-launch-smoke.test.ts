@@ -38,6 +38,24 @@ describe("mcp-launch smoke plan", () => {
     ]);
   });
 
+  it("can prove a portable launch with an explicit bundled Node and constrained environment", () => {
+    const checkoutRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-checkout-"));
+    const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-workspace-"));
+    workspaces.push(checkoutRoot, workspaceRoot);
+    const nodeExecutable = path.join(checkoutRoot, "node.exe");
+
+    const plan = buildMcpLaunchSmokePlan({
+      checkoutRoot,
+      workspaceRoot,
+      nodeExecutable,
+      baseEnv: { PATH: checkoutRoot, SYSTEMROOT: "C:\\Windows" }
+    });
+
+    expect(plan.child.command).toBe(nodeExecutable);
+    expect(plan.child.options.env?.PATH).toBe(checkoutRoot);
+    expect(plan.child.options.env?.SYSTEMROOT).toBe("C:\\Windows");
+  });
+
   it("waits for the launcher to exit before allowing workspace cleanup", async () => {
     const events: string[] = [];
     const child = new EventEmitter() as EventEmitter & {

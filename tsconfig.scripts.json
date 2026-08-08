@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "noImplicitAny": false,
+    "strict": false,
+    "useUnknownInCatchVariables": false
+  },
+  "include": [
+    "plugins/agent-workbench/codex-mcp-config.mjs",
+    "plugins/agent-workbench/install-root.mjs",
+    "scripts/install-codex-hooks.mjs",
+    "scripts/configure-portable.mjs",
+    "scripts/ci/build-windows-portable.mjs",
+    "scripts/ci/mcp-launch-smoke.mjs",
+    "scripts/ci/windows-portable-smoke.mjs"
+  ]
+}

@@ -173,6 +173,19 @@ describe("installed Codex MCP config materialization", () => {
     expect(path.isAbsolute(server.args[0])).toBe(true);
     expect(server.startup_timeout_sec).toBe(30.0);
   });
+
+  it("accepts an explicit bundled Node executable for portable installs", () => {
+    const bundledNode = "C:\\bundle\\node.exe";
+    const configPath = materializeCodexMcpConfig(packageRoot, { nodeCommand: bundledNode });
+    const mcpConfig = JSON.parse(fs.readFileSync(configPath, "utf8")) as {
+      mcpServers: Record<string, { command: string; args: string[] }>;
+    };
+
+    expect(mcpConfig.mcpServers["agent-workbench"].command).toBe(bundledNode);
+    expect(mcpConfig.mcpServers["agent-workbench"].args).toEqual([
+      path.join(packageRoot, "plugins", "agent-workbench", "mcp-launch.mjs")
+    ]);
+  });
 });
 
 describe("npm MCP bin failure handling", () => {

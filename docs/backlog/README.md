@@ -1610,7 +1610,7 @@ Do not promote an item when:
 ### EB047: Turnkey Native Parser Install
 
 - Priority: P2
-- Status: proposed spec
+- Status: active Spec 063 Windows slice
 - Friction signal: native parser setup still requires local compiler/toolchain
   readiness on some platforms, reducing confidence in clean installs.
 - Runtime surface: package dependency constraints, native dependency setup,
@@ -1628,7 +1628,11 @@ Do not promote an item when:
   - Release or doctor evidence that distinguishes missing toolchain, ABI drift,
     and package metadata errors.
 - Promotion target: fold into EB026 doctor work or EB043 release-readiness work
-  when package install reliability is scheduled.
+  when package install reliability is scheduled. Spec 063 owns the bounded
+  Windows x64 portable ZIP with bundled Node 22, compiled native dependencies,
+  consumer smoke, checksum, and build provenance. Windows arm64, MSI/SEA,
+  Authenticode credential acquisition, and other operating-system bundles
+  remain outside that slice.
 
 ### EB048: Snapshot-Aware Orientation Entry Point
 

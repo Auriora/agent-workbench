@@ -8,9 +8,13 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+function defaultCodexHome(env = process.env) {
+  return path.resolve(env.CODEX_HOME || path.join(os.homedir(), ".codex"));
+}
+
 function parseArgs(argv) {
   const parsed = {
-    codexHome: path.join(os.homedir(), ".codex"),
+    codexHome: defaultCodexHome(),
     packageRoot: "",
     dryRun: false
   };
@@ -35,6 +39,7 @@ function parseArgs(argv) {
   if (!parsed.packageRoot) {
     throw new Error("--package-root is required");
   }
+  parsed.codexHome = path.resolve(parsed.codexHome);
   return parsed;
 }
 
@@ -55,8 +60,9 @@ function isAgentWorkbenchCommand(hook) {
     return false;
   }
   const command = typeof hook.command === "string" ? hook.command : "";
+  const commandWindows = typeof hook.commandWindows === "string" ? hook.commandWindows : "";
   const args = Array.isArray(hook.args) ? hook.args.filter((arg) => typeof arg === "string") : [];
-  const haystack = [command, ...args].join("\n");
+  const haystack = [command, commandWindows, ...args].join("\n");
   return (
     haystack.includes("agent-workbench") ||
     haystack.includes("hooks/session-start.js") ||
@@ -93,6 +99,15 @@ function hookCommand(packageRoot, scriptName) {
   return `${shellQuote(process.execPath)} ${shellQuote(scriptPath)}`;
 }
 
+function shellQuoteWindows(value) {
+  return `"${value.replaceAll("%", "%%").replaceAll('"', '""')}"`;
+}
+
+function hookCommandWindows(packageRoot, scriptName) {
+  const scriptPath = path.join(packageRoot, "plugins", "agent-workbench", "hooks", scriptName);
+  return `${shellQuoteWindows(process.execPath)} ${shellQuoteWindows(scriptPath)}`;
+}
+
 function installHooks(config, packageRoot) {
   const hooks = { ...config.hooks };
   hooks.SessionStart = withoutAgentWorkbenchHooks(hooks.SessionStart);
@@ -104,6 +119,7 @@ function installHooks(config, packageRoot) {
       {
         type: "command",
         command: hookCommand(packageRoot, "session-start.js"),
+        commandWindows: hookCommandWindows(packageRoot, "session-start.js"),
         timeout: 10,
         statusMessage: "Loading Agent Workbench context"
       }
@@ -115,6 +131,7 @@ function installHooks(config, packageRoot) {
       {
         type: "command",
         command: hookCommand(packageRoot, "post-edit-feedback.js"),
+        commandWindows: hookCommandWindows(packageRoot, "post-edit-feedback.js"),
         timeout: 10,
         statusMessage: "Checking Agent Workbench edit feedback"
       }

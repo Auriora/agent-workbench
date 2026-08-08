@@ -40,6 +40,7 @@
     "packaging/agent-workbench/mcp-bin.mjs",
     "plugins/agent-workbench",
     "scripts/install-codex-hooks.mjs",
+    "scripts/configure-portable.mjs",
     "scripts/postinstall.mjs",
     "scripts/rebuild-native.mjs",
     "src",
@@ -47,13 +48,14 @@
     "dist/mcp/daemon-entrypoint.mjs",
     "dist/mcp/runtime-build-receipt.json",
     "dist/workers/startup-graph-warmup-worker-entrypoint.mjs",
-    "tsconfig.json"
+    "tsconfig.json",
+    "tsconfig.scripts.json"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --project tsconfig.scripts.json",
     "check:contracts": "tsx scripts/check-contracts.ts",
     "test": "vitest run",
     "build-runtime": "node scripts/build-runtime.mjs",

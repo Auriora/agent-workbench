@@ -132,4 +132,24 @@ describe("Codex hook installation", () => {
       expect(suppressed.stdout).toBe("");
     }
   });
+
+  it("escapes percent expansion in Windows hook command paths", () => {
+    const percentPackageRoot = path.join(tempRoot, "%AWB_TEST%", "package");
+    fs.mkdirSync(percentPackageRoot, { recursive: true });
+    const script = path.resolve("scripts/install-codex-hooks.mjs");
+    execFileSync(process.execPath, [
+      script,
+      "--package-root",
+      percentPackageRoot,
+      "--codex-home",
+      codexHome
+    ]);
+
+    const installed = JSON.parse(fs.readFileSync(path.join(codexHome, "hooks.json"), "utf8")) as {
+      hooks: Record<string, Array<{ hooks: Array<{ commandWindows: string }> }>>;
+    };
+    const commandWindows = installed.hooks.SessionStart[0].hooks[0].commandWindows;
+    expect(commandWindows).toContain("%%AWB_TEST%%");
+    expect(commandWindows).not.toContain('"%AWB_TEST%');
+  });
 });

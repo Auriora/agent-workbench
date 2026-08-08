@@ -26,13 +26,12 @@ Agent Workbench is distributed as an npm package attached to each
 [GitHub release](https://github.com/Auriora/agent-workbench/releases). Normal
 installations should use that package rather than a source checkout.
 
-You need macOS, Linux, or Windows, plus Node.js, npm, Python 3, and a C/C++
-build toolchain for the native parser dependencies. Node.js 22 is recommended.
-Node.js 24 requires C++20 compiler flags; on macOS, install Xcode Command Line
-Tools with `xcode-select --install` if no compiler is available. On Windows,
-install Visual Studio Build Tools with the C++ workload. The commands below use
-`npm.cmd` in PowerShell so they do not depend on PowerShell script-execution
-policy allowing the `npm.ps1` shim.
+The macOS/Linux package path and the Windows source-package path need Node.js,
+npm, Python 3, and a C/C++ build toolchain for the native parser dependencies.
+Node.js 22 is recommended. Node.js 24 requires C++20 compiler flags. Windows
+releases also provide a self-contained x64 ZIP with Node 22 and the compiled
+native dependencies; that path does not require Node, npm, Python, or Visual
+Studio Build Tools on the user's machine.
 
 ### macOS And Linux
 
@@ -59,8 +58,38 @@ npm install -g ./auriora-agent-workbench-0.6.9.tgz
 
 ### Windows PowerShell
 
-Install Node.js 22, Python 3, and Visual Studio Build Tools with the C++
-workload, then open a new PowerShell window and install the runtime:
+For a release that contains the portable asset, download
+`agent-workbench-vX.Y.Z-windows-x64.zip` and its `.sha256` file from the GitHub
+release. Verify the download, extract it to a stable path, and configure it:
+
+```powershell
+$version = "X.Y.Z"
+$zip = "agent-workbench-v$version-windows-x64.zip"
+$expected = ((Get-Content "$zip.sha256") -split "\s+")[0]
+$actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw "Agent Workbench ZIP checksum mismatch" }
+
+$installRoot = Join-Path $env:LOCALAPPDATA "Programs\Agent Workbench"
+Expand-Archive -LiteralPath $zip -DestinationPath $installRoot
+$bundleRoot = Join-Path $installRoot "agent-workbench-v$version-windows-x64"
+& (Join-Path $bundleRoot "configure.cmd")
+```
+
+Keep the extracted directory in place. `configure.cmd` records it as the
+runtime root and materializes Codex and Claude commands against its bundled
+`node.exe`. Register either plugin using that package root:
+
+```powershell
+$packageRoot = Join-Path $bundleRoot "runtime\node_modules\@auriora\agent-workbench"
+$pluginRoot = Join-Path $packageRoot "plugins\agent-workbench"
+codex plugin marketplace add "$pluginRoot"
+codex plugin add agent-workbench@agent-workbench-local
+claude plugin marketplace add "$pluginRoot"
+claude plugin install agent-workbench@agent-workbench-local --scope user
+```
+
+The npm tarball remains available as the source-package path. It requires
+Node.js 22, Python 3, and Visual Studio Build Tools with the C++ workload:
 
 ```powershell
 node --version
@@ -98,7 +127,7 @@ codex plugin add agent-workbench@agent-workbench-local
 codex plugin list
 ```
 
-On Windows PowerShell:
+On Windows PowerShell after an npm tarball installation:
 
 ```powershell
 $packageRoot = Join-Path (npm.cmd root --global) "@auriora\agent-workbench"
@@ -119,7 +148,7 @@ claude plugin install agent-workbench@agent-workbench-local --scope user
 claude plugin list
 ```
 
-On Windows PowerShell:
+On Windows PowerShell after an npm tarball installation:
 
 ```powershell
 $packageRoot = Join-Path (npm.cmd root --global) "@auriora\agent-workbench"

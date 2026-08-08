@@ -27,14 +27,20 @@ function fail(message) {
   process.exit(1);
 }
 
-export function buildMcpLaunchSmokePlan({ checkoutRoot, workspaceRoot }) {
-  const launcher = path.join(checkoutRoot, "plugins", "agent-workbench", "mcp-launch.mjs");
-  const env = { ...process.env };
+export function buildMcpLaunchSmokePlan({
+  checkoutRoot,
+  workspaceRoot,
+  nodeExecutable = process.execPath,
+  baseEnv = process.env,
+  launcherRelativePath = path.join("plugins", "agent-workbench", "mcp-launch.mjs")
+}) {
+  const launcher = path.join(checkoutRoot, launcherRelativePath);
+  const env = { ...baseEnv };
   delete env.AGENT_WORKBENCH_DEFAULT_REPO_ROOT;
 
   return {
     child: {
-      command: process.execPath,
+      command: nodeExecutable,
       args: [launcher],
       options: {
         cwd: workspaceRoot,
@@ -44,7 +50,7 @@ export function buildMcpLaunchSmokePlan({ checkoutRoot, workspaceRoot }) {
           AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS: "250",
           AGENT_WORKBENCH_DAEMON_STARTUP_REFRESH_DELAY_MS: "60000"
         },
-        stdio: ["pipe", "pipe", "inherit"]
+        stdio: /** @type {import("node:child_process").StdioOptions} */ (["pipe", "pipe", "inherit"])
       }
     }
   };
@@ -104,19 +110,32 @@ export async function terminateChildForCleanup(child) {
   });
 }
 
-export async function runMcpLaunchSmoke({ checkoutRoot = checkoutRootFromScript } = {}) {
+export async function runMcpLaunchSmoke({
+  checkoutRoot = checkoutRootFromScript,
+  nodeExecutable = process.execPath,
+  baseEnv = process.env,
+  launcherRelativePath = path.join("plugins", "agent-workbench", "mcp-launch.mjs"),
+  terminateChild = terminateChildForCleanup
+} = {}) {
   const workspaceRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-mcp-launch-smoke-"));
-  const { child: plan } = buildMcpLaunchSmokePlan({ checkoutRoot, workspaceRoot });
+  const { child: plan } = buildMcpLaunchSmokePlan({
+    checkoutRoot,
+    workspaceRoot,
+    nodeExecutable,
+    baseEnv,
+    launcherRelativePath
+  });
   const child = spawn(plan.command, plan.args, plan.options);
 
-  const result = await new Promise((resolve, reject) => {
+  try {
+    const result = await new Promise((resolve, reject) => {
       let settled = false;
       let serverName;
       const failAfterChildClose = (error) => {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        void terminateChildForCleanup(child).then(() => reject(error), reject);
+        void terminateChild(child).then(() => reject(error), reject);
       };
       const timer = setTimeout(() => {
         failAfterChildClose(new Error(`MCP launch smoke did not complete within ${TIMEOUT_MS}ms`));
@@ -170,7 +189,7 @@ export async function runMcpLaunchSmoke({ checkoutRoot = checkoutRootFromScript 
               const daemonPid = readDaemonPid(message, workspaceRoot);
               settled = true;
               clearTimeout(timer);
-              void terminateChildForCleanup(child).then(
+              void terminateChild(child).then(
                 () => resolve({ serverName, daemonPid }),
                 reject
               );
@@ -193,10 +212,11 @@ export async function runMcpLaunchSmoke({ checkoutRoot = checkoutRootFromScript 
       };
       child.stdin.write(`${JSON.stringify(initialize)}\n`);
     });
-
-  await waitForDaemonExit(result.daemonPid);
-  fs.rmSync(workspaceRoot, { recursive: true, force: true });
-  return result.serverName;
+    await waitForDaemonExit(result.daemonPid);
+    return result.serverName;
+  } finally {
+    fs.rmSync(workspaceRoot, { recursive: true, force: true });
+  }
 }
 
 const isDirectExecution = process.argv[1]

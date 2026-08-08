@@ -1,9 +1,9 @@
 ---
-title: Install Agent Workbench (npm + Claude Code / Codex)
+title: Install Agent Workbench (portable Windows or npm + Claude Code / Codex)
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-08-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -11,8 +11,9 @@ license: GPL-3.0-or-later
 # Install Agent Workbench
 
 End-user install guide for the Agent Workbench runtime and its editor plugins.
-The runtime ships as a normal npm package (`@auriora/agent-workbench`); plugins
-register against the in-place install — no repository clone, no copy-to-prefix.
+Windows x64 releases include a self-contained ZIP; all platforms retain the
+normal npm package (`@auriora/agent-workbench`). Plugins register against the
+selected in-place runtime without a repository clone.
 
 ## When To Use
 
@@ -24,6 +25,11 @@ hook/MCP details, see
 
 ## Prerequisites
 
+The Windows x64 portable ZIP needs only supported Windows and a Codex or Claude
+Code installation. It contains Node 22 and the compiled native dependencies.
+
+The npm/source-package path has these additional prerequisites:
+
 - **Node.js 22 (recommended).** Node 24 builds the native core (tree-sitter) only
   with a C++20 toolchain, so a default `npm install -g` on Node 24 hits a build
   error first. Use Node 22, or rebuild with `CXXFLAGS=-std=c++20` (GCC/Clang) /
@@ -33,7 +39,61 @@ hook/MCP details, see
   with the C++ workload). A failing native build is a local toolchain issue to
   resolve — see [Native dependency setup](native-dependency-setup.md).
 
-## 1. Install the runtime (all OSes)
+## 1a. Install the Windows x64 portable runtime
+
+Use this path when the selected GitHub release lists
+`agent-workbench-vX.Y.Z-windows-x64.zip`. Download that ZIP and its matching
+`.sha256` file, then run the following from the download directory:
+
+```powershell
+$version = "X.Y.Z"
+$zip = "agent-workbench-v$version-windows-x64.zip"
+$expected = ((Get-Content "$zip.sha256") -split "\s+")[0]
+$actual = (Get-FileHash $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+if ($actual -ne $expected) { throw "Agent Workbench ZIP checksum mismatch" }
+
+$installRoot = Join-Path $env:LOCALAPPDATA "Programs\Agent Workbench"
+Expand-Archive -LiteralPath $zip -DestinationPath $installRoot
+$bundleRoot = Join-Path $installRoot "agent-workbench-v$version-windows-x64"
+& (Join-Path $bundleRoot "configure.cmd")
+$packageRoot = Join-Path $bundleRoot "runtime\node_modules\@auriora\agent-workbench"
+$pluginRoot = Join-Path $packageRoot "plugins\agent-workbench"
+```
+
+`configure.cmd` is fail-fast. It records the package root, writes absolute
+bundled-Node MCP commands for Codex and Claude, and merges Codex hooks using the
+same executable. It writes hooks to `CODEX_HOME` when that environment variable
+is set; otherwise it uses `%USERPROFILE%\.codex`. Keep the extracted directory
+at that path. If it is moved, rerun `configure.cmd` before starting another
+coding-agent session.
+
+Register Claude Code:
+
+```powershell
+claude plugin marketplace add "$pluginRoot"
+claude plugin install agent-workbench@agent-workbench-local --scope user
+claude plugin list
+```
+
+Register Codex:
+
+```powershell
+codex plugin marketplace add "$pluginRoot"
+codex plugin add agent-workbench@agent-workbench-local
+codex plugin list
+```
+
+The portable asset contains `manifest.json` with the package version, immutable
+Git commit, Windows architecture, exact Node version and module ABI,
+source-package and committed-lock identities, and an immutable payload hash.
+Files that `configure.cmd` must materialize are declared outside that immutable
+hash set, so normal first-run configuration does not invalidate the manifest.
+GitHub publishes the ZIP checksum separately and publishes build provenance
+through GitHub artifact attestations. The attestation is not a separate release
+asset. Authenticode signing is not claimed unless the release explicitly says
+the binary was signed.
+
+## 1b. Install the npm runtime (all OSes)
 
 Agent Workbench is distributed through **GitHub Releases** (it is not published to
 the npm registry). Install the release tarball directly by URL — npm builds the
@@ -50,7 +110,7 @@ the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.6.9.tg
 The commands above install release `0.6.9`, including the compiled lightweight
 bridge, daemon-owned refresh convergence, and schema-isolated publication.
 
-This builds the native modules in place and records a runtime-root pointer under
+This source-package path builds the native modules in place and records a runtime-root pointer under
 the per-OS state directory (`%LOCALAPPDATA%\agent-workbench` on Windows,
 `~/.local/share/agent-workbench` on POSIX). The plugin MCP binding launches that
 in-place runtime through the portable `node` shim; nothing is copied to a prefix.
@@ -78,7 +138,7 @@ The generated marketplace is kept under `.cache/agent-workbench/`; the tracked
 plugin manifest remains portable. Re-run the command after checkout changes
 that affect the plugin or hooks, then start a new Codex session.
 
-## 2a. Register the Claude Code plugin (verified, clone-free)
+## 2a. Register the Claude Code plugin after an npm installation
 
 This is the verified clone-free path. The npm package ships a package-scoped
 Claude marketplace (`plugins/agent-workbench/.claude-plugin/marketplace.json`,
@@ -120,7 +180,7 @@ claude plugin uninstall agent-workbench@agent-workbench-local
 npm uninstall -g @auriora/agent-workbench   # only if nothing else uses it
 ```
 
-## 2b. Register the Codex plugin (verified, clone-free)
+## 2b. Register the Codex plugin after an npm installation
 
 The npm package ships a package-scoped Codex marketplace
 (`plugins/agent-workbench/.agents/plugins/marketplace.json`, name
@@ -275,6 +335,16 @@ node scripts/ci/install-smoke.mjs
 node scripts/ci/mcp-launch-smoke.mjs
 CXXFLAGS=-std=c++20 node scripts/ci/installed-package-mcp-smoke.mjs
 ```
+
+The reusable Windows preflight additionally deploys the committed production
+dependency graph on `windows-2022`, passes the ZIP through a separate consumer
+job with a constrained `PATH`, checks native loads, installed Codex and Claude
+hooks, MCP initialization, and bounded process cleanup through the bundled Node
+executable, and performs no publication. Pull requests and manual dispatch use
+this gate before any release tag exists. A governed release reuses the same
+jobs, publishes GHCR, generates the ZIP attestation, and creates the public GitHub
+release last; an existing release is a hard conflict rather than an asset
+replacement target.
 
 The final smoke packs and installs a real tarball into isolated roots, starts
 the installed bin, connects two provider-labelled sessions to one daemon, and

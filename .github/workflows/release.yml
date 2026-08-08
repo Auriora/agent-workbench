@@ -20,23 +20,23 @@ permissions:
 jobs:
   package:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     outputs:
       release_tag: ${{ steps.release.outputs.tag }}
       release_version: ${{ steps.release.outputs.version }}
+      release_git_sha: ${{ steps.release.outputs.git_sha }}
+      release_tarball: ${{ steps.release.outputs.tarball }}
       publish_latest: ${{ steps.release.outputs.publish_latest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: "24"
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
 
@@ -45,11 +45,40 @@ jobs:
           corepack enable
           corepack prepare pnpm@10.18.1 --activate
 
+      - name: Verify release toolchain identities
+        run: |
+          set -euo pipefail
+          node_version="$(node --version)"
+          case "${node_version}" in
+            v24.*) ;;
+            *)
+              echo "Expected Node 24.x, got ${node_version}" >&2
+              exit 1
+              ;;
+          esac
+          python_version="$(python3 --version)"
+          case "${python_version}" in
+            "Python 3.12."*) ;;
+            *)
+              echo "Expected Python 3.12.x, got ${python_version}" >&2
+              exit 1
+              ;;
+          esac
+          pnpm_version="$(pnpm --version)"
+          if [ "${pnpm_version}" != "10.18.1" ]; then
+            echo "Expected pnpm 10.18.1, got ${pnpm_version}" >&2
+            exit 1
+          fi
+          git --version
+          npm --version
+          gh --version | sed -n '1p'
+
       - name: Resolve release version
         id: release
         env:
           DISPATCH_TAG: ${{ inputs.tag }}
         run: |
+          set -euo pipefail
           if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
             tag="${DISPATCH_TAG}"
           else
@@ -60,6 +89,11 @@ jobs:
             exit 1
           fi
           version="${tag#v}"
+          git_sha="$(git rev-parse HEAD)"
+          if [[ ! "${git_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Resolved release git SHA was not a full commit SHA: ${git_sha}" >&2
+            exit 1
+          fi
           latest_tag=""
           while IFS= read -r candidate; do
             if [[ "${candidate}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -74,9 +108,21 @@ jobs:
           fi
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "git_sha=${git_sha}" >> "${GITHUB_OUTPUT}"
           echo "publish_latest=${publish_latest}" >> "${GITHUB_OUTPUT}"
           echo "notes=docs/release-notes/${tag}.md" >> "${GITHUB_OUTPUT}"
           echo "tarball=auriora-agent-workbench-${version}.tgz" >> "${GITHUB_OUTPUT}"
+
+      - name: Refuse an existing public release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "GitHub release ${TAG} already exists; publish a new corrective version instead of rerunning it." >&2
+            exit 1
+          fi
 
       - name: Verify release metadata
         env:
@@ -84,6 +130,7 @@ jobs:
           TAG: ${{ steps.release.outputs.tag }}
           NOTES: ${{ steps.release.outputs.notes }}
         run: |
+          set -euo pipefail
           test -f "${NOTES}" || { echo "Missing release notes: ${NOTES}" >&2; exit 1; }
           node <<'NODE'
           const fs = require("node:fs");
@@ -106,9 +153,7 @@ jobs:
           const failures = [];
           for (const [file, pointer, expected] of checks) {
             let value = JSON.parse(fs.readFileSync(file, "utf8"));
-            for (const key of pointer) {
-              value = value?.[key];
-            }
+            for (const key of pointer) value = value?.[key];
             if (value !== expected) {
               failures.push(`${file}#/${pointer.join("/")} is ${JSON.stringify(value)}, expected ${JSON.stringify(expected)}`);
             }
@@ -163,28 +208,135 @@ jobs:
           GITHUB_RELEASE_NOTES: ${{ runner.temp }}/agent-workbench-github-release-notes.md
         run: node scripts/ci/render-github-release-notes.mjs "${NOTES}" "${GITHUB_RELEASE_NOTES}"
 
-      - name: Publish GitHub release
+      - name: Stage release source inputs
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_TARBALL: ${{ steps.release.outputs.tarball }}
           GITHUB_RELEASE_NOTES: ${{ runner.temp }}/agent-workbench-github-release-notes.md
-          TARBALL: ${{ steps.release.outputs.tarball }}
+          SOURCE_INPUTS_DIR: ${{ runner.temp }}/release-source-inputs
         run: |
-          if gh release view "${TAG}" >/dev/null 2>&1; then
-            gh release edit "${TAG}" --title "${TAG}" --notes-file "${GITHUB_RELEASE_NOTES}"
-            gh release upload "${TAG}" "${TARBALL}" --clobber
-          else
-            gh release create "${TAG}" "${TARBALL}" --title "${TAG}" --notes-file "${GITHUB_RELEASE_NOTES}"
-          fi
+          set -euo pipefail
+          rm -rf "${SOURCE_INPUTS_DIR}"
+          mkdir -p "${SOURCE_INPUTS_DIR}"
+          cp "${RELEASE_TARBALL}" "${SOURCE_INPUTS_DIR}/"
+          cp "${GITHUB_RELEASE_NOTES}" "${SOURCE_INPUTS_DIR}/"
+
+      - name: Upload release source inputs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-source-inputs
+          path: ${{ runner.temp }}/release-source-inputs/*
+          if-no-files-found: error
+
+  windows-portable-preflight:
+    needs: package
+    permissions:
+      contents: read
+    uses: ./.github/workflows/windows-portable-preflight.yml
+    with:
+      ref: ${{ needs.package.outputs.release_git_sha }}
+      release_version: ${{ needs.package.outputs.release_version }}
+      release_git_sha: ${{ needs.package.outputs.release_git_sha }}
+      source_inputs_artifact: release-source-inputs
 
   publish-ghcr:
-    needs: package
+    needs:
+      - package
+      - windows-portable-preflight
     permissions:
       contents: read
       packages: write
     uses: ./.github/workflows/release-ghcr.yml
     with:
-      ref: ${{ needs.package.outputs.release_tag }}
+      git_sha: ${{ needs.package.outputs.release_git_sha }}
       version: ${{ needs.package.outputs.release_version }}
       publish_latest: ${{ needs.package.outputs.publish_latest == 'true' }}
     secrets: inherit
+
+  publish-release:
+    needs:
+      - package
+      - windows-portable-preflight
+      - publish-ghcr
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      attestations: write
+      artifact-metadata: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.package.outputs.release_git_sha }}
+
+      - name: Verify checked-out release identity
+        env:
+          RELEASE_GIT_SHA: ${{ needs.package.outputs.release_git_sha }}
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          if [ "${checked_out_sha}" != "${RELEASE_GIT_SHA}" ]; then
+            echo "Checked-out commit ${checked_out_sha} did not match expected ${RELEASE_GIT_SHA}" >&2
+            exit 1
+          fi
+
+      - name: Verify release publishing toolchain identities
+        run: |
+          set -euo pipefail
+          git --version
+          gh --version | sed -n '1p'
+          sha256sum --version | sed -n '1p'
+
+      - name: Download release source inputs
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-source-inputs
+          path: release-source-inputs
+
+      - name: Download Windows portable candidate
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: windows-portable-candidate
+          path: windows-portable-candidate
+
+      - name: Verify Windows portable candidate checksum
+        env:
+          WINDOWS_ZIP: windows-portable-candidate/agent-workbench-v${{ needs.package.outputs.release_version }}-windows-x64.zip
+          WINDOWS_SHA256: windows-portable-candidate/agent-workbench-v${{ needs.package.outputs.release_version }}-windows-x64.zip.sha256
+        run: |
+          set -euo pipefail
+          actual="$(sha256sum "${WINDOWS_ZIP}" | awk '{print $1}')"
+          expected="$(awk '{print $1}' "${WINDOWS_SHA256}")"
+          if [ "${actual}" != "${expected}" ]; then
+            echo "Windows portable checksum mismatch for ${WINDOWS_ZIP}" >&2
+            echo "expected ${expected}" >&2
+            echo "actual   ${actual}" >&2
+            exit 1
+          fi
+
+      - name: Attest Windows portable candidate
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: windows-portable-candidate/agent-workbench-v${{ needs.package.outputs.release_version }}-windows-x64.zip
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.package.outputs.release_tag }}
+          GITHUB_RELEASE_NOTES: release-source-inputs/agent-workbench-github-release-notes.md
+          TARBALL: release-source-inputs/${{ needs.package.outputs.release_tarball }}
+          WINDOWS_ZIP: windows-portable-candidate/agent-workbench-v${{ needs.package.outputs.release_version }}-windows-x64.zip
+          WINDOWS_SHA256: windows-portable-candidate/agent-workbench-v${{ needs.package.outputs.release_version }}-windows-x64.zip.sha256
+        run: |
+          set -euo pipefail
+          asset_paths=("${TARBALL}" "${WINDOWS_ZIP}" "${WINDOWS_SHA256}")
+          read -r expected_windows_sha expected_windows_name < "${WINDOWS_SHA256}"
+          actual_windows_sha="$(sha256sum "${WINDOWS_ZIP}" | awk '{print $1}')"
+          if [ "${expected_windows_sha}" != "${actual_windows_sha}" ] || [ "${expected_windows_name}" != "$(basename "${WINDOWS_ZIP}")" ]; then
+            echo "Windows portable checksum sidecar does not match the staged ZIP." >&2
+            exit 1
+          fi
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "GitHub release ${TAG} already exists; publish a new corrective version instead of mutating it." >&2
+            exit 1
+          fi
+          gh release create "${TAG}" "${asset_paths[@]}" --title "${TAG}" --notes-file "${GITHUB_RELEASE_NOTES}"
