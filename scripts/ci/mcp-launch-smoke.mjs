@@ -41,7 +41,7 @@ export function buildMcpLaunchSmokePlan({ checkoutRoot, workspaceRoot }) {
         env: {
           ...env,
           AGENT_WORKBENCH_INSTALL_ROOT: checkoutRoot,
-          AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS: "0",
+          AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS: "250",
           AGENT_WORKBENCH_DAEMON_STARTUP_REFRESH_DELAY_MS: "60000"
         },
         stdio: ["pipe", "pipe", "inherit"]
@@ -77,7 +77,7 @@ function readDaemonPid(message, workspaceRoot) {
   if (!Number.isInteger(daemon?.pid) || daemon.pid <= 1) {
     throw new Error("integration health did not identify the launched daemon process");
   }
-  if (path.resolve(daemon.repo_root) !== path.resolve(workspaceRoot)) {
+  if (fs.realpathSync.native(daemon.repo_root) !== fs.realpathSync.native(workspaceRoot)) {
     throw new Error("integration health daemon repository did not match the smoke workspace");
   }
   return daemon.pid;

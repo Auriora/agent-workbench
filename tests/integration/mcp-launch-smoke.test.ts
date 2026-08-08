@@ -31,7 +31,7 @@ describe("mcp-launch smoke plan", () => {
     expect(plan.child.options.cwd).toBe(workspaceRoot);
     expect(plan.child.options.env?.AGENT_WORKBENCH_INSTALL_ROOT).toBe(checkoutRoot);
     expect(plan.child.options.env?.AGENT_WORKBENCH_DEFAULT_REPO_ROOT).toBeUndefined();
-    expect(plan.child.options.env?.AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS).toBe("0");
+    expect(plan.child.options.env?.AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS).toBe("250");
     expect(plan.child.options.env?.AGENT_WORKBENCH_DAEMON_STARTUP_REFRESH_DELAY_MS).toBe("60000");
     expect(plan.child.args).toEqual([
       path.join(checkoutRoot, "plugins", "agent-workbench", "mcp-launch.mjs")
