@@ -88,11 +88,12 @@ export async function runWindowsPortableSmoke({ bundleRoot, expectedVersion, git
     if (observedNode.version !== manifest.node_version || observedNode.modules !== manifest.node_modules_abi) {
       throw new Error("Bundled Node identity does not match manifest");
     }
-    const configured = spawnSync(
-      constrainedEnv.COMSPEC,
-      ["/d", "/s", "/c", `"${path.join(root, "configure.cmd")}"`],
-      { cwd: root, env: constrainedEnv, encoding: "utf8" }
-    );
+    const configurePlan = buildWindowsCmdInvocation(`"${path.join(root, "configure.cmd")}"`, {
+      cwd: root,
+      env: constrainedEnv,
+      encoding: "utf8"
+    });
+    const configured = spawnSync(configurePlan.command, configurePlan.args, configurePlan.options);
     assertSuccess(configured, "configure.cmd");
     assertMaterializedConfiguration(packageRoot, nodeExecutable, stateRoot);
     if (hashPayload(root, manifest.payload_hash_exclusions) !== manifest.payload_sha256) {
@@ -138,14 +139,21 @@ export async function runWindowsPortableSmoke({ bundleRoot, expectedVersion, git
 
 export function buildBundledEntrypointStatusSmokePlan({ bundleRoot, workspaceRoot, env }) {
   return {
-    child: {
-      command: env.COMSPEC,
-      args: ["/d", "/s", "/c", `"${path.win32.join(bundleRoot, "agent-workbench.cmd")}"`],
-      options: {
-        cwd: workspaceRoot,
-        env,
-        stdio: /** @type {import("node:child_process").StdioOptions} */ (["pipe", "pipe", "pipe"])
-      }
+    child: buildWindowsCmdInvocation(`"${path.win32.join(bundleRoot, "agent-workbench.cmd")}"`, {
+      cwd: workspaceRoot,
+      env,
+      stdio: /** @type {import("node:child_process").StdioOptions} */ (["pipe", "pipe", "pipe"])
+    })
+  };
+}
+
+export function buildWindowsCmdInvocation(command, options) {
+  return {
+    command: options.env.COMSPEC,
+    args: ["/d", "/s", "/c", command],
+    options: {
+      ...options,
+      windowsVerbatimArguments: true
     }
   };
 }
@@ -228,11 +236,12 @@ function assertInstalledCodexHookRuns(stateRoot, env) {
   if (typeof commandWindows !== "string" || commandWindows.trim() === "") {
     throw new Error("Installed Codex SessionStart hook is missing commandWindows");
   }
-  const result = spawnSync(env.COMSPEC, ["/d", "/s", "/c", commandWindows], {
+  const hookPlan = buildWindowsCmdInvocation(commandWindows, {
     env,
     input: JSON.stringify({ hook_event_name: "SessionStart" }),
     encoding: "utf8"
   });
+  const result = spawnSync(hookPlan.command, hookPlan.args, hookPlan.options);
   assertSuccess(result, "installed Codex SessionStart hook");
   if (!result.stdout.includes("invoke the packaged Agent Workbench skill")) {
     throw new Error("SessionStart hook did not emit the expected conditional skill pointer");

@@ -15,6 +15,7 @@ import { PAYLOAD_HASH_EXCLUSIONS } from "../../scripts/ci/build-windows-portable
 
 const {
   buildBundledEntrypointStatusSmokePlan,
+  buildWindowsCmdInvocation,
   parsePortableSmokeArgs,
   validatePortableManifest,
   validateRepoStatusReadMessage
@@ -78,8 +79,24 @@ describe("Windows portable consumer smoke contract", () => {
         options: {
           cwd: "C:\\workspace",
           env,
+          windowsVerbatimArguments: true,
           stdio: ["pipe", "pipe", "pipe"]
         }
+      }
+    });
+  });
+
+  it("preserves already-quoted cmd.exe commands for every Windows smoke call site", () => {
+    const env = { COMSPEC: "C:\\Windows\\System32\\cmd.exe" };
+    const command = '"C:\\bundle with spaces\\configure.cmd"';
+
+    expect(buildWindowsCmdInvocation(command, { env, encoding: "utf8" })).toEqual({
+      command: env.COMSPEC,
+      args: ["/d", "/s", "/c", command],
+      options: {
+        env,
+        encoding: "utf8",
+        windowsVerbatimArguments: true
       }
     });
   });
