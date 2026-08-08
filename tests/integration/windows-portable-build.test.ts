@@ -67,6 +67,8 @@ describe("Windows portable bundle contract", () => {
     expect(launcherText()).toContain("runtime\\node_modules\\@auriora\\agent-workbench");
     expect(configureLauncherText()).toContain('"%~dp0node.exe"');
     expect(configureLauncherText()).toContain("scripts\\configure-portable.mjs");
+    expect(configureLauncherText()).toContain('--bundle-root "%~dp0."');
+    expect(configureLauncherText()).not.toContain('--bundle-root "%~dp0"');
     expect(launcherText()).not.toMatch(/\bnpm(?:\.cmd)?\b/i);
     expect(configureLauncherText()).not.toMatch(/\bnpm(?:\.cmd)?\b/i);
   });

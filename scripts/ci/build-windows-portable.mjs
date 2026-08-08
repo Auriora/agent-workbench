@@ -76,7 +76,7 @@ export function configureLauncherText() {
   return [
     "@echo off",
     "setlocal",
-    '"%~dp0node.exe" "%~dp0runtime\\node_modules\\@auriora\\agent-workbench\\scripts\\configure-portable.mjs" --bundle-root "%~dp0" %*',
+    '"%~dp0node.exe" "%~dp0runtime\\node_modules\\@auriora\\agent-workbench\\scripts\\configure-portable.mjs" --bundle-root "%~dp0." %*',
     ""
   ].join("\r\n");
 }
