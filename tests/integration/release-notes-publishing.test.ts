@@ -242,7 +242,10 @@ describe("GitHub release-note publishing", () => {
       windowsPreflightImpl,
       "Stage workspace release source inputs"
     );
-    expect(stageWorkspaceSourceInputs.run).toContain('tarball="$(npm_config_cache="${RUNNER_TEMP}/agent-workbench-npm-cache" npm pack)"');
+    expect(stageWorkspaceSourceInputs.run).toContain("pnpm build-runtime");
+    expect(stageWorkspaceSourceInputs.run).toContain("npm pack --ignore-scripts --json");
+    expect(stageWorkspaceSourceInputs.run).toContain("npm pack did not return exactly one filename");
+    expect(stageWorkspaceSourceInputs.run).toContain("process.stdout.write(result[0].filename)");
     expect(stageWorkspaceSourceInputs.run).toContain('mv "${tarball}" "${SOURCE_INPUTS_DIR}/${tarball}"');
 
     const verifyStagedSourceInputs = workflowStep(

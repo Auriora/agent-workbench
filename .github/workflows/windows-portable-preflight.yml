@@ -125,7 +125,17 @@ jobs:
           set -euo pipefail
           rm -rf "${SOURCE_INPUTS_DIR}"
           mkdir -p "${SOURCE_INPUTS_DIR}"
-          tarball="$(npm_config_cache="${RUNNER_TEMP}/agent-workbench-npm-cache" npm pack)"
+          pnpm build-runtime
+          pack_result="${RUNNER_TEMP}/agent-workbench-pack-result.json"
+          npm_config_cache="${RUNNER_TEMP}/agent-workbench-npm-cache" npm pack --ignore-scripts --json > "${pack_result}"
+          tarball="$(node -e '
+            const fs = require("node:fs");
+            const result = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            if (!Array.isArray(result) || result.length !== 1 || typeof result[0]?.filename !== "string") {
+              throw new Error("npm pack did not return exactly one filename");
+            }
+            process.stdout.write(result[0].filename);
+          ' "${pack_result}")"
           if [ "${tarball}" != "${RELEASE_TARBALL_NAME}" ]; then
             echo "Expected ${RELEASE_TARBALL_NAME} from npm pack, got ${tarball}" >&2
             exit 1
