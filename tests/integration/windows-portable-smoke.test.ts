@@ -16,6 +16,7 @@ import { PAYLOAD_HASH_EXCLUSIONS } from "../../scripts/ci/build-windows-portable
 const {
   buildBundledEntrypointStatusSmokePlan,
   buildWindowsCmdInvocation,
+  assertMaterializedConfiguration,
   parsePortableSmokeArgs,
   validatePortableManifest,
   validateRepoStatusReadMessage
@@ -99,6 +100,58 @@ describe("Windows portable consumer smoke contract", () => {
         windowsVerbatimArguments: true
       }
     });
+  });
+
+  it("validates parsed Windows hook commands instead of raw JSON escaping", () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "awb-portable-materialized-"));
+    const packageRoot = path.join(root, "package");
+    const stateRoot = path.join(root, "state");
+    const nodeExecutable = "D:\\portable\\node.exe";
+    const hook = (script: string) => ({
+      command: `'${nodeExecutable}' '${script}'`,
+      commandWindows: `"${nodeExecutable}" "${script}"`
+    });
+    try {
+      fs.mkdirSync(path.join(packageRoot, "plugins", "agent-workbench", "claude-plugin", "hooks"), { recursive: true });
+      fs.mkdirSync(path.join(stateRoot, ".codex"), { recursive: true });
+      fs.writeFileSync(path.join(packageRoot, "plugins", "agent-workbench", ".mcp.json"), JSON.stringify({
+        mcpServers: { "agent-workbench": { command: nodeExecutable } }
+      }));
+      fs.writeFileSync(path.join(packageRoot, "plugins", "agent-workbench", "claude-plugin", ".mcp.json"), JSON.stringify({
+        mcpServers: { "agent-workbench": { command: nodeExecutable } }
+      }));
+      fs.writeFileSync(
+        path.join(packageRoot, "plugins", "agent-workbench", "claude-plugin", "hooks", "hooks.json"),
+        JSON.stringify({ hooks: { SessionStart: [], PostToolUse: [] } })
+      );
+      const installedHooks = {
+        hooks: {
+          SessionStart: [{ hooks: [hook(path.join(packageRoot, "plugins", "agent-workbench", "hooks", "session-start.js"))] }],
+          PostToolUse: [{ hooks: [hook(path.join(packageRoot, "plugins", "agent-workbench", "hooks", "post-edit-feedback.js"))] }]
+        }
+      };
+      const codexHooksPath = path.join(stateRoot, ".codex", "hooks.json");
+      fs.writeFileSync(codexHooksPath, JSON.stringify(installedHooks));
+
+      expect(() => assertMaterializedConfiguration(packageRoot, nodeExecutable, stateRoot)).not.toThrow();
+      for (const [eventName, field] of [
+        ["SessionStart", "command"],
+        ["SessionStart", "commandWindows"],
+        ["PostToolUse", "command"],
+        ["PostToolUse", "commandWindows"]
+      ] as const) {
+        const drifted = structuredClone(installedHooks);
+        drifted.hooks[eventName][0].hooks[0][field] = field === "command"
+          ? `'${nodeExecutable}' 'D:\\wrong\\hook.js'`
+          : `"${nodeExecutable}" "D:\\wrong\\hook.js"`;
+        fs.writeFileSync(codexHooksPath, JSON.stringify(drifted));
+        expect(() => assertMaterializedConfiguration(packageRoot, nodeExecutable, stateRoot)).toThrow(
+          `Codex ${eventName} hook ${field} does not use packaged`
+        );
+      }
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("accepts repo status responses only for the bounded workspace root", () => {

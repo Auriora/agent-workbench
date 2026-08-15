@@ -201,7 +201,7 @@ export function validateRepoStatusReadMessage(message, workspaceRoot) {
   return envelope;
 }
 
-function assertMaterializedConfiguration(packageRoot, nodeExecutable, stateRoot) {
+export function assertMaterializedConfiguration(packageRoot, nodeExecutable, stateRoot) {
   const codex = readJson(path.join(packageRoot, "plugins", "agent-workbench", ".mcp.json"));
   const claude = readJson(path.join(packageRoot, "plugins", "agent-workbench", "claude-plugin", ".mcp.json"));
   const claudeHooks = readJson(path.join(packageRoot, "plugins", "agent-workbench", "claude-plugin", "hooks", "hooks.json"));
@@ -214,8 +214,26 @@ function assertMaterializedConfiguration(packageRoot, nodeExecutable, stateRoot)
       }
     }
   }
-  const codexHooksText = fs.readFileSync(path.join(stateRoot, ".codex", "hooks.json"), "utf8");
-  if (!codexHooksText.includes(nodeExecutable)) throw new Error("Codex hooks do not use bundled node.exe");
+  const codexHooks = readJson(path.join(stateRoot, ".codex", "hooks.json"));
+  const expectedScripts = {
+    SessionStart: path.join(packageRoot, "plugins", "agent-workbench", "hooks", "session-start.js"),
+    PostToolUse: path.join(packageRoot, "plugins", "agent-workbench", "hooks", "post-edit-feedback.js")
+  };
+  for (const [eventName, expectedScript] of Object.entries(expectedScripts)) {
+    const hook = codexHooks.hooks?.[eventName]?.[0]?.hooks?.[0];
+    if (typeof hook?.command !== "string" || !hook.command.includes(nodeExecutable)) {
+      throw new Error(`Codex ${eventName} hook command does not use bundled node.exe`);
+    }
+    if (!hook.command.includes(expectedScript)) {
+      throw new Error(`Codex ${eventName} hook command does not use packaged ${path.basename(expectedScript)}`);
+    }
+    if (typeof hook?.commandWindows !== "string" || !hook.commandWindows.includes(`"${nodeExecutable}"`)) {
+      throw new Error(`Codex ${eventName} hook commandWindows does not use bundled node.exe`);
+    }
+    if (!hook.commandWindows.includes(`"${expectedScript}"`)) {
+      throw new Error(`Codex ${eventName} hook commandWindows does not use packaged ${path.basename(expectedScript)}`);
+    }
+  }
 }
 
 function assertNativeLoads(nodeExecutable, packageRoot, env) {
