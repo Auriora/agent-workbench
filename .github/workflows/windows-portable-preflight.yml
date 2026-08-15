@@ -33,6 +33,10 @@ on:
         required: false
         default: ""
         type: string
+    secrets:
+      POSTHOG_PROJECT_TOKEN:
+        description: "Public PostHog project token injected only into official release bundles."
+        required: false
 
 permissions:
   contents: read
@@ -114,6 +118,13 @@ jobs:
           CXXFLAGS: -std=c++20
           _CL_: /std:c++20
         run: pnpm install --frozen-lockfile
+
+      - name: Build configured Windows release runtime
+        if: ${{ inputs.source_inputs_artifact != '' }}
+        env:
+          AGENT_WORKBENCH_DISTRIBUTION_ANALYTICS_ENABLED: "true"
+          AGENT_WORKBENCH_DISTRIBUTION_POSTHOG_PROJECT_TOKEN: ${{ secrets.POSTHOG_PROJECT_TOKEN }}
+        run: pnpm build-runtime
 
       - name: Stage workspace release source inputs
         if: ${{ inputs.source_inputs_artifact == '' }}

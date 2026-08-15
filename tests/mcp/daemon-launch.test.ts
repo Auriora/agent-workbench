@@ -34,10 +34,67 @@ import type {
   DaemonRefreshActivityTransition,
   RepositoryOwnershipLease,
   RepositoryOwnershipPort,
-  SnapshotRefreshControllerPort
+  SnapshotRefreshControllerPort,
+  TelemetryRecorderPort
 } from "../../src/ports/index.js";
 
 describe("Agent Workbench daemon launcher", () => {
+  it("owns one shared telemetry lifecycle across daemon clients", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-telemetry-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    const records: string[] = [];
+    let factoryCalls = 0;
+    const shutdown = vi.fn(async () => undefined);
+    const telemetry: TelemetryRecorderPort = {
+      record(name) { records.push(name); },
+      recordError() {},
+      flush() {},
+      shutdown
+    };
+    const daemon = await startAgentWorkbenchDaemon({
+      repoRoot,
+      idleGraceMs: 3_000,
+      serverOptions: { startupRefreshDelayMs: 60_000 },
+      testHooks: {
+        createTelemetry() {
+          factoryCalls += 1;
+          return telemetry;
+        }
+      }
+    });
+    const sockets: net.Socket[] = [];
+
+    try {
+      for (const [index, clientName] of ["first", "second"].entries()) {
+        const socket = await connectOrStartDaemon({
+          repoRoot,
+          debugRepoRootOverride: false,
+          startTimeoutMs: 2_000
+        });
+        sockets.push(socket);
+        const session = createSocketSession(socket);
+        await initializeSocketSession(session, index + 1, clientName);
+        await session.call({
+          jsonrpc: "2.0",
+          id: index + 10,
+          method: "resources/read",
+          params: { uri: "repo:///status" }
+        });
+      }
+
+      expect(factoryCalls).toBe(1);
+      expect(records.filter((name) => name === "mcp.resource.dispatch")).toHaveLength(2);
+    } finally {
+      for (const socket of sockets) socket.destroy();
+      await daemon.close();
+      await daemon.close();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+
+    expect(shutdown).toHaveBeenCalledTimes(1);
+  });
+
   it("blocks lazy standalone controller creation for active and ambiguous owners", async () => {
     const owner = ownershipLease("active");
     for (const blocked of [

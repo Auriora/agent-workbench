@@ -10,6 +10,21 @@ import { BatchSpanProcessor, ConsoleSpanExporter } from "@opentelemetry/sdk-trac
 import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
 import type { TelemetryRecorderPort } from "../../ports/index.js";
+import {
+  createPostHogTelemetryAdapter,
+  postHogAnalyticsConfigFromEnv,
+  type PostHogAnalyticsConfig,
+  type PostHogClientFactory
+} from "./posthog.js";
+import {
+  createPostHogLogsTelemetryAdapter,
+  postHogLogsConfigFromEnv,
+  type PostHogLogProviderFactory,
+  type PostHogLogsConfig
+} from "./posthog-logs.js";
+
+export * from "./posthog.js";
+export * from "./posthog-logs.js";
 
 export type TelemetryRecord = {
   name: string;
@@ -24,6 +39,24 @@ export type TelemetryConfig = {
   destination: TelemetryDestination;
   serviceName: string;
   endpoint?: string;
+};
+
+export type RuntimeTelemetryOptions = {
+  env?: NodeJS.ProcessEnv;
+  postHogConfig?: PostHogAnalyticsConfig;
+  postHogRuntimeId?: string;
+  postHogClientFactory?: PostHogClientFactory;
+  postHogShutdownTimeoutMs?: number;
+  postHogLogProviderFactory?: PostHogLogProviderFactory;
+};
+
+export type RuntimeTelemetryConfigurationEvidence = {
+  posthog: {
+    status: PostHogAnalyticsConfig["status"];
+  };
+  posthog_logs: {
+    status: PostHogLogsConfig["status"];
+  };
 };
 
 export type TelemetryAdapter = TelemetryRecorderPort;
@@ -102,6 +135,69 @@ export class NoopTelemetryAdapter {
 
   public shutdown(): void {
     return undefined;
+  }
+}
+
+export class CompositeTelemetryAdapter implements TelemetryAdapter {
+  public constructor(private readonly adapters: readonly TelemetryAdapter[]) {}
+
+  public record(name: string, properties?: Record<string, unknown>): void {
+    for (const adapter of this.adapters) {
+      try {
+        adapter.record(name, properties);
+      } catch {
+        // Telemetry destinations are isolated from each other and from callers.
+      }
+    }
+  }
+
+  public recordError(error: unknown, properties?: Record<string, unknown>): void {
+    for (const adapter of this.adapters) {
+      try {
+        adapter.recordError(error, properties);
+      } catch {
+        // Telemetry destinations are isolated from each other and from callers.
+      }
+    }
+  }
+
+  public async flush(): Promise<void> {
+    await Promise.allSettled(this.adapters.map((adapter) => Promise.resolve().then(() => adapter.flush())));
+  }
+
+  public async shutdown(): Promise<void> {
+    await Promise.allSettled(this.adapters.map((adapter) => Promise.resolve().then(() => adapter.shutdown())));
+  }
+}
+
+export class RuntimeTelemetryAdapter implements TelemetryAdapter {
+  public readonly configuration: RuntimeTelemetryConfigurationEvidence;
+
+  public constructor(
+    private readonly delegate: TelemetryAdapter,
+    postHogConfig: PostHogAnalyticsConfig,
+    postHogLogsConfig: PostHogLogsConfig
+  ) {
+    this.configuration = Object.freeze({
+      posthog: Object.freeze({ status: postHogConfig.status }),
+      posthog_logs: Object.freeze({ status: postHogLogsConfig.status })
+    });
+  }
+
+  public record(name: string, properties?: Record<string, unknown>): void {
+    this.delegate.record(name, properties);
+  }
+
+  public recordError(error: unknown, properties?: Record<string, unknown>): void {
+    this.delegate.recordError(error, properties);
+  }
+
+  public flush(): Promise<void> | void {
+    return this.delegate.flush();
+  }
+
+  public shutdown(): Promise<void> | void {
+    return this.delegate.shutdown();
   }
 }
 
@@ -399,6 +495,43 @@ export function createTelemetryAdapter(config: TelemetryConfig): TelemetryAdapte
     });
     return fallback;
   }
+}
+
+export function createRuntimeTelemetryAdapter(
+  options: RuntimeTelemetryOptions = {}
+): RuntimeTelemetryAdapter {
+  const env = options.env ?? process.env;
+  const postHogConfig = options.postHogConfig ?? postHogAnalyticsConfigFromEnv(env);
+  const postHogLogsConfig = postHogLogsConfigFromEnv(env, postHogConfig);
+  const openTelemetry = createTelemetryAdapter(telemetryConfigFromEnv(env));
+  const postHog = createPostHogTelemetryAdapter(
+    postHogConfig,
+    {
+      runtimeId: options.postHogRuntimeId,
+      clientFactory: options.postHogClientFactory,
+      shutdownTimeoutMs: options.postHogShutdownTimeoutMs
+    }
+  );
+  const postHogLogs = createPostHogLogsTelemetryAdapter(
+    postHogLogsConfig,
+    { providerFactory: options.postHogLogProviderFactory }
+  );
+  const adapters: TelemetryAdapter[] = [];
+  if (!(openTelemetry instanceof NoopTelemetryAdapter)) {
+    adapters.push(openTelemetry);
+  }
+  if (postHog !== undefined) {
+    adapters.push(postHog);
+  }
+  if (postHogLogs !== undefined) {
+    adapters.push(postHogLogs);
+  }
+  const delegate = adapters.length === 0
+    ? createNoopTelemetryAdapter()
+    : adapters.length === 1
+      ? adapters[0]
+      : new CompositeTelemetryAdapter(adapters);
+  return new RuntimeTelemetryAdapter(delegate, postHogConfig, postHogLogsConfig);
 }
 
 function parseDestination(value: string | undefined): TelemetryDestination {

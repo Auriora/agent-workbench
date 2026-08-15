@@ -85,8 +85,7 @@ import {
   retireLegacyGraphStore
 } from "./infrastructure/sqlite/graph-store-location.js";
 import {
-  createTelemetryAdapter,
-  telemetryConfigFromEnv
+  createRuntimeTelemetryAdapter
 } from "./infrastructure/telemetry/index.js";
 import { SystemClockAdapter } from "./infrastructure/time/index.js";
 import { createAgentWorkbenchServer as createAgentWorkbenchMcpServer } from "./interface-adapters/mcp/server.js";
@@ -215,7 +214,8 @@ export function createAgentWorkbenchServer(
       }
     });
   const warmupView = controllerWarmupView(refreshAuthority, absoluteRepoRoot, clock);
-  const telemetry = options.telemetry ?? createTelemetryAdapter(telemetryConfigFromEnv());
+  const ownsTelemetry = options.telemetry === undefined;
+  const telemetry = options.telemetry ?? createRuntimeTelemetryAdapter();
   const workspaceWatcherConfig = resolveWorkspaceWatcherConfig(options.workspaceWatcher);
   const localWorkspaceRefresh = options.sharedRepositoryServices === undefined
     ? createRepositoryWorkspaceRefreshService({
@@ -623,12 +623,16 @@ export function createAgentWorkbenchServer(
   if (localRefreshAuthority !== undefined) {
     const closeServer = server.close.bind(server);
     server.close = async () => {
-      await closeServer();
-      if (localStartupTimer !== undefined) clearTimeout(localStartupTimer);
-      await localWorkspaceRefresh?.close();
-      await localRefreshAuthority.close();
-      if ("close" in graphStore && typeof graphStore.close === "function") {
-        await graphStore.close();
+      try {
+        await closeServer();
+        if (localStartupTimer !== undefined) clearTimeout(localStartupTimer);
+        await localWorkspaceRefresh?.close();
+        await localRefreshAuthority.close();
+        if ("close" in graphStore && typeof graphStore.close === "function") {
+          await graphStore.close();
+        }
+      } finally {
+        if (ownsTelemetry) await telemetry.shutdown();
       }
     };
   }

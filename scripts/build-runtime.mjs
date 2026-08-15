@@ -8,6 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { distributionAnalyticsDefines } from "./distribution-analytics-config.mjs";
 import {
   BUILD_OPTIONS,
   RUNTIME_BUILD_ENTRYPOINTS,
@@ -60,6 +61,7 @@ try {
   await build({
     entryPoints,
     ...BUILD_OPTIONS,
+    define: distributionAnalyticsDefines(),
     outdir: distRoot
   });
 

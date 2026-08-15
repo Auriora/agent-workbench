@@ -71,6 +71,10 @@ function withRuntimeBuildFixture<T>(callback: (root: string) => T): T {
 
     fs.copyFileSync(path.join(REPO_ROOT, "scripts/runtime-build-contract.mjs"), path.join(root, "scripts", "runtime-build-contract.mjs"));
     fs.copyFileSync(path.join(REPO_ROOT, "scripts/build-runtime.mjs"), path.join(root, "scripts", "build-runtime.mjs"));
+    fs.copyFileSync(
+      path.join(REPO_ROOT, "scripts/distribution-analytics-config.mjs"),
+      path.join(root, "scripts", "distribution-analytics-config.mjs")
+    );
 
     return callback(root);
   } finally {
@@ -125,6 +129,7 @@ describe("runtime build contract", () => {
       expect(sourcePaths.has("package.json")).toBe(true);
       expect(sourcePaths.has("tsconfig.json")).toBe(true);
       expect(sourcePaths.has("scripts/build-runtime.mjs")).toBe(true);
+      expect(sourcePaths.has("scripts/distribution-analytics-config.mjs")).toBe(true);
       expect(sourcePaths.has("scripts/runtime-build-contract.mjs")).toBe(true);
       expect(sourcePaths.has(normalizePath(path.join("src", "mcp", "stdio.ts")))).toBe(true);
       expect(sourcePaths.has(normalizePath(path.join("src", "mcp", "daemon-main.ts")))).toBe(true);

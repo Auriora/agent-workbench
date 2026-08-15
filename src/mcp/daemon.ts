@@ -33,6 +33,7 @@ import { RepositoryRefreshTriggerCoordinator } from "../application/use-cases/re
 import { FilesystemWorkspaceWatcherAdapter } from "../infrastructure/filesystem/index.js";
 import { SystemClockAdapter } from "../infrastructure/time/index.js";
 import { resolveWorkspaceWatcherConfig } from "../domain/models/index.js";
+import { createRuntimeTelemetryAdapter } from "../infrastructure/telemetry/index.js";
 import { SocketServerTransport } from "./socket-transport.js";
 import type {
   SnapshotRefreshAdmissionFailurePort,
@@ -159,6 +160,8 @@ type DaemonTestHooks = {
    * bootstrap after the daemon socket is listening.
    */
   awaitBootstrap?: Promise<void>;
+  /** Construct daemon-owned telemetry without enabling a real exporter. */
+  createTelemetry?: () => import("../ports/index.js").TelemetryRecorderPort;
 };
 
 export async function startAgentWorkbenchDaemon(input: {
@@ -205,6 +208,16 @@ export async function startAgentWorkbenchDaemon(input: {
   let sharedRepositoryServices: AgentWorkbenchSharedRepositoryServices | undefined;
   let lifetime: DaemonRefreshLifetimeCoordinator | undefined;
   const sharedDisposers = new Set<() => void | Promise<void>>();
+  const daemonTelemetry = input.serverOptions?.telemetry ??
+    input.testHooks?.createTelemetry?.() ??
+    createRuntimeTelemetryAdapter();
+  const daemonServerOptions: AgentWorkbenchServerOptions = {
+    ...input.serverOptions,
+    telemetry: daemonTelemetry
+  };
+  if (input.serverOptions?.telemetry === undefined) {
+    sharedDisposers.add(() => daemonTelemetry.shutdown());
+  }
   const pendingSocketTimeouts = new Map<Socket, ReturnType<typeof setTimeout>>();
 
   const closeSockets = (): void => {
@@ -317,7 +330,7 @@ export async function startAgentWorkbenchDaemon(input: {
         identity,
         repoRoot,
         debugRepoRootOverride: input.debugRepoRootOverride === true,
-        serverOptions: input.serverOptions,
+        serverOptions: daemonServerOptions,
         sharedRepositoryServices,
         daemonDiagnostics: () => {
           return {

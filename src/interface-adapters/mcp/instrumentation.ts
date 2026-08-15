@@ -55,7 +55,6 @@ export function instrumentMcpServer(input: {
               eventName: "mcp.resource.dispatch",
               surfaceKind: "resource",
               surfaceName: name,
-              uri,
               handler
             })
           );
@@ -71,7 +70,6 @@ function instrumentHandler(input: {
   eventName: string;
   surfaceKind: "tool" | "resource";
   surfaceName: string;
-  uri?: string;
   handler: ToolHandler | ResourceHandler;
 }) {
   return async (args: unknown) => {
@@ -90,7 +88,6 @@ function instrumentHandler(input: {
       input.telemetry.record(input.eventName, {
         surface_kind: input.surfaceKind,
         surface_name: input.surfaceName,
-        ...(input.uri === undefined ? {} : { uri: input.uri }),
         outcome: envelope.errors.length > 0 ? "blocked" : "ok",
         analysis_validity: envelope.meta?.analysis_validity,
         verification_status: envelope.meta?.verification_status,
@@ -103,7 +100,6 @@ function instrumentHandler(input: {
         quiet_feedback_suppression_count: countQuietFeedbackSuppressions(envelope.warnings),
         ...buildDeferredCheckTelemetryProperties(envelope.post_edit_feedback ?? {}),
         ...envelope.markdown_audit,
-        repo_root: envelope.repo_root,
         status: envelope.status,
         truncated: envelope.meta?.truncated,
         row_limit: envelope.meta?.budget?.row_limit,
@@ -116,7 +112,6 @@ function instrumentHandler(input: {
       input.telemetry.recordError(error, {
         surface_kind: input.surfaceKind,
         surface_name: input.surfaceName,
-        ...(input.uri === undefined ? {} : { uri: input.uri }),
         invalid_input_count: 0,
         degraded_mode_count: 0,
         duration_ms: Date.now() - startedAt
@@ -139,7 +134,6 @@ function extractResponseEnvelope(response: unknown): {
   };
   runtime_state?: unknown;
   cache_state?: unknown;
-  repo_root?: unknown;
   status?: unknown;
   post_edit_feedback?: unknown;
   markdown_audit?: Record<string, string | number | boolean>;
@@ -167,10 +161,6 @@ function extractResponseEnvelope(response: unknown): {
       data !== undefined && data !== null && typeof data === "object" && "runtime_state" in data
         ? (data as { runtime_state?: unknown }).runtime_state
         : undefined;
-    const repoRoot =
-      data !== undefined && data !== null && typeof data === "object" && "repo_root" in data
-        ? (data as { repo_root?: unknown }).repo_root
-        : undefined;
     const status =
       data !== undefined && data !== null && typeof data === "object" && "status" in data
         ? (data as { status?: unknown }).status
@@ -182,7 +172,6 @@ function extractResponseEnvelope(response: unknown): {
       warnings: Array.isArray(parsed.warnings) ? parsed.warnings : [],
       cache_state: cacheState,
       runtime_state: runtimeState,
-      repo_root: repoRoot ?? extractNestedDataValue(data, "repo_root"),
       status: status ?? extractNestedDataValue(data, "status"),
       post_edit_feedback: extractPostEditFeedback(data),
       markdown_audit: extractMarkdownAuditTelemetry(data)

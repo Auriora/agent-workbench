@@ -1,5 +1,6 @@
 .cache/
 .tmp/
+.env
 .codex/
 node_modules/
 .pytest_cache/

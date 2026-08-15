@@ -116,6 +116,7 @@ function sourceInputRecords(repoRoot) {
   filePaths.push("package.json");
   filePaths.push("tsconfig.json");
   filePaths.push("scripts/build-runtime.mjs");
+  filePaths.push("scripts/distribution-analytics-config.mjs");
   filePaths.push("scripts/runtime-build-contract.mjs");
 
   const unique = [...new Set(filePaths)].sort();

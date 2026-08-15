@@ -3,7 +3,7 @@ title: Layered runtime architecture
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-07-20
+last_reviewed: 2026-08-15
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -142,8 +142,10 @@ The runtime keeps shared response policy in the innermost layer that needs it:
   helpers while still owning envelope construction, warnings/errors, and final
   response shaping.
 - MCP instrumentation depends on `TelemetryRecorderPort` from `src/ports`.
-  Concrete telemetry adapters, OpenTelemetry configuration, and fallback
-  in-memory/no-op implementations live in `src/infrastructure/telemetry/`.
+  Concrete telemetry adapters, OpenTelemetry configuration, the PostHog
+  privacy-boundary adapters for product analytics and opt-in operational logs,
+  and fallback in-memory/no-op implementations live in
+  `src/infrastructure/telemetry/`.
 
 Architecture tests enforce these decisions: application code must not import
 `src/presentation` or `src/infrastructure`, presentation must not import
@@ -173,6 +175,16 @@ every connection-specific server. Standalone composition uses the same
 controller only behind successful ownership admission. Use cases depend on
 these ports; MCP adapters, presenters, and provider integrations cannot import
 the controller, graph store, watcher, worker, or ownership implementation.
+
+Telemetry ownership follows the same rule: the daemon composition root owns at
+most one runtime telemetry adapter for the daemon lifecycle and injects that
+single adapter into each connection-scoped server. Connection handlers and MCP
+registries must not construct vendor SDK clients directly. Standalone servers
+may construct their own runtime telemetry adapter, but they remain responsible
+for shutting it down once on server close. The adapter may compose independent
+OTEL trace, PostHog analytics, and PostHog OTLP Logs providers; the composition
+root still owns their shared lifecycle and shuts each constructed provider down
+once.
 
 MVP ports:
 

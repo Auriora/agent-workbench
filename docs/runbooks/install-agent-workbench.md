@@ -3,7 +3,7 @@ title: Install Agent Workbench (portable Windows or npm + Claude Code / Codex)
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-08-08
+last_reviewed: 2026-08-15
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -14,6 +14,52 @@ End-user install guide for the Agent Workbench runtime and its editor plugins.
 Windows x64 releases include a self-contained ZIP; all platforms retain the
 normal npm package (`@auriora/agent-workbench`). Plugins register against the
 selected in-place runtime without a repository clone.
+
+## Anonymous Product Analytics And Opt-Out
+
+Official npm and Windows portable release artifacts enable personless,
+aggregate product analytics by default. Events are restricted to MCP surface
+names, outcomes, bounded counts, degraded states, and latency buckets. They do
+not contain repository identity, paths, filenames, source, prompts, queries,
+commands, environment values, raw errors, stack traces, user or machine
+identity, or stable installation IDs. Exception autocapture, person profiles,
+GeoIP enrichment, and session replay are disabled. Handled exceptions are
+reduced locally to a bounded category and fixed generic message before being
+routed to PostHog Error Tracking; original messages, stacks, and throwable
+objects are not sent.
+
+Set the opt-out before starting Codex, Claude Code, or another process that
+launches Agent Workbench:
+
+```bash
+export AGENT_WORKBENCH_ANALYTICS_ENABLED=false
+```
+
+On Windows PowerShell:
+
+```powershell
+$env:AGENT_WORKBENCH_ANALYTICS_ENABLED = "false"
+```
+
+The launched application must inherit that environment variable. A source or
+development build without release-injected settings remains disabled unless it
+is explicitly configured. See
+[Observability and debugging design](../design/observability-debugging-design.md#posthog-product-analytics)
+for the exact event and privacy boundary.
+
+PostHog operational logs are independently disabled by default. To enable
+fixed-body `WARN` and `ERROR` summaries for actionable outcomes, set:
+
+```bash
+export AGENT_WORKBENCH_POSTHOG_LOGS_ENABLED=true
+```
+
+This option requires valid PostHog analytics configuration, and
+`AGENT_WORKBENCH_ANALYTICS_ENABLED=false` overrides it. It does not forward raw
+logs, stdout/stderr, exception messages or stacks, paths, repository data,
+prompts, queries, commands, or environment values. Sanitized exceptions remain
+owned solely by PostHog Error Tracking. Jaeger/OTEL traces use the separate
+`AGENT_WORKBENCH_OTEL_*` settings and remain disabled unless explicitly enabled.
 
 ## When To Use
 

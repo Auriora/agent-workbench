@@ -179,6 +179,9 @@ jobs:
         run: pnpm typecheck
 
       - name: Build runtime
+        env:
+          AGENT_WORKBENCH_DISTRIBUTION_ANALYTICS_ENABLED: "true"
+          AGENT_WORKBENCH_DISTRIBUTION_POSTHOG_PROJECT_TOKEN: ${{ secrets.POSTHOG_PROJECT_TOKEN }}
         run: pnpm build-runtime
 
       - name: Check runtime contracts
@@ -197,9 +200,15 @@ jobs:
         run: pnpm run validate:skills
 
       - name: Validate npm package payload
+        env:
+          AGENT_WORKBENCH_DISTRIBUTION_ANALYTICS_ENABLED: "true"
+          AGENT_WORKBENCH_DISTRIBUTION_POSTHOG_PROJECT_TOKEN: ${{ secrets.POSTHOG_PROJECT_TOKEN }}
         run: pnpm pack:dry-run
 
       - name: Build release tarball
+        env:
+          AGENT_WORKBENCH_DISTRIBUTION_ANALYTICS_ENABLED: "true"
+          AGENT_WORKBENCH_DISTRIBUTION_POSTHOG_PROJECT_TOKEN: ${{ secrets.POSTHOG_PROJECT_TOKEN }}
         run: npm_config_cache=/tmp/agent-workbench-npm-cache npm pack
 
       - name: Render GitHub release notes
@@ -237,6 +246,8 @@ jobs:
       release_version: ${{ needs.package.outputs.release_version }}
       release_git_sha: ${{ needs.package.outputs.release_git_sha }}
       source_inputs_artifact: release-source-inputs
+    secrets:
+      POSTHOG_PROJECT_TOKEN: ${{ secrets.POSTHOG_PROJECT_TOKEN }}
 
   publish-ghcr:
     needs:

@@ -3,7 +3,7 @@ title: Observability and debugging design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-05-31
+last_reviewed: 2026-08-15
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -47,6 +47,122 @@ Configuration is environment driven:
 | `AGENT_WORKBENCH_OTEL_DESTINATION` | `otlp_http` when enabled | `otlp_http`, `console`, or `none`. |
 | `AGENT_WORKBENCH_OTEL_ENDPOINT` | `http://localhost:4318/v1/traces` | OTLP HTTP traces endpoint. Jaeger all-in-one or collector endpoints can be used here. |
 | `AGENT_WORKBENCH_OTEL_SERVICE_NAME` | `agent-workbench` | OTEL service name. |
+
+## PostHog Product Analytics
+
+Agent Workbench also supports an independent PostHog product-analytics path.
+Official release bundles carry build-injected configuration and enable this path
+by default; source and development builds without those defaults remain
+disabled. Operators can explicitly opt out. Enabling or disabling PostHog must
+not change OTEL traces or MCP behavior.
+
+PostHog is limited to aggregate MCP and runtime-boundary events. It is not a
+general exporter and it must not send raw error data, repo identity, prompts,
+paths, resource URIs, source bodies, command text, or environment values.
+
+Runtime overrides and distribution defaults resolve as follows:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `AGENT_WORKBENCH_ANALYTICS_ENABLED` | official release: true; source/development: false | Explicit `false` or `0` opts out before client construction; `true` or `1` opts in when configuration is available. |
+| `AGENT_WORKBENCH_POSTHOG_PROJECT_TOKEN` | official release: build-injected; source/development: unset | Optional runtime override for the project token used only during SDK initialization. |
+| `AGENT_WORKBENCH_POSTHOG_HOST` | official release: `https://eu.i.posthog.com`; source/development: unset | Optional runtime override; only the exact approved EU ingestion host is accepted. |
+
+The runtime constructs PostHog only when all of the following are true:
+
+- analytics resolves enabled from an explicit runtime setting or configured
+  distribution default
+- no explicit `false` or `0` runtime opt-out is present
+- a project token is present after applying runtime overrides
+- the host is exactly the approved EU ingestion endpoint
+
+Official release builds receive the project token through the
+`POSTHOG_PROJECT_TOKEN` GitHub Actions secret. Selecting distribution analytics
+without that secret fails the build. The token may appear only in generated
+runtime bundles; it is not committed to source, documentation, tests, logs, or
+the runtime build receipt. Both the npm tarball and Windows portable ZIP use the
+same generated bundle.
+
+The runtime adapter exposes a local token-free configuration status of
+`disabled`, `ready`, `missing_configuration`, or `invalid_host`. This evidence
+is for local diagnostics only and is not itself exported as analytics.
+
+PostHog events are personless:
+
+- every event uses an ephemeral process-lifetime runtime identifier
+- every event sets `$process_person_profile` to `false`
+- the SDK is configured with `personProfiles: "never"`
+- exception autocapture and passing original throwables to `captureException`
+  are forbidden; only adapter-created stackless synthetic errors use that SDK
+  route
+
+The PostHog adapter constructs a new outbound payload from an allowlist. The
+stable normal analytics event names in this slice are:
+
+- `mcp.tool.dispatch`
+- `mcp.resource.dispatch`
+- `runtime.boundary`
+- `runtime.error`
+
+Sanitized Error Tracking uses PostHog's required `$exception` event shape after
+the adapter reconstructs its nested properties. `recordError` uses this path;
+`runtime.error` remains an allowlisted normal event for explicit aggregate
+recording.
+
+Only bounded scalar properties may leave the process. Supported fields are
+aggregate status and count metadata such as surface kind/name, boundary
+kind/name, outcome, analysis validity, verification status, cache/runtime
+state, duration bucket, truncation, row/traversal/source-byte budgets, and
+Markdown-audit counters when present.
+
+`recordError` maps failures locally to a bounded category enum such as
+`type_error`, `range_error`, `syntax_error`, `reference_error`, `uri_error`,
+`aggregate_error`, `error`, or `non_error_throwable`. Changing an exception
+message, stack, path, prompt, or command content must not change the serialized
+PostHog payload. Error Tracking receives only a newly constructed synthetic
+error with a fixed generic message, a bounded category type/fingerprint, and no
+stack. The original throwable is never passed to the SDK. The `before_send`
+boundary reconstructs the resulting `$exception` event from its own nested
+allowlist and drops SDK-added frames, mechanisms, source, and other properties.
+
+Capture, flush, and shutdown failures are contained inside the adapter. They do
+not raise into MCP handlers, do not trigger another exporter, and do not change
+response envelopes.
+
+## PostHog Operational Logs
+
+PostHog operational logs are a separate OTLP Logs destination. They are not a
+replacement for Jaeger/OTEL traces and do not change the trace configuration
+above. The runtime creates the logs provider only when
+`AGENT_WORKBENCH_POSTHOG_LOGS_ENABLED` is exactly `true` or `1`, the PostHog
+analytics configuration is ready, and no analytics opt-out is present. The
+default is disabled for both release and source builds.
+
+The exporter uses PostHog's EU OTLP Logs endpoint,
+`https://eu.i.posthog.com/i/v1/logs`, with the configured project token in the
+authorization header. That token never becomes a log attribute. The logs path
+has its own `LoggerProvider`, batching, flush, and idempotent shutdown lifecycle;
+provider construction, emit, flush, and shutdown failures are contained.
+
+Only actionable, already-structured telemetry records may become logs:
+
+| Source event | Fixed log body |
+| --- | --- |
+| `mcp.tool.dispatch` | `agent_workbench.mcp_tool_attention` |
+| `mcp.resource.dispatch` | `agent_workbench.mcp_resource_attention` |
+| `runtime.boundary` | `agent_workbench.runtime_boundary_attention` |
+
+`blocked`, `degraded`, `missing`, or a positive degraded-mode count produces a
+`WARN` record. Explicit `error` or `failed` outcomes produce an `ERROR` record.
+Successful and unknown events produce no log. Attributes pass through the same
+bounded scalar allowlist as product analytics; arbitrary nested values are
+dropped. Bodies are fixed constants rather than caller-provided text.
+
+The logs adapter intentionally ignores `recordError`. Sanitized exceptions are
+sent only through PostHog Error Tracking, preventing duplicate exception data.
+Raw logger messages, stdout/stderr, exception messages, stack traces, throwable
+objects, repository or path data, source, prompts, queries, commands, resource
+URIs, and environment values are never exported as logs.
 
 Example local Jaeger usage:
 
@@ -178,10 +294,12 @@ MVP dispatch instrumentation currently emits the following stable event names:
 
 - `mcp.tool.dispatch`
 - `mcp.resource.dispatch`
-- `error` for thrown boundary failures
+- `runtime.boundary`
+- `runtime.error`
 
-These events are opt-in when using OpenTelemetry exporters and must not change
-MCP response schemas or add visible feedback to agents.
+These events remain opt-in for OTEL. PostHog follows the distribution-default
+and explicit opt-out contract above. Neither path may change MCP response
+schemas or add visible feedback to agents.
 
 Avoid durable usage records for operational telemetry. Durable usage tables are
 only justified when there is a product query that cannot be answered by OTEL,

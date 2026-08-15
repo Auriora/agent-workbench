@@ -19,6 +19,21 @@ source-package baseline is `0.6.9`:
 npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.9/auriora-agent-workbench-0.6.9.tgz
 ```
 
+Official npm and Windows portable releases include personless aggregate product
+analytics by default. Set `AGENT_WORKBENCH_ANALYTICS_ENABLED=false` in the
+environment inherited by the launching application to opt out before any
+analytics client is created. Handled exceptions are reduced to a bounded
+category and fixed generic message before PostHog Error Tracking receives them;
+raw messages and stacks are excluded. The
+[install guide](../../docs/runbooks/install-agent-workbench.md#anonymous-product-analytics-and-opt-out)
+documents the collected and excluded data categories.
+
+Optional PostHog operational logs remain disabled unless
+`AGENT_WORKBENCH_POSTHOG_LOGS_ENABLED=true` is set. They contain only
+fixed-body, privacy-bounded `WARN` and `ERROR` summaries; the analytics opt-out
+also disables them. Raw logs, exception details, paths, repository data,
+prompts, and commands are excluded.
+
 (See the runbook for source-vs-release wording and install-model details, and
 the install guide for when the published version changes:
 [the install guide](../../docs/runbooks/install-agent-workbench.md).)

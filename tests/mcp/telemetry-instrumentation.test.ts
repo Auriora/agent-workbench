@@ -197,7 +197,6 @@ describe("MCP telemetry instrumentation", () => {
           outcome: "ok",
           analysis_validity: "valid",
           verification_status: "needed",
-          repo_root: "/repo",
           error_count: 0,
           invalid_input_count: 0,
           degraded_mode_count: 0,
@@ -462,7 +461,6 @@ describe("MCP telemetry instrumentation", () => {
         properties: expect.objectContaining({
           surface_kind: "resource",
           surface_name: "status",
-          uri: "repo:///status",
           outcome: "ok",
           runtime_state: "partial",
           degraded_mode_count: 1
@@ -592,7 +590,6 @@ describe("MCP telemetry instrumentation", () => {
         properties: expect.objectContaining({
           surface_kind: "resource",
           surface_name: "status",
-          uri: "repo:///status",
           outcome: "ok",
           runtime_state: "fresh",
           analysis_validity: "valid",
@@ -679,7 +676,7 @@ describe("MCP telemetry instrumentation", () => {
     expect(parsed.data.planned_commands[0]?.args).toEqual(["exec", "rspec", sensitiveRailsPath]);
     expect(parsed.data.source_body).toBe(sensitiveSourceBody);
     const telemetryPayload = JSON.stringify(telemetry.records[0]?.properties);
-    expect(telemetryPayload).toContain("repo-with-rails");
+    expect(telemetryPayload).not.toContain("repo-with-rails");
     expect(telemetryPayload).not.toContain(sensitiveRailsPath);
     expect(telemetryPayload).not.toContain(sensitiveRailsArg);
     expect(telemetryPayload).not.toContain(sensitiveRepoIdentifier);

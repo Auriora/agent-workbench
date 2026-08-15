@@ -26,6 +26,40 @@ Agent Workbench is distributed as an npm package attached to each
 [GitHub release](https://github.com/Auriora/agent-workbench/releases). Normal
 installations should use that package rather than a source checkout.
 
+### Anonymous product analytics
+
+Official release packages enable personless, aggregate product analytics by
+default. Events describe MCP surface names, outcomes, bounded counts, degraded
+states, and latency buckets. They do not include repository names or roots,
+paths, filenames, source, prompts, queries, commands, environment values, raw
+errors, stack traces, user or machine identity, or stable installation IDs.
+Exception autocapture, person profiles, GeoIP enrichment, and session replay are
+disabled. Handled exceptions are reduced locally to a bounded error category
+and a fixed generic message before being routed to PostHog Error Tracking.
+
+To opt out, set this before starting the application that launches Agent
+Workbench (for example Codex or Claude Code):
+
+```bash
+export AGENT_WORKBENCH_ANALYTICS_ENABLED=false
+```
+
+In PowerShell:
+
+```powershell
+$env:AGENT_WORKBENCH_ANALYTICS_ENABLED = "false"
+```
+
+Source and development builds remain analytics-disabled unless explicitly
+configured. See [Install Agent Workbench](docs/runbooks/install-agent-workbench.md)
+for the full configuration contract.
+
+PostHog operational logs are a separate, disabled-by-default option. Set
+`AGENT_WORKBENCH_POSTHOG_LOGS_ENABLED=true` to send only fixed-body `WARN` and
+`ERROR` summaries for actionable runtime outcomes. The analytics opt-out also
+disables these logs. Raw log messages, stdout/stderr, exception messages,
+stacks, paths, repository data, prompts, and commands are never forwarded.
+
 The macOS/Linux package path and the Windows source-package path need Node.js,
 npm, Python 3, and a C/C++ build toolchain for the native parser dependencies.
 Node.js 22 is recommended. Node.js 24 requires C++20 compiler flags. Windows
