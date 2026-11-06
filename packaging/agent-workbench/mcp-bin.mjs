@@ -14,7 +14,7 @@
 // path and imports the compiled entrypoint in-process.
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(here, "..", "..");
@@ -35,7 +35,7 @@ if (!fs.existsSync(entrypoint)) {
 }
 
 try {
-  await import(entrypoint);
+  await import(pathToFileURL(entrypoint).href);
 } catch (error) {
   process.stderr.write(
     `agent-workbench: compiled runtime failed to start: ${

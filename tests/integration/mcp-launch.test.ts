@@ -215,4 +215,29 @@ describe("npm MCP bin failure handling", () => {
       fs.rmSync(packageRoot, { recursive: true, force: true });
     }
   });
+
+  it("loads the compiled entrypoint through a file URL", () => {
+    const packageRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-bin-entrypoint-# and spaces-"));
+    try {
+      const binDir = path.join(packageRoot, "packaging", "agent-workbench");
+      const entrypoint = path.join(packageRoot, "dist", "mcp", "stdio-entrypoint.mjs");
+      fs.mkdirSync(binDir, { recursive: true });
+      fs.mkdirSync(path.dirname(entrypoint), { recursive: true });
+      const binPath = path.join(binDir, "mcp-bin.mjs");
+      const sourceBinPath = path.resolve("packaging", "agent-workbench", "mcp-bin.mjs");
+      fs.copyFileSync(sourceBinPath, binPath);
+      fs.writeFileSync(entrypoint, "process.stdout.write('compiled entrypoint loaded\\n');\n");
+
+      const result = spawnSync(process.execPath, [binPath], {
+        cwd: packageRoot,
+        encoding: "utf8"
+      });
+
+      expect(result.status).toBe(0);
+      expect(result.stdout).toBe("compiled entrypoint loaded\n");
+      expect(result.stderr).toBe("");
+    } finally {
+      fs.rmSync(packageRoot, { recursive: true, force: true });
+    }
+  });
 });

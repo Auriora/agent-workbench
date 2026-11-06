@@ -156,3 +156,15 @@ installed hook generation and runtime payload are unchanged. Focused smoke/hook
 suite8/8, typecheck and diff-check passed. Both remote preflights will rerun on
 the revised signed candidate before tagging. No public release/tag or live
 installation occurred at this failed checkpoint.
+
+## Second portable preflight checkpoint
+
+Candidate6b854f6f4c27384d1e84e44a58bc07e7aaec2dcf passed all four platform
+jobs in run42270429182. Portable run42270432423 passed the corrected hooks,
+then exposed a packaged CLI startup defect: import(absolutePath) was interpreted
+as a d: URL on Windows. The single shared entrypoint now imports
+pathToFileURL(entrypoint).href on every platform. No branch or fallback exists.
+A real copied-bin fixture under a path containing# and spaces reproduces the
+old failure and proves the fix; focused launch18/18, typecheck and diff passed.
+Full source/installed and remote platform gates will validate the final candidate.
+No tag or public release has been created at this checkpoint.
