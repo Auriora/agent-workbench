@@ -136,9 +136,10 @@ reported incident's root cause.
   payloads have sealed metadata-only corrections, fetched through immutable
   project commit URLs with independently pinned provenance and lock integrity.
   Ordinary npm install/npm ls, six native grammar/SQLite fixtures, MCP convergence,
-  source147 files/1535 tests and actual installed24-case entrypoint suite passed.
-  No peer bypass, parser replacement or consumer override. Version0.6.10 remote
-  platform/publication/live-install acceptance remains in Spec070 T002/T003.
+  source147 files/1536 tests and actual published-global24-case entrypoint suite
+  passed. No peer bypass, parser replacement or consumer override. Version0.6.11
+  platform/container/portable, immutable publication and live installation
+  acceptance are recorded in Spec070 verification V003.
 - Owner: platform. Priority: P1. Package installation proof remains distinct
   from source and provider CLI discovery proof.
 
@@ -2720,8 +2721,8 @@ Do not promote an item when:
 - Spec 066 transport, Spec 067/B001 lifetime evidence, Spec 068/B002 shutdown
   and Spec 069/B006 aggregate admission are verified in source. Spec 068 also
   passed its isolated installed gate. Spec070/B007 ordinary npm and native gates
-  are verified; complete its v0.6.10 platform, publication and installation tasks
-  before selecting another slice. B008 remains with Spec 065 cleanup
+  and v0.6.11 platform, publication and live installation are verified through
+  Spec070 T002/T003. B008 remains with Spec 065 cleanup
   authority and B009 with diagnostic counters. Spec 065 retains endpoint location
   and cleanup ownership.
 

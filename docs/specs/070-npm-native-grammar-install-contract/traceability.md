@@ -25,16 +25,16 @@ license: GPL-3.0-or-later
 | --- | --- | --- | --- |
 | Requirement 1 | T001 | complete | verification.md#v001-native-grammar-dependency-acceptance |
 | Requirement 2 | T002 | complete | verification.md#corrective-v0611-candidate-acceptance |
-| Requirement 3 | T002; T003 | partial | v0.6.11 image published; D003 final asset publication and installation pending |
+| Requirement 3 | T002; T003 | complete | verification.md#v003-published-and-installed-v0611 |
 
 ## Design To Implementation Matrix
 
 D001 seals exact corrected metadata; D002 pins project-owned artifact transport.
 D003 governs final publication resumption using retained verified bytes.
 Runtime source/package/platform and corrective container acceptance passed for
-v0.6.11. Publication and live installation remain in progress.
+v0.6.11. Publication and live installation are verified under V003.
 
 ## Open Decision Impact
 
 D001/D002 decisions are fixed. Ordinary consumer, platform and corrective container gates passed for v0.6.11.
-Publication and live installation remain; no product decision is pending.
+D003 publication recovery and live installation passed; no product decision is pending.

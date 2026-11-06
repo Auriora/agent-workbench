@@ -263,3 +263,57 @@ SHA-256, exact repository/workflow/tag, source commit and run42276022042.
 GHCR0.6.11 and latest match the expected source revision and manifest digest
 sha256:bff3196952b3ae2397a653ee50cd9e926da89cf10ed4abe8ddeebe7140a1de1b.
 Normal global npm install dry-run passed; live installation is still0.6.9.
+
+## V003: Published and installed v0.6.11
+
+[Public release](https://github.com/Auriora/agent-workbench/releases/tag/v0.6.11)
+was created once through D003 using the exact retained assets and rendered notes
+from run42276022042 after checksum-validator repair commit e5f69d2. The immutable
+source tag still resolves to91932a24ffc999a25111501046203fec6da1c315. The
+workflow's final-create job remains failed in its historical record; its package,
+portable, image and attestation gates passed. No image rebuild, retag or release
+asset replacement was performed during final-step recovery.
+
+Fresh public downloads match GitHub REST asset digests and the retained bytes:
+
+| Asset | SHA-256 |
+| --- | --- |
+| auriora-agent-workbench-0.6.11.tgz | 54a169ae4b2f5b5e893cbc036a91bd74620d74664600f08eb4c93ab9e50de7f9 |
+| agent-workbench-v0.6.11-windows-x64.zip | a5fcbf3ce8bbefef756322da1473fd741e168d220058b57908f4201ac21f5a99 |
+| agent-workbench-v0.6.11-windows-x64.zip.sha256 | 2ff6ecc41edfc8c1ba6f53f1980a5abc232b023a052dcbd5b947a651db146394 |
+
+The npm receipt SHA-256 is
+2ef0d1419681a7893ffacf05b2926267ebce04bb721269c8017703d15f86abaa.
+All226 source-input hashes match the tag and all3 compiled-output hashes match
+the receipt. GHCR image digest remains
+sha256:bff3196952b3ae2397a653ee50cd9e926da89cf10ed4abe8ddeebe7140a1de1b;
+0.6.11/latest and the image source/version labels agree. ZIP signature verification
+confirms the repository, release workflow, tag, source commit and subject hash.
+
+Normal global npm installation of the verified public tarball passed under
+Node24.8.0 with CXXFLAGS=-std=c++20. Before replacement, pidfd identity checks
+confirmed graceful termination of4 old daemons and24 old bridges belonging to
+the exact0.6.9 installed entrypoints; unrelated processes were not targeted.
+The global package/bin and user runtime pointer resolve to the installed0.6.11
+payload under the existing Node prefix. Receipt hash matches the public asset;
+clean global npm ls, six native grammar routes and SQLite passed.
+
+Actual `codex plugin add agent-workbench@agent-workbench-local --json` returned
+version0.6.11 and its versioned cache path. The cached manifest agrees. This
+proves CLI plugin registration, while provider-labelled MCP tests alone do not
+prove loading in an already-running Codex session. Restart existing Codex sessions
+to load the refreshed plugin.
+
+The published global executable passed24/24 installed-entrypoint tests in47.26
+seconds, including admission saturation and same-version build handoff. The
+variant copies that published payload and changes receipt whitespace only.
+The host runtime pointer was unchanged by this isolated suite.
+Logs: /tmp/awb0611-live-entrypoint-tests.log,
+/tmp/awb0611-global-install.log, /tmp/awb0611-global-dependency-tree.json and
+/tmp/awb0611-live-install-verification.json. Candidate source regression remains
+147 files/1536 passed plus one installed-only skip; the later publisher repair
+has its separate12-test/typecheck evidence above.
+
+Main was advanced without force after publication. B007 is delivered; B008 and
+B009 remain explicitly accepted follow-ups. Specs063/064 and the unrelated
+untracked Spec065 package are not closed or absorbed by this delivery.

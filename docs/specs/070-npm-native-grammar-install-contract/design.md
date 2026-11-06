@@ -120,6 +120,7 @@ packaging/agent-workbench/README.md, Windows portable artifact section.
 
 ## Open Questions
 
-D001 is fixed after a scratch ordinary npm install/npm ls and native grammar
-experiment passed. Production artifact generation and final acceptance remain
-T001 evidence obligations. No blocking product decision remains.
+D001, D002 and D003 are fixed. Production artifact generation, ordinary npm
+installation, source/platform/container gates, publication and live installation
+are verified under T001-T003 and verification V001-V003. No blocking product
+decision remains.

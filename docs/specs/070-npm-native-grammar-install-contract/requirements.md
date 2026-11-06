@@ -13,7 +13,9 @@ license: GPL-3.0-or-later
 
 ## Goals
 
-Deliver B007 and the user-authorized v0.6.10 release/package/install sequence.
+Deliver B007 and the user-authorized release/package/install sequence. The
+initial v0.6.10 candidate was preserved after a container gate failure; the
+verified corrective release and live installation are v0.6.11.
 Ordinary consumer npm installation must agree with native grammar contracts.
 
 ## Durable Source Baseline
