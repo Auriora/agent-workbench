@@ -100,7 +100,11 @@ import {
   rootAuthorityPolicyFromEnv,
   type RootAuthorityPolicy
 } from "./interface-adapters/mcp/registries/root-authority.js";
-import type { IntegrationLauncherIdentity, RankedDocsSearchResult } from "./contracts/index.js";
+import type {
+  DaemonLifetimeEvidence,
+  IntegrationLauncherIdentity,
+  RankedDocsSearchResult
+} from "./contracts/index.js";
 import type {
   DocsRankingCursorCodecPort,
   RepositoryOwnershipLease,
@@ -135,6 +139,7 @@ export type AgentWorkbenchDaemonHealthFacts = {
   socket_path: string;
   repo_root: string;
   connected_clients: number;
+  lifetime_evidence?: DaemonLifetimeEvidence;
 };
 
 export type AgentWorkbenchServerOptions = {

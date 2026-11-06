@@ -3,7 +3,7 @@ title: Runtime operations design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-08-01
+last_reviewed: 2026-11-06
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -394,12 +394,40 @@ Pending sends settle on transport closure as well as drain/error, and remove
 both winning and losing event listeners.
 
 This checked-in design is delivered by Spec 066, separately from installation.
-Daemon-lifetime failure persistence and worker-safe shutdown settlement are
-accepted follow-up work in
-[backlog B001/B002](../backlog/README.md#transport-reliability-follow-up).
+Daemon lifetime evidence is delivered in source by Spec 067 below. Worker-safe
+shutdown settlement remains [backlog B002](../backlog/README.md#transport-reliability-follow-up).
 The existing one-second SIGTERM deadline and startup-only stderr capture have
 not been changed by the transport repair; an orphaned build remains evidence
 of interruption, not proof of a particular cause.
+
+## Daemon Lifetime Evidence
+
+The daemon writes one bounded private local receipt after successful admission,
+independently of endpoint metadata that shutdown removes. The receipt retains
+current and at most one previous launch. It survives the launching client's
+exit; the daemon is its only canonical writer. Launch-aware updates prevent a
+stale observer replacing a newer owner's record. A dedicated evidence lock
+serializes the check and atomic replacement; contention reports unavailable
+evidence after one acquisition attempt. Hooks never wait, retry or reclaim a
+lock. Admission can reclaim only a positively dead lock owner.
+
+Post-ready uncaught exceptions and default-fatal unhandled rejections are observed
+with uncaughtExceptionMonitor, preserving Node's fatal behavior. SIGTERM requests
+and actual exit codes are recorded through the existing termination path and exit
+event. A fatal classification survives the later exit observation. Persistence
+failure cannot replace a fatal exception or prevent normal runtime operation.
+No exception/rejection suppression handlers, retry loop or alternate store exists.
+
+A new admitted launch rotates a prior nonterminal record to unknown prior-owner
+loss. SIGKILL, native crashes, import/bootstrap failures and unavailable storage
+can leave no terminal observation; unknown loss does not establish any specific
+cause. Missing or invalid evidence is explicitly unavailable in daemon health.
+The existing one-second termination deadline is unchanged; B002 owns settling
+refresh workers before exit. Spec 065 owns endpoint and startup diagnostic policy.
+
+The source implementation requires a rebuilt and installed package to affect a
+running runtime. Local POSIX directory/file mode checks do not establish Windows
+ACL privacy. Writes are bounded in bytes, not guaranteed against filesystem stalls.
 
 ## Async And Concurrency Model
 

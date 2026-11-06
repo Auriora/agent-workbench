@@ -56,8 +56,8 @@ behavior to `docs/design/runtime-operations-design.md`, recovery guidance to
 
 Requirements and design are reconciled against the source. The bounded
 transport implementation and targeted validation are complete. Full-suite
-readiness remains partial due to the unrelated existing release-note metadata
-failure recorded in verification.md. Template authority is the installed
+verification is complete after the frontmatter repair; verification.md records
+the passing 133-file, 1417-test run. Template authority is the installed
 Spec Lifecycle Manager skill fallback: no repository spec templates exist.
 No canonical-context artifact is required: all authorities are local files.
 

@@ -31,18 +31,61 @@ import {
   LazyOwnershipGatedRefreshAuthority
 } from "../../src/infrastructure/runtime/repository-ownership.js";
 import type {
+  DaemonLifetimeEvidencePort,
   DaemonRefreshActivityTransition,
   RepositoryOwnershipLease,
   RepositoryOwnershipPort,
   SnapshotRefreshControllerPort,
   TelemetryRecorderPort
 } from "../../src/ports/index.js";
+import type {
+  DaemonLifetimeEvidence,
+  DaemonLifetimeLaunch
+} from "../../src/contracts/daemon-lifetime-contracts.js";
 import {
   MAX_DAEMON_HANDSHAKE_BYTES,
   MAX_MCP_FRAME_BYTES
 } from "../../src/contracts/mcp-transport-contracts.js";
 
 describe("Agent Workbench daemon launcher", () => {
+  it("activates lifetime evidence on admission and exposes it through health", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-lifetime-");
+    const evidence = new AdmissionEvidence();
+    const daemon = await startAgentWorkbenchDaemon({
+      repoRoot,
+      idleGraceMs: 3_000,
+      lifetimeEvidence: evidence,
+      serverOptions: { startupRefreshDelayMs: 60_000 }
+    });
+    const socket = await connectOrStartDaemon({
+      repoRoot,
+      debugRepoRootOverride: false,
+      startTimeoutMs: 2_000
+    });
+    const session = createSocketSession(socket);
+
+    try {
+      expect(evidence.readyCalls).toHaveLength(1);
+      await initializeSocketSession(session, 1, "lifetime-test");
+      const response = await session.call({
+        jsonrpc: "2.0",
+        id: 2,
+        method: "resources/read",
+        params: { uri: "integration:///health/agent-workbench" }
+      });
+      const text = response.result?.contents?.[0]?.text ?? response.result?.content?.[0]?.text;
+      expect(text).toBeTypeOf("string");
+      const health = JSON.parse(text ?? "{}");
+      expect(health.data.daemon_lifetime_evidence).toMatchObject({
+        status: "available",
+        current: { phase: "ready", reason: "admitted" }
+      });
+    } finally {
+      socket.destroy();
+      await daemon.close();
+    }
+  });
+
   it("owns one shared telemetry lifecycle across daemon clients", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-telemetry-");
     const paths = daemonPaths(createDaemonIdentity(repoRoot));
@@ -2823,6 +2866,34 @@ describe("Agent Workbench daemon launcher", () => {
 });
 
 const createdRepoRoots: string[] = [];
+
+class AdmissionEvidence implements DaemonLifetimeEvidencePort {
+  public readonly readyCalls: DaemonLifetimeLaunch[] = [];
+
+  public ready(launch: DaemonLifetimeLaunch): void {
+    this.readyCalls.push(launch);
+  }
+
+  public observeFatal(): void {}
+  public observeSignal(): void {}
+  public observeExit(): void {}
+
+  public getEvidence(): DaemonLifetimeEvidence {
+    const launch = this.readyCalls[0];
+    if (launch === undefined) {
+      return { status: "unavailable", reason: "not_admitted" };
+    }
+    return {
+      status: "available",
+      current: {
+        ...launch,
+        timestamp: launch.started_at,
+        phase: "ready",
+        reason: "admitted"
+      }
+    };
+  }
+}
 
 afterEach(() => {
   const uniqueRepoRoots = Array.from(new Set(createdRepoRoots.splice(0, createdRepoRoots.length)));

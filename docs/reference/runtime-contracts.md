@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-08-05
+last_reviewed: 2026-11-06
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -36,6 +36,7 @@ Runtime contract schemas are grouped by stable runtime context under
   response envelopes, and envelope construction.
 - `runtime-integration-contracts.ts`: MCP surface health and coding-agent
   integration profile contracts.
+- `daemon-lifetime-contracts.ts`: bounded private daemon lifetime evidence.
 - `mcp-transport-contracts.ts`: daemon handshake and MCP frame bounds and fixed
   local transport failure messages.
 
@@ -391,9 +392,29 @@ closure settles that bridge and closes its socket without signalling the
 shared daemon; failure reporting cannot make teardown depend on stderr.
 
 These are source contracts for Spec 066. They become installed behavior only
-after a package containing the changes is built and installed. Persistent
-daemon failure/exit evidence and refresh-aware termination remain deferred in
-[backlog B001/B002](../backlog/README.md#transport-reliability-follow-up).
+after a package containing the changes is built and installed. Spec 067 adds
+source lifetime evidence below; refresh-aware termination remains
+[backlog B002](../backlog/README.md#transport-reliability-follow-up).
+
+## Daemon Lifetime Evidence
+
+The canonical schemas in `src/contracts/daemon-lifetime-contracts.ts` define
+bounded local post-ready evidence. One versioned store contains current and
+optional previous launch records, with a maximum serialized size of 4096 bytes.
+The store is `${metadataPath}.lifetime.json`, separate from endpoint metadata,
+and survives endpoint cleanup. Its identity and launch token guard updates;
+new admission rotates a prior nonterminal record to unknown prior-owner loss
+without inventing a terminal signal or exit code.
+
+Integration health optionally includes `data.daemon_lifetime_evidence`, either available with
+records or unavailable with a fixed reason. This field survives unavailable refresh
+diagnostics; no refresh receipt is fabricated. Unavailable evidence blocks health
+verification without changing the refresh controller's graph freshness. Consumers
+must distinguish observation loss from a confirmed fatal exception or observed
+exit. Node fatal behavior remains unchanged; import/bootstrap and uncatchable
+terminations have no guaranteed terminal record. Raw throwables, stack traces,
+paths and client payloads are excluded. This is source behavior requiring rebuild
+and installation, with no claim about a running installed runtime.
 
 ## Daemon Health
 

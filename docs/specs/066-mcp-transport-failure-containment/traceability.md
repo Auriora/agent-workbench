@@ -27,7 +27,7 @@ license: GPL-3.0-or-later
 | Requirement 1 | must-have | AC1-AC3 | Bridge lifecycle | T001 | V001 | runtime operations design | complete | none |
 | Requirement 2 | must-have | AC1-AC4 | Input framing | T002 | V002, V004 | runtime contracts | complete | none |
 | Requirement 3 | must-have | AC1-AC2 | Sending | T002 | V003 | runtime contracts | complete | none |
-| Requirement 4 | must-have | AC1-AC3 | Deferred work; promotion | T003, T004 | V004, V005 | backlog; runbook | partial-blocking | T004: full-suite metadata failure in excluded release-note draft |
+| Requirement 4 | must-have | AC1-AC3 | Deferred work; promotion | T003, T004 | V004, V005 | backlog; runbook | complete | none |
 
 ## Correctness Property Coverage
 

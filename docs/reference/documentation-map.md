@@ -3,7 +3,7 @@ title: Documentation map
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-07-21
+last_reviewed: 2026-11-06
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -49,7 +49,7 @@ uses them.
 | Threat model | [Threat model](../security/threat-model.md) |  | Owns security assumptions, untrusted-repository boundaries, and security-sensitive follow-up routing. |
 | SQLite graph schema and freshness model | [Graph store design](../design/graph-store-design.md) | graph schema; SQLite schema | Owns storage invariants, FTS, rebuilds, and query budgets. |
 | Cache, warm-up, and concurrency | [Runtime operations design](../design/runtime-operations-design.md) |  | Owns cache tiers, invalidation, warm-up, work queues, worker pools, async/snapshot rules, and runtime signals exposed to observability. |
-| Observability, trace export, debug harnesses, and profiling | [Observability and debugging design](../design/observability-debugging-design.md) |  | Owns disabled-by-default trace configuration, OTLP HTTP export, repo-local debug harnesses including the MCP tool sweep, profiler guidance, low-impact monitoring candidates, and usage-record boundaries. Sweep result quality vocabulary is summarized in [Runtime contracts](runtime-contracts.md). |
+| Observability, trace export, debug harnesses, and profiling | [Observability and debugging design](../design/observability-debugging-design.md) |  | Owns local daemon lifetime evidence privacy, disabled-by-default trace configuration, OTLP HTTP export, repo-local debug harnesses including the MCP tool sweep, profiler guidance, low-impact monitoring candidates, and usage-record boundaries. Sweep result quality vocabulary is summarized in [Runtime contracts](runtime-contracts.md). |
 | Codex plugin | [Runbook](../runbooks/codex-agent-workbench-plugin.md) |  | Setup. |
 | Adapter capability model and promotion gates | [Language adapter design](../design/language-adapter-design.md) |  | Owns adapter lifecycle and semantic promotion rules. |
 | Language priority table | [Language capability matrix](language-capability-matrix.md) |  | Reference view only; uses enums from runtime contracts. |

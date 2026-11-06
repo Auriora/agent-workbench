@@ -3,7 +3,7 @@ title: Observability and debugging design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-08-15
+last_reviewed: 2026-11-06
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -25,6 +25,21 @@ hot paths.
 - Hot paths must pay near-zero overhead when telemetry is disabled.
 - Raw backend output belongs in traces or debug logs, not agent-facing MCP
   responses.
+
+## Local Daemon Lifetime Evidence
+
+Daemon lifetime receipts are operational local evidence, independent of optional
+telemetry. The source implementation retains at most two launch records and 4096
+serialized bytes with launch identity, PID, timestamps and fixed lifecycle/cause
+enums. It excludes raw errors, stack traces, repository paths, environment values
+and client/tool payloads. Receipt content is not forwarded to PostHog or OTEL.
+Fatal observation ignores the throwable itself and preserves default termination.
+
+Health exposes available records or a fixed unavailable reason. A missing terminal
+observation is unknown prior-owner loss on the next admission; it does not diagnose
+SIGKILL or a native crash. See [runtime operations](runtime-operations-design.md#daemon-lifetime-evidence)
+for observation boundaries and [runtime contracts](../reference/runtime-contracts.md#daemon-lifetime-evidence)
+for the canonical schema. This behavior is source delivery, not installed evidence.
 
 ## OpenTelemetry And Jaeger
 

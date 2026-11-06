@@ -35,7 +35,7 @@ reported incident's root cause.
 
 | ID | Status | Topic | Priority | Owner | Target |
 | --- | --- | --- | --- | --- | --- |
-| B001 | accepted | Preserve daemon lifetime failure and exit evidence | P0 | platform | Focused lifecycle diagnostics spec; next after Spec 066 |
+| B001 | done | Preserve daemon lifetime failure and exit evidence | P0 | platform | [Spec 067](../specs/067-daemon-lifetime-evidence/requirements.md); source delivery verified |
 | B002 | accepted | Settle refresh workers and publication before daemon termination | P0 | platform | Focused shutdown/handoff spec after B001 diagnostics design |
 | B003 | done | Contain bridge stdout and stderr failures | P0 | platform | Spec 066 T001 |
 | B004 | done | Bound daemon handshake and incoming MCP frames | P1 | platform | Spec 066 T002 |
@@ -49,8 +49,10 @@ reported incident's root cause.
 - Signal: the launcher removes child exit/error listeners and destroys its
   stderr reader after startup. A later orphaned build identifies interruption
   but cannot distinguish a signal, runtime exception, or native failure.
-- Scope: daemon-local lifecycle evidence and launcher observation; no raw
-  stderr or repository/client payload export to analytics.
+- Scope: post-ready daemon-local lifecycle evidence; Spec 067 selects one
+  daemon-owned canonical writer because the launching parent can disappear.
+  Launcher observation remains startup-only. No raw stderr or repository/client
+  payload export to analytics; unobservable terminal causes remain unknown.
 - Acceptance: define one bounded private local record with launch identity,
   phase, classified cause, observed exit code/signal and timestamp; enforce
   permissions, size/retention and launch-aware writes; do not invent evidence
@@ -63,9 +65,10 @@ reported incident's root cause.
 - Promotion: runtime operations and observability design, runtime contracts,
   operator runbook, then a focused lifecycle diagnostics spec. Startup cause
   classification remains owned by Spec 065; coordinate the local cause model.
-- Disposition: accepted P0, intentionally deferred from Spec 066 because this
-  changes daemon-lifetime evidence and persistence contracts, not transport
-  cleanup. Owner: platform. Sequencing: next after the bounded transport fix.
+- Disposition: done in source through Spec 067; 138 files and 1445 tests pass,
+  with independent review and compiled MCP smoke. Owner: platform. Installation
+  and release acceptance are separate. Spec 066 full verification is complete. This changes
+  daemon-lifetime evidence; B002 shutdown policy and Spec 065 remain separate.
 
 ### B002: Settle refresh workers before daemon termination
 
@@ -2657,8 +2660,8 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-- Finish Spec 066 transport validation, then select B001 daemon-lifetime
-  failure evidence and B002 worker-safe shutdown through focused specs.
+- Spec 066 transport validation and Spec 067/B001 lifetime evidence are verified
+  in source. Select B002 worker-safe shutdown through a focused spec next.
   Spec 065 retains endpoint location and cleanup ownership.
 
 - EB065/Spec 053 is delivered with exact population accounting, bounded public

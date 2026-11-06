@@ -75,8 +75,8 @@ No incident cause, package publication, install or closure commit is claimed.
 ## Delivery state
 
 Source implementation, durable promotion, backlog routing and independent
-review are complete. The package remains active: T004's full-suite gate is
-partial because the existing untracked release-note draft lacks frontmatter.
+review are complete. The package is retained with T004 complete; the passing completion evidence
+below supersedes the earlier release-note metadata blocker.
 No closure/archive or commit metadata is fabricated; no global runtime was
 installed or published.
 
@@ -156,3 +156,13 @@ checks do not relabel that run as green.
 - The pre-existing untracked release-note draft's missing frontmatter remains
   outside this slice. It is not counted as a transport regression or silently
   repaired, and no green full-suite, installed-runtime or closure claim is made.
+
+## T004 completion after metadata repair
+
+On 2026-11-06, following frontmatter fix commit `8aa5094`, the unchanged
+transport implementation from `bb7abc1` passed `pnpm test --maxWorkers=2`:
+**133 test files and 1417 tests passed**, with no failures. This supersedes the
+earlier full-suite/closure-gate blocker; it does not rewrite the historical
+review or failed-run evidence above. T004 is complete and Requirement 4 coverage
+is complete. B001/B002/B006 remain routed follow-up work. The package is retained
+for its delivery record; no archive cleanup, install or release is claimed.

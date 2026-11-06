@@ -7,7 +7,10 @@ import fs from "node:fs";
 import net, { type Server, type Socket } from "node:net";
 import path from "node:path";
 import { createRootAuthorityPolicy } from "../interface-adapters/mcp/registries/root-authority.js";
-import type { IntegrationLauncherIdentity } from "../contracts/index.js";
+import type {
+  DaemonLifetimeEvidence,
+  IntegrationLauncherIdentity
+} from "../contracts/index.js";
 import { GRAPH_STORE_IDENTITY_VERSION } from "../contracts/graph-store-identity-contracts.js";
 import { retireLegacyGraphStore } from "../infrastructure/sqlite/graph-store-location.js";
 import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../runtime/version.js";
@@ -34,12 +37,15 @@ import { FilesystemWorkspaceWatcherAdapter } from "../infrastructure/filesystem/
 import { SystemClockAdapter } from "../infrastructure/time/index.js";
 import { resolveWorkspaceWatcherConfig } from "../domain/models/index.js";
 import { createRuntimeTelemetryAdapter } from "../infrastructure/telemetry/index.js";
+import { FileDaemonLifetimeEvidenceAdapter } from "../infrastructure/runtime/daemon-lifetime-evidence.js";
+import { installDaemonProcessHooks } from "../infrastructure/runtime/daemon-process-hooks.js";
 import { SocketServerTransport } from "./socket-transport.js";
 import {
   DAEMON_HANDSHAKE_TOO_LARGE_MESSAGE,
   MAX_DAEMON_HANDSHAKE_BYTES
 } from "../contracts/mcp-transport-contracts.js";
 import type {
+  DaemonLifetimeEvidencePort,
   SnapshotRefreshAdmissionFailurePort,
   SnapshotRefreshControllerPort,
   SnapshotRefreshDiagnosticsPort,
@@ -166,6 +172,7 @@ type DaemonTestHooks = {
   awaitBootstrap?: Promise<void>;
   /** Construct daemon-owned telemetry without enabling a real exporter. */
   createTelemetry?: () => import("../ports/index.js").TelemetryRecorderPort;
+  createLifetimeEvidence?: (metadataPath: string) => DaemonLifetimeEvidencePort;
 };
 
 export async function startAgentWorkbenchDaemon(input: {
@@ -175,6 +182,8 @@ export async function startAgentWorkbenchDaemon(input: {
   launchToken?: string;
   launchStartedAt?: string;
   serverOptions?: AgentWorkbenchServerOptions;
+  lifetimeEvidence?: DaemonLifetimeEvidencePort;
+  installProcessHooks?: boolean;
   testHooks?: DaemonTestHooks;
 }): Promise<StartedAgentWorkbenchDaemon> {
   const repoRoot = path.resolve(input.repoRoot);
@@ -219,6 +228,8 @@ export async function startAgentWorkbenchDaemon(input: {
     ...input.serverOptions,
     telemetry: daemonTelemetry
   };
+  const lifetimeEvidence = input.lifetimeEvidence ??
+    input.testHooks?.createLifetimeEvidence?.(paths.metadataPath);
   if (input.serverOptions?.telemetry === undefined) {
     sharedDisposers.add(() => daemonTelemetry.shutdown());
   }
@@ -341,7 +352,8 @@ export async function startAgentWorkbenchDaemon(input: {
             pid: metadata.pid,
             socket_path: metadata.socketPath,
             repo_root: metadata.identity.repoRoot,
-            connected_clients: connected.size
+            connected_clients: connected.size,
+            lifetime_evidence: readLifetimeEvidence(lifetimeEvidence)
           };
         },
         mcpServers
@@ -532,6 +544,23 @@ export async function startAgentWorkbenchDaemon(input: {
     bootstrapFailureCode = "metadata_write_failed";
     writeDaemonMetadata(paths.metadataPath, metadata);
     bootstrapFailureCode = "bootstrap_failed";
+    if (lifetimeEvidence !== undefined) {
+      try {
+        lifetimeEvidence.ready({
+          daemon_id: metadata.identity.id,
+          launch_token: metadata.launchLifecycle.launchToken,
+          pid: metadata.pid,
+          runtime_version: metadata.identity.runtimeVersion,
+          build_fingerprint: metadata.identity.buildFingerprint,
+          started_at: metadata.launchLifecycle.startedAt
+        });
+      } catch {
+        // Evidence loss must not block daemon admission.
+      }
+      if (input.installProcessHooks === true) {
+        installDaemonProcessHooks({ evidence: lifetimeEvidence });
+      }
+    }
     readinessEstablished = true;
     flushPendingSockets();
     lifetime.start();
@@ -613,6 +642,10 @@ export async function runDaemonFromEnv(env: NodeJS.ProcessEnv = process.env): Pr
       idleGraceMs: readIdleGraceMs(env),
       launchToken,
       launchStartedAt,
+      installProcessHooks: isDaemonProcess(env),
+      lifetimeEvidence: new FileDaemonLifetimeEvidenceAdapter(
+        `${metadataPath ?? daemonPaths(identity).metadataPath}.lifetime.json`
+      ),
       serverOptions: {
         startupRefreshDelayMs: daemonStartupRefreshDelayMsFromEnv(env)
       }
@@ -637,6 +670,20 @@ export async function runDaemonFromEnv(env: NodeJS.ProcessEnv = process.env): Pr
       launchStartedAt
     });
     throw error;
+  }
+}
+
+function readLifetimeEvidence(
+  evidence: DaemonLifetimeEvidencePort | undefined
+): DaemonLifetimeEvidence | undefined {
+  if (evidence === undefined) return undefined;
+  try {
+    return evidence.getEvidence();
+  } catch {
+    return {
+      status: "unavailable",
+      reason: "store_unreadable"
+    };
   }
 }
 

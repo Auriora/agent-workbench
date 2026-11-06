@@ -9,6 +9,9 @@ import {
   nextActionSchema,
   toolCapabilityClassSchema
 } from "./runtime-core-contracts.js";
+import {
+  daemonLifetimeEvidenceSchema
+} from "./daemon-lifetime-contracts.js";
 
 export const mcpSurfaceKindSchema = z.enum(["tool", "resource", "prompt"]);
 export type McpSurfaceKind = z.infer<typeof mcpSurfaceKindSchema>;
@@ -492,6 +495,7 @@ export const integrationHealthSchema = z
       })
       .strict()
       .optional(),
+    daemon_lifetime_evidence: daemonLifetimeEvidenceSchema.optional(),
     daemon: integrationDaemonHealthSchema.optional(),
     next_actions: z.array(nextActionSchema)
   })

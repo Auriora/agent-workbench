@@ -3,7 +3,7 @@ title: Codex Agent Workbench plugin and MCP setup
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-07-30
+last_reviewed: 2026-11-06
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -197,10 +197,21 @@ Oversized input closes that client connection. Reduce a request larger than
 daemon handshake has a separate 16 KiB line bound. Do not delete caches or
 restart the daemon to work around a rejected frame.
 
-Persistent daemon failure evidence and coordinated refresh shutdown remain
-tracked by [B001/B002](../backlog/README.md#transport-reliability-follow-up).
-A recovered orphaned build alone does not establish why the former owner
-stopped. Existing endpoint-loss work stays in Spec 065.
+Spec 067 adds bounded persistent daemon lifetime evidence in source. After a
+package containing it is rebuilt and installed, inspect daemon health's optional
+`daemon_lifetime_evidence`: available evidence distinguishes current and previous
+launches; unavailable evidence explains why the local receipt cannot be trusted.
+An observed exception, rejection or exit is attributable to its recorded launch.
+`unknown_prior_owner_loss` means no reliable terminal observation exists; it does
+not establish SIGKILL, a native crash or the cause of an orphaned build. A new
+admitted launch records that distinction even when the launching client vanished.
+
+The private receipt survives normal endpoint cleanup and retains only two launch
+records. Do not delete or edit it as recovery. Corrupt or unsafe storage is explicit
+unavailable evidence; no alternate store is used. Receipt content is local and is
+not exported to analytics. Pre-ready failures remain startup diagnostics. Worker
+settlement remains [B002](../backlog/README.md#transport-reliability-follow-up), and
+endpoint-loss work stays in Spec 065. No installed acceptance is claimed here.
 
 ### Bridge process interpretation
 

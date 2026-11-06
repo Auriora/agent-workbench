@@ -70,8 +70,21 @@ import type {
   SnapshotPublicationState,
   SnapshotRefreshDiagnosticsReceipt
 } from "../contracts/index.js";
+import type {
+  DaemonLifetimeEvidence,
+  DaemonLifetimeFatalOrigin,
+  DaemonLifetimeLaunch
+} from "../contracts/daemon-lifetime-contracts.js";
 
 export type { SnapshotPublicationState } from "../contracts/index.js";
+
+export interface DaemonLifetimeEvidencePort {
+  ready(launch: DaemonLifetimeLaunch): void;
+  observeFatal(origin: DaemonLifetimeFatalOrigin): void;
+  observeSignal(signal: "SIGTERM"): void;
+  observeExit(code: number | null): void;
+  getEvidence(): DaemonLifetimeEvidence;
+}
 
 export type ReferenceCursorDecodeResult =
   | { ok: true; payload: ReferenceCursorPayload }

@@ -6,6 +6,7 @@
 import type {
   IntegrationHealth,
   IntegrationDaemonHealth,
+  DaemonLifetimeEvidence,
   IntegrationHealthRequest,
   IntegrationConnectionIdentity,
   IntegrationSessionEvidence,
@@ -52,6 +53,7 @@ export type GetIntegrationHealthInput = {
     socket_path: string;
     repo_root: string;
     connected_clients: number;
+    lifetime_evidence?: DaemonLifetimeEvidence;
     diagnostics: SnapshotRefreshDiagnosticsPort;
   };
 };
@@ -91,6 +93,7 @@ export async function getIntegrationHealth(input: GetIntegrationHealthInput): Pr
       surfaces,
       counts: countSurfaces(surfaces),
       root_policy: input.root_policy,
+      daemon_lifetime_evidence: input.daemon?.lifetime_evidence,
       next_actions: [
         ...buildIdentityRecoveryActions(providerIdentity?.provider, identities),
         ...buildNextActions(surfaces)
@@ -149,7 +152,11 @@ export async function getIntegrationHealth(input: GetIntegrationHealthInput): Pr
   };
   return {
     health: { ...baseHealth, daemon },
-    meta: diagnosticsMeta(repoRoot, diagnostics)
+    meta: diagnosticsMeta(
+      repoRoot,
+      diagnostics,
+      baseHealth.daemon_lifetime_evidence?.status === "unavailable"
+    )
   };
 }
 
@@ -172,14 +179,15 @@ function healthyMeta(repoRoot: string): ResponseMetadata {
 
 function diagnosticsMeta(
   repoRoot: string,
-  diagnostics: SnapshotRefreshDiagnosticsReceipt
+  diagnostics: SnapshotRefreshDiagnosticsReceipt,
+  lifetimeEvidenceUnavailable = false
 ): ResponseMetadata {
   const refreshing = diagnostics.execution_state === "planned" || diagnostics.execution_state === "running";
   const blocked = diagnostics.execution_state === "failed" || diagnostics.graph_freshness !== "fresh";
   return {
     ...healthyMeta(repoRoot),
     freshness: refreshing ? "refreshing" : diagnostics.graph_freshness,
-    verification_status: blocked || refreshing ? "blocked" : "done"
+    verification_status: blocked || refreshing || lifetimeEvidenceUnavailable ? "blocked" : "done"
   };
 }
 

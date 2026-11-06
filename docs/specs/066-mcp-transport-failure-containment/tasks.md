@@ -47,12 +47,12 @@ an explicit exception to the usual single in-progress task convention.
   - Evidence: Artifacts: docs/backlog/README.md and docs/specs/066-mcp-transport-failure-containment/traceability.md record all five dispositions; docs/design/runtime-operations-design.md, docs/reference/runtime-contracts.md and docs/runbooks/codex-agent-workbench-plugin.md promote source behavior. backlog_items returned B001/B002 accepted P0 and B003-B005 done, planning_state valid. Seven new link targets checked, nine docs checked with style advisories only; git diff --check passed.
 
   - Evidence mode: artifact
-- [/] T004 Verify integration and review the delivered slice.
+- [x] T004 Verify integration and review the delivered slice.
   - Depends on: T001, T002, T003.
   - Requirements: Requirement 4.1; CP-001 to CP-004.
   - Files: this package; tests and durable docs above.
   - Acceptance: typecheck, full tests and plugin validation pass; built-runtime
     fixture smoke and independent review have evidence and no open blockers.
-  - Evidence: Final pnpm test --maxWorkers=2: 132/133 files, 1414/1415 tests passed; sole failure is pre-existing untracked docs/release-notes/v0.1.1-agent-instructions.md missing frontmatter. All transport/integration tests pass. Final typecheck, plugin validation, contracts check, compiled build/receipt and isolated Linux MCP smoke pass. Independent correctness review has no remaining blockers; additional post-completion stdout regression passes. See verification.md. Full-suite/closure gate remains partial; unrelated draft preserved.
+  - Evidence: After frontmatter fix commit 8aa5094, pnpm test --maxWorkers=2 passed all 133 files and 1417 tests on 2026-11-06. Previous typecheck, plugin/contracts checks, build receipt and isolated compiled MCP smoke passed; MoE source review has no blockers and residual W1 is routed to B006. Implementation commit bb7abc1; no installed-runtime or release claim.
   - Evidence mode: command
-  - Status: Implementation/review/promotion complete; full-suite metadata gate blocked by unrelated pre-existing draft.
+  - Status: Verification complete; package retained with delivery evidence and deferred work routed.
