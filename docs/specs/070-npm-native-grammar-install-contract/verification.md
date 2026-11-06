@@ -137,3 +137,22 @@ prebuilds. Remote platform evidence is still pending.
 
 All declared local source/package gates are green. Remote cross-platform and
 Windows portable gates remain pending before T003 publication/installation.
+
+## Remote preflight checkpoint and correction
+
+Candidate d45e42864a4429ceca0d64a14400bc8b5d0b75e8 is signed and passed all
+four cross-platform jobs (Linuxx64/ARM64, macOS, Windows) in run42268596035.
+Each job ran the shared six-parser/SQLite fixture and hook/MCP smokes.
+
+Windows portable run42268600046 installed locked dependencies, deployed and
+built the ZIP, then failed its installed Codex SessionStart hook invocation with
+Windows path-syntax error. Root cause was the smoke harness: cmd.exe /s /c
+strips the first/last quote of its command-string argument. The valid materialized
+hook already quotes executable and script separately, so the harness must add
+one enclosing quote pair while keeping windowsVerbatimArguments=true.
+
+The bounded correction changes only the smoke invocation and its contract test;
+installed hook generation and runtime payload are unchanged. Focused smoke/hook
+suite8/8, typecheck and diff-check passed. Both remote preflights will rerun on
+the revised signed candidate before tagging. No public release/tag or live
+installation occurred at this failed checkpoint.

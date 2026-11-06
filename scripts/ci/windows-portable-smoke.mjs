@@ -150,7 +150,12 @@ export function buildBundledEntrypointStatusSmokePlan({ bundleRoot, workspaceRoo
 export function buildWindowsCmdInvocation(command, options) {
   return {
     command: options.env.COMSPEC,
-    args: ["/d", "/s", "/c", command],
+    // `cmd /s /c` removes the first and last quote from its command
+    // argument.  The command itself already quotes executable and script
+    // paths, so preserve those quotes by adding the required outer pair.
+    // `windowsVerbatimArguments` keeps this exact cmd.exe command line from
+    // being rewritten by Node's Windows argument quoting.
+    args: ["/d", "/s", "/c", `"${command}"`],
     options: {
       ...options,
       windowsVerbatimArguments: true

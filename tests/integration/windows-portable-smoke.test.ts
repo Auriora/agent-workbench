@@ -76,7 +76,7 @@ describe("Windows portable consumer smoke contract", () => {
     expect(plan).toMatchObject({
       child: {
         command: env.COMSPEC,
-        args: ["/d", "/s", "/c", '"C:\\bundle\\agent-workbench.cmd"'],
+        args: ["/d", "/s", "/c", '""C:\\bundle\\agent-workbench.cmd""'],
         options: {
           cwd: "C:\\workspace",
           env,
@@ -87,13 +87,13 @@ describe("Windows portable consumer smoke contract", () => {
     });
   });
 
-  it("preserves already-quoted cmd.exe commands for every Windows smoke call site", () => {
+  it("wraps already-quoted commands for cmd.exe /s /c without losing path quotes", () => {
     const env = { COMSPEC: "C:\\Windows\\System32\\cmd.exe" };
-    const command = '"C:\\bundle with spaces\\configure.cmd"';
+    const command = '"C:\\bundle with spaces\\node.exe" "C:\\bundle with spaces\\plugins\\agent-workbench\\hooks\\session-start.js"';
 
     expect(buildWindowsCmdInvocation(command, { env, encoding: "utf8" })).toEqual({
       command: env.COMSPEC,
-      args: ["/d", "/s", "/c", command],
+      args: ["/d", "/s", "/c", `"${command}"`],
       options: {
         env,
         encoding: "utf8",
