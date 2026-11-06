@@ -1,0 +1,337 @@
+{
+  "artifacts": {
+    "tree-sitter-ruby": {
+      "allowed_metadata_changes": {
+        "peerDependencies.tree-sitter": {
+          "from": "^0.21.1",
+          "to": "^0.25.0"
+        },
+        "version": {
+          "from": "0.23.1",
+          "to": "0.23.1-awb.1"
+        }
+      },
+      "archive": "tree-sitter-ruby-0.23.1-awb.1.tgz",
+      "archive_sha256": "3ec09920812e280e5e4237ccc45205f3c4b234271c8640f5111960acfad72c8e",
+      "corrected_package_json_sha256": "f70c1f0f5dab5dea813a76e46b680cc2decf4c6cc3efdd99536f61e8989008c0",
+      "corrected_version": "0.23.1-awb.1",
+      "members": {
+        "package/LICENSE": {
+          "mode": 420,
+          "sha256": "ee006f02a3d856df282e409be2a86e24a65bb573a98b9c28343771141351bb6b"
+        },
+        "package/README.md": {
+          "mode": 420,
+          "sha256": "8bee75838a85bf55dab9dcb25dc4b117a86c3275a7ed487ff036787157f6eebd"
+        },
+        "package/binding.gyp": {
+          "mode": 420,
+          "sha256": "5890a49ccc6a81bf1da23c2b740725562acdbbb7c9813dfd87fc3fb228ea80c2"
+        },
+        "package/bindings/node/binding.cc": {
+          "mode": 420,
+          "sha256": "b24ba437af1a31668a2765925f2f994a8516229fae81852451b21c35c32b67d2"
+        },
+        "package/bindings/node/binding_test.js": {
+          "mode": 420,
+          "sha256": "c35f2aaec5d06fa42a4cea226fa4cb841a04a7506e70086c2ea5d9fd67d8c482"
+        },
+        "package/bindings/node/index.d.ts": {
+          "mode": 420,
+          "sha256": "5f593f781f7cb12a3dcdcab2f9c063a77b9965f537bb01c5c05958947f5ff8fd"
+        },
+        "package/bindings/node/index.js": {
+          "mode": 420,
+          "sha256": "52c37620fa69a1ad54c8b3c5812f5856c27e78018872efecc1c418d834534aea"
+        },
+        "package/grammar.js": {
+          "mode": 420,
+          "sha256": "3b5a0afa4ad836b2579c6d836450a373c6736bb0da3d7e030a9d4e66b94fbc7a"
+        },
+        "package/prebuilds/darwin-arm64/tree-sitter-ruby.node": {
+          "mode": 420,
+          "sha256": "5f4e99bcee31e060f21bb892d047654db60a4943839c4e8b71431abe4f7952ca"
+        },
+        "package/prebuilds/darwin-x64/tree-sitter-ruby.node": {
+          "mode": 420,
+          "sha256": "0a15d24f59cb003cb9c2d88473c2ba61844b6d992d14478a4be4deb23c3b4838"
+        },
+        "package/prebuilds/linux-arm64/tree-sitter-ruby.node": {
+          "mode": 420,
+          "sha256": "649772a444e61d5ee6432beb289c8f9ba2b7d32ebf5f6af80c6a0fdeeafed338"
+        },
+        "package/prebuilds/linux-x64/tree-sitter-ruby.node": {
+          "mode": 420,
+          "sha256": "649772a444e61d5ee6432beb289c8f9ba2b7d32ebf5f6af80c6a0fdeeafed338"
+        },
+        "package/prebuilds/win32-arm64/tree-sitter-ruby.node": {
+          "mode": 420,
+          "sha256": "fb51cb5b397e7fcb4f33d467a22ab2a55f2cebd1df89887e0a6e19095f42ae5c"
+        },
+        "package/prebuilds/win32-x64/tree-sitter-ruby.node": {
+          "mode": 420,
+          "sha256": "e73cccc0ceec90bbf4d609a7686d61d2a39990dcf6db6b5892e62ddbfcc48127"
+        },
+        "package/queries/highlights.scm": {
+          "mode": 420,
+          "sha256": "0858de9feece6dcd3408a541f995a34918d587ac2c552096026b0e47e2b332e6"
+        },
+        "package/queries/locals.scm": {
+          "mode": 420,
+          "sha256": "f00178e94b9c2ea672fd4ee2e60ac5d7d90be59c72e86292e22620358ac9dbb0"
+        },
+        "package/queries/tags.scm": {
+          "mode": 420,
+          "sha256": "ed1e7dc07a95b87aef267e7f9715c6717a70f09efbd7b6f48bbd51c7b7510cf3"
+        },
+        "package/src/grammar.json": {
+          "mode": 420,
+          "sha256": "ff0a0ab48788daea51cb418d9cfc14086dfcad50ac10e4981776be8b4d9296ab"
+        },
+        "package/src/node-types.json": {
+          "mode": 420,
+          "sha256": "9683f80e7be3dd93f1d6f575800de3f3445cda8af1f313f1f80003229c328e8b"
+        },
+        "package/src/parser.c": {
+          "mode": 420,
+          "sha256": "4ce468358b6f4e25a35c8cf6bc0eaf60665bc22d602f8c939323c2347255cd15"
+        },
+        "package/src/scanner.c": {
+          "mode": 420,
+          "sha256": "e7a6196d6e78bf4c6728502e924c867dee5d851c6253e43fcdb8ba169009bc58"
+        },
+        "package/src/tree_sitter/alloc.h": {
+          "mode": 420,
+          "sha256": "b29c1c9fb7cc82f58c84b376df1297d6e2737a1d655fd356db0859e3c29c2fea"
+        },
+        "package/src/tree_sitter/array.h": {
+          "mode": 420,
+          "sha256": "4ff743903dc46f5db6aa54f31c6b4d160a8a9779e5b2ab1ee59ae7ebcd850ea1"
+        },
+        "package/src/tree_sitter/parser.h": {
+          "mode": 420,
+          "sha256": "a1f6ef161fbaf48a0e10fca90ef5290a062462b307b3898aa562993853b9f80a"
+        },
+        "package/tree-sitter-ruby.wasm": {
+          "mode": 420,
+          "sha256": "09a96427d7c72f0613ed470cd9812223fc4a91d6a9c025c0235cc6bd59ff96f4"
+        },
+        "package/tree-sitter.json": {
+          "mode": 420,
+          "sha256": "7de08cd47b857dfa02845c25032bba7a6653ddd673502b19018a92d8404d2b24"
+        }
+      },
+      "original_package_json_base64": "ewogICJuYW1lIjogInRyZWUtc2l0dGVyLXJ1YnkiLAogICJ2ZXJzaW9uIjogIjAuMjMuMSIsCiAgImRlc2NyaXB0aW9uIjogIlJ1YnkgZ3JhbW1hciBmb3IgdHJlZS1zaXR0ZXIiLAogICJyZXBvc2l0b3J5IjogImh0dHBzOi8vZ2l0aHViLmNvbS90cmVlLXNpdHRlci90cmVlLXNpdHRlci1ydWJ5IiwKICAibGljZW5zZSI6ICJNSVQiLAogICJhdXRob3IiOiB7CiAgICAibmFtZSI6ICJSb2IgUml4IiwKICAgICJlbWFpbCI6ICJyb2Iucml4QGdtYWlsLmNvbSIKICB9LAogICJjb250cmlidXRvcnMiOiBbCiAgICB7CiAgICAgICJuYW1lIjogIlRpbW90aHkgQ2xlbSIsCiAgICAgICJlbWFpbCI6ICJ0aW1vdGh5LmNsZW1AZ21haWwuY29tIgogICAgfSwKICAgIHsKICAgICAgIm5hbWUiOiAiTWF4IEJydW5zZmVsZCIsCiAgICAgICJlbWFpbCI6ICJtYXhicnVuc2ZlbGRAZ21haWwuY29tIgogICAgfSwKICAgIHsKICAgICAgIm5hbWUiOiAiQXJ0aHVyIEJhYXJzIiwKICAgICAgImVtYWlsIjogImFpYmFhcnNAZ2l0aHViLmNvbSIKICAgIH0sCiAgICB7CiAgICAgICJuYW1lIjogIkFtYWFuIFF1cmVzaGkiLAogICAgICAiZW1haWwiOiAiYW1hYW5xMTJAZ21haWwuY29tIgogICAgfQogIF0sCiAgIm1haW50YWluZXJzIjogWwogICAgewogICAgICAibmFtZSI6ICJBbWFhbiBRdXJlc2hpIiwKICAgICAgImVtYWlsIjogImFtYWFucTEyQGdtYWlsLmNvbSIKICAgIH0KICBdLAogICJtYWluIjogImJpbmRpbmdzL25vZGUiLAogICJ0eXBlcyI6ICJiaW5kaW5ncy9ub2RlIiwKICAia2V5d29yZHMiOiBbCiAgICAiaW5jcmVtZW50YWwiLAogICAgInBhcnNpbmciLAogICAgInRyZWUtc2l0dGVyIiwKICAgICJydWJ5IgogIF0sCiAgImZpbGVzIjogWwogICAgImdyYW1tYXIuanMiLAogICAgInRyZWUtc2l0dGVyLmpzb24iLAogICAgImJpbmRpbmcuZ3lwIiwKICAgICJwcmVidWlsZHMvKioiLAogICAgImJpbmRpbmdzL25vZGUvKiIsCiAgICAicXVlcmllcy8qIiwKICAgICJzcmMvKioiLAogICAgIioud2FzbSIKICBdLAogICJkZXBlbmRlbmNpZXMiOiB7CiAgICAibm9kZS1hZGRvbi1hcGkiOiAiXjguMi4yIiwKICAgICJub2RlLWd5cC1idWlsZCI6ICJeNC44LjIiCiAgfSwKICAiZGV2RGVwZW5kZW5jaWVzIjogewogICAgImVzbGludCI6ICI+PTkuMTQuMCIsCiAgICAiZXNsaW50LWNvbmZpZy10cmVlc2l0dGVyIjogIl4xLjAuMiIsCiAgICAicHJlYnVpbGRpZnkiOiAiXjYuMC4xIiwKICAgICJ0cmVlLXNpdHRlci1jbGkiOiAiXjAuMjQuNCIKICB9LAogICJwZWVyRGVwZW5kZW5jaWVzIjogewogICAgInRyZWUtc2l0dGVyIjogIl4wLjIxLjEiCiAgfSwKICAicGVlckRlcGVuZGVuY2llc01ldGEiOiB7CiAgICAidHJlZS1zaXR0ZXIiOiB7CiAgICAgICJvcHRpb25hbCI6IHRydWUKICAgIH0KICB9LAogICJzY3JpcHRzIjogewogICAgImluc3RhbGwiOiAibm9kZS1neXAtYnVpbGQiLAogICAgInByZXN0YXJ0IjogInRyZWUtc2l0dGVyIGJ1aWxkIC0td2FzbSIsCiAgICAic3RhcnQiOiAidHJlZS1zaXR0ZXIgcGxheWdyb3VuZCIsCiAgICAidGVzdCI6ICJub2RlIC0tdGVzdCBiaW5kaW5ncy9ub2RlLypfdGVzdC5qcyIKICB9Cn0K",
+      "original_package_json_mode": 420,
+      "original_package_json_sha256": "07fb6a02a020df5fcedd8cc968b266de69eb6e5a1f1e43bd7c5817306339019c",
+      "source": {
+        "integrity": "sha512-d9/RXgWjR6HanN7wTYhS5bpBQLz1VkH048Vm3CodPGyJVnamXMGb8oEhDypVCBq4QnHui9sTXuJBBP3WtCw5RA==",
+        "sha256": "1f0f0c100e31ddf650962ebb1f1fb8420bdbabccd49582f6e731ea7478db639d",
+        "url": "https://registry.npmjs.org/tree-sitter-ruby/-/tree-sitter-ruby-0.23.1.tgz",
+        "version": "0.23.1"
+      },
+      "source_member_inventory_sha256": "4cfedd84525d10e5ba1ed3e2b843e422fbb6b6c20efa585b0c0149a048cc959c"
+    },
+    "tree-sitter-typescript": {
+      "allowed_metadata_changes": {
+        "dependencies.tree-sitter-javascript": {
+          "from": "^0.23.1",
+          "to": "^0.25.0"
+        },
+        "peerDependencies.tree-sitter": {
+          "from": "^0.21.0",
+          "to": "^0.25.0"
+        },
+        "version": {
+          "from": "0.23.2",
+          "to": "0.23.2-awb.1"
+        }
+      },
+      "archive": "tree-sitter-typescript-0.23.2-awb.1.tgz",
+      "archive_sha256": "a3e2e1088e152d742e3cae1466235fb91e4cc23e52696cbbbe91bfaa62fdc731",
+      "corrected_package_json_sha256": "69fabd207d298e7f6ceaa1a091e0bff1ef8445649f257cbda3ea5bf49ca96c83",
+      "corrected_version": "0.23.2-awb.1",
+      "members": {
+        "package/LICENSE": {
+          "mode": 420,
+          "sha256": "49bf33cf78ef5897e4e161ce1517df7de1ae5042a65b6bcfd44401e0fc606559"
+        },
+        "package/README.md": {
+          "mode": 420,
+          "sha256": "56d77257cc26b3469abefd371b10d230246ea085431bd26a397d31a1ca7f79c5"
+        },
+        "package/binding.gyp": {
+          "mode": 420,
+          "sha256": "5451214724030d5150581c5af614d2d37c10379d9801c1170035f9777058b9e1"
+        },
+        "package/bindings/node/binding.cc": {
+          "mode": 420,
+          "sha256": "4cd4aa17fc240701572efe79b016aae0f2fa067f28a551de3cdba0e98537bc00"
+        },
+        "package/bindings/node/binding_test.js": {
+          "mode": 420,
+          "sha256": "0a5eabd8ae4e5b36870b702967fc689f2fe23f54602e1adacb1727fce840bbac"
+        },
+        "package/bindings/node/index.d.ts": {
+          "mode": 420,
+          "sha256": "e5bd8a1be459aecc9b973d87eee92406f031132c078b5397479ccde39ad3673b"
+        },
+        "package/bindings/node/index.js": {
+          "mode": 420,
+          "sha256": "b3bdc95667c309b13ffde9165aa27d3e1436ab957e99c7e5defa1eda699b0a1d"
+        },
+        "package/bindings/node/tsx.js": {
+          "mode": 420,
+          "sha256": "e27d0b766fc7ec8459fb4e380b8e0f5885cbbd08de4c331d66c6bbf53f34aa9b"
+        },
+        "package/bindings/node/typescript.js": {
+          "mode": 420,
+          "sha256": "3d500a9748eaa64ba2822789e1254a46dc2ce445461f268b9b87b2ff5b5d8ea6"
+        },
+        "package/common/common.mak": {
+          "mode": 420,
+          "sha256": "cf9c53b8b24c50796577aebbb5f5f6c08dd088952737260b37ec4827f0aa9a3f"
+        },
+        "package/common/define-grammar.js": {
+          "mode": 420,
+          "sha256": "c2ac6894e0db6164f56dc339788d9da2da60ce1f81d888e6b74a74fc81db818f"
+        },
+        "package/common/scanner.h": {
+          "mode": 420,
+          "sha256": "da66ef2bd14a3f7ea743e25ba068c6c9aae2c3509db200ff80c4a0e6116e564c"
+        },
+        "package/prebuilds/darwin-arm64/tree-sitter-typescript.node": {
+          "mode": 420,
+          "sha256": "d3b710d803d4df4043dbd404f158776db17a3ef6f8f15f659b3b058338114133"
+        },
+        "package/prebuilds/darwin-x64/tree-sitter-typescript.node": {
+          "mode": 420,
+          "sha256": "6c8f2c0509fede5267c9af18003341e514900f7b010a2e8fcc931cd7a1af3e70"
+        },
+        "package/prebuilds/linux-arm64/tree-sitter-typescript.node": {
+          "mode": 420,
+          "sha256": "1391b8935c1d5ad55f25c39ab1ef7b4d5524ca627e06b8ff6a693b851b5c67e2"
+        },
+        "package/prebuilds/linux-x64/tree-sitter-typescript.node": {
+          "mode": 420,
+          "sha256": "1391b8935c1d5ad55f25c39ab1ef7b4d5524ca627e06b8ff6a693b851b5c67e2"
+        },
+        "package/prebuilds/win32-arm64/tree-sitter-typescript.node": {
+          "mode": 420,
+          "sha256": "05a5ab93ba0d89dfdaeedb925341922bed222c17a2f4ec0b5e08bff7418c6184"
+        },
+        "package/prebuilds/win32-x64/tree-sitter-typescript.node": {
+          "mode": 420,
+          "sha256": "d6ec552803f84d6a75170335534d3014e5e54360181337380f5559f2b6bb17d5"
+        },
+        "package/queries/highlights.scm": {
+          "mode": 420,
+          "sha256": "e0c35adb819127bfd4f853fac5419e7d8ba44760246201d04a4a5ce0228a10c5"
+        },
+        "package/queries/locals.scm": {
+          "mode": 420,
+          "sha256": "c3680f9b56276fb2ccc9f1d5f4d03dbca5d64bdf3e6d52ce5a4ad342cec162d5"
+        },
+        "package/queries/tags.scm": {
+          "mode": 420,
+          "sha256": "b391288bcc71b513a5df7c9bb232d8bc7418d7e274b125aa0aa4bdd6121a0338"
+        },
+        "package/tree-sitter-tsx.wasm": {
+          "mode": 420,
+          "sha256": "79e5da75ea62855a0cd67177685f0164eac87d5f630b3cbe1e0a099751ad30f8"
+        },
+        "package/tree-sitter-typescript.wasm": {
+          "mode": 420,
+          "sha256": "778025db5a8be0e70f8ccc3671e486dfeddd048c25d9e8a70c26de2e1bf6f97d"
+        },
+        "package/tree-sitter.json": {
+          "mode": 420,
+          "sha256": "4f39daa6a0bde84506cdeaf0b4460ed262df880030b3e6073868d0c746932291"
+        },
+        "package/tsx/grammar.js": {
+          "mode": 420,
+          "sha256": "19b7bc89bac1dfbb64e01ca15ca52345056028c2582d71762efd675af947a0f6"
+        },
+        "package/tsx/package.json": {
+          "mode": 420,
+          "sha256": "d91e8e983679ba8bb4736e0680dc895513f2f10a7e7ff833bcc5f9e92ef0dfeb"
+        },
+        "package/tsx/src/grammar.json": {
+          "mode": 420,
+          "sha256": "f98a7830b67be266c9e9effb673a5fc154ad6aa26f87f7c6d4a9191e09d8b357"
+        },
+        "package/tsx/src/node-types.json": {
+          "mode": 420,
+          "sha256": "78b5789145286799a27a0a7ecc36cc1bcb151f94ec7fa631b248459867010c8c"
+        },
+        "package/tsx/src/parser.c": {
+          "mode": 420,
+          "sha256": "1902cb53fa7ff5179df89b2eea863165e84c8cc866226419dc26921d8c055885"
+        },
+        "package/tsx/src/scanner.c": {
+          "mode": 420,
+          "sha256": "d563cd30b2f39718c9ae4292795c5ce03a2ad01954ba3a86ef84c2781a736673"
+        },
+        "package/tsx/src/tree_sitter/alloc.h": {
+          "mode": 420,
+          "sha256": "b29c1c9fb7cc82f58c84b376df1297d6e2737a1d655fd356db0859e3c29c2fea"
+        },
+        "package/tsx/src/tree_sitter/array.h": {
+          "mode": 420,
+          "sha256": "4ff743903dc46f5db6aa54f31c6b4d160a8a9779e5b2ab1ee59ae7ebcd850ea1"
+        },
+        "package/tsx/src/tree_sitter/parser.h": {
+          "mode": 420,
+          "sha256": "a1f6ef161fbaf48a0e10fca90ef5290a062462b307b3898aa562993853b9f80a"
+        },
+        "package/typescript/grammar.js": {
+          "mode": 420,
+          "sha256": "7e4109889b2ce2731dde89f82f545a12f1e54a286f72bc874f1aed9965c5d5ae"
+        },
+        "package/typescript/package.json": {
+          "mode": 420,
+          "sha256": "fcbd2e0fb7e7eed1af20cfd562cd3c3b22c839cb95b9d18df5793b850bd601dd"
+        },
+        "package/typescript/src/grammar.json": {
+          "mode": 420,
+          "sha256": "99dc4b95424dff47c89acb50d5d3f25b081b07eaff43994b7881dccd4186b214"
+        },
+        "package/typescript/src/node-types.json": {
+          "mode": 420,
+          "sha256": "c790a733fc756b54d4e54dceeb7d2d51e40d8b57136e70277753a75804cce3e3"
+        },
+        "package/typescript/src/parser.c": {
+          "mode": 420,
+          "sha256": "74fe453edd70f4eae9af0a1050cbd7943d8971d59165b6aaebbaa0a0b716d1aa"
+        },
+        "package/typescript/src/scanner.c": {
+          "mode": 420,
+          "sha256": "9125013b42cb888379d9be909f1d73dfb75a37626c2cdbf4122718a2b431a6d3"
+        },
+        "package/typescript/src/tree_sitter/alloc.h": {
+          "mode": 420,
+          "sha256": "b29c1c9fb7cc82f58c84b376df1297d6e2737a1d655fd356db0859e3c29c2fea"
+        },
+        "package/typescript/src/tree_sitter/array.h": {
+          "mode": 420,
+          "sha256": "4ff743903dc46f5db6aa54f31c6b4d160a8a9779e5b2ab1ee59ae7ebcd850ea1"
+        },
+        "package/typescript/src/tree_sitter/parser.h": {
+          "mode": 420,
+          "sha256": "a1f6ef161fbaf48a0e10fca90ef5290a062462b307b3898aa562993853b9f80a"
+        }
+      },
+      "original_package_json_base64": "ewogICJuYW1lIjogInRyZWUtc2l0dGVyLXR5cGVzY3JpcHQiLAogICJ2ZXJzaW9uIjogIjAuMjMuMiIsCiAgImRlc2NyaXB0aW9uIjogIlR5cGVTY3JpcHQgYW5kIFRTWCBncmFtbWFycyBmb3IgdHJlZS1zaXR0ZXIiLAogICJyZXBvc2l0b3J5IjogImh0dHBzOi8vZ2l0aHViLmNvbS90cmVlLXNpdHRlci90cmVlLXNpdHRlci10eXBlc2NyaXB0IiwKICAibGljZW5zZSI6ICJNSVQiLAogICJhdXRob3IiOiAiTWF4IEJydW5zZmVsZCA8bWF4YnJ1bnNmZWxkQGdtYWlsLmNvbT4iLAogICJtYWludGFpbmVycyI6IFsKICAgICJBbWFhbiBRdXJlc2hpIDxhbWFhbnExMkBnbWFpbC5jb20+IgogIF0sCiAgIm1haW4iOiAiYmluZGluZ3Mvbm9kZSIsCiAgInR5cGVzIjogImJpbmRpbmdzL25vZGUiLAogICJrZXl3b3JkcyI6IFsKICAgICJpbmNyZW1lbnRhbCIsCiAgICAicGFyc2luZyIsCiAgICAidHJlZS1zaXR0ZXIiLAogICAgInR5cGVzY3JpcHQiLAogICAgInRzeCIKICBdLAogICJmaWxlcyI6IFsKICAgICJiaW5kaW5nLmd5cCIsCiAgICAicHJlYnVpbGRzLyoqIiwKICAgICJiaW5kaW5ncy9ub2RlLyoiLAogICAgInF1ZXJpZXMvKiIsCiAgICAidHlwZXNjcmlwdC9ncmFtbWFyLmpzIiwKICAgICJ0c3gvZ3JhbW1hci5qcyIsCiAgICAidHJlZS1zaXR0ZXIuanNvbiIsCiAgICAidHlwZXNjcmlwdC9wYWNrYWdlLmpzb24iLAogICAgInRzeC9wYWNrYWdlLmpzb24iLAogICAgInR5cGVzY3JpcHQvc3JjLyoqIiwKICAgICJ0c3gvc3JjLyoqIiwKICAgICJjb21tb24vKioiLAogICAgIioud2FzbSIKICBdLAogICJkZXBlbmRlbmNpZXMiOiB7CiAgICAibm9kZS1hZGRvbi1hcGkiOiAiXjguMi4yIiwKICAgICJub2RlLWd5cC1idWlsZCI6ICJeNC44LjIiLAogICAgInRyZWUtc2l0dGVyLWphdmFzY3JpcHQiOiAiXjAuMjMuMSIKICB9LAogICJwZWVyRGVwZW5kZW5jaWVzIjogewogICAgInRyZWUtc2l0dGVyIjogIl4wLjIxLjAiCiAgfSwKICAicGVlckRlcGVuZGVuY2llc01ldGEiOiB7CiAgICAidHJlZS1zaXR0ZXIiOiB7CiAgICAgICJvcHRpb25hbCI6IHRydWUKICAgIH0KICB9LAogICJkZXZEZXBlbmRlbmNpZXMiOiB7CiAgICAiZXNsaW50IjogIj49OS4xNC4wIiwKICAgICJlc2xpbnQtY29uZmlnLXRyZWVzaXR0ZXIiOiAiXjEuMC4yIiwKICAgICJ0cmVlLXNpdHRlci1jbGkiOiAiXjAuMjQuNCIsCiAgICAicHJlYnVpbGRpZnkiOiAiXjYuMC4xIgogIH0sCiAgInNjcmlwdHMiOiB7CiAgICAiaW5zdGFsbCI6ICJub2RlLWd5cC1idWlsZCIsCiAgICAibGludCI6ICJlc2xpbnQgY29tbW9uL2RlZmluZS1ncmFtbWFyLmpzIiwKICAgICJ0ZXN0IjogIm5vZGUgLS10ZXN0IGJpbmRpbmdzL25vZGUvKl90ZXN0LmpzIgogIH0KfQo=",
+      "original_package_json_mode": 420,
+      "original_package_json_sha256": "26892ef49837678a747f81e344ed26938ec5804e29e003ad34fd5a3c87c68baf",
+      "source": {
+        "integrity": "sha512-e04JUUKxTT53/x3Uq1zIL45DoYKVfHH4CZqwgZhPg5qYROl5nQjV+85ruFzFGZxu+QeFVbRTPDRnqL9UbU4VeA==",
+        "sha256": "0fdf63c35930a75885145d75ee63cb879da2d49db9bfe454bd8e60b08ba778a1",
+        "url": "https://registry.npmjs.org/tree-sitter-typescript/-/tree-sitter-typescript-0.23.2.tgz",
+        "version": "0.23.2"
+      },
+      "source_member_inventory_sha256": "a7056927b68a756fa9ed3552f09888723f648ce73adf007e6f7f5b05532c537f"
+    }
+  },
+  "schema_version": 1
+}

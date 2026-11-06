@@ -13,3 +13,5 @@ __pycache__/
 .claude-plugin/
 dist/
 *.tgz
+# Sealed upstream grammar artifacts are intentional distribution inputs.
+!packaging/agent-workbench/native-grammars/*.tgz
