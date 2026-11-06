@@ -24,11 +24,13 @@ license: GPL-3.0-or-later
   - Requirements: Requirement 2; Requirement 3 AC1; CP-002.
   - Files: version manifests, release notes, package/runtime tests and evidence.
   - Acceptance: source/package/platform gates pass and identities agree.
-  - Evidence: v0.6.10 version metadata and reviewed draft notes prepared. Ordinary npm installed/native/daemon acceptance passes. Final source/package suite, installed entrypoint suite and supported-platform workflows pending; shared native fixture helper/ARM64 matrix being finalized.
+  - Evidence: v0.6.10 candidate f45940f passed source/package/installed/platform gates, but publication exposed omitted pnpm workspace input in Containerfile. Corrective v0.6.11 candidate and container preflight being validated. See verification.md retained exact candidate evidence.
 
-- [ ] T003 Publish and verify the installed release.
+  - Evidence mode: command
+- [~] T003 Publish and verify the installed release.
   - Depends on: T001; T002.
   - Requirements: Requirement 3; CP-002; CP-003.
   - Files: release/installation evidence and backlog disposition.
   - Acceptance: governed immutable publication and verified live installation.
-  - Evidence: pending.
+  - Evidence: v0.6.10 tag preserved after run42273149994 passed package/Windows but failed GHCR frozen install before image/public GitHub publication. Corrective v0.6.11 candidate in preparation; live installation remains0.6.9.
+  - Evidence mode: command

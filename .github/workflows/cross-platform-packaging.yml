@@ -71,3 +71,10 @@ jobs:
 
       - name: Hook smoke — SessionStart + PostToolUse, no shell error
         run: node scripts/ci/hook-smoke.mjs
+
+      # The GHCR image uses the same frozen workspace install as the release
+      # publisher. Keep this as a no-push gate on the Linux x64 leg so a
+      # container-context drift fails before a release tag is created.
+      - name: Build GHCR container (no push)
+        if: matrix.os == 'ubuntu-latest'
+        run: docker build --file packaging/agent-workbench/Containerfile --tag agent-workbench:ci-container .

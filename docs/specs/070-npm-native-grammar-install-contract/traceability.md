@@ -24,15 +24,16 @@ license: GPL-3.0-or-later
 | Requirement | Tasks | Coverage State | Evidence |
 | --- | --- | --- | --- |
 | Requirement 1 | T001 | complete | verification.md#v001-native-grammar-dependency-acceptance |
-| Requirement 2 | T002 | partial | verification.md#final-local-candidate-gates; remote platform pending |
-| Requirement 3 | T002; T003 | partial | version/notes prepared; publication/install pending |
+| Requirement 2 | T002 | partial | v0.6.10 accepted; corrective v0.6.11 container gate in progress |
+| Requirement 3 | T002; T003 | partial | v0.6.10 publication failed before push; corrective v0.6.11 pending |
 
 ## Design To Implementation Matrix
 
 D001 seals exact corrected metadata; D002 pins project-owned artifact transport.
-Implementation and final acceptance remain in progress.
+Runtime source/package/platform acceptance passed for v0.6.10. Corrective
+container packaging, v0.6.11 publication and live installation remain in progress.
 
 ## Open Decision Impact
 
-D001/D002 decisions are fixed. Final ordinary consumer and platform evidence
-remain T001/T002 gates before T003 publication; no product decision is pending.
+D001/D002 decisions are fixed. Ordinary consumer and platform gates passed for v0.6.10. Corrective container
+packaging is in progress; no product decision is pending.

@@ -115,8 +115,8 @@ compiler toolchain.
 
 ## Native grammar package metadata
 
-Ruby and TypeScript use sealed metadata-corrected artifacts in the v0.6.10
-source package. The accepted upstream parser sources and native bindings are
+Ruby and TypeScript use sealed metadata-corrected artifacts in the v0.6.11
+release package. The accepted upstream parser sources and native bindings are
 unchanged. Their peer ranges and TypeScript's JavaScript dependency agree with
 the runtime's Tree-sitter 0.25 path. Use ordinary npm installation; peer-bypass
 flags and consumer overrides are not part of this contract. See the

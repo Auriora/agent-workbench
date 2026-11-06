@@ -1120,6 +1120,7 @@ describe("Codex plugin artifacts", () => {
     expect(manifest.codex.plugin_install_model).toBe(latestReleasedInstallCommand);
     expect(containerfile).toContain("FROM node:24-bookworm-slim");
     expect(containerfile).toContain("COPY src ./src");
+    expect(containerfile).toContain("COPY pnpm-workspace.yaml ./");
     expect(containerfile).toContain("rm -rf src/debug");
     expect(containerfile).toContain("docs/specs");
     expect(containerfile).toContain('k.startsWith("debug:")');
@@ -1175,6 +1176,9 @@ describe("Codex plugin artifacts", () => {
     expect(crossPlatformLaunch).toBeGreaterThan(-1);
     expect(crossPlatformInstall).toBeLessThan(crossPlatformBuild);
     expect(crossPlatformBuild).toBeLessThan(crossPlatformLaunch);
+    expect(crossPlatformWorkflow).toContain(
+      "docker build --file packaging/agent-workbench/Containerfile --tag agent-workbench:ci-container ."
+    );
   });
 
   it("keeps cross-repo debug harnesses checkout-only", () => {

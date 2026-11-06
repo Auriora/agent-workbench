@@ -168,3 +168,51 @@ A real copied-bin fixture under a path containing# and spaces reproduces the
 old failure and proves the fix; focused launch18/18, typecheck and diff passed.
 Full source/installed and remote platform gates will validate the final candidate.
 No tag or public release has been created at this checkpoint.
+
+## Final v0.6.10 candidate acceptance
+
+The tagged candidate is f45940fb5b02e8b03e110d396bcb673b8f6b85bb. It
+supersedes the retained checkpoints above:
+
+- Source: 147 files, 1536 tests passed; one conditional installed-only skip,
+  252.62 seconds (/tmp/awb0610-final-source-tests.log).
+- Typecheck passed (/tmp/awb0610-final-typecheck.log).
+- Ordinary npm installation, clean dependency tree, all six native parser
+  routes, SQLite, shared-daemon queries and complete cleanup passed
+  (/tmp/awb0610-final-installed-smoke.log). Local tarball SHA-256:
+  3fab7e99d53e8b85a5de86ca423da9346289a84e3abec91dc19387eead6c20b6.
+- Retained installed entrypoint suite: 24/24 passed, 86.59 seconds
+  (/tmp/awb070-installed-entrypoint-final.log). Host runtime pointer unchanged.
+- [Cross-platform run 42272025612](https://github.com/Auriora/agent-workbench/actions/runs/42272025612)
+  passed Linux x64, Linux ARM64, Windows and macOS.
+- [Windows portable run 42272230510](https://github.com/Auriora/agent-workbench/actions/runs/42272230510)
+  passed the built portable bundle, materialized hooks and packaged CLI.
+- An initial dispatch of this candidate used a shortened commit identifier;
+  checkout interpreted it as a branch and failed before running product code
+  (run42272030730). The successful dispatch uses the full commit identifier.
+- Annotated v0.6.10 tag pushed from the clean release worktree. Governed
+  [publication run 42273149994](https://github.com/Auriora/agent-workbench/actions/runs/42273149994)
+  is running. Publication and live upgrade evidence remain pending.
+
+The local candidate hashes above are not claims about the future published
+artifact, which includes the governed distribution build configuration.
+
+## Publication checkpoint: v0.6.10
+
+Release run42273149994 passed the package and Windows portable jobs, then
+failed GHCR build before image push and public GitHub publication. The
+Containerfile omitted pnpm-workspace.yaml, so pnpm's default
+injectWorkspacePackages setting disagreed with the frozen lockfile. The
+failure was ERR_PNPM_LOCKFILE_CONFIG_MISMATCH; the lockfile was not regenerated
+and frozen validation was not bypassed.
+
+The existing v0.6.10 tag is preserved. Corrective candidate v0.6.11 adds the
+missing canonical build input. Publication and live installation remain
+pending under T003. The live installation remains v0.6.9.
+
+The corrective Containerfile passed a local Docker build before tagging:
+`docker build --file packaging/agent-workbench/Containerfile --tag awb-ghcr-fix-local:validation .`.
+Frozen installation, runtime build, approved native rebuild and image export
+all completed. The focused container/plugin integration suite passed22/22;
+typecheck passed. Linux x64 cross-platform preflight now includes this same
+no-push container build. No lockfile rewrite or peer bypass was used.

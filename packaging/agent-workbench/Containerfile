@@ -29,6 +29,7 @@ RUN corepack enable \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json pnpm-lock.yaml tsconfig.json ./
+COPY pnpm-workspace.yaml ./
 COPY AGENTS.md ./
 COPY LICENSE ./
 COPY src ./src
