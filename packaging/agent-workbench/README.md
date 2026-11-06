@@ -70,6 +70,16 @@ GitHub publishes build provenance through artifact attestations rather than as
 another release asset. Authenticode signing remains external to this contract
 until a release-signing certificate is governed and available.
 
+The publisher uses `scripts/ci/verify-release-checksum.mjs` to verify the exact
+ZIP filename and SHA-256 with either LF or CRLF sidecar line endings. If only
+final release creation fails after all build and attestation gates pass, an
+operator may complete creation from that same run's retained bytes. First verify
+the immutable tag, source/build receipt hashes, ZIP attestation, sidecar through
+the canonical validator, and GHCR revision; confirm the public release is absent.
+Create it once with `gh release create --verify-tag`, the retained rendered notes
+and the three retained assets, then verify the downloaded public asset digests.
+Record the failed gate, repair commit and exact hashes in the delivery evidence.
+
 Portable configuration records the in-place package root and materializes
 Codex and Claude MCP/hook commands with the absolute bundled `node.exe`. Codex
 hook configuration includes an explicit Windows command and honors

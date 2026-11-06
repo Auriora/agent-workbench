@@ -321,9 +321,9 @@ describe("GitHub release-note publishing", () => {
       WINDOWS_SHA256:
         "windows-portable-candidate/agent-workbench-v${{ needs.package.outputs.release_version }}-windows-x64.zip.sha256"
     });
-    expect(verifyCandidateChecksum.run).toContain('actual="$(sha256sum "${WINDOWS_ZIP}" | awk \'{print $1}\')"');
-    expect(verifyCandidateChecksum.run).toContain('expected="$(awk \'{print $1}\' "${WINDOWS_SHA256}")"');
-    expect(verifyCandidateChecksum.run).toContain('Windows portable checksum mismatch for ${WINDOWS_ZIP}');
+    expect(verifyCandidateChecksum.run).toContain(
+      'node scripts/ci/verify-release-checksum.mjs "${WINDOWS_ZIP}" "${WINDOWS_SHA256}"'
+    );
 
     const attestStep = workflowStep(publishReleaseJob, "Attest Windows portable candidate");
     expect(attestStep).toMatchObject({
@@ -345,9 +345,9 @@ describe("GitHub release-note publishing", () => {
         "windows-portable-candidate/agent-workbench-v${{ needs.package.outputs.release_version }}-windows-x64.zip.sha256"
     });
     expect(publishRelease.run).toContain('if gh release view "${TAG}" >/dev/null 2>&1; then');
-    expect(publishRelease.run).toContain('read -r expected_windows_sha expected_windows_name < "${WINDOWS_SHA256}"');
-    expect(publishRelease.run).toContain('actual_windows_sha="$(sha256sum "${WINDOWS_ZIP}" | awk \'{print $1}\')"');
-    expect(publishRelease.run).toContain("Windows portable checksum sidecar does not match the staged ZIP.");
+    expect(publishRelease.run).toContain(
+      'node scripts/ci/verify-release-checksum.mjs "${WINDOWS_ZIP}" "${WINDOWS_SHA256}"'
+    );
     expect(publishRelease.run).toContain(
       'GitHub release ${TAG} already exists; publish a new corrective version instead of mutating it.'
     );

@@ -95,13 +95,28 @@ archives. Rebuild lockfile with pnpm using approved native build scripts.
 
 ## Operational Considerations
 
-Release v0.6.10 metadata uses awb release bump-version. Reviewed notes derive
-from v0.6.9..HEAD evidence, including final dependency fix. Publish via the existing
-annotated tag workflow only after exact commit preflight. Preserve unrelated
+Release metadata uses awb release bump-version; the final candidate is v0.6.11. Reviewed notes derive
+from v0.6.9..HEAD evidence, including final dependency fix. Build and publish via the existing
+annotated tag workflow after exact commit preflight. D003 governs resumption
+of its final creation step when verified artifacts already exist. Preserve unrelated
 untracked files using an isolated clean release worktree, not force/dirty-tag
 bypasses. Verify Windows portable preflight before publication; then verify
 GitHub asset hashes and install from the published source tarball. Retain B008's
 fail-closed limitation in release/operator guidance. No destructive guard cleanup.
+
+### D003: Resume final publication of retained verified artifacts
+
+The v0.6.11 run passed package, portable, GHCR and ZIP attestation gates, but
+final release creation rejected a CRLF sidecar filename because Bash retained
+its carriage return. Artifact bytes, tag and published image are valid. Repair
+the canonical checksum validator with LF/CRLF and malformed-input fixtures.
+Complete only the final creation step using the same run's exact retained assets
+and rendered notes after source/compiled hashes, signed provenance, filename,
+digest, immutable tag and GHCR revision are independently verified. Confirm the
+public release is absent and use gh release create --verify-tag once. Verify
+all public asset hashes afterward. This resumes the governed publication step;
+there is no new build or alternate installed runtime path. Durable procedure:
+packaging/agent-workbench/README.md, Windows portable artifact section.
 
 ## Open Questions
 

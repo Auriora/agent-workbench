@@ -216,3 +216,50 @@ Frozen installation, runtime build, approved native rebuild and image export
 all completed. The focused container/plugin integration suite passed22/22;
 typecheck passed. Linux x64 cross-platform preflight now includes this same
 no-push container build. No lockfile rewrite or peer bypass was used.
+
+## Corrective v0.6.11 candidate acceptance
+
+Candidate91932a24ffc999a25111501046203fec6da1c315 is tagged v0.6.11.
+The v0.6.10 tag remains unchanged after its failed publication checkpoint.
+
+- Source suite:147 files/1536 tests passed, one conditional installed-only
+  skip,304.95 seconds (/tmp/awb0611-source-tests.log).
+- Dev CLI28 tests, plugin/skills validation and typecheck passed.
+- Ordinary npm/native/daemon smoke and complete cleanup passed
+  (/tmp/awb0611-installed-smoke.log). Six native grammar routes and SQLite
+  passed with a clean npm dependency tree.
+- Installed entrypoint suite:24/24 passed in77.77 seconds
+  (/tmp/awb070-installed-entrypoint-final.log). Host pointer unchanged.
+- [Cross-platform/container run42275040991](https://github.com/Auriora/agent-workbench/actions/runs/42275040991)
+  passed Linux x64/ARM64, macOS, Windows and the actual no-push container build.
+- [Windows portable run42275045091](https://github.com/Auriora/agent-workbench/actions/runs/42275045091)
+  passed built bundle, native, hook and packaged startup checks.
+- Local container identity:
+  sha256:fa01a3ee0b63b24023b6b1e56ed2b6739f3789ad2c2db78b74a66a54db623356.
+  This local validation image is not the future GHCR publication identity.
+- [Release run42276022042](https://github.com/Auriora/agent-workbench/actions/runs/42276022042)
+  is running from the immutable v0.6.11 source. Published asset hashes and live
+  installation identity remain T003 evidence.
+
+## Final publication gate correction
+
+Run42276022042 passed package, Windows portable and GHCR publication. Its final
+GitHub release creation failed before creation: Bash read retained CR from the
+Windows sidecar's CRLF filename. The earlier ZIP hash gate and signed workflow
+attestation passed; this was a filename-line-ending validation defect.
+
+The canonical scripts/ci/verify-release-checksum.mjs now handles LF/CRLF and
+strictly rejects wrong names, digests and malformed/multiple records. Both
+workflow gates call it. Focused release tests12/12 and typecheck passed; it
+verified the exact retained v0.6.11 ZIP and unchanged CRLF sidecar. D003 and the
+packaging README govern completing only this final step using retained bytes.
+
+Independent prepublication checks passed:226 source hashes match immutable
+commit91932a24ffc999a25111501046203fec6da1c315; all3 compiled outputs match
+the receipt; package/bin/sealed grammar archive bytes match that tag. GitHub
+CLI2.103.3 was checksum-verified in a temporary directory because the host CLI
+lacks attestation support. Cryptographic attestation verification confirms ZIP
+SHA-256, exact repository/workflow/tag, source commit and run42276022042.
+GHCR0.6.11 and latest match the expected source revision and manifest digest
+sha256:bff3196952b3ae2397a653ee50cd9e926da89cf10ed4abe8ddeebe7140a1de1b.
+Normal global npm install dry-run passed; live installation is still0.6.9.

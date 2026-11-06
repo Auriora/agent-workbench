@@ -315,14 +315,7 @@ jobs:
           WINDOWS_SHA256: windows-portable-candidate/agent-workbench-v${{ needs.package.outputs.release_version }}-windows-x64.zip.sha256
         run: |
           set -euo pipefail
-          actual="$(sha256sum "${WINDOWS_ZIP}" | awk '{print $1}')"
-          expected="$(awk '{print $1}' "${WINDOWS_SHA256}")"
-          if [ "${actual}" != "${expected}" ]; then
-            echo "Windows portable checksum mismatch for ${WINDOWS_ZIP}" >&2
-            echo "expected ${expected}" >&2
-            echo "actual   ${actual}" >&2
-            exit 1
-          fi
+          node scripts/ci/verify-release-checksum.mjs "${WINDOWS_ZIP}" "${WINDOWS_SHA256}"
 
       - name: Attest Windows portable candidate
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
@@ -340,12 +333,7 @@ jobs:
         run: |
           set -euo pipefail
           asset_paths=("${TARBALL}" "${WINDOWS_ZIP}" "${WINDOWS_SHA256}")
-          read -r expected_windows_sha expected_windows_name < "${WINDOWS_SHA256}"
-          actual_windows_sha="$(sha256sum "${WINDOWS_ZIP}" | awk '{print $1}')"
-          if [ "${expected_windows_sha}" != "${actual_windows_sha}" ] || [ "${expected_windows_name}" != "$(basename "${WINDOWS_ZIP}")" ]; then
-            echo "Windows portable checksum sidecar does not match the staged ZIP." >&2
-            exit 1
-          fi
+          node scripts/ci/verify-release-checksum.mjs "${WINDOWS_ZIP}" "${WINDOWS_SHA256}"
           if gh release view "${TAG}" >/dev/null 2>&1; then
             echo "GitHub release ${TAG} already exists; publish a new corrective version instead of mutating it." >&2
             exit 1
