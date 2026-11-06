@@ -18,6 +18,7 @@ import type {
 
 type ProcessState = "active" | "dead" | "ambiguous";
 type BlockedOwnershipAdmission = Extract<RepositoryOwnershipAdmission, { outcome: "blocked" }>;
+type ControllerShutdownAdmission = Extract<SnapshotRefreshAdmission, { outcome: "blocked" }>;
 const MAX_RECOVERED_OWNER_EVIDENCE = 32;
 
 export class FileRepositoryOwnershipAdapter implements RepositoryOwnershipPort {
@@ -161,6 +162,7 @@ export class LazyOwnershipGatedRefreshAuthority implements SnapshotRefreshContro
   private initialization: Promise<SnapshotRefreshControllerPort | BlockedOwnershipAdmission> | undefined;
   private readonly listeners = new Set<Parameters<SnapshotRefreshControllerPort["onTransition"]>[0]>();
   private unsubscribeController: (() => void) | undefined;
+  private shutdownPromise: Promise<void> | undefined;
   private closePromise: Promise<void> | undefined;
   private closed = false;
 
@@ -177,9 +179,10 @@ export class LazyOwnershipGatedRefreshAuthority implements SnapshotRefreshContro
 
   public async request(input: SnapshotRefreshRequest): Promise<SnapshotRefreshAdmission> {
     if (this.closed) {
-      throw new Error("Refresh authority is closed.");
+      return controllerShutdownAdmission();
     }
     const controller = this.controller ?? await this.initialize();
+    if (this.closed) return controllerShutdownAdmission();
     if (!("request" in controller)) {
       const owner = controller.owner;
       return controller.reason === "owner_active"
@@ -203,17 +206,19 @@ export class LazyOwnershipGatedRefreshAuthority implements SnapshotRefreshContro
     return await controller.request(input);
   }
 
-  public async prepare(): Promise<{ outcome: "ready" } | BlockedOwnershipAdmission> {
+  public async prepare(): Promise<{ outcome: "ready" } | BlockedOwnershipAdmission | ControllerShutdownAdmission> {
     if (this.closed) {
-      throw new Error("Refresh authority is closed.");
+      return controllerShutdownAdmission();
     }
     const controller = this.controller ?? await this.initialize();
+    if (this.closed) return controllerShutdownAdmission();
     return "request" in controller ? { outcome: "ready" } : controller;
   }
 
   public async recordAdmissionFailure(input: Parameters<SnapshotRefreshAdmissionFailurePort["recordAdmissionFailure"]>[0]): Promise<Extract<SnapshotRefreshAdmission, { outcome: "blocked" }>> {
-    if (this.closed) throw new Error("Refresh authority is closed.");
+    if (this.closed) return controllerShutdownAdmission();
     const controller = this.controller ?? await this.initialize();
+    if (this.closed) return controllerShutdownAdmission();
     if ("reason" in controller) {
       return controller.reason === "owner_active"
         ? {
@@ -241,24 +246,33 @@ export class LazyOwnershipGatedRefreshAuthority implements SnapshotRefreshContro
     return await recorder.call(controller, input);
   }
 
-  public async close(): Promise<void> {
+  public shutdown(): Promise<void> {
     this.closed = true;
+    this.shutdownPromise ??= this.shutdownOwnedAuthority();
+    return this.shutdownPromise;
+  }
+
+  public async close(): Promise<void> {
     this.closePromise ??= this.closeOwnedAuthority();
     await this.closePromise;
   }
 
   private async closeOwnedAuthority(): Promise<void> {
-    if (this.initialization !== undefined) {
-      await this.initialization;
-    }
-    if (this.controller !== undefined) {
-      await waitForControllerShutdownSafety(this.controller);
-    }
+    await this.shutdown();
     this.unsubscribeController?.();
     this.unsubscribeController = undefined;
     if (this.lease !== undefined) {
       await this.options.ownership.release({ lease: this.lease });
       this.lease = undefined;
+    }
+  }
+
+  private async shutdownOwnedAuthority(): Promise<void> {
+    if (this.initialization !== undefined) {
+      await this.initialization;
+    }
+    if (this.controller !== undefined) {
+      await this.controller.shutdown();
     }
   }
 
@@ -407,6 +421,16 @@ export async function waitForControllerShutdownSafety(
 function refreshOwnershipUnsafe(controller: SnapshotRefreshControllerPort): boolean {
   const receipt = controller.getReceipt();
   return receipt.activity_lease?.state === "held" || receipt.worker_termination_state === "unconfirmed";
+}
+
+function controllerShutdownAdmission(): ControllerShutdownAdmission {
+  return {
+    outcome: "blocked",
+    reused: false,
+    state: "idle",
+    reason: "controller_shutdown",
+    message: "Refresh controller is shutting down."
+  };
 }
 
 function sameOwner(

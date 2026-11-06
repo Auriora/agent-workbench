@@ -317,8 +317,9 @@ remove stale socket metadata only when PID and socket evidence prove the owner
 is gone. Ambiguous evidence must produce a structured blocked state rather than
 destructive cleanup.
 
-The daemon metadata record is also the authoritative cold-start lifecycle
-receipt. It moves through `starting`, `ready`, or terminal `failed` state and
+The daemon metadata record is the authoritative endpoint lifecycle receipt.
+It moves through `starting`, `ready`, shutdown `draining`, or terminal startup
+`failed` state and
 identifies one launch attempt, daemon identity, process, endpoint, timestamps,
 and a bounded startup phase or safe failure code. Each transition is published
 atomically so concurrent launchers observe either the previous complete receipt
@@ -394,8 +395,7 @@ Pending sends settle on transport closure as well as drain/error, and remove
 both winning and losing event listeners.
 
 This checked-in design is delivered by Spec 066, separately from installation.
-Daemon lifetime evidence is delivered in source by Spec 067 below. Worker-safe
-shutdown settlement remains [backlog B002](../backlog/README.md#transport-reliability-follow-up).
+Daemon lifetime evidence is delivered in source by Spec 067 below. Spec 068 adds the shutdown protocol below.
 The existing one-second SIGTERM deadline and startup-only stderr capture have
 not been changed by the transport repair; an orphaned build remains evidence
 of interruption, not proof of a particular cause.
@@ -422,12 +422,58 @@ A new admitted launch rotates a prior nonterminal record to unknown prior-owner
 loss. SIGKILL, native crashes, import/bootstrap failures and unavailable storage
 can leave no terminal observation; unknown loss does not establish any specific
 cause. Missing or invalid evidence is explicitly unavailable in daemon health.
-The existing one-second termination deadline is unchanged; B002 owns settling
-refresh workers before exit. Spec 065 owns endpoint and startup diagnostic policy.
+The one-second policy is implemented by the finite shutdown protocol below.
+Spec 065 owns endpoint location and startup diagnostic policy.
 
 The source implementation requires a rebuilt and installed package to affect a
 running runtime. Local POSIX directory/file mode checks do not establish Windows
 ACL privacy. Writes are bounded in bytes, not guaranteed against filesystem stalls.
+
+## Refresh-safe daemon shutdown
+
+Source delivery in Spec 068 replaces passive waiting plus an outer exit race
+with one infrastructure shutdown coordinator. Every close synchronously gates
+socket admission, stops scheduled triggers and closes retained sockets. It requests
+controller shutdown immediately, including when startup exclusion is unavailable;
+startup exclusion authorizes cleanup, not cancellation. Repeated close uses the
+same operation and terminal result.
+
+The controller fences queued admissions and post-await allocation/continuation
+boundaries, claims the active pass and requests termination of its exact worker.
+Positive termination and terminal publication must precede activity release. A
+shutdown interrupted build becomes failed while the previous published snapshot
+remains selectable. Unconfirmed worker death or failed publication settlement
+retains quarantine. Lazy authority shutdown quiesces without releasing repository
+ownership; the daemon closes its store before the authority releases that lease.
+
+One referenced monotonic one-second budget covers the whole protocol. Promises
+and unreferenced workers cannot make the process disappear before its outcome is
+recorded. Every later cleanup phase is fenced after a blocked result. Clean
+settlement releases exact-launch endpoint/startup state and exits zero; blocked
+SIGTERM or idle close records safe evidence and exits nonzero. Retained canonical
+owner state is recoverable only after positive process death through the existing
+election, without another writer, timeout extension or retry path.
+
+Stale startup-lock reclamation is serialized by a private .reclaim claim and exact
+file/PID/token validation. Live reclamation claims report known contention;
+abandoned or unverifiable claims deliberately block. A crash inside reclamation
+can therefore leave an ambiguous guard. B008/Spec 065 owns a
+future safe recovery policy for that boundary. Endpoint relocation is unchanged.
+
+Before closing sockets, the exact owner atomically publishes canonical draining
+metadata after requesting authority shutdown and fencing admission. A live draining
+record is not ready and grants no signal/cleanup authority; it permits only waiting
+under the original startup deadline. Probe failures may follow that path only when
+a canonical re-read proves exact draining or expected successor/death progress.
+Unchanged unverified ready endpoints remain ambiguous. Waiters do not clean stale
+state; they re-enter the ordinary guarded election. Duplicate SIGTERM reuses the
+same close operation until exit.
+
+The bounded lifetime receipt retains optional shutdown state, phase, fixed cause,
+worker termination, activity and publication observations through exit and later
+admission. It carries no raw errors or client data. Source and isolated installed
+fixture evidence are separate from updating the user's installed runtime. B006
+aggregate budgets and B007 npm peer metadata remain separate backlog items.
 
 ## Async And Concurrency Model
 
@@ -442,8 +488,8 @@ Concurrency components:
   timeouts and recycling.
 - `SnapshotRefreshControllerPort`: linearizes invalidation generations,
   execution, activity leases, worker invocation, and terminal state.
-- `SnapshotPublicationPort`: allocates building snapshots and atomically
-  transitions them to `published`, `superseded`, or `failed`.
+- `SnapshotPublicationPort`: allocates target identifiers and atomically
+  transitions persisted building snapshots to `published`, `superseded`, or `failed`.
 - `GraphTransactionPort`: commits graph writes atomically.
 - `CancellationPort`: cancels obsolete work when file hashes, scope, or config
   change.

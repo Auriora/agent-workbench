@@ -78,11 +78,14 @@ import type {
 
 export type { SnapshotPublicationState } from "../contracts/index.js";
 
+import type { DaemonShutdownReceipt } from "../contracts/daemon-shutdown-contracts.js";
+
 export interface DaemonLifetimeEvidencePort {
   ready(launch: DaemonLifetimeLaunch): void;
   observeFatal(origin: DaemonLifetimeFatalOrigin): void;
   observeSignal(signal: "SIGTERM"): void;
   observeExit(code: number | null): void;
+  observeShutdown(receipt: DaemonShutdownReceipt): void;
   getEvidence(): DaemonLifetimeEvidence;
 }
 
@@ -980,6 +983,7 @@ export type SnapshotPublicationSelection =
     };
 
 export interface SnapshotPublicationPort {
+  /** Allocates an identifier only; the worker's SnapshotBuildPort persists the build. */
   allocateBuildSnapshotId(input: {
     repo_root: string;
     minimum_id: string;
@@ -1251,6 +1255,13 @@ export type SnapshotRefreshAdmission =
       state: "idle";
       reason: "permission_failure";
       message: "Refresh operation was not permitted.";
+    }
+  | {
+      outcome: "blocked";
+      reused: false;
+      state: "idle";
+      reason: "controller_shutdown";
+      message: "Refresh controller is shutting down.";
     };
 
 export interface SnapshotRefreshPort {
@@ -1268,6 +1279,7 @@ export type SnapshotRefreshControllerReceipt = {
   activity_lease: RefreshActivityLease | null;
   worker_invocations: number;
   worker_termination_state: "not_required" | "unconfirmed" | "confirmed";
+  publication_state?: SnapshotPublicationState;
   last_failure?: RefreshFailure;
   last_worker_progress?: RefreshWorkerProgress;
 };
@@ -1276,6 +1288,7 @@ export interface SnapshotRefreshControllerPort
   extends SnapshotRefreshPort,
     DaemonRefreshActivityPort {
   getReceipt(): SnapshotRefreshControllerReceipt;
+  shutdown(): Promise<void>;
 }
 
 export interface SnapshotRefreshAdmissionFailurePort {

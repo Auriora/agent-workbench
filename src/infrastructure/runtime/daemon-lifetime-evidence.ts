@@ -20,6 +20,7 @@ import {
   type DaemonLifetimeLaunch,
   type DaemonLifetimeRecord
 } from "../../contracts/daemon-lifetime-contracts.js";
+import { daemonShutdownReceiptSchema, type DaemonShutdownReceipt } from "../../contracts/daemon-shutdown-contracts.js";
 import type { DaemonLifetimeEvidencePort } from "../../ports/index.js";
 
 const PRIVATE_DIRECTORY_MODE = 0o700;
@@ -120,6 +121,15 @@ export class FileDaemonLifetimeEvidenceAdapter implements DaemonLifetimeEvidence
     }));
   }
 
+  public observeShutdown(receipt: DaemonShutdownReceipt): void {
+    const parsed = daemonShutdownReceiptSchema.safeParse(receipt);
+    if (!parsed.success) {
+      this.unavailableReason = "invalid_observation";
+      return;
+    }
+    this.updateCurrent((current) => ({ ...current, timestamp: now(), shutdown: parsed.data }));
+  }
+
   public getEvidence(): DaemonLifetimeEvidence {
     if (this.activeLaunch === undefined) {
       return { status: "unavailable", reason: this.unavailableReason ?? "not_admitted" };
@@ -173,7 +183,7 @@ export class FileDaemonLifetimeEvidenceAdapter implements DaemonLifetimeEvidence
   }
 
   private asOwnerLoss(record: DaemonLifetimeRecord): DaemonLifetimeRecord {
-    const { daemon_id, launch_token, pid, runtime_version, build_fingerprint, started_at } = record;
+    const { daemon_id, launch_token, pid, runtime_version, build_fingerprint, started_at, shutdown } = record;
     return {
       daemon_id,
       launch_token,
@@ -183,7 +193,8 @@ export class FileDaemonLifetimeEvidenceAdapter implements DaemonLifetimeEvidence
       started_at,
       timestamp: now(),
       phase: "owner_loss",
-      reason: "unknown_prior_owner_loss"
+      reason: "unknown_prior_owner_loss",
+      ...(shutdown === undefined ? {} : { shutdown })
     };
   }
 
@@ -497,5 +508,3 @@ function isNoSuchProcess(error: unknown): boolean {
 function noFollowFlag(): number {
   return typeof fs.constants.O_NOFOLLOW === "number" ? fs.constants.O_NOFOLLOW : 0;
 }
-
-

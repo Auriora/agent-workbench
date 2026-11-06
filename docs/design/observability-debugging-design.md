@@ -34,6 +34,9 @@ serialized bytes with launch identity, PID, timestamps and fixed lifecycle/cause
 enums. It excludes raw errors, stack traces, repository paths, environment values
 and client/tool payloads. Receipt content is not forwarded to PostHog or OTEL.
 Fatal observation ignores the throwable itself and preserves default termination.
+The optional shutdown block adds fixed phase/cause and observed termination,
+activity and publication state. It survives exit and later launch rotation; no
+throwable, stack, path or client payload is introduced by shutdown recording.
 
 Health exposes available records or a fixed unavailable reason. A missing terminal
 observation is unknown prior-owner loss on the next admission; it does not diagnose

@@ -39,6 +39,7 @@ import { resolveWorkspaceWatcherConfig } from "../domain/models/index.js";
 import { createRuntimeTelemetryAdapter } from "../infrastructure/telemetry/index.js";
 import { FileDaemonLifetimeEvidenceAdapter } from "../infrastructure/runtime/daemon-lifetime-evidence.js";
 import { installDaemonProcessHooks } from "../infrastructure/runtime/daemon-process-hooks.js";
+import { DaemonShutdownCoordinator } from "../infrastructure/runtime/daemon-shutdown.js";
 import { SocketServerTransport } from "./socket-transport.js";
 import {
   DAEMON_HANDSHAKE_TOO_LARGE_MESSAGE,
@@ -51,6 +52,7 @@ import type {
   SnapshotRefreshDiagnosticsPort,
   RepositoryOwnershipLease
 } from "../ports/index.js";
+import type { DaemonShutdownReceipt } from "../contracts/daemon-shutdown-contracts.js";
 import {
   acquireDaemonStartupLock,
   classifyDaemonState,
@@ -63,6 +65,7 @@ import {
   ensureDaemonDirectories,
   fsyncDirectory,
   isDaemonProcess,
+  publishDaemonDraining,
   readDaemonMetadata,
   removeCanonicalFile,
   writeDaemonMetadata,
@@ -78,8 +81,6 @@ import {
   type LifecycleDaemonMetadata
 } from "./daemon-client.js";
 
-const DAEMON_SIGTERM_GRACE_MS = 1_000;
-
 export * from "./daemon-client.js";
 
 const DEFAULT_DAEMON_PENDING_CLIENT_TIMEOUT_MS = 30_000;
@@ -91,7 +92,7 @@ const DAEMON_IDLE_GRACE_ENV = "AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS";
 export type StartedAgentWorkbenchDaemon = {
   server: Server;
   metadata: AgentWorkbenchDaemonMetadata;
-  close: () => Promise<void>;
+  close: () => Promise<DaemonShutdownReceipt>;
   connectedClients: () => number;
 };
 
@@ -104,7 +105,7 @@ export class DaemonRefreshLifetimeCoordinator {
     controller: SnapshotRefreshControllerPort;
     connected_clients: () => number;
     idle_grace_ms: number;
-    close: () => void | Promise<void>;
+    close: () => void | Promise<unknown>;
     schedule?: (delayMs: number, callback: () => void) => { cancel(): void };
   }) {
     this.unsubscribe = options.controller.onTransition((transition) => {
@@ -184,6 +185,8 @@ export async function startAgentWorkbenchDaemon(input: {
   serverOptions?: AgentWorkbenchServerOptions;
   lifetimeEvidence?: DaemonLifetimeEvidencePort;
   installProcessHooks?: boolean;
+  /** Production entrypoints map every terminal close (SIGTERM and idle) to process exit. */
+  onShutdown?: (receipt: DaemonShutdownReceipt) => void;
   testHooks?: DaemonTestHooks;
 }): Promise<StartedAgentWorkbenchDaemon> {
   const repoRoot = path.resolve(input.repoRoot);
@@ -207,6 +210,7 @@ export async function startAgentWorkbenchDaemon(input: {
   });
   const connected = new Set<Socket>();
   const mcpServers = new Set<{ close: () => Promise<void> }>();
+  const acceptingClients = new Set<Promise<void>>();
   const databasePath = graphStorePath(repoRoot);
   const sharedGraphStore = createAsyncGraphStore(databasePath);
   const ownerGeneration = Date.now();
@@ -214,12 +218,14 @@ export async function startAgentWorkbenchDaemon(input: {
   let refreshController: SnapshotRefreshControllerPort &
     SnapshotRefreshDiagnosticsPort & SnapshotRefreshAdmissionFailurePort;
   let refreshAuthority: LazyOwnershipGatedRefreshAuthority | undefined;
-  let closePromise: Promise<void> | undefined;
+  let closePromise: Promise<DaemonShutdownReceipt> | undefined;
+  let shutdownCoordinator: DaemonShutdownCoordinator | undefined;
   let startupTimer: ReturnType<typeof setTimeout> | undefined;
   let startupRefreshPromise: Promise<void> | undefined;
   let readinessEstablished = false;
   let sharedRepositoryServices: AgentWorkbenchSharedRepositoryServices | undefined;
   let lifetime: DaemonRefreshLifetimeCoordinator | undefined;
+  let shuttingDown = false;
   const sharedDisposers = new Set<() => void | Promise<void>>();
   const daemonTelemetry = input.serverOptions?.telemetry ??
     input.testHooks?.createTelemetry?.() ??
@@ -340,7 +346,7 @@ export async function startAgentWorkbenchDaemon(input: {
         connected.delete(socket);
         lifetime?.clientDisconnected();
       });
-      void acceptDaemonClient({
+      const accepting = acceptDaemonClient({
         socket,
         identity,
         repoRoot,
@@ -358,12 +364,17 @@ export async function startAgentWorkbenchDaemon(input: {
         },
         mcpServers
       });
+      acceptingClients.add(accepting);
+      void accepting.then(
+        () => acceptingClients.delete(accepting),
+        () => acceptingClients.delete(accepting)
+      );
     }
   };
 
   const pendingSockets = new Set<Socket>();
   const server = net.createServer((socket) => {
-    if (pendingSockets.size >= MAX_PENDING_DAEMON_CLIENTS) {
+    if (shuttingDown || pendingSockets.size >= MAX_PENDING_DAEMON_CLIENTS) {
       socket.destroy();
       return;
     }
@@ -569,53 +580,89 @@ export async function startAgentWorkbenchDaemon(input: {
     throw error;
   }
 
-  function close(): Promise<void> {
-    closePromise ??= closeDaemon();
+  function close(): Promise<DaemonShutdownReceipt> {
+    closePromise ??= (shutdownCoordinator === undefined
+      ? Promise.reject(new Error("Daemon shutdown coordinator is not initialized."))
+      : shutdownCoordinator.close().then((receipt) => {
+          input.onShutdown?.(receipt);
+          return receipt;
+        }));
     return closePromise;
   }
 
-  async function closeDaemon(): Promise<void> {
-    const shutdownLockAdmission = acquireDaemonStartupLock(paths.startupLockPath);
-    const shutdownLock = shutdownLockAdmission !== null &&
-      shutdownLockAdmission !== "ambiguous"
-      ? shutdownLockAdmission
-      : undefined;
-    try {
+  shutdownCoordinator = new DaemonShutdownCoordinator({
+    acquire_startup_exclusion: () => acquireDaemonStartupLock(paths.startupLockPath),
+    stop_admission: () => {
+      shuttingDown = true;
+    },
+    stop_triggers: () => {
       if (startupTimer !== undefined) {
         clearTimeout(startupTimer);
         startupTimer = undefined;
       }
       lifetime?.dispose();
+    },
+    publish_draining: () => {
+      metadata = publishDaemonDraining({
+        metadataPath: paths.metadataPath,
+        metadata
+      });
+    },
+    close_sockets: () => {
       closeSockets();
       pendingSockets.clear();
-      await Promise.allSettled([...mcpServers].map((mcpServer) => mcpServer.close()));
-      await Promise.allSettled([...sharedDisposers].map((dispose) => Promise.resolve(dispose())));
-      if (startupRefreshPromise !== undefined) {
-        await startupRefreshPromise;
+    },
+    controller_shutdown: async () => {
+      if (refreshAuthority !== undefined) {
+        await (refreshAuthority as LazyOwnershipGatedRefreshAuthority & {
+          shutdown(): Promise<void>;
+        }).shutdown();
+        return;
       }
-      await refreshAuthority?.close();
-      if (refreshAuthority === undefined && refreshController !== undefined) {
-        await waitForControllerShutdownSafety(refreshController);
+      if (refreshController !== undefined) {
+        await refreshController.shutdown();
       }
-      if (server.listening) {
-        await new Promise<void>((resolve, reject) => {
-          server.close((error) => {
-            if (error !== undefined) {
-              reject(error);
-              return;
-            }
-            resolve();
-          });
-        });
+    },
+    controller_receipt: () => refreshAuthority?.getReceipt() ?? refreshController?.getReceipt() ?? {
+      worker_termination_state: "unconfirmed",
+      activity_lease: { state: "held" }
+    },
+    await_startup_refresh: async () => {
+      await startupRefreshPromise;
+    },
+    close_clients: async () => {
+      await Promise.all([
+        ...[...acceptingClients],
+        ...[...mcpServers].map((mcpServer) => mcpServer.close())
+      ]);
+    },
+    close_resources: async () => {
+      await Promise.all([
+        ...[...sharedDisposers].map((dispose) => Promise.resolve(dispose())),
+        server.listening
+          ? new Promise<void>((resolve, reject) => {
+              server.close((error) => error === undefined ? resolve() : reject(error));
+            })
+          : Promise.resolve()
+      ]);
+    },
+    close_store: () => sharedGraphStore.close(),
+    release_authority: async () => {
+      if (refreshAuthority !== undefined) {
+        await refreshAuthority.close();
       }
-      await sharedGraphStore.close();
-      if (shutdownLock !== undefined) {
-        cleanupStaleDaemonState(metadata, paths);
+    },
+    cleanup_endpoint: () => {
+      cleanupStaleDaemonState(metadata, paths);
+    },
+    observe: (receipt) => {
+      try {
+        lifetimeEvidence?.observeShutdown(receipt);
+      } catch {
+        // Evidence loss must not alter the selected shutdown outcome.
       }
-    } finally {
-      shutdownLock?.release();
     }
-  }
+  });
 
   return {
     server,
@@ -648,17 +695,19 @@ export async function runDaemonFromEnv(env: NodeJS.ProcessEnv = process.env): Pr
       ),
       serverOptions: {
         startupRefreshDelayMs: daemonStartupRefreshDelayMsFromEnv(env)
-      }
+      },
+      onShutdown: isDaemonProcess(env)
+        ? (receipt) => process.exit(receipt.state === "settled" ? 0 : 1)
+        : undefined
     });
     if (isDaemonProcess(env)) {
       let shuttingDown = false;
-      process.once("SIGTERM", () => {
+      process.on("SIGTERM", () => {
         if (shuttingDown) {
           return;
         }
         shuttingDown = true;
-        void closeDaemonForTermination(daemon)
-          .then((clean) => process.exit(clean ? 0 : 1));
+        void daemon.close().catch(() => process.exit(1));
       });
     }
   } catch (error) {
@@ -684,25 +733,6 @@ function readLifetimeEvidence(
       status: "unavailable",
       reason: "store_unreadable"
     };
-  }
-}
-
-async function closeDaemonForTermination(
-  daemon: Pick<StartedAgentWorkbenchDaemon, "close">
-): Promise<boolean> {
-  let timeout: NodeJS.Timeout | undefined;
-  try {
-    return await Promise.race([
-      daemon.close().then(() => true, () => false),
-      new Promise<false>((resolve) => {
-        timeout = setTimeout(() => resolve(false), DAEMON_SIGTERM_GRACE_MS);
-        timeout.unref();
-      })
-    ]);
-  } finally {
-    if (timeout !== undefined) {
-      clearTimeout(timeout);
-    }
   }
 }
 

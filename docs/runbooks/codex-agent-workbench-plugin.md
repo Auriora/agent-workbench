@@ -209,9 +209,26 @@ admitted launch records that distinction even when the launching client vanished
 The private receipt survives normal endpoint cleanup and retains only two launch
 records. Do not delete or edit it as recovery. Corrupt or unsafe storage is explicit
 unavailable evidence; no alternate store is used. Receipt content is local and is
-not exported to analytics. Pre-ready failures remain startup diagnostics. Worker
-settlement remains [B002](../backlog/README.md#transport-reliability-follow-up), and
-endpoint-loss work stays in Spec 065. No installed acceptance is claimed here.
+not exported to analytics. Pre-ready failures remain startup diagnostics. Spec 068's source shutdown protocol requests exact-worker cancellation and waits
+for terminal publication before releasing ownership. Its one-second budget remains
+referenced until a settled or blocked outcome. A shutdown block in lifetime evidence
+identifies the last phase and fixed cause, including unconfirmed worker death,
+cleanup failure or unavailable startup exclusion. Successful cancellation keeps the
+previous published graph; an interrupted building target becomes failed.
+
+A blocked outcome exits nonzero and retains unresolved canonical ownership for
+positive-death recovery. Do not infer clean shutdown from the old socket closing.
+New connections are deliberately rejected during drain. Canonical endpoint metadata
+first becomes draining for the exact launch, allowing current launchers to wait
+within their existing deadline rather than treat deliberate socket teardown as an
+unverified ready endpoint. Draining does not authorize another signal or cleanup,
+and lifetime diagnostics are not a second admission authority. Older readers that
+do not recognize draining fail closed; this fixture does not prove compatibility
+with every historical launcher. An abandoned or unverifiable .reclaim guard
+is an explicit ambiguous state; B008/Spec 065 owns future safe recovery, and this
+protocol does not automatically remove it. Endpoint location remains Spec 065.
+Isolated installed fixture acceptance is separate from installing this repair into
+the user's runtime. Npm peer-resolution acceptance remains B007.
 
 ### Bridge process interpretation
 

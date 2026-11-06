@@ -13,6 +13,10 @@ import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import type { IntegrationLauncherIdentity } from "../contracts/index.js";
+import type {
+  DaemonEndpointLifecyclePhase,
+  DaemonEndpointLifecycleState
+} from "../contracts/daemon-lifecycle-contracts.js";
 import { GRAPH_STORE_IDENTITY_VERSION } from "../contracts/graph-store-identity-contracts.js";
 import {
   AGENT_WORKBENCH_RUNTIME_BUILD_FINGERPRINT,
@@ -55,8 +59,8 @@ export type AgentWorkbenchDaemonMetadata = {
   socketPath: string;
   createdAt: string;
   launchLifecycle?: {
-    state: "starting" | "ready" | "failed";
-    phase: "launching" | "ready" | "terminal";
+    state: DaemonEndpointLifecycleState;
+    phase: DaemonEndpointLifecyclePhase;
     launchToken: string;
     startedAt: string;
     updatedAt: string;
@@ -80,7 +84,7 @@ export type DaemonState =
   | { state: "absent"; reason: "missing" }
   | { state: "stale"; reason: "malformed_metadata" | "dead_process" | "missing_socket" | "identity_mismatch"; metadata?: AgentWorkbenchDaemonMetadata }
   | { state: "mismatched"; reason: "build_fingerprint_mismatch"; metadata: AgentWorkbenchDaemonMetadata }
-  | { state: "blocked"; reason: "ambiguous_process" | "ambiguous_metadata" | "starting" | "failed"; metadata?: AgentWorkbenchDaemonMetadata }
+  | { state: "blocked"; reason: "ambiguous_process" | "ambiguous_metadata" | "starting" | "draining" | "failed"; metadata?: AgentWorkbenchDaemonMetadata }
   | { state: "ready"; metadata: AgentWorkbenchDaemonMetadata };
 
 export type DaemonPaths = {
@@ -197,6 +201,11 @@ export function classifyDaemonState(input: {
       : { state: "stale", reason: "identity_mismatch", metadata };
   }
   const lifecycle = resolveLifecycleState(metadata.launchLifecycle);
+  if (metadata.socketPath !== input.socketPath) {
+    return processState
+      ? { state: "blocked", reason: "ambiguous_process", metadata }
+      : { state: "stale", reason: "identity_mismatch", metadata };
+  }
   if (lifecycle === "starting") {
     return processState
       ? { state: "blocked", reason: "starting", metadata }
@@ -210,8 +219,11 @@ export function classifyDaemonState(input: {
   if (!processState) {
     return { state: "stale", reason: "dead_process", metadata };
   }
+  if (lifecycle === "draining") {
+    return { state: "blocked", reason: "draining", metadata };
+  }
   const socketExists = input.socketExists ?? defaultSocketExists;
-  if (metadata.socketPath !== input.socketPath || !socketExists(metadata.socketPath)) {
+  if (!socketExists(metadata.socketPath)) {
     return { state: "blocked", reason: "ambiguous_process", metadata };
   }
   if (identityRelationship === "build_fingerprint_mismatch") {
@@ -318,6 +330,17 @@ export async function connectOrStartDaemon(
           retryStartup
         });
       }
+      if (state.reason === "draining") {
+        return await waitForReplaceableDaemonHandoff({
+          identity,
+          integrationIdentity: options.integrationIdentity,
+          paths,
+          timeoutMs,
+          deadlineMs,
+          handshakeTimeoutMs,
+          retryStartup
+        });
+      }
       if (state.reason === "failed" && state.metadata !== undefined) {
         throw startupFailureFromMetadata(state.metadata);
       }
@@ -378,6 +401,19 @@ export async function connectOrStartDaemon(
             retryStartup
           });
         }
+        if (state.reason === "draining") {
+          keepStartupLock = false;
+          releaseStartupLock();
+          return await waitForReplaceableDaemonHandoff({
+            identity,
+            integrationIdentity: options.integrationIdentity,
+            paths,
+            timeoutMs,
+            deadlineMs,
+            handshakeTimeoutMs,
+            retryStartup
+          });
+        }
         if (state.reason === "failed" && state.metadata !== undefined) {
           keepStartupLock = false;
           throw startupFailureFromMetadata(state.metadata);
@@ -387,19 +423,27 @@ export async function connectOrStartDaemon(
       }
       if (state.state === "mismatched") {
         try {
-          await verifyReplaceableDaemonOwnership({
+          const ownershipDecision = await verifyReplaceableDaemonOwnership({
             metadata: state.metadata,
             expectedIdentity: identity,
             socketPath: paths.socketPath,
+            metadataPath: paths.metadataPath,
             deadlineMs,
             handshakeTimeoutMs
           });
-          signalReplaceableDaemon({
-            metadata: state.metadata,
-            expectedIdentity: identity,
-            socketPath: paths.socketPath,
-            signalProcess
-          });
+          if (ownershipDecision === "signal") {
+            signalReplaceableDaemon({
+              metadata: state.metadata,
+              expectedIdentity: identity,
+              socketPath: paths.socketPath,
+              signalProcess
+            });
+          }
+          if (ownershipDecision === "elect") {
+            keepStartupLock = false;
+            releaseStartupLock();
+            return await retryStartup();
+          }
         } finally {
           keepStartupLock = false;
           releaseStartupLock();
@@ -670,11 +714,14 @@ async function waitForReplaceableDaemonHandoff(input: {
   retryStartup: () => Promise<Socket>;
 }): Promise<Socket> {
   while (performance.now() <= input.deadlineMs) {
-    const state = normalizeLaunchState(classifyDaemonState({
+    // This waiter does not own startup authority.  In particular, do not
+    // clean up stale metadata here: the existing retry path reacquires the
+    // startup lock before making any destructive election decision.
+    const state = classifyDaemonState({
       metadataPath: input.paths.metadataPath,
       expectedIdentity: input.identity,
       socketPath: input.paths.socketPath
-    }), input.paths);
+    });
     if (state.state === "absent" || state.state === "stale") {
       return input.retryStartup();
     }
@@ -709,6 +756,10 @@ async function waitForReplaceableDaemonHandoff(input: {
           retryStartup: input.retryStartup
         });
       }
+      if (state.reason === "draining") {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        continue;
+      }
       if (state.reason === "failed" && state.metadata !== undefined) {
         throw startupFailureFromMetadata(state.metadata);
       }
@@ -719,13 +770,16 @@ async function waitForReplaceableDaemonHandoff(input: {
   throw new Error("Timed out waiting for Agent Workbench daemon replacement handoff.");
 }
 
+type ReplaceableDaemonOwnershipDecision = "signal" | "wait" | "elect";
+
 async function verifyReplaceableDaemonOwnership(input: {
   metadata: AgentWorkbenchDaemonMetadata;
   expectedIdentity: AgentWorkbenchDaemonIdentity;
   socketPath: string;
+  metadataPath: string;
   deadlineMs: number;
   handshakeTimeoutMs: number;
-}): Promise<void> {
+}): Promise<ReplaceableDaemonOwnershipDecision> {
   if (
     !daemonBaseIdentityMatches(input.metadata.identity, input.expectedIdentity) ||
     daemonIdentityMatches(input.metadata.identity, input.expectedIdentity) ||
@@ -743,6 +797,7 @@ async function verifyReplaceableDaemonOwnership(input: {
   }
 
   let socket: Socket | undefined;
+  let probeSucceeded = false;
   try {
     socket = await connectSocket(input.socketPath, remainingMs);
     const session = createDaemonProbeSession(socket, input.deadlineMs);
@@ -778,11 +833,73 @@ async function verifyReplaceableDaemonOwnership(input: {
     if (!replaceableDaemonHealthMatches(response, input.metadata)) {
       throw new Error("Agent Workbench daemon is blocked: ambiguous_process.");
     }
+    probeSucceeded = true;
   } catch {
+    const progress = recheckReplaceableDaemonProgress(input, false);
+    if (progress !== undefined) {
+      return progress;
+    }
     throw new Error("Agent Workbench daemon is blocked: ambiguous_process.");
   } finally {
     socket?.destroy();
   }
+  const progress = recheckReplaceableDaemonProgress(input, probeSucceeded);
+  if (progress === undefined) {
+    throw new Error("Agent Workbench daemon is blocked: ambiguous_process.");
+  }
+  return progress;
+}
+
+function recheckReplaceableDaemonProgress(
+  input: {
+    metadata: AgentWorkbenchDaemonMetadata;
+    expectedIdentity: AgentWorkbenchDaemonIdentity;
+    socketPath: string;
+    metadataPath: string;
+  },
+  probeSucceeded: boolean
+): ReplaceableDaemonOwnershipDecision | undefined {
+  const current = readDaemonMetadata(input.metadataPath);
+  if (current === undefined) {
+    return "elect";
+  }
+  if (current === "malformed") {
+    return undefined;
+  }
+  if (
+    current.launchLifecycle?.state === "draining" &&
+    sameDaemonLaunchExact(current, input.metadata)
+  ) {
+    return "wait";
+  }
+  const successorLifecycle = current.launchLifecycle;
+  if (
+    successorLifecycle !== undefined &&
+    (successorLifecycle.state === "starting" || successorLifecycle.state === "ready") &&
+    daemonIdentityMatches(current.identity, input.expectedIdentity) &&
+    current.socketPath === input.socketPath &&
+    current.pid > 0 &&
+    (input.metadata.launchLifecycle?.launchToken === undefined ||
+      successorLifecycle.launchToken !== input.metadata.launchLifecycle.launchToken)
+  ) {
+    return "wait";
+  }
+  const state = classifyDaemonState({
+    metadataPath: input.metadataPath,
+    expectedIdentity: input.expectedIdentity,
+    socketPath: input.socketPath
+  });
+  if (state.state === "absent" || state.state === "stale") {
+    return "elect";
+  }
+  if (
+    probeSucceeded &&
+    sameDaemonLaunchExact(current, input.metadata) &&
+    (current.launchLifecycle === undefined || current.launchLifecycle.state === "ready")
+  ) {
+    return "signal";
+  }
+  return undefined;
 }
 
 function createDaemonProbeSession(socket: Socket, deadlineMs: number): {
@@ -1081,6 +1198,80 @@ export function writeDaemonMetadata(metadataPath: string, metadata: AgentWorkben
   }
 }
 
+/** Publish the exact owner's ready-to-draining transition without replacing a
+ * different launch's canonical metadata. */
+export function publishDaemonDraining(input: {
+  metadataPath: string;
+  metadata: LifecycleDaemonMetadata;
+}): LifecycleDaemonMetadata {
+  if (
+    input.metadata.launchLifecycle.state !== "ready" &&
+    input.metadata.launchLifecycle.state !== "draining"
+  ) {
+    throw new Error("Daemon draining publication was blocked: owner is not ready.");
+  }
+  const current = readDaemonMetadata(input.metadataPath);
+  if (current === undefined || current === "malformed") {
+    throw new Error("Daemon draining publication was blocked: canonical metadata changed.");
+  }
+  if (!sameDaemonLaunchExact(current, input.metadata)) {
+    throw new Error("Daemon draining publication was blocked: canonical owner changed.");
+  }
+  const currentLifecycle = current.launchLifecycle;
+  if (currentLifecycle === undefined) {
+    throw new Error("Daemon draining publication was blocked: lifecycle metadata is missing.");
+  }
+  if (currentLifecycle.state === "draining") {
+    return current as LifecycleDaemonMetadata;
+  }
+  if (currentLifecycle.state !== "ready") {
+    throw new Error("Daemon draining publication was blocked: owner is not ready.");
+  }
+  const draining: LifecycleDaemonMetadata = {
+    ...current,
+    launchLifecycle: {
+      ...currentLifecycle,
+      state: "draining",
+      phase: "draining",
+      updatedAt: new Date().toISOString(),
+      failureCode: undefined,
+      native_module_rebuild_required: undefined
+    }
+  };
+  writeDaemonMetadataIfExactOwner(input.metadataPath, current, draining);
+  return draining;
+}
+
+function writeDaemonMetadataIfExactOwner(
+  metadataPath: string,
+  expected: AgentWorkbenchDaemonMetadata,
+  metadata: AgentWorkbenchDaemonMetadata
+): void {
+  fs.mkdirSync(path.dirname(metadataPath), { recursive: true });
+  const serialized = `${JSON.stringify(metadata, null, 2)}\n`;
+  const tempPath = `${metadataPath}.${process.pid}.${Date.now()}.${crypto.randomUUID()}.tmp`;
+  let fd: number | undefined;
+  let fdClosed = false;
+  try {
+    fd = fs.openSync(tempPath, "w", 0o600);
+    fs.writeFileSync(fd, serialized);
+    fs.fsyncSync(fd);
+    fs.closeSync(fd);
+    fdClosed = true;
+    const current = readDaemonMetadata(metadataPath);
+    if (current === undefined || current === "malformed" || !sameDaemonLaunchExact(current, expected)) {
+      throw new Error("Daemon draining publication was blocked: canonical owner changed.");
+    }
+    fs.renameSync(tempPath, metadataPath);
+    fsyncDirectory(path.dirname(metadataPath));
+  } finally {
+    if (!fdClosed && fd !== undefined) {
+      try { fs.closeSync(fd); } catch {}
+    }
+    fs.rmSync(tempPath, { force: true });
+  }
+}
+
 export function fsyncDirectory(directoryPath: string): void {
   let directoryFd: number | undefined;
   try {
@@ -1114,30 +1305,81 @@ function ensurePrivateDirectory(directory: string): void {
 export function acquireDaemonStartupLock(
   lockPath: string
 ): { release: () => void } | "ambiguous" | null {
+  const reclaimGuardPath = `${lockPath}.reclaim`;
+  // Preserve the uncontended fast path: the canonical claim remains one
+  // atomic hard-link publication and does not need the reclaim guard.
   try {
-    return createDaemonStartupLock(lockPath);
+    const fresh = createDaemonStartupLock(lockPath);
+    // A reclaimer may have died after unlinking the canonical lock. Do not
+    // convert that abandoned guard into a fresh owner through the fast path.
+    if (pathExists(reclaimGuardPath)) {
+      fresh.release();
+      const guardState = classifyReclaimGuard(reclaimGuardPath);
+      return guardState === "live" || guardState === "missing" ? null : "ambiguous";
+    }
+    return fresh;
   } catch (error) {
     if (!isFileExistsError(error)) {
       throw error;
     }
   }
 
-  const stale = daemonStartupLockIsStale(lockPath);
-  if (stale === "ambiguous") {
-    return "ambiguous";
-  }
-  if (!stale) {
-    return null;
+  // A reclaim guard is an explicit in-progress/abandoned authority marker.
+  // Never infer that its owner is dead: an interrupted reclaimer must remain
+  // blocked until an operator removes the guard under the future authority
+  // policy. Acquiring it precedes stale probing so reclaimers serialize.
+  let reclaimGuard: { release: () => void };
+  try {
+    reclaimGuard = createDaemonStartupLock(reclaimGuardPath);
+  } catch (error) {
+    if (isFileExistsError(error)) {
+      const guardState = classifyReclaimGuard(reclaimGuardPath);
+      return guardState === "live" || guardState === "missing" ? null : "ambiguous";
+    }
+    throw error;
   }
 
   try {
-    fs.rmSync(lockPath, { force: true });
-    return createDaemonStartupLock(lockPath);
-  } catch (error) {
-    if (isFileExistsError(error)) {
+    const stale = daemonStartupLockIsStale(lockPath);
+    if (stale === "missing") {
       return null;
     }
-    throw error;
+    if (stale === "ambiguous") {
+      return "ambiguous";
+    }
+    if (!stale) {
+      return null;
+    }
+    const staleSnapshot = readDaemonStartupLockSnapshot(lockPath);
+    if (staleSnapshot === undefined) {
+      return null;
+    }
+    if (staleSnapshot === "ambiguous") {
+      return "ambiguous";
+    }
+    if (isProcessAlive(staleSnapshot.payload.pid) !== false) {
+      return "ambiguous";
+    }
+    const currentSnapshot = readDaemonStartupLockSnapshot(lockPath);
+    if (
+      currentSnapshot === "ambiguous" ||
+      currentSnapshot === undefined ||
+      currentSnapshot.stat.dev !== staleSnapshot.stat.dev ||
+      currentSnapshot.stat.ino !== staleSnapshot.stat.ino ||
+      currentSnapshot.payload.token !== staleSnapshot.payload.token ||
+      currentSnapshot.payload.pid !== staleSnapshot.payload.pid
+    ) {
+      return "ambiguous";
+    }
+    fs.rmSync(lockPath);
+    try {
+      return createDaemonStartupLock(lockPath);
+    } catch (error) {
+      if (isFileExistsError(error)) return null;
+      throw error;
+    }
+  } finally {
+    reclaimGuard.release();
   }
 }
 
@@ -1223,12 +1465,74 @@ export function createDaemonStartupLock(
   };
 }
 
-function daemonStartupLockIsStale(lockPath: string): boolean | "ambiguous" {
-  const payload = readDaemonStartupLockPayload(lockPath);
-  if (payload === undefined) return "ambiguous";
+function daemonStartupLockIsStale(lockPath: string): boolean | "ambiguous" | "missing" {
+  const snapshot = readDaemonStartupLockSnapshot(lockPath);
+  if (snapshot === undefined) return "missing";
+  if (snapshot === "ambiguous") return "ambiguous";
 
-  const processState = isProcessAlive(payload.pid);
+  const processState = isProcessAlive(snapshot.payload.pid);
   return processState === "ambiguous" ? "ambiguous" : processState === false;
+}
+
+type DaemonStartupLockSnapshot = {
+  stat: Pick<fs.Stats, "dev" | "ino">;
+  payload: DaemonStartupLockPayload;
+};
+
+function readDaemonStartupLockSnapshot(
+  lockPath: string
+): DaemonStartupLockSnapshot | "ambiguous" | undefined {
+  let fd: number | undefined;
+  try {
+    fd = fs.openSync(lockPath, fs.constants.O_RDONLY | noFollowFlag());
+    const stat = fs.fstatSync(fd);
+    if (!stat.isFile()) return "ambiguous";
+    const buffer = Buffer.alloc(4097);
+    const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, 0);
+    if (bytesRead > 4096) return "ambiguous";
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(buffer.subarray(0, bytesRead).toString("utf8"));
+    } catch {
+      return "ambiguous";
+    }
+    if (typeof parsed !== "object" || parsed === null) return "ambiguous";
+    const value = parsed as Partial<DaemonStartupLockPayload>;
+    if (
+      typeof value.pid !== "number" || !Number.isInteger(value.pid) || value.pid <= 0 ||
+      typeof value.created_at !== "string" || !Number.isFinite(Date.parse(value.created_at)) ||
+      typeof value.token !== "string" || value.token.length === 0
+    ) return "ambiguous";
+    return { stat: { dev: stat.dev, ino: stat.ino }, payload: value as DaemonStartupLockPayload };
+  } catch (error) {
+    if (isMissingFileError(error)) return undefined;
+    return "ambiguous";
+  } finally {
+    if (fd !== undefined) {
+      try { fs.closeSync(fd); } catch {}
+    }
+  }
+}
+
+function noFollowFlag(): number {
+  return process.platform === "win32" ? 0 : (fs.constants.O_NOFOLLOW ?? 0);
+}
+
+function pathExists(filePath: string): boolean {
+  try {
+    fs.lstatSync(filePath);
+    return true;
+  } catch (error) {
+    if (isMissingFileError(error)) return false;
+    return true;
+  }
+}
+
+function classifyReclaimGuard(filePath: string): "live" | "missing" | "ambiguous" {
+  const snapshot = readDaemonStartupLockSnapshot(filePath);
+  if (snapshot === undefined) return "missing";
+  if (snapshot === "ambiguous") return "ambiguous";
+  return isProcessAlive(snapshot.payload.pid) === true ? "live" : "ambiguous";
 }
 
 function readDaemonStartupLockPayload(lockPath: string): DaemonStartupLockPayload | undefined {
@@ -1270,11 +1574,11 @@ function normalizeLaunchState(state: DaemonState, paths: DaemonPaths): DaemonSta
 
 function resolveLifecycleState(
   lifecycle: AgentWorkbenchDaemonMetadata["launchLifecycle"] | undefined
-): "ready" | "starting" | "failed" {
+): "ready" | "starting" | "draining" | "failed" {
   if (lifecycle === undefined) {
     return "ready";
   }
-  if (lifecycle.state === "failed" || lifecycle.state === "starting") {
+  if (lifecycle.state === "failed" || lifecycle.state === "starting" || lifecycle.state === "draining") {
     return lifecycle.state;
   }
   return lifecycle.state;
@@ -1370,6 +1674,9 @@ function isDaemonLifecycle(
   if (lifecycle.state === "ready") {
     return lifecycle.phase === "ready" && lifecycle.failureCode === undefined;
   }
+  if (lifecycle.state === "draining") {
+    return lifecycle.phase === "draining" && lifecycle.failureCode === undefined;
+  }
   if (lifecycle.state === "failed") {
     return lifecycle.phase === "terminal" && isValidDaemonStartupFailureCode(lifecycle.failureCode);
   }
@@ -1433,6 +1740,21 @@ function sameDaemonLaunch(
     current.socketPath === expected.socketPath &&
     daemonIdentityMatches(current.identity, expected.identity)
   );
+}
+
+function sameDaemonLaunchExact(
+  current: AgentWorkbenchDaemonMetadata,
+  expected: AgentWorkbenchDaemonMetadata
+): boolean {
+  const currentToken = current.launchLifecycle?.launchToken;
+  const expectedToken = expected.launchLifecycle?.launchToken;
+  return daemonIdentityMatches(current.identity, expected.identity) &&
+    current.pid === expected.pid &&
+    current.socketPath === expected.socketPath &&
+    current.createdAt === expected.createdAt &&
+    (currentToken === undefined || expectedToken === undefined
+      ? currentToken === expectedToken
+      : currentToken === expectedToken);
 }
 
 function signalReplaceableDaemon(input: {

@@ -12,6 +12,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { PassThrough } from "node:stream";
 import { EventEmitter } from "node:events";
 import {
+  acquireDaemonStartupLock,
   DAEMON_PROTOCOL_VERSION,
   classifyDaemonState,
   connectOrStartDaemon,
@@ -42,6 +43,7 @@ import type {
   DaemonLifetimeEvidence,
   DaemonLifetimeLaunch
 } from "../../src/contracts/daemon-lifetime-contracts.js";
+import type { DaemonShutdownReceipt } from "../../src/contracts/daemon-shutdown-contracts.js";
 import {
   MAX_DAEMON_HANDSHAKE_BYTES,
   MAX_MCP_FRAME_BYTES
@@ -82,7 +84,13 @@ describe("Agent Workbench daemon launcher", () => {
       });
     } finally {
       socket.destroy();
-      await daemon.close();
+      const receipt = await daemon.close();
+      expect(receipt.state).toBe("settled");
+      expect(evidence.shutdownReceipts.at(-1)).toMatchObject({
+        state: "settled",
+        phase: "complete",
+        cause: "complete"
+      });
     }
   });
 
@@ -407,6 +415,7 @@ describe("Agent Workbench daemon launcher", () => {
           worker_termination_state: terminationState
         };
       },
+      async shutdown() {},
       onTransition(next) {
         listener = next;
         return () => { listener = undefined; };
@@ -514,6 +523,7 @@ describe("Agent Workbench daemon launcher", () => {
           worker_termination_state: "not_required"
         };
       },
+      async shutdown() {},
       onTransition() { return () => undefined; }
     };
     const authority = new LazyOwnershipGatedRefreshAuthority({
@@ -2241,6 +2251,144 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
+  it("serializes stale startup-lock reclaim and fails closed on an abandoned guard", () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-reclaim-guard-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+    try {
+      fs.writeFileSync(paths.startupLockPath, `${JSON.stringify({
+        pid: 999999999,
+        created_at: new Date().toISOString(),
+        token: "stale-owner"
+      })}\n`);
+      fs.writeFileSync(`${paths.startupLockPath}.reclaim`, "abandoned\n");
+
+      expect(acquireDaemonStartupLock(paths.startupLockPath)).toBe("ambiguous");
+      expect(fs.existsSync(paths.startupLockPath)).toBe(true);
+      expect(fs.readFileSync(`${paths.startupLockPath}.reclaim`, "utf8")).toBe("abandoned\n");
+      fs.rmSync(paths.startupLockPath);
+      expect(acquireDaemonStartupLock(paths.startupLockPath)).toBe("ambiguous");
+      expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("reclaims a positively dead startup owner and removes only its guard", () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-reclaim-dead-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+    try {
+      fs.writeFileSync(paths.startupLockPath, `${JSON.stringify({
+        pid: 999999999,
+        created_at: new Date().toISOString(),
+        token: "stale-owner"
+      })}\n`);
+      const replacement = acquireDaemonStartupLock(paths.startupLockPath);
+      expect(replacement).not.toBe("ambiguous");
+      expect(replacement).not.toBeNull();
+      expect(fs.existsSync(`${paths.startupLockPath}.reclaim`)).toBe(false);
+      replacement !== null && replacement !== "ambiguous" && replacement.release();
+      expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+    } finally {
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("treats a live reclaimer as busy without mutating the canonical owner", () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-live-reclaimer-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+    const guardPath = `${paths.startupLockPath}.reclaim`;
+    let guard: { release: () => void } | undefined;
+    try {
+      fs.writeFileSync(paths.startupLockPath, `${JSON.stringify({
+        pid: 999999999,
+        created_at: new Date().toISOString(),
+        token: "stale-owner"
+      })}\n`);
+      const before = fs.readFileSync(paths.startupLockPath, "utf8");
+      guard = createDaemonStartupLock(guardPath);
+      expect(acquireDaemonStartupLock(paths.startupLockPath)).toBeNull();
+      expect(fs.readFileSync(paths.startupLockPath, "utf8")).toBe(before);
+    } finally {
+      guard?.release();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("releases its fresh canonical claim when a live reclaim guard is observed", () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-live-guard-fastpath-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+    const guardPath = `${paths.startupLockPath}.reclaim`;
+    let guard: { release: () => void } | undefined;
+    try {
+      guard = createDaemonStartupLock(guardPath);
+      expect(acquireDaemonStartupLock(paths.startupLockPath)).toBeNull();
+      expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+      expect(fs.existsSync(guardPath)).toBe(true);
+    } finally {
+      guard?.release();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("treats a canonical owner disappearing during guarded inspection as election progress", () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-owner-gap-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+    const guardPath = `${paths.startupLockPath}.reclaim`;
+    const incumbent = createDaemonStartupLock(paths.startupLockPath);
+    const originalLinkSync = fs.linkSync.bind(fs);
+    const linkSyncSpy = vi.spyOn(fs, "linkSync").mockImplementation(((existingPath: fs.PathLike, newPath: fs.PathLike) => {
+      const result = originalLinkSync(existingPath, newPath);
+      if (String(newPath) === guardPath) incumbent.release();
+      return result;
+    }) as typeof fs.linkSync);
+    try {
+      expect(acquireDaemonStartupLock(paths.startupLockPath)).toBeNull();
+      expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+      expect(fs.existsSync(guardPath)).toBe(false);
+    } finally {
+      linkSyncSpy.mockRestore();
+      incumbent.release();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a fresh contender that wins the reclaim unlink/create gap", () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-reclaim-gap-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.mkdirSync(paths.metadataDir, { recursive: true });
+    let winner: { release: () => void } | undefined;
+    let injected = false;
+    const originalRmSync = fs.rmSync.bind(fs);
+    const rmSyncSpy = vi.spyOn(fs, "rmSync").mockImplementation(((target: fs.PathLike, options?: fs.RmDirOptions | fs.RmOptions) => {
+      const result = originalRmSync(target, options as never);
+      if (String(target) === paths.startupLockPath && !injected) {
+        injected = true;
+        winner = createDaemonStartupLock(paths.startupLockPath);
+      }
+      return result;
+    }) as typeof fs.rmSync);
+    try {
+      fs.writeFileSync(paths.startupLockPath, `${JSON.stringify({
+        pid: 999999999,
+        created_at: new Date().toISOString(),
+        token: "stale-owner"
+      })}\n`);
+      expect(acquireDaemonStartupLock(paths.startupLockPath)).toBeNull();
+      expect(JSON.parse(fs.readFileSync(paths.startupLockPath, "utf8"))).toMatchObject({
+        pid: process.pid
+      });
+    } finally {
+      rmSyncSpy.mockRestore();
+      winner?.release();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("atomically publishes one complete startup owner and checks ownership before release", () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-lock-atomic-");
     const paths = daemonPaths(createDaemonIdentity(repoRoot));
@@ -2869,6 +3017,7 @@ const createdRepoRoots: string[] = [];
 
 class AdmissionEvidence implements DaemonLifetimeEvidencePort {
   public readonly readyCalls: DaemonLifetimeLaunch[] = [];
+  public readonly shutdownReceipts: DaemonShutdownReceipt[] = [];
 
   public ready(launch: DaemonLifetimeLaunch): void {
     this.readyCalls.push(launch);
@@ -2877,6 +3026,9 @@ class AdmissionEvidence implements DaemonLifetimeEvidencePort {
   public observeFatal(): void {}
   public observeSignal(): void {}
   public observeExit(): void {}
+  public observeShutdown(receipt: DaemonShutdownReceipt): void {
+    this.shutdownReceipts.push(receipt);
+  }
 
   public getEvidence(): DaemonLifetimeEvidence {
     const launch = this.readyCalls[0];
@@ -2939,6 +3091,7 @@ function createShutdownController(initialState: "running") {
   let executionState: "running" | "complete" | "failed" = initialState;
   let terminationState: "not_required" | "unconfirmed" | "confirmed" = "not_required";
   let leaseHeld = true;
+  const shutdownWaiters = new Set<() => void>();
   let listener: ((transition: DaemonRefreshActivityTransition) => void | Promise<void>) | undefined;
   const failure = {
     code: "worker_error" as const,
@@ -2980,6 +3133,10 @@ function createShutdownController(initialState: "running") {
         last_failure: executionState === "failed" ? failure : undefined
       };
     },
+    async shutdown() {
+      if (!leaseHeld && terminationState !== "unconfirmed") return;
+      await new Promise<void>((resolve) => shutdownWaiters.add(resolve));
+    },
     onTransition(next) {
       listener = next;
       return () => { listener = undefined; };
@@ -2991,6 +3148,10 @@ function createShutdownController(initialState: "running") {
       executionState = state;
       terminationState = workerTerminationState;
       leaseHeld = false;
+      if (terminationState !== "unconfirmed") {
+        for (const resolve of shutdownWaiters) resolve();
+        shutdownWaiters.clear();
+      }
       if (state === "complete") {
         void listener?.({
           execution_id: "exec-1",
@@ -3024,6 +3185,8 @@ function createShutdownController(initialState: "running") {
     },
     confirmTermination() {
       terminationState = "confirmed";
+      for (const resolve of shutdownWaiters) resolve();
+      shutdownWaiters.clear();
       void listener?.({
         execution_id: "exec-1",
         controller_generation: 1,

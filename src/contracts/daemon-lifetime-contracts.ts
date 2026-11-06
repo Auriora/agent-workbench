@@ -4,6 +4,7 @@
  */
 
 import { z } from "zod";
+import { daemonShutdownReceiptSchema } from "./daemon-shutdown-contracts.js";
 
 export const DAEMON_LIFETIME_EVIDENCE_SCHEMA_VERSION = 1 as const;
 export const DAEMON_LIFETIME_EVIDENCE_MAX_BYTES = 4096 as const;
@@ -59,7 +60,8 @@ export const daemonLifetimeRecordSchema = daemonLifetimeLaunchSchema
     phase: daemonLifetimePhaseSchema,
     reason: daemonLifetimeReasonSchema,
     observed_code: z.number().int().nonnegative().nullable().optional(),
-    observed_signal: daemonLifetimeSignalSchema.optional()
+    observed_signal: daemonLifetimeSignalSchema.optional(),
+    shutdown: daemonShutdownReceiptSchema.optional()
   })
   .strict()
   .superRefine((value, context) => {

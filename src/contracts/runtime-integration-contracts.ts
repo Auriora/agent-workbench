@@ -4,6 +4,8 @@
  */
 
 import { z } from "zod";
+import { snapshotPublicationStateSchema } from "./snapshot-publication-contracts.js";
+export { snapshotPublicationStateSchema, type SnapshotPublicationState } from "./snapshot-publication-contracts.js";
 import {
   evidenceKindSchema,
   nextActionSchema,
@@ -127,13 +129,7 @@ export const refreshExecutionStateSchema = z.enum([
 ]);
 export type RefreshExecutionState = z.infer<typeof refreshExecutionStateSchema>;
 
-export const snapshotPublicationStateSchema = z.enum([
-  "building",
-  "published",
-  "superseded",
-  "failed"
-]);
-export type SnapshotPublicationState = z.infer<typeof snapshotPublicationStateSchema>;
+
 
 export const authoritativeGraphFreshnessSchema = z.enum(["fresh", "stale", "cold"]);
 export type AuthoritativeGraphFreshness = z.infer<typeof authoritativeGraphFreshnessSchema>;
@@ -165,7 +161,8 @@ export const refreshFailureCodeSchema = z.enum([
   "permission_failure",
   "ownership_lost",
   "orphaned_build",
-  "orphaned_pre_publication"
+  "orphaned_pre_publication",
+  "controller_shutdown"
 ]);
 export type RefreshFailureCode = z.infer<typeof refreshFailureCodeSchema>;
 
@@ -174,7 +171,8 @@ export const refreshFailureCategorySchema = z.enum([
   "store",
   "permission",
   "ownership",
-  "publication"
+  "publication",
+  "shutdown"
 ]);
 export type RefreshFailureCategory = z.infer<typeof refreshFailureCategorySchema>;
 
@@ -187,7 +185,8 @@ export const refreshFailureMessageSchema = z.enum([
   "Refresh operation was not permitted.",
   "Repository refresh ownership was lost.",
   "An orphaned snapshot build was recovered.",
-  "An unpublished legacy snapshot was recovered."
+  "An unpublished legacy snapshot was recovered.",
+  "Refresh controller shutdown interrupted the active execution."
 ]);
 export type RefreshFailureMessage = z.infer<typeof refreshFailureMessageSchema>;
 
@@ -200,7 +199,8 @@ export const refreshFailureCategoryByCode: Readonly<Record<RefreshFailureCode, R
   permission_failure: "permission",
   ownership_lost: "ownership",
   orphaned_build: "publication",
-  orphaned_pre_publication: "publication"
+  orphaned_pre_publication: "publication",
+  controller_shutdown: "shutdown"
 };
 
 export const refreshFailureMessageByCode: Readonly<Record<RefreshFailureCode, RefreshFailureMessage>> = {
@@ -212,7 +212,8 @@ export const refreshFailureMessageByCode: Readonly<Record<RefreshFailureCode, Re
   permission_failure: "Refresh operation was not permitted.",
   ownership_lost: "Repository refresh ownership was lost.",
   orphaned_build: "An orphaned snapshot build was recovered.",
-  orphaned_pre_publication: "An unpublished legacy snapshot was recovered."
+  orphaned_pre_publication: "An unpublished legacy snapshot was recovered.",
+  controller_shutdown: "Refresh controller shutdown interrupted the active execution."
 };
 
 export const refreshFailureSchema = z

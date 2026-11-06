@@ -37,6 +37,11 @@ Runtime contract schemas are grouped by stable runtime context under
 - `runtime-integration-contracts.ts`: MCP surface health and coding-agent
   integration profile contracts.
 - `daemon-lifetime-contracts.ts`: bounded private daemon lifetime evidence.
+- `daemon-shutdown-contracts.ts`: finite shutdown receipt and fixed budget.
+- `daemon-lifecycle-contracts.ts`: canonical endpoint states and phases, including
+  wait-only draining.
+- `snapshot-publication-contracts.ts`: canonical publication-state vocabulary,
+  re-exported through runtime integration contracts.
 - `mcp-transport-contracts.ts`: daemon handshake and MCP frame bounds and fixed
   local transport failure messages.
 
@@ -393,8 +398,7 @@ shared daemon; failure reporting cannot make teardown depend on stderr.
 
 These are source contracts for Spec 066. They become installed behavior only
 after a package containing the changes is built and installed. Spec 067 adds
-source lifetime evidence below; refresh-aware termination remains
-[backlog B002](../backlog/README.md#transport-reliability-follow-up).
+source lifetime evidence below; Spec 068 adds finite refresh-safe shutdown.
 
 ## Daemon Lifetime Evidence
 
@@ -415,6 +419,42 @@ exit. Node fatal behavior remains unchanged; import/bootstrap and uncatchable
 terminations have no guaranteed terminal record. Raw throwables, stack traces,
 paths and client payloads are excluded. This is source behavior requiring rebuild
 and installation, with no claim about a running installed runtime.
+
+### Shutdown observation
+
+The optional lifetime record `shutdown` uses `daemonShutdownReceiptSchema`:
+`state` is draining, settled or blocked; `phase` identifies admission, refresh,
+resources, store, ownership, endpoint or complete. Fixed `cause` values distinguish
+requested, complete, deadline, startup_exclusion_unavailable, refresh_unconfirmed
+and cleanup_failed. It includes worker_termination_state, activity_lease_held and
+optional publication_state. Settled evidence cannot report held activity,
+unconfirmed termination or a building publication. Exit and owner-loss rotation
+preserve observed shutdown facts; rotation invents no terminal signal or code.
+
+Controller shutdown is idempotent and closes admission synchronously. Intentional
+interruption uses the fixed `controller_shutdown` failure code in category
+`shutdown`; it is separate from worker error or timeout. The synchronous controller
+receipt includes publication_state and actual termination observations even when
+publication mutations are blocked. The lazy authority quiesces first and releases
+ownership only after successful shutdown and daemon store closure.
+
+Daemon close returns the typed shutdown receipt. A single referenced monotonic
+1000 ms budget governs the whole drain; there is no user timeout knob. Unavailable
+startup exclusion blocks destructive cleanup but never suppresses the cancellation
+request. Blocked outcomes fence later cleanup and map production SIGTERM and idle
+exit to code 1; settled maps to 0. New sockets are deliberately rejected during
+drain. Exact-launch metadata transitions from ready to draining before sockets
+close; this state is wait-only and never authorizes admission, signalling, spawning
+or cleanup. No new pre-initialize wire response is added. Failed ready probes
+require a canonical re-read proving exact draining, expected successor progress
+or positive death/absence before using the existing bounded waiter/election.
+
+Stale startup-lock reclamation uses a serialized private guard and exact
+identity checks. A bounded, validated guard with a positively live PID yields known-busy through
+the existing election deadline. A claim disappearing after contention yields no
+owner and the same bounded wait. Dead, malformed or unverifiable guards yield
+ambiguous/blocked; automatic abandoned-guard recovery is not claimed. B008/Spec 065 owns abandoned-guard recovery. Canonical dead-owner
+recovery remains the ordinary election path, with no parallel writer or retry mode.
 
 ## Daemon Health
 
@@ -471,6 +511,10 @@ exactly one of these states:
 - `ready`: compatible graph-store opening, request-service construction, socket
   binding, and endpoint metadata publication completed for the recorded daemon
   identity. A rolling-upgrade observer may be ready without owning refresh.
+- `draining`: the exact owner has fenced admission and requested shutdown before
+  socket teardown. A live base-matching owner permits bounded waiting even when
+  its endpoint is no longer present; it does not grant endpoint proof. Positive
+  death permits ordinary guarded recovery.
 - `failed`: the identified launch attempt ended with a bounded safe failure
   code and is not usable as a daemon endpoint.
 
@@ -491,8 +535,10 @@ or is absent because an older runtime wrote it, is replaceable only through the
 canonical endpoint and exact recorded PID. The current launcher sends
 `SIGTERM`, waits for launch-aware shutdown to release metadata and the socket,
 and then re-enters ordinary startup election within the original monotonic
-deadline. Graceful shutdown is bounded; if a stalled worker prevents cleanup,
-the process exits and positive dead-owner recovery governs the remaining state.
+deadline. Shutdown first cancels the exact worker and settles its publication under one
+referenced absolute budget. If settlement or cleanup remains unconfirmed, a typed
+blocked receipt survives nonzero exit and positive canonical dead-owner recovery
+governs retained state. Abandoned reclamation guards remain explicitly blocked.
 Ambiguous process, endpoint, or base-identity evidence blocks the handoff. No
 broad process discovery, forced termination, cache deletion, or parallel
 fallback daemon is permitted.

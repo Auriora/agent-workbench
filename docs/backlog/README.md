@@ -36,11 +36,14 @@ reported incident's root cause.
 | ID | Status | Topic | Priority | Owner | Target |
 | --- | --- | --- | --- | --- | --- |
 | B001 | done | Preserve daemon lifetime failure and exit evidence | P0 | platform | [Spec 067](../specs/067-daemon-lifetime-evidence/requirements.md); source delivery verified |
-| B002 | accepted | Settle refresh workers and publication before daemon termination | P0 | platform | Focused shutdown/handoff spec after B001 diagnostics design |
+| B002 | done | Settle refresh workers and publication before daemon termination | P0 | platform | [Spec 068](../specs/068-refresh-safe-daemon-shutdown/requirements.md); source and isolated installed gates passed |
 | B003 | done | Contain bridge stdout and stderr failures | P0 | platform | Spec 066 T001 |
 | B004 | done | Bound daemon handshake and incoming MCP frames | P1 | platform | Spec 066 T002 |
 | B005 | done | Settle and clean backpressured socket sends | P1 | platform | Spec 066 T002 |
 | B006 | accepted | Bound aggregate daemon session and request resources | P1 | platform | Focused admission-budget spec before release review |
+| B007 | accepted | Resolve npm tree-sitter Ruby peer metadata conflict | P1 | platform | Packaging dependency contract; before npm release acceptance |
+| B008 | accepted | Define safe abandoned startup-reclaim guard recovery | P1 | platform | Spec 065 cleanup authority; conservative blocked state until designed |
+| B009 | accepted | Count refresh executor calls at the actual invocation boundary | P2 | platform | Coordinate with B006 admission/diagnostic instrumentation |
 
 ## Transport reliability follow-up
 
@@ -88,9 +91,49 @@ reported incident's root cause.
   recovery when termination cannot be observed, and bounded failure evidence.
 - Promotion: runtime operations, ownership/publication contracts and upgrade
   runbooks, followed by a focused shutdown/handoff spec.
-- Disposition: accepted P0, deferred pending the lifecycle/worker protocol and
-  coordinated fixtures. Owner: platform. Dependency: B001 diagnostics design;
-  coordinate with Spec 065 endpoint cleanup/migration without duplicating it.
+- Disposition: done through Spec 068 after 142 source files/1491 tests passed,
+  plus all 23 isolated installed-entrypoint cases. Owner: platform. B001 is
+  committed as 84ea8ca; B002 source delivery is verified. D002 adds canonical draining
+  to eliminate observed handoff ambiguity; Spec 065 location/migration stays separate.
+  B007-B009 retain explicit packaging, guard-recovery and diagnostic limits.
+
+### B009: Count refresh executor calls at the invocation boundary
+
+- Signal: the running transition increments worker_invocations before executor.run.
+  Reentrant shutdown can cancel between those boundaries, yielding one counted
+  attempt despite no executor call. This is a diagnostic limit, not a second worker.
+- Acceptance: increment at the actual executor invocation boundary; regression
+  proves reentrant pre-run cancellation reports zero and real passes count once.
+  Preserve diagnostic revision and ordinary refresh/ownership contracts.
+- Owner: platform. Priority: P2. Coordinate with B006 admission instrumentation.
+  B002's worker-safety proof uses exact executor/termination identities and real
+  child barriers rather than treating this counter alone as launch evidence.
+
+### B008: Define safe abandoned startup-reclaim guard recovery
+
+- Signal: B002 serializes stale startup-lock reclamation to prevent dual authority.
+  A process dying inside reclamation may leave a private .reclaim claim. Current
+  admission deliberately reports ambiguous/blocked rather than unlinking it.
+- Scope: define fixture-backed recovery authority for that exact dead claim under
+  Spec 065 cleanup policy; do not infer process death or add recursive lock retries.
+- Acceptance: prove safe recovery with two simultaneous reclaimers and a replacement
+  guard appearing during inspection; no live/new owner can be unlinked. Retain an
+  explicit blocked result when ownership or kernel/file identity is insufficient.
+- Owner: platform. Priority: P1. Target: Spec 065 cleanup authority. No automatic
+  mid-reclamation crash recovery or installed-host remediation is claimed by B002.
+
+### B007: Resolve npm tree-sitter Ruby peer metadata conflict
+
+- Signal: isolated Spec 068 fixture provisioning with npm fails ERESOLVE because
+  tree-sitter-ruby 0.23.1 declares optional tree-sitter peer ^0.21.1 while the
+  runtime requires ^0.25.0. The pnpm-backed source suite is a different gate.
+- Scope: settle the published dependency/peer contract with upstream evidence and
+  native grammar fixtures; do not bypass peers or replace tree-sitter parsers.
+- Acceptance: a clean isolated npm tarball install succeeds with ordinary peer
+  resolution; approved native bindings load and language/runtime fixtures pass.
+  No --force/--legacy-peer-deps claim may substitute for acceptance.
+- Owner: platform. Priority: P1. Sequence: before npm release acceptance; retain
+  explicit distinction from pnpm installed-runtime and B002 shutdown proof.
 
 ### B006: Bound aggregate daemon admission and retained input
 
@@ -2660,8 +2703,10 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-- Spec 066 transport validation and Spec 067/B001 lifetime evidence are verified
-  in source. Select B002 worker-safe shutdown through a focused spec next.
+- Spec 066 transport, Spec 067/B001 lifetime evidence and Spec 068/B002 shutdown
+  are verified in source. Spec 068 also passed its isolated installed gate.
+  Select B006 aggregate admission next; B007 must precede npm release acceptance.
+  B008 remains with Spec 065 cleanup authority and B009 with diagnostic counters.
   Spec 065 retains endpoint location and cleanup ownership.
 
 - EB065/Spec 053 is delivered with exact population accounting, bounded public

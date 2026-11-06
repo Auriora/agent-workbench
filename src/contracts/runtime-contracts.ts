@@ -13,3 +13,5 @@ export * from "./runtime-response-contracts.js";
 export * from "./runtime-integration-contracts.js";
 export * from "./mcp-transport-contracts.js";
 export * from "./daemon-lifetime-contracts.js";
+export * from "./daemon-shutdown-contracts.js";
+export * from "./daemon-lifecycle-contracts.js";

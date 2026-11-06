@@ -6,7 +6,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createDaemonIdentity,
   daemonPaths
@@ -39,6 +39,9 @@ import { holdExclusiveSqliteLockUntilReleased } from "../helpers/sqlite-lock.js"
 
 const sessions: EntryPointSession[] = [];
 const tempRoots: string[] = [];
+const workerTerminateRejectFixture = path.resolve(
+  "tests/fixtures/daemon-shutdown/worker-terminate-reject.mjs"
+);
 
 afterEach(async () => {
   await closeSessionsAndWaitForDaemons({
@@ -48,7 +51,7 @@ afterEach(async () => {
 });
 
 describe("daemon-backed stdio entrypoint integration", () => {
-  it("starts through the checkout/source entrypoint and reports daemon health without expanding normal status", async () => {
+  it("starts through the configured entrypoint and reports daemon health without expanding normal status", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-status-");
     const session = trackSession(await startEntryPointSession(repoRoot));
     await initializeSession(session);
@@ -82,6 +85,24 @@ describe("daemon-backed stdio entrypoint integration", () => {
     expect(health.data.daemon?.pid).toBeGreaterThan(0);
     expect(session.stderr()).toBe("");
   }, 30_000);
+
+  it("rejects an invalid installed-entrypoint override instead of falling back to source", async () => {
+    const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-invalid-installed-");
+    try {
+      for (const invalidPath of [
+        path.join(repoRoot, "does-not-exist", "agent-workbench-mcp"),
+        "",
+        "   "
+      ]) {
+        vi.stubEnv("AGENT_WORKBENCH_TEST_INSTALLED_ENTRYPOINT", invalidPath);
+        await expect(startEntryPointSession(repoRoot)).rejects.toThrow(
+          /AGENT_WORKBENCH_TEST_INSTALLED_ENTRYPOINT must name a regular file/
+        );
+      }
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }, 15_000);
 
   it("rejects outstanding calls and future operations after unexpected child exit", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-child-exit-");
@@ -139,7 +160,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
     );
   }, 15_000);
 
-  it("shares one daemon across concurrent checkout/source clients", async () => {
+  it("shares one daemon across concurrent configured clients", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-shared-");
     const first = trackSession(await startEntryPointSession(repoRoot));
     const second = trackSession(await startEntryPointSession(repoRoot));
@@ -159,7 +180,88 @@ describe("daemon-backed stdio entrypoint integration", () => {
     )).toBeGreaterThanOrEqual(2);
   }, 15_000);
 
-  it("shares one authoritative refresh diagnostic identity across checkout/source clients", async () => {
+  it.runIf(
+    process.env.AGENT_WORKBENCH_TEST_INSTALLED_ENTRYPOINT !== undefined &&
+    process.env.AGENT_WORKBENCH_TEST_INSTALLED_VARIANT_ENTRYPOINT !== undefined
+  )(
+    "[installed gate] hands off same-version different-build launchers to one successor owner",
+    async () => {
+      const oldEntrypoint = process.env.AGENT_WORKBENCH_TEST_INSTALLED_ENTRYPOINT;
+      const variantEntrypoint = process.env.AGENT_WORKBENCH_TEST_INSTALLED_VARIANT_ENTRYPOINT;
+      if (oldEntrypoint === undefined || variantEntrypoint === undefined) return;
+      expect(fs.realpathSync(oldEntrypoint)).not.toBe(fs.realpathSync(variantEntrypoint));
+      const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-build-handoff-");
+      const databasePath = graphStorePath(repoRoot);
+      const first = trackSession(await startEntryPointSession(repoRoot, {
+        idleGraceMs: 250,
+        startupRefreshDelayMs: 60_000,
+        installedEntrypoint: oldEntrypoint
+      }));
+      await initializeSession(first, 30_000);
+      const oldHealth = daemonHealth(await first.call("resources/read", {
+        uri: "integration:///health/agent-workbench"
+      }));
+      const oldMetadataPath = await waitForDaemonMetadataPath(repoRoot, oldHealth.pid);
+      const oldMetadata = JSON.parse(fs.readFileSync(oldMetadataPath, "utf8")) as {
+        identity: { runtimeVersion: string; buildFingerprint?: string };
+      };
+
+      const successorSessions = [0, 1].map(() => startEntryPointSession(repoRoot, {
+        idleGraceMs: 250,
+        startupRefreshDelayMs: 60_000,
+        installedEntrypoint: variantEntrypoint
+      }));
+      const successors = (await Promise.all(successorSessions)).map(trackSession);
+      await Promise.all(successors.map((session) => initializeSession(session, 30_000)));
+      const successorHealth = await Promise.all(successors.map(async (session) =>
+        daemonHealth(await session.call("resources/read", {
+          uri: "integration:///health/agent-workbench"
+        }))
+      ));
+      expect(successorHealth[0].pid).toBe(successorHealth[1].pid);
+      expect(successorHealth[0].pid).not.toBe(oldHealth.pid);
+
+      const successorMetadataPath = await waitForDaemonMetadataPath(repoRoot, successorHealth[0].pid);
+      const successorMetadata = JSON.parse(fs.readFileSync(successorMetadataPath, "utf8")) as {
+        identity: { runtimeVersion: string; buildFingerprint?: string };
+      };
+      expect(successorMetadata.identity.runtimeVersion).toBe(oldMetadata.identity.runtimeVersion);
+      expect(successorMetadata.identity.buildFingerprint).not.toBe(oldMetadata.identity.buildFingerprint);
+
+      const lifetime = await waitForLifetimeReceipt(repoRoot, oldMetadataPath, "previous");
+      expect(lifetime.previous?.reason).toBe("sigterm");
+      if (lifetime.previous?.shutdown?.state === "settled") {
+        expect(lifetime.previous.shutdown).toMatchObject({
+          phase: "complete",
+          worker_termination_state: "not_required",
+          activity_lease_held: false
+        });
+        expect(lifetime.previous.observed_code).toBe(0);
+      } else {
+        // R2 AC4 permits the old owner to block when a concurrent launcher
+        // holds startup exclusion. Both new clients must still converge.
+        expect(lifetime.previous?.shutdown).toMatchObject({
+          state: "blocked",
+          phase: "admission",
+          cause: "startup_exclusion_unavailable"
+        });
+        expect(lifetime.previous?.observed_code).toBe(1);
+      }
+      expect(JSON.parse(fs.readFileSync(repositoryOwnershipPath(databasePath), "utf8"))).toMatchObject({
+        owner_pid: successorHealth[0].pid,
+        state: "active"
+      });
+      const successorStore = openGraphStore(databasePath);
+      try {
+        expect(countBuildingSnapshots(successorStore, repoRoot)).toBe(0);
+      } finally {
+        successorStore.close();
+      }
+    },
+    60_000
+  );
+
+  it("shares one authoritative refresh diagnostic identity across configured clients", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-shared-refresh-");
     const first = trackSession(await startEntryPointSession(repoRoot));
     const second = trackSession(await startEntryPointSession(repoRoot));
@@ -185,7 +287,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
     expect(secondDiagnostics.visible_snapshot_id).toBe(firstDiagnostics.visible_snapshot_id);
   }, 15_000);
 
-  it("executes a refresh requested by a non-startup checkout/source client", async () => {
+  it("executes a refresh requested by a non-startup configured client", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-non-startup-refresh-");
     const startupClient = trackSession(await startEntryPointSession(repoRoot, {
       startupRefreshDelayMs: 0
@@ -280,7 +382,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
   // full-suite worker load; their individual I/O waits remain independently bounded.
   }, 30_000);
 
-  it("returns graph-backed results for concurrent checkout/source clients without raw lock output", async () => {
+  it("returns graph-backed results for concurrent configured clients without raw lock output", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-concurrent-");
     const first = trackSession(await startEntryPointSession(repoRoot, { startupRefreshDelayMs: 0 }));
     const second = trackSession(await startEntryPointSession(repoRoot, { startupRefreshDelayMs: 0 }));
@@ -332,7 +434,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
     const firstDaemon = daemonHealth(await first.call("resources/read", {
       uri: "integration:///health/agent-workbench"
     }));
-    process.kill(firstDaemon.pid, "SIGTERM");
+    process.kill(firstDaemon.pid, "SIGKILL");
     await waitForProcessExit(firstDaemon.pid);
     await first.close();
 
@@ -484,7 +586,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
         atBarrier.close();
       }
 
-      process.kill(firstDaemonPid, "SIGTERM");
+      process.kill(firstDaemonPid, "SIGKILL");
       await waitForProcessExit(firstDaemonPid);
       await first.close();
 
@@ -583,6 +685,188 @@ describe("daemon-backed stdio entrypoint integration", () => {
       fs.writeFileSync(releasePath, "release\n");
       terminateIfRunning(firstDaemonPid);
       terminateIfRunning(replacementDaemonPid);
+    }
+  }, 60_000);
+
+  it.each(["graph", "prepublication"] as const)(
+    "settles a real SIGTERM during %s extraction/publication and retains the prior published snapshot",
+    async (barrier) => {
+      const repoRoot = createCrashBarrierRepository(`agent-workbench-entrypoint-sigterm-${barrier}-`);
+      const databasePath = graphStorePath(repoRoot);
+      await seedPublishedBarrierSnapshot(repoRoot, databasePath);
+      const probeRoot = path.join(repoRoot, ".cache", "agent-workbench", "test-crash");
+      const markerPath = path.join(probeRoot, `${barrier}.json`);
+      const releasePath = path.join(probeRoot, `${barrier}.release`);
+      const session = trackSession(await startEntryPointSession(repoRoot, {
+        idleGraceMs: 250,
+        startupRefreshDelayMs: 60_000,
+        env: {
+          NODE_ENV: "test",
+          AGENT_WORKBENCH_TEST_REFRESH_CRASH_BARRIER: barrier,
+          AGENT_WORKBENCH_TEST_REFRESH_CRASH_MARKER: markerPath,
+          AGENT_WORKBENCH_TEST_REFRESH_CRASH_RELEASE: releasePath
+        }
+      }));
+      let daemonPid: number | undefined;
+      try {
+        await initializeSession(session, 30_000);
+        const before = await waitForFreshRepoStatus(session);
+        expect(before.data).toMatchObject({ snapshot_id: "80", freshness: "fresh" });
+        fs.rmSync(path.join(repoRoot, "stale-sentinel.py"));
+        expect(repoStatus(await session.call("resources/read", { uri: "repo:///status" })).data)
+          .toMatchObject({ snapshot_id: "80", freshness: "stale" });
+        const marker = await waitForCrashBarrierMarker(markerPath);
+        const health = daemonRefreshHealth(await session.call("resources/read", {
+          uri: "integration:///health/agent-workbench"
+        }));
+        daemonPid = health.pid;
+        expect(marker).toMatchObject({ barrier, daemon_pid: daemonPid });
+        expect(health.worker_invocations).toBe(1);
+
+        process.kill(daemonPid, "SIGTERM");
+        const sessionExit = await session.waitForExit(5_000);
+        expect(sessionExit).toEqual({ code: 0, signal: null });
+        await waitForProcessExit(daemonPid);
+        await waitForDaemonMetadata(repoRoot, false, 3_000);
+
+        const settledStore = openGraphStore(databasePath);
+        try {
+          expect(readSnapshotPublication(settledStore, 80)).toMatchObject({
+            publication_state: "published",
+            freshness: "fresh"
+          });
+          expect(readSnapshotPublication(settledStore, Number(marker.snapshot_id))).toMatchObject({
+            publication_state: "failed"
+          });
+          expect(countBuildingSnapshots(settledStore, repoRoot)).toBe(0);
+          await expect(settledStore.getLatestPublished({ repo_root: repoRoot })).resolves.toMatchObject({
+            status: "selected",
+            snapshot: { id: "80" }
+          });
+        } finally {
+          settledStore.close();
+        }
+
+        const lifetime = await waitForLifetimeReceipt(repoRoot);
+        expect(lifetime.current.shutdown).toMatchObject({
+          state: "settled",
+          phase: "complete",
+          cause: "complete",
+          worker_termination_state: "confirmed",
+          activity_lease_held: false
+        });
+        expect(lifetime.current.observed_code).toBe(0);
+        expect(session.entrypointKind).toBe(
+          process.env.AGENT_WORKBENCH_TEST_INSTALLED_ENTRYPOINT === undefined
+            ? "source"
+            : "installed"
+        );
+      } finally {
+        fs.mkdirSync(path.dirname(releasePath), { recursive: true });
+        fs.writeFileSync(releasePath, "release\n");
+        terminateIfRunning(daemonPid);
+      }
+    },
+  30_000);
+
+  it("returns a blocked receipt and retains owner/endpoint state when worker death is unconfirmed", async () => {
+    const repoRoot = createCrashBarrierRepository("agent-workbench-entrypoint-unconfirmed-worker-");
+    const databasePath = graphStorePath(repoRoot);
+    await seedPublishedBarrierSnapshot(repoRoot, databasePath);
+    const probeRoot = path.join(repoRoot, ".cache", "agent-workbench", "test-crash");
+    const markerPath = path.join(probeRoot, "graph.json");
+    const releasePath = path.join(probeRoot, "graph.release");
+    const inheritedNodeOptions = process.env.NODE_OPTIONS;
+    const nodeOptions = [
+      inheritedNodeOptions,
+      `--import=${workerTerminateRejectFixture}`
+    ].filter((value): value is string => value !== undefined && value.trim() !== "").join(" ");
+    const session = trackSession(await startEntryPointSession(repoRoot, {
+      idleGraceMs: 250,
+      startupRefreshDelayMs: 60_000,
+      env: {
+        NODE_ENV: "test",
+        NODE_OPTIONS: nodeOptions,
+        AGENT_WORKBENCH_TEST_REFRESH_CRASH_BARRIER: "graph",
+        AGENT_WORKBENCH_TEST_REFRESH_CRASH_MARKER: markerPath,
+        AGENT_WORKBENCH_TEST_REFRESH_CRASH_RELEASE: releasePath
+      }
+    }));
+    let daemonPid: number | undefined;
+    try {
+      await initializeSession(session, 30_000);
+      await waitForFreshRepoStatus(session);
+      fs.rmSync(path.join(repoRoot, "stale-sentinel.py"));
+      expect(repoStatus(await session.call("resources/read", { uri: "repo:///status" })).data)
+        .toMatchObject({ snapshot_id: "80", freshness: "stale" });
+      const marker = await waitForCrashBarrierMarker(markerPath);
+      daemonPid = marker.daemon_pid;
+      const shutdownStartedAt = Date.now();
+      process.kill(daemonPid, "SIGTERM");
+      const sessionExit = await session.waitForExit(5_000);
+      expect(sessionExit).toEqual({ code: 0, signal: null });
+      await waitForProcessExit(daemonPid);
+      expect(Date.now() - shutdownStartedAt).toBeLessThan(2_500);
+
+      const paths = daemonPaths(createDaemonIdentity(repoRoot));
+      await waitForDaemonMetadata(repoRoot, true, 1_000);
+      expect(fs.existsSync(paths.socketPath)).toBe(true);
+      expect(fs.existsSync(repositoryOwnershipPath(databasePath))).toBe(true);
+      expect(JSON.parse(fs.readFileSync(paths.metadataPath, "utf8"))).toMatchObject({ pid: daemonPid });
+      const lifetime = await waitForLifetimeReceipt(repoRoot);
+      expect(lifetime.current.shutdown).toMatchObject({
+        state: "blocked",
+        phase: "refresh",
+        cause: "refresh_unconfirmed",
+        worker_termination_state: "unconfirmed",
+        activity_lease_held: true,
+        publication_state: "building"
+      });
+      expect(lifetime.current).toMatchObject({ observed_code: 1 });
+
+      const blockedStore = openGraphStore(databasePath);
+      try {
+        expect(readSnapshotPublication(blockedStore, 80).publication_state).toBe("published");
+        expect(readSnapshotPublication(blockedStore, Number(marker.snapshot_id)).publication_state)
+          .toBe("building");
+        await expect(blockedStore.getLatestPublished({ repo_root: repoRoot })).resolves.toMatchObject({
+          status: "selected",
+          snapshot: { id: "80" }
+        });
+      } finally {
+        blockedStore.close();
+      }
+
+      await expect(session.call("resources/read", { uri: "repo:///status" })).rejects.toThrow(
+        /MCP entrypoint child process exited unexpectedly/
+      );
+
+      // A later launch is the positive-death recovery path. It may replace the
+      // retained endpoint only after observing that the blocked owner is dead.
+      fs.mkdirSync(path.dirname(releasePath), { recursive: true });
+      fs.writeFileSync(releasePath, "release\n");
+      const replacement = trackSession(await startEntryPointSession(repoRoot, {
+        idleGraceMs: 100,
+        startupRefreshDelayMs: 60_000,
+        env: { NODE_ENV: "test" }
+      }));
+      await initializeSession(replacement);
+      const recovered = daemonRefreshHealth(await replacement.call("resources/read", {
+        uri: "integration:///health/agent-workbench"
+      }));
+      expect(recovered).toMatchObject({
+        warmup_state: "failed",
+        worker_invocations: 0,
+        last_failure: { code: "orphaned_build", target_snapshot_id: marker.snapshot_id }
+      });
+      expect(JSON.parse(fs.readFileSync(repositoryOwnershipPath(databasePath), "utf8"))).toMatchObject({
+        owner_pid: recovered.pid,
+        state: "active"
+      });
+    } finally {
+      fs.mkdirSync(path.dirname(releasePath), { recursive: true });
+      fs.writeFileSync(releasePath, "release\n");
+      terminateIfRunning(daemonPid);
     }
   }, 60_000);
 
@@ -975,6 +1259,68 @@ async function waitForDaemonMetadata(repoRoot: string, exists: boolean, timeoutM
     await sleep(50);
   }
   throw new Error(`Timed out waiting for daemon metadata exists=${exists}: ${metadataPath}`);
+}
+
+async function waitForDaemonMetadataPath(repoRoot: string, pid: number): Promise<string> {
+  const metadataDir = daemonPaths(createDaemonIdentity(repoRoot)).metadataDir;
+  const started = Date.now();
+  while (Date.now() - started <= 5_000) {
+    if (fs.existsSync(metadataDir)) {
+      for (const name of fs.readdirSync(metadataDir)) {
+        if (!name.endsWith("-daemon.json")) continue;
+        const candidate = path.join(metadataDir, name);
+        try {
+          const metadata = JSON.parse(fs.readFileSync(candidate, "utf8")) as { pid?: unknown };
+          if (metadata.pid === pid) return candidate;
+        } catch {
+          // The metadata may be between atomic replacement writes.
+        }
+      }
+    }
+    await sleep(25);
+  }
+  throw new Error(`Timed out waiting for daemon metadata pid=${pid}: ${metadataDir}`);
+}
+
+type LifetimeRecord = {
+  observed_code?: number | null;
+  reason?: string;
+  shutdown?: {
+    state: string;
+    phase: string;
+    cause: string;
+    worker_termination_state: string;
+    activity_lease_held: boolean;
+    publication_state?: string;
+  };
+};
+
+type LifetimeEnvelope = {
+  current: LifetimeRecord;
+  previous?: LifetimeRecord;
+};
+
+async function waitForLifetimeReceipt(
+  repoRoot: string,
+  metadataPath?: string,
+  record: "current" | "previous" = "current"
+): Promise<LifetimeEnvelope> {
+  const evidencePath = `${metadataPath ?? daemonPaths(createDaemonIdentity(repoRoot)).metadataPath}.lifetime.json`;
+  const started = Date.now();
+  while (Date.now() - started <= 5_000) {
+    if (fs.existsSync(evidencePath)) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(evidencePath, "utf8")) as LifetimeEnvelope;
+        if (parsed[record]?.shutdown !== undefined) {
+          return parsed;
+        }
+      } catch {
+        // The process may be between its atomic evidence-file replacement.
+      }
+    }
+    await sleep(25);
+  }
+  throw new Error(`Timed out waiting for shutdown lifetime evidence: ${evidencePath}`);
 }
 
 async function waitForProcessExit(pid: number): Promise<void> {

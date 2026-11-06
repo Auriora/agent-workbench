@@ -87,6 +87,7 @@ class ControlledRefreshExecutor implements RefreshExecutorPort {
     count: number;
     barrier: ReturnType<typeof controlledDeferred<void>>;
   }> = [];
+  public onRun: ((input: Parameters<RefreshExecutorPort["run"]>[0]) => void) | undefined;
 
   constructor(
     private readonly terminationBehavior: "resolve" | "delayed" | "hang" | "reject" | "throw" = "resolve",
@@ -101,6 +102,7 @@ class ControlledRefreshExecutor implements RefreshExecutorPort {
       throw new Error("synchronous executor failure");
     }
     this.calls.push(input);
+    this.onRun?.(input);
     const pending = controlledDeferred<RefreshExecutorCompletion>();
     this.pending.push(pending);
     for (const waiter of this.callWaiters) {
@@ -214,6 +216,8 @@ class ControlledDeadlineScheduler implements RefreshDeadlineSchedulerPort {
 class ControlledPublicationPort implements SnapshotPublicationPort {
   public readonly transitions: SnapshotPublicationTransition[] = [];
   private readonly buildingSnapshotIds = new Set<string>();
+  private readonly allocatedSnapshotIds = new Set<string>();
+  private readonly omittedSnapshotIds = new Set<string>();
   private failingState: SnapshotPublicationTransition["to"] | undefined;
   private deferredTransition: {
     state: SnapshotPublicationTransition["to"];
@@ -224,12 +228,22 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
   private allocationFails = false;
   private allocationFailureCode: string | undefined;
   private omitNextAllocatedBuild = false;
+  private deferredAllocation: {
+    entered: ReturnType<typeof controlledDeferred<void>>;
+    release: ReturnType<typeof controlledDeferred<void>>;
+  } | undefined;
   private latestPublished: {
     snapshot: SnapshotState;
     publication: SnapshotPublicationRecord & { state: "published" };
   } | undefined;
 
   public async allocateBuildSnapshotId(): Promise<string> {
+    if (this.deferredAllocation !== undefined) {
+      const deferred = this.deferredAllocation;
+      this.deferredAllocation = undefined;
+      deferred.entered.resolve(undefined);
+      await deferred.release.promise;
+    }
     if (this.allocationFails) {
       this.allocationFails = false;
       throw Object.assign(new Error("target allocation failure SENTINEL_SECRET"), {
@@ -238,12 +252,18 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
     }
     this.allocationSequence += 1;
     const snapshotId = String(this.allocationSequence);
+    this.allocatedSnapshotIds.add(snapshotId);
     if (this.omitNextAllocatedBuild) {
       this.omitNextAllocatedBuild = false;
-    } else {
-      this.buildingSnapshotIds.add(snapshotId);
+      this.omittedSnapshotIds.add(snapshotId);
     }
     return snapshotId;
+  }
+
+  public markBuildStarted(snapshotId: string): void {
+    this.allocatedSnapshotIds.delete(snapshotId);
+    if (this.omittedSnapshotIds.delete(snapshotId)) return;
+    this.buildingSnapshotIds.add(snapshotId);
   }
 
   public async transitionBuild<TState extends SnapshotPublicationTransition["to"]>(
@@ -365,6 +385,13 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
     this.deferredTransition = { state, entered, release };
     return { entered: entered.promise, release: () => release.resolve(undefined) };
   }
+
+  public deferNextAllocation(): { entered: Promise<void>; release: () => void } {
+    const entered = controlledDeferred<void>();
+    const release = controlledDeferred<void>();
+    this.deferredAllocation = { entered, release };
+    return { entered: entered.promise, release: () => release.resolve(undefined) };
+  }
 }
 
 function controlledDeferred<T>(): {
@@ -412,9 +439,10 @@ function createControlledController(options?: {
   publication?: ControlledPublicationPort;
 }) {
   const clock = new MutableClock("2026-07-20T10:00:00.000Z");
-  const executor = options?.executor ?? new ControlledRefreshExecutor();
   const deadlines = options?.deadlines ?? new ControlledDeadlineScheduler();
   const publication = options?.publication ?? new ControlledPublicationPort();
+  const executor = options?.executor ?? new ControlledRefreshExecutor();
+  executor.onRun = (input) => publication.markBuildStarted(input.target_snapshot_id);
   let executionSequence = 0;
   const controller = new SnapshotRefreshController({
     repo_root: "/repo",
@@ -1315,9 +1343,7 @@ describe("runtime operation adapters", () => {
         code: "worker_error"
       }
     });
-    expect(publication.transitions).toEqual([
-      expect.objectContaining({ snapshot_id: "1001", to: "failed" })
-    ]);
+    expect(publication.transitions).toHaveLength(0);
     expect(executor.calls).toHaveLength(0);
   });
 
@@ -2534,6 +2560,300 @@ describe("runtime operation adapters", () => {
       isolated.claimOwnership({ repo_root: "/repo", snapshot_id: "snap-3", owner_id: "debug" })
     ).resolves.toMatchObject({ state: "isolated_worker", owner_id: "debug" });
     await expect(isolated.getOwner({ repo_root: "/repo" })).resolves.toBeNull();
+  });
+
+  it("shuts down active refreshes once and blocks late admission/publication", async () => {
+    const { controller, executor, publication } = createControlledController();
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+
+    const shutdown = controller.shutdown();
+    expect(executor.terminations).toEqual([
+      { execution_id: "exec-1", reason: "controller_shutdown" }
+    ]);
+    await expect(controller.request({
+      repo_root: "/repo",
+      reason: "watcher_invalidation",
+      source: "late-client",
+      invalidation_generation: 2
+    })).resolves.toMatchObject({
+      outcome: "blocked",
+      reason: "controller_shutdown"
+    });
+
+    // A late worker result must not publish after shutdown has claimed the pass.
+    executor.complete(0);
+    await shutdown;
+    await expect(controller.shutdown()).resolves.toBeUndefined();
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "failed" })
+    ]);
+    expect(publication.transitions.some((transition) => transition.to === "published")).toBe(false);
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      publication_state: "failed",
+      last_failure: {
+        code: "controller_shutdown",
+        category: "shutdown",
+        message: "Refresh controller shutdown interrupted the active execution."
+      }
+    });
+  });
+
+  it("fences an allocation that completes after shutdown begins", async () => {
+    const publication = new ControlledPublicationPort();
+    const allocation = publication.deferNextAllocation();
+    const { controller, executor } = createControlledController({ publication });
+    const admission = controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await allocation.entered;
+    const shutdown = controller.shutdown();
+    allocation.release();
+
+    await expect(admission).resolves.toMatchObject({
+      outcome: "blocked",
+      reason: "controller_shutdown"
+    });
+    await shutdown;
+    expect(executor.calls).toHaveLength(0);
+    expect(publication.transitions).toHaveLength(0);
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "idle",
+      activity_lease: null
+    });
+  });
+
+  it("fences a deferred replacement allocation without launching a successor worker", async () => {
+    const publication = new ControlledPublicationPort();
+    publication.setLatestPublished("prior", "fresh");
+    const { controller, executor } = createControlledController({ publication });
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    await controller.request({
+      repo_root: "/repo",
+      reason: "watcher_invalidation",
+      source: "test",
+      invalidation_generation: 2
+    });
+    const allocation = publication.deferNextAllocation();
+    executor.complete(0);
+    await allocation.entered;
+
+    const shutdown = controller.shutdown();
+    allocation.release();
+    await shutdown;
+
+    expect(executor.calls).toHaveLength(1);
+    expect(publication.transitions).toEqual([
+      expect.objectContaining({ snapshot_id: "1001", to: "superseded" })
+    ]);
+    await expect(publication.getLatestPublished()).resolves.toMatchObject({
+      status: "selected",
+      snapshot: { id: "prior" }
+    });
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      last_failure: { code: "controller_shutdown" }
+    });
+  });
+
+  it("does not launch a worker when a running transition listener reenters shutdown", async () => {
+    const { controller, executor } = createControlledController();
+    let shutdown: Promise<void> | undefined;
+    controller.onTransition((transition) => {
+      if (transition.state === "active" && transition.execution_state === "running") {
+        shutdown = controller.shutdown();
+      }
+    });
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    for (let attempt = 0; attempt < 20 && shutdown === undefined; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
+    if (shutdown === undefined) throw new Error("Shutdown listener was not invoked.");
+    await shutdown;
+
+    expect(executor.calls).toHaveLength(0);
+    expect(executor.terminations).toHaveLength(0);
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      last_failure: { code: "controller_shutdown" }
+    });
+  });
+
+  it("retains the active lease when shutdown cannot confirm worker termination", async () => {
+    const executor = new ControlledRefreshExecutor("reject");
+    const { controller } = createControlledController({ executor });
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+
+    await expect(controller.shutdown()).rejects.toThrow(
+      "could not confirm worker termination"
+    );
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: { state: "held" },
+      publication_state: "building",
+      worker_termination_state: "unconfirmed",
+      last_failure: { code: "controller_shutdown" }
+    });
+    await expect(controller.request({
+      repo_root: "/repo",
+      reason: "stale_first_read",
+      source: "blocked-client",
+      invalidation_generation: 2
+    })).resolves.toMatchObject({
+      outcome: "blocked",
+      reason: "controller_shutdown"
+    });
+  });
+
+  it("settles a shutdown-quarantined build after delayed termination confirmation", async () => {
+    const executor = new ControlledRefreshExecutor("delayed");
+    const { controller } = createControlledController({ executor });
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+
+    const shutdown = controller.shutdown();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(controller.getReceipt()).toMatchObject({
+      activity_lease: { state: "held" },
+      publication_state: "building",
+      worker_termination_state: "unconfirmed"
+    });
+    executor.confirmTermination();
+    await shutdown;
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      publication_state: "failed",
+      worker_termination_state: "confirmed",
+      last_failure: { code: "controller_shutdown" }
+    });
+  });
+
+  it("allows later shutdown to await an unconfirmed terminal worker", async () => {
+    const executor = new ControlledRefreshExecutor("delayed");
+    const { controller, deadlines } = createControlledController({ executor });
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+    deadlines.fire(0);
+    await waitForControllerState(controller, "failed");
+    expect(controller.getReceipt()).toMatchObject({
+      activity_lease: null,
+      worker_termination_state: "unconfirmed"
+    });
+
+    const shutdown = controller.shutdown();
+    executor.confirmTermination();
+    await shutdown;
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      activity_lease: null,
+      worker_termination_state: "confirmed"
+    });
+    expect(executor.terminations).toEqual([
+      { execution_id: "exec-1", reason: "deadline" }
+    ]);
+  });
+
+  it("reports termination as unconfirmed synchronously while shutdown settlement is pending", async () => {
+    const executor = new ControlledRefreshExecutor("delayed");
+    const { controller } = createControlledController({ executor });
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+
+    const shutdown = controller.shutdown();
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "running",
+      activity_lease: { state: "held" },
+      worker_termination_state: "unconfirmed"
+    });
+
+    executor.confirmTermination();
+    await shutdown;
+  });
+
+  it("retains the quarantine when shutdown publication settlement fails", async () => {
+    const publication = new ControlledPublicationPort();
+    publication.failNext("failed");
+    const { controller, executor } = createControlledController({ publication });
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+
+    await expect(controller.shutdown()).rejects.toThrow(
+      "could not settle active refresh state"
+    );
+    expect(controller.getReceipt()).toMatchObject({
+      activity_lease: { state: "held" },
+      publication_state: "building",
+      last_failure: { code: "store_failure" },
+      worker_termination_state: "confirmed"
+    });
+  });
+
+  it("makes shutdown idempotent before any refresh is admitted", async () => {
+    const { controller, executor } = createControlledController();
+    const first = controller.shutdown();
+    expect(controller.shutdown()).toBe(first);
+    await first;
+
+    expect(executor.terminations).toHaveLength(0);
+    await expect(controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "late-client",
+      invalidation_generation: 1
+    })).resolves.toMatchObject({
+      outcome: "blocked",
+      reason: "controller_shutdown"
+    });
   });
 
   it("creates stable runtime context signatures and scoped cancellation", async () => {

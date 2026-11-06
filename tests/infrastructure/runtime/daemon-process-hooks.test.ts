@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { installDaemonProcessHooks } from "../../../src/infrastructure/runtime/daemon-process-hooks.js";
 import type { DaemonLifetimeEvidencePort } from "../../../src/ports/index.js";
 import type { DaemonLifetimeLaunch } from "../../../src/contracts/daemon-lifetime-contracts.js";
+import type { DaemonShutdownReceipt } from "../../../src/contracts/daemon-shutdown-contracts.js";
 
 class RecordingEvidence implements DaemonLifetimeEvidencePort {
   public readonly fatal: string[] = [];
@@ -24,6 +25,7 @@ class RecordingEvidence implements DaemonLifetimeEvidencePort {
   observeExit(code: number | null): void {
     this.exits.push(code);
   }
+  observeShutdown(_receipt: DaemonShutdownReceipt): void {}
   getEvidence() {
     return {
       status: "unavailable" as const,
@@ -66,6 +68,7 @@ describe("daemon process hooks", () => {
       observeFatal() { throw new Error("sink unavailable"); },
       observeSignal() { throw new Error("sink unavailable"); },
       observeExit() { throw new Error("sink unavailable"); },
+      observeShutdown() { throw new Error("sink unavailable"); },
       getEvidence() { throw new Error("sink unavailable"); }
     };
     const dispose = installDaemonProcessHooks({

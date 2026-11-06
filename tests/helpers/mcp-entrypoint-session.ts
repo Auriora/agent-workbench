@@ -28,6 +28,7 @@ export type McpMessage = {
 
 export type EntryPointSession = {
   repoRoot: string;
+  entrypointKind: "source" | "installed";
   child: ChildProcessWithoutNullStreams;
   stderr: () => string;
   stdoutRemainder: () => string;
@@ -39,8 +40,9 @@ export type EntryPointSession = {
 };
 
 /**
- * Starts the checkout/source entrypoint at `src/mcp/stdio-entrypoint.mjs`.
- * This helper does not exercise an installed package bin or a real agent CLI.
+ * Starts the source fixture entrypoint by default, or the explicitly configured
+ * installed-package target. Invalid installed targets fail rather than using
+ * source. This helper does not execute a real agent CLI.
  */
 export async function startEntryPointSession(
   repoRoot: string,
@@ -49,11 +51,35 @@ export async function startEntryPointSession(
     startupRefreshDelayMs?: number;
     cwd?: string;
     env?: NodeJS.ProcessEnv;
+    /** Test-only per-session override for an installed package target. */
+    installedEntrypoint?: string;
   } = {}
 ): Promise<EntryPointSession> {
   const normalizedRepoRoot = path.resolve(repoRoot);
+  const configuredEntrypoint = options.installedEntrypoint ??
+    process.env.AGENT_WORKBENCH_TEST_INSTALLED_ENTRYPOINT;
+  const installedEntrypoint = configuredEntrypoint === undefined
+    ? undefined
+    : path.resolve(options.cwd ?? process.cwd(), configuredEntrypoint);
+  if (installedEntrypoint !== undefined) {
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(installedEntrypoint);
+    } catch (error) {
+      throw new Error(
+        `AGENT_WORKBENCH_TEST_INSTALLED_ENTRYPOINT must name a regular file: ${installedEntrypoint}. ` +
+        `${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    if (!stat.isFile()) {
+      throw new Error(
+        `AGENT_WORKBENCH_TEST_INSTALLED_ENTRYPOINT must name a regular file: ${installedEntrypoint}`
+      );
+    }
+  }
+  const entrypointKind = installedEntrypoint === undefined ? "source" : "installed";
   const child = spawn(process.execPath, [
-    "src/mcp/stdio-entrypoint.mjs",
+    ...(installedEntrypoint === undefined ? ["src/mcp/stdio-entrypoint.mjs"] : [installedEntrypoint]),
     "--repo-root",
     normalizedRepoRoot
   ], {
@@ -168,6 +194,7 @@ export async function startEntryPointSession(
 
   return {
     repoRoot: normalizedRepoRoot,
+    entrypointKind,
     child,
     stderr: () => stderr,
     stdoutRemainder: () => stdout,
