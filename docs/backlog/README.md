@@ -4,7 +4,7 @@ doc_type: backlog
 planning_schema: slm-planning/v1
 status: draft
 owner: platform
-last_reviewed: 2026-08-04
+last_reviewed: 2026-11-06
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -40,7 +40,7 @@ reported incident's root cause.
 | B003 | done | Contain bridge stdout and stderr failures | P0 | platform | Spec 066 T001 |
 | B004 | done | Bound daemon handshake and incoming MCP frames | P1 | platform | Spec 066 T002 |
 | B005 | done | Settle and clean backpressured socket sends | P1 | platform | Spec 066 T002 |
-| B006 | accepted | Bound aggregate daemon session and request resources | P1 | platform | Focused admission-budget spec before release review |
+| B006 | done | Bound aggregate daemon session and request resources | P1 | platform | [Spec 069](../specs/069-daemon-admission-budgets/requirements.md); source gates passed |
 | B007 | accepted | Resolve npm tree-sitter Ruby peer metadata conflict | P1 | platform | Packaging dependency contract; before npm release acceptance |
 | B008 | accepted | Define safe abandoned startup-reclaim guard recovery | P1 | platform | Spec 065 cleanup authority; conservative blocked state until designed |
 | B009 | accepted | Count refresh executor calls at the actual invocation boundary | P2 | platform | Coordinate with B006 admission/diagnostic instrumentation |
@@ -154,9 +154,16 @@ reported incident's root cause.
 - Promotion: threat model, runtime operations, transport contracts and operator
   runbooks through a focused admission-budget spec. Do not infer a particular
   OOM threshold from static analysis.
-- Disposition: accepted, deferred from Spec 066's per-frame/connection repair;
-  explicitly assess this risk before release. This is a newly surfaced MoE
-  residual, separate from B001 diagnostics, B002 shutdown and Spec 065 endpoints.
+- Disposition: done in source through [Spec 069](../specs/069-daemon-admission-budgets/requirements.md).
+  One accept-time 64-session budget bounds retained wire input and outstanding
+  messages, preserves per-session small-request allowances, and retains actual
+  work accounting through cancellation/disconnect and shutdown. Final serial
+  regression passed 145 files/1526 tests with one installed-only skip; typecheck,
+  plugin/contracts, runtime receipt and compiled smoke passed. Independent
+  security/correctness reviews have no source blocker. Durable owners are
+  promoted. These logical bounds do not establish whole-process heap/RSS or CPU
+  rate limits; no installed-runtime or release acceptance is implied. B007-B009
+  and Spec 065 remain separate.
 
 B003-B005 are implemented in source by
 [Spec 066](../specs/066-mcp-transport-failure-containment/requirements.md).
@@ -2703,11 +2710,12 @@ Do not promote an item when:
 
 ## Immediate Next Specs
 
-- Spec 066 transport, Spec 067/B001 lifetime evidence and Spec 068/B002 shutdown
-  are verified in source. Spec 068 also passed its isolated installed gate.
-  Select B006 aggregate admission next; B007 must precede npm release acceptance.
-  B008 remains with Spec 065 cleanup authority and B009 with diagnostic counters.
-  Spec 065 retains endpoint location and cleanup ownership.
+- Spec 066 transport, Spec 067/B001 lifetime evidence, Spec 068/B002 shutdown
+  and Spec 069/B006 aggregate admission are verified in source. Spec 068 also
+  passed its isolated installed gate. Select B007 npm peer metadata next; it
+  must precede npm release acceptance. B008 remains with Spec 065 cleanup
+  authority and B009 with diagnostic counters. Spec 065 retains endpoint location
+  and cleanup ownership.
 
 - EB065/Spec 053 is delivered with exact population accounting, bounded public
   presentation, and five-gate regression evidence.

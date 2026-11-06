@@ -197,6 +197,21 @@ Oversized input closes that client connection. Reduce a request larger than
 daemon handshake has a separate 16 KiB line bound. Do not delete caches or
 restart the daemon to work around a rejected frame.
 
+Spec 069 adds aggregate admission limits in source: 64 accepted sessions,
+eight outstanding messages per session, 32 MiB retained input per session and
+a shared overflow pool of 64 MiB above guaranteed 64 KiB session allowances.
+Queued output is capped at 32 MiB per socket and eight pending sends. A frame
+that makes no progress for 30 seconds closes its connection; complete slow
+requests and ready idle connections do not inherit that timer.
+
+If a connection is rejected for admission, reduce concurrent sessions, request
+bursts or retained request size, and allow existing work to finish before opening
+a new connection. Cancelled or disconnected work retains its reservation until
+its handler settles. Another established session retains its small-request
+allowance. Do not delete caches, restart the shared daemon, or create repeated
+reconnect attempts to bypass limits. Source checkout edits require a rebuilt
+and installed package before they affect the running runtime.
+
 Spec 067 adds bounded persistent daemon lifetime evidence in source. After a
 package containing it is rebuilt and installed, inspect daemon health's optional
 `daemon_lifetime_evidence`: available evidence distinguishes current and previous

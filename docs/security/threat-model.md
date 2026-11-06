@@ -3,7 +3,7 @@ title: Agent Workbench threat model
 doc_type: security
 status: draft
 owner: platform
-last_reviewed: 2026-08-04
+last_reviewed: 2026-11-06
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -62,6 +62,26 @@ must never treat repository text as policy.
 | Repo-local validation policy abuse | Repository may propose dangerous validation commands | Policy guides planning only; execution needs separate approval | EB028 validation-policy trust levels |
 | Validation script or repository-boundary confusion | An extensionless file may be mistaken for an approved build script, or nested repository content may inherit the parent repository's authority | Require positive path-and-purpose evidence for scripts; plan only; admit only declared initialized submodules from local `.gitmodules` plus gitlink evidence; keep unrelated embedded repositories non-traversed | Future policy may add additional repository-boundary fixtures |
 | Submodule trust confusion | A declared child repository may be dirty, revision-mismatched, uninitialized, inaccessible, or controlled by different project policy | Treat each admitted child as a separate read-only unit with child-local ignore policy, structured blockers for Git-dependent claims, no URL fetching, no writes, and no cross-repository evidence borrowing | Future review support may add richer child-repository ownership summaries |
+
+## Daemon resource admission
+
+Spec 069 treats local MCP clients as untrusted resource consumers. One daemon
+budget covers accepted sockets before readiness, handshakes and ready sessions.
+The [runtime contract](../reference/runtime-contracts.md#aggregate-daemon-admission)
+fixes session, retained-input, message and socket-output limits. Per-session
+reserved input/work allowances protect established small requests from another
+session's saturation. Rejected connections cannot restart the daemon or acquire
+a refresh-writer lease. Cancellation/disconnection does not free unsettled
+application work; session and input reservations follow actual handler lifetime.
+
+Incomplete-frame inactivity is finite without imposing a request execution
+timeout. Deterministic counter and socket fixtures verify bounded admission and
+release without conducting a live exhaustion test. These are logical wire-byte,
+message and connection limits, not proof of an OOM threshold, total heap bound,
+CPU-rate fairness or protection from every coordinated local denial of service.
+A never-settling handler retains a finite reservation until process termination.
+Current synchronous SDK control handlers are covered by microtask accounting;
+future asynchronous notification handlers must extend work settlement tracking.
 
 ## Security-Sensitive Changes
 

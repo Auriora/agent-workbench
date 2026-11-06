@@ -118,6 +118,7 @@ import type {
   ClockPort,
   WarmupCoordinatorPort
 } from "./ports/index.js";
+import type { DaemonSessionAdmissionPort } from "./ports/index.js";
 
 export type AgentWorkbenchSharedRepositoryServices = {
   refreshController: SnapshotRefreshControllerPort;
@@ -156,6 +157,7 @@ export type AgentWorkbenchServerOptions = {
   workspaceWatcherIndexedRoots?: readonly string[];
   workspaceWatcherSkippedRoots?: readonly string[];
   sharedRepositoryServices?: AgentWorkbenchSharedRepositoryServices;
+  daemonAdmission?: DaemonSessionAdmissionPort;
 };
 
 const DEFAULT_STARTUP_WARMUP_DELAY_MS = 1000;
@@ -329,6 +331,7 @@ export function createAgentWorkbenchServer(
       debugRepoRootOverride: rootAuthorityPolicy.debugRepoRootOverride
     }),
     telemetry,
+    daemonAdmission: options.daemonAdmission,
     launcherIdentity: options.integrationIdentity,
     getRepoStatus: ({ repo_root }) => currentRepoStatus(repo_root),
     getRepoOrientation: async ({ repo_root }) => {

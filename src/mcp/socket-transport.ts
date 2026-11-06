@@ -7,6 +7,13 @@ import type { Socket } from "node:net";
 import { deserializeMessage, serializeMessage } from "@modelcontextprotocol/sdk/shared/stdio.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import type { JSONRPCMessage } from "@modelcontextprotocol/sdk/types.js";
+import type { DaemonSessionAdmissionPort } from "../ports/daemon-admission.js";
+import {
+  DAEMON_ADMISSION_REJECTED_MESSAGE,
+  DAEMON_PARTIAL_FRAME_IDLE_MS,
+  MAX_DAEMON_SESSION_MESSAGES,
+  MAX_DAEMON_SESSION_OUTPUT_BYTES
+} from "../contracts/daemon-admission-contracts.js";
 import {
   MCP_FRAME_TOO_LARGE_MESSAGE,
   MCP_SEND_CLOSED_MESSAGE,
@@ -31,12 +38,17 @@ export class SocketServerTransport implements Transport {
   private closed = false;
   private socketListenersAttached = false;
   private drainListenerAttached = false;
+  private partialFrameTimer: ReturnType<typeof setTimeout> | undefined;
+  private initialReservedBytes = 0;
 
   constructor(
     private readonly socket: Socket,
-    initialData?: Buffer
+    initialData?: Buffer,
+    private readonly admission?: DaemonSessionAdmissionPort,
+    initialDataAlreadyReserved = false
   ) {
     this.initialData = initialData;
+    this.initialReservedBytes = initialDataAlreadyReserved ? initialData?.length ?? 0 : 0;
   }
 
   private initialData: Buffer | undefined;
@@ -57,9 +69,12 @@ export class SocketServerTransport implements Transport {
     }
     const initialData = this.initialData;
     this.initialData = undefined;
+    this.admission?.releaseInput(this.initialReservedBytes);
+    this.initialReservedBytes = 0;
     if (initialData !== undefined && initialData.length > 0) {
       this.processChunk(initialData);
     }
+    if (!this.closed) this.socket.resume?.();
   }
 
   async close(): Promise<void> {
@@ -81,6 +96,9 @@ export class SocketServerTransport implements Transport {
         if (settled) return;
         settled = true;
         this.pendingSends.delete(settle);
+        if (!("method" in message) && "id" in message && message.id !== undefined) {
+          this.admission?.completeResponse(message.id);
+        }
         this.detachDrainListenerIfIdle();
         if (error === undefined) {
           resolve();
@@ -89,11 +107,26 @@ export class SocketServerTransport implements Transport {
         }
       };
 
+      let serialized: string;
+      try {
+        serialized = serializeMessage(message);
+      } catch (error) {
+        settle(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
+      if (this.admission !== undefined && (
+        this.pendingSends.size >= MAX_DAEMON_SESSION_MESSAGES ||
+        (this.socket.writableLength ?? 0) + Buffer.byteLength(serialized) > MAX_DAEMON_SESSION_OUTPUT_BYTES
+      )) {
+        this.failAdmission();
+        reject(new Error(DAEMON_ADMISSION_REJECTED_MESSAGE));
+        return;
+      }
       this.pendingSends.add(settle);
       this.ensureDrainListener();
 
       try {
-        if (this.socket.write(serializeMessage(message))) {
+        if (this.socket.write(serialized)) {
           settle();
         }
       } catch (error) {
@@ -138,11 +171,52 @@ export class SocketServerTransport implements Transport {
         return;
       }
 
+      if (this.admission !== undefined && !this.admission.reserveInput(segment.length)) {
+        this.failAdmission();
+        return;
+      }
+
       const line = this.takeFrame(segment).toString("utf8").replace(/\r$/, "");
+      let ownsFrame = true;
       try {
-        this.onmessage?.(deserializeMessage(line));
+        const message = deserializeMessage(line);
+        if (this.admission !== undefined) {
+          if ("method" in message && "id" in message) {
+            if (!this.admission.admitRequest(message.id, frameBytes)) {
+              this.admission.releaseInput(frameBytes);
+              ownsFrame = false;
+              this.failAdmission();
+              return;
+            }
+            ownsFrame = false;
+            this.onmessage?.(message);
+          } else {
+            const release = this.admission.admitControl(frameBytes);
+            if (release === undefined) {
+              this.admission.releaseInput(frameBytes);
+              ownsFrame = false;
+              this.failAdmission();
+              return;
+            }
+            ownsFrame = false;
+            if ("method" in message && message.method === "notifications/cancelled") {
+              const id = message.params?.requestId;
+              if (typeof id === "string" || typeof id === "number") this.admission.cancelRequest(id);
+            }
+            try {
+              this.onmessage?.(message);
+            } finally {
+              // SDK builtin notifications run synchronously in its next microtask.
+              queueMicrotask(release);
+            }
+          }
+        } else {
+          this.onmessage?.(message);
+        }
       } catch (error) {
         this.reportError(error instanceof Error ? error : new Error(String(error)));
+      } finally {
+        if (ownsFrame) this.admission?.releaseInput(frameBytes);
       }
       offset = newlineIndex + 1;
     }
@@ -151,6 +225,10 @@ export class SocketServerTransport implements Transport {
   private appendPending(chunk: Buffer): void {
     if (this.pendingBytes + chunk.length > MAX_MCP_FRAME_BYTES) {
       this.failFrameLimit();
+      return;
+    }
+    if (this.admission !== undefined && !this.admission.reserveInput(chunk.length)) {
+      this.failAdmission();
       return;
     }
 
@@ -172,9 +250,11 @@ export class SocketServerTransport implements Transport {
       this.pendingBlockBytes += copyBytes;
       this.pendingBytes += copyBytes;
     }
+    this.resetPartialFrameTimer();
   }
 
   private takeFrame(segment: Buffer): Buffer {
+    this.clearPartialFrameTimer();
     const chunks = this.pendingChunks.splice(0);
     const bytes = this.pendingBytes + segment.length;
     if (this.pendingBlock !== undefined && this.pendingBlockBytes > 0) {
@@ -196,12 +276,31 @@ export class SocketServerTransport implements Transport {
     }
   }
 
+  private failAdmission(): void {
+    this.reportError(new Error(DAEMON_ADMISSION_REJECTED_MESSAGE));
+    this.closeTransport(DAEMON_ADMISSION_REJECTED_MESSAGE);
+    if (!this.socket.destroyed) this.socket.destroy();
+  }
+
+  private resetPartialFrameTimer(): void {
+    this.clearPartialFrameTimer();
+    if (this.admission === undefined) return;
+    this.partialFrameTimer = setTimeout(() => this.failAdmission(), DAEMON_PARTIAL_FRAME_IDLE_MS);
+    this.partialFrameTimer.unref?.();
+  }
+
+  private clearPartialFrameTimer(): void {
+    if (this.partialFrameTimer !== undefined) clearTimeout(this.partialFrameTimer);
+    this.partialFrameTimer = undefined;
+  }
+
   private closeTransport(sendError: string): void {
     if (this.closed) return;
     this.closed = true;
     this.socket.off("data", this.onData);
     this.clearPendingChunks();
     this.settlePendingSends(new Error(sendError));
+    this.admission?.close();
     try {
       this.onclose?.();
     } catch (error) {
@@ -237,6 +336,9 @@ export class SocketServerTransport implements Transport {
   }
 
   private clearPendingChunks(): void {
+    this.clearPartialFrameTimer();
+    this.admission?.releaseInput(this.pendingBytes + this.initialReservedBytes);
+    this.initialReservedBytes = 0;
     this.pendingChunks.splice(0);
     this.pendingBlock = undefined;
     this.pendingBlockBytes = 0;

@@ -80,6 +80,8 @@ export type { SnapshotPublicationState } from "../contracts/index.js";
 
 import type { DaemonShutdownReceipt } from "../contracts/daemon-shutdown-contracts.js";
 
+export type { DaemonSessionAdmissionPort, DaemonAdmissionBudgetPort } from "./daemon-admission.js";
+
 export interface DaemonLifetimeEvidencePort {
   ready(launch: DaemonLifetimeLaunch): void;
   observeFatal(origin: DaemonLifetimeFatalOrigin): void;

@@ -50,6 +50,106 @@ import {
 } from "../../src/contracts/mcp-transport-contracts.js";
 
 describe("Agent Workbench daemon launcher", () => {
+  it("blocks shutdown cleanup and a successor while disconnected application work remains unsettled", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-admission-shutdown-");
+    const entered = controlledDeferred<void>();
+    const finish = controlledDeferred<void>();
+    const settled = controlledDeferred<void>();
+    const daemon = await startAgentWorkbenchDaemon({
+      repoRoot,
+      idleGraceMs: 60_000,
+      serverOptions: { startupRefreshDelayMs: 60_000 },
+      testHooks: {
+        configureMcpServer(server) {
+          server.tool("delayed_admission_test", {}, async () => {
+            entered.resolve();
+            await finish.promise;
+            settled.resolve();
+            return { content: [{ type: "text", text: "finished" }] };
+          });
+        }
+      }
+    });
+    const socket = await connectSocketEventually(daemon.metadata.socketPath);
+    try {
+      const session = createSocketSession(socket);
+      socket.write(`${JSON.stringify({
+        protocol: "agent-workbench-daemon",
+        protocolVersion: DAEMON_PROTOCOL_VERSION,
+        identity: daemon.metadata.identity
+      })}\n`);
+      await initializeSocketSession(session, 7101, "admission-shutdown");
+      socket.write(`${JSON.stringify({
+        jsonrpc: "2.0", id: 7102, method: "tools/call",
+        params: { name: "delayed_admission_test", arguments: {} }
+      })}\n`);
+      await entered.promise;
+      const outcome = await daemon.close();
+      expect(outcome).toMatchObject({ state: "blocked", phase: "resources", cause: "deadline" });
+      const paths = daemonPaths(daemon.metadata.identity);
+      const retained = JSON.parse(fs.readFileSync(paths.metadataPath, "utf8"));
+      expect(retained.launchLifecycle.state).toBe("draining");
+      await expect(startAgentWorkbenchDaemon({
+        repoRoot, serverOptions: { startupRefreshDelayMs: 60_000 }
+      })).rejects.toThrow();
+      expect(JSON.parse(fs.readFileSync(paths.metadataPath, "utf8")).launchLifecycle.state).toBe("draining");
+      finish.resolve();
+      await settled.promise;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      // Late settlement cannot bypass the coordinator's terminal cleanup fence.
+      expect(JSON.parse(fs.readFileSync(paths.metadataPath, "utf8")).launchLifecycle.state).toBe("draining");
+    } finally {
+      finish.resolve();
+      socket.destroy();
+      await daemon.close();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("caps ready and handshaking sessions together while an established client remains callable", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-admission-");
+    const daemon = await startAgentWorkbenchDaemon({
+      repoRoot,
+      idleGraceMs: 60_000,
+      serverOptions: { startupRefreshDelayMs: 60_000 }
+    });
+    const sockets: net.Socket[] = [];
+    try {
+      const healthy = await connectSocketEventually(daemon.metadata.socketPath);
+      sockets.push(healthy);
+      const session = createSocketSession(healthy);
+      healthy.write(`${JSON.stringify({
+        protocol: "agent-workbench-daemon",
+        protocolVersion: DAEMON_PROTOCOL_VERSION,
+        identity: daemon.metadata.identity
+      })}\n`);
+      await initializeSocketSession(session, 7001, "admission-healthy");
+      for (let index = 1; index < 64; index += 1) {
+        const socket = await connectSocketEventually(daemon.metadata.socketPath);
+        socket.on("error", () => undefined);
+        sockets.push(socket);
+      }
+      await vi.waitFor(() => expect(daemon.connectedClients()).toBe(64));
+      const excess = net.createConnection(daemon.metadata.socketPath);
+      excess.on("error", () => undefined);
+      sockets.push(excess);
+      await new Promise<void>((resolve) => excess.once("close", () => resolve()));
+      expect(daemon.connectedClients()).toBe(64);
+      expect((await session.call({ jsonrpc: "2.0", id: 7002, method: "ping" })).result).toEqual({});
+
+      sockets[1].destroy();
+      await vi.waitFor(() => expect(daemon.connectedClients()).toBe(63));
+      const replacement = await connectSocketEventually(daemon.metadata.socketPath);
+      sockets.push(replacement);
+      await vi.waitFor(() => expect(daemon.connectedClients()).toBe(64));
+      expect((await session.call({ jsonrpc: "2.0", id: 7003, method: "ping" })).result).toEqual({});
+    } finally {
+      for (const socket of sockets) socket.destroy();
+      await daemon.close();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
   it("activates lifetime evidence on admission and exposes it through health", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-lifetime-");
     const evidence = new AdmissionEvidence();

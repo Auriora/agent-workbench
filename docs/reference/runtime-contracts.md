@@ -42,6 +42,8 @@ Runtime contract schemas are grouped by stable runtime context under
   wait-only draining.
 - `snapshot-publication-contracts.ts`: canonical publication-state vocabulary,
   re-exported through runtime integration contracts.
+- `daemon-admission-contracts.ts`: fixed session, retained-wire-input, message
+  and queued-output limits and bounded accounting facts.
 - `mcp-transport-contracts.ts`: daemon handshake and MCP frame bounds and fixed
   local transport failure messages.
 
@@ -399,6 +401,55 @@ shared daemon; failure reporting cannot make teardown depend on stderr.
 These are source contracts for Spec 066. They become installed behavior only
 after a package containing the changes is built and installed. Spec 067 adds
 source lifetime evidence below; Spec 068 adds finite refresh-safe shutdown.
+
+### Aggregate daemon admission
+
+Spec 069 adds one daemon-owned budget with limits defined in
+`src/contracts/daemon-admission-contracts.ts`:
+
+| Resource | Fixed limit |
+| --- | --- |
+| Accepted sessions, including pending and handshaking | 64 |
+| Retained wire input per session | 32 MiB |
+| Guaranteed wire input per session | 64 KiB |
+| Shared overflow beyond the guarantees | 64 MiB |
+| Outstanding messages per session / daemon | 8 / 512 |
+| Queued output per socket / pending sends | 32 MiB / 8 |
+| Incomplete-frame inactivity | 30 seconds |
+
+The guaranteed allowances plus shared overflow bound accounted retained input
+to 68 MiB. Input includes handshake fragments, initial MCP remainder, incomplete
+frames and parsed requests while dispatch/work remains outstanding. This is a
+wire-byte accounting bound, not total heap, RSS, parser-work or OOM evidence.
+Socket buffers, UTF-8/JSON expansion, fixed block overhead, transient chunks,
+serialized responses and repository caches remain separate allocations.
+
+Each accepted socket reserves a slot before bootstrap queueing or handshake.
+Input is reserved before copying/parsing. Excess sessions, byte reservations,
+message bursts, duplicate outstanding request IDs and queued output close only
+the offending connection with a fixed local admission diagnostic. No retries,
+restart, alternate parser, competing writer or truncated successful output is
+introduced. Existing per-frame and handshake limits remain in effect.
+
+Message slots are reserved per session, so a saturated session cannot consume
+another established session's small-request allowance. Controls consume the
+same slots as requests. A complete application request stays charged until its
+handler actually settles and its response send settles or cancellation/closure
+makes that response impossible. Cancellation and socket close do not release
+running application work or its session slot early; a handler that never settles
+retains its finite reservation until process termination. Shutdown awaits admission
+quiescence under the existing one-second budget; unresolved work blocks resource
+release and endpoint cleanup, and late settlement cannot resume fenced cleanup.
+Queued application
+handlers cannot start after close. Constructor-installed SDK initialize/ping and
+unknown requests perform no repository work and settle through transport sends.
+Current SDK control handlers are synchronous and their charges release after
+that SDK microtask; future asynchronous notifications need settlement tracking.
+
+The inactivity timer resets on incomplete-frame progress and clears on frame
+completion. It does not time out ready idle connections or complete slow tool
+requests. Existing absolute startup queue and handshake deadlines remain.
+These are source contracts; installation requires a package containing them.
 
 ## Daemon Lifetime Evidence
 

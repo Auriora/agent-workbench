@@ -5,7 +5,9 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { TelemetryRecorderPort } from "../../ports/index.js";
+import type { DaemonSessionAdmissionPort } from "../../ports/index.js";
 import { instrumentMcpServer } from "./instrumentation.js";
+import { installMcpAdmission } from "./admission.js";
 import {
   registerAllMcpSurfaces,
   registeredIntegrationBindings
@@ -24,7 +26,10 @@ export const AGENT_WORKBENCH_MCP_INSTRUCTIONS = [
 
 export function createAgentWorkbenchServer(
   repoRoot: string,
-  context: Partial<Omit<McpRegistryContext, "repoRoot">> & { telemetry?: TelemetryRecorderPort } = {}
+  context: Partial<Omit<McpRegistryContext, "repoRoot">> & {
+    telemetry?: TelemetryRecorderPort;
+    daemonAdmission?: DaemonSessionAdmissionPort;
+  } = {}
 ): McpServer {
   const absoluteRepoRoot = createRootAuthorityPolicy({
     launchRoot: repoRoot,
@@ -46,7 +51,10 @@ export function createAgentWorkbenchServer(
     client: server.server.getClientVersion()
   });
 
-  registerAllMcpSurfaces(instrumentMcpServer({ server, telemetry: context.telemetry }), {
+  const { daemonAdmission, ...registryContext } = context;
+  installMcpAdmission(server, daemonAdmission);
+
+  registerAllMcpSurfaces(instrumentMcpServer({ server, telemetry: registryContext.telemetry }), {
     repoRoot: absoluteRepoRoot,
     rootAuthorityPolicy,
     getConnectionIdentity,
@@ -54,7 +62,7 @@ export function createAgentWorkbenchServer(
       provider_identity: getConnectionIdentity().provider_identity,
       mcp_bindings: registeredIntegrationBindings()
     }),
-    ...context
+    ...registryContext
   });
 
   return server;

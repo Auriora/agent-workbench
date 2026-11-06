@@ -400,6 +400,34 @@ The existing one-second SIGTERM deadline and startup-only stderr capture have
 not been changed by the transport repair; an orphaned build remains evidence
 of interruption, not proof of a particular cause.
 
+### Aggregate admission and isolation
+
+Spec 069 supplies one daemon-owned session, input and message budget before any
+accepted socket enters bootstrap or handshake. The
+[transport admission contract](../reference/runtime-contracts.md#aggregate-daemon-admission)
+defines the fixed limits. All 64 slots cover pending, handshaking and ready
+connections together. A disconnected session retains its slot while application
+work remains unsettled; reconnects cannot turn cancellation into unbounded work.
+
+A 64 KiB input allowance and eight message slots belong to each session, with
+64 MiB of shared input overflow. This preserves another established client's
+small-request capacity during saturation. The controller tracks retained wire
+bytes through parsing and actual handler settlement, rather than treating a
+parsed frame or closed socket as completed work. SDK handler registration is
+wrapped at the MCP adapter boundary; refresh authority and graph ownership stay
+with their existing daemon owners.
+
+Shutdown includes admission quiescence in the resources phase under its existing
+one-second absolute budget. Unsettled handlers block store/ownership release and
+endpoint cleanup, retaining draining evidence and preventing a competing daemon.
+Late settlement cannot resume cleanup after that deadline.
+
+An incomplete MCP frame with no progress for 30 seconds closes its connection.
+Legitimate fragments reset inactivity, and completed long requests are unaffected.
+Output queuing and pending sends are also finite. Over-budget connections close
+without automatic retry/restart or partial successful output. Counter fixtures
+establish logical bounds and terminal release, not a total-process memory limit.
+
 ## Daemon Lifetime Evidence
 
 The daemon writes one bounded private local receipt after successful admission,

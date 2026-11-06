@@ -40,6 +40,9 @@ import { createRuntimeTelemetryAdapter } from "../infrastructure/telemetry/index
 import { FileDaemonLifetimeEvidenceAdapter } from "../infrastructure/runtime/daemon-lifetime-evidence.js";
 import { installDaemonProcessHooks } from "../infrastructure/runtime/daemon-process-hooks.js";
 import { DaemonShutdownCoordinator } from "../infrastructure/runtime/daemon-shutdown.js";
+import { DaemonAdmissionBudget } from "../infrastructure/runtime/daemon-admission.js";
+import type { DaemonSessionAdmissionPort } from "../ports/daemon-admission.js";
+import { DAEMON_ADMISSION_REJECTED_MESSAGE } from "../contracts/daemon-admission-contracts.js";
 import { SocketServerTransport } from "./socket-transport.js";
 import {
   DAEMON_HANDSHAKE_TOO_LARGE_MESSAGE,
@@ -84,7 +87,6 @@ import {
 export * from "./daemon-client.js";
 
 const DEFAULT_DAEMON_PENDING_CLIENT_TIMEOUT_MS = 30_000;
-const MAX_PENDING_DAEMON_CLIENTS = 64;
 const DEFAULT_DAEMON_IDLE_GRACE_MS = 30_000;
 const DEFAULT_DAEMON_STARTUP_REFRESH_DELAY_MS = 1000;
 const DAEMON_IDLE_GRACE_ENV = "AGENT_WORKBENCH_DAEMON_IDLE_GRACE_MS";
@@ -174,6 +176,8 @@ type DaemonTestHooks = {
   /** Construct daemon-owned telemetry without enabling a real exporter. */
   createTelemetry?: () => import("../ports/index.js").TelemetryRecorderPort;
   createLifetimeEvidence?: (metadataPath: string) => DaemonLifetimeEvidencePort;
+  /** Register deterministic application work before connecting a test client. */
+  configureMcpServer?: (server: ReturnType<typeof createAgentWorkbenchServer>) => void;
 };
 
 export async function startAgentWorkbenchDaemon(input: {
@@ -240,6 +244,8 @@ export async function startAgentWorkbenchDaemon(input: {
     sharedDisposers.add(() => daemonTelemetry.shutdown());
   }
   const pendingSocketTimeouts = new Map<Socket, ReturnType<typeof setTimeout>>();
+  const admissionBudget = new DaemonAdmissionBudget();
+  const sessionAdmissions = new Map<Socket, DaemonSessionAdmissionPort>();
 
   const closeSockets = (): void => {
     for (const socket of [...pendingSockets]) {
@@ -348,6 +354,8 @@ export async function startAgentWorkbenchDaemon(input: {
       });
       const accepting = acceptDaemonClient({
         socket,
+        admission: sessionAdmissions.get(socket)!,
+        configureMcpServer: input.testHooks?.configureMcpServer,
         identity,
         repoRoot,
         debugRepoRootOverride: input.debugRepoRootOverride === true,
@@ -374,10 +382,17 @@ export async function startAgentWorkbenchDaemon(input: {
 
   const pendingSockets = new Set<Socket>();
   const server = net.createServer((socket) => {
-    if (shuttingDown || pendingSockets.size >= MAX_PENDING_DAEMON_CLIENTS) {
+    const admission = shuttingDown ? undefined : admissionBudget.tryOpenSession();
+    if (admission === undefined) {
       socket.destroy();
       return;
     }
+    socket.pause();
+    sessionAdmissions.set(socket, admission);
+    socket.once("close", () => {
+      sessionAdmissions.delete(socket);
+      admission.close();
+    });
     pendingSockets.add(socket);
     const timeout = setTimeout(() => {
       removePendingSocket(socket);
@@ -633,7 +648,8 @@ export async function startAgentWorkbenchDaemon(input: {
     close_clients: async () => {
       await Promise.all([
         ...[...acceptingClients],
-        ...[...mcpServers].map((mcpServer) => mcpServer.close())
+        ...[...mcpServers].map((mcpServer) => mcpServer.close()),
+        admissionBudget.whenQuiescent()
       ]);
     },
     close_resources: async () => {
@@ -811,6 +827,8 @@ function recordEntrypointDaemonFailure(input: {
 
 async function acceptDaemonClient(input: {
   socket: Socket;
+  admission: DaemonSessionAdmissionPort;
+  configureMcpServer?: (server: ReturnType<typeof createAgentWorkbenchServer>) => void;
   identity: AgentWorkbenchDaemonIdentity;
   repoRoot: string;
   debugRepoRootOverride: boolean;
@@ -819,14 +837,22 @@ async function acceptDaemonClient(input: {
   daemonDiagnostics: () => AgentWorkbenchDaemonHealthFacts;
   mcpServers: Set<{ close: () => Promise<void> }>;
 }): Promise<void> {
+  let transport: SocketServerTransport | undefined;
   try {
-    const { handshake, remainder } = await readHandshake(input.socket);
+    const { handshake, remainder } = await readHandshake(input.socket, input.admission);
     if (!validHandshake(handshake, input.identity)) {
+      input.admission.releaseInput(remainder.length);
       input.socket.destroy();
       return;
     }
+    if (input.socket.destroyed) {
+      input.admission.releaseInput(remainder.length);
+      return;
+    }
+    transport = new SocketServerTransport(input.socket, remainder, input.admission, true);
     const mcpServer = createAgentWorkbenchServer(input.repoRoot, {
       ...input.serverOptions,
+      daemonAdmission: input.admission,
       integrationIdentity: handshake.integrationIdentity,
       sharedRepositoryServices: input.sharedRepositoryServices,
       daemonDiagnostics: input.daemonDiagnostics,
@@ -835,18 +861,20 @@ async function acceptDaemonClient(input: {
         debugRepoRootOverride: input.debugRepoRootOverride
       })
     });
+    input.configureMcpServer?.(mcpServer);
     input.mcpServers.add(mcpServer);
     input.socket.once("close", () => {
       input.mcpServers.delete(mcpServer);
       void mcpServer.close();
     });
-    await mcpServer.connect(new SocketServerTransport(input.socket, remainder));
+    await mcpServer.connect(transport);
   } catch (error) {
+    await transport?.close();
     input.socket.destroy();
   }
 }
 
-function readHandshake(socket: Socket): Promise<{ handshake: unknown; remainder: Buffer }> {
+function readHandshake(socket: Socket, admission: DaemonSessionAdmissionPort): Promise<{ handshake: unknown; remainder: Buffer }> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
     let bufferedBytes = 0;
@@ -860,6 +888,9 @@ function readHandshake(socket: Socket): Promise<{ handshake: unknown; remainder:
       socket.off("data", onData);
       socket.off("error", onError);
       socket.off("close", onClose);
+      admission.releaseInput(bufferedBytes);
+      bufferedBytes = 0;
+      chunks.splice(0);
     };
     const onError = (error: Error): void => {
       cleanup();
@@ -877,7 +908,12 @@ function readHandshake(socket: Socket): Promise<{ handshake: unknown; remainder:
           reject(new Error(DAEMON_HANDSHAKE_TOO_LARGE_MESSAGE));
           return;
         }
-        chunks.push(chunk);
+        if (!admission.reserveInput(chunk.length)) {
+          cleanup();
+          reject(new Error(DAEMON_ADMISSION_REJECTED_MESSAGE));
+          return;
+        }
+        chunks.push(Buffer.from(chunk));
         bufferedBytes += chunk.length;
         return;
       }
@@ -888,11 +924,24 @@ function readHandshake(socket: Socket): Promise<{ handshake: unknown; remainder:
         return;
       }
       const lineChunk = chunk.subarray(0, newlineIndex);
+      if (!admission.reserveInput(newlineIndex)) {
+        cleanup();
+        reject(new Error(DAEMON_ADMISSION_REJECTED_MESSAGE));
+        return;
+      }
       const lineBuffer = chunks.length === 0
         ? lineChunk
         : Buffer.concat([...chunks, lineChunk], lineBytes);
       const line = lineBuffer.toString("utf8").replace(/\r$/, "");
-      const remainder = chunk.subarray(newlineIndex + 1);
+      bufferedBytes += newlineIndex;
+      const remainderBytes = chunk.length - newlineIndex - 1;
+      if (!admission.reserveInput(remainderBytes)) {
+        cleanup();
+        reject(new Error(DAEMON_ADMISSION_REJECTED_MESSAGE));
+        return;
+      }
+      const remainder = Buffer.from(chunk.subarray(newlineIndex + 1));
+      socket.pause();
       cleanup();
       try {
         resolve({
@@ -900,6 +949,7 @@ function readHandshake(socket: Socket): Promise<{ handshake: unknown; remainder:
           remainder
         });
       } catch (error) {
+        admission.releaseInput(remainder.length);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
     };
@@ -907,6 +957,7 @@ function readHandshake(socket: Socket): Promise<{ handshake: unknown; remainder:
     socket.on("data", onData);
     socket.once("error", onError);
     socket.once("close", onClose);
+    socket.resume();
   });
 }
 
