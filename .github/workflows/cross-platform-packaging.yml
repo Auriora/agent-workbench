@@ -30,7 +30,7 @@ jobs:
         # version and refuses to use for the tree-sitter native build (it won't
         # fall back to VS2017 on Node 22+). windows-2022 has the VS that node-gyp
         # detects. Tracked to revisit when node-gyp gains VS18 support.
-        os: [ubuntu-latest, macos-latest, windows-2022]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-2022]
     steps:
       - uses: actions/checkout@v4
 
@@ -59,6 +59,9 @@ jobs:
 
       - name: Build distributed runtime
         run: pnpm build-runtime
+
+      - name: Native parser and SQLite fixture smoke
+        run: node scripts/ci/native-parser-fixtures.mjs
 
       - name: Postinstall pointer smoke — records the in-place runtime root
         run: node scripts/ci/install-smoke.mjs

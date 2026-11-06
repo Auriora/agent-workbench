@@ -281,6 +281,7 @@ class CliTests(unittest.TestCase):
             for relative in [
                 "README.md",
                 "docs/runbooks/install-agent-workbench.md",
+                "docs/runbooks/codex-agent-workbench-plugin.md",
                 "packaging/agent-workbench/README.md",
                 "plugins/agent-workbench/README.md",
             ]:
@@ -325,6 +326,10 @@ class CliTests(unittest.TestCase):
             self.assertIn("v0.4.0/auriora-agent-workbench-0.4.0.tgz", manifest["install_command"])
             readme = (root / "README.md").read_text(encoding="utf-8")
             self.assertIn("v0.4.0/auriora-agent-workbench-0.4.0.tgz", readme)
+            codex_runbook = (root / "docs/runbooks/codex-agent-workbench-plugin.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("v0.4.0/auriora-agent-workbench-0.4.0.tgz", codex_runbook)
             self.assertIn("The released v0.5.2 adapter remains the compatibility baseline.", readme)
 
     def test_verify_release_artifacts_requires_matching_metadata_and_release_note(self) -> None:
@@ -506,6 +511,41 @@ class CliTests(unittest.TestCase):
             self.assertFalse((root / "docs/release-notes").exists())
             self.assertIn("# Agent Workbench v0.4.0", result.output)
 
+    def test_release_notes_writes_absolute_outputs_outside_repo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside:
+            root = self._make_release_notes_fixture(Path(tmp))
+            outside_root = Path(outside)
+            notes_path = outside_root / "notes.md"
+            evidence_path = outside_root / "evidence.json"
+            agent_path = outside_root / "agent.md"
+
+            result = CliRunner().invoke(
+                app,
+                [
+                    "release",
+                    "notes",
+                    "--repo-root",
+                    str(root),
+                    "--version",
+                    "0.4.0",
+                    "--output",
+                    str(notes_path),
+                    "--evidence-output",
+                    str(evidence_path),
+                    "--agent-instructions",
+                    str(agent_path),
+                ],
+            )
+
+            self.assertEqual(result.exit_code, 0, result.output)
+            self.assertTrue(notes_path.exists())
+            self.assertTrue(evidence_path.exists())
+            self.assertTrue(agent_path.exists())
+            self.assertIn(f"Wrote release notes: {notes_path}", result.output)
+            self.assertIn(f"Wrote evidence: {evidence_path}", result.output)
+            self.assertIn(f"Wrote agent instructions: {agent_path}", result.output)
+            self.assertFalse((root / "docs/release-notes").exists())
+
     def test_release_notes_empty_range_exits_nonzero_without_writing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self._make_release_notes_fixture(Path(tmp), after_tag_commits=False)
@@ -595,6 +635,8 @@ class CliTests(unittest.TestCase):
         self._git(root, "init")
         self._git(root, "config", "user.email", "dev@example.com")
         self._git(root, "config", "user.name", "Dev User")
+        self._git(root, "config", "commit.gpgsign", "false")
+        self._git(root, "config", "tag.gpgsign", "false")
         (root / "README.md").write_text("Agent Workbench\n", encoding="utf-8")
         self._git(root, "add", ".")
         self._git(root, "commit", "-m", "Initial release baseline")
@@ -683,6 +725,8 @@ class CliTests(unittest.TestCase):
         self._git(root, "init")
         self._git(root, "config", "user.email", "dev@example.com")
         self._git(root, "config", "user.name", "Dev User")
+        self._git(root, "config", "commit.gpgsign", "false")
+        self._git(root, "config", "tag.gpgsign", "false")
         self._git(root, "add", ".")
         self._git(root, "commit", "-m", "Prepare release")
         return root

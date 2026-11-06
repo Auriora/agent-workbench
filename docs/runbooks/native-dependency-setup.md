@@ -112,3 +112,14 @@ build, not the parser strategy.
 Stop and document the failing command, Node version, pnpm version, and native
 build error if `pnpm rebuild:native` fails after a clean install with a working
 compiler toolchain.
+
+## Native grammar package metadata
+
+Ruby and TypeScript use sealed metadata-corrected artifacts in the v0.6.10
+source package. The accepted upstream parser sources and native bindings are
+unchanged. Their peer ranges and TypeScript's JavaScript dependency agree with
+the runtime's Tree-sitter 0.25 path. Use ordinary npm installation; peer-bypass
+flags and consumer overrides are not part of this contract. See the
+[artifact provenance](../../packaging/agent-workbench/native-grammars/README.md)
+for hashes, exact corrections and the condition for returning to official
+registry releases. This is separate from native compiler/toolchain failures.

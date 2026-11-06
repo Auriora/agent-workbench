@@ -41,7 +41,7 @@ reported incident's root cause.
 | B004 | done | Bound daemon handshake and incoming MCP frames | P1 | platform | Spec 066 T002 |
 | B005 | done | Settle and clean backpressured socket sends | P1 | platform | Spec 066 T002 |
 | B006 | done | Bound aggregate daemon session and request resources | P1 | platform | [Spec 069](../specs/069-daemon-admission-budgets/requirements.md); source gates passed |
-| B007 | accepted | Resolve npm tree-sitter Ruby peer metadata conflict | P1 | platform | Packaging dependency contract; before npm release acceptance |
+| B007 | done | Resolve npm tree-sitter Ruby peer metadata conflict | P1 | platform | [Spec 070](../specs/070-npm-native-grammar-install-contract/requirements.md); ordinary npm/native gates passed |
 | B008 | accepted | Define safe abandoned startup-reclaim guard recovery | P1 | platform | Spec 065 cleanup authority; conservative blocked state until designed |
 | B009 | accepted | Count refresh executor calls at the actual invocation boundary | P2 | platform | Coordinate with B006 admission/diagnostic instrumentation |
 
@@ -132,8 +132,15 @@ reported incident's root cause.
 - Acceptance: a clean isolated npm tarball install succeeds with ordinary peer
   resolution; approved native bindings load and language/runtime fixtures pass.
   No --force/--legacy-peer-deps claim may substitute for acceptance.
-- Owner: platform. Priority: P1. Sequence: before npm release acceptance; retain
-  explicit distinction from pnpm installed-runtime and B002 shutdown proof.
+- Disposition: done through Spec 070 D001/D002. Exact upstream Ruby/TypeScript
+  payloads have sealed metadata-only corrections, fetched through immutable
+  project commit URLs with independently pinned provenance and lock integrity.
+  Ordinary npm install/npm ls, six native grammar/SQLite fixtures, MCP convergence,
+  source147 files/1535 tests and actual installed24-case entrypoint suite passed.
+  No peer bypass, parser replacement or consumer override. Version0.6.10 remote
+  platform/publication/live-install acceptance remains in Spec070 T002/T003.
+- Owner: platform. Priority: P1. Package installation proof remains distinct
+  from source and provider CLI discovery proof.
 
 ### B006: Bound aggregate daemon admission and retained input
 
@@ -2712,8 +2719,9 @@ Do not promote an item when:
 
 - Spec 066 transport, Spec 067/B001 lifetime evidence, Spec 068/B002 shutdown
   and Spec 069/B006 aggregate admission are verified in source. Spec 068 also
-  passed its isolated installed gate. Select B007 npm peer metadata next; it
-  must precede npm release acceptance. B008 remains with Spec 065 cleanup
+  passed its isolated installed gate. Spec070/B007 ordinary npm and native gates
+  are verified; complete its v0.6.10 platform, publication and installation tasks
+  before selecting another slice. B008 remains with Spec 065 cleanup
   authority and B009 with diagnostic counters. Spec 065 retains endpoint location
   and cleanup ownership.
 

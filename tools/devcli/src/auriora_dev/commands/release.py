@@ -62,6 +62,7 @@ RELEASE_STATE_JSON_POINTERS = (
 CURRENT_DOC_PATHS = (
     "README.md",
     "docs/runbooks/install-agent-workbench.md",
+    "docs/runbooks/codex-agent-workbench-plugin.md",
     "packaging/agent-workbench/README.md",
     "plugins/agent-workbench/README.md",
 )
@@ -314,6 +315,14 @@ def update_release_version(root: Path, version: str) -> list[Path]:
             changed.append(path)
 
     return sorted(set(changed))
+
+
+def _display_path(path: Path, root: Path) -> str:
+    """Format a generated path without assuming it is inside the repository."""
+    try:
+        return str(path.relative_to(root))
+    except ValueError:
+        return str(path)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -687,7 +696,7 @@ def register(app: typer.Typer) -> None:
                 evidence_path = evidence_output if evidence_output.is_absolute() else root / evidence_output
                 write_text_output(evidence_path, evidence_to_json(evidence), dry_run=dry_run)
                 if not dry_run:
-                    typer.echo(f"Wrote evidence: {evidence_path.relative_to(root)}")
+                    typer.echo(f"Wrote evidence: {_display_path(evidence_path, root)}")
             else:
                 evidence_path = None
             if agent_instructions is not None:
@@ -698,11 +707,11 @@ def register(app: typer.Typer) -> None:
                     dry_run=dry_run,
                 )
                 if not dry_run:
-                    typer.echo(f"Wrote agent instructions: {agent_path.relative_to(root)}")
+                    typer.echo(f"Wrote agent instructions: {_display_path(agent_path, root)}")
             if output is not None and not dry_run:
                 output_path = output if output.is_absolute() else root / output
                 write_text_output(output_path, markdown, dry_run=False)
-                typer.echo(f"Wrote release notes: {output_path.relative_to(root)}")
+                typer.echo(f"Wrote release notes: {_display_path(output_path, root)}")
                 return
             typer.echo(markdown)
         except ReleaseNotesError as exc:

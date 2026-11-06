@@ -10,9 +10,11 @@
 // real Codex or Claude Code CLI loaded the plugin.
 import crypto from "node:crypto";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import { runNativeParserFixtures } from "./native-parser-fixtures.mjs";
 
 const repoRoot = process.cwd();
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "agent-workbench-installed-smoke-"));
@@ -124,6 +126,11 @@ async function runSmoke() {
   const installedManifest = JSON.parse(fs.readFileSync(installedManifestPath, "utf8"));
   assert(installedManifest.name === "@auriora/agent-workbench", "installed package identity matches");
   assert(typeof installedManifest.version === "string", "installed package version is present");
+  currentPhase = "installed_native_contract";
+  const nativeContract = validateInstalledNativeContract({
+    installedPackageRoot,
+    installRoot
+  });
 
   const installedBin = path.join(installRoot, "node_modules", ".bin", "agent-workbench-mcp");
   assert(fs.existsSync(installedBin), "installed agent-workbench-mcp bin is present");
@@ -361,6 +368,7 @@ async function runSmoke() {
       bin_realpath: installedBinRealPath,
       bin_resolved_inside_install: true
     },
+    installed_native_contract: nativeContract,
     clients: [
       { provider_label: "codex", kind: "provider_labelled_mcp_session" },
       { provider_label: "claude_code", kind: "provider_labelled_mcp_session" }
@@ -600,6 +608,82 @@ function installTarball(tarballPath) {
     env: isolatedEnv,
     timeout: 600_000
   });
+}
+
+function validateInstalledNativeContract(input) {
+  const dependencyTreeResult = run("npm", [
+    "ls",
+    "--prefix",
+    input.installRoot,
+    "--omit=dev",
+    "--all",
+    "--json"
+  ], {
+    cwd: tempRoot,
+    env: isolatedEnv,
+    timeout: 120_000
+  });
+  let dependencyTree;
+  try {
+    dependencyTree = JSON.parse(dependencyTreeResult.stdout);
+  } catch {
+    throw new Error("npm ls did not return JSON for the installed runtime.");
+  }
+  assert(
+    !Array.isArray(dependencyTree.problems) || dependencyTree.problems.length === 0,
+    `npm ls reported dependency problems (${dependencyTree.problems?.length ?? 0}).`
+  );
+
+  const packageRequire = createRequire(path.join(input.installedPackageRoot, "package.json"));
+  const expectedPackages = [
+    ["tree-sitter", "0.25.x"],
+    ["tree-sitter-go", "0.25.x"],
+    ["tree-sitter-javascript", "0.25.x"],
+    ["tree-sitter-python", "0.25.x"],
+    ["tree-sitter-ruby", "0.23.1-awb.1"],
+    ["tree-sitter-typescript", "0.23.2-awb.1"],
+    ["better-sqlite3", undefined]
+  ];
+  const packageFacts = {};
+  for (const [name, expectedVersion] of expectedPackages) {
+    const resolved = packageRequire.resolve(name);
+    assert(isInside(input.installRoot, resolved), `${name} resolves inside the isolated install`);
+    assert(!isInside(repoRoot, resolved), `${name} does not resolve into the checkout`);
+    const packageRoot = findInstalledPackageRoot(resolved, name);
+    const metadata = JSON.parse(fs.readFileSync(path.join(packageRoot, "package.json"), "utf8"));
+    assert(metadata.name === name, `${name} metadata identity matches`);
+    if (expectedVersion !== undefined) {
+      const matches = expectedVersion === "0.25.x"
+        ? /^0\.25\.\d+$/.test(metadata.version)
+        : metadata.version === expectedVersion;
+      assert(matches, `${name} version ${metadata.version} matches approved ${expectedVersion}`);
+    }
+    packageFacts[name] = { version: metadata.version, resolved_from_install: true };
+  }
+
+  const parserFixtures = runNativeParserFixtures(packageRequire);
+  return {
+    npm_dependency_tree_clean: true,
+    runtime_core: packageFacts["tree-sitter"].version,
+    packages: packageFacts,
+    parsed_roots: parserFixtures.parsed_roots,
+    native_sqlite_smoke: parserFixtures.native_sqlite_smoke
+  };
+}
+
+function findInstalledPackageRoot(resolved, expectedName) {
+  let current = path.dirname(resolved);
+  while (isInside(installRoot, current)) {
+    const metadataPath = path.join(current, "package.json");
+    if (fs.existsSync(metadataPath)) {
+      const metadata = JSON.parse(fs.readFileSync(metadataPath, "utf8"));
+      if (metadata.name === expectedName) return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  throw new Error(`${expectedName} installed package metadata was not found`);
 }
 
 function createWorkspaceFixture() {
@@ -856,6 +940,9 @@ async function initializeSession(session, provider) {
   }, 30_000);
   assert(response.result?.serverInfo?.name === "agent-workbench", `${provider} initialized installed bin`);
   session.notify("notifications/initialized", {});
+  // Controls share the documented eight-message admission budget. Await one
+  // protocol acknowledgement before issuing the eight concurrent probes below.
+  await session.call("ping", {}, 30_000);
 }
 
 async function initializeAndProbeSession({ session, provider, expectedVersion }) {

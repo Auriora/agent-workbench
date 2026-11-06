@@ -13,10 +13,10 @@ GitHub Releases carry two application forms: the source-oriented npm tarball
 for all supported platforms and a self-contained Windows x64 ZIP. The package
 name is `@auriora/agent-workbench`; it is not published to the npm registry.
 Installing the tarball builds native modules in place. The latest published
-source-package baseline is `0.6.9`:
+source-package baseline is `0.6.10`:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.9/auriora-agent-workbench-0.6.9.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.10/auriora-agent-workbench-0.6.10.tgz
 ```
 
 Official npm and Windows portable releases include personless aggregate product
@@ -96,6 +96,22 @@ bug. The package surfaces an actionable hint in two places: a best-effort note
 from `postinstall`, and (authoritatively) a message at server launch if a native
 binding cannot load. A source checkout can rebuild with `pnpm rebuild:native`
 (or `npm rebuild tree-sitter tree-sitter-ruby better-sqlite3`).
+
+## Corrected native grammar metadata
+
+The source tarball includes sealed Ruby 0.23.1-awb.1 and TypeScript 0.23.2-awb.1
+artifacts under `native-grammars/`. Their parser sources, bindings, prebuilds and
+licenses are byte-identical to the pinned official npm payloads; only package
+metadata is corrected for the accepted Tree-sitter 0.25 runtime and JavaScript
+0.25 dependency. Ordinary npm installation requires no peer-bypass flags or
+consumer overrides. The [artifact provenance](native-grammars/README.md) records
+upstream integrity, exact deltas, ownership and the removal condition.
+
+From a checkout, verify the sealed artifacts offline before packaging:
+
+```bash
+python3 scripts/native-grammar-artifacts.py --check
+```
 
 ## Launch model
 

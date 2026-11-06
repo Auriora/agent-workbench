@@ -4,6 +4,7 @@
  */
 
 import fs from "node:fs";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -179,6 +180,70 @@ describe("daemon-backed stdio entrypoint integration", () => {
       secondHealth.data.daemon?.connected_clients ?? 0
     )).toBeGreaterThanOrEqual(2);
   }, 15_000);
+
+  it("keeps an established entrypoint client callable at the aggregate session boundary", async () => {
+    const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-admission-boundary-");
+    const session = trackSession(await startEntryPointSession(repoRoot, {
+      startupRefreshDelayMs: 60_000
+    }));
+    await initializeSession(session, 30_000);
+    const initialHealth = daemonHealth(await session.call("resources/read", {
+      uri: "integration:///health/agent-workbench"
+    }));
+    expect(initialHealth.socket_path).toEqual(
+      daemonPaths(createDaemonIdentity(repoRoot)).socketPath
+    );
+
+    const rawSockets: net.Socket[] = [];
+    try {
+      const pendingSockets = Array.from({ length: 63 }, () => {
+        const socket = net.createConnection(initialHealth.socket_path);
+        rawSockets.push(socket);
+        return new Promise<void>((resolve, reject) => {
+          const onError = (error: Error): void => {
+            socket.off("connect", onConnect);
+            reject(error);
+          };
+          const onConnect = (): void => {
+            socket.off("error", onError);
+            resolve();
+          };
+          socket.once("error", onError);
+          socket.once("connect", onConnect);
+        });
+      });
+      await Promise.all(pendingSockets);
+
+      let boundaryHealth = initialHealth;
+      for (let attempt = 0; attempt < 120; attempt += 1) {
+        boundaryHealth = daemonHealth(await session.call("resources/read", {
+          uri: "integration:///health/agent-workbench"
+        }));
+        if (boundaryHealth.connected_clients === 64) break;
+        await sleep(25);
+      }
+      expect(boundaryHealth.connected_clients).toBe(64);
+
+      const excess = net.createConnection(initialHealth.socket_path);
+      rawSockets.push(excess);
+      excess.on("error", () => undefined);
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          excess.off("close", onClose);
+          reject(new Error("The 65th daemon session was not rejected within the test bound."));
+        }, 3_000);
+        const onClose = (): void => {
+          clearTimeout(timeout);
+          resolve();
+        };
+        excess.once("close", onClose);
+      });
+
+      await expect(session.call("ping")).resolves.toMatchObject({ result: {} });
+    } finally {
+      for (const socket of rawSockets) socket.destroy();
+    }
+  }, 30_000);
 
   it.runIf(
     process.env.AGENT_WORKBENCH_TEST_INSTALLED_ENTRYPOINT !== undefined &&

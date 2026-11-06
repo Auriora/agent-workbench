@@ -3,11 +3,11 @@
   "registry": "github-release",
   "publish_status": "github-release",
   "release_status": "released",
-  "latest_released_version": "0.6.9",
+  "latest_released_version": "0.6.10",
   "distribution_url": "https://github.com/Auriora/agent-workbench/releases",
   "version_source": "package.json#/version",
   "plugin_version_source": "plugins/agent-workbench/.codex-plugin/plugin.json#/version",
-  "install_command": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.9/auriora-agent-workbench-0.6.9.tgz",
+  "install_command": "npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.10/auriora-agent-workbench-0.6.10.tgz",
   "pack_command": "npm pack",
   "payload_root": "plugins/agent-workbench",
   "bin": "packaging/agent-workbench/mcp-bin.mjs",
@@ -54,7 +54,11 @@
     "dist/workers/startup-graph-warmup-worker-entrypoint.mjs",
     "src/mcp/stdio-entrypoint.mjs",
     "src/mcp/stdio.ts",
-    "tsconfig.json"
+    "tsconfig.json",
+    "packaging/agent-workbench/native-grammars/manifest.json",
+    "packaging/agent-workbench/native-grammars/README.md",
+    "packaging/agent-workbench/native-grammars/tree-sitter-ruby-0.23.1-awb.1.tgz",
+    "packaging/agent-workbench/native-grammars/tree-sitter-typescript-0.23.2-awb.1.tgz"
   ],
   "provenance": {
     "source_repository": "https://github.com/Auriora/agent-workbench",
