@@ -133,7 +133,10 @@ describe("daemon-backed stdio entrypoint integration", () => {
     expect(result).toEqual({ code: 0, signal: null });
     expect(fs.existsSync(paths.metadataPath)).toBe(false);
     expect(fs.existsSync(paths.socketPath)).toBe(false);
-    expect(session.stderr()).toBe("");
+    expect(session.stderr()).toBe(
+      "agent-workbench: daemon socket closed unexpectedly; the MCP session is ending. " +
+        "Restart the MCP connection and inspect integration:///health/agent-workbench.\n"
+    );
   }, 15_000);
 
   it("shares one daemon across concurrent checkout/source clients", async () => {

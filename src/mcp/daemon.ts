@@ -35,6 +35,10 @@ import { SystemClockAdapter } from "../infrastructure/time/index.js";
 import { resolveWorkspaceWatcherConfig } from "../domain/models/index.js";
 import { createRuntimeTelemetryAdapter } from "../infrastructure/telemetry/index.js";
 import { SocketServerTransport } from "./socket-transport.js";
+import {
+  DAEMON_HANDSHAKE_TOO_LARGE_MESSAGE,
+  MAX_DAEMON_HANDSHAKE_BYTES
+} from "../contracts/mcp-transport-contracts.js";
 import type {
   SnapshotRefreshAdmissionFailurePort,
   SnapshotRefreshControllerPort,
@@ -767,7 +771,8 @@ async function acceptDaemonClient(input: {
 
 function readHandshake(socket: Socket): Promise<{ handshake: unknown; remainder: Buffer }> {
   return new Promise((resolve, reject) => {
-    let buffer = Buffer.alloc(0);
+    const chunks: Buffer[] = [];
+    let bufferedBytes = 0;
     const timeout = setTimeout(() => {
       cleanup();
       reject(new Error("Timed out waiting for Agent Workbench daemon handshake."));
@@ -788,13 +793,29 @@ function readHandshake(socket: Socket): Promise<{ handshake: unknown; remainder:
       reject(new Error("Socket closed before Agent Workbench daemon handshake."));
     };
     const onData = (chunk: Buffer): void => {
-      buffer = Buffer.concat([buffer, chunk]);
-      const newlineIndex = buffer.indexOf(0x0a);
+      const newlineIndex = chunk.indexOf(0x0a);
       if (newlineIndex < 0) {
+        if (bufferedBytes + chunk.length > MAX_DAEMON_HANDSHAKE_BYTES) {
+          cleanup();
+          reject(new Error(DAEMON_HANDSHAKE_TOO_LARGE_MESSAGE));
+          return;
+        }
+        chunks.push(chunk);
+        bufferedBytes += chunk.length;
         return;
       }
-      const line = buffer.subarray(0, newlineIndex).toString("utf8");
-      const remainder = buffer.subarray(newlineIndex + 1);
+      const lineBytes = bufferedBytes + newlineIndex;
+      if (lineBytes > MAX_DAEMON_HANDSHAKE_BYTES) {
+        cleanup();
+        reject(new Error(DAEMON_HANDSHAKE_TOO_LARGE_MESSAGE));
+        return;
+      }
+      const lineChunk = chunk.subarray(0, newlineIndex);
+      const lineBuffer = chunks.length === 0
+        ? lineChunk
+        : Buffer.concat([...chunks, lineChunk], lineBytes);
+      const line = lineBuffer.toString("utf8").replace(/\r$/, "");
+      const remainder = chunk.subarray(newlineIndex + 1);
       cleanup();
       try {
         resolve({

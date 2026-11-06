@@ -1,6 +1,7 @@
 ---
 title: Agent Workbench backlog
 doc_type: backlog
+planning_schema: slm-planning/v1
 status: draft
 owner: platform
 last_reviewed: 2026-08-04
@@ -24,6 +25,98 @@ A backlog item is executable when it has:
 - validation evidence that can prove success or expose a blocked state;
 - a promotion target such as an active spec, follow-up spec, durable design
   document, or implementation task.
+
+The following entries use `slm-planning/v1`. The retained EB-series history
+below remains unchanged; this is a bounded addition, not a historical backlog
+migration. Static analysis found possible failure mechanisms, not proof of the
+reported incident's root cause.
+
+## Items
+
+| ID | Status | Topic | Priority | Owner | Target |
+| --- | --- | --- | --- | --- | --- |
+| B001 | accepted | Preserve daemon lifetime failure and exit evidence | P0 | platform | Focused lifecycle diagnostics spec; next after Spec 066 |
+| B002 | accepted | Settle refresh workers and publication before daemon termination | P0 | platform | Focused shutdown/handoff spec after B001 diagnostics design |
+| B003 | done | Contain bridge stdout and stderr failures | P0 | platform | Spec 066 T001 |
+| B004 | done | Bound daemon handshake and incoming MCP frames | P1 | platform | Spec 066 T002 |
+| B005 | done | Settle and clean backpressured socket sends | P1 | platform | Spec 066 T002 |
+| B006 | accepted | Bound aggregate daemon session and request resources | P1 | platform | Focused admission-budget spec before release review |
+
+## Transport reliability follow-up
+
+### B001: Preserve daemon lifetime failure and exit evidence
+
+- Signal: the launcher removes child exit/error listeners and destroys its
+  stderr reader after startup. A later orphaned build identifies interruption
+  but cannot distinguish a signal, runtime exception, or native failure.
+- Scope: daemon-local lifecycle evidence and launcher observation; no raw
+  stderr or repository/client payload export to analytics.
+- Acceptance: define one bounded private local record with launch identity,
+  phase, classified cause, observed exit code/signal and timestamp; enforce
+  permissions, size/retention and launch-aware writes; do not invent evidence
+  for SIGKILL/native abort or suppress fatal exceptions. A later launch must
+  distinguish observed failure from unknown prior-owner loss.
+- Validation: real child fixtures for normal shutdown, thrown exception,
+  unhandled rejection, observed signal/exit, missing/unwritable evidence sink,
+  stale/replacement launches and unavailable parent; privacy tests prove raw
+  payloads and host paths do not reach product analytics.
+- Promotion: runtime operations and observability design, runtime contracts,
+  operator runbook, then a focused lifecycle diagnostics spec. Startup cause
+  classification remains owned by Spec 065; coordinate the local cause model.
+- Disposition: accepted P0, intentionally deferred from Spec 066 because this
+  changes daemon-lifetime evidence and persistence contracts, not transport
+  cleanup. Owner: platform. Sequencing: next after the bounded transport fix.
+
+### B002: Settle refresh workers before daemon termination
+
+- Signal: SIGTERM races close against one second, then exits even if refresh
+  settlement is incomplete. A same-version build replacement may trigger this
+  path. This is a possible orphaned-build mechanism, not incident attribution.
+- Scope: refresh-aware shutdown and exact-owner build handoff; preserve the
+  existing serialized ownership/publication authority.
+- Acceptance: define a finite shutdown protocol that settles or terminates the
+  exact worker and records publication/termination evidence before exit; retain
+  ownership until safe release or positive process death; reject new clients
+  explicitly during drain; never start a competing writer or mask unfinished
+  work by extending timeouts or reporting partial success.
+- Validation: installed child fixtures for SIGTERM during extraction,
+  publication and worker-termination failure, retained clients, same-version
+  replacement and concurrent new launches. Prove one writer, safe orphan
+  recovery when termination cannot be observed, and bounded failure evidence.
+- Promotion: runtime operations, ownership/publication contracts and upgrade
+  runbooks, followed by a focused shutdown/handoff spec.
+- Disposition: accepted P0, deferred pending the lifecycle/worker protocol and
+  coordinated fixtures. Owner: platform. Dependency: B001 diagnostics design;
+  coordinate with Spec 065 endpoint cleanup/migration without duplicating it.
+
+### B006: Bound aggregate daemon admission and retained input
+
+- Signal: MoE security/operations review found the 64-client cap covers only
+  the pre-readiness pending queue. Ready/handshaking session cardinality and
+  total retained input/in-flight requests have no daemon-wide budget. The
+  per-frame repair does not establish aggregate denial-of-service resistance.
+- Scope: one daemon-wide admission/resource policy for accepted clients,
+  partial input and in-flight requests. Owner: platform. Priority: P1.
+- Acceptance: define finite session, retained-byte and in-flight request/work
+  budgets; specify partial-frame inactivity behavior and compatibility with
+  legitimate slow/large requests; reject excess on the offending connection
+  without restart, a competing refresh writer or partial successful output.
+- Validation: deterministic saturation fixtures must keep an already-connected
+  healthy client callable while excess sessions, retained frames and request
+  bursts are rejected; verify accounting releases on all terminal paths and
+  show bounded memory/work without conducting live resource-exhaustion tests.
+- Promotion: threat model, runtime operations, transport contracts and operator
+  runbooks through a focused admission-budget spec. Do not infer a particular
+  OOM threshold from static analysis.
+- Disposition: accepted, deferred from Spec 066's per-frame/connection repair;
+  explicitly assess this risk before release. This is a newly surfaced MoE
+  residual, separate from B001 diagnostics, B002 shutdown and Spec 065 endpoints.
+
+B003-B005 are implemented in source by
+[Spec 066](../specs/066-mcp-transport-failure-containment/requirements.md).
+Endpoint location and cleanup remain owned by the existing Spec 065 worktree
+package, which is outside the Spec 066 commit.
+No package install or release is implied by a completed source repair.
 
 ## Mining Taxonomy
 
@@ -2563,6 +2656,10 @@ Do not promote an item when:
 | Debug-sweep scenarios | EB067, under EB009 and registry parity. |
 
 ## Immediate Next Specs
+
+- Finish Spec 066 transport validation, then select B001 daemon-lifetime
+  failure evidence and B002 worker-safe shutdown through focused specs.
+  Spec 065 retains endpoint location and cleanup ownership.
 
 - EB065/Spec 053 is delivered with exact population accounting, bounded public
   presentation, and five-gate regression evidence.

@@ -79,40 +79,161 @@ export function createStdioBridgeSession(
 ): StdioBridgeSession {
   let completedResolve!: () => void;
   let completed = false;
+  let cleanupComplete = false;
   let socketErrorReported = false;
+  let stdoutErrorReported = false;
+  let socketClosed = false;
+  let cleanupRequested = false;
+  const outputWriteSettlers = new Set<() => void>();
+  const stderrWriteSettlers = new Set<() => void>();
   const completedPromise = new Promise<void>((resolve) => {
     completedResolve = resolve;
   });
 
-  const removeBridgeListeners = (): void => {
+  const writeStderr = (message: string): void => {
+    try {
+      if (!io.stderr.destroyed && !io.stderr.writableEnded) {
+        const settle = (): void => settleStderrWrite(settle);
+        stderrWriteSettlers.add(settle);
+        io.stderr.write(message, settle);
+      }
+    } catch {
+      // Failure reporting must not prevent transport teardown.
+      for (const settle of [...stderrWriteSettlers]) settle();
+    }
+  };
+
+  const handleStderrError = (): void => {
+    // Keep a session-owned listener installed while terminal diagnostics are
+    // being written so a failed stderr cannot become an unhandled error.
+    for (const settle of [...stderrWriteSettlers]) settle();
+  };
+
+  const removeBridgeListeners = (
+    removeStdoutListeners = true,
+    removeStderrListener = true
+  ): void => {
     io.stdin.removeListener("end", handleStdinTerminal);
     io.stdin.removeListener("close", handleStdinTerminal);
     io.stdin.removeListener("error", handleStdinError);
+    if (removeStdoutListeners) {
+      io.stdout.removeListener("close", handleStdoutClose);
+      io.stdout.removeListener("error", handleStdoutError);
+      io.stdout.removeListener("drain", handleStdoutDrain);
+    }
+    if (removeStderrListener) io.stderr.removeListener("error", handleStderrError);
+    if (removeStderrListener) io.stderr.removeListener("close", handleStderrClose);
     socket.removeListener("close", handleSocketClose);
     socket.removeListener("error", handleSocketError);
+    socket.removeListener("data", handleSocketData);
   };
 
-  const teardown = (owner: "stdin" | "socket-close" | "socket-error" | "manual"): void => {
+  const finishCleanup = (): void => {
+    if (cleanupComplete) return;
+    cleanupComplete = true;
+    const stderrSettled = stderrWriteSettlers.size === 0;
+    removeBridgeListeners(outputWriteSettlers.size === 0, stderrSettled);
+    if (outputWriteSettlers.size > 0) {
+      io.stdout.removeListener("drain", handleStdoutDrain);
+    }
+    if (!stderrSettled) {
+      setImmediate(() => {
+        if (stderrWriteSettlers.size === 0) {
+          io.stderr.removeListener("error", handleStderrError);
+          io.stderr.removeListener("close", handleStderrClose);
+        }
+      });
+    }
+    completedResolve();
+  };
+
+  const tryFinishCleanup = (): void => {
+    if (
+      cleanupRequested &&
+      socketClosed
+    ) {
+      finishCleanup();
+    }
+  };
+
+  const settleStderrWrite = (settler: () => void): void => {
+    setImmediate(() => {
+      if (!stderrWriteSettlers.delete(settler)) return;
+      if (cleanupComplete && stderrWriteSettlers.size === 0) {
+        io.stderr.removeListener("error", handleStderrError);
+        io.stderr.removeListener("close", handleStderrClose);
+      }
+      tryFinishCleanup();
+    });
+  };
+
+  const settleOutputWrite = (settler: () => void): void => {
+    setImmediate(() => {
+      if (!outputWriteSettlers.delete(settler)) return;
+      if (cleanupComplete && outputWriteSettlers.size === 0) {
+        io.stdout.removeListener("close", handleStdoutClose);
+        io.stdout.removeListener("error", handleStdoutError);
+        io.stdout.removeListener("drain", handleStdoutDrain);
+      }
+      tryFinishCleanup();
+    });
+  };
+
+  const handleSocketData = (chunk: Buffer): void => {
+    if (completed) return;
+    let settled = false;
+    const settle = (): void => {
+      if (settled) return;
+      settled = true;
+      settleOutputWrite(settle);
+    };
+    outputWriteSettlers.add(settle);
+    try {
+      if (!io.stdout.write(chunk, settle)) socket.pause();
+    } catch {
+      settle();
+      handleStdoutError();
+    }
+  };
+
+  const handleStdoutDrain = (): void => {
+    if (!completed && !socket.destroyed) socket.resume();
+  };
+
+  const teardown = (
+    owner: "stdin" | "socket-close" | "socket-error" | "stdout-close" | "stdout-error" | "manual"
+  ): void => {
     if (completed) return;
     completed = true;
-    removeBridgeListeners();
+    cleanupRequested = true;
     io.stdin.unpipe(socket);
     socket.unpipe(io.stdout);
     if (owner === "socket-close") {
       io.stdin.pause();
     } else {
-      if (owner === "socket-error" || owner === "manual") {
+      if (
+        owner === "socket-error" ||
+        owner === "stdout-close" ||
+        owner === "stdout-error" ||
+        owner === "manual"
+      ) {
         io.stdin.pause();
       }
-      if (!socket.destroyed) socket.destroy();
+      if (!socket.destroyed) {
+        try {
+          socket.destroy();
+        } catch {
+          socketClosed = true;
+        }
+      }
     }
-    completedResolve();
+    tryFinishCleanup();
   };
 
   const handleSocketError = (error: Error): void => {
-    if (!socketErrorReported) {
+    if (!socketErrorReported && !completed) {
       socketErrorReported = true;
-      io.stderr.write(`agent-workbench: daemon socket error: ${error.message}\n`);
+      writeStderr(`agent-workbench: daemon socket error: ${error.message}\n`);
     }
     teardown("socket-error");
   };
@@ -122,27 +243,68 @@ export function createStdioBridgeSession(
   };
 
   const handleStdinError = (error: Error): void => {
-    io.stderr.write(`agent-workbench: stdin error: ${error.message}\n`);
+    if (!completed) writeStderr(`agent-workbench: stdin error: ${error.message}\n`);
     teardown("stdin");
   };
 
   const handleSocketClose = (): void => {
+    socketClosed = true;
+    if (completed) {
+      tryFinishCleanup();
+      return;
+    }
+    if (!io.stdin.destroyed && !io.stdin.readableEnded) {
+      writeStderr(
+        "agent-workbench: daemon socket closed unexpectedly; the MCP session is ending. " +
+          "Restart the MCP connection and inspect integration:///health/agent-workbench.\n"
+      );
+    }
     teardown("socket-close");
+  };
+
+  const handleStdoutError = (): void => {
+    for (const settle of [...outputWriteSettlers]) settle();
+    if (!stdoutErrorReported && !completed) {
+      stdoutErrorReported = true;
+      writeStderr("agent-workbench: MCP stdout error; the MCP session is ending.\n");
+    }
+    teardown("stdout-error");
+  };
+
+  const handleStderrClose = (): void => {
+    for (const settle of [...stderrWriteSettlers]) settle();
+  };
+
+  const handleStdoutClose = (): void => {
+    for (const settle of [...outputWriteSettlers]) settle();
+    if (completed) {
+      tryFinishCleanup();
+      return;
+    }
+    writeStderr("agent-workbench: MCP stdout closed unexpectedly; the MCP session is ending.\n");
+    teardown("stdout-close");
   };
 
   io.stdin.once("end", handleStdinTerminal);
   io.stdin.once("close", handleStdinTerminal);
   io.stdin.once("error", handleStdinError);
-  socket.once("error", handleSocketError);
-  socket.once("close", handleSocketClose);
+  io.stdout.on("error", handleStdoutError);
+  io.stdout.on("close", handleStdoutClose);
+  io.stdout.on("drain", handleStdoutDrain);
+  io.stderr.on("error", handleStderrError);
+  io.stderr.on("close", handleStderrClose);
+  socket.on("error", handleSocketError);
+  socket.on("close", handleSocketClose);
+  socket.on("data", handleSocketData);
 
   if (socket.destroyed) {
     handleSocketClose();
   } else if (io.stdin.destroyed || io.stdin.readableEnded) {
     handleStdinTerminal();
+  } else if (io.stdout.destroyed || io.stdout.writableEnded) {
+    handleStdoutClose();
   } else {
     io.stdin.pipe(socket);
-    socket.pipe(io.stdout, { end: false });
   }
 
   return {

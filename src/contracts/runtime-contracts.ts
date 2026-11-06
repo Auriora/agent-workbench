@@ -11,3 +11,4 @@ export * from "./runtime-validation-edit-contracts.js";
 export * from "./runtime-changed-files-contracts.js";
 export * from "./runtime-response-contracts.js";
 export * from "./runtime-integration-contracts.js";
+export * from "./mcp-transport-contracts.js";

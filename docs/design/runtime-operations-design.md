@@ -373,6 +373,34 @@ Startup, shutdown, timeout, crash replacement, and failed publication unwind
 worker, writer, activity, graph-store, socket, metadata, WAL/SHM, and child
 resources exactly once along the applicable drain or dead-owner path.
 
+## MCP Transport Failure Containment
+
+Each stdio bridge owns its stream bindings and daemon socket lifecycle. Output
+pipe failure or closure converges on the same idempotent teardown as other
+terminal events: pause stdin, unpipe streams, close that socket and settle the
+session. Caller-owned stdout and stderr are preserved. Session completion does
+not wait for their writes: lifecycle listeners are removed, while narrow guards
+for already-admitted writes remain only until callback, error or stream close.
+A caller Writable that never settles may retain that guard until close; no
+polling or completion dependency is introduced. Unavailable diagnostic stderr
+must not prevent teardown. A client disconnect never authorizes daemon signalling,
+cache deletion, restart loops or another refresh writer.
+
+The socket transport collects bounded fragments and parses each completed
+frame once through the MCP SDK. Per-frame and handshake byte bounds live in
+[Runtime contracts](../reference/runtime-contracts.md#mcp-transport-admission).
+Oversized input closes its client connection; other daemon clients continue.
+Pending sends settle on transport closure as well as drain/error, and remove
+both winning and losing event listeners.
+
+This checked-in design is delivered by Spec 066, separately from installation.
+Daemon-lifetime failure persistence and worker-safe shutdown settlement are
+accepted follow-up work in
+[backlog B001/B002](../backlog/README.md#transport-reliability-follow-up).
+The existing one-second SIGTERM deadline and startup-only stderr capture have
+not been changed by the transport repair; an orphaned build remains evidence
+of interruption, not proof of a particular cause.
+
 ## Async And Concurrency Model
 
 The runtime is async-first and uses bounded queues. It must support concurrent

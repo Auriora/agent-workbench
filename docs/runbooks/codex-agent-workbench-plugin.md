@@ -178,6 +178,30 @@ The plugin should not create a host-level Agent Workbench MCP block in
 
 ## Refresh Ownership And Diagnosis
 
+### Transport failures in the source repair
+
+Spec 066 adds stdout failure/closure containment, bounded incoming frames and
+send settlement on closure. These changes require building and installing a
+package containing the repair; editing a checkout does not update a running
+or globally installed runtime.
+
+An unexpected daemon disconnection reports a fixed diagnostic with guidance
+to restart the MCP connection and inspect
+`integration:///health/agent-workbench`. If the client output pipe has closed,
+that bridge tears down without signalling the shared daemon. When stderr is
+also unavailable, teardown still completes; absence of a diagnostic does not
+prove normal shutdown.
+
+Oversized input closes that client connection. Reduce a request larger than
+16 MiB (UTF-8 bytes excluding LF) before opening a new connection. The private
+daemon handshake has a separate 16 KiB line bound. Do not delete caches or
+restart the daemon to work around a rejected frame.
+
+Persistent daemon failure evidence and coordinated refresh shutdown remain
+tracked by [B001/B002](../backlog/README.md#transport-reliability-follow-up).
+A recovered orphaned build alone does not establish why the former owner
+stopped. Existing endpoint-loss work stays in Spec 065.
+
 ### Bridge process interpretation
 
 Expect one daemon per active repository and compatible runtime build identity,

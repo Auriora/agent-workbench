@@ -37,6 +37,10 @@ import type {
   SnapshotRefreshControllerPort,
   TelemetryRecorderPort
 } from "../../src/ports/index.js";
+import {
+  MAX_DAEMON_HANDSHAKE_BYTES,
+  MAX_MCP_FRAME_BYTES
+} from "../../src/contracts/mcp-transport-contracts.js";
 
 describe("Agent Workbench daemon launcher", () => {
   it("owns one shared telemetry lifecycle across daemon clients", async () => {
@@ -2509,6 +2513,114 @@ describe("Agent Workbench daemon launcher", () => {
       socket.write("this is not json\n");
       await new Promise<void>((resolve) => socket.once("close", () => resolve()));
       expect(daemon.connectedClients()).toBe(0);
+    } finally {
+      await daemon.close();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects an oversized handshake without affecting the next client", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-handshake-limit-");
+    const daemon = await startAgentWorkbenchDaemon({
+      repoRoot,
+      idleGraceMs: 100,
+      serverOptions: { startupRefreshDelayMs: 60_000 }
+    });
+
+    try {
+      const oversized = net.createConnection(daemon.metadata.socketPath);
+      await new Promise<void>((resolve, reject) => {
+        oversized.once("connect", resolve);
+        oversized.once("error", reject);
+      });
+      oversized.write(Buffer.alloc(MAX_DAEMON_HANDSHAKE_BYTES + 1, 0x78));
+      await new Promise<void>((resolve) => oversized.once("close", () => resolve()));
+
+      const healthy = net.createConnection(daemon.metadata.socketPath);
+      await new Promise<void>((resolve, reject) => {
+        healthy.once("connect", resolve);
+        healthy.once("error", reject);
+      });
+      healthy.write(`${JSON.stringify({
+        protocol: "agent-workbench-daemon",
+        protocolVersion: DAEMON_PROTOCOL_VERSION,
+        identity: daemon.metadata.identity
+      })}\n`);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(daemon.connectedClients()).toBe(1);
+      healthy.destroy();
+    } finally {
+      await daemon.close();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts the exact handshake limit and isolates an oversized MCP remainder", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-transport-boundary-");
+    const daemon = await startAgentWorkbenchDaemon({
+      repoRoot,
+      idleGraceMs: 100,
+      serverOptions: { startupRefreshDelayMs: 60_000 }
+    });
+    const baseHandshake = {
+      protocol: "agent-workbench-daemon",
+      protocolVersion: DAEMON_PROTOCOL_VERSION,
+      identity: daemon.metadata.identity,
+      padding: ""
+    };
+    const baseBytes = Buffer.byteLength(JSON.stringify(baseHandshake));
+    const handshakeLine = (paddingBytes: number, ending = "\n"): Buffer => Buffer.from(
+      `${JSON.stringify({ ...baseHandshake, padding: "a".repeat(paddingBytes) })}${ending}`
+    );
+
+    try {
+      const exact = net.createConnection(daemon.metadata.socketPath);
+      await new Promise<void>((resolve, reject) => {
+        exact.once("connect", resolve);
+        exact.once("error", reject);
+      });
+      exact.write(handshakeLine(MAX_DAEMON_HANDSHAKE_BYTES - baseBytes));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(daemon.connectedClients()).toBe(1);
+      exact.destroy();
+
+      const over = net.createConnection(daemon.metadata.socketPath);
+      await new Promise<void>((resolve, reject) => {
+        over.once("connect", resolve);
+        over.once("error", reject);
+      });
+      over.write(handshakeLine(MAX_DAEMON_HANDSHAKE_BYTES - baseBytes + 1));
+      await new Promise<void>((resolve) => over.once("close", () => resolve()));
+
+      const fragmented = net.createConnection(daemon.metadata.socketPath);
+      await new Promise<void>((resolve, reject) => {
+        fragmented.once("connect", resolve);
+        fragmented.once("error", reject);
+      });
+      const fragmentedLine = handshakeLine(0, "\r\n");
+      fragmented.write(fragmentedLine.subarray(0, Math.floor(fragmentedLine.length / 2)));
+      fragmented.write(fragmentedLine.subarray(Math.floor(fragmentedLine.length / 2)));
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(daemon.connectedClients()).toBe(1);
+      fragmented.destroy();
+
+      const oversizedRemainder = net.createConnection(daemon.metadata.socketPath);
+      await new Promise<void>((resolve, reject) => {
+        oversizedRemainder.once("connect", resolve);
+        oversizedRemainder.once("error", reject);
+      });
+      oversizedRemainder.write(Buffer.concat([
+        handshakeLine(0),
+        Buffer.alloc(MAX_MCP_FRAME_BYTES + 1, 0x78)
+      ]));
+      await new Promise<void>((resolve) => oversizedRemainder.once("close", () => resolve()));
+
+      const healthy = await connectSocketEventually(daemon.metadata.socketPath);
+      const healthySession = createSocketSession(healthy);
+      healthy.write(handshakeLine(0));
+      await initializeSocketSession(healthySession, 401, "healthy-after-boundary");
+      expect(await readIntegrationProvider(healthySession, 402)).toBe("unknown");
+      healthy.destroy();
     } finally {
       await daemon.close();
       fs.rmSync(repoRoot, { recursive: true, force: true });

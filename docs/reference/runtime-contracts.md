@@ -36,6 +36,8 @@ Runtime contract schemas are grouped by stable runtime context under
   response envelopes, and envelope construction.
 - `runtime-integration-contracts.ts`: MCP surface health and coding-agent
   integration profile contracts.
+- `mcp-transport-contracts.ts`: daemon handshake and MCP frame bounds and fixed
+  local transport failure messages.
 
 `src/contracts/runtime-contracts.ts` and `src/contracts/index.ts` remain
 compatibility barrels for public imports. New contract definitions should live
@@ -365,6 +367,33 @@ graph index remains non-complete.
 - `needed`: validation is required before relying on the result.
 - `blocked`: validation could not proceed.
 - `not_applicable`: validation does not apply to this result.
+
+## MCP Transport Admission
+
+The checked-in transport implementation defines its bounds in
+`src/contracts/mcp-transport-contracts.ts`: daemon handshake lines are limited
+to 16 KiB and incoming MCP JSON-RPC frames to 16 MiB, measured in UTF-8 bytes
+excluding the LF delimiter. CR counts toward the limit for CRLF framing.
+Each frame is checked independently, including initial bytes after the
+handshake; multiple valid frames may share a larger aggregate socket chunk.
+Requests exceeding this transport limit must be reduced by the caller, even
+when a tool's argument schema would otherwise accept them.
+
+Input fragments are bounded before SDK JSON-RPC deserialization. An oversized
+frame closes only the offending client socket; it does not restart the daemon,
+run an alternate parser or expose partial tool output. The same SDK parser
+continues to validate complete frames. Outbound response budgets remain owned
+by their existing presentation contracts.
+
+Backpressured sends settle once on drain, error, peer close or local transport
+close. Each settlement removes temporary listeners. Bridge stdout failure or
+closure settles that bridge and closes its socket without signalling the
+shared daemon; failure reporting cannot make teardown depend on stderr.
+
+These are source contracts for Spec 066. They become installed behavior only
+after a package containing the changes is built and installed. Persistent
+daemon failure/exit evidence and refresh-aware termination remain deferred in
+[backlog B001/B002](../backlog/README.md#transport-reliability-follow-up).
 
 ## Daemon Health
 
