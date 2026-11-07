@@ -483,12 +483,11 @@ owner state is recoverable only after positive process death through the existin
 election, without another writer, timeout extension or retry path.
 
 Stale startup-lock reclamation retains private .reclaim claims and exact
-file/PID/token validation. Source behavior after v0.6.11 additionally records a
+file/PID/token validation. Version v0.6.12 additionally records a
 Linux boot/PID-namespace scope fingerprint in new claims. An exact same-scope
 guard with a positively dead owner can be removed by an isolated recovery helper;
 legacy, foreign or unverifiable scope remains ambiguous. B010 owns equivalent
-non-Linux process-scope proof. This availability improvement is not yet part of
-the published v0.6.11 payload.
+non-Linux process-scope proof. Earlier v0.6.11 installations retain conservative guard blocking until upgraded.
 
 Only dead-guard deletion is serialized under a zero-wait SQLite exclusive
 transaction in a separate process; native SQLite never loads in the stdio bridge.

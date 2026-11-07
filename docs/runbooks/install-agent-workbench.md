@@ -147,14 +147,14 @@ the npm registry). Install the release tarball directly by URL — npm builds th
 native modules and runs the package's `postinstall` the same as any package:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.11/auriora-agent-workbench-0.6.11.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.12/auriora-agent-workbench-0.6.12.tgz
 ```
 
 For a different version, take the tarball URL from the matching release on
 <https://github.com/Auriora/agent-workbench/releases>. Offline/air-gapped: download
-the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.6.11.tgz`.
+the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.6.12.tgz`.
 
-The commands above install release `0.6.11`, including the compiled lightweight
+The commands above install release `0.6.12`, including the compiled lightweight
 bridge, daemon-owned refresh convergence, and schema-isolated publication.
 
 This source-package path builds the native modules in place and records a runtime-root pointer under
@@ -197,7 +197,7 @@ name `agent-workbench-local`).
 PKG="$(npm root -g)/@auriora/agent-workbench"
 claude plugin marketplace add "$PKG/plugins/agent-workbench"
 claude plugin install agent-workbench@agent-workbench-local --scope user
-claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.11  enabled
+claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.12  enabled
 ```
 
 **Windows (PowerShell):**
@@ -206,7 +206,7 @@ claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.11  enable
 $pkg = "$(npm root -g)\@auriora\agent-workbench"
 claude plugin marketplace add "$pkg\plugins\agent-workbench"
 claude plugin install agent-workbench@agent-workbench-local --scope user
-claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.11  enabled
+claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.12  enabled
 ```
 
 Start a new Claude Code session so the skill, hooks, and MCP server are
@@ -239,7 +239,7 @@ The npm package ships a package-scoped Codex marketplace
 PKG="$(npm root -g)/@auriora/agent-workbench"
 codex plugin marketplace add "$PKG/plugins/agent-workbench"
 codex plugin add agent-workbench@agent-workbench-local
-codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.11  installed, enabled
+codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.12  installed, enabled
 ```
 
 **Windows (PowerShell):**
@@ -248,7 +248,7 @@ codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.11  install
 $pkg = "$(npm root -g)\@auriora\agent-workbench"
 codex plugin marketplace add "$pkg\plugins\agent-workbench"
 codex plugin add agent-workbench@agent-workbench-local
-codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.11  installed, enabled
+codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.12  installed, enabled
 ```
 
 Start a new Codex session so the skill, hooks, and MCP server are discovered. See
@@ -285,8 +285,8 @@ execution:
   publication target invisible; a failure before build creation can have no
   publication state. One later ordinary stale read may request one successor;
   failure callbacks and health reads do not retry automatically.
-- `worker_invocations` is a cumulative controller diagnostic. Source after
-  v0.6.11 counts actual executor.run calls, including synchronous throws, and
+- `worker_invocations` is a cumulative controller diagnostic. Version
+  v0.6.12 counts actual executor.run calls, including synchronous throws, and
   excludes cancellation before invocation. Use execution/termination receipts
   to establish whether a worker started or safely stopped.
 
@@ -296,14 +296,13 @@ ownership records. A replacement daemon recovers an orphaned build only after
 positive evidence that the previous owner is dead; ambiguous ownership returns
 a structured blocked result and requires investigation, not manual cleanup.
 
-Unreleased source can recover a new Linux .reclaim guard only with matching
+Version v0.6.12 can recover a new Linux .reclaim guard only with matching
 kernel boot/PID scope, exact file identity and positive owner death. Legacy,
 foreign-scope and non-Linux-unprovable guards remain blocked; B010 tracks platform
 proof. Preserve the private .reclaim.sqlite exclusion file with the authority
 metadata while processes may be active. Store authority metadata on a filesystem
 with reliable SQLite/POSIX locks; do not rely on broken network-filesystem locking.
-Do not treat this source behavior as a
-capability of the currently published v0.6.11 installation.
+Earlier v0.6.11 installations retain conservative guard blocking until upgraded.
 
 Large-repository warm-up completion and deadline tuning remain tracked by
 EB014. A finite refresh failure on a repository that exceeds current bounds is

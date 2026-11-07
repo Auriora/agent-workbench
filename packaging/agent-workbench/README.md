@@ -13,10 +13,10 @@ GitHub Releases carry two application forms: the source-oriented npm tarball
 for all supported platforms and a self-contained Windows x64 ZIP. The package
 name is `@auriora/agent-workbench`; it is not published to the npm registry.
 Installing the tarball builds native modules in place. The latest published
-source-package baseline is `0.6.11`:
+source-package baseline is `0.6.12`:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.11/auriora-agent-workbench-0.6.11.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.12/auriora-agent-workbench-0.6.12.tgz
 ```
 
 Official npm and Windows portable releases include personless aggregate product

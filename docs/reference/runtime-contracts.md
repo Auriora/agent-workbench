@@ -502,7 +502,7 @@ or positive death/absence before using the existing bounded waiter/election.
 
 Stale startup-lock reclamation uses a private guard and exact identity checks.
 A validated live guard yields existing known-busy; malformed, legacy/foreign-scope
-or unverifiable guard evidence remains ambiguous/blocked. In source after v0.6.11,
+or unverifiable guard evidence remains ambiguous/blocked. In v0.6.12,
 new guard owner_scope records a private linux-pid-namespace-v1 fingerprint. Only
 matching kernel boot/PID namespace plus positive owner death authorizes the
 isolated helper's exact dead-guard deletion. Its exit code is bounded recovery
@@ -527,7 +527,7 @@ normal task context. It contains:
 - `controller_generation`
 - `diagnostic_revision`
 - `worker_invocations`, a cumulative count of actual executor.run calls, including
-  synchronous throws. Source after v0.6.11 counts cancelled pre-run attempts as
+  synchronous throws. Version v0.6.12 counts cancelled pre-run attempts as
   zero and advances diagnostic_revision at invocation. Execution/termination
   receipts, rather than this count alone, establish worker-start/safety facts
 - `execution_id`, `started_generation`, `requested_generation`, and

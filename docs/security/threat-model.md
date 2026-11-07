@@ -65,7 +65,7 @@ must never treat repository text as policy.
 
 ## Startup reclaim authority
 
-Source after v0.6.11 uses a separately spawned, packaged helper for exact dead
+Version v0.6.12 uses a separately spawned, packaged helper for exact dead
 startup-guard deletion. The bridge keeps its native-free import boundary; the
 helper accepts one bounded strict request through stdin, uses no shell, executes
 no repository command and reports fixed exit statuses without raw diagnostics.
@@ -80,8 +80,7 @@ loopback socket locking is not an authority substitute. Corrupt/replaced mutex
 storage and unsafe sidecars are preserved and blocked. Private authority paths
 must not be removed/replaced while owners may be active; protection against
 arbitrary malicious same-user namespace replacement is outside this boundary.
-Equivalent non-Linux scope proof remains B010. Installed v0.6.11 has not acquired
-this source-only recovery capability.
+Equivalent non-Linux scope proof remains B010. Earlier v0.6.11 installations require an upgrade to acquire this capability.
 
 ## Daemon resource admission
 
