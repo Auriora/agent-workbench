@@ -4,7 +4,7 @@ doc_type: spec
 artifact_type: verification
 status: active
 owner: platform
-last_reviewed: 2026-11-06
+last_reviewed: 2026-11-07
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -13,9 +13,10 @@ license: GPL-3.0-or-later
 
 ## Evidence Log
 
-B008/B009 source implementation and isolated installed-package acceptance passed.
-No public release or live upgrade was performed. The published v0.6.11 runtime
-is the rollout baseline, not a claim that it contains these source changes.
+B008/B009 source implementation and isolated installed-package acceptance passed
+on 2026-11-06. The separately authorized v0.6.12 publication and live installation
+completed on 2026-11-07; exact evidence appears below. Version v0.6.11 was the
+prior rollout baseline and does not contain these changes.
 
 ## Quality Gates
 
@@ -162,7 +163,7 @@ passed. No native API or runtime behavior was bypassed by that test-only change.
 
 Existing runtime operations, runtime contracts, threat model and install runbook
 describe delivered source, retained storage and installed-release limits. B008
-and B009 are done in source; B010/B011 remain owned follow-ups. The untracked
+and B009 are delivered in v0.6.12; B010/B011 remain owned follow-ups. The untracked
 Spec065 package is unchanged. Spec071 remains active pending a separate closure
 record; no archive or implementation-commit reference is invented.
 
@@ -176,7 +177,51 @@ claim complete cross-PID-namespace daemon ownership support.
 The underlying filesystem must provide reliable SQLite/POSIX locking.
 Private authority storage must be retained while owners may be active; arbitrary
 malicious same-user namespace replacement is outside this boundary. No production
-cache cleanup, new release or live installed upgrade is claimed.
+cache cleanup was performed. The later authorized release/install is recorded below.
+
+## v0.6.12 publication and installation
+
+Implementation commit: cb037b1e377442d750751758a4a3e72bb908962b.
+Release commit/tag: 662263ecaced6ffc8c842d508db9763bbde462bd, v0.6.12.
+[Release workflow 42354547531](https://github.com/Auriora/agent-workbench/actions/runs/42354547531)
+passed package, Windows portable preflight/consumer, GHCR and public-release jobs.
+CI source regression passed 150 files, 1575 tests and one installed-only skip.
+[GitHub release v0.6.12](https://github.com/Auriora/agent-workbench/releases/tag/v0.6.12)
+was published at 2026-11-07T08:22:28Z. The previous public release was v0.6.11
+at 2026-11-06T19:16:39Z.
+
+The downloaded public auriora-agent-workbench-0.6.12.tgz SHA-256 matches GitHub's
+asset digest: a452f344642be89fd89a36b2dc377a98558aa71fdc27712c712bf0453f0bb60c.
+Ordinary npm global installation with CXXFLAGS=-std=c++20 completed without
+peer bypass. Compiled bridge, daemon, recovery helper and runtime receipt bytes
+match the public tarball. Installed receipt SHA-256:
+b6f16e087e5137fcb76e7f3abebdfc5c0ae80155e5469e2bd6904d6e669bef97.
+The runtime-root pointer names the global v0.6.12 package; Codex reports
+agent-workbench@agent-workbench-local v0.6.12 installed/enabled, with its cache
+under ~/.codex/plugins/cache/agent-workbench-local/agent-workbench/0.6.12.
+The supported hook installer merged the package hooks.
+
+All 25 configured-entrypoint cases passed against this actual global installation
+in 50.29s, including compiled recovery and a temporary receipt-whitespace variant.
+The variant was removed after validation. Six native parser routes and SQLite
+loaded successfully. These are real installed MCP sessions, not proof that an
+already-running Codex session has rediscovered the plugin; sessions must restart.
+
+Additional global npm ls checks returned ELSPROBLEMS for the two direct-URL
+grammar dependencies. This global install has no lockfile or retained resolved
+URL metadata; npm Arborist dep-valid.js requires child.resolved to equal the
+requested remote URL. Correct versions/peer ranges and all 27 Ruby/43 TypeScript
+archive members were verified against the sealed published grammar payloads,
+and native load/parse passed. This is not recorded as a clean global npm tree;
+B012 owns diagnosis/reproduction and supported remediation of that diagnostic.
+No metadata edit, forced peer resolution or runtime fallback was introduced.
+The earlier clean isolated npm tree remains a distinct acceptance checkpoint.
+
+Detailed receipts are /tmp/awb-v0.6.12-release-api.json,
+/tmp/awb-v0.6.12-live-install-state.json, /tmp/awb-v0.6.12-plugin-state.json,
+/tmp/awb-v0.6.12-live-installed-tests.log, /tmp/awb-v0.6.12-live-native.log and
+/tmp/awb-v0.6.12-native-provenance.json. Core identities/results are retained here
+because temporary files are not durable evidence storage.
 
 ## Documentation checks
 

@@ -46,6 +46,7 @@ reported incident's root cause.
 | B009 | done | Count refresh executor calls at the actual invocation boundary | P2 | platform | Spec 071 T002/T003 source and isolated-installed gates passed |
 | B010 | accepted | Establish verifiable non-Linux process scope for guard recovery | P2 | platform | Kernel-evidence design before macOS/Windows automatic guard cleanup |
 | B011 | accepted | Exercise real-helper mid-abort at the process boundary | P3 | platform | Additional cancellation fixture; no blocking implementation finding |
+| B012 | accepted | Reconcile global npm direct-URL dependency diagnostics | P3 | platform | Reproduce missing resolution metadata and govern supported validation/remediation |
 
 ## Transport reliability follow-up
 
@@ -115,7 +116,8 @@ reported incident's root cause.
   calls, including synchronous throws, count once; cancelled pre-run attempts
   count zero and diagnostic revision advances. Controller 65 focused tests,
   full 150-file/1575-test regression and 25-case installed entrypoint gate passed.
-  Publication/live upgrade is separate from this source delivery.
+  Published and globally installed as v0.6.12 on 2026-11-07; all 25 installed
+  entrypoint cases passed against the public release payload.
 
 ### B011: Exercise real-helper mid-abort at the process boundary
 
@@ -158,7 +160,27 @@ reported incident's root cause.
   ordinary hard-link election. Real crash/contention/replacement/namespace and
   compiled installed-entrypoint fixtures passed. Legacy/foreign/unavailable
   scope stays blocked; B010 owns non-Linux proof and B011 adds mid-abort evidence.
-  No production guard cleanup or live upgrade was performed.
+  Published and globally installed as v0.6.12 on 2026-11-07; existing sessions
+  must restart. No production guard cleanup was performed.
+
+### B012: Reconcile global npm direct-URL dependency diagnostics
+
+- Signal: ordinary v0.6.12 global installation succeeds, but subsequent local
+  and global npm ls report Ruby/TypeScript direct-URL dependencies invalid.
+  This installation has no lockfile or retained resolved URL; npm's remote
+  dependency validator requires the resolved URL to match the requested URL.
+- Evidence: installed versions/peers are correct; all 27 Ruby and 43 TypeScript
+  archive members match sealed payloads; six native grammar routes, SQLite and
+  25 actual global-installed MCP cases pass. The isolated local npm tree passed
+  earlier; it does not prove this global diagnostic clean.
+- Scope: reproduce with a clean global prefix and supported npm versions,
+  distinguish missing provenance metadata from actual dependency incompatibility,
+  and document or implement the supported upstream/package remedy.
+- Acceptance: fixture-backed global diagnostics/provenance contract; preserve
+  immutable grammar identity and ordinary peer resolution. Do not hand-edit
+  installed metadata, suppress errors or add parser/runtime fallbacks.
+- Owner: platform. Priority: P3. Promotion target: Spec070 install contract
+  follow-up and canonical install runbook after the concrete remedy is established.
 
 ### B007: Resolve npm tree-sitter Ruby peer metadata conflict
 

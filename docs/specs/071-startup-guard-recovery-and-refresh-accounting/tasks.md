@@ -32,5 +32,5 @@ license: GPL-3.0-or-later
   - Requirements: Requirement 3; CP-001 to CP-005.
   - Files: durable operations/contracts/security/runbook/backlog and this package.
   - Acceptance: focused/full/source/isolated-installed gates pass, expert findings resolved, durable promotion and backlog disposition accurate.
-  - Evidence: Final typecheck, 150-file/1575-test source regression (one installed-only skip), 74 daemon-launch tests, build/receipt/plugin/contracts/package gates, ordinary isolated npm/native smoke and actual installed 25/25 entrypoint cases passed. Independent correctness/security reviews cleared final canonical scope fence. Durable docs and B008/B009 disposition reconciled; B010/B011 retained. No publication or live upgrade.
+  - Evidence: Source and isolated-install gates passed. Separately authorized v0.6.12 release at 662263e published 2026-11-07T08:22:28Z via successful workflow 42354547531 (CI: 1575 tests; Windows portable; GHCR). Public tarball digest verified, installed globally, Codex v0.6.12 plugin/hooks refreshed; actual global-installed suite: 25/25 cases; six native parser routes and SQLite passed. Global npm ls URL-resolution diagnostic retained explicitly as B012; no clean global tree claim. See verification.md for immutable identities and limits.
   - Evidence mode: executed
