@@ -500,12 +500,19 @@ or cleanup. No new pre-initialize wire response is added. Failed ready probes
 require a canonical re-read proving exact draining, expected successor progress
 or positive death/absence before using the existing bounded waiter/election.
 
-Stale startup-lock reclamation uses a serialized private guard and exact
-identity checks. A bounded, validated guard with a positively live PID yields known-busy through
-the existing election deadline. A claim disappearing after contention yields no
-owner and the same bounded wait. Dead, malformed or unverifiable guards yield
-ambiguous/blocked; automatic abandoned-guard recovery is not claimed. B008/Spec 065 owns abandoned-guard recovery. Canonical dead-owner
-recovery remains the ordinary election path, with no parallel writer or retry mode.
+Stale startup-lock reclamation uses a private guard and exact identity checks.
+A validated live guard yields existing known-busy; malformed, legacy/foreign-scope
+or unverifiable guard evidence remains ambiguous/blocked. In source after v0.6.11,
+new guard owner_scope records a private linux-pid-namespace-v1 fingerprint. Only
+matching kernel boot/PID namespace plus positive owner death authorizes the
+isolated helper's exact dead-guard deletion. Its exit code is bounded recovery
+status, not startup ownership. Kernel exclusion is a permanent private SQLite
+mutex; bigint device/inode identities cross the process boundary as decimal
+strings. The parent performs one ordinary hard-link election continuation and
+ignores cancelled/late results. Busy exclusion preserves evidence and existing
+deadlines; no recursive guard recovery or alternate writer is introduced.
+Published v0.6.11 retains its earlier conservative guard behavior. B010 owns
+non-Linux scope proof; Spec065 owns broader endpoint/canonical-owner policy.
 
 ## Daemon Health
 
@@ -519,8 +526,10 @@ normal task context. It contains:
 - `connected_clients`
 - `controller_generation`
 - `diagnostic_revision`
-- `worker_invocations`, a cumulative controller count used to prove that a
-  bounded convergence interval launched exactly one worker pass
+- `worker_invocations`, a cumulative count of actual executor.run calls, including
+  synchronous throws. Source after v0.6.11 counts cancelled pre-run attempts as
+  zero and advances diagnostic_revision at invocation. Execution/termination
+  receipts, rather than this count alone, establish worker-start/safety facts
 - `execution_id`, `started_generation`, `requested_generation`, and
   `target_snapshot_id` when an execution exists
 - `visible_snapshot_id` when a published snapshot exists

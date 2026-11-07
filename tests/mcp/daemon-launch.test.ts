@@ -11,6 +11,7 @@ import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { PassThrough } from "node:stream";
 import { EventEmitter } from "node:events";
+import { performance } from "node:perf_hooks";
 import {
   acquireDaemonStartupLock,
   DAEMON_PROTOCOL_VERSION,
@@ -26,6 +27,7 @@ import {
   type StartedAgentWorkbenchDaemon
 } from "../../src/mcp/daemon.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { currentStartupGuardOwnerScope } from "../../src/infrastructure/runtime/startup-guard-scope.js";
 import { createPhase1DaemonLifetimeReproduction } from "../helpers/spec041-refresh-reproductions.js";
 import {
   FileRepositoryOwnershipAdapter,
@@ -2351,7 +2353,123 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
-  it("serializes stale startup-lock reclaim and fails closed on an abandoned guard", () => {
+  it.each(["before acquisition", "after publication"])("fences startup deadline %s without retaining a provisional claim", async (stage) => {
+    const repoRoot = makeRepoRoot("agent-workbench-startup-deadline-fence-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    let starts = 0;
+    const clock = vi.spyOn(performance, "now").mockReturnValue(0);
+    const originalLink = fs.linkSync.bind(fs);
+    const link = vi.spyOn(fs, "linkSync").mockImplementation(((from: fs.PathLike, to: fs.PathLike) => {
+      const result = originalLink(from, to);
+      if (String(to) === paths.startupLockPath && stage === "after publication") clock.mockReturnValue(20);
+      return result;
+    }) as typeof fs.linkSync);
+    if (stage === "before acquisition") clock.mockReturnValueOnce(0).mockReturnValue(20);
+    try {
+      await expect(connectOrStartDaemon({
+        repoRoot, debugRepoRootOverride: false, startTimeoutMs: 10,
+        spawnDaemon: () => { starts += 1; return fakeChildProcess(); }
+      })).rejects.toThrow("Timed out connecting");
+      expect(starts).toBe(0);
+      expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+      expect(fs.existsSync(`${paths.startupLockPath}.reclaim`)).toBe(false);
+    } finally {
+      link.mockRestore();
+      clock.mockRestore();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+      fs.rmSync(paths.ipcDir, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform !== "linux").each(["dead", "missing"])("recovers a scoped dead guard with a %s canonical claim through normal election", async (canonical) => {
+    const repoRoot = makeRepoRoot("agent-workbench-dead-guard-helper-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.mkdirSync(paths.metadataDir, { recursive: true, mode: 0o700 });
+    const scope = currentStartupGuardOwnerScope();
+    expect(scope).toBeDefined();
+    const guardPath = `${paths.startupLockPath}.reclaim`;
+    const stale = { pid: 999999999, token: "dead-canonical", created_at: new Date().toISOString() };
+    if (canonical === "dead") fs.writeFileSync(paths.startupLockPath, `${JSON.stringify(stale)}\n`, { mode: 0o600 });
+    fs.writeFileSync(guardPath, `${JSON.stringify({ ...stale, token: "dead-guard", owner_scope: scope })}\n`, { mode: 0o600 });
+    let claim: Awaited<ReturnType<typeof acquireDaemonStartupLock>> = null;
+    try {
+      claim = await acquireDaemonStartupLock(paths.startupLockPath);
+      expect(claim).not.toBeNull();
+      expect(claim).not.toBe("ambiguous");
+      expect(JSON.parse(fs.readFileSync(paths.startupLockPath, "utf8"))).toMatchObject({ pid: process.pid });
+      expect(fs.existsSync(guardPath)).toBe(false);
+      expect(fs.existsSync(`${guardPath}.sqlite`)).toBe(true);
+    } finally {
+      if (claim !== null && claim !== "ambiguous") claim.release();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.skipIf(process.platform !== "linux").each(["legacy", "foreign-scope"])("preserves a %s hard-link claimant winning the post-helper gap", async (kind) => {
+    const repoRoot = makeRepoRoot("agent-workbench-helper-legacy-gap-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.mkdirSync(paths.metadataDir, { recursive: true, mode: 0o700 });
+    const guardPath = `${paths.startupLockPath}.reclaim`;
+    const stale = { pid: 999999999, token: "dead", created_at: new Date().toISOString() };
+    fs.writeFileSync(paths.startupLockPath, `${JSON.stringify(stale)}\n`, { mode: 0o600 });
+    fs.writeFileSync(guardPath, `${JSON.stringify({ ...stale, owner_scope: currentStartupGuardOwnerScope() })}\n`, { mode: 0o600 });
+    const legacy = {
+      pid: kind === "legacy" ? process.pid : 999999999,
+      token: "gap-winner",
+      created_at: new Date().toISOString(),
+      ...(kind === "foreign-scope" ? { owner_scope: { kind: "linux-pid-namespace-v1", fingerprint: "0".repeat(64) } } : {})
+    };
+    const originalLink = fs.linkSync.bind(fs);
+    let won = false;
+    const publishLegacyClaim = (target: string) => {
+      const candidate = `${target}.legacy-candidate`;
+      fs.writeFileSync(candidate, `${JSON.stringify(legacy)}\n`, { mode: 0o600 });
+      originalLink(candidate, target);
+      fs.unlinkSync(candidate);
+    };
+    const link = vi.spyOn(fs, "linkSync").mockImplementation(((from: fs.PathLike, to: fs.PathLike) => {
+      if (!won && String(to) === paths.startupLockPath && fs.existsSync(`${guardPath}.sqlite`) && !fs.existsSync(guardPath)) {
+        won = true;
+        publishLegacyClaim(guardPath);
+        fs.unlinkSync(paths.startupLockPath);
+        publishLegacyClaim(paths.startupLockPath);
+        fs.unlinkSync(guardPath);
+      }
+      return originalLink(from, to);
+    }) as typeof fs.linkSync);
+    try {
+      expect(await acquireDaemonStartupLock(paths.startupLockPath)).toBe(kind === "legacy" ? null : "ambiguous");
+      expect(won).toBe(true);
+      expect(fs.readFileSync(paths.startupLockPath, "utf8")).toBe(`${JSON.stringify(legacy)}\n`);
+      expect(JSON.parse(fs.readFileSync(paths.startupLockPath, "utf8"))).toEqual(legacy);
+      expect(fs.existsSync(guardPath)).toBe(false);
+    } finally {
+      link.mockRestore();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([undefined, { kind: "linux-pid-namespace-v1", fingerprint: "0".repeat(64) }])(
+    "preserves a dead guard without matching process scope (%j)",
+    async (owner_scope) => {
+      const repoRoot = makeRepoRoot("agent-workbench-unproven-guard-");
+      const paths = daemonPaths(createDaemonIdentity(repoRoot));
+      fs.mkdirSync(paths.metadataDir, { recursive: true, mode: 0o700 });
+      const guardPath = `${paths.startupLockPath}.reclaim`;
+      const bytes = `${JSON.stringify({ pid: 999999999, token: "unproven", created_at: new Date().toISOString(), owner_scope })}\n`;
+      fs.writeFileSync(guardPath, bytes, { mode: 0o600 });
+      try {
+        expect(await acquireDaemonStartupLock(paths.startupLockPath)).toBe("ambiguous");
+        expect(fs.readFileSync(guardPath, "utf8")).toBe(bytes);
+        expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+        expect(fs.existsSync(`${guardPath}.sqlite`)).toBe(false);
+      } finally {
+        fs.rmSync(repoRoot, { recursive: true, force: true });
+      }
+    }
+  );
+
+  it("serializes stale startup-lock reclaim and fails closed on an abandoned guard", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-reclaim-guard-");
     const paths = daemonPaths(createDaemonIdentity(repoRoot));
     fs.mkdirSync(paths.metadataDir, { recursive: true });
@@ -2363,18 +2481,18 @@ describe("Agent Workbench daemon launcher", () => {
       })}\n`);
       fs.writeFileSync(`${paths.startupLockPath}.reclaim`, "abandoned\n");
 
-      expect(acquireDaemonStartupLock(paths.startupLockPath)).toBe("ambiguous");
+      expect(await acquireDaemonStartupLock(paths.startupLockPath)).toBe("ambiguous");
       expect(fs.existsSync(paths.startupLockPath)).toBe(true);
       expect(fs.readFileSync(`${paths.startupLockPath}.reclaim`, "utf8")).toBe("abandoned\n");
       fs.rmSync(paths.startupLockPath);
-      expect(acquireDaemonStartupLock(paths.startupLockPath)).toBe("ambiguous");
+      expect(await acquireDaemonStartupLock(paths.startupLockPath)).toBe("ambiguous");
       expect(fs.existsSync(paths.startupLockPath)).toBe(false);
     } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
   });
 
-  it("reclaims a positively dead startup owner and removes only its guard", () => {
+  it("reclaims a positively dead startup owner and removes only its guard", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-reclaim-dead-");
     const paths = daemonPaths(createDaemonIdentity(repoRoot));
     fs.mkdirSync(paths.metadataDir, { recursive: true });
@@ -2384,7 +2502,7 @@ describe("Agent Workbench daemon launcher", () => {
         created_at: new Date().toISOString(),
         token: "stale-owner"
       })}\n`);
-      const replacement = acquireDaemonStartupLock(paths.startupLockPath);
+      const replacement = await acquireDaemonStartupLock(paths.startupLockPath);
       expect(replacement).not.toBe("ambiguous");
       expect(replacement).not.toBeNull();
       expect(fs.existsSync(`${paths.startupLockPath}.reclaim`)).toBe(false);
@@ -2395,7 +2513,7 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
-  it("treats a live reclaimer as busy without mutating the canonical owner", () => {
+  it("treats a live reclaimer as busy without mutating the canonical owner", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-live-reclaimer-");
     const paths = daemonPaths(createDaemonIdentity(repoRoot));
     fs.mkdirSync(paths.metadataDir, { recursive: true });
@@ -2409,7 +2527,7 @@ describe("Agent Workbench daemon launcher", () => {
       })}\n`);
       const before = fs.readFileSync(paths.startupLockPath, "utf8");
       guard = createDaemonStartupLock(guardPath);
-      expect(acquireDaemonStartupLock(paths.startupLockPath)).toBeNull();
+      expect(await acquireDaemonStartupLock(paths.startupLockPath)).toBeNull();
       expect(fs.readFileSync(paths.startupLockPath, "utf8")).toBe(before);
     } finally {
       guard?.release();
@@ -2417,7 +2535,7 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
-  it("releases its fresh canonical claim when a live reclaim guard is observed", () => {
+  it("releases its fresh canonical claim when a live reclaim guard is observed", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-live-guard-fastpath-");
     const paths = daemonPaths(createDaemonIdentity(repoRoot));
     fs.mkdirSync(paths.metadataDir, { recursive: true });
@@ -2425,7 +2543,7 @@ describe("Agent Workbench daemon launcher", () => {
     let guard: { release: () => void } | undefined;
     try {
       guard = createDaemonStartupLock(guardPath);
-      expect(acquireDaemonStartupLock(paths.startupLockPath)).toBeNull();
+      expect(await acquireDaemonStartupLock(paths.startupLockPath)).toBeNull();
       expect(fs.existsSync(paths.startupLockPath)).toBe(false);
       expect(fs.existsSync(guardPath)).toBe(true);
     } finally {
@@ -2434,7 +2552,7 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
-  it("treats a canonical owner disappearing during guarded inspection as election progress", () => {
+  it("treats a canonical owner disappearing during guarded inspection as election progress", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-owner-gap-");
     const paths = daemonPaths(createDaemonIdentity(repoRoot));
     fs.mkdirSync(paths.metadataDir, { recursive: true });
@@ -2447,7 +2565,7 @@ describe("Agent Workbench daemon launcher", () => {
       return result;
     }) as typeof fs.linkSync);
     try {
-      expect(acquireDaemonStartupLock(paths.startupLockPath)).toBeNull();
+      expect(await acquireDaemonStartupLock(paths.startupLockPath)).toBeNull();
       expect(fs.existsSync(paths.startupLockPath)).toBe(false);
       expect(fs.existsSync(guardPath)).toBe(false);
     } finally {
@@ -2457,7 +2575,7 @@ describe("Agent Workbench daemon launcher", () => {
     }
   });
 
-  it("keeps a fresh contender that wins the reclaim unlink/create gap", () => {
+  it("keeps a fresh contender that wins the reclaim unlink/create gap", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-startup-reclaim-gap-");
     const paths = daemonPaths(createDaemonIdentity(repoRoot));
     fs.mkdirSync(paths.metadataDir, { recursive: true });
@@ -2478,7 +2596,7 @@ describe("Agent Workbench daemon launcher", () => {
         created_at: new Date().toISOString(),
         token: "stale-owner"
       })}\n`);
-      expect(acquireDaemonStartupLock(paths.startupLockPath)).toBeNull();
+      expect(await acquireDaemonStartupLock(paths.startupLockPath)).toBeNull();
       expect(JSON.parse(fs.readFileSync(paths.startupLockPath, "utf8"))).toMatchObject({
         pid: process.pid
       });

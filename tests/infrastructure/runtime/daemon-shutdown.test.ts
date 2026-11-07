@@ -15,7 +15,7 @@ function options(overrides: Partial<DaemonShutdownCoordinatorOptions> = {}) {
   const receipts: DaemonShutdownReceipt[] = [];
   let released = false;
   const base = {
-    acquire_startup_exclusion: () => ({ release: () => { released = true; events.push("release"); } }),
+    acquire_startup_exclusion: async () => ({ release: () => { released = true; events.push("release"); } }),
     stop_admission: () => events.push("admission"),
     stop_triggers: () => events.push("triggers"),
     publish_draining: () => events.push("draining"),
@@ -65,7 +65,7 @@ describe("DaemonShutdownCoordinator", () => {
   });
 
   it("blocks on unavailable startup exclusion without destructive cleanup", async () => {
-    const state = options({ acquire_startup_exclusion: () => null });
+    const state = options({ acquire_startup_exclusion: async () => null });
     const receipt = await state.coordinator.close();
 
     expect(receipt).toMatchObject({
@@ -89,6 +89,31 @@ describe("DaemonShutdownCoordinator", () => {
       "admission", "triggers", "controller", "draining", "sockets", "startup", "clients"
     ]);
     expect(state.released).toBe(false);
+  });
+
+  it("includes asynchronous exclusion in the same deadline and fences late acquisition", async () => {
+    let acquired!: (value: { release(): void }) => void;
+    let signal!: AbortSignal;
+    let lateRelease = false;
+    const state = options({
+      budget_ms: 20,
+      acquire_startup_exclusion: (input) => {
+        signal = input;
+        return new Promise((resolve) => { acquired = resolve; });
+      }
+    });
+    const closing = state.coordinator.close();
+    expect(state.events).toEqual(["admission", "triggers", "controller", "draining", "sockets"]);
+    expect(signal.aborted).toBe(false);
+
+    await expect(closing).resolves.toMatchObject({ state: "blocked", phase: "admission", cause: "deadline" });
+    expect(signal.aborted).toBe(true);
+    acquired({ release: () => { lateRelease = true; } });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(lateRelease).toBe(false);
+    expect(state.events).toEqual(["admission", "triggers", "controller", "draining", "sockets"]);
+    expect(state.coordinator.close()).toBe(closing);
   });
 
   it("records refresh failure and does not release the startup exclusion", async () => {

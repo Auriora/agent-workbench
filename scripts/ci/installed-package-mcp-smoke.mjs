@@ -153,12 +153,6 @@ async function runSmoke() {
     pluginVersion: installedManifest.version,
     startupRefreshDelayMs: 0
   }));
-  const claude = trackSession(startInstalledSession({
-    binPath: installedBin,
-    provider: "claude_code",
-    pluginVersion: installedManifest.version,
-    startupRefreshDelayMs: 60_000
-  }));
   currentPhase = "sessions_init";
   if (injectedFailure === "post-initialize-pre-health") {
     await initializeSession(codex, "codex");
@@ -172,6 +166,12 @@ async function runSmoke() {
     provider: "codex",
     expectedVersion: installedManifest.version
   });
+  const claude = trackSession(startInstalledSession({
+    binPath: installedBin,
+    provider: "claude_code",
+    pluginVersion: installedManifest.version,
+    startupRefreshDelayMs: 60_000
+  }));
   const claudeBaseline = await initializeAndProbeSession({
     session: claude,
     provider: "claude_code",

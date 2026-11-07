@@ -27,6 +27,11 @@ export const RUNTIME_BUILD_ENTRYPOINTS = {
     source: "src/mcp/daemon-main.ts",
     output: path.join(RUNTIME_BUILD_OUTPUT_DIR, "mcp", "daemon-entrypoint.mjs")
   },
+  startupGuardRecovery: {
+    name: "mcp/startup-guard-recovery-entrypoint",
+    source: "src/infrastructure/runtime/startup-guard-recovery-main.ts",
+    output: path.join(RUNTIME_BUILD_OUTPUT_DIR, "mcp", "startup-guard-recovery-entrypoint.mjs")
+  },
   worker: {
     name: "workers/startup-graph-warmup-worker-entrypoint",
     source: "src/infrastructure/workers/startup-graph-warmup-worker.ts",

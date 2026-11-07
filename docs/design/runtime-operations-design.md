@@ -482,11 +482,38 @@ SIGTERM or idle close records safe evidence and exits nonzero. Retained canonica
 owner state is recoverable only after positive process death through the existing
 election, without another writer, timeout extension or retry path.
 
-Stale startup-lock reclamation is serialized by a private .reclaim claim and exact
-file/PID/token validation. Live reclamation claims report known contention;
-abandoned or unverifiable claims deliberately block. A crash inside reclamation
-can therefore leave an ambiguous guard. B008/Spec 065 owns a
-future safe recovery policy for that boundary. Endpoint relocation is unchanged.
+Stale startup-lock reclamation retains private .reclaim claims and exact
+file/PID/token validation. Source behavior after v0.6.11 additionally records a
+Linux boot/PID-namespace scope fingerprint in new claims. An exact same-scope
+guard with a positively dead owner can be removed by an isolated recovery helper;
+legacy, foreign or unverifiable scope remains ambiguous. B010 owns equivalent
+non-Linux process-scope proof. This availability improvement is not yet part of
+the published v0.6.11 payload.
+
+Only dead-guard deletion is serialized under a zero-wait SQLite exclusive
+transaction in a separate process; native SQLite never loads in the stdio bridge.
+The helper compares the caller-observed bigint device/inode, PID, timestamp,
+token and scope immediately before unlink. Missing means already recovered;
+replacement never retargets the request. Its permanent .reclaim.sqlite mutex
+storage stays private and retained; unsafe/corrupt/replaced storage blocks.
+Authority storage requires a filesystem with reliable SQLite/POSIX locking;
+broken or unsupported network-filesystem locking is outside this safety proof.
+A helper crash releases kernel exclusion and leaves the original guard or
+absence. The parent obtains no authority from its exit code: it makes one normal
+hard-link startup election attempt and preserves any winner in that gap.
+
+Canonical startup claims that explicitly name foreign or unavailable process
+scope remain ambiguous before PID probing and stale deletion. Scope-absent
+canonical claims retain their established policy; Spec065 owns that broader
+migration. This slice does not establish complete cross-PID-namespace daemon
+ownership support.
+
+The original startup/shutdown deadline covers asynchronous recovery. Late helper
+results cannot resume election; no timeout signal is sent to the helper. A
+launcher discards/releases its own unusable provisional claim after its deadline.
+A blocked daemon shutdown retains acquired canonical exclusion until positive
+process death, preserving the existing worker/publication fence. Endpoint
+relocation and broader canonical-owner migration remain Spec065.
 
 Before closing sockets, the exact owner atomically publishes canonical draining
 metadata after requesting authority shutdown and fencing admission. A live draining

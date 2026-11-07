@@ -52,6 +52,7 @@ export const RUNTIME_BUILD_RECEIPT_PATH: string;
 export const RUNTIME_BUILD_ENTRYPOINTS: {
   stdio: RuntimeBuildEntrypoint;
   daemon: RuntimeBuildEntrypoint;
+  startupGuardRecovery: RuntimeBuildEntrypoint;
   worker: RuntimeBuildEntrypoint;
 };
 export const BUILD_OPTIONS: RuntimeBuildContract["buildOptions"];

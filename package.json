@@ -46,6 +46,7 @@
     "src",
     "dist/mcp/stdio-entrypoint.mjs",
     "dist/mcp/daemon-entrypoint.mjs",
+    "dist/mcp/startup-guard-recovery-entrypoint.mjs",
     "dist/mcp/runtime-build-receipt.json",
     "dist/workers/startup-graph-warmup-worker-entrypoint.mjs",
     "tsconfig.json",

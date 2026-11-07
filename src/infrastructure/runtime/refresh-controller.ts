@@ -398,7 +398,6 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
         if (current?.execution_id !== executionId || this.shutdownRequested) return undefined;
         current.state = "running";
         this.executionState = "running";
-        this.workerInvocations += 1;
         this.bumpDiagnosticRevision();
         this.currentPassExecutionId = executionId;
         this.currentPassCancelled = false;
@@ -724,6 +723,8 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
             this.bumpDiagnosticRevision();
           }
         };
+        this.workerInvocations += 1;
+        this.bumpDiagnosticRevision();
         workerRun = this.executor.run(runInput);
       } catch {
         if (claim()) {

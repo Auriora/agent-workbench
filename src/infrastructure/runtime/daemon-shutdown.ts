@@ -17,7 +17,8 @@ type ControllerReceipt = {
 };
 
 export type DaemonShutdownCoordinatorOptions = {
-  acquire_startup_exclusion: () => StartupExclusion | "ambiguous" | null;
+  /** Abort fences pending recovery; an acquired lease remains held until release or process death. */
+  acquire_startup_exclusion: (signal: AbortSignal) => Promise<StartupExclusion | "ambiguous" | null>;
   stop_admission: () => void;
   stop_triggers: () => void;
   publish_draining: () => void;
@@ -50,6 +51,7 @@ export class DaemonShutdownCoordinator {
   private deadlineTimer: ReturnType<typeof setTimeout> | undefined;
   private deadlineReached = false;
   private deadlinePromise: Promise<never> | undefined;
+  private readonly exclusionAbort = new AbortController();
 
   public constructor(options: DaemonShutdownCoordinatorOptions) {
     this.options = options;
@@ -70,6 +72,7 @@ export class DaemonShutdownCoordinator {
     this.deadlinePromise = new Promise<never>((_, reject) => {
       this.deadlineTimer = setTimeout(() => {
         this.deadlineReached = true;
+        this.exclusionAbort.abort();
         reject(new ShutdownDeadlineError());
       }, this.budgetMs);
     });
@@ -115,13 +118,18 @@ export class DaemonShutdownCoordinator {
 
     let exclusion: StartupExclusion;
     try {
-      const acquired = this.options.acquire_startup_exclusion();
+      this.assertActive();
+      const acquisition = this.options.acquire_startup_exclusion(this.exclusionAbort.signal);
+      void acquisition.catch(() => undefined);
+      const acquired = await Promise.race([acquisition, this.deadlinePromise]);
+      this.assertActive();
       if (acquired === null || acquired === "ambiguous") {
         return this.blocked("admission", "startup_exclusion_unavailable");
       }
       exclusion = acquired;
-    } catch {
-      return this.blocked("admission", "startup_exclusion_unavailable");
+    } catch (error) {
+      return this.blocked("admission", error instanceof ShutdownDeadlineError
+        ? "deadline" : "startup_exclusion_unavailable");
     }
 
     if (this.deadlineReached || performance.now() >= this.deadline) {
@@ -162,6 +170,7 @@ export class DaemonShutdownCoordinator {
     const settled = this.receipt("settled", "complete", "complete");
     this.observe(settled);
     this.active = false;
+    this.exclusionAbort.abort();
     return settled;
   }
 
@@ -206,6 +215,7 @@ export class DaemonShutdownCoordinator {
     cause: Extract<DaemonShutdownReceipt["cause"], "deadline" | "startup_exclusion_unavailable" | "refresh_unconfirmed" | "cleanup_failed">
   ): DaemonShutdownReceipt {
     this.active = false;
+    this.exclusionAbort.abort();
     this.clearDeadlineTimer();
     const blocked = this.receipt("blocked", phase, cause);
     this.observe(blocked);

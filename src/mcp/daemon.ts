@@ -606,7 +606,7 @@ export async function startAgentWorkbenchDaemon(input: {
   }
 
   shutdownCoordinator = new DaemonShutdownCoordinator({
-    acquire_startup_exclusion: () => acquireDaemonStartupLock(paths.startupLockPath),
+    acquire_startup_exclusion: (signal) => acquireDaemonStartupLock(paths.startupLockPath, { signal }),
     stop_admission: () => {
       shuttingDown = true;
     },

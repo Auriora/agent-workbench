@@ -7,6 +7,8 @@ import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createDaemonIdentity,
@@ -52,6 +54,50 @@ afterEach(async () => {
 });
 
 describe("daemon-backed stdio entrypoint integration", () => {
+  it.skipIf(process.platform !== "linux")("recovers a guard left by an exited process through the configured package entrypoint", async () => {
+    const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-reclaim-recovery-");
+    const paths = daemonPaths(createDaemonIdentity(repoRoot));
+    fs.mkdirSync(paths.metadataDir, { recursive: true, mode: 0o700 });
+    const guardPath = `${paths.startupLockPath}.reclaim`;
+    const owner = spawn(process.execPath, [path.resolve("tests/fixtures/startup-guard/owner.mjs"), guardPath], {
+      stdio: ["ignore", "pipe", "ignore"]
+    });
+    const ownerClosed = once(owner, "close");
+    void ownerClosed.catch(() => undefined);
+    try {
+      await new Promise<void>((resolve, reject) => {
+        let output = "";
+        owner.once("error", reject);
+        owner.once("exit", () => reject(new Error("guard owner exited before readiness")));
+        owner.stdout.on("data", (chunk: Buffer) => {
+          output += chunk.toString("utf8");
+          if (output.length > 64) reject(new Error("unexpected guard fixture output"));
+          if (output === "guard-ready\n") resolve();
+        });
+      });
+      const guard = JSON.parse(fs.readFileSync(guardPath, "utf8"));
+      expect(guard.pid).toBe(owner.pid);
+      expect(guard.owner_scope.kind).toBe("linux-pid-namespace-v1");
+      expect(fs.existsSync(paths.startupLockPath)).toBe(false);
+      owner.kill("SIGKILL");
+      await ownerClosed;
+      const session = trackSession(await startEntryPointSession(repoRoot));
+      if (process.env.AGENT_WORKBENCH_TEST_INSTALLED_ENTRYPOINT !== undefined) expect(session.entrypointKind).toBe("installed");
+      await initializeSession(session);
+      const health = parseEnvelope(await session.call("resources/read", { uri: "integration:///health/agent-workbench" })) as {
+        data: { daemon?: { pid: number; repo_root: string } };
+      };
+      expect(health.data.daemon?.pid).toBeGreaterThan(0);
+      expect(health.data.daemon?.repo_root).toBe(repoRoot);
+      expect(fs.existsSync(guardPath)).toBe(false);
+      expect(fs.existsSync(`${guardPath}.sqlite`)).toBe(true);
+      expect(session.stderr()).toBe("");
+    } finally {
+      if (owner.exitCode === null && owner.signalCode === null) owner.kill("SIGKILL");
+      await ownerClosed;
+    }
+  }, 30_000);
+
   it("starts through the configured entrypoint and reports daemon health without expanding normal status", async () => {
     const repoRoot = createCleanFixtureCopy("agent-workbench-entrypoint-status-");
     const session = trackSession(await startEntryPointSession(repoRoot));

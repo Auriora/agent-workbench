@@ -110,7 +110,9 @@ describe("stdio bridge runtime import boundary", () => {
       ) {
         return true;
       }
-      return resolved === "src/mcp/daemon.ts" ||
+      return resolved === "src/infrastructure/runtime/startup-guard-recovery-main.ts" ||
+        resolved === "src/infrastructure/runtime/startup-guard-recovery.ts" ||
+        resolved === "src/mcp/daemon.ts" ||
         resolved === "src/server.ts" ||
         resolved?.startsWith("src/infrastructure/sqlite/") === true ||
         resolved?.startsWith("src/infrastructure/tree-sitter/") === true ||

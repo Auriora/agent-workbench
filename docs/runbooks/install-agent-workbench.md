@@ -285,15 +285,25 @@ execution:
   publication target invisible; a failure before build creation can have no
   publication state. One later ordinary stale read may request one successor;
   failure callbacks and health reads do not retry automatically.
-- `worker_invocations` is a cumulative controller count. It can demonstrate
-  that a bounded convergence interval used one worker pass, but it is not a
-  general performance metric.
+- `worker_invocations` is a cumulative controller diagnostic. Source after
+  v0.6.11 counts actual executor.run calls, including synchronous throws, and
+  excludes cancellation before invocation. Use execution/termination receipts
+  to establish whether a worker started or safely stopped.
 
 If another client disconnects while refresh is active, leave the daemon to
 finish. Do not remove the graph database, WAL/SHM files, socket, metadata, or
 ownership records. A replacement daemon recovers an orphaned build only after
 positive evidence that the previous owner is dead; ambiguous ownership returns
 a structured blocked result and requires investigation, not manual cleanup.
+
+Unreleased source can recover a new Linux .reclaim guard only with matching
+kernel boot/PID scope, exact file identity and positive owner death. Legacy,
+foreign-scope and non-Linux-unprovable guards remain blocked; B010 tracks platform
+proof. Preserve the private .reclaim.sqlite exclusion file with the authority
+metadata while processes may be active. Store authority metadata on a filesystem
+with reliable SQLite/POSIX locks; do not rely on broken network-filesystem locking.
+Do not treat this source behavior as a
+capability of the currently published v0.6.11 installation.
 
 Large-repository warm-up completion and deadline tuning remain tracked by
 EB014. A finite refresh failure on a repository that exceeds current bounds is

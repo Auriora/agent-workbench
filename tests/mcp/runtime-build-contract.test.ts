@@ -30,6 +30,7 @@ function withRuntimeBuildFixture<T>(callback: (root: string) => T): T {
   try {
     fs.mkdirSync(path.join(root, "src", "mcp"), { recursive: true });
     fs.mkdirSync(path.join(root, "src", "infrastructure", "workers"), { recursive: true });
+    fs.mkdirSync(path.join(root, "src", "infrastructure", "runtime"), { recursive: true });
     fs.mkdirSync(path.join(root, "scripts"), { recursive: true });
     fs.mkdirSync(path.join(root, "node_modules", "esbuild"), { recursive: true });
 
@@ -64,6 +65,10 @@ function withRuntimeBuildFixture<T>(callback: (root: string) => T): T {
 
     fs.writeFileSync(path.join(root, "src", "mcp", "stdio.ts"), `console.log("fixture stdio");\n`);
     fs.writeFileSync(path.join(root, "src", "mcp", "daemon-main.ts"), `console.log("fixture daemon main");\n`);
+    fs.writeFileSync(
+      path.join(root, "src", "infrastructure", "runtime", "startup-guard-recovery-main.ts"),
+      `console.log("fixture isolated startup guard helper");\n`
+    );
     fs.writeFileSync(
       path.join(root, "src", "infrastructure", "workers", "startup-graph-warmup-worker.ts"),
       `console.log("fixture graph worker");\n`
@@ -121,6 +126,7 @@ describe("runtime build contract", () => {
       expect(contract.buildOptions.outExtension).toEqual({ ".js": ".mjs" });
       expect(contract.entrypoints.map((entry) => entry.name).sort()).toEqual([
         "mcp/daemon-entrypoint",
+        "mcp/startup-guard-recovery-entrypoint",
         "mcp/stdio-entrypoint",
         "workers/startup-graph-warmup-worker-entrypoint"
       ]);
@@ -133,6 +139,7 @@ describe("runtime build contract", () => {
       expect(sourcePaths.has("scripts/runtime-build-contract.mjs")).toBe(true);
       expect(sourcePaths.has(normalizePath(path.join("src", "mcp", "stdio.ts")))).toBe(true);
       expect(sourcePaths.has(normalizePath(path.join("src", "mcp", "daemon-main.ts")))).toBe(true);
+      expect(sourcePaths.has("src/infrastructure/runtime/startup-guard-recovery-main.ts")).toBe(true);
       expect(
         sourcePaths.has(
           normalizePath(path.join("src", "infrastructure", "workers", "startup-graph-warmup-worker.ts"))
@@ -191,6 +198,9 @@ describe("runtime build contract", () => {
       expect(fs.existsSync(receiptPath)).toBe(true);
       expect(
         fs.existsSync(path.join(root, RUNTIME_BUILD_ENTRYPOINTS.worker.output))
+      ).toBe(true);
+      expect(
+        fs.existsSync(path.join(root, RUNTIME_BUILD_ENTRYPOINTS.startupGuardRecovery.output))
       ).toBe(true);
       expect(() => validateRuntimeBuildReceipt(root)).not.toThrow();
 

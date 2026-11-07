@@ -42,8 +42,10 @@ reported incident's root cause.
 | B005 | done | Settle and clean backpressured socket sends | P1 | platform | Spec 066 T002 |
 | B006 | done | Bound aggregate daemon session and request resources | P1 | platform | [Spec 069](../specs/069-daemon-admission-budgets/requirements.md); source gates passed |
 | B007 | done | Resolve npm tree-sitter Ruby peer metadata conflict | P1 | platform | [Spec 070](../specs/070-npm-native-grammar-install-contract/requirements.md); ordinary npm/native gates passed |
-| B008 | accepted | Define safe abandoned startup-reclaim guard recovery | P1 | platform | Spec 065 cleanup authority; conservative blocked state until designed |
-| B009 | accepted | Count refresh executor calls at the actual invocation boundary | P2 | platform | Coordinate with B006 admission/diagnostic instrumentation |
+| B008 | done | Define safe abandoned startup-reclaim guard recovery | P1 | platform | [Spec 071](../specs/071-startup-guard-recovery-and-refresh-accounting/requirements.md); scoped Linux recovery verified |
+| B009 | done | Count refresh executor calls at the actual invocation boundary | P2 | platform | Spec 071 T002/T003 source and isolated-installed gates passed |
+| B010 | accepted | Establish verifiable non-Linux process scope for guard recovery | P2 | platform | Kernel-evidence design before macOS/Windows automatic guard cleanup |
+| B011 | accepted | Exercise real-helper mid-abort at the process boundary | P3 | platform | Additional cancellation fixture; no blocking implementation finding |
 
 ## Transport reliability follow-up
 
@@ -95,7 +97,8 @@ reported incident's root cause.
   plus all 23 isolated installed-entrypoint cases. Owner: platform. B001 is
   committed as 84ea8ca; B002 source delivery is verified. D002 adds canonical draining
   to eliminate observed handoff ambiguity; Spec 065 location/migration stays separate.
-  B007-B009 retain explicit packaging, guard-recovery and diagnostic limits.
+  At that delivery checkpoint B007-B009 retained packaging, guard-recovery and
+  diagnostic follow-ups; their later dispositions are recorded below.
 
 ### B009: Count refresh executor calls at the invocation boundary
 
@@ -108,6 +111,35 @@ reported incident's root cause.
 - Owner: platform. Priority: P2. Coordinate with B006 admission instrumentation.
   B002's worker-safety proof uses exact executor/termination identities and real
   child barriers rather than treating this counter alone as launch evidence.
+- Disposition: done in source through Spec071 T002/T003. Actual executor.run
+  calls, including synchronous throws, count once; cancelled pre-run attempts
+  count zero and diagnostic revision advances. Controller 65 focused tests,
+  full 150-file/1575-test regression and 25-case installed entrypoint gate passed.
+  Publication/live upgrade is separate from this source delivery.
+
+### B011: Exercise real-helper mid-abort at the process boundary
+
+- Signal: independent security review requested additional real-process
+  cancellation evidence beyond the current client/coordinator fences.
+- Scope: pause an isolated real helper after spawn, cancel its parent wait,
+  permit late exact-old-guard deletion, and prove no signal or parent election.
+- Acceptance: deterministic owned-process barrier fixture; no runtime retry,
+  mode switch or timeout increase; clean process/resource teardown.
+- Owner: platform. Priority: P3. Existing static review and deadline/client tests
+  have no implementation blocker; this is additional evidence hardening.
+
+### B010: Establish verifiable non-Linux process scope for guard recovery
+
+- Signal: PID absence is meaningful only within the guard creator's process
+  authority scope. Linux can prove matching boot/PID namespace; portable Node
+  APIs do not establish equivalent macOS/Windows kernel scope.
+- Scope: govern verifiable same-kernel/process-scope evidence for automatic dead
+  guard cleanup on those platforms; no hostname guesses or command fallbacks.
+- Acceptance: prove same/foreign/reboot/legacy scope and cross-host/container
+  cases with real supported-platform fixtures. Retain ambiguous handling when
+  kernel evidence is insufficient.
+- Owner: platform. Priority: P2. Spec071 delivers the Linux proof boundary;
+  legacy/unverifiable guards remain blocked on every platform.
 
 ### B008: Define safe abandoned startup-reclaim guard recovery
 
@@ -121,6 +153,12 @@ reported incident's root cause.
   explicit blocked result when ownership or kernel/file identity is insufficient.
 - Owner: platform. Priority: P1. Target: Spec 065 cleanup authority. No automatic
   mid-reclamation crash recovery or installed-host remediation is claimed by B002.
+- Disposition: done in source through Spec071 T001/T003. New same-scope Linux
+  guards recover through an isolated exact-delete SQLite helper, followed by
+  ordinary hard-link election. Real crash/contention/replacement/namespace and
+  compiled installed-entrypoint fixtures passed. Legacy/foreign/unavailable
+  scope stays blocked; B010 owns non-Linux proof and B011 adds mid-abort evidence.
+  No production guard cleanup or live upgrade was performed.
 
 ### B007: Resolve npm tree-sitter Ruby peer metadata conflict
 
@@ -2722,9 +2760,9 @@ Do not promote an item when:
   and Spec 069/B006 aggregate admission are verified in source. Spec 068 also
   passed its isolated installed gate. Spec070/B007 ordinary npm and native gates
   and v0.6.11 platform, publication and live installation are verified through
-  Spec070 T002/T003. B008 remains with Spec 065 cleanup
-  authority and B009 with diagnostic counters. Spec 065 retains endpoint location
-  and cleanup ownership.
+  Spec070 T002/T003. Spec071/B008/B009 source and isolated installed gates are
+  verified. B010 retains non-Linux kernel-scope proof and B011 extra process-abort
+  evidence. Spec065 retains broader endpoint location/migration and cleanup policy.
 
 - EB065/Spec 053 is delivered with exact population accounting, bounded public
   presentation, and five-gate regression evidence.

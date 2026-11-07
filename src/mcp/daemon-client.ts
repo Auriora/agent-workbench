@@ -19,6 +19,12 @@ import type {
 } from "../contracts/daemon-lifecycle-contracts.js";
 import { GRAPH_STORE_IDENTITY_VERSION } from "../contracts/graph-store-identity-contracts.js";
 import {
+  startupGuardOwnerScopeSchema,
+  type StartupGuardOwnerScope
+} from "../contracts/startup-guard-recovery-contracts.js";
+import { currentStartupGuardOwnerScope } from "../infrastructure/runtime/startup-guard-scope.js";
+import { recoverStartupGuardViaHelper } from "../infrastructure/runtime/startup-guard-recovery-client.js";
+import {
   AGENT_WORKBENCH_RUNTIME_BUILD_FINGERPRINT,
   AGENT_WORKBENCH_RUNTIME_VERSION
 } from "../runtime/version.js";
@@ -348,7 +354,23 @@ export async function connectOrStartDaemon(
       throw new Error(`Agent Workbench daemon is ${state.state}: ${state.reason}.`);
     }
     if (state.state === "absent" || state.state === "stale" || state.state === "mismatched") {
-      const startupLockAdmission = acquireDaemonStartupLock(paths.startupLockPath);
+      const acquisitionAbort = new AbortController();
+      const acquisitionRemainingMs = deadlineMs - performance.now();
+      if (acquisitionRemainingMs <= 0) acquisitionAbort.abort();
+      const acquisitionTimer = acquisitionAbort.signal.aborted ? undefined
+        : setTimeout(() => acquisitionAbort.abort(), acquisitionRemainingMs);
+      let startupLockAdmission: Awaited<ReturnType<typeof acquireDaemonStartupLock>>;
+      try {
+        startupLockAdmission = await acquireDaemonStartupLock(paths.startupLockPath, { signal: acquisitionAbort.signal });
+      } finally {
+        clearTimeout(acquisitionTimer);
+      }
+      if (acquisitionAbort.signal.aborted || performance.now() >= deadlineMs) {
+        // No daemon has been spawned by this attempt: release only our own
+        // provisional claim before reporting the unchanged startup deadline.
+        if (startupLockAdmission !== null && startupLockAdmission !== "ambiguous") startupLockAdmission.release();
+        throw new Error("Timed out connecting to Agent Workbench daemon during startup exclusion.");
+      }
       if (startupLockAdmission === "ambiguous") {
         throw new Error("Agent Workbench daemon is blocked: ambiguous startup ownership.");
       }
@@ -1302,75 +1324,83 @@ function ensurePrivateDirectory(directory: string): void {
   }
 }
 
-export function acquireDaemonStartupLock(
-  lockPath: string
-): { release: () => void } | "ambiguous" | null {
+export async function acquireDaemonStartupLock(
+  lockPath: string,
+  options: { signal?: AbortSignal } = {}
+): Promise<{ release: () => void } | "ambiguous" | null> {
+  if (options.signal?.aborted) return "ambiguous";
   const reclaimGuardPath = `${lockPath}.reclaim`;
-  // Preserve the uncontended fast path: the canonical claim remains one
-  // atomic hard-link publication and does not need the reclaim guard.
-  try {
-    const fresh = createDaemonStartupLock(lockPath);
-    // A reclaimer may have died after unlinking the canonical lock. Do not
-    // convert that abandoned guard into a fresh owner through the fast path.
-    if (pathExists(reclaimGuardPath)) {
-      fresh.release();
-      const guardState = classifyReclaimGuard(reclaimGuardPath);
-      return guardState === "live" || guardState === "missing" ? null : "ambiguous";
-    }
-    return fresh;
-  } catch (error) {
-    if (!isFileExistsError(error)) {
-      throw error;
-    }
-  }
+  const fresh = attemptFreshDaemonStartupClaim(lockPath, reclaimGuardPath);
+  if (typeof fresh === "object") return fresh;
 
-  // A reclaim guard is an explicit in-progress/abandoned authority marker.
-  // Never infer that its owner is dead: an interrupted reclaimer must remain
-  // blocked until an operator removes the guard under the future authority
-  // policy. Acquiring it precedes stale probing so reclaimers serialize.
   let reclaimGuard: { release: () => void };
   try {
     reclaimGuard = createDaemonStartupLock(reclaimGuardPath);
   } catch (error) {
-    if (isFileExistsError(error)) {
-      const guardState = classifyReclaimGuard(reclaimGuardPath);
-      return guardState === "live" || guardState === "missing" ? null : "ambiguous";
+    if (!isFileExistsError(error)) throw error;
+    const observed = readDaemonStartupLockSnapshot(reclaimGuardPath);
+    if (observed === undefined) return null;
+    if (observed === "ambiguous") return "ambiguous";
+    const scope = currentStartupGuardOwnerScope();
+    if (observed.payload.owner_scope !== undefined && (
+      scope === undefined || observed.payload.owner_scope.kind !== scope.kind ||
+      observed.payload.owner_scope.fingerprint !== scope.fingerprint
+    )) return "ambiguous";
+    const processState = isProcessAlive(observed.payload.pid);
+    if (processState === true) return null;
+    if (
+      processState !== false || scope === undefined ||
+      observed.payload.owner_scope?.kind !== scope.kind ||
+      observed.payload.owner_scope.fingerprint !== scope.fingerprint
+    ) return "ambiguous";
+
+    const outcome = await recoverStartupGuardViaHelper(
+      fileURLToPath(new URL("./startup-guard-recovery-entrypoint.mjs", import.meta.url)),
+      { guard_path: reclaimGuardPath, expected: { ...observed.stat, ...observed.payload } },
+      options.signal
+    );
+    if (options.signal?.aborted) return "ambiguous";
+    if (outcome === "native_module_rebuild_required") throw nativeModuleStartupFailure();
+    if (outcome === "busy") return null;
+    if (outcome !== "recovered" && outcome !== "already_recovered") return "ambiguous";
+
+    // A single continuation of normal hard-link election. Helper success grants
+    // no ownership, and a replacement guard is never targeted for recovery here.
+    const continued = attemptFreshDaemonStartupClaim(lockPath, reclaimGuardPath);
+    if (typeof continued === "object") return continued;
+    if (continued === "guard_present") {
+      const state = classifyReclaimGuard(reclaimGuardPath);
+      return state === "live" || state === "missing" ? null : "ambiguous";
     }
-    throw error;
+    try {
+      reclaimGuard = createDaemonStartupLock(reclaimGuardPath);
+    } catch (claimError) {
+      if (!isFileExistsError(claimError)) throw claimError;
+      const state = classifyReclaimGuard(reclaimGuardPath);
+      return state === "live" || state === "missing" ? null : "ambiguous";
+    }
   }
 
   try {
+    if (options.signal?.aborted) return "ambiguous";
     const stale = daemonStartupLockIsStale(lockPath);
-    if (stale === "missing") {
-      return null;
-    }
-    if (stale === "ambiguous") {
-      return "ambiguous";
-    }
-    if (!stale) {
-      return null;
-    }
+    if (stale === "missing") return null;
+    if (stale === "ambiguous") return "ambiguous";
+    if (!stale) return null;
     const staleSnapshot = readDaemonStartupLockSnapshot(lockPath);
-    if (staleSnapshot === undefined) {
-      return null;
-    }
-    if (staleSnapshot === "ambiguous") {
-      return "ambiguous";
-    }
-    if (isProcessAlive(staleSnapshot.payload.pid) !== false) {
-      return "ambiguous";
-    }
+    if (staleSnapshot === undefined) return null;
+    if (staleSnapshot === "ambiguous") return "ambiguous";
+    if (!startupClaimScopeAllowsProcessProbe(staleSnapshot.payload)) return "ambiguous";
+    if (isProcessAlive(staleSnapshot.payload.pid) !== false) return "ambiguous";
     const currentSnapshot = readDaemonStartupLockSnapshot(lockPath);
     if (
-      currentSnapshot === "ambiguous" ||
-      currentSnapshot === undefined ||
+      currentSnapshot === "ambiguous" || currentSnapshot === undefined ||
       currentSnapshot.stat.dev !== staleSnapshot.stat.dev ||
       currentSnapshot.stat.ino !== staleSnapshot.stat.ino ||
       currentSnapshot.payload.token !== staleSnapshot.payload.token ||
-      currentSnapshot.payload.pid !== staleSnapshot.payload.pid
-    ) {
-      return "ambiguous";
-    }
+      currentSnapshot.payload.pid !== staleSnapshot.payload.pid ||
+      !startupClaimScopeAllowsProcessProbe(currentSnapshot.payload)
+    ) return "ambiguous";
     fs.rmSync(lockPath);
     try {
       return createDaemonStartupLock(lockPath);
@@ -1380,6 +1410,21 @@ export function acquireDaemonStartupLock(
     }
   } finally {
     reclaimGuard.release();
+  }
+}
+
+function attemptFreshDaemonStartupClaim(
+  lockPath: string,
+  reclaimGuardPath: string
+): { release: () => void } | "guard_present" | "canonical_exists" {
+  try {
+    const fresh = createDaemonStartupLock(lockPath);
+    if (!pathExists(reclaimGuardPath)) return fresh;
+    fresh.release();
+    return "guard_present";
+  } catch (error) {
+    if (!isFileExistsError(error)) throw error;
+    return "canonical_exists";
   }
 }
 
@@ -1420,11 +1465,12 @@ export function createDaemonStartupLock(
   const payload: DaemonStartupLockPayload = {
     pid: process.pid,
     created_at: new Date().toISOString(),
-    token
+    token,
+    owner_scope: currentStartupGuardOwnerScope()
   };
   let released = false;
   let fd: number | undefined;
-  let claimedStat: fs.Stats;
+  let claimedStat: fs.BigIntStats;
   try {
     fd = fs.openSync(candidatePath, "wx", 0o600);
     const serialized = `${JSON.stringify(payload)}\n`;
@@ -1438,7 +1484,7 @@ export function createDaemonStartupLock(
     fd = undefined;
     hooks.before_claim?.();
     fs.linkSync(candidatePath, lockPath);
-    claimedStat = fs.statSync(candidatePath);
+    claimedStat = fs.statSync(candidatePath, { bigint: true });
   } finally {
     if (fd !== undefined) {
       try { fs.closeSync(fd); } catch {}
@@ -1453,7 +1499,7 @@ export function createDaemonStartupLock(
       }
       released = true;
       try {
-        const currentStat = fs.statSync(lockPath);
+        const currentStat = fs.statSync(lockPath, { bigint: true });
         if (currentStat.dev !== claimedStat.dev || currentStat.ino !== claimedStat.ino) return;
         const current = readDaemonStartupLockPayload(lockPath);
         if (current !== undefined && (current.token !== token || current.pid !== process.pid)) return;
@@ -1469,13 +1515,23 @@ function daemonStartupLockIsStale(lockPath: string): boolean | "ambiguous" | "mi
   const snapshot = readDaemonStartupLockSnapshot(lockPath);
   if (snapshot === undefined) return "missing";
   if (snapshot === "ambiguous") return "ambiguous";
+  if (!startupClaimScopeAllowsProcessProbe(snapshot.payload)) return "ambiguous";
 
   const processState = isProcessAlive(snapshot.payload.pid);
   return processState === "ambiguous" ? "ambiguous" : processState === false;
 }
 
+function startupClaimScopeAllowsProcessProbe(payload: DaemonStartupLockPayload): boolean {
+  // Legacy canonical claims retain the established admission policy. Explicit
+  // contradictory scope on a new claim must never authorize stale cleanup.
+  if (payload.owner_scope === undefined) return true;
+  const current = currentStartupGuardOwnerScope();
+  return current !== undefined && current.kind === payload.owner_scope.kind &&
+    current.fingerprint === payload.owner_scope.fingerprint;
+}
+
 type DaemonStartupLockSnapshot = {
-  stat: Pick<fs.Stats, "dev" | "ino">;
+  stat: { dev: string; ino: string };
   payload: DaemonStartupLockPayload;
 };
 
@@ -1485,7 +1541,7 @@ function readDaemonStartupLockSnapshot(
   let fd: number | undefined;
   try {
     fd = fs.openSync(lockPath, fs.constants.O_RDONLY | noFollowFlag());
-    const stat = fs.fstatSync(fd);
+    const stat = fs.fstatSync(fd, { bigint: true });
     if (!stat.isFile()) return "ambiguous";
     const buffer = Buffer.alloc(4097);
     const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, 0);
@@ -1503,7 +1559,13 @@ function readDaemonStartupLockSnapshot(
       typeof value.created_at !== "string" || !Number.isFinite(Date.parse(value.created_at)) ||
       typeof value.token !== "string" || value.token.length === 0
     ) return "ambiguous";
-    return { stat: { dev: stat.dev, ino: stat.ino }, payload: value as DaemonStartupLockPayload };
+    if (value.owner_scope !== undefined && !startupGuardOwnerScopeSchema.safeParse(value.owner_scope).success) {
+      return "ambiguous";
+    }
+    return {
+      stat: { dev: stat.dev.toString(), ino: stat.ino.toString() },
+      payload: value as DaemonStartupLockPayload
+    };
   } catch (error) {
     if (isMissingFileError(error)) return undefined;
     return "ambiguous";
@@ -1532,6 +1594,10 @@ function classifyReclaimGuard(filePath: string): "live" | "missing" | "ambiguous
   const snapshot = readDaemonStartupLockSnapshot(filePath);
   if (snapshot === undefined) return "missing";
   if (snapshot === "ambiguous") return "ambiguous";
+  if (snapshot.payload.owner_scope !== undefined) {
+    const scope = currentStartupGuardOwnerScope();
+    if (scope === undefined || scope.fingerprint !== snapshot.payload.owner_scope.fingerprint) return "ambiguous";
+  }
   return isProcessAlive(snapshot.payload.pid) === true ? "live" : "ambiguous";
 }
 
@@ -1793,6 +1859,7 @@ type DaemonStartupLockPayload = {
   pid: number;
   created_at: string;
   token: string;
+  owner_scope?: StartupGuardOwnerScope;
 };
 
 export function daemonStartupRefreshDelayMsFromEnv(env: NodeJS.ProcessEnv): number {

@@ -213,6 +213,15 @@ class ControlledDeadlineScheduler implements RefreshDeadlineSchedulerPort {
   }
 }
 
+class ImmediateDeadlineScheduler implements RefreshDeadlineSchedulerPort {
+  public arm(input: { onDeadline: () => void }) {
+    input.onDeadline();
+    return {
+      cancel(): void {}
+    };
+  }
+}
+
 class ControlledPublicationPort implements SnapshotPublicationPort {
   public readonly transitions: SnapshotPublicationTransition[] = [];
   private readonly buildingSnapshotIds = new Set<string>();
@@ -918,6 +927,10 @@ describe("runtime operation adapters", () => {
     });
     await executor.waitForCalls(1);
     expect(executor.calls).toHaveLength(1);
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "running",
+      worker_invocations: 1
+    });
     expect(executor.calls[0]?.deadline).toEqual({
       timeout_ms: 30_000,
       deadline_at: "2026-07-20T10:00:30.000Z"
@@ -1040,6 +1053,28 @@ describe("runtime operation adapters", () => {
     expect(after.diagnostic_revision).toBe(before.diagnostic_revision + 1);
     expect(after.execution_id).toBe(before.execution_id);
     expect(executor.calls).toHaveLength(1);
+  });
+
+  it("reports the invocation count and revision after the executor starts", async () => {
+    const { controller, executor } = createControlledController();
+    const initial = await controller.getDiagnostics({ repo_root: "/repo" });
+
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await executor.waitForCalls(1);
+
+    const running = await controller.getDiagnostics({ repo_root: "/repo" });
+    expect(running).toMatchObject({
+      execution_state: "running",
+      worker_invocations: 1
+    });
+    expect(running.diagnostic_revision).toBe(initial.diagnostic_revision + 3);
+
+    await controller.shutdown();
   });
 
   it("publishes an ordinary successful build before releasing the execution lease", async () => {
@@ -1339,6 +1374,7 @@ describe("runtime operation adapters", () => {
     expect(controller.getReceipt()).toMatchObject({
       execution_state: "failed",
       activity_lease: null,
+      worker_invocations: 1,
       last_failure: {
         code: "worker_error"
       }
@@ -1378,7 +1414,46 @@ describe("runtime operation adapters", () => {
     expect(controller.getReceipt()).toMatchObject({
       execution_state: "failed",
       activity_lease: null,
+      worker_invocations: 0,
       last_failure: { code: "worker_error" }
+    });
+  });
+
+  it("does not count a worker when the deadline claims before invocation", async () => {
+    const clock = new MutableClock("2026-07-20T10:00:00.000Z");
+    const executor = new ControlledRefreshExecutor();
+    const controller = new SnapshotRefreshController({
+      repo_root: "/repo",
+      controller_generation: 1,
+      timeout_ms: 30_000,
+      clock,
+      executor,
+      publication: new ControlledPublicationPort(),
+      deadline_scheduler: new ImmediateDeadlineScheduler(),
+      create_execution_id: () => "exec-deadline-before-run"
+    });
+    const terminal = observeTerminal(controller);
+
+    await controller.request({
+      repo_root: "/repo",
+      reason: "startup",
+      source: "test",
+      invalidation_generation: 1
+    });
+    await terminal;
+
+    expect(executor.calls).toHaveLength(0);
+    expect(executor.terminations).toEqual([{
+      execution_id: "exec-deadline-before-run",
+      reason: "deadline"
+    }]);
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed",
+      worker_invocations: 0,
+      last_failure: { code: "worker_timeout" }
+    });
+    await expect(controller.getDiagnostics({ repo_root: "/repo" })).resolves.toMatchObject({
+      worker_invocations: 0
     });
   });
 
@@ -2695,6 +2770,10 @@ describe("runtime operation adapters", () => {
 
     expect(executor.calls).toHaveLength(0);
     expect(executor.terminations).toHaveLength(0);
+    expect(controller.getReceipt()).toMatchObject({ worker_invocations: 0 });
+    await expect(controller.getDiagnostics({ repo_root: "/repo" })).resolves.toMatchObject({
+      worker_invocations: 0
+    });
     expect(controller.getReceipt()).toMatchObject({
       execution_state: "failed",
       activity_lease: null,

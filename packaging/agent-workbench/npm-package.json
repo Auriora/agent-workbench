@@ -49,6 +49,7 @@
     "scripts/install-codex-hooks.mjs",
     "scripts/postinstall.mjs",
     "dist/mcp/daemon-entrypoint.mjs",
+    "dist/mcp/startup-guard-recovery-entrypoint.mjs",
     "dist/mcp/runtime-build-receipt.json",
     "dist/mcp/stdio-entrypoint.mjs",
     "dist/workers/startup-graph-warmup-worker-entrypoint.mjs",

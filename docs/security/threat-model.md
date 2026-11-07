@@ -63,6 +63,26 @@ must never treat repository text as policy.
 | Validation script or repository-boundary confusion | An extensionless file may be mistaken for an approved build script, or nested repository content may inherit the parent repository's authority | Require positive path-and-purpose evidence for scripts; plan only; admit only declared initialized submodules from local `.gitmodules` plus gitlink evidence; keep unrelated embedded repositories non-traversed | Future policy may add additional repository-boundary fixtures |
 | Submodule trust confusion | A declared child repository may be dirty, revision-mismatched, uninitialized, inaccessible, or controlled by different project policy | Treat each admitted child as a separate read-only unit with child-local ignore policy, structured blockers for Git-dependent claims, no URL fetching, no writes, and no cross-repository evidence borrowing | Future review support may add richer child-repository ownership summaries |
 
+## Startup reclaim authority
+
+Source after v0.6.11 uses a separately spawned, packaged helper for exact dead
+startup-guard deletion. The bridge keeps its native-free import boundary; the
+helper accepts one bounded strict request through stdin, uses no shell, executes
+no repository command and reports fixed exit statuses without raw diagnostics.
+Native binding failures retain the installation rebuild hint. A response never
+grants startup ownership; only the normal hard-link election does.
+
+Bigint file identity, private non-symlink metadata/mutex storage, same Linux
+kernel boot/PID namespace and positive process death constrain deletion. Legacy,
+foreign and unavailable scope cannot authorize cleanup. The filesystem-scoped
+SQLite mutex excludes simultaneous recoverers across network namespaces;
+loopback socket locking is not an authority substitute. Corrupt/replaced mutex
+storage and unsafe sidecars are preserved and blocked. Private authority paths
+must not be removed/replaced while owners may be active; protection against
+arbitrary malicious same-user namespace replacement is outside this boundary.
+Equivalent non-Linux scope proof remains B010. Installed v0.6.11 has not acquired
+this source-only recovery capability.
+
 ## Daemon resource admission
 
 Spec 069 treats local MCP clients as untrusted resource consumers. One daemon
