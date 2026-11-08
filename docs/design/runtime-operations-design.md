@@ -73,6 +73,32 @@ Cache rules:
   handlers
 - generated cache files must live under approved generated-cache roots
 
+### Compiled Path Policies
+
+Each ignore-policy admission prepares one immutable set from `.gitignore` followed
+by `.aiignore`. Each distinct wildcard pattern compiles once for that set;
+exact patterns use string comparison. Frozen rule records retain private prepared
+matchers and copied flags, preserving ordered negation, anchoring, directory and
+segment semantics. Classification accepts prepared rules from the canonical
+parser; there is no unprepared matching route or process-global matcher cache.
+
+Catalog scans prepare independent root and admitted-child policies using the
+shared filesystem loader. Each new scan reloads current ignore-file contents,
+including scans on an existing scanner instance. Workspace path safety uses the
+same loader. Retained old policies keep their immutable prior behavior; new
+admissions cannot inherit obsolete expressions. Matcher retention is bounded by
+the admitted rule set and its distinct patterns; dropping that owner removes the
+retaining references. This is not generation-level catalog reuse or a publication
+freshness guarantee.
+
+Priority ordering prepares one matcher set per scan, sharing expressions for each
+distinct non-`**` segment across its patterns. It preserves the separate priority
+glob grammar, including `**`, `?`, escaping and the original UTF-16 code-unit `?`
+behavior. Each path comparison has its own dynamic-programming memo. The set is
+local to the scan; no scanner-instance/global cache retains obsolete ordering
+inputs. Profiling counts expression construction during preparation, including
+literal segments inside priority globs, rather than during path comparisons.
+
 ## Warm-Up Process
 
 ### Ambiguous TypeScript Extension Admission

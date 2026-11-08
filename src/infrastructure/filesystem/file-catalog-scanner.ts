@@ -74,7 +74,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     const prioritizedPathPatterns = normalizeCatalogPatterns(input.priority_path_patterns ?? []);
     const prioritySet = new Set<string>();
     const admittedPriorityPaths: string[] = [];
-    const scanUnits = buildScanUnits(repoRoot, indexedRoots, input.repository_composition);
+    const scanUnits = buildScanUnits(repoRoot, indexedRoots, input.repository_composition, this.observeWildcardCompilation);
     let truncated = false;
     let continuationCursor: string | undefined;
     const normalizedAfterPath = input.after_path === undefined
@@ -101,7 +101,6 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       const owner = findOwningScanUnit(scanUnits, requestedPath);
       const ownerRelativePath = toOwnerRelativePath(owner, requestedPath);
       const reason = catalogSkipReason({
-        observeWildcardCompilation: this.observeWildcardCompilation,
         relativePath: ownerRelativePath,
         isDirectory: false,
         skippedRoots: input.skipped_roots,
@@ -130,7 +129,6 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
           const candidatePath = toGlobalPath(unit, normalizeCatalogPath(path.relative(unit.absoluteRoot, absoluteRoot)));
           if (!discoveredPaths.has(candidatePath)) {
             const reason = catalogSkipReason({
-              observeWildcardCompilation: this.observeWildcardCompilation,
               relativePath: normalizeCatalogPath(path.relative(unit.absoluteRoot, absoluteRoot)),
               isDirectory: false,
               skippedRoots: input.skipped_roots,
@@ -265,7 +263,6 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
         continue;
       }
       const skipReason = catalogSkipReason({
-        observeWildcardCompilation: this.observeWildcardCompilation,
         relativePath: localRelativePath,
         isDirectory: child.isDirectory(),
         skippedRoots: input.skippedRoots,
@@ -316,7 +313,6 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     const relativePath = normalizeCatalogPath(path.relative(input.repoRoot, input.absolutePath));
     const localRelativePath = normalizeCatalogPath(path.relative(input.unit.absoluteRoot, input.absolutePath));
     const skipReason = catalogSkipReason({
-      observeWildcardCompilation: this.observeWildcardCompilation,
       relativePath: localRelativePath,
       isDirectory: false,
       skippedRoots: input.skippedRoots,
@@ -384,7 +380,8 @@ type ScanUnit = {
 function buildScanUnits(
   repoRoot: string,
   indexedRoots: readonly string[],
-  repositoryComposition?: RepositoryCompositionAdmissionReceipt
+  repositoryComposition?: RepositoryCompositionAdmissionReceipt,
+  observeWildcardCompilation?: () => void
 ): readonly ScanUnit[] {
   const admittedUnits = listAdmittedUnits(repositoryComposition);
   const admittedRoots = new Set(admittedUnits.map((unit) => unit.pathPrefix).filter((pathPrefix) => pathPrefix.length > 0));
@@ -399,7 +396,7 @@ function buildScanUnits(
     .map((unit) => ({
       pathPrefix: unit.pathPrefix,
       absoluteRoot: unit.absoluteRoot,
-      gitignoreRules: readRootIgnoreRules(unit.absoluteRoot),
+      gitignoreRules: readRootIgnoreRules(unit.absoluteRoot, observeWildcardCompilation),
       indexedRoots: indexedRootsForUnit(unit.pathPrefix, indexedRoots, admittedRoots),
       admittedRepositoryRoots: descendantRepositoryRoots(unit.pathPrefix, admittedRoots)
     }))
@@ -697,77 +694,63 @@ function prioritizeDiscoveredPathsByPattern(
   patterns: readonly string[],
   observeWildcardCompilation?: () => void
 ): { prioritizedPaths: string[]; remainingPaths: string[] } {
-  if (patterns.length === 0) {
-    return { prioritizedPaths: [], remainingPaths: [...discoveredPaths] };
-  }
-
+  const segments = new Map<string, RegExp>();
+  const matchers = patterns.map(pattern => compilePriorityPattern(pattern, segments, observeWildcardCompilation));
   const prioritized: string[] = [];
   const prioritySet = new Set<string>();
-  for (const pattern of patterns) {
+  for (const matches of matchers) {
     for (const candidatePath of discoveredPaths) {
-      if (prioritySet.has(candidatePath)) {
-        continue;
-      }
-      if (isPathMatchedByPattern(candidatePath, pattern, observeWildcardCompilation)) {
+      if (!prioritySet.has(candidatePath) && matches(candidatePath)) {
         prioritized.push(candidatePath);
         prioritySet.add(candidatePath);
       }
     }
   }
-
-  const remainingPaths = discoveredPaths.filter((path) => !prioritySet.has(path));
-
-  return { prioritizedPaths: prioritized, remainingPaths };
+  return { prioritizedPaths: prioritized, remainingPaths: discoveredPaths.filter(candidate => !prioritySet.has(candidate)) };
 }
 
-function isPathMatchedByPattern(pathValue: string, pattern: string, observeWildcardCompilation?: () => void): boolean {
+/** One pattern-set preparation owns these expressions; each path gets its own DP memo. */
+function compilePriorityPattern(
+  pattern: string,
+  segments: Map<string, RegExp>,
+  observeWildcardCompilation?: () => void
+): (pathValue: string) => boolean {
   if (!pattern.includes("*") && !pattern.includes("?")) {
-    if (pathValue === pattern) {
-      return true;
-    }
-    if (pattern.endsWith("/")) {
-      return pathValue.startsWith(pattern);
-    }
-    return pathValue.endsWith(`/${pattern}`);
+    return pathValue => pathValue === pattern || (pattern.endsWith("/") ? pathValue.startsWith(pattern) : pathValue.endsWith(`/${pattern}`));
   }
-  return isGlobPatternMatch(pathValue, pattern, observeWildcardCompilation);
-}
-
-function isGlobPatternMatch(pathValue: string, pattern: string, observeWildcardCompilation?: () => void): boolean {
-  const pathSegments = splitPathSegments(pathValue);
   const patternSegments = splitPathSegments(pattern);
-  const memo = new Map<string, boolean>();
-
-  const matchSegment = (patternSegment: string, valueSegment: string): boolean => {
-    const escaped = patternSegment
+  const expressions = patternSegments.map(segment => {
+    if (segment === "**") return undefined;
+    const existing = segments.get(segment);
+    if (existing !== undefined) return existing;
+    const escaped = segment
       .replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")
       .replace(/\\\*/gu, ".*")
       .replace(/\\\?/gu, ".");
+    const expression = new RegExp(`^${escaped}$`);
     observeWildcardCompilation?.();
-    return new RegExp(`^${escaped}$`).test(valueSegment);
+    segments.set(segment, expression);
+    return expression;
+  });
+  return pathValue => {
+    const pathSegments = splitPathSegments(pathValue);
+    const memo = new Map<string, boolean>();
+    const visit = (patternIndex: number, pathIndex: number): boolean => {
+      const key = `${patternIndex}:${pathIndex}`;
+      const existing = memo.get(key);
+      if (existing !== undefined) return existing;
+      let matched: boolean;
+      if (patternIndex === patternSegments.length) matched = pathIndex === pathSegments.length;
+      else if (patternSegments[patternIndex] === "**") {
+        matched = visit(patternIndex + 1, pathIndex) || (pathIndex < pathSegments.length && visit(patternIndex, pathIndex + 1));
+      } else {
+        matched = pathIndex < pathSegments.length && expressions[patternIndex]!.test(pathSegments[pathIndex]) && visit(patternIndex + 1, pathIndex + 1);
+      }
+      memo.set(key, matched);
+      return matched;
+    };
+    return visit(0, 0);
   };
-
-  const visit = (patternIndex: number, pathIndex: number): boolean => {
-    const memoKey = `${patternIndex}:${pathIndex}`;
-    if (memo.has(memoKey)) {
-      return memo.get(memoKey) as boolean;
-    }
-
-    let matched: boolean;
-    if (patternIndex === patternSegments.length) {
-      matched = pathIndex === pathSegments.length;
-    } else if (patternSegments[patternIndex] === "**") {
-      matched = visit(patternIndex + 1, pathIndex) || (pathIndex < pathSegments.length && visit(patternIndex, pathIndex + 1));
-    } else if (pathIndex < pathSegments.length && matchSegment(patternSegments[patternIndex], pathSegments[pathIndex])) {
-      matched = visit(patternIndex + 1, pathIndex + 1);
-    } else {
-      matched = false;
-    }
-    memo.set(memoKey, matched);
-    return matched;
-  };
-
-  return visit(0, 0);
 }
 
 function splitPathSegments(value: string): readonly string[] {

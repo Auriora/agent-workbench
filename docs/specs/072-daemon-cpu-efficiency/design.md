@@ -15,9 +15,9 @@ license: GPL-3.0-or-later
 
 Fix admitted file format and repeated algorithmic work inside the existing
 refresh pipeline. Preserve its single executor, durable completion and atomic
-publication. T001 profiling/fixture baseline and design checkpoint and T002
-bounded Qt admission are verified. T003-T006 optimisations and migration remain
-pending; comparative performance acceptance remains T007.
+publication. T001 baseline/design, T002 bounded Qt admission and T003 compiled
+matchers are verified. T003 passes the controlled SC-001 scan gate. T004-T006
+remain pending; full-generation comparative acceptance remains T007.
 
 ## Requirement Coverage
 
@@ -89,7 +89,31 @@ and discarded-set release on invalidation. The exact profiling counter includes
 both ignore-policy and scanner priority-glob expressions: T003 must also prepare
 priority matchers once per immutable ordering-pattern set, so those comparisons
 do not retain a separate per-path compilation bottleneck. Preserve identical
-priority semantics; this is planned T003 scope, not a T001 optimisation.
+priority semantics. T003 implements this scope and passes V003/SC-001.
+
+The canonical parser produces frozen readonly rule sets with a private prepared
+matcher on each frozen rule. Raw shapes stay private; classification has one
+prepared-rule execution path. Preparation copies rule flags and deduplicates
+wildcards by pattern within the set, while retaining each ordered rule's own
+negation/directory/anchor behavior. Both root ignore files are prepared together
+in their existing order. The shared filesystem loader is also used by workspace
+safety. Each scanner admission reloads root/admitted-child contents, creating new
+sets; no global or scanner-instance policy cache exists. Old retained sets remain
+immutable and retain their old behavior until discarded.
+
+Priority preparation shares each distinct non-`**` segment expression within one
+normalized ordering-pattern set. Exact non-glob patterns retain string matching;
+glob segments preserve their original escaping and no-flags RegExp behavior.
+Each path comparison gets a fresh DP memo, preserving `**` recursion and UTF-16
+code-unit `?` semantics. Retention is bounded by the current policy's distinct
+patterns and the current ordering set's distinct segments. Construction observers
+run at preparation; the obsolete per-path construction route is removed.
+
+The unchanged owned two-scan harness records full output and comparable five-run
+CPU distributions before/after. The 4000-caller fixture passes SC-001 with 84.60%
+less median scan CPU and byte-identical output. A separate complete-worker probe
+preserves all T002 semantic evidence exactly. See verification.md for identities,
+limits and independent review; these results do not establish SC-003/V007.
 
 ### D003: Durable catalog manifest and shape
 

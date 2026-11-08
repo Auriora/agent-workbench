@@ -48,7 +48,8 @@ Closed Spec 051 and completed delivery in Specs 068/069/071 are not reopened.
 
 ## Durable Impact
 
-T002 promotes verified format admission to runtime operations. T008 reconciles
+T002/T003 promote verified format admission and compiled policy ownership to
+runtime operations; controlled scan guidance is promoted to observability. T008 reconciles
 these existing owners after delivery: runtime operations for scan
 reuse and budgets; graph-store design for manifests/counters; observability for
 worker profiling; runtime contracts for any changed progress semantics. Proposed
@@ -59,7 +60,8 @@ behavior stays in this package until implemented and verified.
 Current stage: T001 baseline/design checkpoint verified: reproducible actual-worker
 harness, six controlled scenarios with five repetitions, exact observations and
 independent review. T002 bounded Qt admission is implemented and verified under
-V002; T003-T006 remain pending. Comparative performance acceptance remains T007.
+V002. T003 compiled ignore/priority matchers pass V003 and the controlled SC-001
+scan benchmark; T004-T006 remain pending. Full-generation acceptance remains T007.
 User purpose is established by the explicit request to put the CPU findings into
 a fix spec and route residuals to backlog. Template authority is the skill
 fallback: docs/templates/spec-package and docs/templates/README.md are absent.

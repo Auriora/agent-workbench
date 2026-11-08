@@ -5,7 +5,8 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { classifyPathPolicy, parseGitignoreRules, type GitignoreRule } from "../../domain/policies/index.js";
+import { classifyPathPolicy } from "../../domain/policies/index.js";
+import { readRootIgnoreRules } from "./ignore-file-policy.js";
 
 const DEFAULT_WORKSPACE_GENERATED_ROOTS = ["generated"];
 
@@ -118,20 +119,6 @@ function directoryExists(absolutePath: string): boolean {
     return fs.statSync(absolutePath).isDirectory();
   } catch {
     return false;
-  }
-}
-
-function readRootIgnoreRules(repoRoot: string): GitignoreRule[] {
-  return [".gitignore", ".aiignore"].flatMap((ignoreFileName) => readRootIgnoreFileRules(repoRoot, ignoreFileName));
-}
-
-function readRootIgnoreFileRules(repoRoot: string, ignoreFileName: string): GitignoreRule[] {
-  const ignoreFilePath = path.join(repoRoot, ignoreFileName);
-  if (!fs.existsSync(ignoreFilePath)) return [];
-  try {
-    return parseGitignoreRules(fs.readFileSync(ignoreFilePath, "utf8"));
-  } catch (_error) {
-    return [];
   }
 }
 

@@ -16,10 +16,11 @@ license: GPL-3.0-or-later
 T001's profiling baseline and design checkpoint are validated in source: the
 isolated production-worker harness, owned scenarios, exact observations and
 comparison contract passed the final evidence gates below. T002's bounded Qt
-format admission and V002 are also implemented and verified; T003-T006
-optimisations/migration remain pending. Historical
-exploratory measurements remain in [research](research.md). No before/after CPU improvement or complete Requirement 6/candidate/release
-acceptance is claimed; those remain T007/T008 obligations.
+format admission/V002 and T003 compiled matchers/V003 are also verified. T003
+passes SC-001 with 84.60% lower median CPU in the controlled two-scan benchmark.
+T004-T006 remain pending. Historical exploratory measurements remain in
+[research](research.md). Full-generation CPU/RSS improvement and complete
+Requirement 6/candidate/release acceptance remain T007/T008 obligations.
 
 ## Quality Gates
 
@@ -27,7 +28,7 @@ acceptance is claimed; those remain T007/T008 obligations.
 | --- | --- | --- | --- |
 | V001 | Requirement 6 baseline portion; CP-006 | Actual-worker harness, exact observations, six scenarios x five runs, comparator and independently reviewed design checkpoint | passed T001; candidate gates V007/V008 pending |
 | V002 | Requirement 1; CP-001/CP-002 | Qt XML and real/malformed/unknown TypeScript, misleading directories/strings, BOM/whitespace, root beyond the 16,384-byte bound, long TypeScript comments, inconclusive/read-error outcomes; positive-Qt parser invocation counts | passed T002; full candidate gates V007/V008 pending |
-| V003 | Requirement 2; CP-001; SC-001 | Negation/anchor/directory/segment parity, child ignore invalidation, finite matcher lifetime, distinct compilation counts and CPU benchmark | pending T003 |
+| V003 | Requirement 2; CP-001; SC-001 | Negation/anchor/directory/segment parity, child ignore invalidation, finite matcher lifetime, distinct compilation counts and CPU benchmark | passed T003/SC-001; full candidate gates pending |
 | V004 | Requirement 3; CP-001/CP-003/CP-005; SC-002 | Multi-slice single discovery, docs priority, worker exit/restart, create/delete/rename/content/ignore/config/composition invalidation, manifest migration, incomplete/sealed state, death before/during construction, at seal and before consumption, and mutations not yet admitted by watcher | pending T004 |
 | V005 | Requirement 4; CP-004/CP-005 | Cross-language/Ruby/lambda graph and ambiguity parity, candidate-count scaling and final-page cursor/transaction proof | pending T005 |
 | V006 | Requirement 5; CP-003/CP-005 | Budget/long-file overrun, settlement, cancellation/supersession/shutdown, unique versus visit counters and legacy unknown/rebuild behavior | pending T006 |
@@ -491,8 +492,8 @@ T007 still owns the five-run comparable candidate suite and success criteria.
   independently reran the two new suites: 42 tests passed. Findings about malformed
   signatures, encoding, byte-boundary scope, parser-count evidence, containment
   aliases and broad error handling were corrected and regression-tested.
-- Current behavior is promoted to runtime-operations-design.md. T003-T008 remain
-  pending; no T002 acceptance criterion is deferred to backlog. B014 remains the
+- At T002 completion, behavior was promoted to runtime-operations-design.md and
+  T003-T008 remained pending; no T002 criterion was deferred. B014 remains the
   separate sustained CPU scheduling-policy question.
 
 Final integrated test command:
@@ -500,3 +501,129 @@ Final integrated test command:
 ```bash
 pnpm exec vitest run tests/workspace/qt-translation-admission.test.ts tests/graph/qt-translation-admission.test.ts tests/workspace/filesystem-adapters.test.ts tests/workspace/file-catalog-scanner.test.ts tests/workspace/path-policy-consistency.test.ts tests/workspace/refresh-profile-observation.test.ts tests/graph/graph-build-continuation.test.ts tests/graph/refresh-profile-phase.test.ts tests/architecture/layer-boundaries.test.ts tests/mcp/refresh-profile.test.ts tests/mcp/refresh-profile-scenarios.test.ts tests/mcp/refresh-profile-comparison.test.ts --maxWorkers=1
 ```
+
+## T003 Compiled Path Matchers
+
+Requirement 2 AC1-AC3, CP-001, V003 and SC-001 pass. Canonical policy preparation
+freezes each ordered rule and its owning array, sharing a compiled wildcard test
+per distinct pattern within that policy. Exact patterns retain string matching.
+Both root ignore files load in their existing order as one set; workspace safety
+uses the same loader. Every new root/admitted-child policy admission reloads the
+current contents, including scans on the same scanner. There is no global cache,
+scanner-instance cache, unprepared matching branch or alternate algorithm.
+
+Priority ordering prepares each distinct non-`**` segment expression once per
+normalized pattern set. It preserves the original escaping, no-flags RegExp and
+UTF-16-code-unit question-mark behavior, with a new DP memo for each path.
+Construction observations occur during preparation; directory/stat counters and
+graph accounting retain their existing meaning. Catalog rediscovery and legacy
+unique-counter correction remain T004/T006 work.
+
+### Controlled Two-Scan Comparison
+
+The unchanged repo-owned refresh-scan-benchmark.ts harness ran before production
+edits and after source freeze, using Node v24.8.0 on Linux x64. Each arm creates
+a fresh private deterministic fixture with 4000 callers, one unmeasured warmup
+pair and five measured pairs. Each pair runs two complete broad scans with
+max_files=6000, explicit shape/graph priority paths and the two production route
+priority patterns. All 4012 admitted files are retained by each scan.
+
+Fixture revision: 84cc2cf7f12db7a39226ec294cf298e6797a0d9f.
+Source manifest: d69751250f69943d04725e807f6cb3257cfcf8f7fb5a3708b6cb99c507c1bf34.
+Harness SHA-256: 7a5f6d3900f2e3a814cd72eb3e74281353574c06d24899fb14f3f2ad96e17597.
+Pre-change runtime source: 20d39dda2ba9dcf082ca3f872fdb40159b308a35efe775846b2663836b4f1492.
+Candidate runtime source: 88b9f2e8e043700460b4104049d127bda0adad47bd061b5dac1a9fb0d9a42e01.
+The baseline uses the committed e287e1a production path plus this identical
+harness, added before any production matcher edit. T002 classification and graph
+counter policies are unchanged on both arms.
+
+| Measurement per two-scan pair | Pre-change | Compiled candidate |
+| --- | --- | --- |
+| Median process CPU s | 3.338694 | 0.514173 |
+| CPU range s | 3.152351-3.535450 | 0.468169-0.559605 |
+| Median wall s | 3.231881 | 0.465806 |
+| Wall range s | 3.130399-3.407967 | 0.455166-0.484347 |
+| Expression constructions | 1299336 | 62 |
+| Directory enumerations | 12 | 12 |
+| Entries considered | 8044 | 8044 |
+| File identity-stat attempts | 8024 | 8024 |
+
+Median scan CPU falls 84.60%, exceeding SC-001's 50% threshold. The independent
+construction oracle is two scans x (27 distinct ignore wildcards plus four
+distinct non-`**` priority segments) = 62. All counts are stable across five runs.
+All five corresponding full scanner output files are byte-identical, with
+normalized output SHA-256
+4c09042fa160b8d646e08138433c87c77551c9004ad82f56209b36acaf1d193c.
+Only the generated fixture-root field is normalized; full order, cursor,
+classification, identities and skip/coverage populations remain compared.
+
+Timing includes both scans, policy preparation and counter-observer overhead.
+Fixture setup, identity checks, serialization and writes are outside timing.
+Filesystem cache is uncontrolled; arms run sequentially, before and after the
+implementation interval. This is a representative synthetic scan result, not a
+FreeCAD-wide or complete-generation CPU/RSS result. SC-003 and V007 remain pending.
+
+### Correctness and Worker Evidence
+
+A tracked golden preserves 500 full pre-change policy outcomes captured from
+e287e1a: ten rule sets x 25 paths x file/directory variants. It includes ordered
+negation, anchoring, directory/segment matching, duplicate rules, escaping,
+literal question marks, default skips and normalized paths. Forty-five distinct
+full outcomes are stored once and referenced by the 500 cases; no legacy matcher
+implementation is shipped with the test.
+
+Focused tests prove frozen rule/array ownership, duplicate compilation across
+both ignore files, preserved old-set behavior and actual priority matches.
+Wildcard invalidation changes all four root/child .gitignore/.aiignore policies
+on the same scanner: old matching files become admitted and next-policy files
+become excluded. Exact counts are six constructions per scan and twelve after
+the second admission, including separate root/child identities with equal new
+patterns. Duplicate priority patterns share four segments; astral-character
+question-mark behavior retains its original semantics.
+
+A separate default-scale complete worker probe reaches final publication in four
+passes. All 9341 semantic records are byte-identical to T002's final evidence;
+the strong comparator reports equal with zero differences and no correction
+manifest. Files/nodes/edges/unresolved/docs remain 332/655/7680/2/3. Discovery
+counts stay 20 directories, 1028 entries and 749 identity-stat attempts; actual
+scanner expression constructions fall from 141622 to 120. All four CPU profiles
+have real samples; phase wall/CPU totals and aggregate operation counts reconcile.
+This proves worker correctness and attribution, not comparative generation speed.
+
+### Validation, Review and Reproduction
+
+- pnpm typecheck: passed against the frozen final production source.
+- Integrated targeted Vitest: 15 files, 145 tests passed in 53.34 s, including
+  matcher/scanner/workspace safety, Qt routing, architecture, graph continuation,
+  actual-worker metrics, profiling scenarios, semantic comparison and benchmark
+  receipt/threshold rejection. The golden test checks all 500 cases.
+- The subsequent test-only wildcard-invalidation strengthening passed its focused
+  matcher/golden run: two files, six tests. Production source/harness fingerprints
+  remain identical to the accepted measurement.
+- pnpm build-runtime and pnpm build-runtime:check: passed; runtime receipt valid.
+- Independent review accepted source, lifetime/grammar preservation, golden and
+  invalidation tests. It independently recalculated SC-001, checked all five raw
+  output pairs and source/harness identities, then audited all 9341 worker records,
+  four profiles and phase/count totals. Its final wildcard-test advisory is fixed
+  and confirmed; no findings remain.
+- Current policy ownership is promoted to runtime operations; controlled scan
+  guidance is promoted to observability. No T003 criterion is deferred or routed
+  to backlog. T004-T008 and B014 retain their existing separate obligations.
+- Final lifecycle lint: zero errors, warnings or informational findings; completed
+  T003 task context has no gaps. All seven spec documents have required metadata
+  and all 96 document/anchor references resolve. git diff --check passes.
+
+Final local ignored evidence is under .tmp/spec072-t003/: baseline-final/,
+candidate/, scan-comparison.json, worker-candidate/ and worker-comparison.json.
+The earlier baseline/ preceded receipt-validator hardening and is historical;
+the accepted pair uses the identical final harness hash above. Raw output and
+profiles remain private and uncommitted. Reproduce each arm on its respective
+production revision using the identical harness and a new absent output path:
+
+```bash
+pnpm exec tsx src/debug/refresh-scan-benchmark.ts --output .tmp/spec072-t003/reproduction --runs 5 --python-files 4000
+```
+
+The exported compareScanBenchmarks rejects missing/invalid runs, changing inputs,
+different harnesses, inconsistent summaries/counts and unequal full-output digests;
+SC-001 passes only with at least five comparable runs and 50% lower median CPU.

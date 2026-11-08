@@ -12,7 +12,7 @@ import {
   type RootIgnoreFileContent
 } from "../../domain/policies/index.js";
 
-export function readRootIgnoreRules(repoRoot: string): GitignoreRule[] {
+export function readRootIgnoreRules(repoRoot: string, observeWildcardCompilation?: () => void): readonly GitignoreRule[] {
   const ignoreFiles: RootIgnoreFileContent[] = [];
   for (const ignoreFileName of ROOT_IGNORE_FILE_NAMES) {
     const content = readRootIgnoreFile(repoRoot, ignoreFileName);
@@ -20,7 +20,7 @@ export function readRootIgnoreRules(repoRoot: string): GitignoreRule[] {
       ignoreFiles.push({ name: ignoreFileName, content });
     }
   }
-  return parseRootIgnoreFileRules(ignoreFiles);
+  return parseRootIgnoreFileRules(ignoreFiles, observeWildcardCompilation);
 }
 
 function readRootIgnoreFile(repoRoot: string, ignoreFileName: string): string | null {

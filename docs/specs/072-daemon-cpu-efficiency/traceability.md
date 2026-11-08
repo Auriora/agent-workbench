@@ -16,7 +16,7 @@ license: GPL-3.0-or-later
 | Requirement | Design | Tasks | Verification | State |
 | --- | --- | --- | --- | --- |
 | Requirement 1 | D001 | T001; T002; T007; T008 | V002; V007; V008 | T002 implemented and V002 verified; comparative gates pending |
-| Requirement 2 | D002 | T001; T003; T007; T008 | V003; V007; V008 | not implemented |
+| Requirement 2 | D002 | T001; T003; T007; T008 | V003; V007; V008 | T003 implemented; V003/SC-001 passed; full candidate gates pending |
 | Requirement 3 | D003 | T001; T004; T007; T008 | V004; V007; V008 | not implemented |
 | Requirement 4 | D004 | T001; T005; T007; T008 | V005; V007; V008 | not implemented |
 | Requirement 5 | D003; D005 | T001; T004; T006; T007; T008 | V004; V006; V007; V008 | not implemented |
@@ -36,7 +36,9 @@ T008 must promote durable truth and record semantic dispositions before closure.
 T001 profiling/fixture source, exact observations and a six-scenario five-repetition
 baseline passed independent review and integrated checks. T002's format admission,
 unsupported coverage, parser routing and local characterization are verified;
-current behavior is promoted to runtime operations. T003-T006, schema migration,
+T003 compiled policies, invalidation, scanner parity and SC-001 are also verified;
+current behavior is promoted to runtime operations and benchmark guidance to
+observability. T004-T006, schema migration,
 live deployment and comparative candidate-performance gates remain pending.
 
 ## Task To Context Matrix
@@ -57,7 +59,7 @@ live deployment and comparative candidate-performance gates remain pending.
 | Design Section | Requirements | Owning boundary | Tasks | Verification | Coverage State |
 | --- | --- | --- | --- | --- | --- |
 | D001; `design.md#d001-explicit-qt-translation-admission` | Requirement 1 | Filesystem classification and extraction admission | T002 | `verification.md#quality-gates` | covered |
-| D002; `design.md#d002-compiled-rule-set` | Requirement 2 | Policy preparation and matching | T003 | `verification.md#quality-gates` | not-covered |
+| D002; `design.md#d002-compiled-rule-set` | Requirement 2 | Policy preparation and matching | T003 | `verification.md#quality-gates` | covered |
 | D003; `design.md#d003-durable-catalog-manifest-and-shape` | Requirement 3 | Application, catalog ports and SQLite | T004 | `verification.md#quality-gates` | not-covered |
 | D004; `design.md#d004-candidate-indexes` | Requirement 4 | Application reference resolution | T005 | `verification.md#quality-gates` | not-covered |
 | D005; `design.md#d005-budget-and-accounting` | Requirement 5 | Worker/controller budget and progress | T006 | `verification.md#quality-gates` | not-covered |

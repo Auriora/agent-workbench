@@ -239,6 +239,17 @@ Current harnesses:
   full selected-snapshot semantic evidence and per-scenario repetition comparison.
   Missing or mismatched evidence fails without a successful suite summary. Zero
   worker counts in reuse/idle do not imply zero parent validator/watcher I/O.
+- `pnpm exec tsx src/debug/refresh-scan-benchmark.ts --output <new-directory>
+  --runs 5 --python-files 4000`: measures two complete broad catalog scans on a
+  newly owned deterministic fixture after one unmeasured warmup pair. The same
+  unchanged harness runs before and after matcher changes. Reports retain full
+  scanner output, CPU/wall spread, exact construction/work counts and
+  harness/runtime/input fingerprints. Only the generated fixture-root field is
+  normalized. The comparison requires at least five complete runs, matching
+  fixture/runtime parameters and harness identity, identical full output, and
+  reconciled measurements. Source validation, fixture setup and output writes
+  remain outside scan timing. This is a scan benchmark; worker/full-generation
+  performance and memory acceptance require the refresh profiling suite.
 - `pnpm debug:mcp-tool-sweep -- --repo <repo> [--repo <repo> ...]`: calls every
   registered public MCP resource and tool through bounded repo-local use-case
   adapters, writes a timestamped JSON report under the selected `.tmp` output

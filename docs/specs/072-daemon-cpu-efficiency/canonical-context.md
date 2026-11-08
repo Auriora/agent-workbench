@@ -34,8 +34,9 @@ runtime evidence establish implementation truth when prose conflicts.
 
 Requirements define requested scope and proposed acceptance. Design defines the
 candidate implementation path and T001 decision checkpoint. Tasks provide the
-execution index; verification/traceability define evidence obligations. All are
-draft and none proves a delivered fix.
+execution index; verification/traceability record evidence obligations and executed
+checks. Draft proposals and task markers alone do not prove delivered behavior;
+claims for completed slices require the recorded source, tests and measurements.
 
 ## Imported Sources
 

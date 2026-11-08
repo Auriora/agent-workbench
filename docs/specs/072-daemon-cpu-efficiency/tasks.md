@@ -69,17 +69,20 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
   - Evidence: Implemented shared 16,384-byte positive Qt signature recognition and canonical containment-checked scanner reads; XML uses existing unsupported coverage, genuine/inconclusive TS and TSX retain canonical routing, and local profiling labels unconfirmed admissions. V002 passes: 42 new tests including zero positive-Qt TS parser calls, exact boundaries/encoding/malformed prolog/read failures. Final integrated validation: typecheck, 12 Vitest files/126 tests, runtime build/receipt all passed. Independent review accepted with no blockers. Four-pass final production-worker probe exactly matched all 9,341 independently expected semantic records with eight predicted Qt/accounting corrections and no extra differences. See verification.md#t002-qt-translation-admission. Durable runtime operations updated; no criterion deferred. Comparative performance remains T007; T003-T008 pending.
 
   - Evidence mode: validation
-- [ ] T003 - Compile immutable ignore matchers once
+- [x] T003 - Compile immutable ignore matchers once
   - Depends on: T001.
   - Requirements: Requirement 2 AC1-AC3; SC-001.
   - Properties: CP-001.
   - Files: src/domain/policies/path-policy.ts; src/infrastructure/filesystem/ignore-file-policy.ts;
-    file-catalog-scanner.ts; tests/workspace/path-policy-consistency.test.ts and file-catalog-scanner.test.ts.
+    file-catalog-scanner.ts; workspace-safety.ts; src/debug/refresh-scan-benchmark.ts;
+    tests/workspace/; tests/mcp/refresh-scan-benchmark.test.ts; frozen policy fixture;
+    existing runtime-operations and observability design owners.
   - Acceptance: policy-scoped bounded matcher lifetime, current/child policy
     invalidation and equivalent output; compilation and CPU targets pass.
   - Validation: V003; typecheck, focused Vitest and controlled scan benchmark.
-  - Evidence: Pending; experimental-src is not production implementation.
+  - Evidence: R2 AC1-AC3, CP-001, V003 and SC-001 pass. Immutable policy-owned ignore matchers and scan-owned priority matchers preserve 500 frozen policy outcomes and all 9,341 worker semantic records. Five-run identical-harness comparison: median scan CPU 3.338694 s to 0.514173 s (84.60% lower); constructions 1,299,336 to 62 = 2 x (27 + 4); all full scanner outputs byte-identical. Root/child wildcard invalidation covers both ignore files with exact fresh-preparation counts. Typecheck, 145 integrated tests, six strengthened matcher/golden tests, runtime build/receipt and independent source/evidence review pass. Durable owners updated; see verification.md#t003-compiled-path-matchers. No T003 deferral; T004-T008 remain pending.
 
+  - Evidence mode: validation
 - [ ] T004 - Persist and reuse generation catalog and project shape
   - Depends on: T001.
   - Requirements: Requirement 3 AC1-AC4; Requirement 5 AC3-AC5.

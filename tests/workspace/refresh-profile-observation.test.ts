@@ -29,16 +29,16 @@ function counts(): Record<FileCatalogObservation, number> {
 
 describe("refresh profiling observations preserve canonical policy", () => {
   it("counts actual wildcard construction without changing exact, negated or segment decisions", () => {
-    const gitignoreRules = parseGitignoreRules("*.py\n!keep.py\n");
     let compilations = 0;
+    const gitignoreRules = parseGitignoreRules("*.py\n!keep.py\n", () => { compilations += 1; });
+    expect(compilations).toBe(1);
     const common = { relativePath: "folder/run.py", isDirectory: false, skippedRoots: [], gitignoreRules };
     const plain = catalogSkipReason(common);
-    const observed = catalogSkipReason({ ...common, observeWildcardCompilation: () => { compilations += 1; } });
+    const observed = catalogSkipReason(common);
     expect(observed).toBe(plain);
     expect(observed).toBe("gitignore");
-    expect(compilations).toBe(2); // First folder segment misses, second matches *.py.
-    compilations = 0;
-    expect(catalogSkipReason({ ...common, relativePath: "keep.py", observeWildcardCompilation: () => { compilations += 1; } })).toBeNull();
+    expect(compilations).toBe(1); // The wildcard is prepared once for this immutable policy set.
+    expect(catalogSkipReason({ ...common, relativePath: "keep.py" })).toBeNull();
     expect(compilations).toBe(1); // The exact !keep.py rule constructs no expression.
   });
 
@@ -54,7 +54,7 @@ describe("refresh profiling observations preserve canonical policy", () => {
       directory_enumerations: 2,
       directory_entries_considered: 5,
       file_stat_attempts: 3,
-      wildcard_regex_compilations: 10
+      wildcard_regex_compilations: 1
     });
   });
 
@@ -66,6 +66,6 @@ describe("refresh profiling observations preserve canonical policy", () => {
     const observed = await new FileCatalogScannerAdapter({ observe: event => { observedCounts[event] += 1; } }).scan(input);
     expect(observed).toEqual(plain);
     expect(observed.files[0].path).toBe("a.py");
-    expect(observedCounts.wildcard_regex_compilations).toBe(13);
+    expect(observedCounts.wildcard_regex_compilations).toBe(2);
   });
 });
