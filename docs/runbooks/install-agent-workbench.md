@@ -76,7 +76,7 @@ Code installation. It contains Node 22 and the compiled native dependencies.
 
 The npm/source-package path has these additional prerequisites:
 
-- **Node.js 22 or newer.** Version 0.6.13 requires a guarded
+- **Node.js 22 or newer.** Version 0.6.14 requires a guarded
   core tree-sitter source build on every supported Node version; Node 22 does
   not remove the compiler/Python requirement. Node 24 dependency installation
   may require C++20 environment flags before the parent build runs; see the
@@ -148,14 +148,14 @@ the npm registry). Install the release tarball directly by URL — npm builds th
 native modules and runs the package's `postinstall` the same as any package:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.13/auriora-agent-workbench-0.6.13.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.14/auriora-agent-workbench-0.6.14.tgz
 ```
 
 For a different version, take the tarball URL from the matching release on
 <https://github.com/Auriora/agent-workbench/releases>. Offline/air-gapped: download
-the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.6.13.tgz`.
+the `.tgz` from that page and `npm install -g ./auriora-agent-workbench-0.6.14.tgz`.
 
-The commands above install release `0.6.13`, including the compiled lightweight
+The commands above install release `0.6.14`, including the compiled lightweight
 bridge, daemon-owned refresh convergence, and schema-isolated publication.
 
 This source-package path builds the native modules in place and records a runtime-root pointer under
@@ -198,7 +198,7 @@ name `agent-workbench-local`).
 PKG="$(npm root -g)/@auriora/agent-workbench"
 claude plugin marketplace add "$PKG/plugins/agent-workbench"
 claude plugin install agent-workbench@agent-workbench-local --scope user
-claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.13  enabled
+claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.14  enabled
 ```
 
 **Windows (PowerShell):**
@@ -207,7 +207,7 @@ claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.13  enable
 $pkg = "$(npm root -g)\@auriora\agent-workbench"
 claude plugin marketplace add "$pkg\plugins\agent-workbench"
 claude plugin install agent-workbench@agent-workbench-local --scope user
-claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.13  enabled
+claude plugin list   # -> agent-workbench@agent-workbench-local  v0.6.14  enabled
 ```
 
 Start a new Claude Code session so the skill, hooks, and MCP server are
@@ -240,7 +240,7 @@ The npm package ships a package-scoped Codex marketplace
 PKG="$(npm root -g)/@auriora/agent-workbench"
 codex plugin marketplace add "$PKG/plugins/agent-workbench"
 codex plugin add agent-workbench@agent-workbench-local
-codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.13  installed, enabled
+codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.14  installed, enabled
 ```
 
 **Windows (PowerShell):**
@@ -249,7 +249,7 @@ codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.13  install
 $pkg = "$(npm root -g)\@auriora\agent-workbench"
 codex plugin marketplace add "$pkg\plugins\agent-workbench"
 codex plugin add agent-workbench@agent-workbench-local
-codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.13  installed, enabled
+codex plugin list   # -> agent-workbench@agent-workbench-local  v0.6.14  installed, enabled
 ```
 
 Start a new Codex session so the skill, hooks, and MCP server are discovered. See
@@ -311,9 +311,9 @@ not authorization to add a second indexer, retry loop, or partial-result path.
 
 ## Upgrade, rollback, and schema compatibility
 
-### Schema identity v4 (v0.6.13)
+### Schema identity v4 (v0.6.14)
 
-Version 0.6.13 uses graph-v4.sqlite. Installing a new package does not replace
+Version 0.6.14 uses graph-v4.sqlite. Installing a new package does not replace
 an already running process. Stop the prior repository owner before starting
 this runtime. Under the version-independent
 refresh lease, it verifies and checkpoints v3, retains and fsyncs

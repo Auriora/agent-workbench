@@ -127,7 +127,7 @@ jobs:
 
       - name: Test Windows native safety contract
         run: |
-          pnpm exec vitest run tests/runtime/native-runtime-guard.test.ts tests/runtime/refresh-native-overrun.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=.tmp/windows-native-safety-results.json
+          pnpm exec vitest run tests/runtime/native-runtime-guard.test.ts tests/runtime/refresh-native-overrun.test.ts tests/mcp/runtime-build-contract.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=.tmp/windows-native-safety-results.json
           $nativeTestExit = $LASTEXITCODE
           if ($nativeTestExit -ne 0) {
             Get-Content .tmp/windows-native-safety-results.json

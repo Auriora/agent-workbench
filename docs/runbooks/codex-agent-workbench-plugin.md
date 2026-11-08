@@ -18,7 +18,7 @@ Workbench from Codex without creating a second executable runtime path.
 ## Supported Model
 
 Agent Workbench has one executable Codex runtime path per packaged install.
-The release install payload is `v0.6.13`.
+The release install payload is `v0.6.14`.
 
 - Use install URLs explicitly tied to the latest published release for live bootstrap.
 
@@ -51,7 +51,7 @@ Workbench plugin should not package or proxy those companion runtimes.
 
 This keeps source updates explicit and keeps release state explicit:
 
-- `0.6.13` is the release install baseline.
+- `0.6.14` is the release install baseline.
 - The candidate worktree can still be developed, validated, and verified without
   changing install URLs.
 
@@ -423,7 +423,7 @@ Linux/macOS. The launch shim reads this pointer to find the runtime; nothing is
 copied to a prefix. Set `AGENT_WORKBENCH_INSTALL_ROOT` to override the runtime
 root (point it at a checkout containing `dist/mcp/stdio-entrypoint.mjs`).
 
-**Native-build requirement (v0.6.13).** Core tree-sitter
+**Native-build requirement (v0.6.14).** Core tree-sitter
 0.25.0 must use the canonical C++20 source build with the termination-safe
 Node-API option on Node 22 and newer. Python 3 and a C/C++ toolchain are required;
 a loadable core prebuild alone is insufficient. npm postinstall stops if that
@@ -444,15 +444,15 @@ release-readiness evidence.
 
 The npm distribution package is `@auriora/agent-workbench`. Its package
 contract lives at `packaging/agent-workbench/npm-package.json`. It is an
-ordinary npm package. Version 0.6.13 postinstall requires the canonical
+ordinary npm package. Version 0.6.14 postinstall requires the canonical
 guarded core tree-sitter build before pointer/config setup; it runs in place
 without a copy-to-prefix installation or a POSIX-shell requirement.
-Use the release URL (`v0.6.13`) in install commands.
+Use the release URL (`v0.6.14`) in install commands.
 
 Install or refresh the runtime with:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.13/auriora-agent-workbench-0.6.13.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.14/auriora-agent-workbench-0.6.14.tgz
 ```
 
 This runs `scripts/postinstall.mjs`, which records the runtime-root pointer file

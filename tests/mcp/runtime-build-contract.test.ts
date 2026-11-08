@@ -7,7 +7,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
 
@@ -119,6 +119,22 @@ function runRuntimeBuildCommand(root: string, args: string[] = []): ReturnType<t
 }
 
 describe("runtime build contract", () => {
+  it("imports the canonical build library with Windows line endings", async () => {
+    const parent = path.join(REPO_ROOT, ".tmp");
+    fs.mkdirSync(parent, { recursive: true });
+    const root = fs.mkdtempSync(path.join(parent, "runtime-build-crlf-"));
+    try {
+      const modulePath = path.join(root, "runtime-build-contract.mjs");
+      const source = fs.readFileSync(path.join(REPO_ROOT, "scripts", "runtime-build-contract.mjs"), "utf8");
+      fs.writeFileSync(modulePath, source.replace(/\r?\n/g, "\r\n"));
+      const imported = await import(pathToFileURL(modulePath).href);
+      expect(imported.RUNTIME_BUILD_ENTRYPOINTS).toEqual(RUNTIME_BUILD_ENTRYPOINTS);
+      expect(imported.validateRuntimeBuildReceipt).toBeTypeOf("function");
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("collects source inputs and deterministic entrypoint metadata", () => {
     withRuntimeBuildFixture((root) => {
       const contract = collectRuntimeBuildContract(root);
