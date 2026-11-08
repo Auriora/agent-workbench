@@ -28,11 +28,26 @@ import { isNestedGitRepository } from "./nested-git-repository.js";
 
 const MAX_SKIPPED_PATHS = 100;
 
+export type FileCatalogObservation =
+  | "directory_enumerations"
+  | "directory_entries_considered"
+  | "file_stat_attempts"
+  | "wildcard_regex_compilations";
+
 export class FileCatalogScannerAdapter implements FileCatalogScanPort {
   private readonly fileIdentity: FileIdentityPort;
+  private readonly observe: ((event: FileCatalogObservation) => void) | undefined;
+  private readonly observeWildcardCompilation: (() => void) | undefined;
 
-  constructor(input: { fileIdentity?: FileIdentityPort } = {}) {
+  constructor(input: {
+    fileIdentity?: FileIdentityPort;
+    observe?: (event: FileCatalogObservation) => void;
+  } = {}) {
     this.fileIdentity = input.fileIdentity ?? new FileIdentityAdapter();
+    this.observe = input.observe;
+    this.observeWildcardCompilation = input.observe === undefined
+      ? undefined
+      : () => this.observe!("wildcard_regex_compilations");
   }
 
   public async scan(input: {
@@ -86,6 +101,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       const owner = findOwningScanUnit(scanUnits, requestedPath);
       const ownerRelativePath = toOwnerRelativePath(owner, requestedPath);
       const reason = catalogSkipReason({
+        observeWildcardCompilation: this.observeWildcardCompilation,
         relativePath: ownerRelativePath,
         isDirectory: false,
         skippedRoots: input.skipped_roots,
@@ -114,6 +130,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
           const candidatePath = toGlobalPath(unit, normalizeCatalogPath(path.relative(unit.absoluteRoot, absoluteRoot)));
           if (!discoveredPaths.has(candidatePath)) {
             const reason = catalogSkipReason({
+              observeWildcardCompilation: this.observeWildcardCompilation,
               relativePath: normalizeCatalogPath(path.relative(unit.absoluteRoot, absoluteRoot)),
               isDirectory: false,
               skippedRoots: input.skipped_roots,
@@ -159,7 +176,8 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
 
     const { prioritizedPaths: discoveredPriorityPaths, remainingPaths } = prioritizeDiscoveredPathsByPattern(
       discoveredFiles,
-      prioritizedPathPatterns
+      prioritizedPathPatterns,
+      this.observeWildcardCompilation
     );
 
     const combinedPaths = [...admittedPriorityPaths, ...discoveredPriorityPaths, ...remainingPaths];
@@ -235,9 +253,11 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     if (children === null) {
       return [];
     }
+    this.observe?.("directory_enumerations");
     children.sort(compareCatalogEntries);
 
     for (const child of children) {
+      this.observe?.("directory_entries_considered");
       const absolutePath = path.join(input.directory, child.name);
       const localRelativePath = normalizeCatalogPath(path.relative(input.unit.absoluteRoot, absolutePath));
       const relativePath = toGlobalPath(input.unit, localRelativePath);
@@ -245,6 +265,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
         continue;
       }
       const skipReason = catalogSkipReason({
+        observeWildcardCompilation: this.observeWildcardCompilation,
         relativePath: localRelativePath,
         isDirectory: child.isDirectory(),
         skippedRoots: input.skippedRoots,
@@ -295,6 +316,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     const relativePath = normalizeCatalogPath(path.relative(input.repoRoot, input.absolutePath));
     const localRelativePath = normalizeCatalogPath(path.relative(input.unit.absoluteRoot, input.absolutePath));
     const skipReason = catalogSkipReason({
+      observeWildcardCompilation: this.observeWildcardCompilation,
       relativePath: localRelativePath,
       isDirectory: false,
       skippedRoots: input.skippedRoots,
@@ -310,6 +332,7 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       return;
     }
 
+    this.observe?.("file_stat_attempts");
     const stats = statFileOrSkip({
       repoRoot: input.repoRoot,
       absolutePath: input.absolutePath,
@@ -627,7 +650,8 @@ function normalizeCatalogPatterns(requestedPatterns: readonly string[]): string[
 
 function prioritizeDiscoveredPathsByPattern(
   discoveredPaths: readonly string[],
-  patterns: readonly string[]
+  patterns: readonly string[],
+  observeWildcardCompilation?: () => void
 ): { prioritizedPaths: string[]; remainingPaths: string[] } {
   if (patterns.length === 0) {
     return { prioritizedPaths: [], remainingPaths: [...discoveredPaths] };
@@ -640,7 +664,7 @@ function prioritizeDiscoveredPathsByPattern(
       if (prioritySet.has(candidatePath)) {
         continue;
       }
-      if (isPathMatchedByPattern(candidatePath, pattern)) {
+      if (isPathMatchedByPattern(candidatePath, pattern, observeWildcardCompilation)) {
         prioritized.push(candidatePath);
         prioritySet.add(candidatePath);
       }
@@ -652,7 +676,7 @@ function prioritizeDiscoveredPathsByPattern(
   return { prioritizedPaths: prioritized, remainingPaths };
 }
 
-function isPathMatchedByPattern(pathValue: string, pattern: string): boolean {
+function isPathMatchedByPattern(pathValue: string, pattern: string, observeWildcardCompilation?: () => void): boolean {
   if (!pattern.includes("*") && !pattern.includes("?")) {
     if (pathValue === pattern) {
       return true;
@@ -662,10 +686,10 @@ function isPathMatchedByPattern(pathValue: string, pattern: string): boolean {
     }
     return pathValue.endsWith(`/${pattern}`);
   }
-  return isGlobPatternMatch(pathValue, pattern);
+  return isGlobPatternMatch(pathValue, pattern, observeWildcardCompilation);
 }
 
-function isGlobPatternMatch(pathValue: string, pattern: string): boolean {
+function isGlobPatternMatch(pathValue: string, pattern: string, observeWildcardCompilation?: () => void): boolean {
   const pathSegments = splitPathSegments(pathValue);
   const patternSegments = splitPathSegments(pattern);
   const memo = new Map<string, boolean>();
@@ -675,6 +699,7 @@ function isGlobPatternMatch(pathValue: string, pattern: string): boolean {
       .replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")
       .replace(/\\\*/gu, ".*")
       .replace(/\\\?/gu, ".");
+    observeWildcardCompilation?.();
     return new RegExp(`^${escaped}$`).test(valueSegment);
   };
 

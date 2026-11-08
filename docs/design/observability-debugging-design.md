@@ -3,7 +3,7 @@ title: Observability and debugging design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-11-06
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -211,6 +211,34 @@ Current harnesses:
 - `pnpm debug:mcp-profile -- <status|scope|overview|context> <target-repo>`:
   runs the same debug use-case harness under Node CPU profiling and writes a
   `.cpuprofile` under `.cache/profiles/` unless `--profile-output` is provided.
+- `pnpm debug:refresh-fixture --parent <existing-private-directory>`: creates
+  a newly owned deterministic Git fixture for refresh profiling and emits its
+  revision, content manifest and independent expected Qt/TypeScript cases.
+- `pnpm debug:refresh-profile --repo <read-only-repo> --output <new-directory>
+  --runs 5 --max-files 2000`: runs cold complete generations through the actual
+  production worker/controller/executor with an isolated database for each run.
+  Output must be a new private directory disjoint from the source, including
+  symlink aliases. The runtime must provide process.threadCpuUsage; unavailable
+  capability returns a structured blocked result, without a profiling fallback.
+  Profiles cover the production-worker isolate. Reports distinguish the observed
+  worker-thread CPU interval from whole-process generation CPU and sampled process
+  RSS. Exact scanner counters cover successful directory enumerations, returned
+  entries considered, file-identity stat attempts and actual ignore/priority
+  wildcard constructions; they do not claim all process filesystem syscalls.
+  Exclusive phase intervals reconcile to the observed thread totals. Milestone
+  intervals remain separate, and sampled RSS is not an exact peak. Source/runtime
+  identity drift or incomplete worker evidence fails the run, with no successful
+  aggregate summary. This read-only input command measures cold generations.
+- `pnpm debug:refresh-scenarios --output <new-directory> --runs 5 --python-files 320`:
+  constructs newly owned deterministic fixtures and measures cold generation,
+  persisted first-read reuse, a real sixty-second settled idle window, actual
+  watcher single/burst edits and a committed-continuation dispatch pause/store
+  reopen. It accepts no external mutable --repo input. Persisted first-read reuse
+  is not daemon startup reuse; paused same-session continuation is not crash
+  recovery. The suite records fixed watcher calibration, content/mutation manifests,
+  full selected-snapshot semantic evidence and per-scenario repetition comparison.
+  Missing or mismatched evidence fails without a successful suite summary. Zero
+  worker counts in reuse/idle do not imply zero parent validator/watcher I/O.
 - `pnpm debug:mcp-tool-sweep -- --repo <repo> [--repo <repo> ...]`: calls every
   registered public MCP resource and tool through bounded repo-local use-case
   adapters, writes a timestamped JSON report under the selected `.tmp` output

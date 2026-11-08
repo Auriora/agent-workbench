@@ -55,7 +55,9 @@ behavior stays in this package until implemented and verified.
 
 ## Staged Readiness
 
-Current stage: requirements/design/tasks drafted; implementation not started.
+Current stage: T001 baseline/design checkpoint verified: reproducible actual-worker
+harness, six controlled scenarios with five repetitions, exact observations and
+independent review. Runtime optimisation tasks T002-T006 have not started.
 User purpose is established by the explicit request to put the CPU findings into
 a fix spec and route residuals to backlog. Template authority is the skill
 fallback: docs/templates/spec-package and docs/templates/README.md are absent.
@@ -112,9 +114,16 @@ Architecture, data/publication and operational review are required before closur
 1. FOR an unchanged generation, extraction continuations SHALL consume one
    generation-scoped ordered catalog and stored project-shape evidence without
    repeating whole-repository discovery or a Rails probe for every slice.
-2. Add/delete/rename, content/identity, scope/config, ignore-policy and repository
-   composition changes SHALL invalidate the affected evidence through the sole
-   existing refresh authority before final publication.
+2. Before every fresh publication, including the partial seed and final completion,
+   the sole controller SHALL consume a distinct generation-, target- and
+   watcher-session-bound validation receipt covering the sealed manifest's admitted
+   files, enumerated directories and policy/composition inputs, and drain admitted
+   watcher evidence through its final observed sequence. Any observed identity or
+   relevant path/policy/composition change, queued change, incomplete validation,
+   watcher coverage loss/overflow or generation mismatch SHALL prevent a fresh
+   publication and enter the existing explicit invalidation/failure path.
+   Freshness describes the recorded validation observations and admitted-event
+   boundary, not an atomic filesystem snapshot or absence of later/unobserved changes.
 3. Resume after worker exit/restart SHALL preserve deterministic priority order,
    exclusive cursors, admitted submodule boundaries, unique coverage and complete
    eventual extraction. Invalid manifest evidence SHALL block/degrade explicitly.
@@ -174,7 +183,8 @@ Architecture, data/publication and operational review are required before closur
    and candidate SHALL use the same input and runtime. Coverage and graph
    comparison SHALL follow the frozen D006 comparison contract: exact equality
    for unaffected evidence and only fixture-proven Qt/counter corrections for
-   affected evidence. Any other difference SHALL fail comparison.
+   affected evidence, plus an independently declared exact store-identity 3-to-4
+   transition. Any other difference SHALL fail comparison.
 4. SC-001 through SC-004 SHALL pass; source and compiled/isolated-installed checks,
    architecture review and durable promotion SHALL be recorded before closure.
 
@@ -202,7 +212,10 @@ Keep MCP adapters thin. No extra dependency or parser is justified by this spec.
   classification/counter policy on both arms and requires identical scanner output.
 - SC-002: Positively identified Qt XML causes zero TypeScript extractor invocations;
   inconclusive prefixes follow Requirement 1 AC4. An unchanged
-  generation performs at most one broad catalog discovery regardless of slices.
+  successful generation performs at most one broad catalog discovery regardless
+  of extraction slices. Final identity validation visits persisted paths without
+  directory enumeration and is measured separately; interrupted unsealed
+  preparation invalidates its generation rather than claiming discovery complete.
 - SC-003: A fixed representative large-repository full-generation benchmark
   uses at least 30% less median CPU with no more than 10% wall-time regression,
   equivalent required coverage and graph semantics under D006's explicit

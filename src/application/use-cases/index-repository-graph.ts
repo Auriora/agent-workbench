@@ -44,7 +44,7 @@ import type {
   CachePort,
   WarmupCoordinatorPort
 } from "../../ports/index.js";
-import type { EvidenceCoverageState, IndexCoverage } from "../../contracts/index.js";
+import type { EvidenceCoverageState, IndexCoverage, RefreshWorkerProgress } from "../../contracts/index.js";
 import {
   markdownTitleFromPath,
   parseMarkdownHeadings,
@@ -98,6 +98,8 @@ export type WarmupRepositoryGraphResult = IndexRepositoryGraphResult & {
   warmup_state: "complete";
 };
 
+export type RepositoryGraphBuildPhase = Exclude<RefreshWorkerProgress["phase"], "composition">;
+
 export type BuildRepositoryGraphInput = {
   repo_root: string;
   scanner: FileCatalogScanPort;
@@ -122,6 +124,8 @@ export type BuildRepositoryGraphInput = {
   append_to_existing_build?: boolean;
   mark_fresh?: boolean;
   should_yield_extraction?: () => boolean;
+  /** Optional aggregate phase boundary, emitted before the corresponding work. */
+  observe_build_phase?: (phase: RepositoryGraphBuildPhase) => void;
   report_build_progress?: (
     phase: "catalog" | "extraction" | "docs" | "graph_write" | "resolution",
     completed_units: number
@@ -162,6 +166,7 @@ export type RepositoryGraphBuildSliceInput = BuildRepositoryGraphInput & {
 export async function buildRepositoryGraph(
   input: BuildRepositoryGraphInput
 ): Promise<IndexRepositoryGraphResult> {
+  input.observe_build_phase?.("graph_write");
   const snapshotId = input.snapshot_id ?? String(input.clock.nowUnixMs());
   const now = input.clock.nowIso8601();
   const configIdentity = input.config_identity ?? "default";
@@ -196,6 +201,7 @@ export async function buildRepositoryGraph(
     ...(input.priority_paths ?? []),
     ...DEFAULT_GRAPH_PRIORITY_PATHS
   ].map(normalizePriorityPath));
+  input.observe_build_phase?.("catalog");
   const scanned = await scanFileCatalog(input.scanner, {
     repo_root: input.repo_root,
     indexed_roots: ["."],
@@ -234,7 +240,9 @@ export async function buildRepositoryGraph(
   let unsupportedFiles = 0;
   let resourceBackedFiles = 0;
 
+  input.observe_build_phase?.("extraction");
   for (const [index, file] of plannedExtractionFiles.entries()) {
+    input.observe_build_phase?.("extraction");
     if (extractionFiles.length > 0 && input.should_yield_extraction?.() === true) {
       cooperativeDeadlineReached = true;
       break;
@@ -252,6 +260,7 @@ export async function buildRepositoryGraph(
 
     if (!extractor) {
       unsupportedFiles += 1;
+      input.observe_build_phase?.("graph_write");
       await input.catalog.upsertEntry({
         snapshot_id: snapshotId,
         entry: {
@@ -270,6 +279,7 @@ export async function buildRepositoryGraph(
     if (file.file_identity.size_bytes > MAX_TEXT_EXTRACTION_BYTES ||
       (isDocumentationIndexPath(file.path) && file.file_identity.size_bytes > MAX_DOCS_INDEX_BYTES)) {
       unsupportedFiles += 1;
+      input.observe_build_phase?.("graph_write");
       await input.catalog.upsertEntry({
         snapshot_id: snapshotId,
         entry: {
@@ -312,6 +322,7 @@ export async function buildRepositoryGraph(
     cooperativeDeadlineReached ||
     (maxExtractionFiles !== undefined && prioritizedExtractionFiles.length > maxExtractionFiles);
 
+  if (input.docs_index !== undefined) input.observe_build_phase?.("catalog");
   const docsScan = input.docs_index === undefined
     ? undefined
     : await scanFileCatalog(input.scanner, {
@@ -322,6 +333,7 @@ export async function buildRepositoryGraph(
         repository_composition: input.repository_composition
       });
 
+  input.observe_build_phase?.("docs");
   const markdownContentByPath = new Map<string, string>();
   const documents: DocsIndexDocumentWrite[] = [];
   let docsPartition: DocumentationCorpusDecisionPartition | undefined;
@@ -432,11 +444,13 @@ export async function buildRepositoryGraph(
     });
   }
 
+  input.observe_build_phase?.("resolution");
   const augmentedRouting = augmentTemplateHandlerRouting({
     batches,
     files: scanned.files
   });
   const resolved = resolveReferences(augmentedRouting.batches);
+  input.observe_build_phase?.("graph_write");
   for (const [index, batch] of resolved.batches.entries()) {
     await yieldToEventLoop(index);
     await input.graph.replaceSnapshotExtraction({
@@ -458,6 +472,7 @@ export async function buildRepositoryGraph(
     });
   }
 
+  input.observe_build_phase?.("finalizing");
   const coverage = buildIndexCoverage({
     graphScan: scanned,
     docsScan,
@@ -514,6 +529,7 @@ export async function buildRepositoryGraph(
 export async function runRepositoryGraphBuildSlice(
   input: RepositoryGraphBuildSliceInput
 ): Promise<RepositoryGraphBuildSliceResult> {
+  input.observe_build_phase?.("graph_write");
   const generationSourceHash = graphGenerationSourceHash(input);
   let progress = await input.build_progress.getGraphBuildProgress({
     snapshot_id: input.snapshot_id
@@ -593,6 +609,7 @@ export async function runRepositoryGraphBuildSlice(
         ...input,
         mark_fresh: true
       });
+      input.observe_build_phase?.("graph_write");
       const graphCoverage = requireGraphCoverage(result.coverage);
       const partial = graphCoverage.state === "partial";
       const cursor = partial ? graphCoverage.continuation_cursor : undefined;
@@ -653,6 +670,7 @@ export async function runRepositoryGraphBuildSlice(
     throw new Error("Incomplete graph build progress has no continuation cursor.");
   }
 
+  input.observe_build_phase?.("catalog");
   const railsShapeFiles = (await scanFileCatalog(input.scanner, {
     repo_root: input.repo_root,
     indexed_roots: ["."],
@@ -671,6 +689,7 @@ export async function runRepositoryGraphBuildSlice(
     after_path: progress.scan_cursor,
     rails_shape_files: railsShapeFiles
   });
+  input.observe_build_phase?.("graph_write");
   const graphCoverage = requireGraphCoverage(result.coverage);
   const counters = addBuildCounters(progress, result);
   const partial = graphCoverage.state === "partial";
@@ -739,6 +758,7 @@ async function resolveAccumulatedBuildReferencesSlice(
   input: RepositoryGraphBuildSliceInput,
   progress: GraphBuildProgress
 ): Promise<RepositoryGraphBuildSliceResult> {
+  input.observe_build_phase?.("resolution");
   const afterId = parseResolutionCursor(progress.scan_cursor);
   const maxResolutionReferences = input.max_resolution_references ?? MAX_RESOLUTION_REFERENCES_PER_PASS;
   if (!Number.isSafeInteger(maxResolutionReferences) || maxResolutionReferences <= 0) {
@@ -767,6 +787,7 @@ async function resolveAccumulatedBuildReferencesSlice(
       });
     }
   }
+  input.observe_build_phase?.("graph_write");
   await input.build_resolution.applyBuildResolutionSlice({
     snapshot_id: input.snapshot_id,
     controller_generation: input.controller_generation,
@@ -775,6 +796,7 @@ async function resolveAccumulatedBuildReferencesSlice(
     resolved_references: resolvedReferences
   });
   input.report_build_progress?.("resolution", unresolved.length);
+  input.observe_build_phase?.("finalizing");
 
   if (unresolved.length === maxResolutionReferences) {
     const cursor = `resolve:${unresolved.at(-1)!.id}`;

@@ -26,12 +26,15 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
 
 ## Implementation
 
-- [ ] T001 - Establish reproducible worker baseline and design checkpoint
+- [x] T001 - Establish reproducible worker baseline and design checkpoint
   - Depends on: none.
   - Requirements: Requirement 1 AC1-AC5; Requirement 3 AC2-AC3;
     Requirement 5 AC5; Requirement 6 AC1-AC3.
   - Properties: CP-002; CP-003; CP-005; CP-006.
-  - Files: src/debug/; src/infrastructure/workers/; this package's design.md and verification.md.
+  - Files: src/debug/; src/infrastructure/workers/; optional observation callbacks
+    in src/domain/policies/path-policy.ts, filesystem/file-catalog-scanner.ts and
+    application/use-cases/index-repository-graph.ts; focused tests; this package's
+    design.md and verification.md. Observers preserve the canonical algorithms.
   - Acceptance: create isolated worker profiling harness; freeze representative
     revision/runtime/scenarios; capture complete-generation baseline including
     resolution, five-run metrics and graph comparison method. Record bounded
@@ -48,8 +51,9 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
     Independent QA/architecture/operations review must accept these documented
     decisions; otherwise T001 remains pending and T002-T006 cannot start.
   - Validation: V001; pnpm typecheck and harness fixture tests.
-  - Evidence: Pending; exploratory research is not completed baseline acceptance.
+  - Evidence: Completed reproducible six-scenario baseline: five repetitions, 30 measurements and 80 sampled worker profiles; exact operation counts and phase sums audited; full semantic evidence stable, five >=60 s idle windows used zero workers, and committed continuation cursors restored. Final frozen source passes typecheck, nine focused Vitest files/69 tests, runtime build and build receipt checks. Independent QA, architecture/operations and comparator reviews accepted the bounded T001 baseline/design gate. See verification.md sections Complete Scenario Baseline, Final Validation and Review, and T001 Disposition and Remaining Delivery. T002-T008 delivery remains pending; no optimisation gain or final R6/SC acceptance claimed.
 
+  - Evidence mode: validation
 - [ ] T002 - Route Qt translation XML outside the TypeScript parser
   - Depends on: T001.
   - Requirements: Requirement 1 AC1-AC5.
@@ -80,8 +84,10 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
   - Requirements: Requirement 3 AC1-AC4; Requirement 5 AC3-AC5.
   - Properties: CP-001; CP-003; CP-005.
   - Files: src/ports/; src/contracts/; src/application/use-cases/index-repository-graph.ts;
-    src/infrastructure/sqlite/; src/infrastructure/filesystem/; startup-graph-warmup-worker.ts;
-    tests/graph/graph-build-continuation.test.ts; tests/workspace/.
+    src/infrastructure/sqlite/; src/infrastructure/filesystem/; src/server.ts;
+    src/infrastructure/runtime/refresh-controller.ts; repository-refresh-triggers.ts;
+    startup-graph-warmup-worker.ts; tests/graph/graph-build-continuation.test.ts;
+    tests/workspace/; watcher/controller/migration boundary fixtures.
   - Acceptance: one broad discovery per unchanged generation across worker exits;
     correct priority/docs views, no repeated shape probe, safe invalidation and
     restart, tested migration and truthful distinct identity counts. Consume only

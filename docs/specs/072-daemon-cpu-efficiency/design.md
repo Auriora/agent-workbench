@@ -15,7 +15,8 @@ license: GPL-3.0-or-later
 
 Fix admitted file format and repeated algorithmic work inside the existing
 refresh pipeline. Preserve its single executor, durable completion and atomic
-publication. No implementation has started.
+publication. T001 profiling/fixture baseline and design checkpoint are verified;
+the production optimisations and migration described below are not implemented.
 
 ## Requirement Coverage
 
@@ -43,8 +44,9 @@ src/debug with explicit worker instrumentation, outside public MCP tool surfaces
 Use one bounded admission policy for ambiguous .ts files, before extraction.
 Read at most 16,384 bytes from offset zero through containment-checked I/O.
 The supported positive signature is UTF-8/ASCII XML with an optional UTF-8 BOM,
-XML whitespace, a complete XML declaration or Qt TS doctype, optional complete
-prolog comments/processing instructions, and the complete case-sensitive TS root
+XML whitespace, a complete XML declaration optionally followed by one Qt TS
+doctype, or one declaration-free Qt TS doctype, with complete prolog comments/
+processing instructions between allowed tokens, and the complete case-sensitive TS root
 start tag. Root/tag matching must be anchored to this prolog, not a substring in
 TypeScript source, strings or comments. Do not expand entities, resolve external
 identifiers or add an XML parser dependency. T001 freezes recognizer grammar and
@@ -67,7 +69,11 @@ Prepare exact/wildcard matchers once when root or child-local ignore policy is
 loaded; preserve ordered rules and last-match negation. Give the compiled set
 policy-scoped ownership, not an unbounded process-global string cache. The
 exploratory Map is proof of cost, not production design. Preserve pattern semantics
-and discarded-set release on invalidation.
+and discarded-set release on invalidation. The exact profiling counter includes
+both ignore-policy and scanner priority-glob expressions: T003 must also prepare
+priority matchers once per immutable ordering-pattern set, so those comparisons
+do not retain a separate per-path compilation bottleneck. Preserve identical
+priority semantics; this is planned T003 scope, not a T001 optimisation.
 
 ### D003: Durable catalog manifest and shape
 
@@ -157,6 +163,12 @@ selection. Use the following rules for all before/after evidence:
   resource/unsupported outcome, including removal of false parser module nodes
   and their dependent references/edges. List and validate each affected item;
   unrelated files or references cannot be ignored wholesale.
+- For the planned store identity migration, require a separate explicit correction
+  declaration with exact selected-snapshot schema_version before=3 and after=4.
+  Bind it to the independently verified source manifest and exact before/after
+  snapshot records; it permits no other field, schema transition or blanket
+  schema exclusion. New v4 evidence fields require deliberate T004 capture/tests,
+  not accidental normalization by the v3 comparator.
 - For progress corrections, independently derive distinct identity totals from
   the fixed input manifest. Only the documented repeated-work-to-unique counter
   changes are allowed; record visits/work separately. Do not use old inflated
@@ -166,6 +178,215 @@ Publish the allowed-difference manifest and comparator rules with V001/V007.
 Any unlisted difference fails comparison and requires investigation, not a wider
 exclusion. No final acceptance may preserve false TypeScript evidence just to
 match the defective baseline.
+
+## T001 Design Decisions
+
+These concrete decisions passed independent QA/architecture/operations checkpoint
+review; acceptance is recorded in verification.md. None is a claim that T004's
+runtime protocol exists.
+
+### Observation Boundary and Publication Authority
+
+Requirement 3 AC2 is explicitly clarified during T001: the mutable workspace and
+fs.watch do not supply an atomic snapshot or complete ordered change journal.
+The existing watcher enumerates directories before registering their watches;
+its poll drains callbacks already received. An observed generation is therefore
+not proof of every concurrent filesystem change. The revised claim is bounded to
+a generation/session-bound identity validation and admitted-event observation
+boundary; later/unobserved mutation and filesystem identity/timestamp aliasing
+remain limitations. This is a reviewed scope clarification, not a hidden guarantee.
+
+The single broad discovery and final validation serve different purposes:
+
+1. The daemon owns one watch session/epoch across its sequential workers. Arm
+   each admitted directory before its single readdir, using a worker-to-daemon
+   registration acknowledgement; root is armed before initial discovery. Record
+   pre/post bigint device/inode/mtimeNs/ctimeNs and directory kind/containment.
+   Registration failure, an identity change during enumeration or coverage loss
+   invalidates that generation. Do not run a separate watcher tree discovery.
+2. Discovery persists included file identities and enumerated directory identities,
+   including the owning repository and inputs that determine policy, composition,
+   priorities and shape. A newly included directory or relevant membership event
+   invalidates the sealed generation; it does not append silently to its inventory.
+3. Before every fresh publication (partial seed and final completion), require a
+   sealed manifest and a distinct target-bound receipt. The validation adapter
+   checks every persisted
+   admitted file and directory, plus policy/composition identity inputs. Use
+   containment, kind and bigint dev/ino/size/mtimeNs/ctimeNs as applicable; changed
+   or unavailable evidence invalidates or degrades. Validation must not readdir
+   directories or silently rediscover the tree. Count its reads/time separately.
+4. Validation and forced non-debounced watcher draining occur outside the
+   controller mutation lock: watcherBatch re-enters the controller and holding
+   that lock while draining would deadlock. Capture immutable start/end session
+   sequences, health and generation in the private validation receipt. Missing,
+   disabled, overflowed or restarted watcher coverage prevents a fresh receipt;
+   no attempt to emulate an event journal with a timeout or polling fallback.
+5. Re-enter the controller mutation authority. Recheck receipt manifest identity,
+   session epoch/health/live sequence, requested generation and shutdown fence.
+   Bind each receipt to its publication kind and target; never reuse a seed
+   receipt for the completion target. Consume it once and enter synchronous SQLite publication
+   without an await, observer callback or yielded event-loop gap between the final
+   observation check and transaction. The publication linearization point is the
+   SQLite commit; the separately recorded validation boundary is not that instant.
+   A queued/newly admitted event supersedes the target through the existing
+   authority. No concurrent writer, in-lock watcher callback or failure retry.
+
+The application owns the validation protocol/receipt port, filesystem adapters own
+identity reads/watch registration, and the controller owns publication admission.
+The receipt carries manifest/owner/controller/invalidation/session/target identities,
+publication kind,
+start/end observations, inspected counts, validation-policy version and complete
+or structured failure outcome. Keep this private evidence out of product analytics.
+Apply the same admission gate to both controller publication branches. Tests
+mutate source at seed publication and final completion separately and prove events
+during discovery, after individual identity reads and
+before transaction entry cannot be silently discarded as observed evidence. They
+must also assert the explicit unobserved-mutation limit rather than simulate an
+unavailable atomic-snapshot guarantee.
+
+### Manifest Schema and Sealing
+
+Use independent generation-level inventory, not only snapshot files rows: existing
+files rows contain already admitted snapshot paths, not all remaining ordered
+source, directory identities or preparation completeness. The v4 design is:
+
+- graph_build_manifests: manifest_id primary key; repo/config/owner identities;
+  controller/invalidation generation; generation-source hash; policy, composition
+  and ordering versions/fingerprints; preparing/sealed/invalid state; watcher
+  epoch; discovered/eligible counts; manifest digest; start/seal timestamps.
+  Unique key on repo identity plus controller/invalidation generation.
+- graph_build_manifest_files: foreign key manifest_id; ordinal; relative path;
+  repository key; language/classification evidence; bigint device/inode/size and
+  nanosecond mtime/ctime serialized losslessly; docs eligibility; nullable content
+  hash; pending/extracted/resource/unsupported outcome. Primary key on manifest
+  and path; unique manifest/ordinal. Unassigned ordinals are NULL only while
+  preparing; consumers require sealed state and contiguous final ordinals.
+- graph_build_manifest_directories: primary key manifest/path; repository key;
+  kind/device/inode/nanosecond identities; watch-registration state. Contains only
+  discovery observations, never a claim that fs.watch is a complete journal.
+- graph_build_progress: manifest foreign key, ordinal cursor, counters_version=2.
+  Keep published seed and isolated completion target linked to the same manifest
+  in the existing seed-clone transaction; do not duplicate inventory per slice.
+
+Preparing rows remain private/nonconsumable. After complete enumeration and the
+existing deterministic priority/path ordering, a single IMMEDIATE transaction
+rechecks owner, generations, session and policy; verifies unique paths, contiguous
+ordinals, counts and digest; seals the manifest and initializes progress/counters.
+No persisted prefix may prove extraction exhaustion. Each subsequent file outcome
+transaction writes graph evidence, the first pending-to-terminal state transition,
+ordinal cursor and distinct counters atomically. Re-examining a committed identity
+cannot increment unique counts. Eligible total is the sealed source universe;
+admitted/extracted totals are distinct terminal outcomes. Visits/work are separate.
+
+Crash/recovery dispositions are fixed before T004:
+
+- Before first write or during preparation: exact-owner recovery marks any
+  preparing inventory invalid and fails that execution. A later explicit admission
+  builds a new generation. No automatic retry or partial-discovery resume.
+- At sealing: transaction rollback leaves preparing state; commit exposes complete
+  sealed inventory and initialized progress together, never one without the other.
+- After seal/before first consumption and between later slices: same-owner/session
+  continuation validates identity/session fences and resumes the committed cursor.
+  A new daemon/watch epoch cannot silently resume old capture; it invalidates the
+  old generation under established ownership/recovery authority.
+- During file commit, seed clone or publication: SQLite atomicity and existing
+  generation/owner fencing preserve the previous committed cursor and target.
+
+Tests require deterministic barriers at all these boundaries, including failure
+on digest/ordinal/count mismatch, watcher registration loss and legacy progress.
+
+### Store Identity and Legacy Counters
+
+Advance graph-store identity/schema to v4 in T004, with canonical graph-v4.sqlite.
+Do not add unique-counter semantics inside v3: an older writer could update the old
+fields while leaving an additive counters-version marker, silently corrupting the
+interpretation. No v3 progress, coverage or snapshots are cloned into v4; v4 starts
+as an empty derived store and the ordinary coordinated build creates its evidence.
+
+Migration is owned by the existing version-independent repository refresh lease,
+acquired before retiring prior storage. Require quiesced prior handles or positively
+established owner death and a nonbusy WAL checkpoint. Otherwise block and preserve
+all storage. Retain a fsynced, verified v3 rollback artifact; atomically install a
+canonical v3 retirement blocker so an old binary cannot create a divergent writable
+cache. Build/validate/fsync a temporary empty v4 and atomically claim its canonical
+path using the established versioned-store publication discipline. Conflicting
+backup/guard/target evidence blocks; never delete or overwrite a live cache.
+
+T004 must explicitly replace the current v2/legacy seed selection for this identity
+transition, add retained-v3 retirement/re-entry tests, and test crashes between each
+backup/blocker/v4 claim. Re-entry under the same lease validates completed artifacts
+and advances the one migration protocol; it is not a fallback implementation.
+Rollback requires all owners stopped and restoration of a known complete retained
+v3, or recoverable quarantine/rebuild of the entire derived cache by the older
+runtime. No in-place downgrade. Legacy inflated counters stay historical; unique
+coverage is unknown until the v4 coordinated build commits distinct identities.
+
+### Bounded Qt Grammar and Independent Fixture Oracle
+
+Freeze a byte-oriented prolog recognizer under the existing 16,384-byte bound:
+optional UTF-8 BOM and XML whitespace, then either a complete case-sensitive XML
+declaration followed by an optional single literal Qt TS doctype, or one doctype
+without a declaration. Allow complete prolog comments/processing instructions
+between tokens and before the complete case-sensitive TS root start tag; preserve
+quoted attribute boundaries. A declaration, if present, precedes the doctype;
+neither token can repeat. At least one declaration/doctype token is required.
+Require valid UTF-8/ASCII for this supported signature. Do not scan arbitrary
+source substrings or expand entities/external/internal DTD subsets. An incomplete,
+malformed, unsupported-encoding or beyond-bound signature is inconclusive and
+retains established extension admission; unreadable input is a structured failure.
+
+The owned fixture generator freezes two positive paths (standard XML and prolog),
+one root-beyond-bound inconclusive path and two genuine TypeScript paths (XML
+string and long leading comment). Expected classification comes from fixture
+construction, independently of the runtime detector. T002 must add exact-bound,
+BOM/whitespace, quotes, malformed declaration/tag, doctype, processing instruction,
+unsupported encoding, symlink escape and read-error cases before implementation.
+T001 does not introduce classification code or turn the fixture oracle into one.
+
+### Baseline and Comparison Contract
+
+Use src/debug/fixtures/refresh-baseline-fixture.ts to construct a new private,
+immutable-input Git repository. Default scale is 336 files, 322 Python files and
+7,680 cross-slice calls, plus Qt/TypeScript/ignore/docs/CMake cases. The fixed Git
+revision is b8bf06687190d3b09280f3b37c11e914bce0577e; content manifest SHA-256 is
+d10935fcb3d0c1e8ca95e877c08644aec625f2a787b20d7395790b1d0f6eefd4.
+This is a synthetic mechanism/scaling baseline, not FreeCAD-wide performance proof.
+
+The independent expected-difference manifest lists only the two positive Qt paths
+for format correction and the unique-counter reinterpretation. The beyond-bound Qt
+path is deliberately unchanged. Stable comparison keys are file relative path and
+repository key; node kind/language/qualified name/source range; and references/edges
+by those source/target keys plus kind/range/provenance/confidence/metadata. Normalize
+only generated storage/snapshot identities and observation timestamps. Enumerate
+false positive-Qt parser nodes and their dependent edges explicitly before removal;
+all unaffected evidence, including ambiguous/unresolved cases, must remain equal.
+An unlisted difference fails. T003's matcher-only comparison holds this admission
+and accounting policy constant. T007 proves the full candidate result against this
+contract; a digest of a handful of totals is not graph equivalence evidence.
+
+Actual worker-isolate profiler output separates its observed thread CPU/wall
+interval, whole measured generation-process CPU and sampled process RSS. Exact
+scanner counters describe successful readdir operations, entries considered,
+file-identity stat attempts and actual ignore/priority RegExp construction.
+They are not inferred from profile samples and do not count every OS syscall.
+Exclusive production phase boundaries partition the observed thread interval;
+bootstrap/profiler settlement labels exclude pre-observation TSX/debug imports
+and the final receipt/cleanup tail. Whole-process generation CPU separately
+captures controller/worker startup, execution, V8/profiler and evidence overhead.
+Milestone intervals remain distinct and sampled RSS is not an exact high-water mark.
+
+The owned scenario suite runs five repetitions in fixed order: cold generation,
+persisted first-read validation/reuse (not daemon startup reuse), real sixty-second
+settled idle with zero workers, real watcher-triggered single edit, burst edits,
+and a controlled same-session dispatch pause after a worker commits a partial
+cursor and exits. The pause closes/reopens the parent store before accepting that
+result; it is not worker-crash recovery. Every mutable source is newly generated
+inside a private owned output root; no external mutable repo option exists.
+Watcher calibration and deterministic edited bytes/mtimes are frozen in report
+identity. Strong selected-snapshot semantic evidence, including node/doc FTS
+multiplicity, is compared across independent repetitions. Full suite evidence must
+pass before T001 is marked complete; no optimisation or future v4 proof follows
+merely from passing this baseline.
 
 ## Migration and Compatibility
 

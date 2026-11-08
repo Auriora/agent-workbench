@@ -20,7 +20,7 @@ license: GPL-3.0-or-later
 | Requirement 3 | D003 | T001; T004; T007; T008 | V004; V007; V008 | not implemented |
 | Requirement 4 | D004 | T001; T005; T007; T008 | V005; V007; V008 | not implemented |
 | Requirement 5 | D003; D005 | T001; T004; T006; T007; T008 | V004; V006; V007; V008 | not implemented |
-| Requirement 6 | D006 | T001; T007; T008 | V001; V007; V008 | exploratory evidence only |
+| Requirement 6 | D006 | T001; T007; T008 | V001; V007; V008 | T001 baseline verified; candidate and promotion pending |
 
 All acceptance criteria are covered by the ranges in design.md. Every correctness
 property maps to explicit task and validation gates there and in verification.md.
@@ -33,8 +33,11 @@ is promoted to this package; it is not done. The only deliberately deferred
 operational policy is [B014](../../backlog/README.md#b014-assess-background-indexing-cpu-duty-cycle).
 
 T008 must promote durable truth and record semantic dispositions before closure.
-No source implementation, schema migration, live deployment or performance gate
-is complete. T001 is the next planning-to-implementation checkpoint.
+T001 profiling/fixture source, exact observations and a six-scenario five-repetition
+baseline passed independent review and integrated checks. No runtime optimisation,
+schema migration, live deployment or comparative candidate-performance gate is
+complete. T001's baseline/design checkpoint is satisfied; dependent tasks remain
+pending.
 
 ## Task To Context Matrix
 
@@ -58,7 +61,7 @@ is complete. T001 is the next planning-to-implementation checkpoint.
 | D003; `design.md#d003-durable-catalog-manifest-and-shape` | Requirement 3 | Application, catalog ports and SQLite | T004 | `verification.md#quality-gates` | not-covered |
 | D004; `design.md#d004-candidate-indexes` | Requirement 4 | Application reference resolution | T005 | `verification.md#quality-gates` | not-covered |
 | D005; `design.md#d005-budget-and-accounting` | Requirement 5 | Worker/controller budget and progress | T006 | `verification.md#quality-gates` | not-covered |
-| D006; `design.md#d006-worker-evidence` | Requirement 6 | Checkout debug harness and worker profiler | T001; T007 | `verification.md#quality-gates` | not-covered |
+| D006; `design.md#d006-worker-evidence` | Requirement 6 | Checkout debug harness and worker profiler | T001; T007 | `verification.md#quality-gates` | partial-blocking |
 
 ## Open Decision Impact
 

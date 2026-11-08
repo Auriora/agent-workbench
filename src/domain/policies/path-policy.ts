@@ -209,6 +209,7 @@ export function classifyPathPolicy(input: {
   generatedRoots?: readonly string[];
   vendorRoots?: readonly string[];
   gitignoreRules?: readonly GitignoreRule[];
+  observeWildcardCompilation?: () => void;
   hasNestedGitRepository?: boolean;
   repositoryComposition?: RepositoryCompositionAdmissionReceipt;
 }): PathClassification {
@@ -276,7 +277,8 @@ export function classifyPathPolicy(input: {
     isIgnoredByGitignore({
       relativePath,
       isDirectory: input.isDirectory,
-      rules: baseInput.gitignoreRules
+      rules: baseInput.gitignoreRules,
+      observeWildcardCompilation: input.observeWildcardCompilation
     })
   ) {
     return skippedClassification(relativePath, "ignored", "gitignore");
@@ -291,6 +293,7 @@ export function shouldSkipCatalogPath(input: {
   generatedRoots?: readonly string[];
   vendorRoots?: readonly string[];
   gitignoreRules?: readonly GitignoreRule[];
+  observeWildcardCompilation?: () => void;
   hasNestedGitRepository?: boolean;
   repositoryComposition?: RepositoryCompositionAdmissionReceipt;
 }): boolean {
@@ -304,6 +307,7 @@ export function catalogSkipReason(input: {
   generatedRoots?: readonly string[];
   vendorRoots?: readonly string[];
   gitignoreRules?: readonly GitignoreRule[];
+  observeWildcardCompilation?: () => void;
   hasNestedGitRepository?: boolean;
   repositoryComposition?: RepositoryCompositionAdmissionReceipt;
 }): CatalogSkipReason | null {
@@ -484,10 +488,11 @@ function isIgnoredByGitignore(input: {
   relativePath: string;
   isDirectory: boolean;
   rules: readonly GitignoreRule[];
+  observeWildcardCompilation?: () => void;
 }): boolean {
   let ignored = false;
   for (const rule of input.rules) {
-    if (!gitignoreRuleMatches(rule, input.relativePath, input.isDirectory)) {
+    if (!gitignoreRuleMatches(rule, input.relativePath, input.isDirectory, input.observeWildcardCompilation)) {
       continue;
     }
     ignored = !rule.negated;
@@ -495,17 +500,17 @@ function isIgnoredByGitignore(input: {
   return ignored;
 }
 
-function gitignoreRuleMatches(rule: GitignoreRule, relativePath: string, isDirectory: boolean): boolean {
+function gitignoreRuleMatches(rule: GitignoreRule, relativePath: string, isDirectory: boolean, observeWildcardCompilation?: () => void): boolean {
   if (rule.directoryOnly && !isDirectory && relativePath !== rule.pattern && !relativePath.startsWith(`${rule.pattern}/`)) {
     return false;
   }
   if (rule.anchored || rule.hasSlash) {
-    return pathPatternMatches(rule.pattern, relativePath) || relativePath.startsWith(`${rule.pattern}/`);
+    return pathPatternMatches(rule.pattern, relativePath, observeWildcardCompilation) || relativePath.startsWith(`${rule.pattern}/`);
   }
-  return relativePath.split("/").some((segment) => pathPatternMatches(rule.pattern, segment));
+  return relativePath.split("/").some((segment) => pathPatternMatches(rule.pattern, segment, observeWildcardCompilation));
 }
 
-function pathPatternMatches(pattern: string, value: string): boolean {
+function pathPatternMatches(pattern: string, value: string, observeWildcardCompilation?: () => void): boolean {
   if (!pattern.includes("*")) {
     return pattern === value;
   }
@@ -513,5 +518,6 @@ function pathPatternMatches(pattern: string, value: string): boolean {
     .split("*")
     .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&"))
     .join("[^/]*");
+  observeWildcardCompilation?.();
   return new RegExp(`^${escaped}$`, "u").test(value);
 }

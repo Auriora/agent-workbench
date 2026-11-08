@@ -4,8 +4,10 @@
  */
 
 import fs from "node:fs";
+import { channel } from "node:diagnostics_channel";
 import path from "node:path";
 import { parentPort, workerData } from "node:worker_threads";
+import type { RefreshWorkerProgress } from "../../contracts/index.js";
 import { runRepositoryGraphBuildSlice } from "../../application/use-cases/index-repository-graph.js";
 import { discoverRepositoryComposition } from "../../application/use-cases/repository-composition.js";
 import { SCHEMA_VERSION, openGraphStore } from "../sqlite/index.js";
@@ -48,7 +50,17 @@ const input = workerData as StartupGraphWarmupWorkerData;
 assertGeneration("controllerGeneration", input.controllerGeneration);
 assertGeneration("invalidationGeneration", input.invalidationGeneration);
 const cooperativeExtractionDeadline = resolveCooperativeExtractionDeadline(input);
-const scanner = new FileCatalogScannerAdapter();
+const workObservation = channel("agent-workbench.refresh.work");
+const phaseObservation = channel("agent-workbench.refresh.phase");
+const workCounts = {
+  directory_enumerations: 0,
+  directory_entries_considered: 0,
+  file_stat_attempts: 0,
+  wildcard_regex_compilations: 0
+};
+const scanner = new FileCatalogScannerAdapter({
+  observe: workObservation.hasSubscribers ? (event) => { workCounts[event] += 1; } : undefined
+});
 const workspace = new WorkspaceFileAdapter({ repoRoot: input.repoRoot });
 const graphStore = openGraphStore(input.databasePath);
 const crashBarrierProbe = readCrashBarrierProbe();
@@ -62,6 +74,7 @@ const workerGraphStore = decorateGraphStore(graphStore, async (method, args) => 
 const extractors = createProductionExtractorRegistry();
 
 try {
+  observeBuildPhase("composition");
   const repositoryComposition = await discoverRepositoryComposition({
     workspace,
     git: new GitMetadataCommandAdapter(),
@@ -97,8 +110,10 @@ try {
     invalidation_generation: input.invalidationGeneration,
     repository_composition: repositoryComposition,
     should_yield_extraction: () => Date.now() >= cooperativeExtractionDeadline,
-    report_build_progress: reportProgress
+    report_build_progress: reportProgress,
+    observe_build_phase: phaseObservation.hasSubscribers ? observeBuildPhase : undefined
   });
+  observeBuildPhase("finalizing");
   if (result.outcome === "complete") {
     reportProgress("finalizing", 1);
   }
@@ -138,7 +153,12 @@ try {
     });
   }
 } finally {
+  if (workObservation.hasSubscribers) workObservation.publish(workCounts);
   graphStore.close();
+}
+
+function observeBuildPhase(phase: RefreshWorkerProgress["phase"]): void {
+  if (phaseObservation.hasSubscribers) phaseObservation.publish(phase);
 }
 
 function assertGeneration(name: string, value: number): void {
@@ -160,15 +180,15 @@ function reportProgress(
   phase: "composition" | "catalog" | "extraction" | "docs" | "graph_write" | "resolution" | "finalizing",
   completedUnits: number
 ): void {
-  parentPort?.postMessage({
-    type: "progress",
-    progress: {
-      execution_id: input.executionId,
-      target_snapshot_id: input.snapshotId,
-      phase,
-      completed_units: completedUnits
-    }
-  });
+  const progress = {
+    execution_id: input.executionId,
+    target_snapshot_id: input.snapshotId,
+    phase,
+    completed_units: completedUnits
+  };
+  const observation = channel("agent-workbench.refresh.progress");
+  if (observation.hasSubscribers) observation.publish(progress);
+  parentPort?.postMessage({ type: "progress", progress });
 }
 
 type TestCrashBarrier = "generation" | "catalog" | "docs" | "graph" | "prepublication";
