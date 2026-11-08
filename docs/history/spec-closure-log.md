@@ -472,7 +472,7 @@ historical audit explicitly needs the original scaffolding.
 - **Spec:** `docs/specs/072-daemon-cpu-efficiency/`
 - **Title:** Daemon CPU efficiency requirements
 - **Final spec commit:** `a305310`
-- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure cleanup commit:** `a38b26a`
 - **Closure action:** removed
 - **Durable docs updated:**
   - `docs/design/runtime-operations-design.md`

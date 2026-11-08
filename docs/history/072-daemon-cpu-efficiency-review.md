@@ -222,8 +222,10 @@ all unchanged audit bytes remain available in history. The final five-document
 closure audit reports 175 table advisories and five directly verified non-Markdown
 link false positives, with no truncation. The closure helper initially appended
 the owned archive row under the legacy-gap table; it was moved to Entries so the
-archive validator recognizes it. Cleanup-hash resolution follows the actual
-removal commit; it is not inferred from a pending placeholder.
+archive validator recognizes it. Cleanup-hash resolution uses actual removal
+commit a38b26a, with final verified spec tree a305310. The archive validator now
+recognizes 41 removed entries and reports zero errors, warnings or informational
+findings; Spec 072 is absent from active inventory.
 
 ## Closure Records
 
