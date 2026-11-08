@@ -119,8 +119,20 @@ jobs:
           _CL_: /std:c++20
         run: pnpm install --frozen-lockfile
 
+      - name: Verify native-safety module imports
+        run: |
+          node --check scripts/runtime-build-contract.mjs
+          node --check src/infrastructure/runtime/native-runtime-guard.mjs
+          node --input-type=module -e "for (const id of ['esbuild', './scripts/runtime-build-contract.mjs', './src/infrastructure/runtime/native-runtime-guard.mjs']) { console.log('native-safety import: ' + id); await import(id); }"
+
       - name: Test Windows native safety contract
-        run: pnpm exec vitest run tests/runtime/native-runtime-guard.test.ts tests/runtime/refresh-native-overrun.test.ts --maxWorkers=2
+        run: |
+          pnpm exec vitest run tests/runtime/native-runtime-guard.test.ts tests/runtime/refresh-native-overrun.test.ts --maxWorkers=2 --reporter=default --reporter=json --outputFile=.tmp/windows-native-safety-results.json
+          $nativeTestExit = $LASTEXITCODE
+          if ($nativeTestExit -ne 0) {
+            Get-Content .tmp/windows-native-safety-results.json
+            exit $nativeTestExit
+          }
 
       - name: Build configured Windows release runtime
         if: ${{ inputs.source_inputs_artifact != '' }}
