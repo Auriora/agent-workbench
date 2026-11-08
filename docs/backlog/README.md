@@ -47,9 +47,10 @@ reported incident's root cause.
 | B010 | accepted | Establish verifiable non-Linux process scope for guard recovery | P2 | platform | Kernel-evidence design before macOS/Windows automatic guard cleanup |
 | B011 | accepted | Exercise real-helper mid-abort at the process boundary | P3 | platform | Additional cancellation fixture; no blocking implementation finding |
 | B012 | accepted | Reconcile global npm direct-URL dependency diagnostics | P3 | platform | Reproduce missing resolution metadata and govern supported validation/remediation |
-| B013 | promoted | Deliver daemon CPU efficiency | P1 | platform | [Spec 072](../specs/072-daemon-cpu-efficiency/requirements.md); source delivery underway; task evidence governs completion |
+| B013 | promoted | Deliver daemon CPU efficiency | P1 | platform | [Spec 072](../specs/072-daemon-cpu-efficiency/requirements.md); T001-T007 verified; T008 review/closure remains |
 | B014 | accepted | Assess background indexing CPU duty cycle | P2 | platform | After Spec 072 measurements; resource scheduling policy remains unimplemented |
 | B015 | accepted | Maintain guarded native build-tool dependencies | P2 | platform | Follow up node-gyp transitive audit findings without weakening native termination guards |
+| B016 | accepted | Characterize refresh profiling RSS retention | P2 | platform | Explain process allocation history and idle RSS variation beyond Spec 072 fixture acceptance |
 
 ## Daemon performance follow-up
 
@@ -120,6 +121,31 @@ reported incident's root cause.
 - Owner: platform. Priority: P2. Status: accepted, not implemented. Promotion:
   focused dependency-maintenance work and native setup/release readiness. Spec
   072 T008 reconciles this owned residual before closing the performance package.
+
+### B016: Characterize refresh profiling RSS retention
+
+- Signal: Spec 072 T007 passes its CPU/wall/semantic gates, but the largest
+  end-sampled idle RSS rises from 658526208 to 748707840 bytes (13.69%). Some
+  ordinal-paired repetitions also exceed 10%; per-scenario median changes range
+  from -0.42% to +9.31%. These are process-wide samples, not retained-heap sizes.
+- Disposition: accept the measured memory tradeoff for Spec 072's bounded
+  synthetic workload, with all samples retained and no memory improvement or
+  leak-absence claim. The same profiling parent runs all five repetitions;
+  zero-worker idle/reuse samples occur after semantic capture. Native/V8/SQLite
+  allocation history and GC timing are not controlled. Later samples decrease;
+  this does not establish the allocation cause or rule out a production leak.
+- Scope: compare fresh-process and repeated-process measurements; attribute
+  heap, native/allocator, guard, worker teardown and semantic-capture costs;
+  include longer idle and fixed representative production sources. Preserve
+  existing primary metrics; do not force GC or subtract overhead to rewrite
+  Spec 072's accepted result.
+- Acceptance: identify retained ownership and release behavior, distinguish
+  sample timing from true process high-water marks, and record bounded memory
+  guidance or implement a fixture-proven fix if retention is unintended.
+- Owner: platform. Priority: P2. Status: accepted, not implemented. Promotion:
+  observability/debugging design and focused profiling/runtime maintenance.
+  This follow-up supplements the explicit SC-004 disposition; no T007 CPU,
+  parity or idle-worker criterion is deferred. T008 reconciles the residual.
 
 ## Transport reliability follow-up
 
@@ -2852,8 +2878,9 @@ Do not promote an item when:
 ## Immediate Next Specs
 
 - Spec 072/B013 now owns the newly evidenced daemon CPU fixes and worker profiling
-  from the 2026-11-08 investigation. Implementation is pending; B014 owns any
-  subsequent sustained background CPU scheduling decision.
+  from the 2026-11-08 investigation. T001-T007 are verified; T008 review and
+  closure remain. B014 owns sustained background CPU scheduling; B015 owns
+  native build-tool maintenance and B016 owns further RSS characterization.
 
 - Spec 066 transport, Spec 067/B001 lifetime evidence, Spec 068/B002 shutdown
   and Spec 069/B006 aggregate admission are verified in source. Spec 068 also

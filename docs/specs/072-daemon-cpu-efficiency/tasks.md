@@ -12,7 +12,7 @@ license: GPL-3.0-or-later
 # Tasks
 
 Input: [requirements](requirements.md), [design](design.md), [research](research.md),
-[traceability](traceability.md) and [verification](verification.md). T001-T006 are complete; T007-T008 remain pending. Obtain fresh lifecycle task context and mark the selected task in
+[traceability](traceability.md) and [verification](verification.md). T001-T007 are complete; T008 remains pending. Obtain fresh lifecycle task context and mark the selected task in
 progress before coding; preserve unrelated release notes and Spec 065 work.
 
 ## Task Dependency Graph
@@ -132,11 +132,13 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
   - Evidence mode: validation
 ## Integration and promotion
 
-- [ ] T007 - Prove end-to-end performance and graph equivalence
+- [x] T007 - Prove end-to-end performance and graph equivalence
   - Depends on: T002; T003; T004; T005; T006.
   - Requirements: Requirement 6 AC1-AC4; SC-001-SC-004.
   - Properties: CP-001-CP-006.
-  - Files: src/debug/; tests/fixtures/; this package's verification.md.
+  - Files: src/debug/; tests/fixtures/; this package's verification.md and
+    performance-evidence.json; docs/design/observability-debugging-design.md;
+    docs/backlog/README.md.
   - Acceptance: five-run comparable scenarios include complete final resolution,
     cold/warm/edit/idle/resume cases, CPU/wall/RSS spread and operation counts;
     D006's frozen allowed-difference manifest/comparator, unaffected-file parity,
@@ -144,8 +146,9 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
     pending state and record exact missing evidence instead of partial success.
   - Validation: V007; pnpm typecheck; pnpm test; compiled isolated worker/MCP smoke.
   - Validation risk: Attribute any recurrence of the earlier intermittent manifest_validation_failed profiling outcome using retained failure-evidence.json; reject failed repetitions without retry or discarded evidence. Final T004 frozen suite/probe pass, but no causal repair of the earlier unattributed condition is claimed.
-  - Evidence: Pending.
+  - Evidence: V007 and SC-001 through SC-004 pass. Thirty owned and five read-only measurements complete; 35 semantic comparisons apply exactly nine frozen corrections each with zero unexpected differences; 130 V8 profiles audited. Primary median CPU falls from 7420853 to 3765711 us (49.26% lower), wall from 5061.923 to 2986.628 ms (41.00% lower). Five real >=60-second idle windows and persisted reads invoke zero workers. Discovery occurs only in the first of two passes. All scenario RSS median increases are below 10%; maximum idle increase of 13.69% and seven ordinal-paired flags receive explicit independent reviewed acceptance for this bounded fixture, with platform P2 follow-up B016. Durable performance-evidence.json retains 65 raw measurement rows, phase costs, identities, counts, parity and limitations; observability guidance is promoted. T006 frozen-source typecheck, full suite (182 files; 1816 tests passed; one skipped), build/plugin and installed MCP/native proof apply unchanged. See verification.md#t007-comparable-complete-generation-acceptance. No acceptance criterion deferred. T008 closure and Windows release preflight remain pending.
 
+  - Evidence mode: validation
 - [ ] T008 - Review, promote durable behavior and reconcile residuals
   - Depends on: T007.
   - Requirements: Requirement 6 AC4; all requirement dispositions.

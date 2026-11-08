@@ -63,7 +63,8 @@ harness, six controlled scenarios with five repetitions, exact observations and
 independent review. T002 bounded Qt admission is implemented and verified under
 V002. T003 compiled ignore/priority matchers pass V003 and the controlled SC-001
 scan benchmark. T004 inventory/publication/migration passes
-V004 and SC-002; T005 candidate indexing passes V005; T006 budget/native settlement passes V006. Full-generation acceptance remains T007.
+V004 and SC-002; T005 candidate indexing passes V005; T006 budget/native settlement passes V006. T007 full-generation CPU/wall/parity and reviewed RSS acceptance pass V007.
+T008 final review/reconciliation remains pending.
 User purpose is established by the explicit request to put the CPU findings into
 a fix spec and route residuals to backlog. Template authority is the skill
 fallback: docs/templates/spec-package and docs/templates/README.md are absent.

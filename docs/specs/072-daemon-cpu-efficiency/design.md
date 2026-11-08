@@ -17,8 +17,8 @@ Fix admitted file format and repeated algorithmic work inside the existing
 refresh pipeline. Preserve its single executor, durable completion and atomic
 publication. T001 baseline/design, T002 bounded Qt admission and T003 compiled
 matchers are verified. T003 passes the controlled SC-001 scan gate. T004 sealed inventory, publication receipts and owned v4 migration are implemented;
-V004 and SC-002 pass. T005 candidate indexing passes V005; T006 remains pending; full-generation
-comparative acceptance remains T007.
+V004 and SC-002 pass. T005 candidate indexing passes V005; T006 budgets/native settlement pass V006; T007 full-generation
+CPU/wall/parity and reviewed RSS acceptance pass V007. T008 remains pending.
 
 ## Requirement Coverage
 
@@ -208,8 +208,8 @@ numeric resolve cursor after committed work. It may yield between committed page
 before the admission margin is exhausted; actual phase/hard failure never becomes
 partial success. This is one canonical build path with fewer isolate transitions,
 not an alternate resolver. Complete-node loading and indexes remain page-owned.
-Unit, actual worker, cursor/transaction and strong semantic evidence must prove
-these boundaries before T006 completion.
+Unit, actual worker, cursor/transaction and strong semantic evidence prove
+these boundaries; see verification.md#t006-phase-budgets-and-native-settlement.
 
 Native termination proof exposed an additional R5 AC2 dependency: the unguarded
 tree-sitter Node binding throws from its input callback during Worker.terminate;

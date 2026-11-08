@@ -20,8 +20,8 @@ format admission/V002 and T003 compiled matchers/V003 are also verified. T003
 passes SC-001 with 84.60% lower median CPU in the controlled two-scan benchmark.
 T004 sealed inventory/publication/migration now passes V004 and SC-002 below.
 T005 candidate indexing passes V005; T006 budget and settlement proof passes V006 below. Historical exploratory measurements remain in
-[research](research.md). Full-generation CPU/RSS improvement and complete
-Requirement 6/candidate/release acceptance remain T007/T008 obligations.
+[research](research.md). T007 complete-generation CPU/wall/parity and reviewed RSS acceptance now pass
+V007 below. T008 final review/reconciliation and release acceptance remain pending.
 
 ## Quality Gates
 
@@ -33,7 +33,7 @@ Requirement 6/candidate/release acceptance remain T007/T008 obligations.
 | V004 | Requirement 3; CP-001/CP-003/CP-005; SC-002 | Multi-slice single discovery, docs priority, worker exit/restart, create/delete/rename/content/ignore/config/composition invalidation, manifest migration, incomplete/sealed state, death before/during construction, at seal and before consumption, and mutations not yet admitted by watcher | passed T004/SC-002; comparative V007 remains pending |
 | V005 | Requirement 4; CP-004/CP-005 | Cross-language/Ruby/lambda graph and ambiguity parity, candidate-count scaling and final-page cursor/transaction proof | passed T005; comparative V007 remains pending |
 | V006 | Requirement 5; CP-003/CP-005 | Budget/long-file overrun, settlement, cancellation/supersession/shutdown, unique versus visit counters and legacy unknown/rebuild behavior | passed T006 |
-| V007 | Requirement 6; SC-001-SC-004; CP-006 | Comparable complete-generation five-run baseline/candidate CPU, wall, RSS, phase costs, frozen permitted Qt/counter corrections, normalized unaffected-evidence parity; source and isolated compiled acceptance | pending T007 |
+| V007 | Requirement 6; SC-001-SC-004; CP-006 | Comparable complete-generation five-run baseline/candidate CPU, wall, RSS, phase costs, frozen permitted Qt/counter corrections, normalized unaffected-evidence parity; source and isolated compiled acceptance | passed T007; explicit RSS disposition below |
 | V008 | All requirements; CP-001-CP-006 | Independent architecture/data/operational review, durable promotion, backlog reconciliation, evidence/closure checks | pending T008 |
 
 Use deterministic Vitest assertions for the correctness properties. No new
@@ -1013,3 +1013,162 @@ and installation owners are updated. B015 owns the build-only dependency advisor
 chain; it does not defer a T006 acceptance criterion. Actual Windows portable
 execution remains a T008 release-preflight obligation. T007 comparative acceptance,
 T008 closure and B014 remain pending. No live installed daemon was changed.
+
+## T007 Comparable Complete-Generation Acceptance
+
+### Frozen Comparison Plan
+
+The accepted baseline is T001 commit 84c75ef and its six-scenario, five-repetition
+report, SHA-256 feb75e933b610e90a6e3b4b7ae53c250c4c82dabbc79d157df5c6396ca34184c,
+at .tmp/spec072-t001-completion/full-suite/report.json. The earlier exploratory
+10.739-second cold CPU result is not the acceptance baseline. Primary SC-003 is
+the owned-suite cold complete generation: baseline median process CPU 7420853 us
+and wall 5061.923 ms; candidate limits are 5194597.1 us and 5568.115 ms.
+Supplemental read-only measurements cannot replace that primary result.
+
+Before candidate measurements, independent per-scenario correction oracles were
+frozen at 2026-11-08T20:10:54.385Z, SHA-256
+2d8a133b8df5fe10ff4abb021afa39c45470f5531fbbf143470ed40ca61053ce.
+Comparator SHA-256 is 9bf0582e468ecd25519fc36961fa8feea62ab9c7529e79f8bd52cbd83c7cef24.
+The oracle derives nine exact corrections from baseline fixtures: six Qt file,
+node and node-FTS corrections; exact store identity version 3 to 4; version-2
+progress/cursor accounting; and distinct coverage. Counts derive independently
+from the frozen source manifest and baseline graph, never from candidate output.
+The comparator self-test audits all 30 baseline measurements and 80 sampled V8
+profiles, reconciles every phase sum and verifies the SC-001 scan comparison.
+Five baseline profiles contain tiny negative V8 time deltas (-1, -2 or -18 us);
+these are preserved as sampling jitter. Receipt CPU timers remain authoritative.
+
+The fixture was preselected by T001: 336 synthetic files including 320 callers,
+322 Python files and 7680 cross-file calls; revision
+b8bf06687190d3b09280f3b37c11e914bce0577e;
+content manifest d10935fcb3d0c1e8ca95e877c08644aec625f2a787b20d7395790b1d0f6eefd4;
+admitted source b09d1d3efe9f835a8203164311eda20992f18c472ec72d01902586105e47ef8d;
+fixed timestamps 2001-01-01. Owned copies cover cold, persisted reuse, settled idle,
+single edit, burst edits and interrupted resume; a separate fixed clean read-only
+copy supplies five supplemental cold runs. This is the accepted representative
+synthetic workload, not evidence of FreeCAD-wide performance.
+
+Node 24.8.0, Linux x64, fixture generation and worker profiling code are unchanged
+from the accepted baseline. Generation process CPU includes the parent, all Node
+worker/V8 threads, startup/teardown, profiling and semantic capture; it excludes
+separate Git subprocess CPU and fingerprint work outside measurement boundaries.
+It is not a machine-wide CPU measure. Timing boundaries are unchanged. Production
+validation/drain I/O, corrected store lifetime, the native admission guard and
+same-isolate phase treatment remain inside candidate measurements. Their costs
+are included, not subtracted. The baseline native binary hash was not recorded;
+identical binary provenance is unknown. The guarded native build is an intentional
+T006 safety change, with its candidate identity retained in the final artifact.
+
+Commands run sequentially without concurrent tests or compilation:
+
+```bash
+pnpm debug:refresh-scenarios --output .tmp/spec072-t007/candidate-suite --runs 5 --python-files 320
+pnpm debug:refresh-profile --repo .tmp/spec072-t003/worker-candidate/run-1/awb-refresh-baseline-oxmK8h --output .tmp/spec072-t007/readonly-five --runs 5 --max-files 2000
+pnpm exec tsx .tmp/spec072-t007/compare.ts --candidate .tmp/spec072-t007/candidate-suite/report.json --candidate-cold .tmp/spec072-t007/readonly-five/report.json --scan-comparison .tmp/spec072-t003/scan-comparison.json --output .tmp/spec072-t007/comparison.json
+```
+
+No failed repetition may be discarded or retried into the acceptance set. Any
+source change requires a new complete candidate set. Source remains frozen at
+T006 commit 71ffd9b during these runs; only evidence/documentation changes proceed.
+
+### Final T007 Results
+
+V007 and SC-001 through SC-004 pass. The complete sanitized audit, raw per-run
+CPU/wall/RSS samples, per-pass phase receipts, phase distributions, source/build
+identities and all 35 parity verdicts are retained in
+[performance-evidence.json](performance-evidence.json). Artifact SHA-256 is
+f2e3e060ccf2015b5317084e0e2526aeaeca9ca49ff5faac96be0d93cae0b1cc.
+Full sampled profiles and private SQLite evidence remain ignored under
+.tmp/spec072-t007/.
+The frozen final comparison SHA-256 is
+994f1e3e37aad437d206ede98c9ffb8aa5b4189f137b5d7a6d6b432fd936fa96.
+
+All values below are medians of five complete repetitions. CPU is seconds of
+Node generation-process CPU; wall is seconds. The artifact retains every sample
+and each minimum/maximum, including baseline outliers.
+
+| Scenario | Baseline CPU | Candidate CPU | Baseline wall | Candidate wall |
+| --- | --- | --- | --- | --- |
+| cold_complete_generation | 7.421 | 3.766 | 5.062 | 2.987 |
+| persisted_reuse | 0.591 | 0.565 | 0.563 | 0.493 |
+| settled_idle | 1.218 | 1.158 | 60.460 | 60.386 |
+| single_edit | 6.046 | 3.835 | 4.473 | 3.064 |
+| burst_edits | 6.445 | 4.061 | 4.617 | 3.238 |
+| interrupted_resume | 7.326 | 3.710 | 5.500 | 3.049 |
+
+Primary cold CPU falls 49.26% and wall falls 41.00%, passing the frozen 30% CPU
+and <=10% wall-regression thresholds. Cold CPU ranges are 5822086-17538489 us
+baseline and 3704633-4125337 us candidate; wall ranges are
+4279.162-12377.148 ms and 2884.078-3293.032 ms respectively.
+Supplemental read-only cold CPU is 3887959 us median (3773511-3971704);
+wall 2944.272 ms (2920.400-3128.749); sampled RSS 651853824 bytes
+(524722176-702824448). This supplemental set did not replace primary SC-003.
+
+All 30 owned and five read-only comparisons apply exactly nine frozen corrections
+and have zero unexpected differences. This includes complete final references,
+confidence/provenance, ambiguity/unresolved rows, documentation/FTS, distinct
+coverage, cursor and snapshot identity evidence. Default cold counts remain
+332 files, 655 nodes, 7680 edges, two unresolved and three documents; 9341
+normalized records. Edited scenarios use their independently frozen mutations
+and expected counts. There are 40 owned and ten read-only worker profiles,
+versus 80 baseline; all 130 actual V8 profiles and phase/CPU receipts are audited.
+Default complete generations use two isolates instead of four. Discovery occurs
+only in the first pass: directory enumerations 20 to 6, entries 1028 to 342,
+file-identity stat attempts 749 to 332, wildcard constructions 141622 to 31.
+No positive-Qt file invokes TypeScript extraction. SC-001 retains five identical
+scan-output pairs and 84.60% lower scan CPU. These worker operation counts do not
+include the required controller validation/watcher/fingerprint I/O.
+
+Five >=60-second idle windows schedule zero workers; all five persisted first
+reads also use zero workers. No repetition fails, is retried, is discarded or
+changes runtime source. The earlier intermittent manifest-validation failure does
+not recur; its exact original cause remains unknown. The deterministic paused
+store lifetime defect was separately reproduced and fixed under T006; no causal
+repair claim links it to the unattributed prior failure.
+
+### RSS Disposition and Delivery Limits
+
+Per-scenario sampled RSS median changes are +8.92%, +9.31%, +4.92%, +7.32%,
++2.98% and -0.42% in the table's order. The frozen comparator's median RSS check
+passes. Supplementary review also checks maximum and ordinal-paired samples:
+maximum idle RSS rises from 658526208 to 748707840 bytes (+13.69%); seven
+ordinal-paired samples exceed 10%. The overall candidate maximum is 834170880
+bytes versus baseline 808083456 (+3.23%). All raw values remain in the artifact.
+
+Platform disposition, independently reviewed: accept this observed increase for
+the fixed synthetic fixture's SC-004 gate, with no memory improvement or absence
+of leaks claimed. Idle/reuse RSS is sampled once after semantic capture, rather
+than continuously through the idle interval. All repetitions share a parent;
+native/V8/SQLite allocation history and GC timing are uncontrolled. Candidate
+idle samples are nonmonotonic and the final idle sample decreases 78450688 bytes
+from the prior one. This bounds the observed result and explains its measurement
+limits; it does not establish the exact allocation cause or exclude a production
+leak. [B016](../../backlog/README.md#b016-characterize-refresh-profiling-rss-retention)
+owns fresh/repeated-process, allocator/native guard/teardown and longer-idle
+characterization before broader production memory claims. This explicit reviewed
+disposition satisfies SC-004; no required CPU, graph or zero-worker gate moves to
+backlog. B014 still owns duty-cycle policy and B015 build-tool maintenance.
+
+T006's frozen-source typecheck/full suite, runtime build/receipt, plugin checks
+and actual isolated installed MCP/native proof apply to this unchanged runtime.
+Independent review accepts measurement scope, frozen oracles, phase sums,
+parity, counters and the bounded RSS disposition. Durable benchmark guidance and
+these measured results are promoted to observability/debugging design. Shared
+host/OS cache, sampled RSS, synthetic workload, unknown baseline native binary
+hash and lack of actual provider CLI execution limit interpretation. No installed
+live daemon was replaced or restarted, no CPU cap is delivered, and no FreeCAD-wide
+performance claim is made. T008 review/reconciliation/closure and actual Windows
+portable release preflight remain pending; B013 stays promoted until that gate.
+
+### Evidence Documentation Checks
+
+Lifecycle lint reports zero errors, warnings or informational findings.
+The Markdown audit checks all seven changed Markdown documents without
+truncation: 127 table-readability advisories and two false-positive link warnings
+for performance-evidence.json. The link checker tests membership only in its
+existing_markdown_paths set, so it cannot validate the non-Markdown audit artifact.
+Direct filesystem checks resolve all 113 relative targets, including both JSON
+links, inside the repository with no missing target. The JSON parses and retains
+no temporary absolute paths. git diff --check passes. These are evidence-only
+changes; the runtime/package/lock fingerprint remains the tested T006 value.

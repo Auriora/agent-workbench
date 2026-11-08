@@ -15,12 +15,12 @@ license: GPL-3.0-or-later
 
 | Requirement | Design | Tasks | Verification | State |
 | --- | --- | --- | --- | --- |
-| Requirement 1 | D001 | T001; T002; T007; T008 | V002; V007; V008 | T002 implemented and V002 verified; comparative gates pending |
-| Requirement 2 | D002 | T001; T003; T007; T008 | V003; V007; V008 | T003 implemented; V003/SC-001 passed; full candidate gates pending |
-| Requirement 3 | D003 | T001; T004; T007; T008 | V004; V007; V008 | T004 implemented; V004/SC-002 passed; comparative gates pending |
-| Requirement 4 | D004 | T001; T005; T007; T008 | V005; V007; V008 | T005 implemented; V005 passed; comparative gates pending |
+| Requirement 1 | D001 | T001; T002; T007; T008 | V002; V007; V008 | T002/V002 and T007/V007 verified; T008 pending |
+| Requirement 2 | D002 | T001; T003; T007; T008 | V003; V007; V008 | T003/V003/SC-001 and T007/V007 verified; T008 pending |
+| Requirement 3 | D003 | T001; T004; T007; T008 | V004; V007; V008 | T004/V004/SC-002 and T007/V007 verified; T008 pending |
+| Requirement 4 | D004 | T001; T005; T007; T008 | V005; V007; V008 | T005/V005 and T007/V007 verified; T008 pending |
 | Requirement 5 | D003; D005 | T001; T004; T006; T007; T008 | V004; V006; V007; V008 | T004 inventory/progress and T006 budgets/native settlement verified |
-| Requirement 6 | D006 | T001; T007; T008 | V001; V007; V008 | T001 baseline verified; candidate and promotion pending |
+| Requirement 6 | D006 | T001; T007; T008 | V001; V007; V008 | T001 baseline and T007/V007 verified; T008 review/closure pending |
 
 All acceptance criteria are covered by the ranges in design.md. Every correctness
 property maps to explicit task and validation gates there and in verification.md.
@@ -42,8 +42,11 @@ observability. T004 sealed inventory, receipt-gated publication and owned schema
 pass V004/SC-002; final evidence is recorded in verification.md.
 T005 candidate pools pass V005 with exact fixture/worker parity and numeric-page
 transaction proof; graph-store design records the delivered lifetime and lookup
-boundaries. T006 phase budgeting and native settlement pass V006. T007-T008 and live deployment remain pending;
-T007 owns comparative complete-generation CPU/RSS acceptance.
+boundaries. T006 phase budgeting and native settlement pass V006. T007 complete-generation CPU/wall/parity and reviewed RSS acceptance pass V007;
+observability design and performance-evidence.json retain the durable results.
+T008 final review/reconciliation/closure and live deployment remain pending.
+B015 owns build-tool maintenance and B016 further RSS characterization; neither
+defers a T007 CPU/parity/idle-worker criterion.
 
 ## Task To Context Matrix
 
@@ -67,7 +70,7 @@ T007 owns comparative complete-generation CPU/RSS acceptance.
 | D003; `design.md#d003-durable-catalog-manifest-and-shape` | Requirement 3 | Application, catalog ports and SQLite | T004 | `verification.md#t004-sealed-inventory-and-publication` | covered |
 | D004; `design.md#d004-candidate-indexes` | Requirement 4 | Application reference resolution | T005 | `verification.md#t005-indexed-reference-candidate-pools` | covered |
 | D005; `design.md#d005-budget-and-accounting` | Requirement 5 | Worker/controller budget and progress | T006 | `verification.md#quality-gates` | covered |
-| D006; `design.md#d006-worker-evidence` | Requirement 6 | Checkout debug harness and worker profiler | T001; T007 | `verification.md#quality-gates` | partial-blocking |
+| D006; `design.md#d006-worker-evidence` | Requirement 6 | Checkout debug harness and worker profiler | T001; T007 | `verification.md#quality-gates` | covered |
 
 ## Open Decision Impact
 

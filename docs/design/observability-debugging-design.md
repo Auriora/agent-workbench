@@ -316,6 +316,39 @@ Future harnesses should follow the same pattern:
 - optionally emit OTEL traces when telemetry is enabled
 - never expose debug-only behavior through the public MCP registry
 
+### Refresh performance acceptance
+
+Refresh performance acceptance compares complete generations, including final
+resolution and settlement. Freeze source revision, content/timestamp manifest,
+Node/platform, scenario parameters, measurement boundaries and independently
+expected semantic corrections before running candidates. Use at least five
+repetitions for cold, persisted reuse, settled idle, edits and resume, and retain
+failed repetitions with their original failure evidence. Report process CPU and
+worker-thread CPU separately, plus wall and sampled RSS median/minimum/maximum.
+Worker scanner counters exclude parent validation/watcher work; zero workers
+therefore does not mean zero parent I/O. Source drift or unexplained graph changes
+invalidate acceptance. An additional read-only cold run set supplements the
+preselected primary scenario; it cannot replace a less favorable primary result.
+
+
+Spec 072's frozen synthetic fixture comparison (Node 24.8.0, Linux x64, five
+repetitions per scenario) records cold complete-generation median process CPU
+7.421 to 3.766 seconds (49.26% lower) and wall 5.062 to 2.987 seconds
+(41.00% lower), with exact graph parity after independently frozen Qt/schema/
+accounting corrections. Default worker passes fall four to two; discovery runs
+once per generation. Five >=60-second settled-idle windows invoke zero workers.
+The [verification record](../specs/072-daemon-cpu-efficiency/verification.md#final-t007-results)
+and [audit artifact](../specs/072-daemon-cpu-efficiency/performance-evidence.json)
+retain all scenarios, spreads, phase costs, counters and identity limits.
+
+Memory is a recorded tradeoff: all scenario median RSS changes are below +10%,
+but maximum end-sampled idle RSS grows 13.69%. Platform review accepts that
+bounded fixture result with [B016](../backlog/README.md#b016-characterize-refresh-profiling-rss-retention)
+owning further allocation/long-idle characterization. Idle RSS is a single
+post-capture sample; allocation cause and production leak behavior remain unknown.
+These measurements establish neither production-wide memory/CPU bounds nor
+FreeCAD-wide performance. Background duty-cycle policy remains B014.
+
 ## Profiling
 
 Profiling should be possible without changing MCP contracts. Preferred modes:
