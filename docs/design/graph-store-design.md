@@ -188,6 +188,23 @@ only when one compatible target remains. Dynamic Ruby records and ambiguous
 candidates stay unresolved with their parser provenance and candidate counts.
 No Ruby-specific table or public response field is introduced.
 
+Build-time resolution creates an invocation-owned candidate index over the exact
+extraction node set, or the complete node universe loaded for a final resolution
+page. Case-folded name buckets serve both selection and candidate counts from one
+filtered pool. Qualified names, Ruby module path suffixes, model/controller names,
+route concerns and draw files, action scopes, exact Lambda file paths and source
+IDs have dedicated lookup tables. Merged alternatives retain original node
+occurrence order; existing form-specific ID deduplication and ambiguity rules
+remain unchanged. Indexes expire with that invocation and never span node sets,
+generations or worker isolates.
+
+This changes in-memory lookup work only. Each final page still loads the complete
+authoritative build-node universe; it does not introduce a persisted candidate
+cache or change semantic filters. Numeric unresolved-reference cursors remain
+exclusive and generation-fenced. Edge insertion, unresolved-row deletion and
+counter updates commit together; interruption before subsequent cursor settlement
+resumes safely against the remaining unresolved rows without duplicate edges.
+
 Parser reference paging uses limit-plus-one probes over three disjoint routes:
 outgoing edges, incoming edges, then unresolved references. One authenticated
 composite cursor carries per-route offsets and exhaustion. Complete evidence

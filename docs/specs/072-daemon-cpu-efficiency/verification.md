@@ -19,7 +19,7 @@ comparison contract passed the final evidence gates below. T002's bounded Qt
 format admission/V002 and T003 compiled matchers/V003 are also verified. T003
 passes SC-001 with 84.60% lower median CPU in the controlled two-scan benchmark.
 T004 sealed inventory/publication/migration now passes V004 and SC-002 below.
-T005-T006 remain pending. Historical exploratory measurements remain in
+T005 candidate indexing passes V005 below; T006 remains pending. Historical exploratory measurements remain in
 [research](research.md). Full-generation CPU/RSS improvement and complete
 Requirement 6/candidate/release acceptance remain T007/T008 obligations.
 
@@ -31,7 +31,7 @@ Requirement 6/candidate/release acceptance remain T007/T008 obligations.
 | V002 | Requirement 1; CP-001/CP-002 | Qt XML and real/malformed/unknown TypeScript, misleading directories/strings, BOM/whitespace, root beyond the 16,384-byte bound, long TypeScript comments, inconclusive/read-error outcomes; positive-Qt parser invocation counts | passed T002; full candidate gates V007/V008 pending |
 | V003 | Requirement 2; CP-001; SC-001 | Negation/anchor/directory/segment parity, child ignore invalidation, finite matcher lifetime, distinct compilation counts and CPU benchmark | passed T003/SC-001; full candidate gates pending |
 | V004 | Requirement 3; CP-001/CP-003/CP-005; SC-002 | Multi-slice single discovery, docs priority, worker exit/restart, create/delete/rename/content/ignore/config/composition invalidation, manifest migration, incomplete/sealed state, death before/during construction, at seal and before consumption, and mutations not yet admitted by watcher | passed T004/SC-002; comparative V007 remains pending |
-| V005 | Requirement 4; CP-004/CP-005 | Cross-language/Ruby/lambda graph and ambiguity parity, candidate-count scaling and final-page cursor/transaction proof | pending T005 |
+| V005 | Requirement 4; CP-004/CP-005 | Cross-language/Ruby/lambda graph and ambiguity parity, candidate-count scaling and final-page cursor/transaction proof | passed T005; comparative V007 remains pending |
 | V006 | Requirement 5; CP-003/CP-005 | Budget/long-file overrun, settlement, cancellation/supersession/shutdown, unique versus visit counters and legacy unknown/rebuild behavior | pending T006 |
 | V007 | Requirement 6; SC-001-SC-004; CP-006 | Comparable complete-generation five-run baseline/candidate CPU, wall, RSS, phase costs, frozen permitted Qt/counter corrections, normalized unaffected-evidence parity; source and isolated compiled acceptance | pending T007 |
 | V008 | All requirements; CP-001-CP-006 | Independent architecture/data/operational review, durable promotion, backlog reconciliation, evidence/closure checks | pending T008 |
@@ -809,3 +809,135 @@ invalidation reasons on recurrence. T007 owns attribution of any recurrence and
 must reject failed repetitions rather than retry, discard or count them as
 performance acceptance. This is a recorded validation risk, not evidence of an
 identified filesystem race being fixed or permission to weaken freshness checks.
+
+
+## T005 Indexed Reference Candidate Pools
+
+### Scope and Correctness Evidence
+
+T005 implements R4 AC1-AC3 and CP-004/CP-005. ReferenceCandidateIndex is owned by
+one extraction invocation or final-resolution page. It builds case-folded name,
+exact file/source ID, Ruby qualified-name/module-path suffix, class name/raw
+qualification/suffix, concern/draw-file and action-scope tables once over that
+invocation's authoritative node set. Extraction computes one filtered candidate
+pool per reference, then uses the same pool for the unique-target decision and
+unresolved/ambiguous candidate count. Final resolution uses the same index path.
+Lambda routing also replaces repeated batch/file/source searches with maps.
+
+No per-reference whole-node fallback remains. Merged buckets preserve original
+node occurrence order; existing ID deduplication remains at the original semantic
+boundaries. Case-sensitive Lambda paths, Ruby extension-removal order, distinct
+qualified-name normalization rules, namespace filtering and cross-language action
+matching are preserved. Indexes are not persisted or shared between invocations.
+Each final page still loads all authoritative nodes; this task does not claim to
+optimize database node loading or all graph-build memory.
+
+New reference-candidate-index.test.ts predicate fixtures cover ordering,
+duplicate IDs/occurrences, exact file case, Ruby require/relative lookup inputs,
+model/controller qualification, concerns/draw files and action scope prefixes,
+singleton methods and cross-language actions. Operation-count tests construct
+100 and 10000 unrelated nodes, then perform 1000 loops of ten lookup operations.
+Construction performs 1450 and 145000 property reads respectively (14.5 per
+unrelated node); all subsequent lookups perform zero reads of those unrelated nodes. Lookup cost is
+bounded by the requested key and matching buckets, including ordinal merging,
+rather than the complete unrelated universe. These deterministic counts are not
+wall-time or total-generation CPU claims.
+
+New reference-resolution-pages.test.ts uses a real manifest-backed SQLite build
+and single-row pages across numeric IDs 1 through 14, explicitly crossing 9/10.
+Twelve resolved targets remain unique; ambiguous and missing references remain
+unresolved; repeated completion leaves state unchanged. A SQLite abort on the
+second unresolved-row deletion proves whole-page rollback of edges, unresolved
+rows and progress. Stale controller/invalidation generations are rejected.
+Interruption after committed edge/removal/counter writes but before cursor
+settlement resumes from remaining rows without duplicating edges. No production
+cursor or transaction behavior was changed.
+
+### Frozen Fixture Parity
+
+A detached T004 baseline at commit 62f92b1 captured complete normalized graph
+records using the production extractor registry and fixed clock. The same seven
+copied fixture roots and bytes were then indexed with T005. The independent
+baseline was captured before candidate comparison and is never regenerated from
+candidate output. All 684 records are exactly equal, with no permitted changes:
+
+| Fixture | Normalized records |
+| --- | ---: |
+| fixture-basic-python | 30 |
+| fixture-js-ts-monorepo | 121 |
+| fixture-ruby-semantic-repo | 340 |
+| fixture-sam-lambda-repo | 52 |
+| fixture-sam-lambda-heavy-repo | 82 |
+| fixture-mixed-language-platform | 26 |
+| fixture-go-docker-policy-repo | 33 |
+
+This compares edges, unresolved metadata, confidence/provenance, symbol/FTS data,
+coverage, docs and concern state present in each fixture. Local evidence is under
+.tmp/spec072-t005/baseline-fixtures/ and candidate-fixtures/; the ignored driver is
+.tmp/t005-fixture-parity.ts. The baseline source is the detached worktree under
+.tmp/spec072-t005/baseline/. These are local supporting artifacts, not packaged
+commands or committed runtime data.
+
+### Final Validation and Characterization
+
+Final full-suite, compiled smoke and frozen worker results are recorded below. T006 phase budgets, T007 comparative five-run CPU/RSS
+acceptance (including its explicitly recorded validation risk), and T008 closure
+remain pending. No T005 acceptance criterion is deferred to backlog; B013 remains
+owned by this spec and B014 remains separate.
+
+
+Final frozen-source commands all pass:
+
+- pnpm typecheck.
+- pnpm test --maxWorkers=2: 174 files passed; 1775 tests passed and one existing
+  test skipped; 120.14 seconds. This includes candidate-index, Ruby/cross-language,
+  continuation, numeric-page/transaction, workspace, architecture and actual
+  daemon/profile scenarios. The earlier T007-owned intermittent profiling failure
+  did not recur; no causal repair of that prior condition is inferred.
+- pnpm build-runtime; pnpm build-runtime:check; pnpm validate:plugin.
+- Compiled stdio MCP non-startup configured-client refresh smoke: one passed,
+  24 deselected, 3.81 seconds, using dist/mcp/stdio-entrypoint.mjs through
+  AGENT_WORKBENCH_TEST_INSTALLED_ENTRYPOINT. No live installation was replaced.
+- Candidate worker focused validation: five files, 53 tests passed; independent
+  reviewer focused validation: five files, 25 tests passed. Independent source
+  review accepted ordering/normalization, pool reuse, lifetime, scaling and final
+  page safety with no blocking findings. Its acceptance of complete worker parity
+  follows the separately executed parent comparison below.
+
+The final production-worker probe uses the same frozen input as T004:
+
+```bash
+pnpm debug:refresh-profile --repo .tmp/spec072-t003/worker-candidate/run-1/awb-refresh-baseline-oxmK8h --output .tmp/spec072-t005-worker-complete --runs 1 --max-files 2000
+pnpm exec tsx .tmp/t005-compare-worker.ts
+```
+
+The ignored comparison driver calls compareRefreshSemanticEvidence against
+.tmp/spec072-t004-worker-complete/run-1/semantic-evidence.json, with no permitted
+correction manifest. All 9341 records are equal: zero differences and zero
+corrections. Files/nodes/edges/unresolved/docs remain 332/655/7680/2/3; all four
+passes complete, with scanner counts 6/342/332/31 (directories/entries/file
+identity-stat attempts/wildcard constructions), all in the first pass. Input
+revision, fixed timestamps, content-manifest and admitted-source identities are
+unchanged from the T004 record above. Final runtime source SHA-256 is
+`bfe8d8e9e4f59251c236f8732f14e3fa5593c22e428e715e6b9161198b9dc5de`.
+
+One-run characterization records 4045.106 ms generation wall, 5761409 microseconds
+whole-process CPU, 2739167 microseconds observed worker thread CPU and 509505536
+bytes sampled process peak RSS. The two final-resolution phases record 30.775 ms
+and 19.985 ms wall, with 30752 and 19905 microseconds thread CPU. The shared host
+and OS cache are uncontrolled. These observations characterize the complete
+candidate path; neither they nor the lookup-count proof establish five-run
+whole-generation CPU/RSS acceptance. That remains T007, including SC-003/SC-004.
+
+Final supporting reports, worker profiles and SQLite stores remain ignored under
+.tmp/spec072-t005-worker-complete/, .tmp/spec072-t005/ and .tmp/t005-*.log. Lasting
+candidate-index and final-page semantics are promoted to graph-store design.
+No T005 criterion is deferred; T006-T008 and B014 retain their existing ownership.
+
+
+Final lifecycle lint reports zero errors, warnings or informational findings.
+Markdown audit checks all six edited documents without truncation: its 56 findings
+are table-readability advisories on the existing table layout; there are no other
+finding categories. Existing table formats are retained. Spec metadata and
+relative document/anchor references are checked separately; git diff --check
+passes. These documentation checks do not replace the executed runtime gates.

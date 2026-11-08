@@ -12,7 +12,7 @@ license: GPL-3.0-or-later
 # Tasks
 
 Input: [requirements](requirements.md), [design](design.md), [research](research.md),
-[traceability](traceability.md) and [verification](verification.md). T001-T004 are complete; T005-T008 remain pending. Obtain fresh lifecycle task context and mark the selected task in
+[traceability](traceability.md) and [verification](verification.md). T001-T005 are complete; T006-T008 remain pending. Obtain fresh lifecycle task context and mark the selected task in
 progress before coding; preserve unrelated release notes and Spec 065 work.
 
 ## Task Dependency Graph
@@ -100,7 +100,7 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
   - Evidence: V004 and SC-002 pass: sealed inventory reused across worker isolates; documentation and shape reuse; atomic unique counters/cursors; receipt-gated seed/final publication; watcher handshake; dead-generation recovery; owned empty-v4 migration. Final typecheck, full suite (172 files; 1766 passed; one skipped), runtime build/receipt, plugin validation and compiled MCP smoke pass. Four-pass worker enumerates six directories in pass 1 and zero thereafter; all 9341 semantic records match after three independently expected corrections. Independent architecture/operations/security reviews accepted; durable owners and operator runbook updated. See verification.md#t004-sealed-inventory-and-publication for commands, metrics and limits. An earlier unattributed intermittent profiling failure remains an explicit T007 validation risk with retained diagnostics; no causal repair claimed. No T004 criterion deferred; T005-T008 and B014 remain separate.
 
   - Evidence mode: validation
-- [ ] T005 - Reuse indexed reference candidate pools
+- [x] T005 - Reuse indexed reference candidate pools
   - Depends on: T001.
   - Requirements: Requirement 4 AC1-AC3.
   - Properties: CP-004; CP-005.
@@ -110,8 +110,9 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
   - Acceptance: name/count and special-form lookup avoid repeated whole-node
     filtering with graph/ambiguity parity and final-resolution cursor safety.
   - Validation: V005; typecheck, focused Vitest and operation-count scaling checks.
-  - Evidence: Pending.
+  - Evidence: R4 AC1-AC3, CP-004/CP-005 and V005 pass. Invocation-owned name, Ruby special-form and Lambda indexes preserve ordering and ambiguity; selection/count reuse one filtered pool. Scaling: 100/10000 unrelated nodes require 1450/145000 construction reads; 10000 lookups cause zero unrelated reads. Seven frozen fixtures match all 684 records; final four-pass production worker matches all 9341 T004 records with zero differences/corrections. Numeric 9-to-10 cursor, stale-generation, whole-page rollback and post-edge/pre-cursor interruption tests pass. Final typecheck, full suite (174 files; 1775 passed; one skipped), runtime build/receipt, plugin validation and compiled MCP smoke pass; independent source review accepted. Durable graph-store design updated. See verification.md#t005-indexed-reference-candidate-pools. Complete-node loading/index rebuilding remains per page by design; T006-T008 and T007's earlier profiling risk remain pending. No T005 criterion deferred.
 
+  - Evidence mode: validation
 - [ ] T006 - Verify phase budgets and unique progress accounting
   - Depends on: T004.
   - Requirements: Requirement 5 AC1-AC5.

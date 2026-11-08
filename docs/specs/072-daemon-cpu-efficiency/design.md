@@ -17,7 +17,7 @@ Fix admitted file format and repeated algorithmic work inside the existing
 refresh pipeline. Preserve its single executor, durable completion and atomic
 publication. T001 baseline/design, T002 bounded Qt admission and T003 compiled
 matchers are verified. T003 passes the controlled SC-001 scan gate. T004 sealed inventory, publication receipts and owned v4 migration are implemented;
-V004 and SC-002 pass. T005-T006 remain pending; full-generation
+V004 and SC-002 pass. T005 candidate indexing passes V005; T006 remains pending; full-generation
 comparative acceptance remains T007.
 
 ## Requirement Coverage

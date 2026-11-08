@@ -61,6 +61,7 @@ import {
   selectedMarkdownText
 } from "./markdown-docs.js";
 import { extractDocumentationConcernIndex } from "./document-currency-routing.js";
+import { ReferenceCandidateIndex } from "./reference-candidate-index.js";
 import {
   partitionDocumentationCorpusPaths,
   type DocumentationCorpusDecisionPartition,
@@ -1100,6 +1101,7 @@ async function resolveAccumulatedBuildReferencesSlice(
     throw new TypeError("max_resolution_references must be a positive safe integer.");
   }
   const nodes = await readAllBuildNodes(input);
+  const candidateIndex = new ReferenceCandidateIndex(nodes);
   const unresolved = await input.build_read.listBuildUnresolvedReferences({
     snapshot_id: input.snapshot_id,
     controller_generation: input.controller_generation,
@@ -1123,7 +1125,7 @@ async function resolveAccumulatedBuildReferencesSlice(
       });
       continue;
     }
-    const lambdaDeferred = deferredLambdaHandlerResolution({ reference, nodes, snapshot_id: input.snapshot_id });
+    const lambdaDeferred = deferredLambdaHandlerResolution({ reference, candidateIndex, snapshot_id: input.snapshot_id });
     if (lambdaDeferred !== undefined) {
       deferredAnchors.push(lambdaDeferred.anchor);
       resolvedReferences.push({
@@ -1133,7 +1135,7 @@ async function resolveAccumulatedBuildReferencesSlice(
       });
       continue;
     }
-    const resolution = resolveOneReference({ reference, allNodes: nodes, finalization: true });
+    const resolution = resolveOneReference({ reference, candidates: referenceCandidates(reference, candidateIndex), finalization: true });
     if (resolution !== undefined) {
       resolvedReferences.push({
         unresolved_reference_id: reference.id,
@@ -1225,7 +1227,7 @@ function deferredGraphEdge(value: unknown): GraphEdgeWriteModel | undefined {
 
 function deferredLambdaHandlerResolution(input: {
   reference: UnresolvedReference;
-  nodes: readonly GraphNode[];
+  candidateIndex: ReferenceCandidateIndex;
   snapshot_id: string;
 }): { anchor: GraphNodeWriteModel; edge: GraphEdgeWriteModel } | undefined {
   const target = input.reference.candidate_metadata.deferred_handler_target;
@@ -1233,7 +1235,7 @@ function deferredLambdaHandlerResolution(input: {
   const typed = target as { path?: unknown; language?: unknown; file_identity?: unknown };
   if (typeof typed.path !== "string" || typeof typed.language !== "string" ||
       typed.file_identity === null || typeof typed.file_identity !== "object") return undefined;
-  const source = input.nodes.find((node) => node.id === input.reference.source_node_id);
+  const source = input.candidateIndex.nodeById(input.reference.source_node_id);
   if (source === undefined) return undefined;
   const anchorId = `${input.snapshot_id}:${typed.path}:lambda_handler_file:${source.id}`;
   const exportName = typeof source.metadata.handler_export_candidate === "string"
@@ -1794,6 +1796,10 @@ function augmentTemplateHandlerRouting(input: {
   const batchesByPath = new Map(input.batches.map((batch) => [batch.source_path, batch]));
   const handlerAnchorsByPath = new Map<string, GraphNodeWriteModel[]>();
   const augmented = input.batches.map((batch) => ({ ...batch, nodes: [...batch.nodes], edges: [...batch.edges], unresolved_references: [...batch.unresolved_references] }));
+  const augmentedByPath = new Map<string, (typeof augmented)[number]>();
+  for (const batch of augmented) if (!augmentedByPath.has(batch.source_path)) augmentedByPath.set(batch.source_path, batch);
+  const filesByPath = new Map<string, FileCatalogEntry>();
+  for (const file of input.files) if (!filesByPath.has(file.path)) filesByPath.set(file.path, file);
   const edges: Array<{ file_path: string; edges: GraphEdgeWriteModel[] }> = [];
 
   for (const batch of augmented) {
@@ -1823,9 +1829,9 @@ function augmentTemplateHandlerRouting(input: {
       }
 
       const targetBatch = batchesByPath.get(resolvedPath);
-      const augmentedTargetBatch = augmented.find((candidate) => candidate.source_path === resolvedPath);
+      const augmentedTargetBatch = augmentedByPath.get(resolvedPath);
       if (targetBatch === undefined || augmentedTargetBatch === undefined) {
-        const targetFile = input.files.find((file) => file.path === resolvedPath);
+        const targetFile = filesByPath.get(resolvedPath);
         batch.unresolved_references.push({
           id: `${node.id}:handler-file-deferred`,
           source_node_id: node.id,
@@ -2184,11 +2190,7 @@ function resolveReferences(batches: readonly ExtractionBatch[]): {
   edges: Array<{ file_path: string; edges: GraphEdgeWriteModel[] }>;
 } {
   const allNodes = batches.flatMap((batch) => batch.nodes);
-  const nodesByName = new Map<string, GraphNodeWriteModel[]>();
-  for (const node of allNodes) {
-    const key = node.name.toLowerCase();
-    nodesByName.set(key, [...(nodesByName.get(key) ?? []), node]);
-  }
+  const candidateIndex = new ReferenceCandidateIndex(allNodes);
 
   const edgesByFile: Array<{ file_path: string; edges: GraphEdgeWriteModel[] }> = [];
   const resolvedBatches = batches.map((batch) => {
@@ -2196,17 +2198,14 @@ function resolveReferences(batches: readonly ExtractionBatch[]): {
     const unresolved: UnresolvedReferenceWriteModel[] = [];
 
     for (const reference of batch.unresolved_references) {
-      const edge = resolveOneReference({
-        reference,
-        allNodes,
-        namedCandidates: nodesByName.get(reference.reference_name.toLowerCase()) ?? []
-      });
+      const candidates = referenceCandidates(reference, candidateIndex);
+      const edge = resolveOneReference({ reference, candidates });
       if (edge !== undefined) {
         edges.push(edge);
         continue;
       }
 
-      const candidateCount = referenceCandidateCount({ reference, allNodes });
+      const candidateCount = candidates.length;
       unresolved.push({
         ...reference,
         candidate_metadata: {
@@ -2239,21 +2238,10 @@ function resolveReferences(batches: readonly ExtractionBatch[]): {
 
 function resolveOneReference(input: {
   reference: UnresolvedReferenceWriteModel | UnresolvedReference;
-  allNodes: readonly GraphNodeWriteModel[] | readonly GraphNode[];
-  namedCandidates?: readonly GraphNodeWriteModel[] | readonly GraphNode[];
+  candidates: readonly GraphNodeWriteModel[];
   finalization?: boolean;
 }): GraphEdgeWriteModel | undefined {
-  const namedCandidates = input.namedCandidates ?? input.allNodes.filter((candidate) =>
-    candidate.name.toLowerCase() === input.reference.reference_name.toLowerCase()
-  );
-  const candidates = filterReferenceCandidates({
-    reference: input.reference,
-    candidates: candidatePoolForReference({
-      reference: input.reference,
-      allNodes: input.allNodes,
-      namedCandidates
-    })
-  });
+  const candidates = input.candidates;
   const unique = candidates.length === 1 ? candidates[0] : undefined;
   if (unique === undefined) return undefined;
   const sourceProvenance = typeof input.reference.candidate_metadata.provenance === "string"
@@ -2280,25 +2268,18 @@ function resolveOneReference(input: {
   };
 }
 
-function referenceCandidateCount(input: {
-  reference: UnresolvedReferenceWriteModel;
-  allNodes: readonly GraphNodeWriteModel[];
-}): number {
-  return filterReferenceCandidates({
-    reference: input.reference,
-    candidates: candidatePoolForReference({
-      reference: input.reference,
-      allNodes: input.allNodes,
-      namedCandidates: input.allNodes.filter((candidate) =>
-        candidate.name.toLowerCase() === input.reference.reference_name.toLowerCase()
-      )
-    })
-  }).length;
+function referenceCandidates(
+  reference: UnresolvedReferenceWriteModel,
+  candidateIndex: ReferenceCandidateIndex
+): GraphNodeWriteModel[] {
+  return filterReferenceCandidates({ reference,
+    candidates: candidatePoolForReference({ reference, candidateIndex,
+      namedCandidates: candidateIndex.named(reference.reference_name) }) });
 }
 
 function candidatePoolForReference(input: {
   reference: UnresolvedReferenceWriteModel;
-  allNodes: readonly GraphNodeWriteModel[];
+  candidateIndex: ReferenceCandidateIndex;
   namedCandidates: readonly GraphNodeWriteModel[];
 }): GraphNodeWriteModel[] {
   if (input.reference.reference_kind === "lambda_handler_file") {
@@ -2306,7 +2287,7 @@ function candidatePoolForReference(input: {
       input.reference.candidate_metadata.candidates,
       input.reference.reference_name
     );
-    return input.allNodes.filter((candidate) => candidates.includes(candidate.file_path));
+    return input.candidateIndex.atFiles(candidates);
   }
   if (input.reference.candidate_metadata.provenance !== "tree-sitter-ruby") {
     return [...input.namedCandidates];
@@ -2324,37 +2305,20 @@ function candidatePoolForReference(input: {
       rawNormalizedName
     )).replace(/\.rb$/u, "")
     : rawNormalizedName.replace(/\.rb$/u, "");
-  const additional = input.allNodes.filter((candidate) => {
-    if (candidate.language !== "ruby") return false;
-    const qualified = candidate.qualified_name?.replaceAll("::", ".").toLowerCase();
-    if (qualified === normalizedName) return true;
-    if (referenceKind !== "ruby_require" && referenceKind !== "ruby_require_relative") return false;
-    const pathWithoutExtension = candidate.file_path.replace(/\.rb$/u, "").toLowerCase();
-    return candidate.kind === "module" &&
-      (pathWithoutExtension === normalizedName || pathWithoutExtension.endsWith(`/${normalizedName}`));
-  });
+  const additional = input.candidateIndex.rubyAdditional(normalizedName,
+    referenceKind === "ruby_require" || referenceKind === "ruby_require_relative");
 
   if (referenceKind === "ruby_route") {
     if (metadata.route_form === "concerns" && typeof metadata.route_concern_name === "string") {
       const routeConcernName = metadata.route_concern_name.toLowerCase();
-      return input.allNodes.filter((candidate) =>
-        candidate.language === "ruby" &&
-        candidate.kind === "rails_route_concern" &&
-        typeof candidate.metadata.route_concern_name === "string" &&
-        candidate.metadata.route_concern_name.toLowerCase() === routeConcernName
-      );
+      return input.candidateIndex.rubyConcern(routeConcernName);
     }
     if (metadata.route_form === "draw" && typeof metadata.route_file_candidate === "string") {
       const routeFileCandidate = metadata.route_file_candidate.toLowerCase();
-      return input.allNodes.filter((candidate) =>
-        candidate.language === "ruby" &&
-        candidate.kind === "module" &&
-        candidate.metadata.parser_version === "tree-sitter-ruby" &&
-        candidate.file_path.toLowerCase() === routeFileCandidate
-      );
+      return input.candidateIndex.rubyDrawFile(routeFileCandidate);
     }
-    const namespacedControllerCandidates = controllerClassCandidatesForRouteReference(metadata, input.allNodes);
-    const actionCandidates = routeActionCandidatesForReference(input.reference, input.allNodes);
+    const namespacedControllerCandidates = controllerClassCandidatesForRouteReference(metadata, input.candidateIndex);
+    const actionCandidates = routeActionCandidatesForReference(input.reference, input.candidateIndex, namespacedControllerCandidates);
     return uniqueById([...namespacedControllerCandidates, ...actionCandidates]);
   }
 
@@ -2364,7 +2328,7 @@ function candidatePoolForReference(input: {
       modelForm !== "has_and_belongs_to_many") {
       return [];
     }
-    const modelDsnCandidates = modelDslClassCandidates(input.reference, input.allNodes);
+    const modelDsnCandidates = modelDslClassCandidates(input.reference, input.candidateIndex);
     return uniqueById([...input.namedCandidates, ...additional, ...modelDsnCandidates]);
   }
 
@@ -2373,7 +2337,7 @@ function candidatePoolForReference(input: {
 
 function modelDslClassCandidates(
   reference: UnresolvedReferenceWriteModel,
-  allNodes: readonly GraphNodeWriteModel[]
+  candidateIndex: ReferenceCandidateIndex
 ): GraphNodeWriteModel[] {
   if (reference.candidate_metadata.model_form !== "has_many" &&
     reference.candidate_metadata.model_form !== "has_one" &&
@@ -2405,11 +2369,11 @@ function modelDslClassCandidates(
       : explicitSourceName !== undefined && throughName !== undefined && throughName.length > 0
         ? inferModelClassNames(reference.candidate_metadata.model_form, explicitSourceName)
         : inferModelClassNames(reference.candidate_metadata.model_form, reference.reference_name);
-  return modelClassCandidatesForNames(allNodes, candidateClassNames);
+  return modelClassCandidatesForNames(candidateIndex, candidateClassNames);
 }
 
 function modelClassCandidatesForNames(
-  allNodes: readonly GraphNodeWriteModel[],
+  candidateIndex: ReferenceCandidateIndex,
   names: readonly string[]
 ): GraphNodeWriteModel[] {
   const normalizedExpectedNames = new Set<string>();
@@ -2426,19 +2390,7 @@ function modelClassCandidatesForNames(
     }
   }
 
-  return allNodes.filter((candidate) => {
-    if (candidate.language !== "ruby" || candidate.kind !== "class") {
-      return false;
-    }
-    const name = candidate.name.toLowerCase();
-    const qualifiedName = candidate.qualified_name?.toLowerCase();
-    return Array.from(normalizedExpectedNames).some((expectedName) => {
-      if (qualifiedName !== undefined && qualifiedName.endsWith(`.${expectedName}`)) {
-        return true;
-      }
-      return name === expectedName;
-    });
-  });
+  return candidateIndex.rubyModelClasses([...normalizedExpectedNames]);
 }
 
 function inferModelClassNames(form: string, associationName: string): string[] {
@@ -2473,7 +2425,7 @@ function toPascalCase(input: string): string {
 
 function controllerClassCandidatesForRouteReference(
   metadata: Record<string, unknown>,
-  allNodes: readonly GraphNodeWriteModel[]
+  candidateIndex: ReferenceCandidateIndex
 ): GraphNodeWriteModel[] {
   const controllerCandidate = typeof metadata.controller_candidate === "string"
     ? metadata.controller_candidate
@@ -2490,13 +2442,7 @@ function controllerClassCandidatesForRouteReference(
   const namespaceTokens = namespace?.split("/").map((segment) => segment.toLowerCase()).filter(Boolean) ?? [];
   const controllerCandidateContainsNamespace = controllerCandidate.includes(".") || controllerCandidate.includes("/");
   const expectedControllerNames = candidateControllerNamesFromMetadata(controllerCandidate);
-  return allNodes.filter((candidate) => {
-    if (candidate.language !== "ruby" || candidate.kind !== "class") {
-      return false;
-    }
-    if (!nodeMatchesRouteControllerName(candidate, expectedControllerNames)) {
-      return false;
-    }
+  return candidateIndex.rubyControllerClasses(expectedControllerNames.map(name => name.toLowerCase())).filter((candidate) => {
     if (namespaceTokens.length === 0 && !controllerCandidateContainsNamespace) {
       const qualifiedName = candidate.qualified_name ?? "";
       if (qualifiedName.includes(".")) {
@@ -2519,27 +2465,6 @@ function candidateControllerNamesFromMetadata(controllerClass: string): string[]
   return [full];
 }
 
-function nodeMatchesRouteControllerName(node: GraphNodeWriteModel, expectedControllerNames: string[]): boolean {
-  if (expectedControllerNames.length === 0) {
-    return false;
-  }
-  const lowerName = node.name.toLowerCase();
-  const lowerQualified = node.qualified_name?.toLowerCase();
-  const normalizedExpected = expectedControllerNames.map((name) => name.toLowerCase());
-  return normalizedExpected.some((expectedName) => {
-    const finalExpected = expectedName.split(".").at(-1);
-    if (finalExpected !== undefined && finalExpected !== expectedName) {
-      return lowerQualified === expectedName;
-    }
-    return lowerName === expectedName ||
-      lowerName === (finalExpected ?? expectedName) ||
-      (lowerQualified !== undefined && (
-        lowerQualified === expectedName ||
-        lowerQualified.endsWith(`.${expectedName}`)
-      ));
-  });
-}
-
 function nodeMatchesRouteNamespace(node: GraphNodeWriteModel, namespaceTokens: string[]): boolean {
   if (namespaceTokens.length === 0) {
     return true;
@@ -2555,7 +2480,8 @@ function nodeMatchesRouteNamespace(node: GraphNodeWriteModel, namespaceTokens: s
 
 function routeActionCandidatesForReference(
   reference: UnresolvedReferenceWriteModel,
-  allNodes: readonly GraphNodeWriteModel[]
+  candidateIndex: ReferenceCandidateIndex,
+  controllers: readonly GraphNodeWriteModel[]
 ): GraphNodeWriteModel[] {
   if (reference.candidate_metadata.controller_action_candidate !== true) {
     return [];
@@ -2567,7 +2493,6 @@ function routeActionCandidatesForReference(
     return [];
   }
 
-  const controllers = controllerClassCandidatesForRouteReference(reference.candidate_metadata, allNodes);
   if (controllers.length === 0) {
     return [];
   }
@@ -2579,23 +2504,7 @@ function routeActionCandidatesForReference(
       .map((qualified) => qualified.toLowerCase())
   );
   const action = routeAction.toLowerCase();
-  return allNodes.filter((candidate) => {
-    if (candidate.kind !== "method" && candidate.kind !== "singleton_method") {
-      return false;
-    }
-    if (candidate.name.toLowerCase() !== action) {
-      return false;
-    }
-    const candidateScope = candidate.qualified_name ?? "";
-    const hashScope = candidateScope.lastIndexOf("#");
-    const parentScope = hashScope >= 0
-      ? candidateScope.slice(0, hashScope)
-      : candidateScope.slice(0, Math.max(0, candidateScope.lastIndexOf(".")));
-    const lowerParentScope = parentScope.toLowerCase();
-    return Array.from(controllerScopes).some((controllerScope) => {
-      return lowerParentScope === controllerScope || lowerParentScope.startsWith(`${controllerScope}.`);
-    });
-  });
+  return candidateIndex.routeActions(action, [...controllerScopes]);
 }
 
 function uniqueById(candidates: readonly GraphNodeWriteModel[]): GraphNodeWriteModel[] {
