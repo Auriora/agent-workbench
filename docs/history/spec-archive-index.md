@@ -3,7 +3,7 @@ title: Spec archive index
 doc_type: history
 status: active
 owner: platform
-last_reviewed: 2026-08-02
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -59,6 +59,7 @@ history instead of active implementation scaffolding.
 | 060-changed-files-workbench-entry-point | Changed-files Workbench entry point requirements | `docs/specs/060-changed-files-workbench-entry-point/` | removed | 6e884a6 | 0447301 | removed | `docs/requirements/runtime-requirements.md`; `docs/design/edit-and-validation-loop-design.md`; `docs/design/coding-agent-integration-design.md`; `docs/reference/runtime-contracts.md`; `docs/backlog/README.md`; `.well-known/mcp/server-card.json` | `tests/application/changed-files-context.test.ts`; `tests/mcp/changed-files-context-tool.test.ts`; `tests/workspace/command-runner.test.ts`; `tests/integration/codex-integration-profile.test.ts`; `tests/mcp/registry-metadata.test.ts` |
 | 061-protocol-and-contract-drift-tests | Protocol and contract drift tests requirements | `docs/specs/061-protocol-and-contract-drift-tests/` | removed | 9f9ddbb | 83f3a71 | removed | `docs/reference/runtime-contracts.md`; `docs/design/mcp-surface-design.md`; `docs/backlog/README.md`; `package.json` | `tests/contracts/contract-drift.test.ts`; `tests/mcp/registry-metadata.test.ts`; `tests/docs/docs-links-metadata.test.ts`; `tests/docs/markdown-quality.test.ts` |
 | 062-markdown-document-audit-scale-and-chunking | Markdown document audit scale and chunking requirements | `docs/specs/062-markdown-document-audit-scale-and-chunking/` | removed | e316849 | 8f2fd93 | removed | `docs/reference/runtime-contracts.md`; `docs/design/mcp-surface-design.md`; `.well-known/mcp/server-card.json`; `docs/backlog/README.md` | `tests/docs/markdown-audit-chunking.test.ts`; `tests/docs/markdown-quality.test.ts`; `tests/mcp/docs-surfaces.test.ts`; `tests/mcp/telemetry-instrumentation.test.ts`; `tests/contracts/runtime-contracts.test.ts`; `tests/mcp/trust-golden.test.ts` |
+| 072-daemon-cpu-efficiency | Daemon CPU efficiency requirements | `docs/specs/072-daemon-cpu-efficiency/` | removed | a305310 | pending-cleanup-commit | removed | `docs/design/runtime-operations-design.md`; `docs/design/graph-store-design.md`; `docs/design/observability-debugging-design.md`; `docs/reference/runtime-contracts.md`; `docs/design/layered-runtime-architecture.md`; `docs/requirements/runtime-requirements.md`; `docs/reference/agent-readable-changelog.md`; `docs/runbooks/native-dependency-setup.md`; `docs/runbooks/install-agent-workbench.md`; `docs/runbooks/codex-agent-workbench-plugin.md`; `docs/history/072-daemon-cpu-efficiency-review.md`; `docs/history/072-daemon-cpu-efficiency-performance-evidence.json`; `docs/backlog/README.md` | `docs/history/spec-closure-log.md`; `docs/history/072-daemon-cpu-efficiency-review.md` |
 
 ## Legacy Gaps
 

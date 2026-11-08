@@ -25,8 +25,8 @@ security/operations; reviewers inspect raw source/tests/artifacts separately.
 All three independent review roles have returned; source architecture is ready
 and evidence/operations accept source closure with the owned warnings below.
 
-Source acceptance: ready with warnings; lifecycle cleanup follows verified
-review, promotion and documentation checks.
+Source closure: complete with owned warnings. The verified final package is
+removed after promotion; closure metadata records its final and cleanup commits.
 Release readiness: not ready; B017's actual Windows portable gate is unexecuted.
 No push, publication, installed-runtime replacement or live cache cleanup is
 part of this delivery.
@@ -214,6 +214,16 @@ the historical audit filename contains the spec slug; each resolves to history,
 not active scaffolding. This bounded reference review accepts those warnings.
 git diff --check passes. The runtime fingerprint and immutable audit JSON hash remain unchanged;
 existing full/typecheck/build/plugin/isolated-installed proof stays applicable.
+
+After removal, both documentation test files still pass all 11 tests. Direct
+checks resolve all 469 local documentation targets, with no missing target or
+active reference into the retired package. Active inventory excludes Spec 072;
+all unchanged audit bytes remain available in history. The final five-document
+closure audit reports 175 table advisories and five directly verified non-Markdown
+link false positives, with no truncation. The closure helper initially appended
+the owned archive row under the legacy-gap table; it was moved to Entries so the
+archive validator recognizes it. Cleanup-hash resolution follows the actual
+removal commit; it is not inferred from a pending placeholder.
 
 ## Closure Records
 

@@ -3,7 +3,7 @@ title: Spec closure log
 doc_type: history
 status: active
 owner: platform
-last_reviewed: 2026-07-30
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -466,6 +466,55 @@ durable docs, or backlog items instead of restoring removed packages unless a
 historical audit explicitly needs the original scaffolding.
 
 ## Entries
+
+### 2026-11-08 - 072-daemon-cpu-efficiency
+
+- **Spec:** `docs/specs/072-daemon-cpu-efficiency/`
+- **Title:** Daemon CPU efficiency requirements
+- **Final spec commit:** `a305310`
+- **Closure cleanup commit:** `pending-cleanup-commit`
+- **Closure action:** removed
+- **Durable docs updated:**
+  - `docs/design/runtime-operations-design.md`
+  - `docs/design/graph-store-design.md`
+  - `docs/design/observability-debugging-design.md`
+  - `docs/reference/runtime-contracts.md`
+  - `docs/design/layered-runtime-architecture.md`
+  - `docs/requirements/runtime-requirements.md`
+  - `docs/reference/agent-readable-changelog.md`
+  - `docs/runbooks/native-dependency-setup.md`
+  - `docs/runbooks/install-agent-workbench.md`
+  - `docs/runbooks/codex-agent-workbench-plugin.md`
+  - `docs/history/072-daemon-cpu-efficiency-review.md`
+  - `docs/history/072-daemon-cpu-efficiency-performance-evidence.json`
+  - `docs/backlog/README.md`
+- **Verification summary:** Source closure is ready with warnings; release is
+  not ready pending B017. All six requirements/24 acceptance criteria and eight
+  tasks are verified; lifecycle closure-check is ready with zero blockers.
+  Independent architecture, QA/evidence/lifecycle and security/operations review
+  found no remaining source blocker after documented corrections. The unchanged
+  runtime passes typecheck, 182-file/1816-test full validation (one skip), runtime
+  build/receipt/plugin checks and isolated installed Linux MCP/native positive,
+  negative and actual-termination proof. Thirty owned plus five read-only
+  measurements pass frozen semantic/performance gates; cold CPU is 49.26% lower
+  and wall 41.00% lower. Eleven documentation tests pass. The unchanged audit JSON
+  and delivery review are promoted to history; final active-package removal and
+  reference/archive checks retain auditable commit boundaries. See
+  `docs/history/072-daemon-cpu-efficiency-review.md` for hashes, limits and review.
+- **Residual risks:**
+  - Actual Windows2022/Node22.23.1 portable/native execution is unperformed for
+    this source; B017 blocks release until immutable-candidate proof passes.
+  - B015 retains moderate build-tool dependency findings; packaging is not
+    described as audit-clean.
+  - Sampled RSS increases receive bounded acceptance with B016; exact allocation
+    causes and leak absence remain unknown. B014 retains background scheduling.
+  - Older intermittent profiling failure attribution remains unknown; all final
+    acceptance repetitions pass without retry or discarded evidence.
+  - No actual provider CLI loading, FreeCAD-wide result, CPU cap, publication or
+    live upgrade is claimed.
+- **Follow-up:** B014 scheduling policy, B015 guarded build-tool maintenance,
+  B016 RSS characterization and B017 release-blocking Windows proof remain
+  platform-owned in `docs/backlog/README.md`. Source closure does not waive them.
 
 ### 2026-08-06 - 062-markdown-document-audit-scale-and-chunking
 
