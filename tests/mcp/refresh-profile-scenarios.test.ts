@@ -13,6 +13,28 @@ afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursiv
 const root = (): string => { const value = fs.mkdtempSync(path.join(os.tmpdir(), "awb-refresh-scenario-test-")); roots.push(value); return value; };
 const actual = it.skipIf(typeof process.threadCpuUsage !== "function");
 
+async function measuredSuite(config: Parameters<typeof runRefreshScenarioSuite>[0]) {
+  const result = await runRefreshScenarioSuite(config);
+  if (result.state === "complete") return result;
+  // Keep failed input paths/inodes and SQLite evidence intact. Moving or copying
+  // the fixture would itself change evidence needed to diagnose identity drift.
+  const output = path.resolve(config.output_root);
+  const retainedRoot = roots.find(value => {
+    const relative = path.relative(value, output);
+    return relative === "" || relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  });
+  if (retainedRoot !== undefined) roots.splice(roots.indexOf(retainedRoot), 1);
+  const diagnostic = path.resolve(".tmp", "refresh-profile-test-failures", `${path.basename(retainedRoot ?? output)}.json`);
+  let diagnosticWriteError: string | undefined;
+  try {
+    fs.mkdirSync(path.dirname(diagnostic), { recursive: true });
+    fs.writeFileSync(diagnostic, `${JSON.stringify({ output_root: output, retained_root: retainedRoot, result }, null, 2)}\n`, { mode: 0o600 });
+  } catch (error) {
+    diagnosticWriteError = error instanceof Error ? error.message : String(error);
+  }
+  throw new Error(JSON.stringify({ ...result, retained_evidence_root: retainedRoot, diagnostic, diagnostic_write_error: diagnosticWriteError }));
+}
+
 describe("owned production refresh profiling scenarios", () => {
   it("rejects external source arguments and shortened idle windows before writes", () => {
     const parent = root(), external = path.join(parent, "external"); fs.mkdirSync(external);
@@ -34,8 +56,7 @@ describe("owned production refresh profiling scenarios", () => {
 
   actual("compares complete persisted evidence across independently owned repetitions", async () => {
     const output = path.join(root(), "suite");
-    const result = await runRefreshScenarioSuite({ output_root: output, runs: 2, python_files: 3, scenarios: ["persisted_reuse"] });
-    if (result.state !== "complete") throw new Error(JSON.stringify(result));
+    const result = await measuredSuite({ output_root: output, runs: 2, python_files: 3, scenarios: ["persisted_reuse"] });
     expect(result.measurements).toHaveLength(2);
     expect(result.measurements.every(value => value.worker_invocations === 0)).toBe(true);
     expect(result.measurements[0].semantic_digest).toBe(result.measurements[1].semantic_digest);
@@ -44,9 +65,8 @@ describe("owned production refresh profiling scenarios", () => {
 
   actual("exercises the mandatory seed continuation before the interrupted resume boundary", async () => {
     const output = path.join(root(), "suite");
-    const result = await runRefreshScenarioSuite({ output_root: output, runs: 1, python_files: 1, scenarios: ["interrupted_resume"] });
+    const result = await measuredSuite({ output_root: output, runs: 1, python_files: 1, scenarios: ["interrupted_resume"] });
     expect(result).toMatchObject({ state: "complete" });
-    if (result.state !== "complete") return;
     expect(result.measurements).toHaveLength(1);
     expect(result.measurements[0]?.worker_invocations).toBeGreaterThan(1);
     expect(result.measurements[0]?.observation).toMatchObject({ kind: "paused_committed_worker_continuation" });
@@ -54,9 +74,8 @@ describe("owned production refresh profiling scenarios", () => {
 
   actual("measures persisted first-read reuse, real watcher edits and committed same-session continuation", async () => {
     const output = path.join(root(), "suite");
-    const result = await runRefreshScenarioSuite({ output_root: output, runs: 1, python_files: 260,
+    const result = await measuredSuite({ output_root: output, runs: 1, python_files: 260,
       scenarios: ["cold_complete_generation", "persisted_reuse", "single_edit", "burst_edits", "interrupted_resume"] });
-    if (result.state !== "complete") throw new Error(JSON.stringify(result));
     expect(result.state).toBe("complete");
     expect(result.measurements).toHaveLength(5);
     const find = (scenario: string) => result.measurements.find(row => row.scenario === scenario)!;

@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import "../infrastructure/runtime/native-runtime-startup.mjs";
+import { validateTreeSitterSourceBuild } from "../infrastructure/runtime/native-runtime-guard.mjs";
 import fs from "node:fs";
 import net, { type Server, type Socket } from "node:net";
 import path from "node:path";
@@ -197,6 +199,7 @@ export async function startAgentWorkbenchDaemon(input: {
   onShutdown?: (receipt: DaemonShutdownReceipt) => void;
   testHooks?: DaemonTestHooks;
 }): Promise<StartedAgentWorkbenchDaemon> {
+  validateTreeSitterSourceBuild();
   const repoRoot = path.resolve(input.repoRoot);
   const identity = createDaemonIdentity(repoRoot);
   const paths = daemonPaths(identity);

@@ -1034,6 +1034,8 @@ export type GraphBuildProgress = {
   snapshot_id: string;
   manifest_id?: string;
   ordinal_cursor?: number;
+  /** Version 2 counts distinct manifest identities. Absent means legacy work
+   * counts: unique totals are unknown and must not be inferred from them. */
   counters_version?: 2;
   source_snapshot_id?: string;
   owner_id?: string;

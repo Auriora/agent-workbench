@@ -73,6 +73,32 @@ Cache rules:
   handlers
 - generated cache files must live under approved generated-cache roots
 
+### Refresh phase allocation
+
+The source runtime retains the 60-second hard pass deadline and its existing
+50-second aggregate resolution/write/settlement reserve. Worker admission splits
+the remaining envelope into 40% preparation, 40% extraction soft target and 20%
+headroom. Composition, inventory and docs count as preparation. Extraction starts
+its own allowance at extraction entry; a completed file may consume headroom
+without starting another file once the soft target is used. Required reserve
+and actual deadline breaches fail explicitly.
+
+Final resolution uses one fixed deadline bounded by the hard deadline minus a
+five-second settlement tail. Successive canonical pages can remain in the same
+worker; re-entry never resets the allowance. Between durable pages, a one-second
+admission margin may yield continuation. It is not a guarantee for arbitrary
+native work. Seed publication still exits the worker and no pass extracts more
+than 250 files. Numeric cursor advancement, generation checks and atomic page
+writes retain the existing authority. Private phase/budget observations measure
+work; unique totals come only from versioned manifest outcomes.
+
+A canonical Python parse termination test found that the unguarded native binding
+could abort the host during teardown. The supported Node-API termination option
+is now mandatory in the source build; ordinary callback exceptions remain
+observable. See the [native setup procedure](../runbooks/native-dependency-setup.md)
+for installation/toolchain and guard-receipt requirements. This source change does
+not deploy or restart an installed daemon.
+
 ### Compiled Path Policies
 
 Each ignore-policy admission prepares one immutable set from `.gitignore` followed

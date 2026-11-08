@@ -178,6 +178,63 @@ come from committed admitted identities or catalog state; repeated visits use
 separate work counters. Define additive contract/schema changes and legacy counter
 invalidation explicitly; do not infer unique totals from old cumulative windows.
 
+T006 makes the allocation explicit without reducing the existing aggregate
+reserve: for a 60-second hard pass, retain 50 seconds (max(5000 ms, five-sixths
+of timeout)) for resolution/writes/settlement. At worker admission, split remaining
+time outside that reserve into 40% preparation, 40% extraction and 20% headroom.
+Preparation includes composition, inventory and documentation; it cannot publish
+an unfinished capture. Extraction's cooperative allowance begins at extraction
+entry, with the unchanged reserve still required before its graph writes.
+Preparation and resolution guard exhaustion fail explicitly. The extraction
+allowance is a cooperative soft target: stop starting another file once it is
+used. One fully completed file may overrun that target within headroom or unused
+preparation time while the unchanged 50-second reserve remains available. A
+reserve or hard-deadline breach fails; no timed-out parse fragment or empty
+partial result is accepted.
+
+Measured T005 default-fixture resolution pages take about 20-31 ms for resolution
+and approximately 430 ms of SQLite application work in aggregate; they fit well
+inside a five-second minimum final settlement tail. The resolution deadline is
+fixed at the earlier of first resolution entry plus reserve-minus-tail and hard
+deadline minus tail. Re-entering resolution does not reset that deadline.
+A one-second admission margin between durable pages is a cooperative heuristic,
+not a guarantee that arbitrary native work can finish within one second.
+
+The worker consumes successive canonical resolution slices inside that same
+budget, instead of discarding the reserved interval and creating another isolate
+for each page. It always exits for mandatory seed publication, never extracts
+more than the existing 250-file pass limit, and only continues a strictly advancing
+numeric resolve cursor after committed work. It may yield between committed pages
+before the admission margin is exhausted; actual phase/hard failure never becomes
+partial success. This is one canonical build path with fewer isolate transitions,
+not an alternate resolver. Complete-node loading and indexes remain page-owned.
+Unit, actual worker, cursor/transaction and strong semantic evidence must prove
+these boundaries before T006 completion.
+
+Native termination proof exposed an additional R5 AC2 dependency: the unguarded
+tree-sitter Node binding throws from its input callback during Worker.terminate;
+node-addon-api then attempts to throw into a terminating JavaScript environment
+and aborts the host process. A raw binding reproduction and native backtrace
+confirm this independently of the test instrumentation. The canonical native
+build must enable NODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS, the supported
+[node-addon-api termination policy](https://github.com/nodejs/node-addon-api/blob/main/doc/setup.md).
+This changes only the impossible-JavaScript-rethrow behavior during teardown;
+ordinary callback errors remain observable and no parse result is published.
+
+Pin the runtime binding version and require the same guarded source build in
+local rebuild, npm postinstall and portable preparation. Native build failure is
+fatal; pointer/config convenience steps retain their separate existing policy.
+The same native receipt validator must also gate runtime startup and worker
+admission. Missing/mismatched receipts or loader-selected binaries block bin,
+plugin, container and direct daemon entry routes before execution; lifecycle
+bypass or a later raw dependency rebuild cannot silently select an unsafe binary.
+Do not silently load an unsafe prebuilt binding, substitute a parser, return a
+partial native parse or increase the parent deadline. Installation prerequisites
+and the unreleased behavior change must be promoted to the operator runbook.
+Actual canonical-parser, ordinary-error and packaging tests must pass before
+acceptance; source-only compiler flags without consumer install proof are
+insufficient.
+
 ### D006: Worker evidence
 
 Create a checkout-only refresh profiling harness with one production execution

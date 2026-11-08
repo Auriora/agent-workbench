@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import "./native-runtime-startup.mjs";
+import { validateTreeSitterSourceBuild } from "./native-runtime-guard.mjs";
 import { Worker } from "node:worker_threads";
 import { GraphBuildValidationError } from "../../ports/index.js";
 import type {
@@ -36,6 +38,7 @@ export class StartupGraphRefreshExecutor implements RefreshExecutorPort {
   public constructor(private readonly options: StartupGraphRefreshExecutorOptions) {}
 
   public run(input: Parameters<RefreshExecutorPort["run"]>[0]): Promise<RefreshExecutorCompletion> {
+    validateTreeSitterSourceBuild();
     if (this.workers.has(input.execution_id) || this.starting.has(input.execution_id)) {
       throw new Error("Refresh execution already has a worker.");
     }

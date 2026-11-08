@@ -245,10 +245,16 @@ function assertNativeLoads(nodeExecutable, packageRoot, env) {
   const code = [
     'const { createRequire } = require("node:module");',
     'const path = require("node:path");',
+    'const { pathToFileURL } = require("node:url");',
+    'const root = process.argv[1];',
     'const load = createRequire(path.join(process.argv[1], "package.json"));',
+    'import(pathToFileURL(path.join(root, "scripts", "rebuild-native.mjs")).href).then(async ({ validateTreeSitterSourceBuild, proveTreeSitterTermination }) => {',
+    'validateTreeSitterSourceBuild({ packageRoot: root });',
+    'await proveTreeSitterTermination({ packageRoot: root });',
     'for (const name of ["tree-sitter", "tree-sitter-go", "tree-sitter-javascript", "tree-sitter-python", "tree-sitter-ruby", "tree-sitter-typescript"]) load(name);',
     'const Database = load("better-sqlite3");',
-    'const db = new Database(":memory:"); db.prepare("select 1").get(); db.close();'
+    'const db = new Database(":memory:"); db.prepare("select 1").get(); db.close();',
+    '}).catch(error => { console.error(error); process.exitCode = 1; });'
   ].join("\n");
   assertSuccess(spawnSync(nodeExecutable, ["-e", code, packageRoot], { env, encoding: "utf8" }), "native loads");
 }

@@ -2,6 +2,7 @@
  * Copyright (C) 2026 Auriora
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
+import type { Plugin } from "esbuild";
 
 export type RuntimeBuildEntrypoint = {
   name: string;
@@ -41,6 +42,7 @@ export type RuntimeBuildContract = {
     outdir: string;
     entryNames: string;
     outExtension: Record<string, string>;
+    nativeRuntimeModules: { version: number; modules: Record<string, string> };
   };
   entrypoints: RuntimeBuildEntrypoint[];
   sourceInputs: RuntimeBuildInput[];
@@ -55,7 +57,7 @@ export const RUNTIME_BUILD_ENTRYPOINTS: {
   startupGuardRecovery: RuntimeBuildEntrypoint;
   worker: RuntimeBuildEntrypoint;
 };
-export const BUILD_OPTIONS: RuntimeBuildContract["buildOptions"];
+export const BUILD_OPTIONS: Omit<RuntimeBuildContract["buildOptions"], "nativeRuntimeModules">;
 
 export function collectRuntimeBuildContract(
   repoRoot?: string,
@@ -63,3 +65,8 @@ export function collectRuntimeBuildContract(
 ): RuntimeBuildContract;
 
 export function validateRuntimeBuildReceipt(repoRoot?: string): RuntimeBuildContract;
+
+export const NATIVE_RUNTIME_MODULES: Record<string, string>;
+export function nativeRuntimeModulesPlugin(): Plugin;
+
+export const NATIVE_RUNTIME_MODULE_POLICY_VERSION: 1;

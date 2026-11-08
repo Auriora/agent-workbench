@@ -88,24 +88,19 @@ hook configuration includes an explicit Windows command and honors
 
 ## Native build for the npm source-package path
 
-`npm install` prepares native modules the same way it does for any native
-dependency. A compatible prebuilt binary may be used when a package provides
-one; otherwise the core `tree-sitter` binding, a grammar package such as
-`tree-sitter-ruby`, or `better-sqlite3` can compile from source. A source build
-needs **Python 3** and a **C/C++ toolchain**:
+The unreleased source runtime requires the core tree-sitter 0.25.0 binding to be
+built from source with C++20 and NODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS. npm
+postinstall, local rebuild and portable preparation use the same pinned builder;
+a compatible upstream core prebuild does not prove safe Worker.terminate behavior.
+Build or guard-receipt validation failure is fatal. Runtime-pointer/config setup
+remains separately best-effort. Grammar and SQLite prebuild policy is unchanged.
 
-- Linux/macOS: `make` plus `g++`/`clang++` (e.g. `build-essential` or the Xcode
-  command line tools).
-- Windows: the MSVC C++ build tools ("Desktop development with C++").
-- On **Node 24** the tree-sitter core needs **C++20** (Node 24's V8/cppgc
-  headers require it). Use **Node 22** (the supported floor), or rebuild with
-  `CXXFLAGS=-std=c++20` (`_CL_=/std:c++20` on Windows).
-
-If that build fails, it is a local toolchain issue to resolve — not a packaging
-bug. The package surfaces an actionable hint in two places: a best-effort note
-from `postinstall`, and (authoritatively) a message at server launch if a native
-binding cannot load. A source checkout can rebuild with `pnpm rebuild:native`
-(or `npm rebuild tree-sitter tree-sitter-ruby better-sqlite3`).
+npm/source consumers need Python 3 and a C/C++ toolchain even on Node 22. Portable
+release consumers receive the guarded compiled payload and need no toolchain.
+On Node 24, provision C++20 before dependency install if its own build step
+requires it. From a checkout use pnpm rebuild:native; do not replace that core
+build with an unguarded raw dependency rebuild. See the canonical
+[native dependency procedure](../../docs/runbooks/native-dependency-setup.md).
 
 ## Corrected native grammar metadata
 

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import "../runtime/native-runtime-startup.mjs";
 import { register } from "tsx/esm/api";
 
 register({ parentURL: import.meta.url });

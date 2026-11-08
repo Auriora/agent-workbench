@@ -135,6 +135,8 @@ export type BuildRepositoryGraphInput = {
   append_to_existing_build?: boolean;
   mark_fresh?: boolean;
   should_yield_extraction?: () => boolean;
+  /** Cooperative manifest-build checkpoint; it never replaces parent termination. */
+  check_build_budget?: () => void;
   /** Optional aggregate phase boundary, emitted before the corresponding work. */
   observe_build_phase?: (phase: RepositoryGraphBuildPhase) => void;
   report_build_progress?: (
@@ -551,7 +553,9 @@ export async function buildRepositoryGraph(
 export async function runRepositoryGraphBuildSlice(
   input: RepositoryGraphBuildSliceInput
 ): Promise<RepositoryGraphBuildSliceResult> {
+  input.check_build_budget?.();
   const watch = await input.manifest.watcher.start();
+  input.check_build_budget?.();
   if (!watch.healthy || watch.pending_events !== 0) {
     throw new Error("Graph build watcher is unhealthy or has pending events before manifest preparation.");
   }
@@ -589,12 +593,14 @@ export async function runRepositoryGraphBuildSlice(
         throw new Error("Published graph continuation watcher epoch does not match the requested slice.");
       }
       const now = input.clock.nowIso8601();
+      input.check_build_budget?.();
       await input.snapshots.createBuildSnapshot({
         snapshot: { ...latest.snapshot, id: input.snapshot_id, freshness: "refreshing", created_at: now, updated_at: now },
         controller_generation: input.controller_generation,
         invalidation_generation: input.invalidation_generation,
         created_at: now
       });
+      input.check_build_budget?.();
       await input.build_seed.seedBuildSnapshotFromPublished({
         source_snapshot_id: latest.snapshot.id,
         target_snapshot_id: input.snapshot_id,
@@ -603,6 +609,7 @@ export async function runRepositoryGraphBuildSlice(
         invalidation_generation: input.invalidation_generation,
         updated_at: now
       });
+      input.check_build_budget?.();
       progress = await input.build_progress.getGraphBuildProgress({ snapshot_id: input.snapshot_id });
       if (progress === null) throw new Error("Seeded graph completion target has no durable progress record.");
     } else {
@@ -696,6 +703,7 @@ async function prepareGraphBuildManifest(input: {
   if (existingSnapshot !== null && existingSnapshot.schema_version > build.schema_version) {
     throw new Error("Existing snapshot schema version does not match the requested graph index schema version.");
   }
+  build.check_build_budget?.();
   await build.snapshots.createBuildSnapshot({
     snapshot: buildSnapshot({
       snapshot_id: build.snapshot_id,
@@ -710,19 +718,23 @@ async function prepareGraphBuildManifest(input: {
     invalidation_generation: build.invalidation_generation,
     created_at: startedAt
   });
+  build.check_build_budget?.();
   await build.manifest.store.beginGraphBuildManifest({ manifest_id: manifestId, fence, started_at: startedAt });
 
   const capturedFiles = new Map<string, { repository_key: string; entry: FileCatalogEntry; identity: GraphBuildPathIdentity }>();
   const capturedDirectories: import("../../ports/graph-build-manifest.js").GraphBuildDirectoryObservation[] = [];
   const capture: GraphBuildCatalogCapturePort = {
     beforeDirectory: async ({ path, repository_key, identity }) => {
+      build.check_build_budget?.();
       const observation = await build.manifest.watcher.registerDirectory({ path, repository_key });
+      build.check_build_budget?.();
       if (!observation.healthy || observation.pending_events !== 0 || observation.epoch !== fence.watcher_epoch) {
         throw new Error(`Graph build watcher cannot fence directory inventory: ${path}`);
       }
       return observation;
     },
     directory: async (directory) => {
+      build.check_build_budget?.();
       if (directory.watcher_epoch !== fence.watcher_epoch || !directory.registered) {
         throw new Error(`Graph build directory observation is outside the manifest watcher epoch: ${directory.identity.path}`);
       }
@@ -730,6 +742,7 @@ async function prepareGraphBuildManifest(input: {
       await build.manifest.store.appendGraphBuildManifestObservation({ manifest_id: manifestId, fence, directory });
     },
     file: async (file) => {
+      build.check_build_budget?.();
       if (capturedFiles.has(file.entry.path)) throw new Error(`Duplicate graph build manifest file observation: ${file.entry.path}`);
       capturedFiles.set(file.entry.path, file);
       await build.manifest.store.appendGraphBuildManifestObservation({ manifest_id: manifestId, fence, file });
@@ -747,6 +760,7 @@ async function prepareGraphBuildManifest(input: {
     repository_composition: build.repository_composition
   });
   build.report_build_progress?.("catalog", scanned.files.length);
+  build.check_build_budget?.();
   const postScanWatch = await build.manifest.watcher.start();
   if (!postScanWatch.healthy || postScanWatch.pending_events !== 0 ||
       postScanWatch.epoch !== fence.watcher_epoch || postScanWatch.sequence !== fence.watcher_sequence) {
@@ -804,7 +818,9 @@ async function prepareGraphBuildManifest(input: {
     ...unsealed,
     digest: createHash("sha256").update(graphBuildManifestDigestMaterial(unsealed as GraphBuildManifest)).digest("hex")
   };
+  build.check_build_budget?.();
   await build.manifest.store.sealGraphBuildManifest({ manifest, progress });
+  build.check_build_budget?.();
   await persistDocsFromManifestInventory({ build, scanned, docsPartition });
   return progress;
 }
@@ -884,6 +900,7 @@ async function extractManifestSlice(input: {
   let processedFiles = 0;
   build.observe_build_phase?.("extraction");
   for (const [index, file] of selected.entries()) {
+    build.check_build_budget?.();
     if (index > 0 && build.should_yield_extraction?.() === true) break;
     await yieldToEventLoop(index);
     const extractor = resolveExtractor({ file: file.entry, registry: build.extractors, resourceExtractor: build.resource_extractor });
@@ -909,6 +926,7 @@ async function extractManifestSlice(input: {
         language: file.entry.file_identity.language, content: await build.workspace.readText({ path: file.entry.path }) }),
       shape: manifest.shape
     });
+    build.check_build_budget?.();
     batches.push({ ordinal: file.ordinal, resource: extractor === build.resource_extractor, batch: {
       ...batch, file_identity: { ...file.entry.file_identity, indexed_at: now }, extracted_at: now
     } });
@@ -976,6 +994,7 @@ async function extractManifestSlice(input: {
   let committedFiles = 0;
   build.observe_build_phase?.("graph_write");
   for (const ordinal of [...pending.keys()].sort((left, right) => left - right)) {
+    build.check_build_budget?.();
     const outcome = pending.get(ordinal)!;
     latest = await build.manifest.store.commitGraphBuildFileOutcome({
       manifest_id: manifest.manifest_id,
@@ -987,6 +1006,7 @@ async function extractManifestSlice(input: {
       batch: outcome.batch,
       updated_at: build.clock.nowIso8601()
     });
+    build.check_build_budget?.();
     committedFiles += 1;
     if (committedFiles === 1 || committedFiles % 25 === 0 || committedFiles === pending.size) {
       build.report_build_progress?.("graph_write", committedFiles);
@@ -996,16 +1016,22 @@ async function extractManifestSlice(input: {
     const nextPath = manifest.files.find((file) => file.ordinal === latest.ordinal_cursor)?.entry.path;
     const partialProgress: GraphBuildProgress = { ...latest, phase: "extracting", scan_cursor: nextPath, updated_at: build.clock.nowIso8601() };
     const coverage = partialGraphCoverage(partialProgress, { scan_truncated: false, extraction_truncated: true });
+    build.check_build_budget?.();
     await build.build_coverage.upsertGraphBuildCoverage({ snapshot_id: build.snapshot_id,
       controller_generation: build.controller_generation, invalidation_generation: build.invalidation_generation, coverage });
+    build.check_build_budget?.();
     await build.build_progress.upsertGraphBuildProgress({ progress: partialProgress });
+    build.check_build_budget?.();
     return { outcome: "partial", snapshot_id: build.snapshot_id, continuation_cursor: nextPath, coverage: [coverage] };
   }
   const resolvingProgress: GraphBuildProgress = { ...latest, phase: "resolving", ordinal_cursor: undefined, scan_cursor: "resolve:0", updated_at: build.clock.nowIso8601() };
   const coverage = partialGraphCoverage(resolvingProgress, { scan_truncated: false, extraction_truncated: false });
+  build.check_build_budget?.();
   await build.build_coverage.upsertGraphBuildCoverage({ snapshot_id: build.snapshot_id,
     controller_generation: build.controller_generation, invalidation_generation: build.invalidation_generation, coverage });
+  build.check_build_budget?.();
   await build.build_progress.upsertGraphBuildProgress({ progress: resolvingProgress });
+  build.check_build_budget?.();
   return { outcome: "partial", snapshot_id: build.snapshot_id, continuation_cursor: resolvingProgress.scan_cursor, coverage: [coverage] };
 }
 
@@ -1040,10 +1066,12 @@ async function persistDocsFromManifestInventory(input: {
   const contentByPath = new Map<string, string>();
   const documents: DocsIndexDocumentWrite[] = [];
   for (const [index, file] of files.entries()) {
+    build.check_build_budget?.();
     await yieldToEventLoop(index);
     const content = file.file_identity.size_bytes > MAX_DOCS_INDEX_BYTES
       ? await readBoundedDocsContent({ workspace: build.workspace, path: file.path })
       : await build.workspace.readText({ path: file.path });
+    build.check_build_budget?.();
     const selected = selectedMarkdownText({ content, max_bytes: MAX_DOCS_INDEX_BYTES });
     const headings = parseMarkdownHeadings(content);
     contentByPath.set(file.path, content);
@@ -1079,15 +1107,18 @@ async function persistDocsFromManifestInventory(input: {
       ...documents.map((document) => document.path)
     ])]);
   }
+  build.check_build_budget?.();
   await build.docs_index.replaceSnapshotDocs({
     snapshot_id: build.snapshot_id, repo_root: docsScan.repo_root, documents,
     coverage: [docsIndexCoverage({ docsScan, docsPartition: partition, docsIndexedFiles: documents.length, truncated: docsScan.truncated })]
   });
   if (build.documentation_concerns !== undefined && concernIndex !== undefined) {
     const { document_content_by_path: _contents, ...persisted } = concernIndex;
+    build.check_build_budget?.();
     await build.documentation_concerns.replaceSnapshotDocumentationConcerns({ snapshot_id: build.snapshot_id, ...persisted });
   }
   build.report_build_progress?.("docs", documents.length);
+  build.check_build_budget?.();
 }
 
 async function resolveAccumulatedBuildReferencesSlice(
@@ -1101,6 +1132,7 @@ async function resolveAccumulatedBuildReferencesSlice(
     throw new TypeError("max_resolution_references must be a positive safe integer.");
   }
   const nodes = await readAllBuildNodes(input);
+  input.check_build_budget?.();
   const candidateIndex = new ReferenceCandidateIndex(nodes);
   const unresolved = await input.build_read.listBuildUnresolvedReferences({
     snapshot_id: input.snapshot_id,
@@ -1116,6 +1148,7 @@ async function resolveAccumulatedBuildReferencesSlice(
   }> = [];
   const deferredAnchors: GraphNodeWriteModel[] = [];
   for (const reference of unresolved) {
+    input.check_build_budget?.();
     const exactDeferredEdge = deferredGraphEdge(reference.candidate_metadata.deferred_graph_edge);
     if (exactDeferredEdge !== undefined) {
       resolvedReferences.push({
@@ -1145,6 +1178,7 @@ async function resolveAccumulatedBuildReferencesSlice(
     }
   }
   input.observe_build_phase?.("graph_write");
+  input.check_build_budget?.();
   await input.build_resolution.applyBuildResolutionSlice({
     snapshot_id: input.snapshot_id,
     controller_generation: input.controller_generation,
@@ -1153,6 +1187,7 @@ async function resolveAccumulatedBuildReferencesSlice(
     deferred_anchors: deferredAnchors,
     resolved_references: resolvedReferences
   });
+  input.check_build_budget?.();
   const authoritativeProgress = await input.build_progress.getGraphBuildProgress({
     snapshot_id: input.snapshot_id
   });
@@ -1173,13 +1208,16 @@ async function resolveAccumulatedBuildReferencesSlice(
       scan_truncated: false,
       extraction_truncated: false
     });
+    input.check_build_budget?.();
     await input.build_coverage.upsertGraphBuildCoverage({
       snapshot_id: input.snapshot_id,
       controller_generation: input.controller_generation,
       invalidation_generation: input.invalidation_generation,
       coverage
     });
+    input.check_build_budget?.();
     await input.build_progress.upsertGraphBuildProgress({ progress: nextProgress });
+    input.check_build_budget?.();
     return {
       outcome: "partial",
       snapshot_id: input.snapshot_id,
@@ -1197,17 +1235,21 @@ async function resolveAccumulatedBuildReferencesSlice(
     updated_at: input.clock.nowIso8601()
   };
   const coverage = completeGraphCoverage(completeProgress);
+  input.check_build_budget?.();
   await input.build_coverage.upsertGraphBuildCoverage({
     snapshot_id: input.snapshot_id,
     controller_generation: input.controller_generation,
     invalidation_generation: input.invalidation_generation,
     coverage
   });
+  input.check_build_budget?.();
   await input.build_progress.upsertGraphBuildProgress({ progress: completeProgress });
+  input.check_build_budget?.();
   await input.snapshots.markSnapshotFreshness({
     snapshot_id: input.snapshot_id,
     freshness: "fresh"
   });
+  input.check_build_budget?.();
   return {
     outcome: "complete",
     snapshot_id: input.snapshot_id,
@@ -1403,6 +1445,7 @@ async function readAllBuildNodes(input: RepositoryGraphBuildSliceInput): Promise
   const rows: GraphNode[] = [];
   let after: string | undefined;
   for (;;) {
+    input.check_build_budget?.();
     const page = await input.build_read.listBuildNodes({
       snapshot_id: input.snapshot_id,
       controller_generation: input.controller_generation,
@@ -1411,6 +1454,7 @@ async function readAllBuildNodes(input: RepositoryGraphBuildSliceInput): Promise
       max_rows: 5_000
     });
     rows.push(...page);
+    input.check_build_budget?.();
     if (page.length < 5_000) return rows;
     after = page.at(-1)?.id;
   }

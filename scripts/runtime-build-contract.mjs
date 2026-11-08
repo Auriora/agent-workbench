@@ -43,6 +43,26 @@ export const RUNTIME_BUILD_ENTRYPOINTS = {
   }
 };
 
+// Both distributed entrypoint directories are exactly two levels below the
+// package root. Keep native admission as an external first dependency so ESM
+// package imports cannot be hoisted ahead of the guard while bundling.
+export const NATIVE_RUNTIME_MODULE_POLICY_VERSION = 1;
+export const NATIVE_RUNTIME_MODULES = {
+  "native-runtime-guard.mjs": "../../src/infrastructure/runtime/native-runtime-guard.mjs",
+  "native-runtime-startup.mjs": "../../src/infrastructure/runtime/native-runtime-startup.mjs"
+};
+
+export function nativeRuntimeModulesPlugin() {
+  return {
+    name: "native-runtime-modules",
+    setup(plugin) {
+      plugin.onResolve({ filter: /(?:^|\/)native-runtime-(?:guard|startup)\.mjs$/ }, ({ path: modulePath }) => ({
+        path: NATIVE_RUNTIME_MODULES[path.basename(modulePath)], external: true
+      }));
+    }
+  };
+}
+
 export const BUILD_OPTIONS = {
   platform: "node",
   format: "esm",
@@ -176,7 +196,7 @@ export function collectRuntimeBuildContract(repoRoot = process.cwd(), options = 
       version: readEsbuildVersion(absoluteRepoRoot)
     },
     outputDir: RUNTIME_BUILD_OUTPUT_DIR,
-    buildOptions: { ...BUILD_OPTIONS },
+    buildOptions: { ...BUILD_OPTIONS, nativeRuntimeModules: { version: NATIVE_RUNTIME_MODULE_POLICY_VERSION, modules: { ...NATIVE_RUNTIME_MODULES } } },
     entrypoints: entrypointsFromManifest(),
     sourceInputs: sourceInputRecords(absoluteRepoRoot),
     ...(includeOutputs ? { outputs: outputRecords(absoluteRepoRoot) } : {})

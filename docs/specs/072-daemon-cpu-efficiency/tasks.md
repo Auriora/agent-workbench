@@ -12,7 +12,7 @@ license: GPL-3.0-or-later
 # Tasks
 
 Input: [requirements](requirements.md), [design](design.md), [research](research.md),
-[traceability](traceability.md) and [verification](verification.md). T001-T005 are complete; T006-T008 remain pending. Obtain fresh lifecycle task context and mark the selected task in
+[traceability](traceability.md) and [verification](verification.md). T001-T006 are complete; T007-T008 remain pending. Obtain fresh lifecycle task context and mark the selected task in
 progress before coding; preserve unrelated release notes and Spec 065 work.
 
 ## Task Dependency Graph
@@ -113,19 +113,23 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
   - Evidence: R4 AC1-AC3, CP-004/CP-005 and V005 pass. Invocation-owned name, Ruby special-form and Lambda indexes preserve ordering and ambiguity; selection/count reuse one filtered pool. Scaling: 100/10000 unrelated nodes require 1450/145000 construction reads; 10000 lookups cause zero unrelated reads. Seven frozen fixtures match all 684 records; final four-pass production worker matches all 9341 T004 records with zero differences/corrections. Numeric 9-to-10 cursor, stale-generation, whole-page rollback and post-edge/pre-cursor interruption tests pass. Final typecheck, full suite (174 files; 1775 passed; one skipped), runtime build/receipt, plugin validation and compiled MCP smoke pass; independent source review accepted. Durable graph-store design updated. See verification.md#t005-indexed-reference-candidate-pools. Complete-node loading/index rebuilding remains per page by design; T006-T008 and T007's earlier profiling risk remain pending. No T005 criterion deferred.
 
   - Evidence mode: validation
-- [ ] T006 - Verify phase budgets and unique progress accounting
+- [x] T006 - Verify phase budgets and unique progress accounting
   - Depends on: T004.
   - Requirements: Requirement 5 AC1-AC5.
   - Properties: CP-003; CP-005.
   - Files: src/infrastructure/workers/startup-graph-warmup-worker.ts;
     src/infrastructure/runtime/refresh-controller.ts; src/contracts/; src/ports/;
-    src/infrastructure/sqlite/; tests/runtime/operations.test.ts; tests/graph/.
+    src/infrastructure/sqlite/; native runtime admission/build helpers; MCP startup;
+    scripts/build-runtime.mjs; scripts/ci/; package/lock and packaging metadata;
+    src/debug/refresh-profile.ts; tests/runtime/; tests/graph/; tests/packaging/;
+    tests/integration/; tests/mcp/; native/install runbooks.
   - Acceptance: explicit feasible phase allocation inside unchanged hard deadlines,
     tested native-overrun failure and settlement, unique versus work counters,
     versioned legacy handling, cancellation/supersession/shutdown safety.
   - Validation: V006; typecheck, focused runtime/continuation/shutdown suites.
-  - Evidence: Pending.
+  - Evidence: R5 AC1-AC5 and V006 pass: unchanged hard deadline/reserve, explicit phase allocations, same-isolate canonical resolution pages, actual native parse termination without host abort, one-writer settlement/shutdown and versioned legacy accounting. Final typecheck, full suite (182 files/1816 passed/one skipped), build/receipt/plugin and independently installed MCP/native negative-launch smoke pass. Two-pass production worker matches all 9341 T005 records with no differences. See verification.md#t006-phase-budgets-and-native-settlement. B015 owns build-tool advisories; Windows execution remains T008 release preflight. T007 comparative acceptance remains pending.
 
+  - Evidence mode: validation
 ## Integration and promotion
 
 - [ ] T007 - Prove end-to-end performance and graph equivalence

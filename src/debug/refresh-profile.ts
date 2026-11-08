@@ -314,7 +314,10 @@ export function createRefreshProfileRuntime(input: {
     repo_root: input.source,
     controller,
     publications: publication,
-    snapshots: store
+    // The controlled continuation pause reopens this handle. Resolve writes
+    // at use time just like publication/validation reads, not against the
+    // physical connection captured before the pause.
+    snapshots: { markSnapshotFreshness: request => store.markSnapshotFreshness(request) }
   });
   const workspaceRefresh = createRepositoryWorkspaceRefreshService({
     repoRoot: input.source,

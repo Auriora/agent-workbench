@@ -76,10 +76,11 @@ Code installation. It contains Node 22 and the compiled native dependencies.
 
 The npm/source-package path has these additional prerequisites:
 
-- **Node.js 22 (recommended).** Node 24 builds the native core (tree-sitter) only
-  with a C++20 toolchain, so a default `npm install -g` on Node 24 hits a build
-  error first. Use Node 22, or rebuild with `CXXFLAGS=-std=c++20` (GCC/Clang) /
-  `_CL_=/std:c++20` (MSVC, appended after project-supplied options).
+- **Node.js 22 or newer.** The unreleased source runtime requires a guarded
+  core tree-sitter source build on every supported Node version; Node 22 does
+  not remove the compiler/Python requirement. Node 24 dependency installation
+  may require C++20 environment flags before the parent build runs; see the
+  canonical [native setup procedure](native-dependency-setup.md).
 - A C/C++ build toolchain and Python 3 for `node-gyp` (Linux: build-essential +
   python3; macOS: Xcode Command Line Tools; Windows: Visual Studio Build Tools
   with the C++ workload). A failing native build is a local toolchain issue to

@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import "../runtime/native-runtime-startup.mjs";
 import fs from "node:fs";
 import { channel } from "node:diagnostics_channel";
 import path from "node:path";
@@ -25,6 +26,8 @@ import { SystemClockAdapter } from "../time/index.js";
 import { createGraphBuildObservationClient } from "./graph-build-observation-client.js";
 import type { GraphBuildPathIdentity, GraphBuildWatchObservation } from "../../ports/index.js";
 import type { SnapshotRepositoryComposition } from "../../domain/models/runtime.js";
+import { RefreshPassBudget } from "./refresh-pass-budget.js";
+import { finishRefreshResolutionPages } from "./finish-refresh-resolution-pages.js";
 
 const COMMON_RAILS_FRONT_DOOR_PRIORITY_PATHS = [
   "AGENTS.md",
@@ -54,9 +57,10 @@ type StartupGraphWarmupWorkerData = {
 const input = workerData as StartupGraphWarmupWorkerData;
 assertGeneration("controllerGeneration", input.controllerGeneration);
 assertGeneration("invalidationGeneration", input.invalidationGeneration);
-const cooperativeExtractionDeadline = resolveCooperativeExtractionDeadline(input);
+const budget = new RefreshPassBudget({ deadline_at: input.deadlineAt, timeout_ms: input.timeoutMs });
 const workObservation = channel("agent-workbench.refresh.work");
 const phaseObservation = channel("agent-workbench.refresh.phase");
+const budgetObservation = channel("agent-workbench.refresh.budget");
 const workCounts = {
   directory_enumerations: 0,
   directory_entries_considered: 0,
@@ -88,6 +92,7 @@ const observationClient = createGraphBuildObservationClient({
   },
   initial_observation: input.watcherObservation
 });
+let completedPass = false;
 
 try {
   const watch = await observationClient.start();
@@ -111,7 +116,7 @@ try {
     }
   });
   reportProgress("composition", repositoryComposition.repositories.length);
-  const result = await runRepositoryGraphBuildSlice({
+  const runSlice = () => runRepositoryGraphBuildSlice({
     repo_root: input.repoRoot,
     workspace,
     extractors,
@@ -137,9 +142,10 @@ try {
     controller_generation: input.controllerGeneration,
     invalidation_generation: input.invalidationGeneration,
     repository_composition: repositoryComposition,
-    should_yield_extraction: () => Date.now() >= cooperativeExtractionDeadline,
+    should_yield_extraction: () => budget.shouldYieldExtraction(),
+    check_build_budget: () => budget.check(),
     report_build_progress: reportProgress,
-    observe_build_phase: phaseObservation.hasSubscribers ? observeBuildPhase : undefined,
+    observe_build_phase: observeBuildPhase,
     manifest: {
       store: workerGraphStore,
       watcher: observationClient,
@@ -148,6 +154,20 @@ try {
         observe: workObservation.hasSubscribers ? (event) => { workCounts[event] += 1; } : undefined
       }),
       inputs: capturedInputs
+    }
+  });
+  const result = await finishRefreshResolutionPages({
+    result: await runSlice(),
+    run_slice: runSlice,
+    should_yield: () => budget.shouldYieldResolution(),
+    is_resolving: async () => {
+      const progress = await workerGraphStore.getGraphBuildProgress({ snapshot_id: input.snapshotId });
+      if (progress === null || progress.owner_id !== input.executionId ||
+          progress.controller_generation !== input.controllerGeneration ||
+          progress.invalidation_generation !== input.invalidationGeneration) {
+        throw new Error("Refresh resolution continuation lost its execution fence.");
+      }
+      return progress.phase === "resolving" && progress.status === "active";
     }
   });
   observeBuildPhase("finalizing");
@@ -160,6 +180,7 @@ try {
     retain_latest_fresh_snapshots: input.retainLatestFreshSnapshots,
     vacuum: false
   });
+  budget.check();
   if (crashBarrierProbe?.barrier === "prepublication") {
     await pauseAtCrashBarrier(crashBarrierProbe, "prepublication");
   }
@@ -189,13 +210,17 @@ try {
       }
     });
   }
+  completedPass = true;
 } finally {
   observationClient.close();
   if (workObservation.hasSubscribers) workObservation.publish(workCounts);
   graphStore.close();
+  if (budgetObservation.hasSubscribers) budgetObservation.publish(budget.snapshot());
+  if (completedPass) budget.check();
 }
 
 function observeBuildPhase(phase: RefreshWorkerProgress["phase"]): void {
+  budget.enter(phase);
   if (phaseObservation.hasSubscribers) phaseObservation.publish(phase);
 }
 
@@ -203,15 +228,6 @@ function assertGeneration(name: string, value: number): void {
   if (!Number.isSafeInteger(value) || value < 0) {
     throw new TypeError(`${name} must be a non-negative safe integer.`);
   }
-}
-
-function resolveCooperativeExtractionDeadline(input: StartupGraphWarmupWorkerData): number {
-  const hardDeadline = Date.parse(input.deadlineAt);
-  if (!Number.isFinite(hardDeadline) || !Number.isSafeInteger(input.timeoutMs) || input.timeoutMs <= 0) {
-    throw new TypeError("Refresh worker deadline must be a valid future deadline.");
-  }
-  const settlementReserve = Math.max(5_000, Math.floor(input.timeoutMs * 5 / 6));
-  return hardDeadline - settlementReserve;
 }
 
 function reportProgress(

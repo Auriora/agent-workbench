@@ -216,7 +216,11 @@ export function buildPortableBundle({ packagePath, deploymentPath, lockfilePath,
   fs.writeFileSync(path.join(bundleRoot, "agent-workbench.cmd"), launcherText(), "utf8");
   fs.writeFileSync(path.join(bundleRoot, "configure.cmd"), configureLauncherText(), "utf8");
 
-  assertNativeLoads(nodeExecutable, packageRoot);
+  prepareNativeRuntime(nodeExecutable, packageRoot);
+  // The source build is the final payload mutator; validate the bytes that
+  // will actually be hashed rather than only the copied deployment inputs.
+  assertNoSymbolicLinks(runtimeNodeModules);
+  assertNoSymbolicLinks(packageRoot);
   const manifest = createManifest({
     packageRoot,
     bundleRoot,
@@ -241,17 +245,24 @@ export function assertRealPathInside(rootPath, candidatePath, label) {
   throw new Error(`${label} resolves outside ${rootPath}: ${candidateRealPath}`);
 }
 
-function assertNativeLoads(nodeExecutable, packageRoot) {
+export function prepareNativeRuntime(nodeExecutable, packageRoot) {
   const script = [
     'const { createRequire } = require("node:module");',
     'const path = require("node:path");',
+    'const { pathToFileURL } = require("node:url");',
     'const root = process.argv[1];',
     'const load = createRequire(path.join(root, "package.json"));',
+    'import(pathToFileURL(path.join(root, "scripts", "rebuild-native.mjs")).href).then(async ({ runTreeSitterSourceBuild, validateTreeSitterSourceBuild, proveTreeSitterTermination }) => {',
+    'const status = runTreeSitterSourceBuild({ packageRoot: root });',
+    'if (status !== 0) throw new Error("Portable termination-safe native source build failed.");',
+    'validateTreeSitterSourceBuild({ packageRoot: root });',
+    'await proveTreeSitterTermination({ packageRoot: root });',
     `for (const name of ${JSON.stringify(REQUIRED_NATIVE_PACKAGES)}) load(name);`,
     'const Database = load("better-sqlite3");',
     'const db = new Database(":memory:");',
     'db.prepare("select 1").get();',
-    'db.close();'
+    'db.close();',
+    '}).catch(error => { console.error(error); process.exitCode = 1; });'
   ].join("\n");
   const result = spawnSync(nodeExecutable, ["-e", script, packageRoot], { encoding: "utf8" });
   if (result.status !== 0) {

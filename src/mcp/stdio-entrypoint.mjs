@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import "../infrastructure/runtime/native-runtime-startup.mjs";
 import { register } from "tsx/esm/api";
+import { validateTreeSitterSourceBuild } from "../infrastructure/runtime/native-runtime-guard.mjs";
 
-register({ parentURL: import.meta.url });
 
 // The MCP server depends on native modules (tree-sitter, better-sqlite3) that
 // npm compiles from source on install. When that build is missing or was built
@@ -14,6 +15,8 @@ register({ parentURL: import.meta.url });
 // and per spec 033 it is the user's to resolve. Surface an actionable hint at
 // the one place the user actually hits it — server launch — then rethrow.
 try {
+  validateTreeSitterSourceBuild();
+  register({ parentURL: import.meta.url });
   await import("./stdio.ts");
 } catch (error) {
   const message = String(error?.message ?? error);
@@ -26,8 +29,8 @@ try {
       [
         "agent-workbench: failed to load a native module — this is a local build/toolchain issue, not a server bug.",
         "Fix it by ensuring Python 3 and a C/C++ build toolchain are installed, then rebuild the native modules:",
-        "  npm rebuild tree-sitter better-sqlite3        # or, from a source checkout: pnpm rebuild:native",
-        "On Node 24 the tree-sitter core needs C++20: use Node 22, or rebuild with CXXFLAGS=-std=c++20 (CL=/std:c++20 on Windows).",
+        "  Reinstall the package through its guarded lifecycle, or from a source checkout run pnpm rebuild:native.",
+        "All supported Node versions require the termination-safe tree-sitter build; Node 22 is not a bypass.",
         "",
         `Original error: ${message}`,
         ""

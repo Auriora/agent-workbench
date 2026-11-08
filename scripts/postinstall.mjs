@@ -4,24 +4,15 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// npm postinstall (spec 033). Three jobs, all best-effort and non-fatal so a
-// failure here never fails `npm install`:
-//
-//   1. Record a runtime-root pointer so the plugins' mcp-launch.mjs shim can
-//      find this package's location at launch time (the package is launched in
-//      place — it is never copied to a prefix).
-//   2. Materialize the installed Codex MCP config to an absolute shim path
-//      because current package-backed Codex MCP launches do not expand
-//      `${PLUGIN_ROOT}` there.
-//   3. If the native modules npm just built are unloadable, print an actionable
-//      hint. This is a thin bonus: when tree-sitter itself fails to compile, npm
-//      aborts the dependency build *before* this parent postinstall runs, so the
-//      authoritative hint lives at server launch (dist/mcp/stdio-entrypoint.mjs)
-//      and in the README prerequisites.
+// npm postinstall: native termination safety is mandatory (spec 072). Build
+// tree-sitter from source with the supported node-addon-api termination policy
+// before advertising the installed runtime. Runtime pointer and provider-config
+// setup remain best-effort (spec 033).
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { runTreeSitterSourceBuild, validateTreeSitterSourceBuild } from "./rebuild-native.mjs";
 import { materializeCodexMcpConfig } from "../plugins/agent-workbench/codex-mcp-config.mjs";
 import {
   runtimePointerPath,
@@ -29,6 +20,28 @@ import {
 } from "../plugins/agent-workbench/install-root.mjs";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+const nativeStatus = runTreeSitterSourceBuild({ packageRoot });
+if (nativeStatus !== 0) {
+  console.error("agent-workbench: cannot install the termination-safe tree-sitter runtime. Python 3 and a C/C++ build toolchain are required.");
+  process.exit(nativeStatus);
+}
+validateTreeSitterSourceBuild({ packageRoot });
+
+try {
+  const require = createRequire(path.join(packageRoot, "package.json"));
+  require("tree-sitter");
+} catch (error) {
+  console.error(
+    [
+      "agent-workbench: the native tree-sitter binding could not be loaded after its required source build.",
+      "  Correct the local native toolchain/build issue and rerun package installation.",
+      "  Agent Workbench requires its canonical C++20 build and termination-safe compiler define.",
+      `  (${error.message})`
+    ].join("\n")
+  );
+  process.exit(1);
+}
 
 try {
   const pointer = writeRuntimeRoot(packageRoot);
@@ -55,21 +68,6 @@ try {
   );
 }
 
-try {
-  const require = createRequire(path.join(packageRoot, "package.json"));
-  require("tree-sitter");
-} catch (error) {
-  console.warn(
-    [
-      "agent-workbench: the native tree-sitter binding could not be loaded after install.",
-      "  This is a local toolchain/build issue, not a packaging bug. Ensure Python 3 and a",
-      "  C/C++ build toolchain are installed, then run: npm rebuild tree-sitter better-sqlite3",
-      "  On Node 24 the tree-sitter core needs C++20 — use Node 22, or rebuild with",
-      "  CXXFLAGS=-std=c++20 (_CL_=/std:c++20 on Windows).",
-      `  (${error.message})`
-    ].join("\n")
-  );
-}
 
 function safePointerPath() {
   try {

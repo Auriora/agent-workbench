@@ -26,8 +26,9 @@ describe("rebuild-native", () => {
       _CL_: "/Zc:__cplusplus"
     }, "win32");
 
+    expect(env.npm_config_build_from_source).toBeUndefined();
     expect(env.CL).toBe("/std:c++17 /W3");
-    expect(env._CL_).toBe("/Zc:__cplusplus /std:c++20");
+    expect(env._CL_).toBe("/Zc:__cplusplus /std:c++20 /DNODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS");
   });
 
   it("appends the C++20 flag to CXXFLAGS on POSIX toolchains", () => {
@@ -35,7 +36,8 @@ describe("rebuild-native", () => {
       CXXFLAGS: "-O2"
     }, "linux");
 
-    expect(env.CXXFLAGS).toBe("-O2 -std=c++20");
+    expect(env.npm_config_build_from_source).toBeUndefined();
+    expect(env.CXXFLAGS).toBe("-O2 -std=c++20 -DNODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS");
   });
 
   it("resolves pnpm.cmd through PATHEXT on Windows without a shell", () => {

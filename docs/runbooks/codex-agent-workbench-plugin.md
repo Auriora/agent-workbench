@@ -3,7 +3,7 @@ title: Codex Agent Workbench plugin and MCP setup
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-11-06
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -412,8 +412,9 @@ macOS the Xcode command line tools (`xcode-select --install`); Windows the MSVC
 C++ build tools (the "Desktop development with C++" workload).
 
 On **Node 24** the `tree-sitter` core needs **C++20** (Node 24's V8/cppgc
-headers require it). Use **Node 22** (the supported floor), or rebuild with
-`CXXFLAGS=-std=c++20` (`_CL_=/std:c++20` on Windows).
+headers require it). Provision C++20 before dependency installation when needed:
+`CXXFLAGS=-std=c++20` (`_CL_=/std:c++20` on Windows). Node 22 avoids only that
+initial header-standard issue; the guarded source build below is still required.
 
 The package's `postinstall` records a runtime-root pointer file under the per-OS
 state directory: `%LOCALAPPDATA%\agent-workbench` on Windows (falling back to
@@ -422,15 +423,15 @@ Linux/macOS. The launch shim reads this pointer to find the runtime; nothing is
 copied to a prefix. Set `AGENT_WORKBENCH_INSTALL_ROOT` to override the runtime
 root (point it at a checkout containing `dist/mcp/stdio-entrypoint.mjs`).
 
-**Native build prerequisite (Decision 1).** A C/C++ toolchain (and Python 3) is
-required to build native modules from source. This is bounded: of the native
-dependencies, only the core `tree-sitter` runtime binding compiles from source;
-the four grammar packages (`tree-sitter-go`, `-javascript`, `-python`,
-`-typescript`) ship prebuilt binaries for all targets, and `better-sqlite3`
-ships prebuilds. A failing native build is the user's local toolchain issue to
-resolve, not a packaging bug: the package prints an actionable hint from
-`postinstall` (best effort) and, authoritatively, at server launch when a
-native binding cannot load.
+**Unreleased source native-build requirement (Spec 072).** Core tree-sitter
+0.25.0 must use the canonical C++20 source build with the termination-safe
+Node-API option on Node 22 and newer. Python 3 and a C/C++ toolchain are required;
+a loadable core prebuild alone is insufficient. npm postinstall stops if that
+build or binding validation fails. Runtime-pointer and Codex-config convenience
+steps remain separately best-effort. Grammar and SQLite prebuild policy is
+unchanged. See [Native dependency setup](native-dependency-setup.md) for the
+canonical rebuild and guarded receipt checks. This describes source delivery,
+not an already deployed change to the published 0.6.12 package.
 
 The cross-platform smoke matrix that backs the "Verification" column lives in
 `.github/workflows/cross-platform-packaging.yml` (install, MCP launch, and hook
@@ -443,9 +444,9 @@ release-readiness evidence.
 
 The npm distribution package is `@auriora/agent-workbench`. Its package
 contract lives at `packaging/agent-workbench/npm-package.json`. It is an
-ordinary npm package: `npm install` builds the native modules
-(`tree-sitter`, `better-sqlite3`) from source the normal way — there is no
-custom installer, no copy-to-prefix step, and no POSIX shell on the path.
+ordinary npm package. The unreleased source postinstall requires the canonical
+guarded core tree-sitter build before pointer/config setup; it runs in place
+without a copy-to-prefix installation or a POSIX-shell requirement.
 Use the latest published release URL (`v0.6.12`) in install commands.
 
 Install or refresh the runtime with:
@@ -463,11 +464,10 @@ codex plugin marketplace add "$(npm root -g)/@auriora/agent-workbench/plugins/ag
 codex plugin add agent-workbench@agent-workbench-local
 ```
 
-If the native build fails, it is a local toolchain issue. Ensure Python 3 and a
-C/C++ toolchain are installed, then on Node 24 use Node 22 or rebuild with
-`CXXFLAGS=-std=c++20` (`_CL_=/std:c++20` on Windows). From a source checkout you
-can rebuild with `pnpm rebuild:native` (or
-`npm rebuild tree-sitter better-sqlite3`).
+If the native build fails, correct the reported toolchain or dependency problem
+and rerun the package install lifecycle. From a source checkout use
+`pnpm rebuild:native`; an unguarded raw core dependency rebuild does not satisfy
+the termination-safe build contract. Node 22 also requires the guarded build.
 
 The npm package status is `pack-ready-not-published` until an authorized npm
 publish is performed. Validate the package payload with:

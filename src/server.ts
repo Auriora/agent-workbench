@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import "./infrastructure/runtime/native-runtime-startup.mjs";
+import { validateTreeSitterSourceBuild } from "./infrastructure/runtime/native-runtime-guard.mjs";
 import path from "node:path";
 import fs from "node:fs";
 import { randomUUID } from "node:crypto";
@@ -182,6 +184,7 @@ export function createAgentWorkbenchServer(
   repoRoot: string,
   options: AgentWorkbenchServerOptions = {}
 ) {
+  validateTreeSitterSourceBuild();
   const absoluteRepoRoot = path.resolve(repoRoot);
   const rootAuthorityPolicy = options.rootAuthorityPolicy ?? rootAuthorityPolicyFromEnv({
     launchRoot: absoluteRepoRoot,

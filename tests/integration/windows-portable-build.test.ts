@@ -151,3 +151,39 @@ function makeTempRoot() {
   tempRoots.push(root);
   return root;
 }
+
+describe("portable native runtime preparation", () => {
+  function nativePackage(fails: boolean) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "awb-portable-native-")); tempRoots.push(root);
+    fs.mkdirSync(path.join(root, "scripts"));
+    fs.writeFileSync(path.join(root, "package.json"), JSON.stringify({ name: "portable-native-test" }));
+    fs.writeFileSync(path.join(root, "scripts", "rebuild-native.mjs"), `
+      import fs from 'node:fs'; import path from 'node:path';
+      const log = ${JSON.stringify(path.join(root, "steps.json"))};
+      function record(value) { const values = fs.existsSync(log) ? JSON.parse(fs.readFileSync(log)) : []; values.push(value); fs.writeFileSync(log, JSON.stringify(values)); }
+      export function runTreeSitterSourceBuild({packageRoot}) { if (packageRoot !== ${JSON.stringify(root)}) throw Error('wrong package'); record('source-build'); return ${fails ? 1 : 0}; }
+      export function validateTreeSitterSourceBuild() { record('verify-receipt'); }
+      export async function proveTreeSitterTermination() { record('termination-proof'); }
+    `);
+    for (const name of ["tree-sitter", "tree-sitter-go", "tree-sitter-javascript", "tree-sitter-python", "tree-sitter-ruby", "tree-sitter-typescript", "better-sqlite3"]) {
+      const directory = path.join(root, "node_modules", name); fs.mkdirSync(directory, { recursive: true });
+      const code = name === "better-sqlite3"
+        ? "module.exports = class { prepare() { return {get(){}}; } close() {} };"
+        : "module.exports = {};";
+      fs.writeFileSync(path.join(directory, "index.js"), code);
+    }
+    return root;
+  }
+
+  it("builds the copied runtime and verifies its receipt before accepting the portable payload", () => {
+    const root = nativePackage(false);
+    portableBuild.prepareNativeRuntime(process.execPath, root);
+    expect(JSON.parse(fs.readFileSync(path.join(root, "steps.json"), "utf8"))).toEqual(["source-build", "verify-receipt", "termination-proof"]);
+  });
+
+  it("rejects a failed native source build without accepting a loadable alternative", () => {
+    const root = nativePackage(true);
+    expect(() => portableBuild.prepareNativeRuntime(process.execPath, root)).toThrow("Portable native dependency load failed");
+    expect(JSON.parse(fs.readFileSync(path.join(root, "steps.json"), "utf8"))).toEqual(["source-build"]);
+  });
+});

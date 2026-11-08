@@ -47,8 +47,9 @@ reported incident's root cause.
 | B010 | accepted | Establish verifiable non-Linux process scope for guard recovery | P2 | platform | Kernel-evidence design before macOS/Windows automatic guard cleanup |
 | B011 | accepted | Exercise real-helper mid-abort at the process boundary | P3 | platform | Additional cancellation fixture; no blocking implementation finding |
 | B012 | accepted | Reconcile global npm direct-URL dependency diagnostics | P3 | platform | Reproduce missing resolution metadata and govern supported validation/remediation |
-| B013 | promoted | Deliver daemon CPU efficiency | P1 | platform | [Spec 072](../specs/072-daemon-cpu-efficiency/requirements.md); measured fixes and profiling; implementation pending |
+| B013 | promoted | Deliver daemon CPU efficiency | P1 | platform | [Spec 072](../specs/072-daemon-cpu-efficiency/requirements.md); source delivery underway; task evidence governs completion |
 | B014 | accepted | Assess background indexing CPU duty cycle | P2 | platform | After Spec 072 measurements; resource scheduling policy remains unimplemented |
+| B015 | accepted | Maintain guarded native build-tool dependencies | P2 | platform | Follow up node-gyp transitive audit findings without weakening native termination guards |
 
 ## Daemon performance follow-up
 
@@ -69,8 +70,8 @@ reported incident's root cause.
 - Validation: owned Qt/TypeScript, ignore, continuation, reference and shutdown
   fixtures; five-run complete-generation CPU/wall/RSS measurements; typecheck,
   full tests and isolated compiled acceptance.
-- Owner: platform. Priority: P1. Disposition: promoted to Spec 072; no fix is
-  implemented by this planning change. EB014's closed Spec 051 remains historical.
+- Owner: platform. Priority: P1. Disposition: promoted to Spec 072; its verified task records identify
+  delivered source slices. This intake entry alone proves no implementation. EB014's closed Spec 051 remains historical.
 - Promotion: existing runtime operations, graph-store, observability and runtime
   contract owners; T008 reconciles any newly deferred work before closure.
 
@@ -91,6 +92,34 @@ reported incident's root cause.
 - Owner: platform. Priority: P2. Dependency: Spec 072 T007 measurements. Status:
   accepted, unimplemented, outside Spec 072's fix acceptance. Promotion target:
   runtime operations and observability, then a focused spec if a change is needed.
+
+## Native build dependency maintenance
+
+### B015: Maintain guarded native build-tool dependencies
+
+- Signal: Spec 072 T006 requires an explicitly pinned native builder to avoid
+  ambient-tool selection and unsafe core prebuilds. Production dependency audit
+  identifies two moderate advisories through node-gyp 11.5.0 ->
+  make-fetch-happen -> cacache -> glob/minimatch:
+  [GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4)
+  and [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249).
+  These dependencies execute during installation/build, not daemon workspace
+  reference or ignore-policy processing. This scoped disposition is not a claim
+  that the entire production dependency audit is clean.
+- Scope: select a supported upstream/transitive update or record a reviewed
+  reachability disposition while preserving the supported Node floor, pinned
+  builder, guarded binary receipt and ordinary npm installation. A pnpm-only
+  override does not repair the delivered npm dependency graph.
+- Acceptance: eliminate the affected chain or document a platform-owned bounded
+  risk disposition with evidence; retain ordinary-error behavior and actual
+  Worker.terminate safety. Do not remove mandatory installation/runtime guards,
+  select ambient build tools, add parser fallbacks or raise execution deadlines.
+- Validation: pnpm audit --prod; actual installed npm production dependency-tree
+  evidence; Node 22/24 package installation and native positive/negative startup,
+  ordinary callback error and parser termination tests.
+- Owner: platform. Priority: P2. Status: accepted, not implemented. Promotion:
+  focused dependency-maintenance work and native setup/release readiness. Spec
+  072 T008 reconciles this owned residual before closing the performance package.
 
 ## Transport reliability follow-up
 

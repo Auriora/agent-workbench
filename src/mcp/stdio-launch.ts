@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { validateTreeSitterSourceBuild } from "../infrastructure/runtime/native-runtime-guard.mjs";
 import path from "node:path";
 import type { Socket } from "node:net";
 import type { Readable, Writable } from "node:stream";
@@ -62,6 +63,7 @@ export async function connectAgentWorkbenchStdio(
     stderr?: Writable;
   } = {}
 ): Promise<StdioBridgeSession> {
+  validateTreeSitterSourceBuild();
   const socket = await connectOrStartDaemon({
     repoRoot: config.repoRoot,
     debugRepoRootOverride: config.debugRepoRootOverride,

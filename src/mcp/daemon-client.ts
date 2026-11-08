@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import { validateTreeSitterSourceBuild } from "../infrastructure/runtime/native-runtime-guard.mjs";
 import { spawn, type ChildProcess } from "node:child_process";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -241,6 +242,7 @@ export function classifyDaemonState(input: {
 export async function connectOrStartDaemon(
   options: ConnectOrStartDaemonOptions
 ): Promise<Socket> {
+  validateTreeSitterSourceBuild();
   const repoRoot = path.resolve(options.repoRoot);
   const identity = createDaemonIdentity(repoRoot);
   const paths = daemonPaths(identity);

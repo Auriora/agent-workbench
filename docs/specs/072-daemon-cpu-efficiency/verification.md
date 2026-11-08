@@ -19,7 +19,7 @@ comparison contract passed the final evidence gates below. T002's bounded Qt
 format admission/V002 and T003 compiled matchers/V003 are also verified. T003
 passes SC-001 with 84.60% lower median CPU in the controlled two-scan benchmark.
 T004 sealed inventory/publication/migration now passes V004 and SC-002 below.
-T005 candidate indexing passes V005 below; T006 remains pending. Historical exploratory measurements remain in
+T005 candidate indexing passes V005; T006 budget and settlement proof passes V006 below. Historical exploratory measurements remain in
 [research](research.md). Full-generation CPU/RSS improvement and complete
 Requirement 6/candidate/release acceptance remain T007/T008 obligations.
 
@@ -32,7 +32,7 @@ Requirement 6/candidate/release acceptance remain T007/T008 obligations.
 | V003 | Requirement 2; CP-001; SC-001 | Negation/anchor/directory/segment parity, child ignore invalidation, finite matcher lifetime, distinct compilation counts and CPU benchmark | passed T003/SC-001; full candidate gates pending |
 | V004 | Requirement 3; CP-001/CP-003/CP-005; SC-002 | Multi-slice single discovery, docs priority, worker exit/restart, create/delete/rename/content/ignore/config/composition invalidation, manifest migration, incomplete/sealed state, death before/during construction, at seal and before consumption, and mutations not yet admitted by watcher | passed T004/SC-002; comparative V007 remains pending |
 | V005 | Requirement 4; CP-004/CP-005 | Cross-language/Ruby/lambda graph and ambiguity parity, candidate-count scaling and final-page cursor/transaction proof | passed T005; comparative V007 remains pending |
-| V006 | Requirement 5; CP-003/CP-005 | Budget/long-file overrun, settlement, cancellation/supersession/shutdown, unique versus visit counters and legacy unknown/rebuild behavior | pending T006 |
+| V006 | Requirement 5; CP-003/CP-005 | Budget/long-file overrun, settlement, cancellation/supersession/shutdown, unique versus visit counters and legacy unknown/rebuild behavior | passed T006 |
 | V007 | Requirement 6; SC-001-SC-004; CP-006 | Comparable complete-generation five-run baseline/candidate CPU, wall, RSS, phase costs, frozen permitted Qt/counter corrections, normalized unaffected-evidence parity; source and isolated compiled acceptance | pending T007 |
 | V008 | All requirements; CP-001-CP-006 | Independent architecture/data/operational review, durable promotion, backlog reconciliation, evidence/closure checks | pending T008 |
 
@@ -941,3 +941,75 @@ are table-readability advisories on the existing table layout; there are no othe
 finding categories. Existing table formats are retained. Spec metadata and
 relative document/anchor references are checked separately; git diff --check
 passes. These documentation checks do not replace the executed runtime gates.
+
+## T006 Phase Budgets and Native Settlement
+
+R5 AC1-AC5, CP-003/CP-005 and V006 pass. The production hard deadline
+remains 60 seconds, with a 50-second aggregate reserve. Remaining admission
+capacity is allocated 40% preparation, 40% extraction soft allowance and 20%
+headroom. A completed file may cross the extraction soft target, but no further
+file starts and the aggregate reserve remains protected. Resolution has one
+fixed deadline across durable pages and retains five seconds for settlement;
+a one-second next-page margin is an admission heuristic. The seed boundary and
+250-file extraction limit remain mandatory. Strictly advancing resolution pages
+reuse the canonical build slice in one isolate; no alternate resolver is added.
+
+Real native termination initially reproduced a host abort: the tree-sitter input
+callback threw while V8 was terminating, and node-addon-api rethrew while JavaScript
+execution was disallowed. The canonical source build now enables the supported
+NODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS definition. Ordinary callback errors still
+propagate unchanged. One pinned node-gyp 11.5.0 build path produces tree-sitter
+0.25.0 and a private build receipt. A shared validator verifies the selected
+binary/header hashes and rejects missing or incompatible receipts before native
+imports, including bundled entrypoints. Install failures are fatal; portable
+consumers validate the build-host artifact without compiling it themselves.
+
+Executed native-overrun tests terminate an actual approximately 1.9 MiB Python
+parse after an entered barrier. The parser never returns; the host survives;
+no partial publication occurs. A successor remains blocked until exit confirmation,
+and shutdown waits for both exit and confirmation. The test's one-second deadline
+is a deterministic termination trigger, not a production deadline increase or a
+parse-time guarantee. Existing cancellation/supersession/controller tests pass.
+SQLite accounting tests preserve legacy inflated work counters as unversioned,
+leave unique totals unknown, reject same-target continuation before scanning,
+and rebuild a new generation with version-2 distinct counts.
+
+A separate deterministic profiling defect was reproduced: pausing closed the
+store captured by the snapshot port. Freshness writes now delegate to the current
+reopened store. The pause/reopen/watcher/new-generation fixture passes. Failed
+scenario tests now retain their original roots and failure evidence. This does
+not establish the cause of the earlier intermittent manifest_validation_failed
+outcome; any recurrence in T007 invalidates that measurement and requires analysis.
+
+Final executed validation:
+
+- pnpm typecheck; runtime build and receipt check; plugin validation: passed.
+- pnpm test --maxWorkers=2: 182 files passed, 1816 tests passed, one existing
+  skip; 214.68 seconds. Earlier nonfinal runs are retained separately, including
+  an unattributed minimal scenario failure and a mixed-source guard expectation
+  failure; neither is substituted for the final frozen-source suite.
+- Native guard/build/termination focused validation: seven files, 39 tests passed.
+- Final production worker: two passes, all 9341 T005 semantic records equal,
+  zero differences and zero corrections. Files/nodes/edges/unresolved/docs are
+  332/655/7680/2/3. Discovery counts are 6/342/332/31, all in the first pass.
+  One-run CPU 4141074 microseconds and wall 3134.752 ms are characterization only.
+- Packed, independently installed MCP smoke: passed on Linux x64, Node 24.8.0.
+  Tarball SHA-256 e86daf64b0c7941c40aff8e29c3d94a874519e55b34c0d61de52845442063e0c.
+  Installed native parse/termination and ordinary error identity pass; missing and
+  unguarded receipts exit with no daemon/refresh state. Both provider-labelled
+  MCP sessions, completed initial baseline, stale old snapshot during replacement,
+  new execution, final freshness, deletion queries, complete ranking and pagination
+  pass. Worker count advances 2 to 5, including watcher catch-up; no fixed one-pass
+  assumption is imposed. All isolated cleanup assertions pass. Provider labels
+  do not prove actual Codex/Claude CLI plugin loading.
+
+Runtime source SHA-256:
+293b5d1bbbbc18eb753fe9920dbea71d2f66ec7fbb6d6e9b33496221ee9029a4.
+Supporting ignored evidence: .tmp/t006-full-test-final.log,
+.tmp/t006-installed-mcp-settled.log, .tmp/spec072-t006-final-preflight/,
+.tmp/t006-final-worker-comparison.log and .tmp/t006-native-*. Native/operations
+and budget reviewers accepted the source and proof. Durable runtime, contracts
+and installation owners are updated. B015 owns the build-only dependency advisory
+chain; it does not defer a T006 acceptance criterion. Actual Windows portable
+execution remains a T008 release-preflight obligation. T007 comparative acceptance,
+T008 closure and B014 remain pending. No live installed daemon was changed.

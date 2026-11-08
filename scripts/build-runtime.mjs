@@ -11,6 +11,7 @@ import { build } from "esbuild";
 import { distributionAnalyticsDefines } from "./distribution-analytics-config.mjs";
 import {
   BUILD_OPTIONS,
+  nativeRuntimeModulesPlugin,
   RUNTIME_BUILD_ENTRYPOINTS,
   collectRuntimeBuildContract,
   validateRuntimeBuildReceipt,
@@ -62,6 +63,7 @@ try {
     entryPoints,
     ...BUILD_OPTIONS,
     define: distributionAnalyticsDefines(),
+    plugins: [nativeRuntimeModulesPlugin()],
     outdir: distRoot
   });
 

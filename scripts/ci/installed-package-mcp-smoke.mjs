@@ -13,6 +13,7 @@ import fs from "node:fs";
 import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 import { runNativeParserFixtures } from "./native-parser-fixtures.mjs";
 
@@ -127,7 +128,7 @@ async function runSmoke() {
   assert(installedManifest.name === "@auriora/agent-workbench", "installed package identity matches");
   assert(typeof installedManifest.version === "string", "installed package version is present");
   currentPhase = "installed_native_contract";
-  const nativeContract = validateInstalledNativeContract({
+  const nativeContract = await validateInstalledNativeContract({
     installedPackageRoot,
     installRoot
   });
@@ -140,6 +141,9 @@ async function runSmoke() {
     "installed bin resolves inside the isolated installed package"
   );
   assert(!isInside(repoRoot, installedBinRealPath), "installed bin does not resolve into the checkout");
+  currentPhase = "installed_native_guard_negative";
+  nativeContract.unguarded_launches = verifyUnguardedInstalledLaunch({ installedPackageRoot, installedBinRealPath });
+
   const installedPackageContentSha256 = hashDirectory(installedPackageRoot);
 
   currentPhase = "fixture";
@@ -217,11 +221,15 @@ async function runSmoke() {
   fs.rmSync(deletedSource);
   fs.rmSync(deletedDoc);
 
-  // This is the sole post-deletion trigger. Convergence polling below uses
-  // integration health, whose diagnostics operation cannot request refresh.
+  // One external status read observes deletion and admits or coalesces the
+  // watcher-driven refresh. Health polling below cannot request another refresh.
   const admitted = await readStatus(claude);
   assert(admitted.data.snapshot_id === oldSnapshotId, "stale admission retains the old snapshot");
-  assert(admitted.data.freshness === "stale", "one non-startup status read detects deletion");
+  assert(admitted.data.snapshot_validity?.state === "stale", "one non-startup status read detects deleted indexed paths");
+  assert(admitted.data.freshness === "refreshing", "accepted refresh has canonical refreshing presentation");
+  const admittedDaemon = requiredDaemon(await readHealth(claude));
+  const admittedExecutionId = requiredString(admittedDaemon.execution_id, "admitted execution id");
+  assert(admittedExecutionId !== baselineDaemon.execution_id, "deletion starts a new execution after baseline completion");
 
   const terminalHealth = await waitForReplacementHealth(claude, oldSnapshotId, 60_000);
   const terminalDaemon = requiredDaemon(terminalHealth);
@@ -229,10 +237,14 @@ async function runSmoke() {
     terminalDaemon.worker_invocations,
     "final worker_invocations"
   );
+  // Invocation counts describe actual worker passes. Seed publication and
+  // completion require two passes; an already queued watcher batch may require
+  // a generation-safe catch-up in this same coordinated execution.
   assert(
-    finalWorkerInvocations - baselineWorkerInvocations === 1,
-    "the non-startup stale read starts exactly one worker invocation"
+    finalWorkerInvocations - baselineWorkerInvocations >= 2,
+    "seed and completion count their actual worker passes"
   );
+  assert(terminalDaemon.execution_id === admittedExecutionId, "one coordinated execution converges without a second refresh request");
 
   const [codexFinalHealth, claudeFinalHealth] = await Promise.all([
     readHealth(codex),
@@ -391,7 +403,7 @@ async function runSmoke() {
       requested_generation: codexFinalDaemon.requested_generation,
       worker_invocations_before: baselineWorkerInvocations,
       worker_invocations_after: finalWorkerInvocations,
-      worker_invocation_delta: 1
+      worker_invocation_delta: finalWorkerInvocations - baselineWorkerInvocations
     },
     snapshots: {
       previous: oldSnapshotId,
@@ -444,14 +456,22 @@ async function verifyAuthorityRanking({ codex, claude, snapshotId }) {
     [...expectedPaths].sort(),
     "authority candidate union paths"
   );
+  assertDeepEqual(complete.data.hits.map(hit => hit.path), expectedPaths, "authority ranking order");
   const fixtureScores = complete.data.hits
     .map((hit) => ({ path: hit.path, score: hit.score, lexical_score: hit.lexical_score }))
     .sort((left, right) => left.path.localeCompare(right.path));
-  assertDeepEqual(fixtureScores, [
-    { path: "docs/design/coding-agent-integration-design.md", score: 13.25, lexical_score: undefined },
-    { path: "docs/reference/documentation-map.md", score: 18.43587474697314, lexical_score: -4.185874746973141 },
-    { path: "docs/runbooks/install-agent-workbench.md", score: 0, lexical_score: 1.5714128163270238 }
-  ], "fixture-specific legacy and lexical scores");
+  // FTS5 BM25 uses the retained multi-snapshot corpus. Seed/completion and
+  // catch-up history can change its magnitude without changing these fixture
+  // priors or the ranking contract. Verify the independently fixed priors and
+  // score relation, rather than a float tied to the old single-snapshot build.
+  const scoreByPath = new Map(fixtureScores.map(hit => [hit.path, hit]));
+  const ownerScore = scoreByPath.get(expectedPaths[0]);
+  const mapScore = scoreByPath.get(expectedPaths[1]);
+  const runbookScore = scoreByPath.get(expectedPaths[2]);
+  assert(ownerScore?.score === 13.25 && ownerScore.lexical_score === undefined, "owner-only fixture prior remains exact");
+  assert(Number.isFinite(mapScore?.lexical_score) && mapScore.lexical_score < 0, "map fixture has its expected weighted FTS score sign");
+  assert(Math.abs(mapScore.score + mapScore.lexical_score - 14.25) < 1e-9, "legacy map score preserves its exact 14.25 fixture prior against FTS");
+  assert(runbookScore?.score === 0 && Number.isFinite(runbookScore.lexical_score) && runbookScore.lexical_score > 0, "supporting fixture preserves its clamped legacy score and FTS relation");
 
   const owner = complete.data.hits[0];
   assert(owner?.path === expectedPaths[0], "canonical intent owner ranks first");
@@ -610,7 +630,34 @@ function installTarball(tarballPath) {
   });
 }
 
-function validateInstalledNativeContract(input) {
+function verifyUnguardedInstalledLaunch({ installedPackageRoot, installedBinRealPath }) {
+  const packageRequire = createRequire(path.join(installedPackageRoot, "package.json"));
+  const runtimeRoot = path.dirname(packageRequire.resolve("tree-sitter/package.json"));
+  const receiptPath = path.join(runtimeRoot, "build", "Release", "agent-workbench-native.json");
+  const original = fs.readFileSync(receiptPath);
+  const results = {};
+  for (const kind of ["missing_receipt", "unguarded_receipt"]) {
+    const workspace = path.join(tempRoot, `native-guard-${kind}`);
+    fs.mkdirSync(workspace);
+    try {
+      if (kind === "missing_receipt") fs.rmSync(receiptPath);
+      else fs.writeFileSync(receiptPath, JSON.stringify({ ...JSON.parse(original.toString("utf8")), define: "UNGUARDED_STOCK_BUILD" }));
+      const result = spawnSync(process.execPath, [installedBinRealPath, "--repo-root", workspace], {
+        cwd: tempRoot, env: isolatedEnv, encoding: "utf8", input: "", timeout: 15_000
+      });
+      assert(result.error === undefined, `${kind} launch finishes without a timeout`);
+      assert(typeof result.status === "number" && result.status !== 0 && result.signal === null, `${kind} launch fails normally`);
+      assert(/NATIVE_RUNTIME_UNGUARDED|guarded tree-sitter runtime/.test(result.stderr), `${kind} launch names missing native safety evidence`);
+      assert(!fs.existsSync(path.join(workspace, ".cache", "agent-workbench")), `${kind} launch creates no daemon or refresh state`);
+      results[kind] = { exit_code: result.status, no_daemon_or_refresh_state: true };
+    } finally {
+      fs.writeFileSync(receiptPath, original);
+    }
+  }
+  return results;
+}
+
+async function validateInstalledNativeContract(input) {
   const dependencyTreeResult = run("npm", [
     "ls",
     "--prefix",
@@ -636,7 +683,7 @@ function validateInstalledNativeContract(input) {
 
   const packageRequire = createRequire(path.join(input.installedPackageRoot, "package.json"));
   const expectedPackages = [
-    ["tree-sitter", "0.25.x"],
+    ["tree-sitter", "0.25.0"],
     ["tree-sitter-go", "0.25.x"],
     ["tree-sitter-javascript", "0.25.x"],
     ["tree-sitter-python", "0.25.x"],
@@ -661,13 +708,18 @@ function validateInstalledNativeContract(input) {
     packageFacts[name] = { version: metadata.version, resolved_from_install: true };
   }
 
+  const installedNativeBuild = await import(pathToFileURL(path.join(input.installedPackageRoot, "scripts", "rebuild-native.mjs")).href);
+  const nativeReceipt = installedNativeBuild.validateTreeSitterSourceBuild({ packageRoot: input.installedPackageRoot });
+  const nativeTermination = await installedNativeBuild.proveTreeSitterTermination({ packageRoot: input.installedPackageRoot });
   const parserFixtures = runNativeParserFixtures(packageRequire);
   return {
     npm_dependency_tree_clean: true,
     runtime_core: packageFacts["tree-sitter"].version,
     packages: packageFacts,
     parsed_roots: parserFixtures.parsed_roots,
-    native_sqlite_smoke: parserFixtures.native_sqlite_smoke
+    native_sqlite_smoke: parserFixtures.native_sqlite_smoke,
+    native_build_receipt: nativeReceipt,
+    native_termination: nativeTermination
   };
 }
 
@@ -970,6 +1022,12 @@ async function initializeAndProbeSession({ session, provider, expectedVersion })
     readResourceWithBytes(session, "repo:///docs/map"),
     callToolWithBytes(session, "docs_map", {})
   ]);
+  // A usable/fresh seed does not prove durable graph completion. Settle the
+  // baseline before testing a later non-startup admission or counting passes.
+  const completedHealth = await waitForReplacementHealth(session, undefined, 60_000);
+  const completedStatus = await readStatus(session);
+  assert(completedStatus.data.snapshot_id === requiredDaemon(completedHealth).visible_snapshot_id,
+    `${provider} baseline status selects the completed publication`);
   assert(scope.data?.repo_root === path.resolve(workspaceRoot), `${provider} scoped repo_root matches fixture`);
   assert(status.data?.repo_root === path.resolve(workspaceRoot), `${provider} status repo_root matches fixture`);
   assert(Array.isArray(tools), `${provider} tools/list returns tool results`);
@@ -986,8 +1044,8 @@ async function initializeAndProbeSession({ session, provider, expectedVersion })
   assert(health.data?.repo_root === path.resolve(workspaceRoot), `${provider} health repo_root matches fixture`);
   assertProviderIdentity(health, provider, expectedVersion);
   return {
-    status,
-    health,
+    status: completedStatus,
+    health: completedHealth,
     docs_map: {
       resource_bytes: docsMapResource.bytes,
       tool_bytes: docsMapTool.bytes,

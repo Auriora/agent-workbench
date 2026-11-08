@@ -3,7 +3,7 @@ title: Native dependency setup
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-05-07
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -27,6 +27,33 @@ Common failure signatures:
 - missing `tree_sitter_runtime_binding.node`
 - missing `better_sqlite3.node`
 
+## Source checkout termination policy (unreleased)
+
+Spec 072 requires the core tree-sitter 0.25.0 binding to be built from source
+with C++20 and NODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS. This is source behavior;
+it does not establish that a released or installed runtime has been upgraded.
+The supported Node-API option prevents a fatal rethrow into an environment being
+terminated by Worker.terminate. Ordinary callback exceptions still propagate;
+parser replacement and successful timeout fragments remain unsupported.
+
+The canonical builder in scripts/rebuild-native.mjs uses the pinned node-gyp
+build utility and emits a receipt beside the native binary. npm postinstall,
+local rebuild and portable preparation use that same core build route. A
+loadable unguarded prebuild is insufficient. Core build or receipt validation
+failure stops installation/packaging; runtime-pointer and plugin-config
+convenience steps retain their separate best-effort policy. Portable users run
+the verified compiled payload and do not rebuild on their machine.
+
+Python and a C/C++ toolchain are required for npm/source installation on every
+supported Node version, including Node 22. On Node 24, provision C++20 flags
+before dependency installation when the dependency's own install step requires
+them; the parent guarded builder supplies its required flags for its build.
+Runtime startup and worker admission reject a missing or mismatched guarded
+receipt/binding. Skipping install scripts does not establish a supported guarded
+installation.
+Re-run the package's install lifecycle or the canonical source rebuild before use.
+Do not repair core tree-sitter with an unguarded raw dependency rebuild.
+
 ## Prerequisites
 
 - Node.js 22 or newer. Node 24 requires C++20 for native addon builds.
@@ -46,7 +73,7 @@ Common failure signatures:
 
 | Area | Path Or Setting | How It Is Used | Required Validation |
 | --- | --- | --- | --- |
-| Package scripts | `package.json` `rebuild:native` | Rebuilds tree-sitter native bindings with `CXXFLAGS=-std=c++20`. | `pnpm rebuild:native` exits successfully. |
+| Package scripts | `package.json` `rebuild:native` | Builds the core with C++20 and the required termination guard; rebuilds approved grammars. | `pnpm rebuild:native` exits successfully. |
 | Approved build scripts | `package.json` `pnpm.onlyBuiltDependencies` | Allows known native packages to run install scripts. | `pnpm install` does not report unapproved native scripts for listed packages. |
 | Python parser adapter | `src/infrastructure/tree-sitter/python-parser.ts` | Uses `tree-sitter` and `tree-sitter-python`. | `pnpm test -- tests/adapters/python-parser.test.ts` passes. |
 | SQLite graph store | `src/infrastructure/sqlite/graph-store.ts` | Uses `better-sqlite3` native bindings. | `pnpm test -- tests/graph/store.test.ts` passes. |
@@ -59,12 +86,12 @@ Common failure signatures:
    pnpm install
    ```
 
-2. If pnpm asks to approve build scripts, approve only the native packages
-   already listed in `package.json`: `better-sqlite3`, `esbuild`,
-   `tree-sitter`, and `tree-sitter-python`.
+2. If pnpm asks to approve build scripts, approve only packages already listed
+   under `pnpm.onlyBuiltDependencies` in package.json, including the admitted
+   tree-sitter grammars. Do not bypass the allowlist.
 
-3. Rebuild native tree-sitter bindings when using Node 24 or after any native
-   binding failure.
+3. Use the canonical native rebuild after any local binding/build change. It
+   retains the required termination guard as well as the compiler standard.
 
    ```sh
    pnpm rebuild:native
@@ -87,6 +114,8 @@ Common failure signatures:
 
 The setup is healthy when:
 
+- canonical native termination tests pass and the guarded build receipt matches
+  the selected binding
 - the Python parser test can load `tree-sitter` and `tree-sitter-python`
 - the graph store test can load `better-sqlite3`
 - `pnpm typecheck` passes

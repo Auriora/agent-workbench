@@ -652,6 +652,23 @@ prior publication and reports structured `manifest_validation_failed` evidence.
 The freshness boundary is the recorded observation, not an atomic filesystem
 snapshot or an assurance about all unobserved changes.
 
+Worker completed_units is a local phase/page work milestone; it may restart
+for another page and is not a cumulative unique-file total. Distinct file counts
+require sealed-manifest counters_version=2. An absent version identifies legacy
+work counts, with unique totals unknown; active legacy progress cannot resume as
+v2 and must rebuild under a new admitted generation.
+
+Refresh passes retain the 60-second hard deadline and existing aggregate
+resolution/write/settlement reserve. Preparation and extraction have separate
+allowances; extraction is a soft next-file admission target, with whole-file
+settlement allowed only while the required reserve remains. Final resolution
+may consume successive committed numeric pages in the same worker under one
+fixed deadline. Mandatory seed publication and the 250-file extraction limit
+remain. Hard/phase failure is structured failure, never a successful parse
+fragment. Native worker termination requires the guarded core build described
+in the [native setup runbook](../runbooks/native-dependency-setup.md).
+
+
 `planned` and `running` hold the controller activity lease. `complete` names a
 `published` target that is also the visible snapshot, has matching started and
 requested generations, and has no retained failure. `failed` has no activity
@@ -662,8 +679,9 @@ unconfirmed termination.
 
 Refresh failure codes are `worker_timeout`, `worker_error`,
 `worker_exit_without_result`, `invalid_worker_result`, `store_failure`,
-`permission_failure`, `ownership_lost`, `orphaned_build`, and
-`orphaned_pre_publication`. Each maps to a fixed safe category and message.
+`permission_failure`, `ownership_lost`, `orphaned_build`,
+`orphaned_pre_publication`, `manifest_validation_failed`, and
+`controller_shutdown`. Each maps to a fixed safe category and message.
 Failure evidence includes execution identity, optional target identity, and
 occurrence time; messages are capped at 512 UTF-8 bytes and never expose raw
 worker, SQLite, stack, secret, control-character, or absolute-path text.

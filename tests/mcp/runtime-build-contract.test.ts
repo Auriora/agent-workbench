@@ -257,3 +257,19 @@ describe("runtime build contract", () => {
     });
   });
 });
+
+it("records and fences the native bootstrap externalization policy in build receipts", () => {
+  withRuntimeBuildFixture(root => {
+    writeBuildArtifacts(root);
+    writeRuntimeReceipt(root);
+    const receiptPath = path.join(root, RUNTIME_BUILD_RECEIPT_PATH);
+    const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
+    expect(receipt.buildOptions.nativeRuntimeModules).toEqual({ version: 1, modules: {
+      "native-runtime-guard.mjs": "../../src/infrastructure/runtime/native-runtime-guard.mjs",
+      "native-runtime-startup.mjs": "../../src/infrastructure/runtime/native-runtime-startup.mjs"
+    } });
+    receipt.buildOptions.nativeRuntimeModules.version = 2;
+    fs.writeFileSync(receiptPath, JSON.stringify(receipt));
+    expect(() => validateRuntimeBuildReceipt(root)).toThrow("runtime build options changed");
+  });
+});
