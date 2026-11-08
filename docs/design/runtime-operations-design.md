@@ -3,7 +3,7 @@ title: Runtime operations design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-11-06
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -74,6 +74,31 @@ Cache rules:
 - generated cache files must live under approved generated-cache roots
 
 ## Warm-Up Process
+
+### Ambiguous TypeScript Extension Admission
+
+Before graph extraction, catalog discovery reads at most 16,384 bytes from offset
+zero of ambiguous `.ts` files through workspace containment checks. File identity
+uses the same bounded content recognizer. A supported positive Qt translation
+signature requires a complete XML declaration and/or literal `<!DOCTYPE TS>`
+followed by a complete, case-sensitive `TS` root start tag. The recognizer accepts
+an optional UTF-8 BOM, XML whitespace and complete prolog comments/processing
+instructions; it does not resolve DTDs, expand entities or search source strings.
+Encoding and prolog validation stops at the end of the root start tag; later
+body content or a multibyte character split by the read bound cannot revoke an
+already established positive signature. The read opens the canonical checked
+target under the existing workspace check/open contract.
+
+Positive Qt files have language `xml` and use the existing unsupported coverage
+path because there is no XML extractor. They remain catalog evidence and invoke
+no TypeScript parser. Genuine TypeScript and readable inconclusive signatures,
+including a root beyond the bound, retain the canonical TypeScript tree-sitter
+route. `.tsx` admission is unchanged. Local refresh profiling labels selected
+`.ts` catalog admissions as `positive_qt` or `unconfirmed`; the latter is not
+proof that a file contains TypeScript. Unreadable prefixes retain structured
+catalog failure evidence rather than being admitted as TypeScript.
+
+### Warm-Up Flow
 
 Warm-up is a background application flow that prepares the runtime for cheap
 MCP reads.

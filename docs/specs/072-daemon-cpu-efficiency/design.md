@@ -15,8 +15,9 @@ license: GPL-3.0-or-later
 
 Fix admitted file format and repeated algorithmic work inside the existing
 refresh pipeline. Preserve its single executor, durable completion and atomic
-publication. T001 profiling/fixture baseline and design checkpoint are verified;
-the production optimisations and migration described below are not implemented.
+publication. T001 profiling/fixture baseline and design checkpoint and T002
+bounded Qt admission are verified. T003-T006 optimisations and migration remain
+pending; comparative performance acceptance remains T007.
 
 ## Requirement Coverage
 
@@ -62,6 +63,21 @@ including long leading comments, retains its canonical parser. Read failures kee
 the existing structured failure outcome. This is one pre-extraction admission
 rule, not a parser-failure fallback or an alternate parser. Carry the classification
 consistently through identity, registry resolution and coverage; test both outcomes.
+
+T002 implements this route as language `xml`, using existing unsupported coverage
+because no XML extractor is registered. The shared identity recognizer validates
+the signature only through the complete root start tag: later body content or a
+UTF-8 character split by the read bound cannot invalidate positive evidence.
+Signature validation preserves exactly one optional BOM, case-sensitive tokens,
+XML whitespace, quoted/unique attributes and supported entity-reference spellings
+without expansion. XML versions 1.0/1.1 and case-insensitive UTF-8/ASCII encoding
+names are recognized; ASCII declarations require ASCII signature content after
+the optional BOM. Unsupported constructs, replacement-bearing signature text and
+non-ASCII attribute/PI names remain inconclusive. No XML document validation or
+semantic support is claimed. Scanner reads use the canonical containment-checked
+target; ordinary check/open workspace limits remain. Local profiling labels the
+selected catalog's `.ts` admissions as positive_qt or unconfirmed without reading
+sources again. V002 proves actual parser invocation counts and bounded reads.
 
 ### D002: Compiled rule set
 
@@ -435,14 +451,14 @@ does not authorize installation, daemon termination or live cache replacement.
 
 ## Open Questions
 
-T001 must settle the exact manifest schema, incomplete/sealed construction and
-recovery protocol, final freshness-validation authority, legacy counter migration,
-Qt bounded-recognizer grammar and expected-difference comparator before dependent
-implementation. The 16,384-byte bound and inconclusive admission policy are fixed
-by Requirement 1; a different policy requires an explicit spec revision. These
-remaining design decisions are owned by platform, are acceptance conditions for
-T001, and are not completed by documenting their questions here. Scheduling policy
-is deferred to B014 and does not block algorithmic fixes.
+T001 settled and independently reviewed the manifest schema, incomplete/sealed
+construction and recovery protocol, final freshness-validation authority, legacy
+counter migration, Qt recognizer grammar and comparison contract under T001 Design
+Decisions above. Downstream tasks must implement and verify those decisions; the
+design checkpoint does not establish delivered runtime protocols. The 16,384-byte
+bound and inconclusive admission policy are fixed by Requirement 1; a different
+policy requires an explicit spec revision. Scheduling policy remains owned by
+B014 and does not block algorithmic fixes.
 
 ## Related Artifacts
 

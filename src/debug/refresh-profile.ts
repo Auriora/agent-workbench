@@ -60,6 +60,7 @@ export type RefreshProfileRun = {
   passes: RefreshProfileWorkerMetrics[];
   semantic_digest: string;
   evidence_counts: Record<string, number>;
+  format_admission: Array<{ path: string; language: string; format_evidence: "positive_qt" | "unconfirmed" }>;
   work_counts: RefreshProfileWorkerMetrics["work_counts"];
   phase_timings: RefreshProfileWorkerMetrics["phase_timings"];
 };
@@ -331,6 +332,7 @@ export async function measureRefreshGeneration(input: {
     for (const pass of passes) for (const name of Object.keys(workCounts) as Array<keyof typeof workCounts>) workCounts[name] += pass.work_counts[name];
     const semanticDigest = hash(JSON.stringify(completeEvidence));
     const evidenceCounts = Object.fromEntries(Object.entries(evidence).map(([key, value]) => [key, value.length]));
+    const formatAdmission = formatAdmissionEvidence(runtime.store(), selected.snapshot.id);
     const workerCpu = passes.reduce((sum, pass) => sum + pass.thread_cpu_us.user + pass.thread_cpu_us.system, 0);
     const peakRss = Math.max(process.memoryUsage.rss(), ...passes.map(pass => pass.observed_process_peak_rss_bytes));
     const phaseTimings = passes.flatMap(pass => pass.phase_timings);
@@ -341,6 +343,7 @@ export async function measureRefreshGeneration(input: {
       worker_cpu_us: workerCpu, generation_process_cpu_us: processCpu,
       observed_process_peak_rss_bytes: peakRss, worker_invocations: workerInvocations, passes,
       semantic_digest: semanticDigest, evidence_counts: evidenceCounts,
+      format_admission: formatAdmission,
       work_counts: workCounts, phase_timings: phaseTimings
     } };
   } catch (error) {
@@ -360,6 +363,16 @@ async function runColdGeneration(source: string, output: string, maxFiles: numbe
       runtime.controller.request({ repo_root: source, reason: "startup", source: "refresh-profile", invalidation_generation: 0 })
     });
   } finally { await runtime.close(); }
+}
+
+/** Report selected catalog admission without another source read or detector path. */
+export function formatAdmissionEvidence(store: GraphStore, snapshotId: string): RefreshProfileRun["format_admission"] {
+  const files = store.db.prepare("SELECT path,language FROM files WHERE snapshot_id=? ORDER BY path")
+    .all(Number(snapshotId)) as Array<{ path: string; language: string }>;
+  return files.filter(file => path.extname(file.path).toLowerCase() === ".ts").map(file => ({
+    ...file,
+    format_evidence: file.language === "xml" ? "positive_qt" : "unconfirmed"
+  }));
 }
 
 export function semanticEvidence(store: GraphStore, snapshotId: string): Record<string, string[]> {

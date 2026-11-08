@@ -8,7 +8,7 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { createRefreshBaselineFixture, type RefreshBaselineFixture } from "./fixtures/refresh-baseline-fixture.js";
 import {
-  createRefreshProfileRuntime, measureRefreshGeneration, semanticEvidence,
+  createRefreshProfileRuntime, measureRefreshGeneration, semanticEvidence, formatAdmissionEvidence,
   distribution, hash, isOwningCheckout, runtimeFingerprint, sourceFingerprint, writeJson,
   type RefreshProfileRun, type RefreshProfileRuntime, type RefreshProfileWorkerMetrics
 } from "./refresh-profile.js";
@@ -232,12 +232,14 @@ async function measureWithoutWorkers(runtime: RefreshProfileRuntime, run: number
   const completeEvidence = captureRefreshSemanticEvidence(runtime.store(), selected.snapshot.id);
   const semanticDigest = hash(JSON.stringify(completeEvidence));
   const evidenceCounts = Object.fromEntries(Object.entries(evidence).map(([key, value]) => [key, value.length]));
+  const formatAdmission = formatAdmissionEvidence(runtime.store(), selected.snapshot.id);
   const sampledRss = process.memoryUsage.rss();
   const wallMs = performance.now() - started;
   const processCpu = process.cpuUsage(cpu);
   return { run, scenario, state: "complete", wall_ms: wallMs, worker_cpu_us: 0,
     generation_process_cpu_us: processCpu, observed_process_peak_rss_bytes: sampledRss,
     worker_invocations: 0, passes: [], semantic_digest: semanticDigest, evidence_counts: evidenceCounts,
+    format_admission: formatAdmission,
     work_counts: { ...ZERO_WORK }, phase_timings: [] };
 }
 async function currentDigest(runtime: RefreshProfileRuntime): Promise<string> {

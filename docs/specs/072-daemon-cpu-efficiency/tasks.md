@@ -54,7 +54,7 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
   - Evidence: Completed reproducible six-scenario baseline: five repetitions, 30 measurements and 80 sampled worker profiles; exact operation counts and phase sums audited; full semantic evidence stable, five >=60 s idle windows used zero workers, and committed continuation cursors restored. Final frozen source passes typecheck, nine focused Vitest files/69 tests, runtime build and build receipt checks. Independent QA, architecture/operations and comparator reviews accepted the bounded T001 baseline/design gate. See verification.md sections Complete Scenario Baseline, Final Validation and Review, and T001 Disposition and Remaining Delivery. T002-T008 delivery remains pending; no optimisation gain or final R6/SC acceptance claimed.
 
   - Evidence mode: validation
-- [ ] T002 - Route Qt translation XML outside the TypeScript parser
+- [x] T002 - Route Qt translation XML outside the TypeScript parser
   - Depends on: T001.
   - Requirements: Requirement 1 AC1-AC5.
   - Properties: CP-001; CP-002.
@@ -66,8 +66,9 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
     TypeScript retains its canonical parser. Include Qt roots beyond the bound
     and TypeScript with long leading comments, strings and misleading directories.
   - Validation: V002; typecheck and focused Vitest fixtures.
-  - Evidence: Pending.
+  - Evidence: Implemented shared 16,384-byte positive Qt signature recognition and canonical containment-checked scanner reads; XML uses existing unsupported coverage, genuine/inconclusive TS and TSX retain canonical routing, and local profiling labels unconfirmed admissions. V002 passes: 42 new tests including zero positive-Qt TS parser calls, exact boundaries/encoding/malformed prolog/read failures. Final integrated validation: typecheck, 12 Vitest files/126 tests, runtime build/receipt all passed. Independent review accepted with no blockers. Four-pass final production-worker probe exactly matched all 9,341 independently expected semantic records with eight predicted Qt/accounting corrections and no extra differences. See verification.md#t002-qt-translation-admission. Durable runtime operations updated; no criterion deferred. Comparative performance remains T007; T003-T008 pending.
 
+  - Evidence mode: validation
 - [ ] T003 - Compile immutable ignore matchers once
   - Depends on: T001.
   - Requirements: Requirement 2 AC1-AC3; SC-001.

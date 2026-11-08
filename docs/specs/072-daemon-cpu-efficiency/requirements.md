@@ -48,7 +48,8 @@ Closed Spec 051 and completed delivery in Specs 068/069/071 are not reopened.
 
 ## Durable Impact
 
-T008 updates these existing owners after delivery: runtime operations for scan
+T002 promotes verified format admission to runtime operations. T008 reconciles
+these existing owners after delivery: runtime operations for scan
 reuse and budgets; graph-store design for manifests/counters; observability for
 worker profiling; runtime contracts for any changed progress semantics. Proposed
 behavior stays in this package until implemented and verified.
@@ -57,12 +58,13 @@ behavior stays in this package until implemented and verified.
 
 Current stage: T001 baseline/design checkpoint verified: reproducible actual-worker
 harness, six controlled scenarios with five repetitions, exact observations and
-independent review. Runtime optimisation tasks T002-T006 have not started.
+independent review. T002 bounded Qt admission is implemented and verified under
+V002; T003-T006 remain pending. Comparative performance acceptance remains T007.
 User purpose is established by the explicit request to put the CPU findings into
 a fix spec and route residuals to backlog. Template authority is the skill
 fallback: docs/templates/spec-package and docs/templates/README.md are absent.
-Requirements precede design; no design-first exception. T001 must reconcile the
-baseline, migration decision and measurement contract before other tasks start.
+Requirements precede design; no design-first exception. T001 reconciled the
+baseline, migration decision and measurement contract before dependent work.
 Architecture, data/publication and operational review are required before closure.
 
 ## Requirements

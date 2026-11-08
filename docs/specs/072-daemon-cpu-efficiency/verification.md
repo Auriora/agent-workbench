@@ -15,8 +15,9 @@ license: GPL-3.0-or-later
 
 T001's profiling baseline and design checkpoint are validated in source: the
 isolated production-worker harness, owned scenarios, exact observations and
-comparison contract passed the final evidence gates below. The sole production-worker change is an aggregate diagnostics
-observation hook; T002-T006 optimisations/migration are not implemented. Historical
+comparison contract passed the final evidence gates below. T002's bounded Qt
+format admission and V002 are also implemented and verified; T003-T006
+optimisations/migration remain pending. Historical
 exploratory measurements remain in [research](research.md). No before/after CPU improvement or complete Requirement 6/candidate/release
 acceptance is claimed; those remain T007/T008 obligations.
 
@@ -25,7 +26,7 @@ acceptance is claimed; those remain T007/T008 obligations.
 | Gate | Coverage | Required evidence | State |
 | --- | --- | --- | --- |
 | V001 | Requirement 6 baseline portion; CP-006 | Actual-worker harness, exact observations, six scenarios x five runs, comparator and independently reviewed design checkpoint | passed T001; candidate gates V007/V008 pending |
-| V002 | Requirement 1; CP-001/CP-002 | Qt XML and real/malformed/unknown TypeScript, misleading directories/strings, BOM/whitespace, root beyond the 16,384-byte bound, long TypeScript comments, inconclusive/read-error outcomes; positive-Qt parser invocation counts | pending T002 |
+| V002 | Requirement 1; CP-001/CP-002 | Qt XML and real/malformed/unknown TypeScript, misleading directories/strings, BOM/whitespace, root beyond the 16,384-byte bound, long TypeScript comments, inconclusive/read-error outcomes; positive-Qt parser invocation counts | passed T002; full candidate gates V007/V008 pending |
 | V003 | Requirement 2; CP-001; SC-001 | Negation/anchor/directory/segment parity, child ignore invalidation, finite matcher lifetime, distinct compilation counts and CPU benchmark | pending T003 |
 | V004 | Requirement 3; CP-001/CP-003/CP-005; SC-002 | Multi-slice single discovery, docs priority, worker exit/restart, create/delete/rename/content/ignore/config/composition invalidation, manifest migration, incomplete/sealed state, death before/during construction, at seal and before consumption, and mutations not yet admitted by watcher | pending T004 |
 | V005 | Requirement 4; CP-004/CP-005 | Cross-language/Ruby/lambda graph and ambiguity parity, candidate-count scaling and final-page cursor/transaction proof | pending T005 |
@@ -383,8 +384,8 @@ pnpm debug:refresh-scenarios --output .tmp/spec072-t001-reproduction/full-suite 
 
 T001's frozen baseline, reproducible harness/scenarios, independent oracle and
 comparison method, exact measurements and reviewed design exit criteria are
-satisfied. No T002-T006 optimisation, v4 migration or final-publication protocol
-has been implemented. The baseline is synthetic; it is not a FreeCAD-wide result,
+satisfied. At T001 completion no T002-T006 optimisation, v4 migration or
+final-publication protocol had been implemented. The baseline is synthetic; it is not a FreeCAD-wide result,
 daemon-startup reuse claim, worker-crash recovery proof or CPU reduction claim.
 
 Requirement 6's optimized-candidate before/after results and SC-001-SC-004 acceptance
@@ -393,3 +394,109 @@ registration/freshness/sealed-manifest/schema4 implementation and crash/migratio
 fixtures. The narrower exact Qt detector remains T002. B014 remains solely the
 separate sustained CPU scheduling-policy question. These are explicit dependent
 delivery tasks, not unresolved T001 baseline gaps or new backlog deferrals.
+
+## T002 Qt Translation Admission
+
+Requirement 1 AC1-AC5 and V002 pass. The shared bounded identity recognizer marks
+supported positive `.ts` Qt signatures as `xml`. The existing registry has no XML
+extractor, so catalog and persisted coverage remain explicitly unsupported and
+no TypeScript parser is invoked. Genuine TypeScript, TSX and readable inconclusive
+signatures retain existing admission. No alternate parser, timeout change,
+manifest/schema migration or live installation is part of T002.
+
+### Boundary and Routing Evidence
+
+The new workspace and graph suites contain 42 tests. They cover BOM/whitespace,
+declaration/doctype/prolog forms, mixed-case supported encoding names, quoted
+attributes and supported entity spellings, malformed/repeated/reversed tokens,
+invalid attributes/comments/PIs/characters, internal/external DTD rejection,
+unsupported encodings, raw invalid UTF-8, root completion at byte 16,384 versus
+16,385, and an incomplete multibyte body character after a complete signature.
+Only the complete anchored signature is validated; later body content cannot
+invalidate established positive evidence. Replacement-bearing signature text
+remains conservatively inconclusive. This is format admission, not XML validation.
+
+Tests observe exactly one read at offset zero with a 16,384-byte cap per inspected
+`.ts`; `.tsx` is unprobed. They prove compute/scanner identity consistency, external
+symlink refusal, valid repository-root aliases, canonical checked-target reads,
+structured permission evidence, unexpected EIO propagation and descriptor close.
+There is no claim of an atomic filesystem snapshot between check and open.
+
+The graph test delegates to the real production registry and tree-sitter
+extractor while counting calls: two positive Qt files make zero TypeScript calls;
+five genuine/inconclusive files make exactly five. Those include TypeScript in a
+translation directory, an XML string, a long block comment, TSX and beyond-bound/
+malformed XML. Coverage is seven admitted, five extracted and two unsupported;
+genuine declarations remain present. Selected-catalog local profiling reports
+positive_qt for the two confirmed paths and unconfirmed for remaining `.ts`
+admissions, including the beyond-bound fixture. No second detector/read is used.
+
+### Complete Worker Correctness Probe
+
+A final cold complete generation used the unchanged T001 owned fixture: 320
+callers/322 Python files, revision b8bf06687190d3b09280f3b37c11e914bce0577e,
+content manifest d10935fcb3d0c1e8ca95e877c08644aec625f2a787b20d7395790b1d0f6eefd4.
+Runtime source fingerprint:
+a2097294f22c15c78dfa0d11f94d5deb901a8e4e109637f5396612a6801d7ad6.
+Four actual worker passes reached final publication/resolution and produced four
+parseable sampled CPU profiles; phase totals and aggregate work counts reconcile.
+
+Before candidate execution, an independent oracle transformed T001's complete
+evidence using exactly eight predicted record changes:
+
+- Two positive Qt file records change language to xml, node_count to zero and
+  indexing_error to unsupported.
+- Their two false module-node records and two corresponding node-FTS records
+  disappear. No dependent edges or unresolved references existed for these nodes.
+- The build counter record reduces extracted_files and nodes by two and increases
+  unsupported_files by two. Graph coverage reduces indexed_files and
+  extracted_files by two. This is unsupported-format accounting, not T004/T006's
+  unique-counter reinterpretation.
+
+All 9,341 resulting full semantic records matched that frozen expected evidence,
+with no other differences. Files remain 332, nodes become 655, and all 7,680 edges,
+two unresolved references and three documentation rows remain. Beyond-bound Qt
+and genuine TypeScript evidence are unchanged. Scanner counts remain 20 directory
+enumerations, 1,028 entries, 749 identity-stat attempts and 141,622 wildcard
+constructions. New prefix I/O is scoped to ambiguous `.ts` files; these existing
+work counters do not claim to count every filesystem syscall.
+
+Local ignored evidence: `.tmp/spec072-t002/candidate-final/report.json`, its
+complete semantic evidence and profiles; `.tmp/spec072-t002/expected-qt-changes.json`
+and `expected-semantic-evidence.json` retain the pre-candidate oracle;
+`.tmp/spec072-t002/audit-final.json` records the successful audit. Earlier probes
+in that directory precede the final review correction and are not final evidence.
+Reproduce the final candidate characterization with a new absent output path:
+
+```bash
+pnpm debug:refresh-scenarios --output .tmp/spec072-t002/reproduction --runs 1 --python-files 320 --scenario cold_complete_generation
+```
+
+This single synthetic correctness probe ran alongside tests. It establishes no
+comparative CPU/wall/RSS improvement, FreeCAD-wide result or V007 acceptance.
+T007 still owns the five-run comparable candidate suite and success criteria.
+
+### Validation and Review
+
+- pnpm typecheck: passed against final source.
+- Integrated targeted Vitest: 12 files, 126 tests passed in 54.38 s. Includes both
+  new suites, filesystem/scanner/path policy, scanner observations, graph
+  continuation, actual-worker phases, architecture boundaries, profiler/scenarios
+  and the complete semantic comparator.
+- pnpm build-runtime and pnpm build-runtime:check: passed; final receipt valid.
+- Lifecycle package lint: zero errors, warnings or informational findings;
+  completed T002 task_context has no gaps. All seven spec documents have required
+  metadata; 96 document/anchor references resolve. git diff --check passed.
+- Independent review accepted the final source with no blocking findings and
+  independently reran the two new suites: 42 tests passed. Findings about malformed
+  signatures, encoding, byte-boundary scope, parser-count evidence, containment
+  aliases and broad error handling were corrected and regression-tested.
+- Current behavior is promoted to runtime-operations-design.md. T003-T008 remain
+  pending; no T002 acceptance criterion is deferred to backlog. B014 remains the
+  separate sustained CPU scheduling-policy question.
+
+Final integrated test command:
+
+```bash
+pnpm exec vitest run tests/workspace/qt-translation-admission.test.ts tests/graph/qt-translation-admission.test.ts tests/workspace/filesystem-adapters.test.ts tests/workspace/file-catalog-scanner.test.ts tests/workspace/path-policy-consistency.test.ts tests/workspace/refresh-profile-observation.test.ts tests/graph/graph-build-continuation.test.ts tests/graph/refresh-profile-phase.test.ts tests/architecture/layer-boundaries.test.ts tests/mcp/refresh-profile.test.ts tests/mcp/refresh-profile-scenarios.test.ts tests/mcp/refresh-profile-comparison.test.ts --maxWorkers=1
+```

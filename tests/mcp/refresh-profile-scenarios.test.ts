@@ -71,6 +71,14 @@ describe("owned production refresh profiling scenarios", () => {
     expect(result.summaries.every(value => value.repetitions === 1)).toBe(true);
     expect(fs.statSync(output).mode & 0o777).toBe(0o700);
     const receipt = JSON.parse(fs.readFileSync(path.join(output, "run-1", "fixture.json"), "utf8"));
+    const expectedAdmission = [
+      ...receipt.expected_positive_qt_paths.map((path: string) => ({ path, language: "xml", format_evidence: "positive_qt" })),
+      ...[...receipt.expected_inconclusive_qt_paths, ...receipt.expected_typescript_paths]
+        .map((path: string) => ({ path, language: "typescript", format_evidence: "unconfirmed" }))
+    ].sort((a, b) => a.path.localeCompare(b.path));
+    for (const measurement of result.measurements) {
+      expect(measurement.format_admission).toEqual(expectedAdmission);
+    }
     expect(fs.existsSync(path.join(receipt.repo_root, ".cache"))).toBe(false);
     expect(find("single_edit").observation).toMatchObject({ trigger: "real fs.watch event through canonical queue/coordinator" });
   }, 90_000);

@@ -15,7 +15,7 @@ license: GPL-3.0-or-later
 
 | Requirement | Design | Tasks | Verification | State |
 | --- | --- | --- | --- | --- |
-| Requirement 1 | D001 | T001; T002; T007; T008 | V002; V007; V008 | not implemented |
+| Requirement 1 | D001 | T001; T002; T007; T008 | V002; V007; V008 | T002 implemented and V002 verified; comparative gates pending |
 | Requirement 2 | D002 | T001; T003; T007; T008 | V003; V007; V008 | not implemented |
 | Requirement 3 | D003 | T001; T004; T007; T008 | V004; V007; V008 | not implemented |
 | Requirement 4 | D004 | T001; T005; T007; T008 | V005; V007; V008 | not implemented |
@@ -34,10 +34,10 @@ operational policy is [B014](../../backlog/README.md#b014-assess-background-inde
 
 T008 must promote durable truth and record semantic dispositions before closure.
 T001 profiling/fixture source, exact observations and a six-scenario five-repetition
-baseline passed independent review and integrated checks. No runtime optimisation,
-schema migration, live deployment or comparative candidate-performance gate is
-complete. T001's baseline/design checkpoint is satisfied; dependent tasks remain
-pending.
+baseline passed independent review and integrated checks. T002's format admission,
+unsupported coverage, parser routing and local characterization are verified;
+current behavior is promoted to runtime operations. T003-T006, schema migration,
+live deployment and comparative candidate-performance gates remain pending.
 
 ## Task To Context Matrix
 
@@ -56,7 +56,7 @@ pending.
 
 | Design Section | Requirements | Owning boundary | Tasks | Verification | Coverage State |
 | --- | --- | --- | --- | --- | --- |
-| D001; `design.md#d001-explicit-qt-translation-admission` | Requirement 1 | Filesystem classification and extraction admission | T002 | `verification.md#quality-gates` | not-covered |
+| D001; `design.md#d001-explicit-qt-translation-admission` | Requirement 1 | Filesystem classification and extraction admission | T002 | `verification.md#quality-gates` | covered |
 | D002; `design.md#d002-compiled-rule-set` | Requirement 2 | Policy preparation and matching | T003 | `verification.md#quality-gates` | not-covered |
 | D003; `design.md#d003-durable-catalog-manifest-and-shape` | Requirement 3 | Application, catalog ports and SQLite | T004 | `verification.md#quality-gates` | not-covered |
 | D004; `design.md#d004-candidate-indexes` | Requirement 4 | Application reference resolution | T005 | `verification.md#quality-gates` | not-covered |
@@ -66,8 +66,8 @@ pending.
 ## Open Decision Impact
 
 The manifest sealing/recovery, final freshness, comparison, migration and
-classification/budget checkpoints in T001 block their
-dependent implementation tasks. No open question authorizes an alternate parser,
+classification/budget checkpoints passed T001's independent design review.
+Downstream tasks own implementation and runtime proof. No open question authorizes an alternate parser,
 hidden scan fallback or deadline increase. B014 is a separately owned policy
 question. [Canonical context](canonical-context.md) separates proposed slice
 behavior from current durable contracts and exploratory evidence.

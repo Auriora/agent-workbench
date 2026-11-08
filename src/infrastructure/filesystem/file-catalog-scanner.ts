@@ -22,7 +22,7 @@ import type {
   FileCatalogSkippedPath,
   FileIdentityPort
 } from "../../ports/index.js";
-import { FileIdentityAdapter } from "./file-identity.js";
+import { FileIdentityAdapter, QT_TRANSLATION_PREFIX_BYTES } from "./file-identity.js";
 import { readRootIgnoreRules } from "./ignore-file-policy.js";
 import { isNestedGitRepository } from "./nested-git-repository.js";
 
@@ -333,16 +333,32 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     }
 
     this.observe?.("file_stat_attempts");
-    const stats = statFileOrSkip({
+    const metadata = statFileOrSkip({
       repoRoot: input.repoRoot,
       absolutePath: input.absolutePath,
+      requireCanonicalContainment: path.extname(input.absolutePath).toLowerCase() === ".ts",
       recordSkippedRoot: input.recordSkippedRoot,
       recordSkippedPath: input.recordSkippedPath
     });
-    if (stats === null) {
+    if (metadata === null) {
       return;
     }
-    const language = await this.fileIdentity.inferLanguage({ path: input.absolutePath });
+    const { stats, classification_path: classificationPath } = metadata;
+    let languageContent: string | undefined;
+    if (path.extname(input.absolutePath).toLowerCase() === ".ts") {
+      try {
+        languageContent = readTypeScriptClassificationPrefix(classificationPath);
+      } catch (error) {
+        if (!isSkippableFilesystemError(error)) throw error;
+        input.recordSkippedPath({
+          path: relativePath,
+          reason: filesystemSkipReason(error),
+          detail: "File format evidence could not be read during catalog scan."
+        });
+        return;
+      }
+    }
+    const language = await this.fileIdentity.inferLanguage({ path: input.absolutePath, content: languageContent });
     input.entries.push(
       buildFileCatalogEntry({
         file_identity: {
@@ -559,11 +575,26 @@ function readDirectoryOrSkip(input: {
 function statFileOrSkip(input: {
   repoRoot: string;
   absolutePath: string;
+  requireCanonicalContainment?: boolean;
   recordSkippedRoot: (root: string) => void;
   recordSkippedPath: (skipped: FileCatalogSkippedPath) => void;
-}): fs.Stats | null {
+}): { stats: fs.Stats; classification_path: string } | null {
   try {
-    return fs.statSync(input.absolutePath);
+    const stats = fs.statSync(input.absolutePath);
+    if (input.requireCanonicalContainment === true) {
+      const canonicalRoot = fs.realpathSync(input.repoRoot);
+      const canonicalPath = fs.realpathSync(input.absolutePath);
+      if (!isInsideRepo(canonicalRoot, canonicalPath)) {
+        input.recordSkippedPath({
+          path: relativeCatalogPath(input.repoRoot, input.absolutePath),
+          reason: "workspace_escape",
+          detail: "Path escaped the repository root after symlink resolution."
+        });
+        return null;
+      }
+      return { stats, classification_path: canonicalPath };
+    }
+    return { stats, classification_path: input.absolutePath };
   } catch (error) {
     if (isSkippableFilesystemError(error)) {
       const path = relativeCatalogPath(input.repoRoot, input.absolutePath);
@@ -576,6 +607,19 @@ function statFileOrSkip(input: {
       return null;
     }
     throw error;
+  }
+}
+
+function readTypeScriptClassificationPrefix(absolutePath: string): string {
+  const handle = fs.openSync(absolutePath, "r");
+  try {
+    const buffer = Buffer.alloc(QT_TRANSLATION_PREFIX_BYTES);
+    const bytesRead = fs.readSync(handle, buffer, 0, buffer.length, 0);
+    // The recognizer rejects malformed encoding in the complete signature;
+    // replacement beyond that signature cannot change positive admission.
+    return new TextDecoder("utf-8", { ignoreBOM: true }).decode(buffer.subarray(0, bytesRead));
+  } finally {
+    fs.closeSync(handle);
   }
 }
 
