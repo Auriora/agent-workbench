@@ -16,7 +16,7 @@ Define the implementation architecture that every runtime feature must follow
 from the first MVP task. The goal is a small vertical slice with stable
 boundaries, not a temporary implementation that has to be untangled later.
 
-### Refresh optimization boundaries (source, unreleased)
+### Refresh optimization boundaries (v0.6.13)
 
 Application orchestration consumes generation-scoped sealed inventory and
 versioned progress through ports. Filesystem and SQLite infrastructure own

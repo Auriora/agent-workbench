@@ -45,7 +45,7 @@ T008 records the independent final review and promotion rather than new runtime 
 | R5 | AC1-AC5 | Explicit budgets inside unchanged deadlines/reserve; actual native parse termination and exact exit confirmation; versioned distinct counters and legacy unknown/rebuild handling | [Runtime operations](../design/runtime-operations-design.md); [contracts](../reference/runtime-contracts.md); [native setup](../runbooks/native-dependency-setup.md) |
 | R6 | AC1-AC4 | Actual-worker profiling; six scenarios x five plus fixed read-only five; frozen corrections; all success gates; source and isolated installed validation; independent review/promotion | [Observability](../design/observability-debugging-design.md); [audit JSON](072-daemon-cpu-efficiency-performance-evidence.json) |
 
-[Runtime requirements](../requirements/runtime-requirements.md#refresh-efficiency-and-evidence-source-unreleased)
+[Runtime requirements](../requirements/runtime-requirements.md#refresh-efficiency-and-evidence-v0613)
 retain the accepted operating requirements. [Layered architecture](../design/layered-runtime-architecture.md)
 records the ownership boundaries. [Agent-visible changes](../reference/agent-readable-changelog.md)
 and native/install/plugin runbooks distinguish source/unreleased behavior from

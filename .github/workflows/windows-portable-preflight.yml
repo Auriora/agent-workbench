@@ -119,6 +119,9 @@ jobs:
           _CL_: /std:c++20
         run: pnpm install --frozen-lockfile
 
+      - name: Test Windows native safety contract
+        run: pnpm exec vitest run tests/runtime/native-runtime-guard.test.ts tests/runtime/refresh-native-overrun.test.ts --maxWorkers=2
+
       - name: Build configured Windows release runtime
         if: ${{ inputs.source_inputs_artifact != '' }}
         env:

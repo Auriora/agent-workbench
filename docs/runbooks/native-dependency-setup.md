@@ -27,11 +27,11 @@ Common failure signatures:
 - missing `tree_sitter_runtime_binding.node`
 - missing `better_sqlite3.node`
 
-## Source checkout termination policy (unreleased)
+## Native termination policy (v0.6.13)
 
-Spec 072 requires the core tree-sitter 0.25.0 binding to be built from source
-with C++20 and NODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS. This is source behavior;
-it does not establish that a released or installed runtime has been upgraded.
+Version 0.6.13 requires core tree-sitter 0.25.0 to be built from source with
+C++20 and NODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS. An installed package update
+does not change an already running process.
 The supported Node-API option prevents a fatal rethrow into an environment being
 terminated by Worker.terminate. Ordinary callback exceptions still propagate;
 parser replacement and successful timeout fragments remain unsupported.
