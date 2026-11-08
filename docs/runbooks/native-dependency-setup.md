@@ -27,9 +27,9 @@ Common failure signatures:
 - missing `tree_sitter_runtime_binding.node`
 - missing `better_sqlite3.node`
 
-## Native termination policy (v0.6.14)
+## Native termination policy (v0.6.15)
 
-Version 0.6.14 requires core tree-sitter 0.25.0 to be built from source with
+Version 0.6.15 requires core tree-sitter 0.25.0 to be built from source with
 C++20 and NODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS. An installed package update
 does not change an already running process.
 The supported Node-API option prevents a fatal rethrow into an environment being

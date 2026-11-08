@@ -13,10 +13,10 @@ GitHub Releases carry two application forms: the source-oriented npm tarball
 for all supported platforms and a self-contained Windows x64 ZIP. The package
 name is `@auriora/agent-workbench`; it is not published to the npm registry.
 Installing the tarball builds native modules in place. The latest published
-source-package baseline is `0.6.14`:
+source-package baseline is `0.6.15`:
 
 ```bash
-npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.14/auriora-agent-workbench-0.6.14.tgz
+npm install -g https://github.com/Auriora/agent-workbench/releases/download/v0.6.15/auriora-agent-workbench-0.6.15.tgz
 ```
 
 Official npm and Windows portable releases include personless aggregate product
@@ -88,7 +88,7 @@ hook configuration includes an explicit Windows command and honors
 
 ## Native build for the npm source-package path
 
-Version 0.6.14 requires the core tree-sitter 0.25.0 binding to be
+Version 0.6.15 requires the core tree-sitter 0.25.0 binding to be
 built from source with C++20 and NODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS. npm
 postinstall, local rebuild and portable preparation use the same pinned builder;
 a compatible upstream core prebuild does not prove safe Worker.terminate behavior.

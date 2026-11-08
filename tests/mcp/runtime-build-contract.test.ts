@@ -196,7 +196,7 @@ describe("runtime build contract", () => {
       const stdioOutput = path.join(root, RUNTIME_BUILD_ENTRYPOINTS.stdio.output);
 
       const original = contract.outputs?.find(
-        (entry) => entry.output === normalizePath(RUNTIME_BUILD_ENTRYPOINTS.stdio.output)
+        (entry) => normalizePath(entry.output) === normalizePath(RUNTIME_BUILD_ENTRYPOINTS.stdio.output)
       );
       expect(original).toBeDefined();
       const expectedHash = crypto.createHash("sha256").update(fs.readFileSync(stdioOutput)).digest("hex");
