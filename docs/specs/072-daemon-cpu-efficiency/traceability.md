@@ -38,31 +38,32 @@ is complete. T001 is the next planning-to-implementation checkpoint.
 
 ## Task To Context Matrix
 
-| Task | Design | Properties | Evidence |
-| --- | --- | --- | --- |
-| T001 | D001; D003; D005; D006 | CP-003; CP-005; CP-006 | V001 |
-| T002 | D001 | CP-001; CP-002 | V002 |
-| T003 | D002 | CP-001 | V003 |
-| T004 | D003 | CP-001; CP-003; CP-005 | V004 |
-| T005 | D004 | CP-004; CP-005 | V005 |
-| T006 | D005 | CP-003; CP-005 | V006 |
-| T007 | D001-D006 | CP-001-CP-006 | V007 |
-| T008 | Promotion and residuals | CP-001-CP-006 | V008 |
+| Task ID | Requirements | Acceptance Criteria | Design Sections | Change Impact | Verification | Durable Targets | Open Decisions | Properties |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| T001 | Requirement 1; Requirement 3; Requirement 5; Requirement 6 | R1 AC1-AC5; R3 AC2-AC3; R5 AC5; R6 AC1-AC3 | `design.md#d001-explicit-qt-translation-admission`; `design.md#d003-durable-catalog-manifest-and-shape`; `design.md#d005-budget-and-accounting`; `design.md#d006-worker-evidence` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V001) | `docs/design/runtime-operations-design.md`; `docs/design/graph-store-design.md`; `docs/design/observability-debugging-design.md` | `design.md#open-questions` | CP-002; CP-003; CP-005; CP-006 |
+| T002 | Requirement 1 | R1 AC1-AC5 | `design.md#d001-explicit-qt-translation-admission` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V002) | `docs/design/runtime-operations-design.md` | `design.md#open-questions` | CP-001; CP-002 |
+| T003 | Requirement 2 | R2 AC1-AC3; SC-001 | `design.md#d002-compiled-rule-set` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V003) | `docs/design/runtime-operations-design.md` | none | CP-001 |
+| T004 | Requirement 3; Requirement 5 | R3 AC1-AC4; R5 AC3-AC5 | `design.md#d003-durable-catalog-manifest-and-shape` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V004) | `docs/design/runtime-operations-design.md`; `docs/design/graph-store-design.md` | `design.md#open-questions` | CP-001; CP-003; CP-005 |
+| T005 | Requirement 4 | R4 AC1-AC3 | `design.md#d004-candidate-indexes` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V005) | `docs/design/graph-store-design.md` | none | CP-004; CP-005 |
+| T006 | Requirement 5 | R5 AC1-AC5 | `design.md#d003-durable-catalog-manifest-and-shape`; `design.md#d005-budget-and-accounting` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V006) | `docs/design/runtime-operations-design.md`; `docs/design/graph-store-design.md`; `docs/reference/runtime-contracts.md` | `design.md#open-questions` | CP-003; CP-005 |
+| T007 | All requirements | All acceptance criteria; SC-001-SC-004 | `design.md#d001-explicit-qt-translation-admission`; `design.md#d002-compiled-rule-set`; `design.md#d003-durable-catalog-manifest-and-shape`; `design.md#d004-candidate-indexes`; `design.md#d005-budget-and-accounting`; `design.md#d006-worker-evidence` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V007) | `docs/design/observability-debugging-design.md` | `design.md#open-questions` | CP-001; CP-002; CP-003; CP-004; CP-005; CP-006 |
+| T008 | All requirements | All criteria dispositions; R6 AC4 | `design.md#validation-strategy`; `design.md#migration-and-compatibility` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V008) | `docs/design/runtime-operations-design.md`; `docs/design/graph-store-design.md`; `docs/design/observability-debugging-design.md`; `docs/reference/runtime-contracts.md` | none | CP-001; CP-002; CP-003; CP-004; CP-005; CP-006 |
 
 ## Design To Implementation Matrix
 
-| Design | Owning boundary | Delivery task | State |
-| --- | --- | --- | --- |
-| D001 | Filesystem classification and extraction admission | T002 | pending |
-| D002 | Policy preparation and matching | T003 | pending |
-| D003 | Application, catalog ports and SQLite | T004 | pending |
-| D004 | Application reference resolution | T005 | pending |
-| D005 | Worker/controller budget and progress | T006 | pending |
-| D006 | Checkout debug harness and worker profiler | T001; T007 | pending |
+| Design Section | Requirements | Owning boundary | Tasks | Verification | Coverage State |
+| --- | --- | --- | --- | --- | --- |
+| D001; `design.md#d001-explicit-qt-translation-admission` | Requirement 1 | Filesystem classification and extraction admission | T002 | `verification.md#quality-gates` | not-covered |
+| D002; `design.md#d002-compiled-rule-set` | Requirement 2 | Policy preparation and matching | T003 | `verification.md#quality-gates` | not-covered |
+| D003; `design.md#d003-durable-catalog-manifest-and-shape` | Requirement 3 | Application, catalog ports and SQLite | T004 | `verification.md#quality-gates` | not-covered |
+| D004; `design.md#d004-candidate-indexes` | Requirement 4 | Application reference resolution | T005 | `verification.md#quality-gates` | not-covered |
+| D005; `design.md#d005-budget-and-accounting` | Requirement 5 | Worker/controller budget and progress | T006 | `verification.md#quality-gates` | not-covered |
+| D006; `design.md#d006-worker-evidence` | Requirement 6 | Checkout debug harness and worker profiler | T001; T007 | `verification.md#quality-gates` | not-covered |
 
 ## Open Decision Impact
 
-The manifest/migration and classification/budget checkpoints in T001 block their
+The manifest sealing/recovery, final freshness, comparison, migration and
+classification/budget checkpoints in T001 block their
 dependent implementation tasks. No open question authorizes an alternate parser,
 hidden scan fallback or deadline increase. B014 is a separately owned policy
 question. [Canonical context](canonical-context.md) separates proposed slice

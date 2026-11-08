@@ -76,11 +76,19 @@ Architecture, data/publication and operational review are required before closur
    truthful resource-backed or unsupported coverage through the existing policy.
 2. Genuine TypeScript SHALL retain the canonical tree-sitter route, including
    source in translation-named directories and strings/comments containing XML.
-3. WHERE the extension is ambiguous, detection SHALL use bounded containment-checked
-   content evidence, not a full
-   read of every catalog file or a translation-directory heuristic. Unknown,
-   malformed, oversized and unreadable evidence SHALL have explicit tested
-   outcomes; parser failure SHALL NOT trigger an alternate parser.
+3. WHERE the extension is ambiguous, detection SHALL inspect at most the first
+   16,384 bytes through containment-checked reads. Positive Qt evidence requires
+   a complete XML declaration or Qt TS doctype and the complete TS root start tag
+   inside that prefix, under the bounded recognizer defined in D001.
+4. A readable inconclusive prefix SHALL retain the established extension-based
+   admission and expose unconfirmed format evidence in local characterization.
+   This includes a root beyond the bound, unsupported encoding or an incomplete
+   prolog/tag. Such files are outside the positive-Qt exclusion guarantee.
+   Unreadable evidence SHALL use the existing structured read-failure outcome.
+5. Classification SHALL NOT use directory names, search inside source strings or
+   comments for XML, expand XML entities, increase the read bound, or select a
+   different parser after failure. Fixtures SHALL cover the bound and both sides
+   of the positive/inconclusive distinction.
 
 ### Requirement 2: Compile ignore policy once per rule set
 
@@ -163,14 +171,19 @@ Architecture, data/publication and operational review are required before closur
    Use owned fixtures for edits and a fixed read-only large-repository revision.
 3. At least five comparable runs per performance scenario SHALL report median,
    spread, total CPU per completed generation and correctness parity. Baseline
-   and candidate SHALL use the same input, runtime and final evidence coverage.
+   and candidate SHALL use the same input and runtime. Coverage and graph
+   comparison SHALL follow the frozen D006 comparison contract: exact equality
+   for unaffected evidence and only fixture-proven Qt/counter corrections for
+   affected evidence. Any other difference SHALL fail comparison.
 4. SC-001 through SC-004 SHALL pass; source and compiled/isolated-installed checks,
    architecture review and durable promotion SHALL be recorded before closure.
 
 ## Correctness Properties
 
 - CP-001: Optimisation preserves skip decisions, catalog order and workspace boundaries.
-- CP-002: Qt XML never enters TypeScript extraction; genuine TypeScript retains its parser.
+- CP-002: Positively identified Qt XML within the supported prefix never enters
+  TypeScript extraction; readable inconclusive evidence and genuine TypeScript
+  retain the established admission route.
 - CP-003: Cursors advance committed work once; coverage counts distinct file identities.
 - CP-004: Candidate indexes preserve graph semantics, including unresolved ambiguity.
 - CP-005: One writer and unchanged termination/publication safety survive all failures.
@@ -185,13 +198,16 @@ Keep MCP adapters thin. No extra dependency or parser is justified by this spec.
 
 - SC-001: Rule compilation count is bounded by distinct admitted patterns, and
   a representative two-scan benchmark uses at least 50% less median CPU than
-  the recorded pre-change path, with identical scanner output.
-- SC-002: Qt XML causes zero TypeScript extractor invocations; an unchanged
+  the recorded pre-change path. This optimisation-only comparison freezes the
+  classification/counter policy on both arms and requires identical scanner output.
+- SC-002: Positively identified Qt XML causes zero TypeScript extractor invocations;
+  inconclusive prefixes follow Requirement 1 AC4. An unchanged
   generation performs at most one broad catalog discovery regardless of slices.
 - SC-003: A fixed representative large-repository full-generation benchmark
   uses at least 30% less median CPU with no more than 10% wall-time regression,
-  identical required coverage and equivalent graph semantics. T001 freezes the
-  baseline/revision before optimisation; unavailable evidence blocks this gate.
+  equivalent required coverage and graph semantics under D006's explicit
+  correction contract. T001 freezes the baseline/revision and permitted
+  differences before optimisation; unavailable evidence blocks this gate.
 - SC-004: All fixture invariants pass; unchanged settled input schedules zero
   refresh workers in a controlled 60-second window. Peak RSS is recorded and any
   growth over 10% must be explained and dispositioned before closure.

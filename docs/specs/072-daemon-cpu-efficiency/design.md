@@ -21,7 +21,7 @@ publication. No implementation has started.
 
 | Requirement | Criteria | Design | Tasks | Validation |
 | --- | --- | --- | --- | --- |
-| Requirement 1 | AC1-AC3 | D001 | T002 | V002 mixed .ts fixtures |
+| Requirement 1 | AC1-AC5 | D001 | T002 | V002 mixed .ts fixtures |
 | Requirement 2 | AC1-AC3 | D002 | T003 | V003 matcher parity and compilation counts |
 | Requirement 3 | AC1-AC4 | D003 | T004 | V004 generation and restart cases |
 | Requirement 4 | AC1-AC3 | D004 | T005 | V005 graph parity and scaling |
@@ -40,14 +40,26 @@ src/debug with explicit worker instrumentation, outside public MCP tool surfaces
 
 ### D001: Explicit Qt translation admission
 
-Add a narrow file-format discriminator for ambiguous .ts using a bounded source
-prefix and positive XML/Qt root evidence. Choose and document the prefix bound and
-malformed/unknown outcome in T001/T002; do not hardcode a FreeCAD path. Carry the
-classification consistently through scanner identity, registry resolution and
-coverage. Preserve containment, skip and read-error handling. A classifying read
-is not permission to parse or scan other files. Use the existing resource route
-only where supported; otherwise retain explicit unsupported evidence. No new XML
-parser or alternate TypeScript parser is planned.
+Use one bounded admission policy for ambiguous .ts files, before extraction.
+Read at most 16,384 bytes from offset zero through containment-checked I/O.
+The supported positive signature is UTF-8/ASCII XML with an optional UTF-8 BOM,
+XML whitespace, a complete XML declaration or Qt TS doctype, optional complete
+prolog comments/processing instructions, and the complete case-sensitive TS root
+start tag. Root/tag matching must be anchored to this prolog, not a substring in
+TypeScript source, strings or comments. Do not expand entities, resolve external
+identifiers or add an XML parser dependency. T001 freezes recognizer grammar and
+boundary fixtures before T002; no FreeCAD path or directory heuristic is permitted.
+
+A complete positive signature routes to existing resource-backed extraction only
+where supported, otherwise explicit unsupported evidence. A readable incomplete,
+malformed or unsupported prefix is inconclusive, retains the existing extension
+admission, and is labelled unconfirmed in local profiling evidence. A Qt root past
+the bound may consequently retain TypeScript admission: the exclusion guarantee
+applies only to positive evidence inside the supported bound. Genuine TypeScript,
+including long leading comments, retains its canonical parser. Read failures keep
+the existing structured failure outcome. This is one pre-extraction admission
+rule, not a parser-failure fallback or an alternate parser. Carry the classification
+consistently through identity, registry resolution and coverage; test both outcomes.
 
 ### D002: Compiled rule set
 
@@ -68,12 +80,35 @@ Use existing catalog rows where sufficient; add schema only for missing build-on
 metadata. T001 records the exact ownership/schema and migration decision before
 T004. Public queries remain published-only; a manifest never grants freshness.
 
-The controller's invalidation generation and final validation fence live changes.
-Tests must cover content changes as well as renamed/deleted paths. Missing or
-mismatched durable evidence follows structured failure/invalidation, not an
-implicit full-scan fallback inside every continuation. Keep one explicit rebuild
-path through the existing controller. A worker restart cannot lose catalog
-progress or silently use stale project-shape evidence.
+Generation equality establishes only that the controller has not yet observed a
+newer invalidation. It does not prove the live workspace matches the manifest;
+this design does not assume an existing final filesystem-validation protocol.
+Before T004, T001 must define the final validation authority, evidence inputs,
+publication linearization point, and serialization with watcher drain and generation
+checks. The decision must cover events queued but not admitted, overflow, disabled
+or unavailable watchers, content identity changes, new/deleted/renamed paths,
+ignore/config changes and repository composition. Validation that is incomplete
+or cannot establish the stated boundary must yield structured stale/degraded or
+blocked evidence, not a fresh claim based solely on generation equality.
+
+T001 must demonstrate that this protocol and the single broad-discovery target
+can both hold; any extra discovery or validation work is measured explicitly.
+If they cannot, T001 remains incomplete until an explicit requirement revision is
+reviewed. Tests mutate the workspace during discovery and just before publication,
+including changes not yet observed by the trigger. Missing or mismatched manifest
+evidence follows the sole controller's explicit invalidation/rebuild path, never
+a hidden broad-scan fallback in every continuation.
+
+Manifest construction must distinguish incomplete preparation from a sealed,
+consumable inventory. T001 defines ownership, completeness evidence and an atomic
+seal tied to generation/policy/ordering identity, together with cursor/counter
+transactions. Consumers must reject incomplete, missing or mismatched evidence;
+no persisted prefix can prove traversal exhaustion. The checkpoint must specify
+whether interrupted preparation can resume from durable discovery state or must
+explicitly invalidate the incomplete generation and rebuild through the same
+authority. Neither automatic retries nor reuse of an unsealed prefix is permitted.
+V004 covers death before first write, during construction, at the seal boundary,
+and after seal before first consumption, as well as subsequent worker restart.
 
 ### D004: Candidate indexes
 
@@ -106,6 +141,31 @@ Node version and compiled source parity. Store raw outputs in ignored local
 artifacts; promote sanitized summaries and stable fixture commands into verification.
 No raw path/source/error export to product analytics, no external source mutation,
 and no daemon restart or kernel policy change is needed by the harness.
+
+Freeze a comparison contract in T001 before either optimisation or benchmark
+selection. Use the following rules for all before/after evidence:
+
+- Optimisation-only matcher comparisons hold classification and accounting policy
+  constant, or use inputs unaffected by those corrections; full scanner output
+  must match exactly, including identities, ordering, cursors and skip evidence.
+- End-to-end comparison normalizes only generated snapshot/file/node identifiers
+  and observation timestamps through a documented stable semantic-key mapping.
+  Compare unaffected files' language, classification, coverage, declarations,
+  references, edges, confidence, provenance and ambiguity exactly after mapping.
+- Enumerate positive-Qt files using an independent expected fixture manifest.
+  Only those files may change from TypeScript evidence to the specified
+  resource/unsupported outcome, including removal of false parser module nodes
+  and their dependent references/edges. List and validate each affected item;
+  unrelated files or references cannot be ignored wholesale.
+- For progress corrections, independently derive distinct identity totals from
+  the fixed input manifest. Only the documented repeated-work-to-unique counter
+  changes are allowed; record visits/work separately. Do not use old inflated
+  counters as the expected truth or normalize away real coverage losses.
+
+Publish the allowed-difference manifest and comparator rules with V001/V007.
+Any unlisted difference fails comparison and requires investigation, not a wider
+exclusion. No final acceptance may preserve false TypeScript evidence just to
+match the defective baseline.
 
 ## Migration and Compatibility
 
@@ -154,10 +214,14 @@ does not authorize installation, daemon termination or live cache replacement.
 
 ## Open Questions
 
-T001 must settle the exact manifest schema/reuse contract, legacy counter
-invalidation and Qt prefix bound before T002/T004/T006. These are explicit task
-readiness decisions owned by platform, not completed design approval. Scheduling
-policy is deferred to B014 and does not block algorithmic fixes.
+T001 must settle the exact manifest schema, incomplete/sealed construction and
+recovery protocol, final freshness-validation authority, legacy counter migration,
+Qt bounded-recognizer grammar and expected-difference comparator before dependent
+implementation. The 16,384-byte bound and inconclusive admission policy are fixed
+by Requirement 1; a different policy requires an explicit spec revision. These
+remaining design decisions are owned by platform, are acceptance conditions for
+T001, and are not completed by documenting their questions here. Scheduling policy
+is deferred to B014 and does not block algorithmic fixes.
 
 ## Related Artifacts
 

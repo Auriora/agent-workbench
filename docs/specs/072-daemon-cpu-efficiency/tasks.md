@@ -28,25 +28,39 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
 
 - [ ] T001 - Establish reproducible worker baseline and design checkpoint
   - Depends on: none.
-  - Requirements: Requirement 6 AC1-AC3; Requirement 3 AC2-AC3; Requirement 5 AC5.
-  - Properties: CP-003; CP-005; CP-006.
+  - Requirements: Requirement 1 AC1-AC5; Requirement 3 AC2-AC3;
+    Requirement 5 AC5; Requirement 6 AC1-AC3.
+  - Properties: CP-002; CP-003; CP-005; CP-006.
   - Files: src/debug/; src/infrastructure/workers/; this package's design.md and verification.md.
   - Acceptance: create isolated worker profiling harness; freeze representative
     revision/runtime/scenarios; capture complete-generation baseline including
     resolution, five-run metrics and graph comparison method. Record bounded
-    Qt evidence policy, exact manifest/schema/counter migration design and safety
+    Qt recognizer grammar and boundary fixtures under Requirement 1, and freeze
+    D006's independently expected Qt/counter differences and semantic comparison
+    rules. Record exact manifest/schema/counter migration design and safety
     review before downstream implementation. No live-source edits or live DB writes.
+  - Mandatory exit criteria: identify the final freshness-validation owner,
+    evidence, publication linearization and watcher-drain ordering; define queued,
+    missing, overflow and disabled-watcher outcomes and late-mutation fixtures.
+    Prove compatibility with the single-discovery target. Define incomplete and
+    sealed manifest states, atomic seal/cursor/counter relationships, and recovery
+    outcomes for death before/during construction, at seal and before consumption.
+    Independent QA/architecture/operations review must accept these documented
+    decisions; otherwise T001 remains pending and T002-T006 cannot start.
   - Validation: V001; pnpm typecheck and harness fixture tests.
   - Evidence: Pending; exploratory research is not completed baseline acceptance.
 
 - [ ] T002 - Route Qt translation XML outside the TypeScript parser
   - Depends on: T001.
-  - Requirements: Requirement 1 AC1-AC3.
+  - Requirements: Requirement 1 AC1-AC5.
   - Properties: CP-001; CP-002.
   - Files: src/infrastructure/filesystem/file-identity.ts; file-catalog-scanner.ts;
     src/infrastructure/extraction/; tests/workspace/; new owned Qt/TypeScript fixtures.
   - Acceptance: bounded positive format classification, consistent identities and
-    coverage; Qt XML invokes no TypeScript parser and true TypeScript retains it.
+    coverage; positive supported Qt signatures invoke no TypeScript parser,
+    readable inconclusive prefixes retain extension admission, and genuine
+    TypeScript retains its canonical parser. Include Qt roots beyond the bound
+    and TypeScript with long leading comments, strings and misleading directories.
   - Validation: V002; typecheck and focused Vitest fixtures.
   - Evidence: Pending.
 
@@ -70,7 +84,9 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
     tests/graph/graph-build-continuation.test.ts; tests/workspace/.
   - Acceptance: one broad discovery per unchanged generation across worker exits;
     correct priority/docs views, no repeated shape probe, safe invalidation and
-    restart, tested migration and truthful distinct identity counts.
+    restart, tested migration and truthful distinct identity counts. Consume only
+    sealed manifests; verify construction/seal crash cases and the T001-defined
+    final freshness protocol, including edits not yet admitted by the watcher.
   - Validation: V004; typecheck, continuation/store/workspace/architecture suites.
   - Evidence: Pending.
 
@@ -108,7 +124,8 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
   - Files: src/debug/; tests/fixtures/; this package's verification.md.
   - Acceptance: five-run comparable scenarios include complete final resolution,
     cold/warm/edit/idle/resume cases, CPU/wall/RSS spread and operation counts;
-    all success criteria and full correctness evidence pass. If blocked, retain
+    D006's frozen allowed-difference manifest/comparator, unaffected-file parity,
+    intended Qt/counter corrections and all success criteria pass. If blocked, retain
     pending state and record exact missing evidence instead of partial success.
   - Validation: V007; pnpm typecheck; pnpm test; compiled isolated worker/MCP smoke.
   - Evidence: Pending.
