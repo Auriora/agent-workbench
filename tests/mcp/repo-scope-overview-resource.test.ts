@@ -808,10 +808,14 @@ describe("repo scope and overview composed server resources", () => {
   });
 
   it("reports Ruby source as partial semantic in the public scope resource", async () => {
-    const repoRoot = path.resolve("tests/fixtures/fixture-ruby-semantic-repo");
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "awb-ruby-surface-"));
+    fs.cpSync(path.resolve("tests/fixtures/fixture-ruby-semantic-repo"), repoRoot, {
+      recursive: true, filter: source => ![".cache", "__pycache__"].includes(path.basename(source))
+    });
     const server = createAgentWorkbenchServer(repoRoot, {
       startupRefreshDelayMs: 60_000
     });
+    try {
 
     const response = await getRegisteredResource(server, "repo:///scope").readCallback({});
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
@@ -823,6 +827,10 @@ describe("repo scope and overview composed server resources", () => {
     expect(parsed.data.file_counts.ruby).toBeGreaterThan(0);
     expect(parsed.data.capability_counts.partial_semantic).toBeGreaterThan(0);
     expect(parsed.meta.evidence_kinds).toContain("parser");
+    } finally {
+      await server.close();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 
   it("aligns scope freshness with an available fresh snapshot", async () => {
@@ -921,10 +929,14 @@ describe("repo scope and overview composed server resources", () => {
   });
 
   it("returns parser-backed Ruby coverage in the public overview resource", async () => {
-    const repoRoot = path.resolve("tests/fixtures/fixture-ruby-semantic-repo");
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), "awb-ruby-surface-"));
+    fs.cpSync(path.resolve("tests/fixtures/fixture-ruby-semantic-repo"), repoRoot, {
+      recursive: true, filter: source => ![".cache", "__pycache__"].includes(path.basename(source))
+    });
     const server = createAgentWorkbenchServer(repoRoot, {
       startupRefreshDelayMs: 60_000
     });
+    try {
 
     const response = await getRegisteredResource(server, "repo:///overview").readCallback({});
     const parsed = JSON.parse(response.contents[0]?.text ?? "{}") as {
@@ -935,6 +947,10 @@ describe("repo scope and overview composed server resources", () => {
     expect(parsed.data.platforms).toContain("ruby");
     expect(parsed.meta.capability_level).toBe("partial_semantic");
     expect(parsed.meta.evidence_kinds).toContain("parser");
+    } finally {
+      await server.close();
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
   });
 
   it("passes snapshot repository composition into overview scans and publishes bounded provenance", async () => {

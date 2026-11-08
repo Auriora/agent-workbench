@@ -20,9 +20,13 @@ import type {
   FileCatalogScanPort,
   FileCatalogScanResult,
   FileCatalogSkippedPath,
-  FileIdentityPort
+  FileIdentityPort,
+  GraphBuildCatalogCapturePort,
+  GraphBuildPathIdentity,
+  GraphBuildWatchObservation
 } from "../../ports/index.js";
 import { FileIdentityAdapter, QT_TRANSLATION_PREFIX_BYTES } from "./file-identity.js";
+import { readCapturedGraphBuildPathIdentity, readGraphBuildPathIdentity } from "./graph-build-path-identities.js";
 import { readRootIgnoreRules } from "./ignore-file-policy.js";
 import { isNestedGitRepository } from "./nested-git-repository.js";
 
@@ -38,16 +42,19 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
   private readonly fileIdentity: FileIdentityPort;
   private readonly observe: ((event: FileCatalogObservation) => void) | undefined;
   private readonly observeWildcardCompilation: (() => void) | undefined;
+  private readonly capture: GraphBuildCatalogCapturePort | undefined;
 
   constructor(input: {
     fileIdentity?: FileIdentityPort;
     observe?: (event: FileCatalogObservation) => void;
+    capture?: GraphBuildCatalogCapturePort;
   } = {}) {
     this.fileIdentity = input.fileIdentity ?? new FileIdentityAdapter();
     this.observe = input.observe;
     this.observeWildcardCompilation = input.observe === undefined
       ? undefined
       : () => this.observe!("wildcard_regex_compilations");
+    this.capture = input.capture;
   }
 
   public async scan(input: {
@@ -241,7 +248,26 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
     admittedRepositoryRoots: ReadonlySet<string>;
   }): Promise<string[]> {
     const discoveredPaths: string[] = [];
-
+    const globalDirectoryPath = relativeCatalogPath(input.repoRoot, input.directory);
+    const repositoryKey = repositoryKeyForUnit(input.unit);
+    const captureIdentity = this.capture === undefined
+      ? undefined
+      : readManifestIdentity(input.repoRoot, globalDirectoryPath, "directory");
+    const observation = captureIdentity === undefined
+      ? undefined
+      : await this.capture!.beforeDirectory({
+          path: globalDirectoryPath,
+          repository_key: repositoryKey,
+          identity: captureIdentity
+        });
+    if (captureIdentity !== undefined && observation !== undefined) {
+      assertDirectoryObserved(globalDirectoryPath, observation);
+      assertSameIdentity(
+        captureIdentity,
+        readCapturedManifestIdentity(input.repoRoot, captureIdentity, "directory"),
+        "Directory changed before catalog enumeration"
+      );
+    }
     const children = readDirectoryOrSkip({
       repoRoot: input.repoRoot,
       directory: input.directory,
@@ -249,7 +275,21 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       recordSkippedPath: input.recordSkippedPath
     });
     if (children === null) {
+      if (captureIdentity !== undefined) {
+        throw new Error(`Graph build manifest capture failed because directory could not be read: ${globalDirectoryPath}`);
+      }
       return [];
+    }
+    if (captureIdentity !== undefined && observation !== undefined) {
+      const stableIdentity = readCapturedManifestIdentity(input.repoRoot, captureIdentity, "directory");
+      assertSameIdentity(captureIdentity, stableIdentity, "Directory changed during catalog enumeration");
+      await this.capture!.directory({
+        identity: stableIdentity,
+        repository_key: repositoryKey,
+        watcher_epoch: observation.epoch,
+        watcher_sequence: observation.sequence,
+        registered: true
+      });
     }
     this.observe?.("directory_enumerations");
     children.sort(compareCatalogEntries);
@@ -355,17 +395,26 @@ export class FileCatalogScannerAdapter implements FileCatalogScanPort {
       }
     }
     const language = await this.fileIdentity.inferLanguage({ path: input.absolutePath, content: languageContent });
-    input.entries.push(
-      buildFileCatalogEntry({
-        file_identity: {
-          path: relativePath,
-          language,
-          content_hash: `stat:${stats.size}:${Math.trunc(stats.mtimeMs)}`,
-          size_bytes: stats.size,
-          mtime_ms: stats.mtimeMs
-        }
-      })
-    );
+    const entry = buildFileCatalogEntry({
+      file_identity: {
+        path: relativePath,
+        language,
+        content_hash: `stat:${stats.size}:${Math.trunc(stats.mtimeMs)}`,
+        size_bytes: stats.size,
+        mtime_ms: stats.mtimeMs
+      }
+    });
+    if (this.capture !== undefined) {
+      const identity = readManifestIdentity(input.repoRoot, relativePath, "file");
+      assertFileIdentityMatchesEntry(identity, entry);
+      assertSameIdentity(identity, readCapturedManifestIdentity(input.repoRoot, identity, "file"), "File changed during catalog capture");
+      await this.capture.file({
+        repository_key: repositoryKeyForUnit(input.unit),
+        entry,
+        identity
+      });
+    }
+    input.entries.push(entry);
   }
 }
 
@@ -793,6 +842,63 @@ function catalogTraversalPriority(entry: fs.Dirent): number {
   if (name.endsWith(".md") || name.endsWith(".markdown") || name.endsWith(".mdx")) return 60;
   if (name.endsWith(".json") || name.endsWith(".yaml") || name.endsWith(".yml") || name.endsWith(".toml")) return 20;
   return 30;
+}
+
+function repositoryKeyForUnit(unit: ScanUnit): string {
+  return unit.pathPrefix.length === 0 ? "superproject" : `submodule:${unit.pathPrefix}`;
+}
+
+function assertDirectoryObserved(pathValue: string, observation: GraphBuildWatchObservation): void {
+  if (!observation.healthy) {
+    throw new Error(`Graph build manifest capture watcher is unhealthy before reading directory: ${pathValue}`);
+  }
+  const normalizedPath = normalizeCatalogPath(pathValue) || ".";
+  if (!observation.covered_directories.some(directory => normalizeCatalogPath(directory) === normalizedPath)) {
+    throw new Error(`Graph build manifest capture watcher did not acknowledge directory: ${pathValue}`);
+  }
+}
+
+function assertSameIdentity(
+  expected: GraphBuildPathIdentity,
+  actual: GraphBuildPathIdentity,
+  reason: string
+): void {
+  const fields: readonly (keyof GraphBuildPathIdentity)[] = [
+    "path", "scope", "root", "kind", "device", "inode", "size_bytes", "mtime_ns", "ctime_ns"
+  ];
+  if (fields.some(field => expected[field] !== actual[field])) {
+    throw new Error(`${reason}: ${expected.path}`);
+  }
+}
+
+function assertFileIdentityMatchesEntry(identity: GraphBuildPathIdentity, entry: FileCatalogEntry): void {
+  if (identity.kind !== "file" || identity.path !== entry.path) {
+    throw new Error(`Graph build manifest file identity is inconsistent with catalog entry: ${entry.path}`);
+  }
+  const mtimeMs = BigInt(identity.mtime_ns) / 1_000_000n;
+  if (identity.size_bytes !== String(entry.file_identity.size_bytes) || mtimeMs !== BigInt(Math.trunc(entry.file_identity.mtime_ms))) {
+    throw new Error(`Graph build manifest file metadata changed during catalog preparation: ${entry.path}`);
+  }
+}
+
+function readManifestIdentity(repoRoot: string, relativePath: string, kind: "directory" | "file"): GraphBuildPathIdentity {
+  try {
+    return readGraphBuildPathIdentity(repoRoot, relativePath);
+  } catch (error) {
+    throw new Error(`Graph build manifest capture failed while reading ${kind} identity: ${relativePath}`, { cause: error });
+  }
+}
+
+function readCapturedManifestIdentity(
+  repoRoot: string,
+  expected: GraphBuildPathIdentity,
+  kind: "directory" | "file"
+): GraphBuildPathIdentity {
+  try {
+    return readCapturedGraphBuildPathIdentity(repoRoot, expected);
+  } catch (error) {
+    throw new Error(`Graph build manifest capture failed while verifying ${kind} identity: ${expected.path}`, { cause: error });
+  }
 }
 
 function isProjectShapeFile(name: string): boolean {

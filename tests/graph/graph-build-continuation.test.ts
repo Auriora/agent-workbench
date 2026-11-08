@@ -13,6 +13,32 @@ import { FileCatalogScannerAdapter, WorkspaceFileAdapter } from "../../src/infra
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/index.js";
 import { PythonTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
 import { SystemClockAdapter } from "../../src/infrastructure/time/index.js";
+import type { GraphBuildCatalogCapturePort } from "../../src/ports/index.js";
+
+function createGraphBuildManifestHarness() {
+  const coveredDirectories = new Set<string>();
+  const observation = () => ({
+    epoch: "continuation-watch-epoch",
+    sequence: 0,
+    healthy: true,
+    pending_events: 0,
+    covered_directories: [...coveredDirectories]
+  });
+  return {
+    watcher: {
+      start: async () => observation(),
+      registerDirectory: async ({ path: directory }: { path: string; repository_key?: string }) => {
+        coveredDirectories.add(directory);
+        return observation();
+      }
+    },
+    create_scanner: (capture: GraphBuildCatalogCapturePort) =>
+      new FileCatalogScannerAdapter({ capture }),
+    inputs: [{
+      path: ".", kind: "directory" as const, device: "0", inode: "0", size_bytes: "0", mtime_ns: "0", ctime_ns: "0"
+    }]
+  };
+}
 
 describe("durable repository graph completion", () => {
   const roots: string[] = [];
@@ -53,6 +79,7 @@ describe("durable repository graph completion", () => {
       build_read: store,
       build_coverage: store,
       build_resolution: store,
+      manifest: { store, ...createGraphBuildManifestHarness() },
       clock,
       schema_version: SCHEMA_VERSION,
       controller_generation: 7,
@@ -69,7 +96,7 @@ describe("durable repository graph completion", () => {
       expect(seed).toMatchObject({
         outcome: "partial",
         partial_kind: "publish_seed",
-        continuation_cursor: "AGENTS.md"
+        continuation_cursor: "README.md"
       });
       await store.transitionBuild({
         repo_root: repoRoot,
@@ -80,6 +107,19 @@ describe("durable repository graph completion", () => {
         to: "published",
         updated_at: clock.nowIso8601()
       });
+      await expect(store.search({
+        repo_root: repoRoot,
+        snapshot_id: seedId,
+        query: "Instructions",
+        max_results: 10,
+        include_snippets: true
+      })).resolves.toMatchObject({
+        status: "done",
+        hits: expect.arrayContaining([expect.objectContaining({ path: "AGENTS.md" })])
+      });
+      await expect(store.getDocumentationConcernIndexState({ snapshot_id: seedId })).resolves.toMatchObject({
+        status: "ready"
+      });
       await expect(store.getFile({ snapshot_id: seedId, path: "AGENTS.md" })).resolves.toMatchObject({ indexed: true });
       expect(store.db.prepare(`
         SELECT state, continuation_available, continuation_cursor, reason
@@ -88,8 +128,8 @@ describe("durable repository graph completion", () => {
       `).get(Number(seedId))).toMatchObject({
         state: "partial",
         continuation_available: 1,
-        continuation_cursor: "AGENTS.md",
-        reason: expect.stringContaining("yielded before the worker deadline")
+        continuation_cursor: "README.md",
+        reason: expect.stringContaining("durable scan cursor")
       });
 
       const completionId = await store.allocateBuildSnapshotId({ repo_root: repoRoot, minimum_id: "7002" });
@@ -163,6 +203,10 @@ describe("durable repository graph completion", () => {
           })
         ])
       );
+      await expect(store.getGraphBuildProgress({ snapshot_id: completionId })).resolves.toMatchObject({
+        phase: "complete",
+        counters: expect.objectContaining({ edges: 1, unresolved_references: 0 })
+      });
       expect(store.db.prepare(`
         SELECT state, continuation_available, continuation_cursor
         FROM snapshot_index_coverage
@@ -212,6 +256,7 @@ describe("durable repository graph completion", () => {
       build_read: store,
       build_coverage: store,
       build_resolution: store,
+      manifest: { store, ...createGraphBuildManifestHarness() },
       clock,
       schema_version: SCHEMA_VERSION,
       controller_generation: 9,
@@ -226,7 +271,7 @@ describe("durable repository graph completion", () => {
       expect(seed).toMatchObject({
         outcome: "partial",
         partial_kind: "publish_seed",
-        continuation_cursor: "config/routes.rb"
+        continuation_cursor: "engines/commerce/config/routes.rb"
       });
       await store.transitionBuild({
         repo_root: repoRoot,

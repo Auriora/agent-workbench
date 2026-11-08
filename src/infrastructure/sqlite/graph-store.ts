@@ -4,6 +4,7 @@
  */
 
 import Database from "better-sqlite3";
+import { createHash } from "node:crypto";
 import { seedVersionedGraphStore } from "./graph-store-location.js";
 import { GRAPH_STORE_IDENTITY_VERSION } from "../../contracts/graph-store-identity-contracts.js";
 import type {
@@ -12,6 +13,7 @@ import type {
   FileIdentity,
   GraphEdgeReadModel,
   GraphNodeReadModel,
+  GraphNodeWriteModel,
   GraphTraversalRequest,
   GraphTraversalResult,
   ResolvedReference,
@@ -54,6 +56,11 @@ import type {
   GraphBuildProgress,
   GraphBuildProgressStatus,
   GraphBuildCoveragePort,
+  GraphBuildAtomicPublicationPort,
+  GraphBuildManifest,
+  GraphBuildManifestFence,
+  GraphBuildManifestPort,
+  GraphBuildManifestFile,
   GraphBuildProgressPort,
   GraphBuildReadPort,
   GraphBuildResolutionWritePort,
@@ -82,6 +89,7 @@ import type {
   SnapshotPort
 } from "../../ports/index.js";
 import { DocsRankingUnavailableError } from "../../ports/index.js";
+import { graphBuildManifestDigestMaterial } from "../../ports/index.js";
 
 export const SCHEMA_VERSION = GRAPH_STORE_IDENTITY_VERSION;
 
@@ -276,12 +284,46 @@ type GraphBuildProgressRow = {
   unresolved_references: number;
   controller_generation: number;
   invalidation_generation: number;
+  manifest_id: string | null;
+  ordinal_cursor: number | null;
+  counters_version: number | null;
   updated_at: string;
+};
+
+type ManifestRow = {
+  manifest_id: string;
+  repo_root: string;
+  config_identity: string;
+  owner_id: string;
+  controller_generation: number;
+  invalidation_generation: number;
+  generation_source_hash: string;
+  watcher_epoch: string;
+  watcher_sequence: number;
+  policy_version: string;
+  ordering_version: string;
+  composition_fingerprint: string;
+  state: GraphBuildManifest["state"];
+  digest: string;
+  started_at: string;
+  sealed_at: string | null;
+  invalid_reason: string | null;
+  graph_catalog_json: string | null;
+  docs_catalog_json: string | null;
+  shape_json: string | null;
+  preparation_wall_ms: number | null;
 };
 
 export type GraphStoreOptions = {
   busyTimeoutMs?: number;
   enforceForeignKeys?: boolean;
+  /**
+   * Requires a pre-existing, exact-schema database. It is first checked using
+   * a read-only handle, then opened without seeding, migration, or journal
+   * configuration. This preserves observer cache and freshness writes while
+   * preventing an observer from repairing an incompatible store.
+   */
+  existingCompatible?: boolean;
 };
 
 const LEGACY_GRAPH_BUILD_OWNER_ID = "legacy-unowned";
@@ -301,6 +343,8 @@ export interface GraphStore
     GraphBuildReadPort,
     GraphBuildCoveragePort,
     GraphBuildResolutionWritePort,
+    GraphBuildManifestPort,
+    GraphBuildAtomicPublicationPort,
     FileCatalogPort,
     SnapshotPathInventoryPort,
     SnapshotRepositoryCompositionPort,
@@ -319,10 +363,21 @@ export class SqliteGraphStoreAdapter implements GraphStore {
 
   constructor(databasePath: string, options: GraphStoreOptions = {}) {
     this.databasePath = databasePath;
+    if (options.existingCompatible === true) {
+      validateExistingCompatibleGraphStore(databasePath);
+    }
     this.db = new Database(databasePath, {
-      timeout: options.busyTimeoutMs ?? DEFAULT_SQLITE_BUSY_TIMEOUT_MS
+      timeout: options.busyTimeoutMs ?? DEFAULT_SQLITE_BUSY_TIMEOUT_MS,
+      fileMustExist: options.existingCompatible === true
     });
     try {
+      if (options.existingCompatible === true) {
+        // Recheck after the probe so a replacement between handles cannot be
+        // treated as a compatible observer store.
+        assertExactCompatibleExistingSchema(this.db);
+        if (options.enforceForeignKeys !== false) this.db.pragma("foreign_keys = ON");
+        return;
+      }
       assertCompatibleSchemaVersion(this.db);
       this.db.pragma("journal_mode = WAL");
       this.db.pragma("synchronous = NORMAL");
@@ -904,7 +959,10 @@ export class SqliteGraphStoreAdapter implements GraphStore {
 
   public async replaceSnapshotExtraction(input: { batch: ExtractionBatch; replace: boolean }): Promise<void> {
     const snapshotId = this.requireBuildingSnapshotId(input.batch.snapshot_id);
+    this.replaceSnapshotExtractionSync(input, snapshotId);
+  }
 
+  private replaceSnapshotExtractionSync(input: { batch: ExtractionBatch; replace: boolean }, snapshotId: number): void {
     const tx = this.db.transaction(() => {
       const selectFile = this.db.prepare("SELECT id FROM files WHERE snapshot_id = @snapshotId AND path = @path");
       const fileIdentity = {
@@ -1455,6 +1513,10 @@ export class SqliteGraphStoreAdapter implements GraphStore {
   public async upsertGraphBuildProgress(input: {
     progress: GraphBuildProgress;
   }): Promise<void> {
+    this.upsertGraphBuildProgressSync(input);
+  }
+
+  private upsertGraphBuildProgressSync(input: { progress: GraphBuildProgress }): void {
     const snapshot = this.requireBuildingSnapshotForGeneration({
       snapshot_id: input.progress.snapshot_id,
       controller_generation: input.progress.controller_generation,
@@ -1482,18 +1544,19 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       status
     });
     assertGraphBuildProgressCounters(input.progress);
+    this.assertManifestProgressUpdate({ snapshot, existing, progress: input.progress });
     this.db.prepare(`
       INSERT INTO graph_build_progress (
         snapshot_id, source_snapshot_id, owner_id, completion_target_id, phase, status, scan_cursor, max_files,
         generation_source_hash, eligible_files, scanned_files, admitted_files, extracted_files, unsupported_files,
         resource_backed_files, nodes, edges, unresolved_references,
-        controller_generation, invalidation_generation, updated_at
+        controller_generation, invalidation_generation, manifest_id, ordinal_cursor, counters_version, updated_at
       ) VALUES (
         @snapshotId, @sourceSnapshotId, @ownerId, @completionTargetId, @phase, @status, @scanCursor, @maxFiles,
         @generationSourceHash, @eligibleFiles,
         @scannedFiles, @admittedFiles, @extractedFiles, @unsupportedFiles,
         @resourceBackedFiles, @nodes, @edges, @unresolvedReferences,
-        @controllerGeneration, @invalidationGeneration, @updatedAt
+        @controllerGeneration, @invalidationGeneration, @manifestId, @ordinalCursor, @countersVersion, @updatedAt
       )
       ON CONFLICT(snapshot_id) DO UPDATE SET
         source_snapshot_id = excluded.source_snapshot_id,
@@ -1515,6 +1578,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         unresolved_references = excluded.unresolved_references,
         controller_generation = excluded.controller_generation,
         invalidation_generation = excluded.invalidation_generation,
+        manifest_id = excluded.manifest_id,
+        ordinal_cursor = excluded.ordinal_cursor,
+        counters_version = excluded.counters_version,
         updated_at = excluded.updated_at
     `).run({
       snapshotId: snapshot.id,
@@ -1537,6 +1603,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       unresolvedReferences: input.progress.counters.unresolved_references,
       controllerGeneration: input.progress.controller_generation,
       invalidationGeneration: input.progress.invalidation_generation,
+      manifestId: input.progress.manifest_id ?? null,
+      ordinalCursor: input.progress.ordinal_cursor ?? null,
+      countersVersion: input.progress.counters_version ?? null,
       updatedAt: input.progress.updated_at
     });
   }
@@ -1617,6 +1686,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     const sourceSnapshotId = this.requirePublishedSnapshotIdForSeed(input.source_snapshot_id, target.repo_identity);
     const tx = this.db.transaction(() => {
       this.assertBuildSnapshotEmpty(target.id);
+      this.cloneSnapshotRepositoryCompositionForBuildSeed({ sourceSnapshotId, targetSnapshotId: target.id });
       const fileIdMap = this.cloneFilesForBuildSeed({
         sourceSnapshotId,
         targetSnapshotId: target.id
@@ -1675,12 +1745,13 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           snapshot_id, source_snapshot_id, owner_id, completion_target_id, phase, status, scan_cursor, max_files,
           generation_source_hash, eligible_files, scanned_files, admitted_files, extracted_files, unsupported_files,
           resource_backed_files, nodes, edges, unresolved_references,
-          controller_generation, invalidation_generation, updated_at
+          controller_generation, invalidation_generation, manifest_id, ordinal_cursor, counters_version, updated_at
         ) VALUES (
           @snapshotId, @sourceSnapshotId, @ownerId, @completionTargetId, @phase, @status, @scanCursor, @maxFiles,
           @generationSourceHash, @eligibleFiles, @scannedFiles, @admittedFiles, @extractedFiles,
           @unsupportedFiles, @resourceBackedFiles, @nodes, @edges,
-          @unresolvedReferences, @controllerGeneration, @invalidationGeneration, @updatedAt
+          @unresolvedReferences, @controllerGeneration, @invalidationGeneration,
+          @manifestId, @ordinalCursor, @countersVersion, @updatedAt
         )
       `).run({
         snapshotId: target.id,
@@ -1703,6 +1774,9 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         unresolvedReferences: sourceProgress.unresolved_references,
         controllerGeneration: input.controller_generation,
         invalidationGeneration: input.invalidation_generation,
+        manifestId: sourceProgress.manifest_id,
+        ordinalCursor: sourceProgress.ordinal_cursor,
+        countersVersion: sourceProgress.counters_version,
         updatedAt: input.updated_at
       });
     });
@@ -1876,6 +1950,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     controller_generation: number;
     invalidation_generation: number;
     provenance: string;
+    deferred_anchors?: readonly GraphNodeWriteModel[];
     resolved_references: readonly {
       unresolved_reference_id: string;
       file_path: string;
@@ -1898,11 +1973,53 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           @metadata
         )
       `);
+      const selectNodePath = this.db.prepare(`
+        SELECT files.path AS path FROM nodes
+        INNER JOIN files ON files.id = nodes.file_id
+        WHERE nodes.id = ?
+      `);
+      const upsertAnchor = this.db.prepare(`
+        INSERT INTO nodes (
+          id, file_id, kind, name, lower_name, qualified_name, language,
+          start_line, start_column, end_line, end_column, signature, docstring, metadata_json
+        ) VALUES (
+          @id, @fileId, @kind, @name, @lowerName, @qualifiedName, @language,
+          @startLine, @startColumn, @endLine, @endColumn, @signature, @docstring, @metadata
+        ) ON CONFLICT(id) DO UPDATE SET
+          file_id = excluded.file_id, kind = excluded.kind, name = excluded.name,
+          lower_name = excluded.lower_name, qualified_name = excluded.qualified_name,
+          language = excluded.language, start_line = excluded.start_line, start_column = excluded.start_column,
+          end_line = excluded.end_line, end_column = excluded.end_column, signature = excluded.signature,
+          docstring = excluded.docstring, metadata_json = excluded.metadata_json
+      `);
+      const deleteAnchorFts = this.db.prepare("DELETE FROM node_fts WHERE node_id = ?");
+      const insertAnchorFts = this.db.prepare(`
+        INSERT INTO node_fts (node_id, name, qualified_name, signature, docstring)
+        VALUES (@nodeId, @name, @qualifiedName, @signature, @docstring)
+      `);
       const deleteUnresolved = this.db.prepare(`
         DELETE FROM unresolved_refs
         WHERE id = @id
           AND file_id IN (SELECT id FROM files WHERE snapshot_id = @snapshotId)
       `);
+      for (const anchor of input.deferred_anchors ?? []) {
+        const fileRow = this.getFileRow(snapshot.id, anchor.file_path);
+        if (!fileRow) throw new Error(`Unknown file for deferred resolution anchor: ${anchor.file_path}`);
+        const existing = selectNodePath.get(anchor.id) as { path: string } | undefined;
+        if (existing !== undefined && existing.path !== anchor.file_path) {
+          throw new Error(`Deferred resolution anchor ${anchor.id} belongs to another file.`);
+        }
+        upsertAnchor.run({
+          id: anchor.id, fileId: fileRow.id, kind: anchor.kind, name: anchor.name,
+          lowerName: anchor.name.toLowerCase(), qualifiedName: anchor.qualified_name ?? null,
+          language: anchor.language, startLine: anchor.source_range.start_line, startColumn: anchor.source_range.start_column,
+          endLine: anchor.source_range.end_line, endColumn: anchor.source_range.end_column,
+          signature: anchor.signature ?? null, docstring: anchor.docstring ?? null, metadata: JSON.stringify(anchor.metadata)
+        });
+        deleteAnchorFts.run(anchor.id);
+        insertAnchorFts.run({ nodeId: anchor.id, name: anchor.name, qualifiedName: anchor.qualified_name ?? null,
+          signature: anchor.signature ?? null, docstring: anchor.docstring ?? null });
+      }
       for (const resolved of input.resolved_references) {
         const unresolvedId = this.parseNumericId(resolved.unresolved_reference_id);
         if (unresolvedId === null) {
@@ -1921,7 +2038,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           startColumn: resolved.edge.source_range?.start_column ?? null,
           endLine: resolved.edge.source_range?.end_line ?? null,
           endColumn: resolved.edge.source_range?.end_column ?? null,
-          provenance: input.provenance,
+          provenance: resolved.edge.provenance,
           confidence: resolved.edge.confidence,
           metadata: JSON.stringify(resolved.edge.metadata)
         });
@@ -1929,6 +2046,20 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         if (deleted.changes !== 1) {
           throw new Error(`Unknown unresolved reference for build resolution slice: ${resolved.unresolved_reference_id}`);
         }
+      }
+      const progress = this.getGraphBuildProgressRow(snapshot.id);
+      if (progress?.manifest_id !== null && progress?.manifest_id !== undefined && progress.counters_version === 2) {
+        this.db.prepare(`
+          UPDATE graph_build_progress
+          SET nodes = @nodes, edges = @edges, unresolved_references = @unresolvedReferences
+          WHERE snapshot_id = @snapshotId AND manifest_id = @manifestId AND counters_version = 2
+        `).run({
+          snapshotId: snapshot.id,
+          manifestId: progress.manifest_id,
+          nodes: this.countNodes(snapshot.id),
+          edges: this.countEdges(snapshot.id),
+          unresolvedReferences: this.countUnresolvedReferences(snapshot.id)
+        });
       }
     });
     tx.immediate();
@@ -1963,6 +2094,18 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     to: TState;
     updated_at: string;
   }): Promise<SnapshotPublicationRecord & { state: TState }> {
+    return this.transitionBuildSync(input);
+  }
+
+  private transitionBuildSync<TState extends "published" | "superseded" | "failed">(input: {
+    repo_root: string;
+    snapshot_id: string;
+    controller_generation: number;
+    invalidation_generation: number;
+    from: "building";
+    to: TState;
+    updated_at: string;
+  }): SnapshotPublicationRecord & { state: TState } {
     const snapshotId = this.parseNumericId(input.snapshot_id);
     if (snapshotId === null) {
       throw new Error(`Unknown snapshot id: ${input.snapshot_id}`);
@@ -2005,6 +2148,350 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     return this.mapPublicationRecord(transition.immediate()) as SnapshotPublicationRecord & { state: TState };
   }
 
+  public async beginGraphBuildManifest(input: {
+    manifest_id: string;
+    fence: GraphBuildManifestFence;
+    started_at: string;
+  }): Promise<void> {
+    const tx = this.db.transaction(() => {
+      const existing = this.db.prepare("SELECT manifest_id FROM graph_build_manifests WHERE manifest_id = ?").get(input.manifest_id);
+      if (existing !== undefined) {
+        throw new Error(`Graph build manifest already exists: ${input.manifest_id}`);
+      }
+      this.db.prepare(`
+        INSERT INTO graph_build_manifests (
+          manifest_id, repo_root, config_identity, owner_id, controller_generation, invalidation_generation,
+          generation_source_hash, watcher_epoch, watcher_sequence, policy_version, ordering_version, composition_fingerprint,
+          state, digest, started_at
+        ) VALUES (
+          @manifestId, @repoRoot, @configIdentity, @ownerId, @controllerGeneration, @invalidationGeneration,
+          @generationSourceHash, @watcherEpoch, @watcherSequence, @policyVersion, @orderingVersion, @compositionFingerprint,
+          'preparing', '', @startedAt
+        )
+      `).run(this.manifestFenceParameters(input.manifest_id, input.fence, { startedAt: input.started_at }));
+    });
+    tx.immediate();
+  }
+
+  public async appendGraphBuildManifestObservation(input: {
+    manifest_id: string;
+    fence: GraphBuildManifestFence;
+    file?: Omit<GraphBuildManifestFile, "ordinal" | "outcome" | "docs_eligible">;
+    directory?: import("../../ports/graph-build-manifest.js").GraphBuildDirectoryObservation;
+  }): Promise<void> {
+    if ((input.file === undefined) === (input.directory === undefined)) {
+      throw new Error("Exactly one graph build manifest observation is required.");
+    }
+    const tx = this.db.transaction(() => {
+      this.requirePreparingManifest(input.manifest_id, input.fence);
+      if (input.file !== undefined) {
+        this.db.prepare(`
+          INSERT INTO graph_build_manifest_files (
+            manifest_id, ordinal, path, repository_key, entry_json, identity_json, docs_eligible, outcome
+          ) VALUES (@manifestId, NULL, @path, @repositoryKey, @entryJson, @identityJson, 0, 'pending')
+        `).run({
+          manifestId: input.manifest_id,
+          path: input.file.entry.path,
+          repositoryKey: input.file.repository_key,
+          entryJson: JSON.stringify(input.file.entry),
+          identityJson: JSON.stringify(input.file.identity)
+        });
+      } else if (input.directory !== undefined) {
+        this.db.prepare(`
+          INSERT INTO graph_build_manifest_directories (
+            manifest_id, path, repository_key, identity_json, watcher_epoch, watcher_sequence, registered
+          ) VALUES (@manifestId, @path, @repositoryKey, @identityJson, @watcherEpoch, @watcherSequence, @registered)
+        `).run({
+          manifestId: input.manifest_id,
+          path: input.directory.identity.path,
+          repositoryKey: input.directory.repository_key,
+          identityJson: JSON.stringify(input.directory.identity),
+          watcherEpoch: input.directory.watcher_epoch,
+          watcherSequence: input.directory.watcher_sequence,
+          registered: input.directory.registered ? 1 : 0
+        });
+      }
+    });
+    tx.immediate();
+  }
+
+  public async sealGraphBuildManifest(input: { manifest: GraphBuildManifest; progress: GraphBuildProgress }): Promise<void> {
+    const tx = this.db.transaction(() => {
+      this.requirePreparingManifest(input.manifest.manifest_id, input.manifest);
+      const files = this.getManifestFiles(input.manifest.manifest_id);
+      const observedPaths = new Set(files.map((file) => file.path));
+      if (observedPaths.size !== files.length || input.manifest.files.length !== files.length) {
+        throw new Error("Graph build manifest observations do not match the supplied inventory.");
+      }
+      const paths = new Set<string>();
+      for (const file of input.manifest.files) {
+        if (!Number.isSafeInteger(file.ordinal) || file.ordinal < 0 || file.ordinal >= input.manifest.files.length) {
+          throw new Error("Graph build manifest file ordinals must be contiguous and zero-based.");
+        }
+        const observed = files.find((candidate) => candidate.path === file.entry.path);
+        if (paths.has(file.entry.path) || observed === undefined) {
+          throw new Error("Graph build manifest file paths must be unique prior observations.");
+        }
+        if (
+          observed.repository_key !== file.repository_key || observed.entry_json !== JSON.stringify(file.entry) ||
+          observed.identity_json !== JSON.stringify(file.identity)
+        ) throw new Error("Graph build manifest file observation changed before sealing.");
+        paths.add(file.entry.path);
+      }
+      if (paths.size !== input.manifest.files.length) {
+        throw new Error("Graph build manifest file ordinals must be contiguous and zero-based.");
+      }
+      const observedDirectories = this.db.prepare(`
+        SELECT path, repository_key, identity_json, watcher_epoch, watcher_sequence, registered
+        FROM graph_build_manifest_directories WHERE manifest_id = ?
+      `).all(input.manifest.manifest_id) as Array<{
+        path: string; repository_key: string; identity_json: string; watcher_epoch: string; watcher_sequence: number; registered: number;
+      }>;
+      if (observedDirectories.length !== input.manifest.directories.length) {
+        throw new Error("Graph build manifest directory observations do not match the supplied inventory.");
+      }
+      for (const directory of input.manifest.directories) {
+        const observed = observedDirectories.find((candidate) => candidate.path === directory.identity.path);
+        if (
+          observed === undefined || observed.repository_key !== directory.repository_key ||
+          observed.identity_json !== JSON.stringify(directory.identity) || observed.watcher_epoch !== directory.watcher_epoch ||
+          observed.watcher_sequence !== directory.watcher_sequence || observed.registered !== (directory.registered ? 1 : 0)
+        ) {
+          throw new Error("Graph build manifest directory observation changed before sealing.");
+        }
+      }
+      const inputPaths = new Set(input.manifest.inputs.map(graphBuildInputIdentityKey));
+      if (inputPaths.size !== input.manifest.inputs.length) {
+        throw new Error("Graph build manifest input identities must be unique.");
+      }
+      const expectedDigest = createHash("sha256").update(graphBuildManifestDigestMaterial(input.manifest)).digest("hex");
+      if (input.manifest.digest !== expectedDigest) {
+        throw new Error("Graph build manifest digest does not match canonical inventory material.");
+      }
+      for (const file of input.manifest.files) {
+        const result = this.db.prepare(`
+          UPDATE graph_build_manifest_files
+          SET ordinal = @ordinal, docs_eligible = @docsEligible
+          WHERE manifest_id = @manifestId AND path = @path AND outcome = 'pending'
+        `).run({
+          manifestId: input.manifest.manifest_id,
+          ordinal: file.ordinal,
+          docsEligible: file.docs_eligible ? 1 : 0,
+          path: file.entry.path
+        });
+        if (result.changes !== 1) {
+          throw new Error("Graph build manifest file observation changed before sealing.");
+        }
+      }
+      this.db.prepare("DELETE FROM graph_build_manifest_inputs WHERE manifest_id = ?").run(input.manifest.manifest_id);
+      const insertInput = this.db.prepare(`
+        INSERT INTO graph_build_manifest_inputs (manifest_id, path, identity_json)
+        VALUES (@manifestId, @path, @identityJson)
+      `);
+      for (const identity of input.manifest.inputs) {
+        insertInput.run({
+          manifestId: input.manifest.manifest_id,
+          path: graphBuildInputIdentityKey(identity),
+          identityJson: JSON.stringify(identity)
+        });
+      }
+      const sealed = this.db.prepare(`
+        UPDATE graph_build_manifests
+        SET state = 'sealed', digest = @digest, sealed_at = @sealedAt, graph_catalog_json = @graphCatalog,
+            docs_catalog_json = @docsCatalog, shape_json = @shape, preparation_wall_ms = @preparationWallMs
+        WHERE manifest_id = @manifestId AND state = 'preparing'
+      `).run({
+        manifestId: input.manifest.manifest_id,
+        digest: input.manifest.digest,
+        sealedAt: input.manifest.sealed_at ?? input.progress.updated_at,
+        graphCatalog: JSON.stringify(input.manifest.graph_catalog),
+        docsCatalog: JSON.stringify(input.manifest.docs_catalog),
+        shape: JSON.stringify(input.manifest.shape),
+        preparationWallMs: input.manifest.preparation_wall_ms
+      });
+      if (sealed.changes !== 1) {
+        throw new Error("Graph build manifest cannot be sealed.");
+      }
+      if (
+        input.progress.manifest_id !== input.manifest.manifest_id || input.progress.counters_version !== 2 ||
+        input.progress.controller_generation !== input.manifest.controller_generation ||
+        input.progress.invalidation_generation !== input.manifest.invalidation_generation ||
+        input.progress.owner_id !== input.manifest.owner_id
+      ) {
+        throw new Error("Graph build progress does not bind the sealed manifest fence.");
+      }
+      const counters = input.progress.counters;
+      if (
+        counters.eligible_files !== input.manifest.files.length || counters.scanned_files !== input.manifest.files.length ||
+        counters.admitted_files !== 0 || counters.extracted_files !== 0 || counters.resource_backed_files !== 0 ||
+        counters.unsupported_files !== 0 || counters.nodes !== 0 || counters.edges !== 0 || counters.unresolved_references !== 0 ||
+        input.progress.ordinal_cursor !== 0
+      ) {
+        throw new Error("Initial sealed graph build progress must contain only the manifest inventory counters.");
+      }
+      this.upsertGraphBuildProgressSync({ progress: input.progress });
+    });
+    tx.immediate();
+  }
+
+  public async getGraphBuildManifest(input: {
+    manifest_id?: string;
+    snapshot_id?: string;
+    fence?: GraphBuildManifestFence;
+  }): Promise<GraphBuildManifest | null> {
+    let manifestId = input.manifest_id;
+    if (manifestId === undefined && input.snapshot_id !== undefined) {
+      const snapshotId = this.parseNumericId(input.snapshot_id);
+      const progress = snapshotId === null ? undefined : this.getGraphBuildProgressRow(snapshotId);
+      manifestId = progress?.manifest_id ?? undefined;
+    }
+    if (manifestId === undefined) return null;
+    const row = this.db.prepare("SELECT * FROM graph_build_manifests WHERE manifest_id = ?").get(manifestId) as ManifestRow | undefined;
+    if (row === undefined) return null;
+    if (input.fence !== undefined) this.assertManifestFence(row, input.fence);
+    return this.mapManifest(row);
+  }
+
+  public async invalidateGraphBuildManifest(input: { manifest_id: string; owner_id: string; reason: string; updated_at: string }): Promise<void> {
+    const result = this.db.prepare(`
+      UPDATE graph_build_manifests
+      SET state = 'invalid', invalid_reason = @reason
+      WHERE manifest_id = @manifestId AND owner_id = @ownerId AND state IN ('preparing', 'sealed')
+    `).run({ manifestId: input.manifest_id, ownerId: input.owner_id, reason: input.reason });
+    if (result.changes !== 1) throw new Error(`Graph build manifest cannot be invalidated: ${input.manifest_id}`);
+  }
+
+  public async commitGraphBuildFileOutcome(input: {
+    manifest_id: string; fence: GraphBuildManifestFence; snapshot_id: string;
+    ordinal: number; outcome: Exclude<GraphBuildManifestFile["outcome"], "pending">;
+    entry: FileCatalogEntry; batch?: ExtractionBatch; updated_at: string;
+  }): Promise<GraphBuildProgress> {
+    const tx = this.db.transaction(() => {
+      const snapshot = this.requireBuildingSnapshotForGeneration({
+        snapshot_id: input.snapshot_id,
+        controller_generation: input.fence.controller_generation,
+        invalidation_generation: input.fence.invalidation_generation
+      });
+      this.requireSealedManifest(input.manifest_id, input.fence);
+      const progress = this.getGraphBuildProgressRow(snapshot.id);
+      if (
+        progress === undefined || progress.manifest_id !== input.manifest_id || progress.owner_id !== input.fence.owner_id ||
+        progress.controller_generation !== input.fence.controller_generation ||
+        progress.invalidation_generation !== input.fence.invalidation_generation || progress.status !== "active" ||
+        progress.phase !== "extracting" || progress.ordinal_cursor !== input.ordinal
+      ) {
+        throw new Error("Graph build progress does not bind the sealed manifest.");
+      }
+      const manifestFile = this.db.prepare(`
+        SELECT path, entry_json FROM graph_build_manifest_files WHERE manifest_id = ? AND ordinal = ? AND outcome = 'pending'
+      `).get(input.manifest_id, input.ordinal) as { path: string; entry_json: string } | undefined;
+      if (manifestFile === undefined) throw new Error(`Graph build manifest ordinal ${input.ordinal} was already committed or is unavailable.`);
+      const sealedEntry = JSON.parse(manifestFile.entry_json) as FileCatalogEntry;
+      if (input.entry.path !== manifestFile.path || JSON.stringify(input.entry.file_identity) !== JSON.stringify(sealedEntry.file_identity)) {
+        throw new Error("Graph build file outcome does not match the sealed manifest entry identity.");
+      }
+      if ((input.outcome === "extracted" || input.outcome === "resource") && input.batch === undefined) {
+        throw new Error(`Graph build ${input.outcome} outcome requires an extraction batch.`);
+      }
+      if (input.outcome === "unsupported" && input.batch !== undefined) {
+        throw new Error("Graph build unsupported outcome must not contain an extraction batch.");
+      }
+      if (input.batch !== undefined && (input.batch.snapshot_id !== input.snapshot_id || input.batch.source_path !== manifestFile.path)) {
+        throw new Error("Graph build extraction batch does not match the target snapshot and sealed manifest path.");
+      }
+      const outcome = this.db.prepare(`
+        UPDATE graph_build_manifest_files SET outcome = @outcome
+        WHERE manifest_id = @manifestId AND ordinal = @ordinal AND outcome = 'pending'
+      `).run({ manifestId: input.manifest_id, ordinal: input.ordinal, outcome: input.outcome });
+      if (outcome.changes !== 1) throw new Error(`Graph build manifest ordinal ${input.ordinal} was already committed or is unavailable.`);
+      this.upsertEntrySync(snapshot.id, input.entry);
+      if (input.batch !== undefined) this.replaceSnapshotExtractionSync({ batch: input.batch, replace: true }, snapshot.id);
+      const counters = this.manifestOutcomeCounters(input.manifest_id, snapshot.id);
+      const cursor = this.db.prepare(`
+        SELECT MIN(ordinal) AS ordinal FROM graph_build_manifest_files
+        WHERE manifest_id = ? AND outcome = 'pending'
+      `).get(input.manifest_id) as { ordinal: number | null };
+      this.db.prepare(`
+        UPDATE graph_build_progress
+        SET eligible_files = @eligibleFiles, scanned_files = @scannedFiles, admitted_files = @admittedFiles,
+            extracted_files = @extractedFiles, resource_backed_files = @resourceBackedFiles,
+            unsupported_files = @unsupportedFiles, nodes = @nodes, edges = @edges,
+            unresolved_references = @unresolvedReferences,
+            ordinal_cursor = @ordinalCursor, counters_version = 2, updated_at = @updatedAt
+        WHERE snapshot_id = @snapshotId
+      `).run({ snapshotId: snapshot.id, ordinalCursor: cursor.ordinal, updatedAt: input.updated_at, ...counters });
+      const result = this.getGraphBuildProgressRow(snapshot.id);
+      if (result === undefined) throw new Error("Graph build progress disappeared during outcome commit.");
+      return this.mapGraphBuildProgressRow(result);
+    });
+    return tx.immediate();
+  }
+
+  public publishValidatedGraphBuild(input: {
+    receipt: import("../../ports/graph-build-manifest.js").GraphBuildValidationReceipt;
+    transition: import("../../ports/index.js").SnapshotPublicationTransition & { to: "published" };
+    assert_observation: () => void;
+  }): SnapshotPublicationRecord & { state: "published" } {
+    const tx = this.db.transaction(() => {
+      if (
+        input.transition.repo_root !== input.receipt.repo_root || input.transition.snapshot_id !== input.receipt.target_snapshot_id ||
+        input.transition.controller_generation !== input.receipt.controller_generation ||
+        input.transition.invalidation_generation !== input.receipt.invalidation_generation
+      ) throw new Error("Publication transition does not match validation receipt target.");
+      if (input.receipt.policy_version !== "manifest-identities-v1") throw new Error("Validation receipt policy version is invalid.");
+      if (!Number.isSafeInteger(input.receipt.start_sequence) || !Number.isSafeInteger(input.receipt.end_sequence) ||
+          input.receipt.start_sequence < 0 || input.receipt.end_sequence !== input.receipt.start_sequence ||
+          !Number.isFinite(input.receipt.validation_wall_ms) || input.receipt.validation_wall_ms < 0) {
+        throw new Error("Validation receipt has invalid sequence or timing values.");
+      }
+      const snapshotId = this.parseNumericId(input.receipt.target_snapshot_id);
+      if (snapshotId === null || snapshotId <= 0) throw new Error("Validation receipt target snapshot id is invalid.");
+      const manifestRow = this.db.prepare("SELECT * FROM graph_build_manifests WHERE manifest_id = ?").get(input.receipt.manifest_id) as ManifestRow | undefined;
+      if (manifestRow === undefined) throw new Error("Validation receipt manifest is unavailable.");
+      const sealedManifest = this.requireSealedManifest(input.receipt.manifest_id, {
+        repo_root: manifestRow.repo_root, config_identity: manifestRow.config_identity, owner_id: manifestRow.owner_id,
+        controller_generation: manifestRow.controller_generation, invalidation_generation: manifestRow.invalidation_generation,
+        generation_source_hash: manifestRow.generation_source_hash, watcher_epoch: manifestRow.watcher_epoch,
+        watcher_sequence: manifestRow.watcher_sequence, policy_version: manifestRow.policy_version,
+        ordering_version: manifestRow.ordering_version, composition_fingerprint: manifestRow.composition_fingerprint
+      });
+      const manifest = this.mapManifest(sealedManifest);
+      if (manifest.digest !== input.receipt.manifest_digest) throw new Error("Validation receipt manifest digest does not match sealed manifest.");
+      if (manifest.repo_root !== input.receipt.repo_root || manifest.owner_id !== input.receipt.execution_id ||
+          manifest.controller_generation !== input.receipt.controller_generation || manifest.invalidation_generation !== input.receipt.invalidation_generation ||
+          manifest.watcher_epoch !== input.receipt.watcher_epoch || manifest.watcher_sequence !== input.receipt.start_sequence ||
+          manifest.watcher_sequence !== input.receipt.end_sequence || input.receipt.checked_files !== manifest.files.length ||
+          input.receipt.checked_directories !== manifest.directories.length || input.receipt.checked_inputs !== manifest.inputs.length) {
+        throw new Error("Validation receipt does not match sealed manifest evidence.");
+      }
+      const progress = this.getGraphBuildProgressRow(snapshotId);
+      if (progress === undefined || progress.manifest_id !== input.receipt.manifest_id || progress.owner_id !== input.receipt.execution_id ||
+          progress.controller_generation !== input.receipt.controller_generation || progress.invalidation_generation !== input.receipt.invalidation_generation) {
+        throw new Error("Validation receipt target does not own the sealed manifest.");
+      }
+      if (
+        (input.receipt.kind === "seed" && (progress.status !== "active" || (progress.phase !== "extracting" && progress.phase !== "resolving"))) ||
+        (input.receipt.kind === "complete" && (progress.phase !== "complete" || progress.status !== "completed"))
+      ) {
+        throw new Error("Validation receipt target kind does not match graph build phase.");
+      }
+      this.db.prepare(`
+        INSERT INTO graph_build_validation_receipts (
+          receipt_id, manifest_id, snapshot_id, repo_root, execution_id, controller_generation, invalidation_generation,
+          target_kind, manifest_digest, watcher_epoch, start_sequence, end_sequence, checked_files,
+          checked_directories, checked_inputs, validation_wall_ms, observed_at, policy_version
+        ) VALUES (
+          @receiptId, @manifestId, @snapshotId, @repoRoot, @executionId, @controllerGeneration, @invalidationGeneration,
+          @kind, @manifestDigest, @watcherEpoch, @startSequence, @endSequence, @checkedFiles,
+          @checkedDirectories, @checkedInputs, @validationWallMs, @observedAt, @policyVersion
+        )
+      `).run({ ...camelReceipt(input.receipt), snapshotId });
+      input.assert_observation();
+      return this.transitionBuildSync(input.transition);
+    });
+    return tx.immediate();
+  }
+
   public async reconcileOrphanedBuilds(input: {
     repo_root: string;
     current_owner: RepositoryOwnershipLease & { state: "active" };
@@ -2024,6 +2511,30 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       }>;
       const snapshotIds = rows.map((row) => String(row.id));
       if (rows.length === 0) {
+        const recovered = input.recovered_owners;
+        if (
+          recovered !== undefined && recovered.length > 0 && input.current_owner.repo_root === input.repo_root &&
+          recovered.every((owner) => owner.repo_root === input.current_owner.repo_root && owner.schema_version === input.current_owner.schema_version)
+        ) {
+          const ownerGenerations = recovered.map((owner) => owner.owner_generation);
+          this.db.prepare(`
+            UPDATE graph_build_manifests
+            SET state = 'invalid', invalid_reason = 'owner_recovered_before_manifest_seal'
+            WHERE repo_root = ? AND state = 'preparing' AND controller_generation IN (${sqlPlaceholders(ownerGenerations.length)})
+          `).run(input.repo_root, ...ownerGenerations);
+          this.db.prepare(`
+            UPDATE graph_build_manifests
+            SET state = 'invalid', invalid_reason = 'owner_recovered_before_build_completion'
+            WHERE repo_root = ? AND state = 'sealed' AND controller_generation IN (${sqlPlaceholders(ownerGenerations.length)})
+              AND EXISTS (
+                SELECT 1 FROM graph_build_progress AS progress
+                WHERE progress.manifest_id = graph_build_manifests.manifest_id
+                  AND progress.owner_id = graph_build_manifests.owner_id
+                  AND progress.controller_generation = graph_build_manifests.controller_generation
+                  AND progress.status = 'active' AND progress.phase <> 'complete'
+              )
+          `).run(input.repo_root, ...ownerGenerations);
+        }
         return { outcome: "reconciled" as const, snapshot_ids: snapshotIds };
       }
       if (
@@ -2044,8 +2555,24 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           snapshot_ids: snapshotIds
         };
       }
+      // Manifest owner ids identify worker executions, not the daemon lease.
+      // The persisted controller generation binds them to the recovered owner,
+      // exactly as it binds the orphaned snapshot rows above.
       const ownerGenerations = input.recovered_owners.map((owner) => owner.owner_generation);
       const placeholders = sqlPlaceholders(ownerGenerations.length);
+      this.db.prepare(`
+        UPDATE graph_build_manifests
+        SET state = 'invalid', invalid_reason = 'owner_recovered_before_build_completion'
+        WHERE repo_root = ? AND state = 'sealed' AND controller_generation IN (${sqlPlaceholders(ownerGenerations.length)})
+          AND manifest_id IN (
+            SELECT progress.manifest_id
+            FROM graph_build_progress AS progress
+            INNER JOIN snapshots AS snapshot ON snapshot.id = progress.snapshot_id
+            WHERE snapshot.repo_identity = ? AND snapshot.publication_state = 'building'
+              AND progress.owner_id = graph_build_manifests.owner_id
+              AND progress.controller_generation = graph_build_manifests.controller_generation
+          )
+      `).run(input.repo_root, ...ownerGenerations, input.repo_root);
       this.db.prepare(`
         UPDATE snapshots
         SET publication_state = 'failed', publication_updated_at = ?
@@ -2053,6 +2580,11 @@ export class SqliteGraphStoreAdapter implements GraphStore {
           AND publication_state = 'building'
           AND controller_generation IN (${placeholders})
       `).run(input.updated_at, input.repo_root, ...ownerGenerations);
+      this.db.prepare(`
+        UPDATE graph_build_manifests
+        SET state = 'invalid', invalid_reason = 'owner_recovered_before_manifest_seal'
+        WHERE repo_root = ? AND state = 'preparing' AND controller_generation IN (${sqlPlaceholders(ownerGenerations.length)})
+      `).run(input.repo_root, ...ownerGenerations);
       return { outcome: "reconciled" as const, snapshot_ids: snapshotIds };
     });
     return reconcile.immediate();
@@ -2205,7 +2737,10 @@ export class SqliteGraphStoreAdapter implements GraphStore {
 
   public async upsertEntry(input: { snapshot_id: string; entry: FileCatalogEntry }): Promise<void> {
     const snapshotId = this.requireBuildingSnapshotId(input.snapshot_id);
+    this.upsertEntrySync(snapshotId, input.entry);
+  }
 
+  private upsertEntrySync(snapshotId: number, entry: FileCatalogEntry): void {
     this.db
       .prepare(`
         INSERT INTO files (snapshot_id, path, language, content_hash, size_bytes, mtime_ms, indexed_at, indexing_error)
@@ -2220,13 +2755,13 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       `)
       .run({
         snapshotId,
-        path: input.entry.path,
-        language: input.entry.file_identity.language,
-        contentHash: input.entry.file_identity.content_hash,
-        sizeBytes: input.entry.file_identity.size_bytes,
-        mtimeMs: input.entry.file_identity.mtime_ms,
-        indexedAt: input.entry.indexed ? (input.entry.file_identity.indexed_at ?? null) : null,
-        indexingError: input.entry.skipped_reason ?? null
+        path: entry.path,
+        language: entry.file_identity.language,
+        contentHash: entry.file_identity.content_hash,
+        sizeBytes: entry.file_identity.size_bytes,
+        mtimeMs: entry.file_identity.mtime_ms,
+        indexedAt: entry.indexed ? (entry.file_identity.indexed_at ?? null) : null,
+        indexingError: entry.skipped_reason ?? null
       });
   }
 
@@ -2343,6 +2878,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     if (deleteIds.length > 0) {
       const tx = this.db.transaction(() => {
         this.deleteSnapshotData(deleteIds);
+        this.deleteUnreferencedGraphBuildManifests(input.repo_root);
       });
       tx();
     }
@@ -3542,6 +4078,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       .run(...snapshotIds);
     this.db.prepare(`UPDATE graph_build_progress SET completion_target_id = NULL WHERE completion_target_id IN (${placeholders})`)
       .run(...snapshotIds);
+    this.db.prepare(`DELETE FROM graph_build_validation_receipts WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
     this.db.prepare(`DELETE FROM graph_build_progress WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
     this.db.prepare(`
       DELETE FROM ranked_docs_universe_hits
@@ -3577,6 +4114,22 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       .run(...snapshotIds);
     this.db.prepare(`DELETE FROM files WHERE snapshot_id IN (${placeholders})`).run(...snapshotIds);
     this.db.prepare(`DELETE FROM snapshots WHERE id IN (${placeholders})`).run(...snapshotIds);
+  }
+
+  private deleteUnreferencedGraphBuildManifests(repoRoot: string): void {
+    this.db.prepare(`
+      DELETE FROM graph_build_manifests
+      WHERE repo_root = @repoRoot
+        AND state IN ('sealed', 'invalid')
+        AND NOT EXISTS (
+          SELECT 1 FROM graph_build_progress
+          WHERE graph_build_progress.manifest_id = graph_build_manifests.manifest_id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM graph_build_validation_receipts
+          WHERE graph_build_validation_receipts.manifest_id = graph_build_manifests.manifest_id
+        )
+    `).run({ repoRoot });
   }
 
   private rebuildNodeFts(): void {
@@ -3722,6 +4275,29 @@ export class SqliteGraphStoreAdapter implements GraphStore {
     }
   }
 
+  private cloneSnapshotRepositoryCompositionForBuildSeed(input: { sourceSnapshotId: number; targetSnapshotId: number }): void {
+    const source = this.getSnapshotRowById(input.sourceSnapshotId);
+    if (source === undefined) throw new Error("Published source snapshot composition is unavailable.");
+    const composition = this.readRepositoryComposition(input.sourceSnapshotId, source);
+    this.db.prepare(`
+      UPDATE snapshots
+      SET composition_fingerprint = @compositionFingerprint,
+          composition_source_complete = @compositionSourceComplete,
+          composition_truncated = @compositionTruncated,
+          composition_aggregate_claims_json = @compositionAggregateClaimsJson,
+          composition_limits_json = @compositionLimitsJson
+      WHERE id = @targetSnapshotId
+    `).run({
+      targetSnapshotId: input.targetSnapshotId,
+      compositionFingerprint: source.composition_fingerprint,
+      compositionSourceComplete: source.composition_source_complete,
+      compositionTruncated: source.composition_truncated,
+      compositionAggregateClaimsJson: source.composition_aggregate_claims_json,
+      compositionLimitsJson: source.composition_limits_json
+    });
+    this.replaceSnapshotRepositoryComposition(input.targetSnapshotId, composition ?? undefined);
+  }
+
   private mapPublicationRecord(row: SnapshotRow): SnapshotPublicationRecord {
     return {
       repo_root: row.repo_identity,
@@ -3838,8 +4414,215 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       },
       controller_generation: row.controller_generation,
       invalidation_generation: row.invalidation_generation,
+      manifest_id: row.manifest_id ?? undefined,
+      ordinal_cursor: row.ordinal_cursor ?? undefined,
+      counters_version: row.counters_version === 2 ? 2 : undefined,
       updated_at: row.updated_at
     };
+  }
+
+  private manifestFenceParameters(manifestId: string, fence: GraphBuildManifestFence, extra: Record<string, unknown> = {}): Record<string, unknown> {
+    return {
+      manifestId,
+      repoRoot: fence.repo_root,
+      configIdentity: fence.config_identity,
+      ownerId: fence.owner_id,
+      controllerGeneration: fence.controller_generation,
+      invalidationGeneration: fence.invalidation_generation,
+      generationSourceHash: fence.generation_source_hash,
+      watcherEpoch: fence.watcher_epoch,
+      watcherSequence: fence.watcher_sequence,
+      policyVersion: fence.policy_version,
+      orderingVersion: fence.ordering_version,
+      compositionFingerprint: fence.composition_fingerprint,
+      ...extra
+    };
+  }
+
+  private assertManifestFence(row: ManifestRow, fence: GraphBuildManifestFence): void {
+    const matches = row.repo_root === fence.repo_root && row.config_identity === fence.config_identity &&
+      row.owner_id === fence.owner_id && row.controller_generation === fence.controller_generation &&
+      row.invalidation_generation === fence.invalidation_generation && row.generation_source_hash === fence.generation_source_hash &&
+      row.watcher_epoch === fence.watcher_epoch && row.watcher_sequence === fence.watcher_sequence && row.policy_version === fence.policy_version &&
+      row.ordering_version === fence.ordering_version && row.composition_fingerprint === fence.composition_fingerprint;
+    if (!matches) throw new Error(`Graph build manifest fence does not match: ${row.manifest_id}`);
+  }
+
+  private requirePreparingManifest(manifestId: string, fence: GraphBuildManifestFence): ManifestRow {
+    const row = this.db.prepare("SELECT * FROM graph_build_manifests WHERE manifest_id = ?").get(manifestId) as ManifestRow | undefined;
+    if (row === undefined || row.state !== "preparing") throw new Error(`Graph build manifest is not preparing: ${manifestId}`);
+    this.assertManifestFence(row, fence);
+    return row;
+  }
+
+  private requireSealedManifest(manifestId: string, fence: GraphBuildManifestFence): ManifestRow {
+    const row = this.db.prepare("SELECT * FROM graph_build_manifests WHERE manifest_id = ?").get(manifestId) as ManifestRow | undefined;
+    if (row === undefined || row.state !== "sealed") throw new Error(`Graph build manifest is not sealed: ${manifestId}`);
+    this.assertManifestFence(row, fence);
+    return row;
+  }
+
+  private getManifestFiles(manifestId: string): Array<{ path: string; repository_key: string; entry_json: string; identity_json: string }> {
+    return this.db.prepare(`
+      SELECT path, repository_key, entry_json, identity_json
+      FROM graph_build_manifest_files WHERE manifest_id = ?
+    `).all(manifestId) as Array<{ path: string; repository_key: string; entry_json: string; identity_json: string }>;
+  }
+
+  private mapManifest(row: ManifestRow): GraphBuildManifest {
+    const files = this.db.prepare(`
+      SELECT ordinal, repository_key, entry_json, identity_json, docs_eligible, outcome
+      FROM graph_build_manifest_files WHERE manifest_id = ? ORDER BY ordinal ASC, path ASC
+    `).all(row.manifest_id) as Array<{
+      ordinal: number | null; repository_key: string; entry_json: string; identity_json: string;
+      docs_eligible: number; outcome: GraphBuildManifestFile["outcome"];
+    }>;
+    const directories = this.db.prepare(`
+      SELECT repository_key, identity_json, watcher_epoch, watcher_sequence, registered
+      FROM graph_build_manifest_directories WHERE manifest_id = ? ORDER BY path ASC
+    `).all(row.manifest_id) as Array<{
+      repository_key: string; identity_json: string; watcher_epoch: string; watcher_sequence: number; registered: number;
+    }>;
+    const inputs = this.db.prepare(`SELECT identity_json FROM graph_build_manifest_inputs WHERE manifest_id = ? ORDER BY path ASC`)
+      .all(row.manifest_id) as Array<{ identity_json: string }>;
+    return {
+      manifest_id: row.manifest_id,
+      repo_root: row.repo_root,
+      config_identity: row.config_identity,
+      owner_id: row.owner_id,
+      controller_generation: row.controller_generation,
+      invalidation_generation: row.invalidation_generation,
+      generation_source_hash: row.generation_source_hash,
+      watcher_epoch: row.watcher_epoch,
+      watcher_sequence: row.watcher_sequence,
+      policy_version: row.policy_version,
+      ordering_version: row.ordering_version,
+      composition_fingerprint: row.composition_fingerprint,
+      state: row.state,
+      digest: row.digest,
+      started_at: row.started_at,
+      sealed_at: row.sealed_at ?? undefined,
+      invalid_reason: row.invalid_reason ?? undefined,
+      files: files.map((file) => ({
+        ordinal: file.ordinal ?? -1,
+        repository_key: file.repository_key,
+        entry: JSON.parse(file.entry_json) as FileCatalogEntry,
+        identity: JSON.parse(file.identity_json),
+        docs_eligible: file.docs_eligible === 1,
+        outcome: file.outcome
+      })),
+      directories: directories.map((directory) => ({
+        repository_key: directory.repository_key,
+        identity: JSON.parse(directory.identity_json),
+        watcher_epoch: directory.watcher_epoch,
+        watcher_sequence: directory.watcher_sequence,
+        registered: directory.registered === 1
+      })),
+      inputs: inputs.map((input) => JSON.parse(input.identity_json)),
+      graph_catalog: JSON.parse(row.graph_catalog_json ?? "{}"),
+      docs_catalog: JSON.parse(row.docs_catalog_json ?? "{}"),
+      shape: JSON.parse(row.shape_json ?? "{}"),
+      preparation_wall_ms: row.preparation_wall_ms ?? 0
+    } as GraphBuildManifest;
+  }
+
+  private manifestOutcomeCounters(manifestId: string, snapshotId: number): {
+    eligibleFiles: number; scannedFiles: number; admittedFiles: number; extractedFiles: number;
+    unsupportedFiles: number; resourceBackedFiles: number; nodes: number; edges: number; unresolvedReferences: number;
+  } {
+    const row = this.db.prepare(`
+      SELECT COUNT(*) AS eligibleFiles,
+             COALESCE(SUM(CASE WHEN outcome <> 'pending' THEN 1 ELSE 0 END), 0) AS admittedFiles,
+             COALESCE(SUM(CASE WHEN outcome IN ('extracted', 'resource') THEN 1 ELSE 0 END), 0) AS extractedFiles,
+             COALESCE(SUM(CASE WHEN outcome = 'unsupported' THEN 1 ELSE 0 END), 0) AS unsupportedFiles,
+             COALESCE(SUM(CASE WHEN outcome = 'resource' THEN 1 ELSE 0 END), 0) AS resourceBackedFiles
+      FROM graph_build_manifest_files WHERE manifest_id = ?
+    `).get(manifestId) as {
+      eligibleFiles: number; admittedFiles: number; extractedFiles: number; unsupportedFiles: number; resourceBackedFiles: number;
+    };
+    return {
+      eligibleFiles: row.eligibleFiles,
+      scannedFiles: row.eligibleFiles,
+      admittedFiles: row.admittedFiles,
+      extractedFiles: row.extractedFiles,
+      unsupportedFiles: row.unsupportedFiles,
+      resourceBackedFiles: row.resourceBackedFiles,
+      nodes: this.countNodes(snapshotId),
+      edges: this.countEdges(snapshotId),
+      unresolvedReferences: this.countUnresolvedReferences(snapshotId)
+    };
+  }
+
+  private assertManifestProgressUpdate(input: {
+    snapshot: SnapshotRow;
+    existing: GraphBuildProgressRow | undefined;
+    progress: GraphBuildProgress;
+  }): void {
+    const manifestId = input.progress.manifest_id ?? input.existing?.manifest_id ?? undefined;
+    if (manifestId === undefined) return;
+    if (input.progress.manifest_id !== manifestId || input.progress.counters_version !== 2) {
+      throw new Error("Manifest-bound graph build progress must retain its v2 manifest binding.");
+    }
+    const manifest = this.db.prepare("SELECT * FROM graph_build_manifests WHERE manifest_id = ?").get(manifestId) as ManifestRow | undefined;
+    if (
+      manifest === undefined || manifest.state !== "sealed" || manifest.repo_root !== input.snapshot.repo_identity ||
+      manifest.config_identity !== input.snapshot.config_identity || manifest.owner_id !== input.progress.owner_id ||
+      manifest.controller_generation !== input.progress.controller_generation ||
+      manifest.invalidation_generation !== input.progress.invalidation_generation ||
+      manifest.generation_source_hash !== input.progress.generation_source_hash
+    ) throw new Error("Manifest-bound graph build progress does not match its sealed manifest fence.");
+    const counters = this.manifestOutcomeCounters(manifestId, input.snapshot.id);
+    const supplied = input.progress.counters;
+    if (
+      supplied.eligible_files !== counters.eligibleFiles || supplied.scanned_files !== counters.scannedFiles ||
+      supplied.admitted_files !== counters.admittedFiles || supplied.extracted_files !== counters.extractedFiles ||
+      supplied.unsupported_files !== counters.unsupportedFiles || supplied.resource_backed_files !== counters.resourceBackedFiles ||
+      supplied.nodes !== counters.nodes || supplied.edges !== counters.edges || supplied.unresolved_references !== counters.unresolvedReferences
+    ) throw new Error("Manifest-bound graph build progress counters do not match durable evidence.");
+    const next = this.db.prepare(`
+      SELECT MIN(ordinal) AS ordinal FROM graph_build_manifest_files
+      WHERE manifest_id = ? AND outcome = 'pending'
+    `).get(manifestId) as { ordinal: number | null };
+    if (next.ordinal !== null) {
+      if (input.progress.phase !== "extracting" || input.progress.ordinal_cursor !== next.ordinal || input.progress.status !== "active") {
+        throw new Error("Manifest-bound graph build progress ordinal cursor is not the next pending inventory ordinal.");
+      }
+      return;
+    }
+    const emptyInitialInventory = counters.eligibleFiles === 0 && input.progress.phase === "extracting" &&
+      input.progress.status === "active" && input.progress.ordinal_cursor === 0;
+    if (!emptyInitialInventory && input.progress.ordinal_cursor !== undefined) {
+      throw new Error("Manifest-bound graph build progress has no pending inventory ordinal.");
+    }
+  }
+
+  private getSnapshotConfigIdentity(snapshotId: string): string {
+    const id = this.parseNumericId(snapshotId);
+    const row = id === null ? undefined : this.getSnapshotRowById(id);
+    if (row === undefined) throw new Error(`Validation receipt snapshot is unavailable: ${snapshotId}`);
+    return row.config_identity;
+  }
+
+  private getSnapshotProgressGenerationHash(snapshotId: string): string {
+    const id = this.parseNumericId(snapshotId);
+    const progress = id === null ? undefined : this.getGraphBuildProgressRow(id);
+    if (progress === undefined) throw new Error(`Validation receipt graph build progress is unavailable: ${snapshotId}`);
+    return progress.generation_source_hash;
+  }
+
+  private getSnapshotCompositionFingerprint(snapshotId: string): string {
+    const id = this.parseNumericId(snapshotId);
+    const row = id === null ? undefined : this.getSnapshotRowById(id);
+    if (row?.composition_fingerprint === null || row?.composition_fingerprint === undefined) {
+      throw new Error(`Validation receipt snapshot composition is unavailable: ${snapshotId}`);
+    }
+    return row.composition_fingerprint;
+  }
+
+  private getManifestOrderingVersion(manifestId: string): string {
+    const row = this.db.prepare("SELECT ordering_version FROM graph_build_manifests WHERE manifest_id = ?").get(manifestId) as { ordering_version: string } | undefined;
+    if (row === undefined) throw new Error(`Validation receipt manifest is unavailable: ${manifestId}`);
+    return row.ordering_version;
   }
 
   private requireBuildingSnapshotForGeneration(input: {
@@ -3883,7 +4666,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       SELECT snapshot_id, source_snapshot_id, owner_id, completion_target_id, phase, status, scan_cursor, eligible_files,
              max_files, generation_source_hash, scanned_files, admitted_files, extracted_files, unsupported_files,
              resource_backed_files, nodes, edges, unresolved_references,
-             controller_generation, invalidation_generation, updated_at
+             controller_generation, invalidation_generation, manifest_id, ordinal_cursor, counters_version, updated_at
       FROM graph_build_progress
       WHERE snapshot_id = ?
     `).get(snapshotId) as GraphBuildProgressRow | undefined;
@@ -4079,7 +4862,7 @@ export class SqliteGraphStoreAdapter implements GraphStore {
         row.start_column,
         row.end_line,
         row.end_column,
-        row.candidate_metadata_json
+        remapDeferredGraphEdgeMetadata(row.candidate_metadata_json, input.nodeIdMap)
       );
     }
   }
@@ -4253,6 +5036,14 @@ export class SqliteGraphStoreAdapter implements GraphStore {
       SELECT COUNT(*) AS count
       FROM files
       WHERE snapshot_id = ? AND indexed_at IS NOT NULL
+    `).get(snapshotId) as { count: number }).count;
+  }
+
+  private countNodes(snapshotId: number): number {
+    return (this.db.prepare(`
+      SELECT COUNT(*) AS count
+      FROM nodes
+      WHERE file_id IN (SELECT id FROM files WHERE snapshot_id = ?)
     `).get(snapshotId) as { count: number }).count;
   }
 
@@ -4640,35 +5431,17 @@ function slugifyDocsHeading(value: string): string {
 }
 
 export function openGraphStore(databasePath: string, options: GraphStoreOptions = {}): GraphStore {
-  seedVersionedGraphStore(databasePath, (candidatePath) => {
-    const candidate = new SqliteGraphStoreAdapter(candidatePath, options);
-    try {
-      if (!candidate.validateSchema()) {
-        throw new Error("Graph v3 seed candidate failed schema validation.");
-      }
-      const marker = candidate.db.prepare(
-        "SELECT MAX(version) AS version FROM schema_migrations"
-      ).get() as { version: number | null };
-      if (marker.version !== SCHEMA_VERSION) {
-        throw new Error("Graph v3 seed candidate has an incompatible schema identity.");
-      }
-      const integrity = candidate.db.pragma("quick_check") as Array<{ quick_check: string }>;
-      if (integrity.length !== 1 || integrity[0]?.quick_check !== "ok") {
-        throw new Error("Graph v3 seed candidate failed SQLite integrity validation.");
-      }
-      const checkpoint = candidate.db.pragma("wal_checkpoint(TRUNCATE)") as Array<{
-        busy: number;
-        log: number;
-        checkpointed: number;
-      }>;
-      if (checkpoint.some((entry) => entry.busy !== 0 || entry.log !== entry.checkpointed)) {
-        throw new Error("Graph v3 seed candidate checkpoint did not converge.");
-      }
-    } finally {
-      candidate.close();
-    }
-  });
+  if (options.existingCompatible === true) return openExistingCompatibleGraphStore(databasePath, options);
+  seedVersionedGraphStore(databasePath);
   return new SqliteGraphStoreAdapter(databasePath, options);
+}
+
+/**
+ * Observer loader: validates an existing exact v4 schema read-only before
+ * opening the normal adapter without seed, migration, or journal changes.
+ */
+export function openExistingCompatibleGraphStore(databasePath: string, options: Omit<GraphStoreOptions, "existingCompatible"> = {}): GraphStore {
+  return new SqliteGraphStoreAdapter(databasePath, { ...options, existingCompatible: true });
 }
 
 function migrate(db: Database.Database): void {
@@ -4954,7 +5727,87 @@ function migrate(db: Database.Database): void {
       unresolved_references INTEGER NOT NULL CHECK (unresolved_references >= 0),
       controller_generation INTEGER NOT NULL CHECK (controller_generation >= 0),
       invalidation_generation INTEGER NOT NULL CHECK (invalidation_generation >= 0),
+      manifest_id TEXT,
+      ordinal_cursor INTEGER,
+      counters_version INTEGER,
       updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS graph_build_manifests (
+      manifest_id TEXT PRIMARY KEY,
+      repo_root TEXT NOT NULL,
+      config_identity TEXT NOT NULL,
+      owner_id TEXT NOT NULL,
+      controller_generation INTEGER NOT NULL,
+      invalidation_generation INTEGER NOT NULL,
+      generation_source_hash TEXT NOT NULL,
+      watcher_epoch TEXT NOT NULL,
+      watcher_sequence INTEGER NOT NULL,
+      policy_version TEXT NOT NULL,
+      ordering_version TEXT NOT NULL,
+      composition_fingerprint TEXT NOT NULL,
+      state TEXT NOT NULL CHECK (state IN ('preparing', 'sealed', 'invalid')),
+      digest TEXT NOT NULL DEFAULT '',
+      started_at TEXT NOT NULL,
+      sealed_at TEXT,
+      invalid_reason TEXT,
+      graph_catalog_json TEXT,
+      docs_catalog_json TEXT,
+      shape_json TEXT,
+      preparation_wall_ms INTEGER,
+      UNIQUE(repo_root, config_identity, controller_generation, invalidation_generation)
+    );
+
+    CREATE TABLE IF NOT EXISTS graph_build_manifest_files (
+      manifest_id TEXT NOT NULL REFERENCES graph_build_manifests(manifest_id) ON DELETE CASCADE,
+      ordinal INTEGER,
+      path TEXT NOT NULL,
+      repository_key TEXT NOT NULL,
+      entry_json TEXT NOT NULL,
+      identity_json TEXT NOT NULL,
+      docs_eligible INTEGER NOT NULL DEFAULT 0,
+      outcome TEXT NOT NULL DEFAULT 'pending' CHECK (outcome IN ('pending', 'extracted', 'resource', 'unsupported')),
+      PRIMARY KEY(manifest_id, path),
+      UNIQUE(manifest_id, ordinal)
+    );
+
+    CREATE TABLE IF NOT EXISTS graph_build_manifest_directories (
+      manifest_id TEXT NOT NULL REFERENCES graph_build_manifests(manifest_id) ON DELETE CASCADE,
+      path TEXT NOT NULL,
+      repository_key TEXT NOT NULL,
+      identity_json TEXT NOT NULL,
+      watcher_epoch TEXT NOT NULL,
+      watcher_sequence INTEGER NOT NULL,
+      registered INTEGER NOT NULL,
+      PRIMARY KEY(manifest_id, path)
+    );
+
+    CREATE TABLE IF NOT EXISTS graph_build_manifest_inputs (
+      manifest_id TEXT NOT NULL REFERENCES graph_build_manifests(manifest_id) ON DELETE CASCADE,
+      path TEXT NOT NULL,
+      identity_json TEXT NOT NULL,
+      PRIMARY KEY(manifest_id, path)
+    );
+
+    CREATE TABLE IF NOT EXISTS graph_build_validation_receipts (
+      receipt_id TEXT PRIMARY KEY,
+      manifest_id TEXT NOT NULL REFERENCES graph_build_manifests(manifest_id) ON DELETE RESTRICT,
+      snapshot_id INTEGER NOT NULL REFERENCES snapshots(id) ON DELETE RESTRICT,
+      repo_root TEXT NOT NULL,
+      execution_id TEXT NOT NULL,
+      controller_generation INTEGER NOT NULL,
+      invalidation_generation INTEGER NOT NULL,
+      target_kind TEXT NOT NULL CHECK (target_kind IN ('seed', 'complete')),
+      manifest_digest TEXT NOT NULL,
+      watcher_epoch TEXT NOT NULL,
+      start_sequence INTEGER NOT NULL,
+      end_sequence INTEGER NOT NULL,
+      checked_files INTEGER NOT NULL,
+      checked_directories INTEGER NOT NULL,
+      checked_inputs INTEGER NOT NULL,
+      validation_wall_ms INTEGER NOT NULL,
+      observed_at TEXT NOT NULL,
+      policy_version TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS docs_headings (
@@ -5013,6 +5866,7 @@ function migrate(db: Database.Database): void {
     const snapshotColumns = tableColumns(db, "snapshots");
     const coverageColumns = tableColumns(db, "snapshot_index_coverage");
     const graphBuildColumns = tableColumns(db, "graph_build_progress");
+    const manifestColumns = tableColumns(db, "graph_build_manifests");
     const rankedUniverseColumns = tableColumns(db, "ranked_docs_universes");
     const concernOwnerColumns = tableColumns(db, "documentation_concern_owners");
     const rankedUniverseSql = tableSql(db, "ranked_docs_universes");
@@ -5091,6 +5945,18 @@ function migrate(db: Database.Database): void {
         ADD COLUMN status TEXT NOT NULL DEFAULT 'active'
         CHECK (status IN ('active', 'completed', 'cancelled', 'stale'))`);
     }
+    if (!graphBuildColumns.has("manifest_id")) {
+      db.exec("ALTER TABLE graph_build_progress ADD COLUMN manifest_id TEXT");
+    }
+    if (!graphBuildColumns.has("ordinal_cursor")) {
+      db.exec("ALTER TABLE graph_build_progress ADD COLUMN ordinal_cursor INTEGER");
+    }
+    if (!graphBuildColumns.has("counters_version")) {
+      db.exec("ALTER TABLE graph_build_progress ADD COLUMN counters_version INTEGER");
+    }
+    if (!manifestColumns.has("watcher_sequence")) {
+      db.exec("ALTER TABLE graph_build_manifests ADD COLUMN watcher_sequence INTEGER NOT NULL DEFAULT 0");
+    }
     const addedGraphBuildMaxFiles = !graphBuildColumns.has("max_files");
     if (addedGraphBuildMaxFiles) {
       db.exec(`ALTER TABLE graph_build_progress
@@ -5153,6 +6019,56 @@ function migrate(db: Database.Database): void {
   migration.immediate();
 }
 
+function camelReceipt(receipt: import("../../ports/graph-build-manifest.js").GraphBuildValidationReceipt): Record<string, unknown> {
+  return {
+    receiptId: receipt.receipt_id,
+    manifestId: receipt.manifest_id,
+    repoRoot: receipt.repo_root,
+    executionId: receipt.execution_id,
+    controllerGeneration: receipt.controller_generation,
+    invalidationGeneration: receipt.invalidation_generation,
+    kind: receipt.kind,
+    manifestDigest: receipt.manifest_digest,
+    watcherEpoch: receipt.watcher_epoch,
+    startSequence: receipt.start_sequence,
+    endSequence: receipt.end_sequence,
+    checkedFiles: receipt.checked_files,
+    checkedDirectories: receipt.checked_directories,
+    checkedInputs: receipt.checked_inputs,
+    validationWallMs: receipt.validation_wall_ms,
+    observedAt: receipt.observed_at,
+    policyVersion: receipt.policy_version
+  };
+}
+
+function graphBuildInputIdentityKey(identity: import("../../ports/graph-build-manifest.js").GraphBuildPathIdentity): string {
+  return `${identity.scope ?? "workspace"}\0${identity.root ?? ""}\0${identity.path}`;
+}
+
+function remapDeferredGraphEdgeMetadata(metadataJson: string, nodeIdMap: ReadonlyMap<string, string>): string {
+  let metadata: unknown;
+  try {
+    metadata = JSON.parse(metadataJson);
+  } catch {
+    return metadataJson;
+  }
+  if (metadata === null || typeof metadata !== "object" || Array.isArray(metadata)) return metadataJson;
+  const deferred = (metadata as Record<string, unknown>).deferred_graph_edge;
+  if (deferred === null || typeof deferred !== "object" || Array.isArray(deferred)) return metadataJson;
+  const edge = deferred as Record<string, unknown>;
+  if (typeof edge.source_node_id !== "string") return metadataJson;
+  const sourceNodeId = nodeIdMap.get(edge.source_node_id);
+  const targetNodeId = edge.target_node_id === undefined ? undefined :
+    typeof edge.target_node_id === "string" ? nodeIdMap.get(edge.target_node_id) : undefined;
+  if (sourceNodeId === undefined || (edge.target_node_id !== undefined && targetNodeId === undefined)) {
+    throw new Error("Missing seeded graph mapping for deferred resolution edge metadata.");
+  }
+  return JSON.stringify({
+    ...(metadata as Record<string, unknown>),
+    deferred_graph_edge: { ...edge, source_node_id: sourceNodeId, ...(targetNodeId === undefined ? {} : { target_node_id: targetNodeId }) }
+  });
+}
+
 function assertCompatibleSchemaVersion(db: Database.Database): void {
   const migrationsTable = db.prepare(`
     SELECT 1 AS present
@@ -5170,6 +6086,29 @@ function assertCompatibleSchemaVersion(db: Database.Database): void {
       `Graph store schema version ${marker.version} is newer than supported version ${SCHEMA_VERSION}.`
     );
   }
+}
+
+export function validateExistingCompatibleGraphStore(databasePath: string): void {
+  const probe = new Database(databasePath, { readonly: true, fileMustExist: true });
+  try {
+    assertExactCompatibleExistingSchema(probe);
+  } finally {
+    probe.close();
+  }
+}
+
+function assertExactCompatibleExistingSchema(db: Database.Database): void {
+  const migrationsTable = db.prepare(`
+    SELECT 1 AS present FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'
+  `).get() as { present: number } | undefined;
+  if (migrationsTable === undefined) throw new Error("Existing graph store is missing its schema migration marker.");
+  const marker = db.prepare("SELECT MAX(version) AS version FROM schema_migrations").get() as { version: number | null };
+  if (marker.version !== SCHEMA_VERSION) {
+    throw new Error(`Existing graph store schema marker ${marker.version ?? "missing"} is not compatible with v${SCHEMA_VERSION}.`);
+  }
+  if (!validateSchema(db)) throw new Error("Existing graph store does not have the complete v4 schema.");
+  const integrity = db.pragma("quick_check") as Array<{ quick_check: string }>;
+  if (integrity.length !== 1 || integrity[0]?.quick_check !== "ok") throw new Error("Existing graph store integrity validation failed.");
 }
 
 function tableColumns(db: Database.Database, table: string): Set<string> {
@@ -5308,13 +6247,20 @@ function validateSchema(db: Database.Database): boolean {
     "documentation_concern_owners",
     "ranked_docs_universes",
     "ranked_docs_universe_hits",
-    "graph_build_progress"
+    "graph_build_progress",
+    "graph_build_manifests",
+    "graph_build_manifest_files",
+    "graph_build_manifest_directories",
+    "graph_build_manifest_inputs",
+    "graph_build_validation_receipts"
   ];
   const rows = db
     .prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'virtual table')")
     .all() as Array<{ name: string }>;
   const names = new Set(rows.map((row) => row.name));
-  return expected.every((name) => names.has(name));
+  if (!expected.every((name) => names.has(name))) return false;
+  const foreignKeyViolations = db.prepare("PRAGMA foreign_key_check").all();
+  return foreignKeyViolations.length === 0;
 }
 
 function parseMetadataJson(text: string): Record<string, unknown> {

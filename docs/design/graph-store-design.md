@@ -3,7 +3,7 @@ title: Graph store design
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-08-01
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -366,65 +366,70 @@ universe rather than re-running either candidate query.
 
 ### Publication Migration And Rollback
 
-The current schema identity is v3 at
-`.cache/agent-workbench/graph-v3.sqlite`. When v3 is absent and v2 is present,
-startup first checkpoints v2, atomically clones it to a temporary v3 candidate,
-migrates and validates the candidate, and only then claims the canonical v3
-path. Busy, partial, corrupt, or failed candidates block explicitly, clean their
-temporary artifacts, and leave v2 and any current published evidence untouched.
-Existing v2 snapshots keep their v2 identity and receive no synthetic concern
-rows; a coordinated v3 rebuild is required before authority-aware ranking can
-select concern evidence. An existing v3 store is never overwritten from an
-older identity, and there is no older-schema docs-ranking fallback.
+The current schema identity is v4 at
+`.cache/agent-workbench/graph-v4.sqlite`. Startup acquires the version-independent
+repository refresh lease before opening or migrating the store. A v3 cache is
+not a v4 seed: its historical counters cannot establish distinct-file progress.
+Under the lease, migration validates v3, requires a non-busy WAL checkpoint,
+retains and fsyncs the verified `graph-v3.sqlite.pre-v4` rollback artifact, and
+atomically replaces `graph-v3.sqlite` with a non-SQLite blocker. It then validates,
+fsyncs and atomically claims an empty v4 store. The fsynced old-path blocker
+distinguishes a pending v4 claim from a completed claim: pending claims reject
+nonempty targets on every re-entry, while completed claims permit subsequently
+built v4 evidence. Re-entry verifies completed boundaries; conflicting artifacts, incompatible targets and ambiguous ownership
+block rather than select another cache. Existing valid v4 evidence is preserved.
 
-Schema identity v2 uses `.cache/agent-workbench/graph-v2.sqlite`; it never
-migrates the v0.5.2 `graph.sqlite` in place. On first v2 open, a transactionally
-consistent SQLite seed is created from v1 and claimed at the versioned path by
-one atomic hard link before migration. Concurrent opens reuse the one claimed
-seed. Existing snapshots whose freshness is not `refreshing` become
-`published`; legacy `refreshing` rows become `failed` and remain invisible. Publication columns and
-schema version advance in the v2 transaction, and any failure leaves v1
-untouched and cleans temporary `.seed-*` files. A canonical v2 seed that was
-already atomically installed at the v2 path remains a retryable v1 copy until
-its transactional migration succeeds.
+A ready observer under a positively identified active owner may open only an
+existing compatible v4 cache. Its read-only probe requires the exact marker,
+complete schema and integrity checks. The subsequent existing-file connection
+revalidates compatibility and performs no seed, migration, journal-mode change or
+persistent initialization. Connection-local foreign keys preserve query-cache
+integrity. Published graph reads, freshness invalidation and ranked-universe cache
+writes remain available; graph builds and publication still require ownership.
+Ambiguous ownership blocks access. Promotion blocks new store operations, drains active method borrows and closes
+the compatible handle before owned migration and controller creation. Queries
+retain a stable async facade across promotion; failed preparation blocks further
+access rather than returning to the closed handle. Shutdown awaits the same drain.
 
-After v2 readiness and repository ownership are proven, the runtime checkpoints
-v1, publishes the rollback artifact `graph-v1.sqlite.pre-v2`, and
-atomically replaces canonical `graph.sqlite` with a fsynced non-SQLite guard.
-The actual v0.5.2 adapter therefore blocks with `SQLITE_NOTADB` rather than
-reading or mutating v2 or serving a divergent v1 store. Retirement re-entry is
-idempotent after the backup or guard boundary; a conflicting backup blocks.
-
-Supported rollback requires every owner to stop, followed by restoration from
-a known complete pre-migration cache or recoverable quarantine of the whole
-derived cache and rebuild by the older runtime. The artifact is retained for
-recovery provenance, but the operator runbook does not support overwriting the
-live guard in place. In-place downgrade or ad hoc deletion while an owner may
-be live is unsupported. Artifact size, copy duration, and completion progress
-at large-repository scale are tracked under EB014 and are the target for
-production continuation semantics.
+Supported rollback requires every owner to stop. Restore a known complete
+pre-migration cache through the operator recovery procedure, or quarantine the
+whole derived cache and rebuild with the older runtime. Do not overwrite a live
+blocker, downgrade in place, or delete cache files while an owner may be live.
+Earlier v1/v2 migration records describe historical releases, not a current
+alternate migration path.
 
 ### Durable graph-build completion state
 
 Bounded graph builds persist controller-owned progress in
-`graph_build_progress`. The row binds a building snapshot to controller and
-invalidation generations, the last committed scan cursor, the build phase, and
-cumulative eligible/admitted/extracted/resource/graph counters. Progress and
-coverage updates are accepted only for the matching building generation.
+`graph_build_progress`. Version 2 counters describe distinct manifest identities,
+not accumulated scan visits. The row binds the snapshot to an execution owner,
+controller/invalidation generations, sealed manifest, next pending file ordinal,
+and extraction/resolution phase. Each file outcome, catalog/graph write, cursor
+advance and counter update commits in one SQLite transaction.
 
-The first bounded slice may be published as a queryable seed with explicit
-partial graph coverage. The controller then creates one isolated completion
-target. The store transactionally clones the published seed into that empty
-target, remaps file and node identities, preserves docs/FTS/concern/coverage
-evidence, and carries the committed cursor and counters forward. Public graph,
-catalog, and docs queries remain published-only and cannot select the building
-target.
+A generation performs one broad discovery. The scanner registers each directory
+with the daemon watcher before its sole enumeration and records lossless file and
+directory identities. Preparing manifests cannot be consumed. Sealing atomically
+stores deterministic extraction order, documentation view, project shape, policy
+and composition inputs, digest and initial progress. Sequential worker isolates
+reuse that sealed inventory within the same watcher session. A recovered preparing
+manifest is invalidated for its dead owner; a new daemon session cannot resume an
+old watcher epoch.
 
-Continuation slices append to the same target. At scan exhaustion, build-only
-paged reads expose accumulated nodes and unresolved references to final
-cross-slice reconciliation. Resolution replacement and final coverage writes
-are generation-fenced; the controller publishes the target atomically only
-after that completion boundary.
+The first bounded slice may publish a seed with explicit partial graph coverage.
+One isolated completion target transactionally clones the seed evidence and its
+manifest reference. Public queries continue selecting published evidence while
+extraction and paged cross-slice resolution finish on the building target.
+
+Both seed and final publication require distinct, single-use validation receipts.
+Outside controller mutation authority, validation checks every recorded file,
+directory and policy/Git input identity without directory enumeration, then forces
+watcher queue admission. Any changed identity, missing coverage, unhealthy watcher,
+epoch/sequence drift or pending event prevents fresh publication. Inside mutation
+authority, the controller rechecks generation/shutdown and synchronously checks
+observation adjacent to the receipt and publication transaction. This is a bounded
+filesystem observation, not an atomic filesystem snapshot or a complete event
+journal. The prior publication remains selected after failure or supersession.
 
 ## Documentation Concern, Ranking, And Currency Evidence
 

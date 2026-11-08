@@ -22,7 +22,7 @@ export type RefreshSemanticEvidence = {
   counts: Partial<Record<RefreshSemanticSection, number>>;
 };
 export type RefreshExpectedCorrection = {
-  reason: "qt-format" | "unique-counters" | "store-identity";
+  reason: "qt-format" | "unique-counters" | "store-identity" | "progress-contract";
   section: RefreshSemanticSection;
   key: string;
   before: RefreshSemanticRecord | null;
@@ -35,6 +35,8 @@ export type RefreshExpectedCorrections = {
   positive_qt_paths: string[];
   /** Exact, independently declared T004 storage transition; never an ignore-schema flag. */
   store_identity?: { before: 3; after: 4 };
+  /** Exact completed-progress v4 fields; no arbitrary cursor normalization. */
+  progress_contract?: { before: "unversioned"; after: 2; completed_ordinal_cursor: null };
   changes: RefreshExpectedCorrection[];
   unique_counters: Array<{
     section: "coverage" | "counters";
@@ -220,7 +222,7 @@ function captureInTransaction(store: Pick<GraphStore, "db">, snapshotId: number)
   }
   for (const row of rows("SELECT * FROM graph_build_progress WHERE snapshot_id=?")) {
     add("counters", "selected", [], omit(row, ["snapshot_id", "source_snapshot_id", "owner_id", "completion_target_id",
-      "generation_source_hash", "controller_generation", "invalidation_generation", "updated_at"]));
+      "generation_source_hash", "controller_generation", "invalidation_generation", "updated_at", "manifest_id"]));
   }
   const concernTables = [
     ["concern_state", "documentation_concern_index_state", []],
@@ -286,6 +288,9 @@ export function compareRefreshSemanticEvidence(input: {
     if (manifest.store_identity && !manifest.changes.some(change => change.reason === "store-identity")) {
       return invalidManifest("unused_store_identity_declaration");
     }
+    if (manifest.progress_contract && !manifest.changes.some(change => change.reason === "progress-contract")) {
+      return invalidManifest("unused_progress_contract_declaration");
+    }
   }
   for (const id of [...new Set([...baseline.keys(), ...candidate.keys(), ...corrections.keys()])].sort()) {
     const before = baseline.get(id) ?? null;
@@ -332,6 +337,20 @@ function validCorrection(change: RefreshExpectedCorrection, manifest: RefreshExp
         change.before.value.language === "typescript" && change.after.value.language !== "typescript";
     }
     return true;
+  }
+  if (change.reason === "progress-contract") {
+    const declared = manifest.progress_contract;
+    const before = change.before?.value;
+    const after = change.after?.value;
+    if (change.section !== "counters" || change.key !== "selected" || !before || !after ||
+        declared?.before !== "unversioned" || declared.after !== 2 || declared.completed_ordinal_cursor !== null ||
+        Object.hasOwn(before, "counters_version") || Object.hasOwn(before, "ordinal_cursor") ||
+        after.phase !== "complete" || after.status !== "completed" || after.scan_cursor !== null ||
+        after.counters_version !== 2 || after.ordinal_cursor !== null) return false;
+    const oracle = manifest.unique_counters.find(item => item.section === change.section && item.key === change.key);
+    return changedFields(change.before, change.after).every(field => field === "ordinal_cursor" || field === "counters_version" ||
+      (!!oracle && counterFields.has(field) && Number.isSafeInteger(oracle.expected_values[field]) &&
+       oracle.expected_values[field] >= 0 && after[field] === oracle.expected_values[field]));
   }
   if (change.reason !== "unique-counters" || !["coverage", "counters"].includes(change.section) || !change.before || !change.after) return false;
   const fields = changedFields(change.before, change.after);

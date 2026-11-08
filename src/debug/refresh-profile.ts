@@ -9,14 +9,19 @@ import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { MessageChannel, Worker } from "node:worker_threads";
 import { discoverRepositoryComposition } from "../application/use-cases/repository-composition.js";
+import { RepositoryRefreshTriggerCoordinator } from "../application/use-cases/repository-refresh-triggers.js";
+import { GraphBuildManifestPublicationValidator } from "../application/use-cases/validate-graph-build-manifest.js";
 import { GitMetadataCommandAdapter } from "../infrastructure/commands/index.js";
-import { FileCatalogScannerAdapter, WorkspaceFileAdapter } from "../infrastructure/filesystem/index.js";
+import { FileCatalogScannerAdapter, readCapturedGraphBuildPathIdentity, WorkspaceFileAdapter } from "../infrastructure/filesystem/index.js";
+import { GraphBuildWatchSession } from "../infrastructure/runtime/graph-build-watch-session.js";
+import { restoreGraphBuildWatchCoverage } from "../infrastructure/runtime/restore-graph-build-watch-coverage.js";
 import { SnapshotRefreshController } from "../infrastructure/runtime/refresh-controller.js";
 import { StartupGraphRefreshExecutor } from "../infrastructure/runtime/startup-graph-refresh-executor.js";
 import { openGraphStore, type GraphStore } from "../infrastructure/sqlite/index.js";
 import { SystemClockAdapter } from "../infrastructure/time/index.js";
 import type { RefreshExecutorPort, SnapshotRefreshControllerReceipt } from "../ports/index.js";
-import { createAsyncPublicationPort } from "../server.js";
+import { createAsyncPublicationPort, createRepositoryWorkspaceRefreshService } from "../server.js";
+import { resolveWorkspaceWatcherConfig } from "../domain/models/index.js";
 import { captureRefreshSemanticEvidence } from "./refresh-profile-comparison.js";
 
 export type RefreshProfileConfig = {
@@ -182,6 +187,9 @@ export type RefreshProfileRuntime = {
   source: string;
   database_path: string;
   controller: SnapshotRefreshController;
+  triggers: RepositoryRefreshTriggerCoordinator;
+  workspace_refresh: ReturnType<typeof createRepositoryWorkspaceRefreshService>;
+  watcher: GraphBuildWatchSession;
   store(): GraphStore;
   passes: RefreshProfileWorkerMetrics[];
   settlements: Promise<void>[];
@@ -214,9 +222,37 @@ export function createRefreshProfileRuntime(input: {
   let paused = false;
   const clock = new SystemClockAdapter();
   const controllerGeneration = Date.now();
+  const watcher = new GraphBuildWatchSession({
+    repo_root: sourceRoot,
+    paths: ["."],
+    skipped_roots: [],
+    enabled: true,
+    debounce_ms: 25,
+    event_budget: 2000
+  });
+  // The production executor requires a ready, healthy root watch before it
+  // snapshots workerData. Admission waits on this same session; no profile-only
+  // observer substitutes for the daemon watcher.
+  const watcherReady = watcher.start().then(async () => {
+    await restoreGraphBuildWatchCoverage({
+      repo_root: sourceRoot,
+      store: async () => store,
+      watcher,
+      read_identity: async (expected) => readCapturedGraphBuildPathIdentity(sourceRoot, expected)
+    });
+  });
+  const publication = createAsyncPublicationPort(async () => store);
+  const validation = new GraphBuildManifestPublicationValidator({
+    store: async () => store,
+    watcher,
+    read_identity: async (expected) => readCapturedGraphBuildPathIdentity(sourceRoot, expected),
+    clock,
+    on_published: ({ directories }) => watcher.establishCoverage({ directories })
+  });
   const executor = new StartupGraphRefreshExecutor({
     database_path: databasePath, config_identity: "default", max_files: input.max_files,
     retain_latest_snapshots: 3, retain_latest_fresh_snapshots: 2, controller_generation: controllerGeneration,
+    observation: watcher,
     worker_factory({ workerData }) {
       passNumber += 1;
       const { port1, port2 } = new MessageChannel();
@@ -242,6 +278,7 @@ export function createRefreshProfileRuntime(input: {
   let closePromise: Promise<void> | undefined;
   const observedExecutor: RefreshExecutorPort = {
     async run(request) {
+      await watcherReady;
       const result = await executor.run(request);
       if (input.pause_committed_continuation && !paused && result.results.some(value =>
         typeof value === "object" && value !== null && "outcome" in value && value.outcome === "partial"
@@ -271,13 +308,35 @@ export function createRefreshProfileRuntime(input: {
   };
   const controller = new SnapshotRefreshController({
     repo_root: input.source, controller_generation: controllerGeneration, timeout_ms: PASS_TIMEOUT_MS,
-    clock, executor: observedExecutor, publication: createAsyncPublicationPort(async () => store)
+    clock, executor: observedExecutor, publication, validation
+  });
+  const triggers = new RepositoryRefreshTriggerCoordinator({
+    repo_root: input.source,
+    controller,
+    publications: publication,
+    snapshots: store
+  });
+  const workspaceRefresh = createRepositoryWorkspaceRefreshService({
+    repoRoot: input.source,
+    triggers,
+    observation: watcher,
+    clock,
+    config: resolveWorkspaceWatcherConfig({ enabled: true, debounce_ms: 25, event_budget: 2000 }),
+    indexedRoots: ["."],
+    skippedRoots: [],
+    pollIntervalMs: 25
   });
   runtime = {
-    source: input.source, database_path: databasePath, controller, store: () => store,
+    source: input.source, database_path: databasePath, controller, triggers, workspace_refresh: workspaceRefresh, watcher, store: () => store,
     passes, settlements, profileFailed: () => profileReceiptFailure,
     close() {
-      closePromise ??= (async () => { await controller.shutdown(); await Promise.all(settlements); store.close(); })();
+      closePromise ??= (async () => {
+        await controller.shutdown();
+        await workspaceRefresh.close();
+        await Promise.all(settlements);
+        store.close();
+        await watcher.close();
+      })();
       return closePromise;
     }
   };
@@ -317,7 +376,10 @@ export async function measureRefreshGeneration(input: {
     }
     const terminal = await completion;
     await Promise.all(runtime.settlements.slice(settlementOffset));
-    if (terminal.execution_state !== "complete") return { state: "failed", code: terminal.last_failure?.code ?? "refresh_failed" };
+    if (terminal.execution_state !== "complete") {
+      await writeProfileFailureEvidence(runtime, input.output, terminal);
+      return { state: "failed", code: terminal.last_failure?.code ?? "refresh_failed" };
+    }
     const passes = runtime.passes.slice(passOffset);
     const workerInvocations = terminal.worker_invocations - invocationOffset;
     if (runtime.profileFailed() || passes.length !== workerInvocations || passes.some(pass => pass.state !== "complete")) {
@@ -347,10 +409,42 @@ export async function measureRefreshGeneration(input: {
       work_counts: workCounts, phase_timings: phaseTimings
     } };
   } catch (error) {
+    await writeProfileFailureEvidence(runtime, input.output, runtime.controller.getReceipt(), error);
     return { state: "failed", code: error instanceof Error && error.message === "refresh_admission_not_observed" ? error.message : "refresh_measurement_failed" };
   } finally {
     off();
     if (admissionTimer !== undefined) clearTimeout(admissionTimer);
+  }
+}
+
+/** Durable, bounded diagnostics for a failed measured generation. */
+async function writeProfileFailureEvidence(
+  runtime: RefreshProfileRuntime,
+  output: string,
+  receipt: SnapshotRefreshControllerReceipt,
+  error?: unknown
+): Promise<void> {
+  try {
+    const manifests = runtime.store().db.prepare(`
+      SELECT manifests.manifest_id, manifests.state, manifests.invalid_reason,
+        manifests.owner_id, manifests.controller_generation,
+        manifests.invalidation_generation, manifests.watcher_epoch,
+        manifests.watcher_sequence, progress.snapshot_id
+      FROM graph_build_manifests AS manifests
+      LEFT JOIN graph_build_progress AS progress ON progress.manifest_id = manifests.manifest_id
+      WHERE manifests.repo_root = ?
+      ORDER BY manifests.started_at DESC
+      LIMIT 8
+    `).all(runtime.source) as Array<Record<string, unknown>>;
+    writeJson(path.join(output, "failure-evidence.json"), {
+      schema_version: 1,
+      state: "failed",
+      controller_receipt: receipt,
+      error: error instanceof Error ? { name: error.name, message: error.message } : undefined,
+      manifests
+    });
+  } catch {
+    // The original refresh failure remains the diagnostic authority.
   }
 }
 
@@ -360,7 +454,7 @@ async function runColdGeneration(source: string, output: string, maxFiles: numbe
   const runtime = createRefreshProfileRuntime({ source, output, max_files: maxFiles });
   try {
     return await measureRefreshGeneration({ runtime, output, run, scenario: "cold_complete_generation", action: () =>
-      runtime.controller.request({ repo_root: source, reason: "startup", source: "refresh-profile", invalidation_generation: 0 })
+      runtime.triggers.startup({ source: "refresh-profile" })
     });
   } finally { await runtime.close(); }
 }

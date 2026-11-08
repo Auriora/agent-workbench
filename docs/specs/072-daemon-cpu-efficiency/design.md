@@ -16,8 +16,9 @@ license: GPL-3.0-or-later
 Fix admitted file format and repeated algorithmic work inside the existing
 refresh pipeline. Preserve its single executor, durable completion and atomic
 publication. T001 baseline/design, T002 bounded Qt admission and T003 compiled
-matchers are verified. T003 passes the controlled SC-001 scan gate. T004-T006
-remain pending; full-generation comparative acceptance remains T007.
+matchers are verified. T003 passes the controlled SC-001 scan gate. T004 sealed inventory, publication receipts and owned v4 migration are implemented;
+V004 and SC-002 pass. T005-T006 remain pending; full-generation
+comparative acceptance remains T007.
 
 ## Requirement Coverage
 
@@ -208,7 +209,12 @@ selection. Use the following rules for all before/after evidence:
   Bind it to the independently verified source manifest and exact before/after
   snapshot records; it permits no other field, schema transition or blanket
   schema exclusion. New v4 evidence fields require deliberate T004 capture/tests,
-  not accidental normalization by the v3 comparator.
+  not accidental normalization by the v3 comparator. T004 captures generated
+  manifest IDs as operational identity, while the new counter version and ordinal
+  remain literal evidence. The exact completed-progress declaration permits only
+  unversioned progress to counters_version=2 and ordinal_cursor=null, with phase
+  complete, status completed and exhausted scan cursor. Numeric changes still
+  require independently derived counter oracles; other new fields fail.
 - For progress corrections, independently derive distinct identity totals from
   the fixed input manifest. Only the documented repeated-work-to-unique counter
   changes are allowed; record visits/work separately. Do not use old inflated
@@ -335,6 +341,20 @@ Crash/recovery dispositions are fixed before T004:
 Tests require deterministic barriers at all these boundaries, including failure
 on digest/ordinal/count mismatch, watcher registration loss and legacy progress.
 
+Before worker construction the existing deadline includes a forced canonical
+queue drain outside controller mutation authority. Cancellation while awaiting
+that drain prevents a later worker spawn; global queue settlement remains owned
+by the workspace service and must complete before storage/lease teardown.
+
+Watcher observation is enabled by default because publication requires it;
+explicit disablement remains blocked. A new daemon may re-arm exact directory
+receipts from a sealed published inventory after stat-only pre/post identity
+and epoch/sequence checks. This restores observation coverage, not unfinished
+progress reuse across sessions. Until that proof or a newly validated publication
+establishes coverage, an idle root-only queue cannot claim watcher freshness.
+Changed or missing old directories leave coverage unknown without poisoning the
+root watch needed by a newly admitted generation.
+
 ### Store Identity and Legacy Counters
 
 Advance graph-store identity/schema to v4 in T004, with canonical graph-v4.sqlite.
@@ -351,6 +371,20 @@ canonical v3 retirement blocker so an old binary cannot create a divergent writa
 cache. Build/validate/fsync a temporary empty v4 and atomically claim its canonical
 path using the established versioned-store publication discipline. Conflicting
 backup/guard/target evidence blocks; never delete or overwrite a live cache.
+The fsynced blocker records pending and completed v4 claim states. A pending
+claim rejects a nonempty target on every re-entry; only a durably completed claim
+permits subsequently built v4 evidence. A target present before v3 retirement is
+conflicting, including an empty target. Tests cover the link-before-claim-marker
+crash boundary and repeat admission after a rejected racing target.
+
+A positively identified active-owner observer may read an existing compatible
+v4 store after read-only exact-schema/integrity validation, then a file-must-exist
+connection that revalidates without seeding, migration or persistent pragmas.
+Existing freshness/query-cache writes remain supported; graph build/publication
+remain ownership-gated. Ambiguous ownership blocks. An acquired promotion blocks new store operations, drains active method borrows
+and closes the compatible handle before owned migration and initialization.
+A stable async facade routes later calls to the owned store; failed preparation
+blocks access, and concurrent shutdown waits for the same operation drain.
 
 T004 must explicitly replace the current v2/legacy seed selection for this identity
 transition, add retained-v3 retirement/re-entry tests, and test crashes between each

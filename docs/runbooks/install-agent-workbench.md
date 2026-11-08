@@ -3,7 +3,7 @@ title: Install Agent Workbench (portable Windows or npm + Claude Code / Codex)
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-08-15
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -309,6 +309,35 @@ EB014. A finite refresh failure on a repository that exceeds current bounds is
 not authorization to add a second indexer, retry loop, or partial-result path.
 
 ## Upgrade, rollback, and schema compatibility
+
+### Source checkout: schema identity v4 (unreleased)
+
+Spec 072 T004 changes the source runtime to graph-v4.sqlite. This is source
+behavior, not evidence that an installed daemon has been upgraded. Stop the prior
+repository owner before starting this runtime. Under the version-independent
+refresh lease, it verifies and checkpoints v3, retains and fsyncs
+`graph-v3.sqlite.pre-v4`, retires `graph-v3.sqlite` with a non-SQLite blocker, and
+claims an empty validated v4 store. The normal refresh rebuilds its graph; old
+snapshots and inflated progress counters are not copied into v4.
+
+A pending-claim blocker permits only a validated empty v4 target; a completed
+claim permits subsequently built v4 evidence. A conflicting backup/target,
+busy WAL, or ambiguous owner blocks startup. Preserve the cache and authority
+evidence for diagnosis; do not edit the blocker, remove individual sidecars or
+relabel a database. Confirm all owners stopped before either restoring a known
+complete v3 backup through controlled recovery or using the whole-cache
+quarantine procedure below with the selected runtime. Never overwrite a live
+blocker or downgrade a v4 database in place.
+
+An observer under a positively identified active owner may query an existing
+compatible v4 store without migration or initialization. It cannot build until
+it acquires ownership. Promotion drains active store operations before closing
+the observer handle. Ambiguous ownership blocks store access. Watcher observation
+defaults to enabled; explicitly disabling it prevents fresh publication and
+returns `manifest_validation_failed`. Correct the observation blocker before
+requesting a new refresh; there is no alternate unobserved build path.
+
+### Historical v2 transition
 
 The 0.6.2 runtime adds schema-identity-v2 publication. It seeds
 `graph-v2.sqlite` from v0.5.2 `graph.sqlite` without modifying the

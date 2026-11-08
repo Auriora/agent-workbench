@@ -44,6 +44,7 @@ export async function discoverRepositoryComposition(input: {
   max_repositories?: number;
   cancellation?: CommandCancellation;
   canonicalize_repo_root?: (repo_root: string) => string;
+  before_repository_inspection?: (input: { repo_root: string; path_prefix: string; repository_key: RepositoryKey }) => Promise<void>;
 }): Promise<RepositoryCompositionReceipt> {
   const normalizedRoot = normalizeRoot(input.repo_root);
   const canonicalRoot = input.canonicalize_repo_root?.(normalizedRoot) ?? normalizedRoot;
@@ -55,6 +56,7 @@ export async function discoverRepositoryComposition(input: {
   const skipped_or_blocked: RepositoryUnitEvidence[] = [];
   const limits: RepositoryCompositionLimit[] = [];
   const seenRoots = new Set<string>();
+  const inspectionObservedRoots = new Set<string>();
 
   await visitRepository({
     workspace: input.workspace,
@@ -68,11 +70,13 @@ export async function discoverRepositoryComposition(input: {
     depth: 0,
     parent_repository_key: undefined,
     cancellation: input.cancellation,
+    before_repository_inspection: input.before_repository_inspection,
     budget,
     repositories,
     skipped_or_blocked,
     limits,
-    seenRoots
+    seenRoots,
+    inspectionObservedRoots
   });
 
   const sortedRepositories = repositories.sort(compareRepositoryUnits);
@@ -101,11 +105,13 @@ async function visitRepository(input: {
   parent_repository_key?: RepositoryKey;
   cancellation?: CommandCancellation;
   canonicalize_repo_root?: (repo_root: string) => string;
+  before_repository_inspection?: (input: { repo_root: string; path_prefix: string; repository_key: RepositoryKey }) => Promise<void>;
   budget: DiscoveryBudget;
   repositories: RepositoryUnitEvidence[];
   skipped_or_blocked: RepositoryUnitEvidence[];
   limits: RepositoryCompositionLimit[];
   seenRoots: Set<string>;
+  inspectionObservedRoots: Set<string>;
 }): Promise<void> {
   if (input.seenRoots.has(input.canonical_repo_root)) {
     input.skipped_or_blocked.push(blockedUnit({
@@ -126,6 +132,8 @@ async function visitRepository(input: {
     return;
   }
   input.seenRoots.add(input.canonical_repo_root);
+
+  await observeRepositoryInspection(input);
 
   const head = await input.git.inspectRepositoryHead({
     repo_root: input.repo_root,
@@ -337,6 +345,16 @@ async function visitRepository(input: {
       }));
       continue;
     }
+    // Child Git metadata can live outside its worktree via a gitdir file.
+    // Capture it before either child Git inspection, not only on recursion.
+    await observeRepositoryInspection({
+      ...input,
+      canonical_repo_root: childCanonicalRoot,
+      path_prefix: childPrefix,
+      repository_key: childKey,
+      before_repository_inspection: input.before_repository_inspection,
+      inspectionObservedRoots: input.inspectionObservedRoots
+    });
     const childHead = await input.git.inspectRepositoryHead({
       repo_root: childRepoRoot,
       cancellation: input.cancellation
@@ -414,6 +432,23 @@ async function visitRepository(input: {
       });
     }
   }
+}
+
+async function observeRepositoryInspection(input: {
+  canonical_repo_root: string;
+  canonical_superproject_root: string;
+  path_prefix: string;
+  repository_key: RepositoryKey;
+  before_repository_inspection?: (input: { repo_root: string; path_prefix: string; repository_key: RepositoryKey }) => Promise<void>;
+  inspectionObservedRoots: Set<string>;
+}): Promise<void> {
+  if (input.inspectionObservedRoots.has(input.canonical_repo_root)) return;
+  await input.before_repository_inspection?.({
+    repo_root: input.canonical_superproject_root,
+    path_prefix: input.path_prefix,
+    repository_key: input.repository_key
+  });
+  input.inspectionObservedRoots.add(input.canonical_repo_root);
 }
 
 function isContainedCanonicalRoot(superprojectRoot: string, candidateRoot: string): boolean {

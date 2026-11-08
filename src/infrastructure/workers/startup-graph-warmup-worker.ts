@@ -13,6 +13,7 @@ import { discoverRepositoryComposition } from "../../application/use-cases/repos
 import { SCHEMA_VERSION, openGraphStore } from "../sqlite/index.js";
 import { GitMetadataCommandAdapter } from "../commands/index.js";
 import {
+  captureGraphBuildRepositoryInputs,
   FileCatalogScannerAdapter,
   WorkspaceFileAdapter
 } from "../filesystem/index.js";
@@ -21,6 +22,9 @@ import {
   ResourceExtractorAdapter
 } from "../extraction/index.js";
 import { SystemClockAdapter } from "../time/index.js";
+import { createGraphBuildObservationClient } from "./graph-build-observation-client.js";
+import type { GraphBuildPathIdentity, GraphBuildWatchObservation } from "../../ports/index.js";
+import type { SnapshotRepositoryComposition } from "../../domain/models/runtime.js";
 
 const COMMON_RAILS_FRONT_DOOR_PRIORITY_PATHS = [
   "AGENTS.md",
@@ -44,6 +48,7 @@ type StartupGraphWarmupWorkerData = {
   invalidationGeneration: number;
   deadlineAt: string;
   timeoutMs: number;
+  watcherObservation: GraphBuildWatchObservation;
 };
 
 const input = workerData as StartupGraphWarmupWorkerData;
@@ -58,9 +63,6 @@ const workCounts = {
   file_stat_attempts: 0,
   wildcard_regex_compilations: 0
 };
-const scanner = new FileCatalogScannerAdapter({
-  observe: workObservation.hasSubscribers ? (event) => { workCounts[event] += 1; } : undefined
-});
 const workspace = new WorkspaceFileAdapter({ repoRoot: input.repoRoot });
 const graphStore = openGraphStore(input.databasePath);
 const crashBarrierProbe = readCrashBarrierProbe();
@@ -72,19 +74,45 @@ const workerGraphStore = decorateGraphStore(graphStore, async (method, args) => 
   }
 });
 const extractors = createProductionExtractorRegistry();
+if (parentPort === null) {
+  throw new Error("Startup graph warmup worker requires a parent message port.");
+}
+const observationClient = createGraphBuildObservationClient({
+  port: parentPort,
+  identity: {
+    execution_id: input.executionId,
+    target_snapshot_id: input.snapshotId,
+    controller_generation: input.controllerGeneration,
+    invalidation_generation: input.invalidationGeneration,
+    watcher_epoch: input.watcherObservation.epoch
+  },
+  initial_observation: input.watcherObservation
+});
 
 try {
+  const watch = await observationClient.start();
+  const persisted = await loadPersistedBuildInputs({ store: workerGraphStore, watch });
   observeBuildPhase("composition");
-  const repositoryComposition = await discoverRepositoryComposition({
+  const capturedInputs: GraphBuildPathIdentity[] = persisted?.inputs ?? [];
+  const capturedInputKeys = new Set(capturedInputs.map(identityKey));
+  const repositoryComposition = persisted?.repository_composition ?? await discoverRepositoryComposition({
     workspace,
     git: new GitMetadataCommandAdapter(),
     repo_root: input.repoRoot,
-    canonicalize_repo_root: (repoRoot) => fs.realpathSync.native(repoRoot)
+    canonicalize_repo_root: (repoRoot) => fs.realpathSync.native(repoRoot),
+    before_repository_inspection: async ({ repo_root, path_prefix }) => {
+      for (const identity of captureGraphBuildRepositoryInputs(repo_root, path_prefix)) {
+        const key = identityKey(identity);
+        if (!capturedInputKeys.has(key)) {
+          capturedInputKeys.add(key);
+          capturedInputs.push(identity);
+        }
+      }
+    }
   });
   reportProgress("composition", repositoryComposition.repositories.length);
   const result = await runRepositoryGraphBuildSlice({
     repo_root: input.repoRoot,
-    scanner,
     workspace,
     extractors,
     resource_extractor: new ResourceExtractorAdapter(),
@@ -111,7 +139,16 @@ try {
     repository_composition: repositoryComposition,
     should_yield_extraction: () => Date.now() >= cooperativeExtractionDeadline,
     report_build_progress: reportProgress,
-    observe_build_phase: phaseObservation.hasSubscribers ? observeBuildPhase : undefined
+    observe_build_phase: phaseObservation.hasSubscribers ? observeBuildPhase : undefined,
+    manifest: {
+      store: workerGraphStore,
+      watcher: observationClient,
+      create_scanner: (capture) => new FileCatalogScannerAdapter({
+        capture,
+        observe: workObservation.hasSubscribers ? (event) => { workCounts[event] += 1; } : undefined
+      }),
+      inputs: capturedInputs
+    }
   });
   observeBuildPhase("finalizing");
   if (result.outcome === "complete") {
@@ -153,6 +190,7 @@ try {
     });
   }
 } finally {
+  observationClient.close();
   if (workObservation.hasSubscribers) workObservation.publish(workCounts);
   graphStore.close();
 }
@@ -189,6 +227,57 @@ function reportProgress(
   const observation = channel("agent-workbench.refresh.progress");
   if (observation.hasSubscribers) observation.publish(progress);
   parentPort?.postMessage({ type: "progress", progress });
+}
+
+async function loadPersistedBuildInputs(candidate: {
+  store: WorkerGraphStore;
+  watch: GraphBuildWatchObservation;
+}): Promise<{ repository_composition: SnapshotRepositoryComposition; inputs: GraphBuildPathIdentity[] } | undefined> {
+  const progress = await candidate.store.getGraphBuildProgress({ snapshot_id: input.snapshotId });
+  if (progress === null) {
+    const latest = await candidate.store.getLatestPublished({ repo_root: input.repoRoot });
+    if (latest.status !== "selected") return undefined;
+    const sourceProgress = await candidate.store.getGraphBuildProgress({ snapshot_id: latest.snapshot.id });
+    if (sourceProgress === null || sourceProgress.phase === "complete" || sourceProgress.status === "completed") return undefined;
+    if (sourceProgress.owner_id !== input.executionId ||
+      sourceProgress.controller_generation !== input.controllerGeneration ||
+      sourceProgress.invalidation_generation !== input.invalidationGeneration) return undefined;
+    return await persistedInputsFor({ progress: sourceProgress, snapshot_id: latest.snapshot.id, store: candidate.store, watch: candidate.watch });
+  }
+  return await persistedInputsFor({ progress, snapshot_id: input.snapshotId, store: candidate.store, watch: candidate.watch });
+}
+
+async function persistedInputsFor(candidate: {
+  progress: Awaited<ReturnType<WorkerGraphStore["getGraphBuildProgress"]>> & {};
+  snapshot_id: string;
+  store: WorkerGraphStore;
+  watch: GraphBuildWatchObservation;
+}): Promise<{ repository_composition: SnapshotRepositoryComposition; inputs: GraphBuildPathIdentity[] }> {
+  const progress = candidate.progress;
+  if (progress === null || progress.owner_id !== input.executionId ||
+    progress.controller_generation !== input.controllerGeneration ||
+    progress.invalidation_generation !== input.invalidationGeneration ||
+    progress.manifest_id === undefined || progress.counters_version !== 2 ||
+    progress.status !== "active") {
+    throw new Error("Persisted graph continuation does not match the worker execution fence.");
+  }
+  const repositoryComposition = await candidate.store.getRepositoryComposition({ snapshot_id: candidate.snapshot_id });
+  if (repositoryComposition === null) {
+    throw new Error("Persisted graph continuation has no repository composition evidence.");
+  }
+  const manifest = await candidate.store.getGraphBuildManifest({ manifest_id: progress.manifest_id });
+  if (manifest === null || manifest.state !== "sealed" || manifest.owner_id !== input.executionId ||
+    manifest.repo_root !== input.repoRoot || manifest.controller_generation !== input.controllerGeneration ||
+    manifest.invalidation_generation !== input.invalidationGeneration || manifest.watcher_epoch !== candidate.watch.epoch ||
+    manifest.watcher_sequence !== candidate.watch.sequence ||
+    manifest.composition_fingerprint !== repositoryComposition.composition_fingerprint) {
+    throw new Error("Persisted graph continuation manifest fence does not match the worker execution.");
+  }
+  return { repository_composition: repositoryComposition, inputs: [...manifest.inputs] };
+}
+
+function identityKey(identity: GraphBuildPathIdentity): string {
+  return JSON.stringify([identity.scope ?? "workspace", identity.root ?? input.repoRoot, identity.path]);
 }
 
 type TestCrashBarrier = "generation" | "catalog" | "docs" | "graph" | "prepublication";
@@ -255,11 +344,11 @@ function decorateGraphStore(
 
 function matchingCrashBarrier(method: string, args: readonly unknown[]): TestCrashBarrier | undefined {
   if (method === "createBuildSnapshot") return "generation";
-  if (method === "upsertEntry") return "catalog";
+  if (method === "sealGraphBuildManifest") return "catalog";
   if (method === "replaceSnapshotDocs") return "docs";
-  if (method === "replaceSnapshotExtraction") {
-    const request = args[0] as { batch?: { source_path?: unknown } } | undefined;
-    if (request?.batch?.source_path === "app.py") return "graph";
+  if (method === "commitGraphBuildFileOutcome") {
+    const request = args[0] as { entry?: { path?: unknown } } | undefined;
+    if (request?.entry?.path === "app.py") return "graph";
   }
   return undefined;
 }

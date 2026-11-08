@@ -753,29 +753,26 @@ describe("repo status MCP resource", () => {
       store.close();
     }
 
-    try {
       const server = createAgentWorkbenchServer(repoRoot, {
-        startupRefreshDelayMs: 60_000,
+        startupRefreshDelayMs: 0,
         workspaceWatcher: {
           enabled: true,
           debounce_ms: 0,
           event_budget: 10
         }
       });
+    try {
 
-      const initialResponse = await getRegisteredResource(server, "repo:///status").readCallback({});
-      const initial = JSON.parse(initialResponse.contents[0]?.text ?? "{}") as {
-        data: GetRepoStatusResult["status"];
+      const readStatus = async () => {
+        const response = await getRegisteredResource(server, "repo:///status").readCallback({});
+        return JSON.parse(response.contents[0]?.text ?? "{}") as {
+          data: GetRepoStatusResult["status"]; meta: GetRepoStatusResult["meta"];
+        };
       };
-      expect(initial.data.freshness).toBe("unknown");
-      expect(initial.data.snapshot_validity).toMatchObject({
-        state: "degraded",
-        reason: "Snapshot lacks a persisted repository composition receipt."
-      });
-      expect(initial.data.watcher_freshness).toMatchObject({
-        status: "fresh",
-        queue_state: "drained"
-      });
+      // Child observation is armed by the generation's single inventory,
+      // rather than an independent recursive watcher startup walk.
+      const initial = await waitForReplacementSnapshot(readStatus, "1001");
+      expect(initial.data.watcher_freshness).toMatchObject({ status: "fresh", queue_state: "drained" });
 
       fs.writeFileSync(sourcePath, "export const app = false;\n");
 
@@ -809,9 +806,10 @@ describe("repo status MCP resource", () => {
         verifyStore.close();
       }
     } finally {
+      await server.close();
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
-  });
+  }, 15_000);
 
   it("preserves no-coverage status caveats in the MCP resource envelope", async () => {
     const registered = registerMcpResource(repoStatusResource, {

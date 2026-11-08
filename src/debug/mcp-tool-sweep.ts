@@ -50,6 +50,7 @@ import {
   ResourceExtractorAdapter
 } from "../infrastructure/extraction/index.js";
 import {
+  captureGraphBuildRepositoryInputs,
   FileCatalogScannerAdapter,
   FilesystemSnapshotPathValidatorAdapter,
   WorkspaceFileAdapter,
@@ -58,6 +59,7 @@ import {
 import { MarkdownParserAdapter, MarkdownStructureCheckerAdapter } from "../infrastructure/markdown/index.js";
 import { SCHEMA_VERSION, SqliteGraphStoreAdapter } from "../infrastructure/sqlite/index.js";
 import { createDocsRankingCursorCodec, createReferenceCursorCodec } from "../infrastructure/runtime/index.js";
+import { GraphBuildWatchSession } from "../infrastructure/runtime/graph-build-watch-session.js";
 import { SystemClockAdapter } from "../infrastructure/time/index.js";
 import {
   mcpResources,
@@ -466,14 +468,23 @@ function createRepoRuntime(input: { repoRoot: string; outputDir: string }): Repo
 
 async function warmGraph(input: { repoRoot: string; runtime: RepoRuntime; sliceFiles: number }): Promise<void> {
   const registry = createProductionExtractorRegistry();
+  const watcher = new GraphBuildWatchSession({
+    repo_root: input.repoRoot,
+    paths: ["."],
+    skipped_roots: [],
+    enabled: true,
+    debounce_ms: 25,
+    event_budget: 2000
+  });
+  await watcher.start();
   let snapshotId = await input.runtime.graph.allocateBuildSnapshotId({
     repo_root: input.repoRoot,
     minimum_id: String(Math.max(1, Date.now()))
   });
-  for (;;) {
+  try {
+    for (;;) {
     const result = await runRepositoryGraphBuildSlice({
       repo_root: input.repoRoot,
-      scanner: input.runtime.scanner,
       workspace: input.runtime.workspace,
       extractors: registry,
       resource_extractor: new ResourceExtractorAdapter(),
@@ -493,7 +504,13 @@ async function warmGraph(input: { repoRoot: string; runtime: RepoRuntime; sliceF
       owner_id: `debug-sweep:${input.repoRoot}`,
       controller_generation: 0,
       invalidation_generation: 0,
-      max_files: input.sliceFiles
+      max_files: input.sliceFiles,
+      manifest: {
+        store: input.runtime.graph,
+        watcher,
+        create_scanner: (capture) => new FileCatalogScannerAdapter({ capture }),
+        inputs: captureGraphBuildRepositoryInputs(input.repoRoot, ".")
+      }
     });
     if (result.outcome === "complete") {
       await input.runtime.graph.transitionBuild({
@@ -522,6 +539,9 @@ async function warmGraph(input: { repoRoot: string; runtime: RepoRuntime; sliceF
         minimum_id: String(Math.max(1, Date.now()))
       });
     }
+    }
+  } finally {
+    await watcher.close();
   }
 }
 

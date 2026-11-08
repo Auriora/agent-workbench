@@ -3,7 +3,7 @@ title: Runtime contracts
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-11-06
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -299,8 +299,9 @@ existence-validated. The runtime caveat kinds are
 
 Watcher freshness is evaluated separately from query execution before response
 metadata preserves a `fresh` claim. A watcher-clean snapshot requires the queue
-to be drained, scope to be synchronized, ignore rules to be synchronized, and no
-background rescan to be pending. Watcher processing maps to `refreshing`;
+to be drained, directory observation coverage to be established, scope and ignore
+rules to be synchronized, and no background rescan to be pending. A root-only
+session without restored or newly validated inventory coverage is degraded. Watcher processing maps to `refreshing`;
 overflow, scope drift, ignore-rule drift, or required rescan maps to `stale`;
 watcher startup or processing failure maps to degraded evidence with a caveat.
 
@@ -608,7 +609,11 @@ daemon endpoint readiness. If another runtime identity owns that lease, a
 ready observer serves the compatible published graph and returns structured
 `owner_active` refresh admission without constructing a second controller.
 Ownership acquisition, orphan reconciliation, controller construction, and
-refresh execution remain one lazy authority path.
+refresh execution remain one lazy authority path. An active-owner observer opens
+only an existing, exactly compatible cache after non-mutating compatibility
+validation; it never seeds, migrates or repairs schema. Freshness invalidation and
+query-cache writes remain available on the compatible store. Ambiguous ownership
+blocks access; promotion closes the compatible handle before owned initialization.
 
 Daemon or graph-store startup failures use existing envelope vocabulary:
 incompatible or missing daemon identity maps to `invalid_due_to_environment`;
@@ -625,22 +630,27 @@ publication states are exactly `building`, `published`, `superseded`, and
 `failed`; publication is independent of `fresh`, `stale`, or `cold` graph
 freshness and of evidence-class coverage.
 
-Schema identity v3 stores current evidence in `graph-v3.sqlite`. When v3 is
-absent, startup may checkpoint and atomically clone the complete
-`graph-v2.sqlite` into a temporary v3 candidate, migrate and validate it, then
-claim the v3 path. Existing snapshot rows retain their recorded v2 schema
-identity and receive no synthetic concern evidence; authority-aware ranking
-requires a coordinated current-schema rebuild. Failed or incompatible
-migration blocks without overwriting v2 or an existing v3 store.
+Schema identity v4 stores current evidence in `graph-v4.sqlite`. The repository
+refresh lease gates owned store initialization and the v3 transition. An observer
+under a positively identified active owner may use an existing exact-v4 cache
+after readonly schema/integrity validation, without initialization or migration;
+ambiguous ownership blocks access. Migration retains a
+verified, fsynced `graph-v3.sqlite.pre-v4`, atomically blocks the old v3 path and
+claims an empty validated v4 cache. It never clones historical progress or labels
+old visit counters as distinct counts. Busy WAL state, incompatible targets and
+conflicting recovery artifacts block startup. Recovery requires all owners to
+stop; live cache deletion and in-place downgrade are unsupported.
 
-The earlier owner-gated legacy retirement preserves
-`graph-v1.sqlite.pre-v2` and atomically replaces the former `graph.sqlite` with
-a non-SQLite guard. A v0.5.2 adapter must fail with an incompatible-store error
-at that canonical path; it must never read or mutate the versioned publication
-stores. Fresh repositories need no retirement artifacts, and v1 without a
-backup is valid before retirement. Inconsistent sets—such as a guard without
-its backup or a conflicting backup—block startup rather than selecting another
-path.
+Generation progress uses a sealed manifest and counter version 2. A manifest is
+`preparing`, `sealed` or `invalid`; only sealed inventories may be consumed.
+Continuation binds execution, generations, policy/composition and watcher epoch.
+Workspace observation defaults to enabled because publication requires its proof.
+Explicitly disabling observation blocks fresh publication.
+Fresh seed and completion publication each require a distinct one-use validation
+receipt and synchronous final observation check. Validation failure preserves the
+prior publication and reports structured `manifest_validation_failed` evidence.
+The freshness boundary is the recorded observation, not an atomic filesystem
+snapshot or an assurance about all unobserved changes.
 
 `planned` and `running` hold the controller activity lease. `complete` names a
 `published` target that is also the visible snapshot, has matching started and

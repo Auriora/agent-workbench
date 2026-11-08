@@ -17,9 +17,9 @@ license: GPL-3.0-or-later
 | --- | --- | --- | --- | --- |
 | Requirement 1 | D001 | T001; T002; T007; T008 | V002; V007; V008 | T002 implemented and V002 verified; comparative gates pending |
 | Requirement 2 | D002 | T001; T003; T007; T008 | V003; V007; V008 | T003 implemented; V003/SC-001 passed; full candidate gates pending |
-| Requirement 3 | D003 | T001; T004; T007; T008 | V004; V007; V008 | not implemented |
+| Requirement 3 | D003 | T001; T004; T007; T008 | V004; V007; V008 | T004 implemented; V004/SC-002 passed; comparative gates pending |
 | Requirement 4 | D004 | T001; T005; T007; T008 | V005; V007; V008 | not implemented |
-| Requirement 5 | D003; D005 | T001; T004; T006; T007; T008 | V004; V006; V007; V008 | not implemented |
+| Requirement 5 | D003; D005 | T001; T004; T006; T007; T008 | V004; V006; V007; V008 | T004 durable inventory/progress implemented; T006 phase budgeting pending |
 | Requirement 6 | D006 | T001; T007; T008 | V001; V007; V008 | T001 baseline verified; candidate and promotion pending |
 
 All acceptance criteria are covered by the ranges in design.md. Every correctness
@@ -38,8 +38,10 @@ baseline passed independent review and integrated checks. T002's format admissio
 unsupported coverage, parser routing and local characterization are verified;
 T003 compiled policies, invalidation, scanner parity and SC-001 are also verified;
 current behavior is promoted to runtime operations and benchmark guidance to
-observability. T004-T006, schema migration,
-live deployment and comparative candidate-performance gates remain pending.
+observability. T004 sealed inventory, receipt-gated publication and owned schema-v4 migration
+pass V004/SC-002; final evidence is recorded in verification.md.
+T005-T008 and live deployment remain pending. T006 still owns phase budgeting;
+T007 owns comparative complete-generation CPU/RSS acceptance.
 
 ## Task To Context Matrix
 
@@ -60,7 +62,7 @@ live deployment and comparative candidate-performance gates remain pending.
 | --- | --- | --- | --- | --- | --- |
 | D001; `design.md#d001-explicit-qt-translation-admission` | Requirement 1 | Filesystem classification and extraction admission | T002 | `verification.md#quality-gates` | covered |
 | D002; `design.md#d002-compiled-rule-set` | Requirement 2 | Policy preparation and matching | T003 | `verification.md#quality-gates` | covered |
-| D003; `design.md#d003-durable-catalog-manifest-and-shape` | Requirement 3 | Application, catalog ports and SQLite | T004 | `verification.md#quality-gates` | not-covered |
+| D003; `design.md#d003-durable-catalog-manifest-and-shape` | Requirement 3 | Application, catalog ports and SQLite | T004 | `verification.md#t004-sealed-inventory-and-publication` | covered |
 | D004; `design.md#d004-candidate-indexes` | Requirement 4 | Application reference resolution | T005 | `verification.md#quality-gates` | not-covered |
 | D005; `design.md#d005-budget-and-accounting` | Requirement 5 | Worker/controller budget and progress | T006 | `verification.md#quality-gates` | not-covered |
 | D006; `design.md#d006-worker-evidence` | Requirement 6 | Checkout debug harness and worker profiler | T001; T007 | `verification.md#quality-gates` | partial-blocking |

@@ -7,6 +7,7 @@ import os from "node:os";
 import path from "node:path";
 import { MessageChannel, Worker } from "node:worker_threads";
 import { afterEach, describe, expect, it } from "vitest";
+import { GraphBuildWatchSession } from "../../src/infrastructure/runtime/graph-build-watch-session.js";
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
@@ -32,6 +33,8 @@ async function profileWorker(): Promise<{ metrics: Metrics; publicMessages: unkn
   fs.writeFileSync(path.join(source, "z.py"), "def helper():\n    return 1\n");
   fs.writeFileSync(path.join(source, ".gitignore"), "unused-*.tmp\n");
   const { port1, port2 } = new MessageChannel();
+  const watcher = new GraphBuildWatchSession({repo_root:source,paths:["."],skipped_roots:[],enabled:true,debounce_ms:25,event_budget:2000});
+  const watcherObservation = await watcher.start();
   const publicMessages: unknown[] = [];
   const receipt = new Promise<Metrics>((resolve, reject) => {
     let message: unknown;
@@ -44,15 +47,24 @@ async function profileWorker(): Promise<{ metrics: Metrics; publicMessages: unkn
       snapshotId: "74001", configIdentity: "default", maxFiles: 2000,
       retainLatestSnapshots: 3, retainLatestFreshSnapshots: 2, controllerGeneration: 7,
       invalidationGeneration: 0, deadlineAt: new Date(Date.now() + 60_000).toISOString(), timeoutMs: 60_000,
+      watcherObservation,
       refreshProfile: { port: port2, profile_path: path.join(output, "pass.cpuprofile") }
     }, transferList: [port2]
   });
-  worker.on("message", value => { publicMessages.push(value); });
+  worker.on("message", value => {
+    if ((value as {type?:string}).type === "graph_build_observation_request") {
+      const request = value as {operation:"observe"|"register_directory";path?:string;repository_key?:string};
+      void (request.operation === "observe" ? Promise.resolve(watcher.observe()) : watcher.registerDirectory({path:request.path!,repository_key:request.repository_key}))
+        .then(result => worker.postMessage({...value as object,type:"graph_build_observation_ack",accepted:true,result}));
+      return;
+    }
+    publicMessages.push(value);
+  });
   const exit = new Promise<void>((resolve, reject) => {
     worker.once("error", reject);
     worker.once("exit", code => code === 0 ? resolve() : reject(new Error(`Worker exited ${code}`)));
   });
-  await exit;
+  await exit; await watcher.close();
   return { metrics: await receipt, publicMessages };
 }
 
@@ -68,14 +80,17 @@ describe("actual worker exclusive phase observations", () => {
     const phases = metrics.phase_timings;
     expect(phases[0].phase).toBe("bootstrap");
     expect(phases.at(-1)!.phase).toBe("settlement");
-    for (const phase of ["composition", "catalog", "extraction", "docs", "resolution", "graph_write", "finalizing"]) {
+    // A raw worker intentionally stops at the publish-seed boundary; later
+    // extraction/resolution phases require controller publication and a new
+    // worker isolate. These are the phases this isolated worker actually owns.
+    for (const phase of ["composition", "catalog", "docs", "finalizing"]) {
       expect(phases.some(item => item.phase === phase)).toBe(true);
     }
     expect(phases.every(item => item.wall_ms >= 0 && item.thread_cpu_us.user >= 0 && item.thread_cpu_us.system >= 0)).toBe(true);
     expect(phases.reduce((total, item) => total + item.wall_ms, 0)).toBeCloseTo(metrics.wall_ms, 7);
     expect(phases.reduce((total, item) => total + item.thread_cpu_us.user, 0)).toBe(metrics.thread_cpu_us.user);
     expect(phases.reduce((total, item) => total + item.thread_cpu_us.system, 0)).toBe(metrics.thread_cpu_us.system);
-    expect(publicMessages.some(value => (value as { type?: string }).type === "complete")).toBe(true);
+    expect(publicMessages.some(value => (value as { type?: string }).type === "partial")).toBe(true);
     expect(publicMessages.some(value => (value as { phase_timings?: unknown }).phase_timings !== undefined)).toBe(false);
   }, 20_000);
 });

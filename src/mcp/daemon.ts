@@ -12,7 +12,6 @@ import type {
   IntegrationLauncherIdentity
 } from "../contracts/index.js";
 import { GRAPH_STORE_IDENTITY_VERSION } from "../contracts/graph-store-identity-contracts.js";
-import { retireLegacyGraphStore } from "../infrastructure/sqlite/graph-store-location.js";
 import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../runtime/version.js";
 import {
   createAgentWorkbenchServer,
@@ -21,6 +20,7 @@ import {
   createRepositoryRefreshController,
   createRepositoryWorkspaceRefreshService,
   graphStorePath,
+  prepareOwnedGraphStore,
   repositoryOwnershipPath,
   type AgentWorkbenchDaemonHealthFacts,
   type AgentWorkbenchSharedRepositoryServices,
@@ -31,9 +31,11 @@ import {
   LazyOwnershipGatedRefreshAuthority,
   waitForControllerShutdownSafety
 } from "../infrastructure/runtime/repository-ownership.js";
+import { GraphBuildWatchSession } from "../infrastructure/runtime/graph-build-watch-session.js";
+import { createSwitchableAsyncGraphStore } from "../infrastructure/runtime/switchable-async-graph-store.js";
+import { openGraphStore } from "../infrastructure/sqlite/index.js";
 import { createDocsRankingCursorCodec, createReferenceCursorCodec } from "../infrastructure/runtime/index.js";
 import { RepositoryRefreshTriggerCoordinator } from "../application/use-cases/repository-refresh-triggers.js";
-import { FilesystemWorkspaceWatcherAdapter } from "../infrastructure/filesystem/index.js";
 import { SystemClockAdapter } from "../infrastructure/time/index.js";
 import { resolveWorkspaceWatcherConfig } from "../domain/models/index.js";
 import { createRuntimeTelemetryAdapter } from "../infrastructure/telemetry/index.js";
@@ -178,6 +180,8 @@ type DaemonTestHooks = {
   createLifetimeEvidence?: (metadataPath: string) => DaemonLifetimeEvidencePort;
   /** Register deterministic application work before connecting a test client. */
   configureMcpServer?: (server: ReturnType<typeof createAgentWorkbenchServer>) => void;
+  /** Runs after the refresh/watcher service exists and before ready metadata. */
+  beforeReady?: (input: { refreshTriggers: RepositoryRefreshTriggerCoordinator }) => Promise<void>;
 };
 
 export async function startAgentWorkbenchDaemon(input: {
@@ -216,7 +220,9 @@ export async function startAgentWorkbenchDaemon(input: {
   const mcpServers = new Set<{ close: () => Promise<void> }>();
   const acceptingClients = new Set<Promise<void>>();
   const databasePath = graphStorePath(repoRoot);
-  const sharedGraphStore = createAsyncGraphStore(databasePath);
+  let sharedGraphStore = createAsyncGraphStore(databasePath);
+  const queryGraphStore = createSwitchableAsyncGraphStore(sharedGraphStore);
+  let observerStoreSelected = false;
   const ownerGeneration = Date.now();
   const ownership = new FileRepositoryOwnershipAdapter(repositoryOwnershipPath(databasePath));
   let refreshController: SnapshotRefreshControllerPort &
@@ -238,6 +244,15 @@ export async function startAgentWorkbenchDaemon(input: {
     ...input.serverOptions,
     telemetry: daemonTelemetry
   };
+  const workspaceWatcherConfig = resolveWorkspaceWatcherConfig(input.serverOptions?.workspaceWatcher);
+  const graphBuildWatchSession = new GraphBuildWatchSession({
+    repo_root: repoRoot,
+    paths: input.serverOptions?.workspaceWatcherIndexedRoots ?? ["."],
+    skipped_roots: input.serverOptions?.workspaceWatcherSkippedRoots ?? [],
+    enabled: workspaceWatcherConfig.enabled,
+    debounce_ms: workspaceWatcherConfig.debounce_ms,
+    event_budget: workspaceWatcherConfig.event_budget
+  });
   const lifetimeEvidence = input.lifetimeEvidence ??
     input.testHooks?.createLifetimeEvidence?.(paths.metadataPath);
   if (input.serverOptions?.telemetry === undefined) {
@@ -305,13 +320,28 @@ export async function startAgentWorkbenchDaemon(input: {
     }
     closeSockets();
     pendingSockets.clear();
-    await Promise.allSettled([...sharedDisposers].map((dispose) => Promise.resolve(dispose())));
+    let authorityQuiesced = true;
+    if (refreshAuthority !== undefined) {
+      try {
+        await refreshAuthority.shutdown();
+      } catch {
+        authorityQuiesced = false;
+      }
+    }
+    if (refreshAuthority === undefined && refreshController !== undefined) {
+      try {
+        await waitForControllerShutdownSafety(refreshController);
+      } catch {
+        authorityQuiesced = false;
+      }
+    }
     if (startupRefreshPromise !== undefined) {
       await startupRefreshPromise.catch(() => undefined);
     }
-    await refreshAuthority?.close().catch(() => undefined);
-    if (refreshAuthority === undefined && refreshController !== undefined) {
-      await waitForControllerShutdownSafety(refreshController).catch(() => undefined);
+    if (authorityQuiesced) {
+      const disposed = await Promise.allSettled([...sharedDisposers].map((dispose) => Promise.resolve(dispose())));
+      if (disposed.some(result => result.status === "rejected")) authorityQuiesced = false;
+      try { await graphBuildWatchSession.close(); } catch { authorityQuiesced = false; }
     }
     lifetime?.dispose();
     if (server.listening) {
@@ -325,7 +355,14 @@ export async function startAgentWorkbenchDaemon(input: {
         });
       }).catch(() => undefined);
     }
-    await sharedGraphStore.close().catch(() => undefined);
+    let storeClosed = false;
+    if (authorityQuiesced) {
+      try { await queryGraphStore.close(); storeClosed = true; } catch { /* Retain ownership until store close is proven. */ }
+    }
+    // A failed quiesce or close retains the lease to prevent concurrent writers.
+    if (authorityQuiesced && storeClosed && refreshAuthority !== undefined) {
+      await refreshAuthority.close().catch(() => undefined);
+    }
     removeCanonicalFile(paths.socketPath);
     if (process.platform !== "win32") {
       fsyncDirectory(paths.ipcDir);
@@ -451,15 +488,6 @@ export async function startAgentWorkbenchDaemon(input: {
       await input.testHooks.awaitBootstrap;
     }
 
-    const store = await sharedGraphStore();
-    retireLegacyGraphStore(databasePath);
-    refreshController = await createRepositoryRefreshController({
-      repoRoot,
-      graphStore: sharedGraphStore,
-      databasePath,
-      controllerGeneration: ownerGeneration,
-      maxFiles: input.serverOptions?.startupWarmupMaxFiles ?? 2000
-    });
     let recoveredSnapshotIds: readonly string[] = [];
     let recoveryLease: (RepositoryOwnershipLease & { state: "active" }) | undefined;
     refreshAuthority = new LazyOwnershipGatedRefreshAuthority({
@@ -474,12 +502,29 @@ export async function startAgentWorkbenchDaemon(input: {
         heartbeat_at: new Date().toISOString()
       },
       prepare_controller: async (admission) => {
-        const orphanReconciliation = await store.reconcileOrphanedBuilds({
-          repo_root: repoRoot,
-          current_owner: admission.lease,
-          recovered_owners: admission.recovered_owners,
-          updated_at: new Date().toISOString()
-        });
+        if (observerStoreSelected) {
+          const ownedStore = createAsyncGraphStore(databasePath);
+          await queryGraphStore.promote({
+            next: ownedStore,
+            prepare: () => prepareOwnedGraphStore(databasePath, admission)
+          });
+          sharedGraphStore = ownedStore;
+          observerStoreSelected = false;
+        } else {
+          prepareOwnedGraphStore(databasePath, admission);
+        }
+        const store = openGraphStore(databasePath);
+        let orphanReconciliation: Awaited<ReturnType<typeof store.reconcileOrphanedBuilds>>;
+        try {
+          orphanReconciliation = await store.reconcileOrphanedBuilds({
+            repo_root: repoRoot,
+            current_owner: admission.lease,
+            recovered_owners: admission.recovered_owners,
+            updated_at: new Date().toISOString()
+          });
+        } finally {
+          store.close();
+        }
         recoveredSnapshotIds = orphanReconciliation.outcome === "reconciled"
           ? orphanReconciliation.snapshot_ids
           : [];
@@ -491,6 +536,14 @@ export async function startAgentWorkbenchDaemon(input: {
           : "ready";
       },
       create_controller: async () => {
+        refreshController = await createRepositoryRefreshController({
+          repoRoot,
+          graphStore: sharedGraphStore,
+          databasePath,
+          controllerGeneration: ownerGeneration,
+          maxFiles: input.serverOptions?.startupWarmupMaxFiles ?? 2000,
+          observation: graphBuildWatchSession
+        });
         if (recoveredSnapshotIds[0] !== undefined) {
           await refreshController.recordAdmissionFailure({
             repo_root: repoRoot,
@@ -503,41 +556,75 @@ export async function startAgentWorkbenchDaemon(input: {
           await ownership.confirmRecovery({ lease: recoveryLease });
         }
         return refreshController;
+      },
+      cleanup_before_release: async () => {
+        await graphBuildWatchSession.close();
+        await queryGraphStore.close();
       }
     });
     const refreshPreparation = await refreshAuthority.prepare();
-    if (
-      refreshPreparation.outcome === "blocked" &&
-      refreshPreparation.reason === "ownership_ambiguous"
-    ) {
+    if (refreshPreparation.outcome === "blocked" && refreshPreparation.reason === "owner_active") {
+      const observerStore = createAsyncGraphStore(databasePath, { existingCompatible: true });
+      await queryGraphStore.promote({ next: observerStore, prepare: () => undefined });
+      sharedGraphStore = observerStore;
+      observerStoreSelected = true;
+    }
+    if (refreshPreparation.outcome === "blocked" && refreshPreparation.reason === "ownership_ambiguous") {
       throw new Error("Repository refresh ownership is ambiguous.");
     }
+    if (refreshAuthority === undefined) {
+      throw new Error("Repository refresh authority initialization failed.");
+    }
+    const preparedRefreshAuthority = refreshAuthority;
 
     const refreshTriggers = new RepositoryRefreshTriggerCoordinator({
       repo_root: repoRoot,
       controller: refreshAuthority,
-      publications: createAsyncPublicationPort(sharedGraphStore),
+      publications: createAsyncPublicationPort(async () => await queryGraphStore()),
       snapshots: {
         async markSnapshotFreshness(request) {
-          await (await sharedGraphStore()).markSnapshotFreshness(request);
+          await (await queryGraphStore()).markSnapshotFreshness(request);
         }
       }
     });
     const workspaceRefresh = createRepositoryWorkspaceRefreshService({
       repoRoot,
       triggers: refreshTriggers,
-      watcher: new FilesystemWorkspaceWatcherAdapter(),
+      observation: graphBuildWatchSession,
       clock: new SystemClockAdapter(),
-      config: resolveWorkspaceWatcherConfig(input.serverOptions?.workspaceWatcher),
+      config: workspaceWatcherConfig,
       indexedRoots: input.serverOptions?.workspaceWatcherIndexedRoots ?? ["."],
       skippedRoots: input.serverOptions?.workspaceWatcherSkippedRoots ?? []
     });
-    sharedDisposers.add(() => workspaceRefresh.close());
+    sharedDisposers.add(async () => {
+      await workspaceRefresh.close();
+      await graphBuildWatchSession.close();
+    });
     sharedRepositoryServices = {
-      refreshController: refreshAuthority,
-      refreshDiagnostics: refreshController,
+      refreshController: preparedRefreshAuthority,
+      refreshDiagnostics: {
+        async getDiagnostics(request) {
+          if (request.repo_root !== repoRoot) {
+            throw new TypeError("Refresh diagnostics repository does not match daemon ownership.");
+          }
+          if (refreshController !== undefined) {
+            return await refreshController.getDiagnostics(request);
+          }
+          const receipt = preparedRefreshAuthority.getReceipt();
+          return {
+            repo_identity: repoRoot,
+            controller_generation: receipt.controller_generation,
+            diagnostic_revision: 0,
+            worker_invocations: 0,
+            execution_state: "idle" as const,
+            graph_freshness: "cold" as const,
+            activity_lease_held: false,
+            worker_termination_state: "not_required" as const
+          };
+        }
+      },
       refreshTriggers,
-      graphStore: sharedGraphStore,
+      graphStore: async () => await queryGraphStore(),
       referenceCursorCodec: createReferenceCursorCodec(),
       docsRankingCursorCodec: createDocsRankingCursorCodec(),
       pollWorkspaceWatcher: () => workspaceRefresh.poll(),
@@ -546,6 +633,7 @@ export async function startAgentWorkbenchDaemon(input: {
         return () => sharedDisposers.delete(dispose);
       }
     };
+    await input.testHooks?.beforeReady?.({ refreshTriggers });
     startupTimer = setTimeout(() => {
       startupRefreshPromise = refreshTriggers.startup({ source: "daemon-startup" })
         .then(() => undefined, () => undefined);
@@ -662,7 +750,7 @@ export async function startAgentWorkbenchDaemon(input: {
           : Promise.resolve()
       ]);
     },
-    close_store: () => sharedGraphStore.close(),
+    close_store: () => queryGraphStore.close(),
     release_authority: async () => {
       if (refreshAuthority !== undefined) {
         await refreshAuthority.close();

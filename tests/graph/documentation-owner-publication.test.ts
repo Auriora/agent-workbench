@@ -62,7 +62,7 @@ describe("documentation concern publication", () => {
     }
   });
 
-  it("reports v2 and missing v3 concern state as distinct incompatibilities", async () => {
+  it("reports v2 and missing current-schema concern state as distinct incompatibilities", async () => {
     const store = openGraphStore(path.join(directory, "compatibility.sqlite"));
     try {
       await createBuildingSnapshot(store, { ...snapshot("4302"), schema_version: 2 });
@@ -75,7 +75,7 @@ describe("documentation concern publication", () => {
         snapshot_id: "4302",
         reason: "snapshot_schema_incompatible",
         observed_schema_version: 2,
-        required_schema_version: 3
+        required_schema_version: SCHEMA_VERSION
       });
       await expect(store.getDocumentationConcernIndexState({ snapshot_id: "4303" })).resolves.toEqual({
         status: "unavailable",

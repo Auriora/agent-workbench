@@ -12,7 +12,7 @@ import {
   type RepositoryRefreshTriggerPort
 } from "../../src/application/use-cases/repository-refresh-triggers.js";
 import { createRepositoryWorkspaceRefreshService } from "../../src/server.js";
-import type { WorkspaceWatcherPort } from "../../src/ports/index.js";
+import type { GraphBuildWatchQueuePort } from "../../src/ports/index.js";
 
 class RecordingTriggers implements RepositoryRefreshTriggerPort {
   public readonly watcherRequests: string[] = [];
@@ -231,21 +231,21 @@ describe("process workspace change queue", () => {
   it("autonomously admits modifications without a status or orientation read", async () => {
     const clock = new MutableClock("2026-07-05T12:00:00.000Z");
     const triggers = new RecordingTriggers();
-    let starts = 0;
-    let stops = 0;
     let polls = 0;
     let scheduled: (() => void) | undefined;
     let admitted!: () => void;
     const admissionObserved = new Promise<void>((resolve) => { admitted = resolve; });
     triggers.onWatcherRequest = admitted;
-    const watcher: WorkspaceWatcherPort = {
-      async start() {
-        starts += 1;
-        return { id: "watch-1", started_at: clock.nowIso8601() };
-      },
-      async stop() { stops += 1; },
-      async reset() {},
-      async poll() {
+    const observation: GraphBuildWatchQueuePort = {
+      async start() { return { epoch: "watch-1", sequence: 0, healthy: true, pending_events: 0, covered_directories: ["."] }; },
+      async registerDirectory() { return this.observe(); },
+      observe() { return { epoch: "watch-1", sequence: 0, healthy: true, pending_events: 0, covered_directories: ["."] }; },
+      async drain() { return this.observe(); },
+      async close() {},
+      coverageEstablished: () => true,
+      establishCoverage() {},
+      bindDrain() {},
+      async pollEvents() {
         polls += 1;
         return polls === 1
           ? [{ kind: "modified" as const, path: "src/app.ts", recorded_at: clock.nowIso8601() }]
@@ -255,7 +255,7 @@ describe("process workspace change queue", () => {
     const service = createRepositoryWorkspaceRefreshService({
       repoRoot: "/repo",
       triggers,
-      watcher,
+      observation,
       clock,
       config: { enabled: true, debounce_ms: 0, event_budget: 10 },
       indexedRoots: ["."],
@@ -269,11 +269,8 @@ describe("process workspace change queue", () => {
     expect(scheduled).toBeDefined();
     scheduled!();
     await admissionObserved;
-    expect(starts).toBe(1);
     expect(triggers.watcherRequests).toHaveLength(1);
-    expect(stops).toBe(0);
     await service.close();
-    expect(stops).toBe(1);
   });
 
   it("reuses a stable identity for sequential duplicate batches and advances for new evidence", async () => {
@@ -485,11 +482,16 @@ describe("process workspace change queue", () => {
     const service = createRepositoryWorkspaceRefreshService({
       repoRoot: "/repo",
       triggers: new RecordingTriggers(),
-      watcher: {
-        async start() { return { id: "watch-1", started_at: clock.nowIso8601() }; },
-        async stop() {},
-        async reset() {},
-        async poll() { throw new Error("secret-token at /private/workspace"); }
+      observation: {
+        async start() { return { epoch: "watch-1", sequence: 0, healthy: true, pending_events: 0, covered_directories: ["."] }; },
+        async registerDirectory() { return this.observe(); },
+        observe() { return { epoch: "watch-1", sequence: 0, healthy: true, pending_events: 0, covered_directories: ["."] }; },
+        async drain() { return this.observe(); },
+        async close() {},
+        coverageEstablished: () => true,
+      establishCoverage() {},
+      bindDrain() {},
+        async pollEvents() { throw new Error("secret-token at /private/workspace"); }
       },
       clock,
       config: { enabled: true, debounce_ms: 0, event_budget: 10 },
@@ -507,6 +509,88 @@ describe("process workspace change queue", () => {
       reason: "Workspace watcher processing failed."
     });
     expect(JSON.stringify(result)).not.toMatch(/secret-token|private\/workspace/);
+    await service.close();
+  });
+
+  it("keeps ownership refusals observable without idle retries and permits a new generation", async () => {
+    const clock = new MutableClock("2026-11-08T12:00:00.000Z");
+    const admission = { outcome: "blocked", reused: false, state: "idle", reason: "owner_active",
+      message: "Another owner is active." };
+    const triggers = new RecordingTriggers(admission);
+    let active = false;
+    triggers.hasPendingGeneration = async () => active;
+    let health!: () => { healthy: boolean; pending_events: number };
+    let polls = 0;
+    const service = createRepositoryWorkspaceRefreshService({
+      repoRoot: "/repo", triggers, clock,
+      observation: {
+        async start() { return this.observe(); },
+        async registerDirectory() { return this.observe(); },
+        observe() { return { epoch: "epoch", sequence: 1, healthy: true, pending_events: 0, covered_directories: ["."] }; },
+        async drain() { return this.observe(); },
+        async close() {},
+        coverageEstablished: () => true,
+        establishCoverage() {},
+        bindDrain(_drain, queueHealth) { health = queueHealth!; },
+        async pollEvents() {
+          return ++polls === 1 ? [{ kind: "modified", path: "src/app.ts", recorded_at: clock.nowIso8601() }] : [];
+        }
+      },
+      config: { enabled: true, debounce_ms: 0, event_budget: 10 },
+      indexedRoots: ["."], skippedRoots: [], schedulePoll: () => ({ cancel() {} })
+    });
+    try {
+      await expect(service.poll()).resolves.toMatchObject({ status: "degraded", refresh_admission: admission });
+      expect(health()).toEqual({ healthy: true, pending_events: 0 });
+      await expect(service.poll({ force: true })).resolves.toMatchObject({ status: "degraded", refresh_admission: admission });
+      expect(triggers.watcherRequests).toHaveLength(1);
+      active = true;
+      await expect(service.poll({ force: true })).resolves.toMatchObject({ status: "refreshing" });
+      active = false;
+      await expect(service.poll()).resolves.toMatchObject({ status: "fresh" });
+      expect(triggers.watcherRequests).toHaveLength(1);
+    } finally { await service.close(); }
+  });
+
+  it("binds forced raw-event drains outside debounce timing", async () => {
+    const clock = new MutableClock("2026-07-05T12:00:00.000Z");
+    const triggers = new RecordingTriggers();
+    let boundDrain: (() => Promise<void>) | undefined;
+    let forceSeen = false;
+    let polls = 0;
+    triggers.hasPendingGeneration = async () => true;
+    const service = createRepositoryWorkspaceRefreshService({
+      repoRoot: "/repo",
+      triggers,
+      observation: {
+        async start() { return { epoch: "epoch", sequence: 0, healthy: true, pending_events: 0, covered_directories: ["."] }; },
+        async registerDirectory() { return this.observe(); },
+        observe() { return { epoch: "epoch", sequence: 0, healthy: true, pending_events: 0, covered_directories: ["."] }; },
+        async drain() { return this.observe(); },
+        async close() {},
+        coverageEstablished: () => true,
+        establishCoverage() {},
+        bindDrain(drain) { boundDrain = drain; },
+        async pollEvents(input) {
+          forceSeen = input?.force === true;
+          polls += 1;
+          return polls === 1 ? [{ kind: "modified", path: "src/app.ts", recorded_at: clock.nowIso8601() }] : [];
+        }
+      },
+      clock,
+      config: { enabled: true, debounce_ms: 60_000, event_budget: 10 },
+      indexedRoots: ["."],
+      skippedRoots: [],
+      schedulePoll: () => ({ cancel() {} })
+    });
+
+    await service.poll();
+    expect(triggers.watcherRequests).toHaveLength(0);
+    await boundDrain!();
+    expect(forceSeen).toBe(true);
+    expect(triggers.watcherRequests).toHaveLength(1);
+    await expect(service.poll({ force: true })).resolves.toMatchObject({ status: "refreshing" });
+    expect(triggers.watcherRequests).toHaveLength(1);
     await service.close();
   });
 });

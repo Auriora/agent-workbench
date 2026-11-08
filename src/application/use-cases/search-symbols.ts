@@ -66,7 +66,7 @@ export async function searchSymbols(input: {
       symbols: {
         query: input.request.query,
         repo_root: repoRoot,
-        snapshot_id: input.request.snapshot_id ?? "",
+        snapshot_id: input.selected_snapshot_id ?? input.request.snapshot_id ?? "",
         symbols: [],
         next_actions: capNextActions([])
       },

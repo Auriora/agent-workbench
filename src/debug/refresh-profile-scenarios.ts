@@ -12,14 +12,10 @@ import {
   distribution, hash, isOwningCheckout, runtimeFingerprint, sourceFingerprint, writeJson,
   type RefreshProfileRun, type RefreshProfileRuntime, type RefreshProfileWorkerMetrics
 } from "./refresh-profile.js";
-import { RepositoryRefreshTriggerCoordinator } from "../application/use-cases/repository-refresh-triggers.js";
 import { SnapshotValidityService, classifySnapshotCompositionFreshness, DEFAULT_SNAPSHOT_VALIDITY_MAX_PATHS } from "../application/use-cases/validate-snapshot-paths.js";
 import { discoverRepositoryComposition } from "../application/use-cases/repository-composition.js";
 import { GitMetadataCommandAdapter } from "../infrastructure/commands/index.js";
-import { FilesystemWorkspaceWatcherAdapter, FilesystemSnapshotPathValidatorAdapter, WorkspaceFileAdapter } from "../infrastructure/filesystem/index.js";
-import { SystemClockAdapter } from "../infrastructure/time/index.js";
-import { createRepositoryWorkspaceRefreshService } from "../server.js";
-import { resolveWorkspaceWatcherConfig } from "../domain/models/index.js";
+import { FilesystemSnapshotPathValidatorAdapter, WorkspaceFileAdapter } from "../infrastructure/filesystem/index.js";
 import { captureRefreshSemanticEvidence, compareRefreshSemanticEvidence, type RefreshSemanticEvidence } from "./refresh-profile-comparison.js";
 
 export const REFRESH_PROFILE_SCENARIOS = [
@@ -37,7 +33,7 @@ export type RefreshScenarioSuiteResult =
   | { schema_version: 1; state: "complete"; identity: Record<string, unknown>; measurements: RefreshScenarioMeasurement[];
       summaries: Array<{ scenario: RefreshProfileScenario; repetitions: number; wall_ms: ReturnType<typeof distribution>; generation_process_cpu_us: ReturnType<typeof distribution>; worker_cpu_us: ReturnType<typeof distribution> }>;
       limits: string[] }
-  | { schema_version: 1; state: "blocked" | "failed"; code: string; completed_measurements: number; identity?: Record<string, unknown> };
+  | { schema_version: 1; state: "blocked" | "failed"; code: string; completed_measurements: number; identity?: Record<string, unknown>; failure_evidence?: readonly unknown[] };
 const IDLE_WINDOW_MS = 60_000;
 const WATCHER_CALIBRATION = { debounce_ms: 25, event_budget: 2000, poll_interval_ms: 25 } as const;
 const ZERO_WORK: RefreshProfileWorkerMetrics["work_counts"] = { directory_enumerations: 0, directory_entries_considered: 0, file_stat_attempts: 0, wildcard_regex_compilations: 0 };
@@ -97,7 +93,7 @@ export async function runRefreshScenarioSuite(config: RefreshScenarioConfig): Pr
       const inputMutations: RefreshScenarioMeasurement["input_mutations"] = [];
       const profileRoot = path.join(runRoot, "cold"); fs.mkdirSync(profileRoot, { mode: 0o700 });
       let runtime = createRefreshProfileRuntime({ source: fixture.repo_root, output: profileRoot, max_files: 2000 });
-      let watcher: ReturnType<typeof createRepositoryWorkspaceRefreshService> | undefined;
+      let watcher: RefreshProfileRuntime["workspace_refresh"] | undefined;
       const progress = (scenario: string, extra: Record<string, unknown> = {}): void => writeJson(path.join(output, "progress.json"), { state: "running", run, scenario, completed_measurements: measurements.length, ...extra });
       const collect = async (measurement: RefreshProfileRun, observation?: Record<string, unknown>): Promise<void> => {
         assertOwnedContent(fixture, expectedContent);
@@ -123,7 +119,6 @@ export async function runRefreshScenarioSuite(config: RefreshScenarioConfig): Pr
         await runtime.close();
         const warmOutput = path.join(runRoot, "warm"); fs.mkdirSync(warmOutput, { mode: 0o700 });
         runtime = createRefreshProfileRuntime({ source: fixture.repo_root, output: warmOutput, database_path: databasePath, max_files: 2000 });
-        const triggers = new RepositoryRefreshTriggerCoordinator({ repo_root: fixture.repo_root, controller: runtime.controller, publications: runtime.store(), snapshots: runtime.store() });
         if (scenarios.includes("persisted_reuse")) {
           progress("persisted_reuse");
           const measured = await measureWithoutWorkers(runtime, run, "persisted_reuse", async () => {
@@ -138,7 +133,7 @@ export async function runRefreshScenarioSuite(config: RefreshScenarioConfig): Pr
           await collect(measured, { scope: "canonical persisted first-read path/composition validation; no daemon startup refresh request", database_reopened: true, refresh_workers: 0 });
         }
         if (scenarios.some(name => ["settled_idle", "single_edit", "burst_edits"].includes(name))) {
-          watcher = createRepositoryWorkspaceRefreshService({ repoRoot: fixture.repo_root, triggers, watcher: new FilesystemWorkspaceWatcherAdapter(), clock: new SystemClockAdapter(), config: resolveWorkspaceWatcherConfig({ enabled: true, debounce_ms: WATCHER_CALIBRATION.debounce_ms, event_budget: WATCHER_CALIBRATION.event_budget }), indexedRoots: ["."], skippedRoots: [], pollIntervalMs: WATCHER_CALIBRATION.poll_interval_ms });
+          watcher = runtime.workspace_refresh;
           const ready = await watcher.poll();
           if (ready?.status === "degraded") throw new Error("watcher_start_failed");
         }
@@ -162,6 +157,9 @@ export async function runRefreshScenarioSuite(config: RefreshScenarioConfig): Pr
           // The same runtime emits further pass numbers into its private warm directory.
           const edited = await measureRefreshGeneration({ runtime, output: directory, run, scenario: "single_edit", action: async () => {
             mutateOwnedFixture(fixture, callers[0], "\ndef profile_single_edit():\n    return 101\n", "2001-01-02T00:00:00.000Z", expectedContent, inputMutations);
+            await new Promise<void>(resolve => setTimeout(resolve, WATCHER_CALIBRATION.poll_interval_ms));
+            const observed = await watcher!.poll({ force: true });
+            if (observed?.status !== "refreshing") throw new Error(`watcher_edit_not_admitted:${observed?.status ?? "missing"}`);
           } });
           if (edited.state !== "complete") throw new Error(edited.code);
           assertPublishedDeclaration(runtime, "profile_single_edit");
@@ -173,6 +171,9 @@ export async function runRefreshScenarioSuite(config: RefreshScenarioConfig): Pr
           const directory = path.join(runRoot, "burst-edits"); fs.mkdirSync(directory, { mode: 0o700 });
           const burst = await measureRefreshGeneration({ runtime, output: directory, run, scenario: "burst_edits", action: async () => {
             for (const [index, file] of touched.entries()) mutateOwnedFixture(fixture, file, `\ndef profile_burst_edit_${index}():\n    return ${201 + index}\n`, "2001-01-03T00:00:00.000Z", expectedContent, inputMutations);
+            await new Promise<void>(resolve => setTimeout(resolve, WATCHER_CALIBRATION.poll_interval_ms));
+            const observed = await watcher!.poll({ force: true });
+            if (observed?.status !== "refreshing") throw new Error(`watcher_edit_not_admitted:${observed?.status ?? "missing"}`);
           } });
           if (burst.state !== "complete") throw new Error(burst.code);
           for (let index = 0; index < touched.length; index++) assertPublishedDeclaration(runtime, `profile_burst_edit_${index}`);
@@ -216,9 +217,33 @@ export async function runRefreshScenarioSuite(config: RefreshScenarioConfig): Pr
     return result;
   } catch (error) {
     const code = error instanceof Error && /^[a-z_]+$/.test(error.message) ? error.message : "scenario_suite_failed";
-    const failed: RefreshScenarioSuiteResult = { schema_version: 1, state: "failed", code, completed_measurements: measurements.length, identity };
+    const failureEvidence = readFailureEvidence(output);
+    const failed: RefreshScenarioSuiteResult = {
+      schema_version: 1, state: "failed", code, completed_measurements: measurements.length, identity,
+      ...(failureEvidence.length === 0 ? {} : { failure_evidence: failureEvidence })
+    };
     writeJson(path.join(output, "report.json"), failed); writeJson(path.join(output, "progress.json"), failed); return failed;
   }
+}
+
+/** Reads only private harness diagnostics; it never probes the profiled source. */
+function readFailureEvidence(output: string | undefined): readonly unknown[] {
+  if (output === undefined) return [];
+  const evidence: unknown[] = [];
+  const visit = (directory: string): void => {
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(directory, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const candidate = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(candidate);
+      } else if (entry.isFile() && entry.name === "failure-evidence.json") {
+        try { evidence.push(JSON.parse(fs.readFileSync(candidate, "utf8"))); } catch { /* retain the original failure */ }
+      }
+    }
+  };
+  visit(output);
+  return evidence;
 }
 
 async function measureWithoutWorkers(runtime: RefreshProfileRuntime, run: number, scenario: string, action: () => Promise<void>): Promise<RefreshProfileRun> {

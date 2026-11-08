@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { MessageChannel, Worker } from "node:worker_threads";
 import { execFileSync } from "node:child_process";
 import { resolveRefreshProfileConfig, runRefreshProfile } from "../../src/debug/refresh-profile.js";
+import { GraphBuildWatchSession } from "../../src/infrastructure/runtime/graph-build-watch-session.js";
 
 const temporaryRoots: string[] = [];
 const profilingAvailable = typeof process.threadCpuUsage === "function";
@@ -87,7 +88,7 @@ describe("actual production refresh worker profiling",()=>{
     expect(result.runs[0].evidence_counts.nodes).toBeGreaterThan(0);
     expect(result.runs[0].worker_cpu_us).toBeGreaterThan(0);
     expect(result.runs[0].generation_process_cpu_us.user + result.runs[0].generation_process_cpu_us.system).toBeGreaterThan(0);
-    expect(result.runs[0].passes[0].progress_intervals.some(x=>x.progress.phase==="extraction")).toBe(true);
+    expect(result.runs[0].passes.flatMap(pass=>pass.progress_intervals).some(x=>x.progress.phase==="extraction")).toBe(true);
     const profile=JSON.parse(fs.readFileSync(result.runs[0].passes[0].profile_path,"utf8"));
     expect(profile.nodes.some((node:{callFrame:{url:string}})=>node.callFrame.url.includes("startup-graph-warmup-worker"))).toBe(true);
     expect(fs.readdirSync(f.source)).toEqual(before);
@@ -104,23 +105,33 @@ describe("actual production refresh worker profiling",()=>{
       let debugReceipt:unknown;
       port1.on("message",value=>{debugReceipt=value;});
       const endpointClosed=new Promise<void>(resolve=>port1.once("close",resolve));
-      const workerData={executionId:"equivalent-worker",repoRoot:f.source,databasePath:path.join(output,"graph.sqlite"),snapshotId:"12345",configIdentity:"default",maxFiles:2000,retainLatestSnapshots:3,retainLatestFreshSnapshots:2,controllerGeneration:123,invalidationGeneration:0,deadlineAt:new Date(Date.now()+60000).toISOString(),timeoutMs:60000};
+      const watcher = new GraphBuildWatchSession({repo_root:f.source,paths:["."],skipped_roots:[],enabled:true,debounce_ms:25,event_budget:2000});
+      const watcherObservation = await watcher.start();
+      const workerData={executionId:"equivalent-worker",repoRoot:f.source,databasePath:path.join(output,"graph.sqlite"),snapshotId:"12345",configIdentity:"default",maxFiles:2000,retainLatestSnapshots:3,retainLatestFreshSnapshots:2,controllerGeneration:123,invalidationGeneration:0,deadlineAt:new Date(Date.now()+60000).toISOString(),timeoutMs:60000,watcherObservation};
       const worker=new Worker(new URL(profile?"../../src/debug/refresh-profile-worker-entrypoint.mjs":"../../src/infrastructure/workers/startup-graph-warmup-worker-entrypoint.mjs",import.meta.url),{
         workerData:profile?{...workerData,refreshProfile:{port:port2,profile_path:path.join(output,"worker.cpuprofile")}}:workerData,
         transferList:profile?[port2]:[]
       });
       const exited=new Promise<void>((resolve,reject)=>{
-        worker.on("message",message=>messages.push(message));
+        worker.on("message",message=>{
+          if ((message as {type?:string}).type === "graph_build_observation_request") {
+            const request = message as {request_id:string;operation:"observe"|"register_directory";path?:string;repository_key?:string};
+            void (request.operation === "observe" ? Promise.resolve(watcher.observe()) : watcher.registerDirectory({path:request.path!,repository_key:request.repository_key}))
+              .then(result=>worker.postMessage({...message as object,type:"graph_build_observation_ack",accepted:true,result}));
+            return;
+          }
+          messages.push(message);
+        });
         worker.once("error",reject);worker.once("exit",code=>code===0?resolve():reject(new Error(`exit ${code}`)));
       });
       if(!profile){port2.close();}
-      await exited;await endpointClosed;
+      await exited;await endpointClosed;await watcher.close();
       if(profile)expect(debugReceipt).toMatchObject({state:"complete",schema_version:1});
       return messages;
     }
     const plain=await workerMessages(false),profiled=await workerMessages(true);
     expect(profiled).toEqual(plain);
-    expect(profiled).toContainEqual(expect.objectContaining({type:"complete"}));
+    expect(profiled).toContainEqual(expect.objectContaining({type:"partial",result:expect.objectContaining({partial_kind:"publish_seed"})}));
     expect(profiled.every(message=>["progress","complete","partial"].includes((message as {type:string}).type))).toBe(true);
   },30000);
   it.skipIf(!profilingAvailable)("retains failed worker profiling evidence separately without a success summary",async()=>{
@@ -170,6 +181,7 @@ describe("actual production refresh worker profiling",()=>{
     expect(result.state).toBe("complete");
     if(result.state!=="complete")throw new Error(JSON.stringify(result));
     expect(result.runs[0].evidence_counts.files).toBe(0);
-    expect(result.runs[0].passes).toHaveLength(1);
+    expect(result.runs[0].passes).toHaveLength(2);
+    expect(result.runs[0].passes.at(-1)?.progress_intervals.some(item=>item.progress.phase==="finalizing")).toBe(true);
   },15000);
 });

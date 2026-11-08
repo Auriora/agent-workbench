@@ -54,7 +54,11 @@ export class WorkspaceChangeQueue {
     this.lastEventAtMs = this.clock.nowUnixMs();
   }
 
-  public drain(): WorkspaceChangeQueueDrainResult {
+  public observation(): { pending_events: number; overflowed: boolean } {
+    return { pending_events: this.pending.size, overflowed: this.overflowed };
+  }
+
+  public drain(input: { force?: boolean } = {}): WorkspaceChangeQueueDrainResult {
     if (this.overflowed) {
       this.overflowed = false;
       return {
@@ -76,7 +80,7 @@ export class WorkspaceChangeQueue {
     }
 
     const ageMs = this.clock.nowUnixMs() - this.lastEventAtMs;
-    if (ageMs < this.debounceMs) {
+    if (input.force !== true && ageMs < this.debounceMs) {
       return {
         status: "idle",
         events: [],

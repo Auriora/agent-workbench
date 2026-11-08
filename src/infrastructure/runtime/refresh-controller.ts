@@ -13,6 +13,8 @@ import type {
   RefreshExecutorCompletion,
   RefreshExecutorPort,
   RefreshWorkerResult,
+  GraphBuildPublicationValidationPort,
+  GraphBuildValidationReceipt,
   SnapshotPublicationPort,
   SnapshotRefreshAdmission,
   SnapshotRefreshAdmissionFailurePort,
@@ -49,8 +51,9 @@ type ControllerWorkerFailureCode = Extract<
   | "worker_error"
   | "worker_exit_without_result"
   | "invalid_worker_result"
+  | "manifest_validation_failed"
 >;
-type PassFailureCode = ControllerWorkerFailureCode | "controller_shutdown";
+type PassFailureCode = ControllerWorkerFailureCode | "manifest_validation_failed" | "controller_shutdown";
 
 type PartialRefreshWorkerResult = Extract<RefreshWorkerResult, { outcome: "partial" }>;
 
@@ -59,7 +62,7 @@ type PassOutcome =
   | { outcome: "complete"; result: Extract<RefreshWorkerResult, { outcome: "complete" }> }
   | { outcome: "failed"; code: PassFailureCode; worker_started: boolean };
 
-type ControllerFailureCode = PassFailureCode | "store_failure" | "permission_failure";
+type ControllerFailureCode = PassFailureCode | "store_failure" | "permission_failure" | "manifest_validation_failed";
 
 export type SnapshotRefreshControllerOptions = {
   repo_root: string;
@@ -68,6 +71,7 @@ export type SnapshotRefreshControllerOptions = {
   clock: ClockPort;
   executor: RefreshExecutorPort;
   publication: SnapshotPublicationPort;
+  validation: GraphBuildPublicationValidationPort;
   deadline_scheduler?: RefreshDeadlineSchedulerPort;
   create_execution_id?: () => string;
 };
@@ -86,6 +90,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
   private readonly clock: ClockPort;
   private readonly executor: RefreshExecutorPort;
   private readonly publication: SnapshotPublicationPort;
+  private readonly validation: GraphBuildPublicationValidationPort;
   private readonly deadlineScheduler: RefreshDeadlineSchedulerPort;
   private readonly createExecutionId: () => string;
   private readonly listeners = new Set<
@@ -133,6 +138,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
     this.clock = options.clock;
     this.executor = options.executor;
     this.publication = options.publication;
+    this.validation = options.validation;
     this.deadlineScheduler = options.deadline_scheduler ?? new SystemRefreshDeadlineScheduler();
     this.createExecutionId = options.create_execution_id ?? (() => `refresh-${crypto.randomUUID()}`);
   }
@@ -214,7 +220,8 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
       });
     } catch (error) {
       if (this.shutdownRequested) return this.controllerShutdownAdmission();
-      const code = classifyRefreshInfrastructureFailure(error);
+      const classified = classifyRefreshInfrastructureFailure(error);
+      const code = classified === "manifest_validation_failed" ? "store_failure" : classified;
       this.recordFailedAdmission({
         invalidation_generation: admittedGeneration,
         code
@@ -415,6 +422,29 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
       if (pass === undefined) return;
 
       const outcome = await this.executePass(pass);
+      const publicationKind = outcome.outcome === "complete"
+        ? "complete"
+        : outcome.outcome === "partial" && outcome.result.partial_kind === "publish_seed"
+          ? "seed"
+          : undefined;
+      let validationReceipt: GraphBuildValidationReceipt | undefined;
+      let validationFailure: unknown;
+      if (publicationKind !== undefined) {
+        try {
+          // Identity reads and forced event admission must never run under the
+          // controller mutation authority; the receipt is committed below.
+          validationReceipt = await this.validation.prepare({
+            repo_root: this.repoRoot,
+            execution_id: pass.execution_id,
+            target_snapshot_id: pass.target_snapshot_id,
+            controller_generation: this.controllerGeneration,
+            invalidation_generation: pass.started_generation,
+            kind: publicationKind
+          });
+        } catch (error) {
+          validationFailure = error;
+        }
+      }
       const continueExecution = await this.withMutation(async () => {
         if (this.active?.execution_id !== executionId) {
           return false;
@@ -427,7 +457,6 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
           await this.failActiveBuild(executionId, outcome.code);
           return false;
         }
-
         if (outcome.outcome === "partial") {
           if (this.requestedGeneration > pass.started_generation) {
             if (this.shutdownRequested) {
@@ -463,13 +492,19 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
             return true;
           }
 
+          if (validationFailure !== undefined) {
+            await this.failActiveBuild(executionId, classifyRefreshInfrastructureFailure(validationFailure));
+            return false;
+          }
+
           if (outcome.result.partial_kind === "publish_seed") {
             if (this.shutdownRequested) {
               await this.failActiveBuild(executionId, "controller_shutdown");
               return false;
             }
             try {
-              await this.publication.transitionBuild({
+              if (validationReceipt === undefined) throw new Error("Missing graph build validation receipt.");
+              this.validation.commit({ receipt: validationReceipt, transition: {
                 repo_root: this.repoRoot,
                 snapshot_id: pass.target_snapshot_id,
                 controller_generation: this.controllerGeneration,
@@ -477,7 +512,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
                 from: "building",
                 to: "published",
                 updated_at: this.clock.nowIso8601()
-              });
+              } });
               pass.publication_state = "published";
               this.targetPublicationState = "published";
               this.bumpDiagnosticRevision();
@@ -555,12 +590,17 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
           this.bumpDiagnosticRevision();
           return true;
         }
+        if (validationFailure !== undefined) {
+          await this.failActiveBuild(executionId, classifyRefreshInfrastructureFailure(validationFailure));
+          return false;
+        }
         if (this.shutdownRequested) {
           await this.failActiveBuild(executionId, "controller_shutdown");
           return false;
         }
         try {
-          await this.publication.transitionBuild({
+          if (validationReceipt === undefined) throw new Error("Missing graph build validation receipt.");
+          this.validation.commit({ receipt: validationReceipt, transition: {
             repo_root: this.repoRoot,
             snapshot_id: pass.target_snapshot_id,
             controller_generation: this.controllerGeneration,
@@ -568,7 +608,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
             from: "building",
             to: "published",
             updated_at: this.clock.nowIso8601()
-          });
+          } });
           pass.publication_state = "published";
           this.targetPublicationState = "published";
           this.bumpDiagnosticRevision();
@@ -661,7 +701,7 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
         resolve(outcome);
       };
       const settleStartedWorkerFailure = (
-        code: ControllerWorkerFailureCode,
+        code: ControllerWorkerFailureCode | "manifest_validation_failed",
         reason: "deadline" | "worker_error"
       ): void => {
         this.beginTermination(execution.execution_id, reason);
@@ -726,10 +766,12 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
         this.workerInvocations += 1;
         this.bumpDiagnosticRevision();
         workerRun = this.executor.run(runInput);
-      } catch {
+      } catch (error) {
         if (claim()) {
           this.beginTermination(execution.execution_id, "worker_error");
-          settle({ outcome: "failed", code: "worker_error", worker_started: false });
+          const code = typeof error === "object" && error !== null && "code" in error && error.code === "manifest_validation_failed"
+            ? "manifest_validation_failed" : "worker_error";
+          settle({ outcome: "failed", code, worker_started: false });
         }
         return;
       }
@@ -748,9 +790,11 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
               }
             }
           },
-          () => {
+          (error) => {
             if (claim()) {
-              settleStartedWorkerFailure("worker_error", "worker_error");
+              const code = typeof error === "object" && error !== null && "code" in error && error.code === "manifest_validation_failed"
+                ? "manifest_validation_failed" : "worker_error";
+              settleStartedWorkerFailure(code, "worker_error");
             }
           }
         );
@@ -845,7 +889,10 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
     });
     const releasedLease = this.releaseLease(execution.lease);
     this.executionState = "failed";
-    if (!targetWasCreated) this.targetPublicationState = undefined;
+    if (!targetWasCreated) {
+      this.targetPublicationState = undefined;
+      this.lastWorkerProgress = undefined;
+    }
     this.lastFailure = failure;
     this.workerTerminationState = this.terminationConfirmedExecutionId === executionId
       ? "confirmed"
@@ -930,7 +977,8 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
       this.bumpDiagnosticRevision();
       this.fail(executionId, code);
     } catch (error) {
-      this.quarantineUnsettledBuild(executionId, classifyRefreshInfrastructureFailure(error));
+      const classified = classifyRefreshInfrastructureFailure(error);
+      this.quarantineUnsettledBuild(executionId, classified === "manifest_validation_failed" ? "store_failure" : classified);
     }
   }
 
@@ -1052,7 +1100,8 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
         this.quarantineUnsettledBuild(executionId, "controller_shutdown");
         return this.controllerShutdownAdmission();
       }
-      const code = classifyRefreshInfrastructureFailure(error);
+      const classified = classifyRefreshInfrastructureFailure(error);
+      const code = classified === "manifest_validation_failed" ? "store_failure" : classified;
       this.quarantineUnsettledBuild(executionId, code);
       return code === "permission_failure"
         ? {
@@ -1242,9 +1291,10 @@ export class SnapshotRefreshController implements SnapshotRefreshControllerPort,
 
 export function classifyRefreshInfrastructureFailure(
   error: unknown
-): "store_failure" | "permission_failure" {
+): "store_failure" | "permission_failure" | "manifest_validation_failed" {
   if (typeof error === "object" && error !== null && "code" in error) {
     const code = (error as { code?: unknown }).code;
+    if (code === "manifest_validation_failed") return "manifest_validation_failed";
     if (code === "EACCES" || code === "EPERM") return "permission_failure";
   }
   return "store_failure";

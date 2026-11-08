@@ -162,6 +162,7 @@ export const refreshFailureCodeSchema = z.enum([
   "ownership_lost",
   "orphaned_build",
   "orphaned_pre_publication",
+  "manifest_validation_failed",
   "controller_shutdown"
 ]);
 export type RefreshFailureCode = z.infer<typeof refreshFailureCodeSchema>;
@@ -186,6 +187,7 @@ export const refreshFailureMessageSchema = z.enum([
   "Repository refresh ownership was lost.",
   "An orphaned snapshot build was recovered.",
   "An unpublished legacy snapshot was recovered.",
+  "Refresh manifest validation could not establish freshness.",
   "Refresh controller shutdown interrupted the active execution."
 ]);
 export type RefreshFailureMessage = z.infer<typeof refreshFailureMessageSchema>;
@@ -200,6 +202,7 @@ export const refreshFailureCategoryByCode: Readonly<Record<RefreshFailureCode, R
   ownership_lost: "ownership",
   orphaned_build: "publication",
   orphaned_pre_publication: "publication",
+  manifest_validation_failed: "publication",
   controller_shutdown: "shutdown"
 };
 
@@ -213,6 +216,7 @@ export const refreshFailureMessageByCode: Readonly<Record<RefreshFailureCode, Re
   ownership_lost: "Repository refresh ownership was lost.",
   orphaned_build: "An orphaned snapshot build was recovered.",
   orphaned_pre_publication: "An unpublished legacy snapshot was recovered.",
+  manifest_validation_failed: "Refresh manifest validation could not establish freshness.",
   controller_shutdown: "Refresh controller shutdown interrupted the active execution."
 };
 

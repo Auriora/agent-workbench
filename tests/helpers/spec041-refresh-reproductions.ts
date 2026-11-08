@@ -8,6 +8,7 @@ import type {
   RefreshDeadlineSchedulerPort,
   RefreshActivityLease,
   RefreshExecutorPort,
+  GraphBuildPublicationValidationPort,
   SnapshotPublicationPort,
   SnapshotRefreshAdmission,
   SnapshotRefreshPort,
@@ -15,6 +16,23 @@ import type {
 } from "../../src/ports/index.js";
 import { SnapshotRefreshController } from "../../src/infrastructure/runtime/index.js";
 import { DaemonRefreshLifetimeCoordinator } from "../../src/mcp/daemon.js";
+
+/** Explicit test-only receipt authority; production always uses manifest validation. */
+function unitValidation(onCommit?: (transition: { invalidation_generation: number }) => void): GraphBuildPublicationValidationPort {
+  let sequence = 0;
+  return {
+    async prepare(input) {
+      sequence += 1;
+      return { ...input, receipt_id: `unit-receipt-${sequence}`, manifest_id: "unit-manifest", manifest_digest: "unit-digest",
+        watcher_epoch: "unit-epoch", start_sequence: 0, end_sequence: 0, checked_files: 0, checked_directories: 0,
+        checked_inputs: 0, validation_wall_ms: 0, observed_at: "2026-07-19T12:00:00.000Z", policy_version: "manifest-identities-v1" };
+    },
+    commit(input) {
+      onCommit?.(input.transition);
+      return { ...input.transition, state: "published" };
+    }
+  };
+}
 
 /**
  * Deterministic harness around the production controller-owned deadline path.
@@ -73,6 +91,7 @@ export function createDeadlineControllerHarness(clock: ClockPort) {
     clock,
     executor,
     publication,
+    validation: unitValidation(),
     deadline_scheduler: deadlineScheduler,
     create_execution_id: () => "exec-deadline"
   });
@@ -188,6 +207,7 @@ export function createGenerationCatchupHarness(): SnapshotRefreshPort & {
     },
     executor,
     publication,
+    validation: unitValidation(transition => { publishedGeneration = transition.invalidation_generation; }),
     create_execution_id: () => "exec-refresh-1"
   });
   controller.onTransition((transition) => {
@@ -259,6 +279,7 @@ export function createPhase1DaemonLifetimeReproduction() {
     },
     executor,
     publication,
+    validation: unitValidation(),
     create_execution_id: () => "exec-1"
   });
   const lifetime = new DaemonRefreshLifetimeCoordinator({

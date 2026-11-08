@@ -18,7 +18,8 @@ isolated production-worker harness, owned scenarios, exact observations and
 comparison contract passed the final evidence gates below. T002's bounded Qt
 format admission/V002 and T003 compiled matchers/V003 are also verified. T003
 passes SC-001 with 84.60% lower median CPU in the controlled two-scan benchmark.
-T004-T006 remain pending. Historical exploratory measurements remain in
+T004 sealed inventory/publication/migration now passes V004 and SC-002 below.
+T005-T006 remain pending. Historical exploratory measurements remain in
 [research](research.md). Full-generation CPU/RSS improvement and complete
 Requirement 6/candidate/release acceptance remain T007/T008 obligations.
 
@@ -29,7 +30,7 @@ Requirement 6/candidate/release acceptance remain T007/T008 obligations.
 | V001 | Requirement 6 baseline portion; CP-006 | Actual-worker harness, exact observations, six scenarios x five runs, comparator and independently reviewed design checkpoint | passed T001; candidate gates V007/V008 pending |
 | V002 | Requirement 1; CP-001/CP-002 | Qt XML and real/malformed/unknown TypeScript, misleading directories/strings, BOM/whitespace, root beyond the 16,384-byte bound, long TypeScript comments, inconclusive/read-error outcomes; positive-Qt parser invocation counts | passed T002; full candidate gates V007/V008 pending |
 | V003 | Requirement 2; CP-001; SC-001 | Negation/anchor/directory/segment parity, child ignore invalidation, finite matcher lifetime, distinct compilation counts and CPU benchmark | passed T003/SC-001; full candidate gates pending |
-| V004 | Requirement 3; CP-001/CP-003/CP-005; SC-002 | Multi-slice single discovery, docs priority, worker exit/restart, create/delete/rename/content/ignore/config/composition invalidation, manifest migration, incomplete/sealed state, death before/during construction, at seal and before consumption, and mutations not yet admitted by watcher | pending T004 |
+| V004 | Requirement 3; CP-001/CP-003/CP-005; SC-002 | Multi-slice single discovery, docs priority, worker exit/restart, create/delete/rename/content/ignore/config/composition invalidation, manifest migration, incomplete/sealed state, death before/during construction, at seal and before consumption, and mutations not yet admitted by watcher | passed T004/SC-002; comparative V007 remains pending |
 | V005 | Requirement 4; CP-004/CP-005 | Cross-language/Ruby/lambda graph and ambiguity parity, candidate-count scaling and final-page cursor/transaction proof | pending T005 |
 | V006 | Requirement 5; CP-003/CP-005 | Budget/long-file overrun, settlement, cancellation/supersession/shutdown, unique versus visit counters and legacy unknown/rebuild behavior | pending T006 |
 | V007 | Requirement 6; SC-001-SC-004; CP-006 | Comparable complete-generation five-run baseline/candidate CPU, wall, RSS, phase costs, frozen permitted Qt/counter corrections, normalized unaffected-evidence parity; source and isolated compiled acceptance | pending T007 |
@@ -627,3 +628,184 @@ pnpm exec tsx src/debug/refresh-scan-benchmark.ts --output .tmp/spec072-t003/rep
 The exported compareScanBenchmarks rejects missing/invalid runs, changing inputs,
 different harnesses, inconsistent summaries/counts and unequal full-output digests;
 SC-001 passes only with at least five comparable runs and 50% lower median CPU.
+
+
+## T004 Sealed Inventory and Publication
+
+### Implementation and Safety Boundaries
+
+T004 implements R3 AC1-AC4, the durable-inventory and unique-progress portion of
+R5 AC3-AC5, CP-001/CP-003/CP-005 and SC-002. Each generation persists one sealed,
+ordered inventory with documentation priority, project shape, repository
+composition, admitted file identities, enumerated directory identities and
+policy/Git inputs. Worker continuations reuse that inventory across isolate exits;
+no continuation performs another broad discovery or Rails shape probe. Directory
+watch registration is acknowledged before its single enumeration; watcher startup
+arms only the root. Documentation and concern indexing precede seed extraction.
+
+Manifest sealing and v2 progress initialization are atomic. Per-file outcomes,
+graph/catalog writes, next ordinal and unique counters commit together. Preparing
+captures are never consumed; invalid evidence blocks explicitly. Confirmed dead
+controller generations invalidate their manifests without confusing a worker
+execution UUID with a daemon lease owner ID. A new watcher epoch restores
+observation from a validated published inventory but cannot resume an old capture.
+
+Seed and final publication require distinct, immutable, single-use validation
+receipts. Stat-only checks cover every admitted file, enumerated directory and
+policy/composition input. Forced queue admission runs outside controller locks;
+the final synchronous observation/generation/shutdown check and receipt consumption
+run within the publication transaction. Pending debounce events, queue overflow,
+lost watcher coverage, identity drift and stale generations prevent publication.
+This establishes bounded observations, not an atomic filesystem snapshot or a
+complete native filesystem event journal. The production hard deadline remains
+60 seconds; phase budget improvements remain T006.
+
+Schema/store identity v4 uses graph-v4.sqlite. Under the version-independent owner
+lease, migration validates v3, checkpoints WAL without a busy result, verifies and
+fsyncs graph-v3.sqlite.pre-v4, and retires the old path with a durable blocker.
+Pending and claimed blocker states distinguish crash recovery from conflicting
+nonempty targets. No old graph/progress is relabelled as v4. Compatible observers
+validate an existing exact-v4 database through a readonly probe before opening the
+normal adapter without migration, seeding or persistent pragma changes. Query
+freshness/cache writes remain supported; build/publication still require ownership.
+Ambiguous ownership blocks before opening the store. Promotion drains active method borrows and closes the observer
+handle before owned preparation; a stable async facade routes later calls to the
+owned store. Failed preparation blocks access; concurrent shutdown awaits the
+same drain. Ownership admission refusals preserve healthy
+observation, retain the blocker on idle polls without retries, and permit a newly
+admitted generation to finish.
+
+Shutdown quiesces workers and private observation RPCs before the queue, watcher,
+store and lease. Unconfirmed quiescence retains subsequent resources and ownership.
+The same ordering applies to bootstrap failure. Watchers default to enabled because
+publication now requires observation; explicitly disabled observation blocks fresh
+publication with manifest_validation_failed.
+
+### Verification Coverage
+
+Deterministic tests cover sealed/preparing/invalid captures, atomic rollback,
+exclusive cursors and unique counters; documentation priority and one-shot graph
+parity (including exact lambda edges); worker exit and recovery; delayed private
+watch ACKs and cancellation before worker creation; file create/delete/rename/edit,
+ignore/config/Git/submodule drift, unadmitted events, directory coverage, overflow,
+receipt forgery/replay and changes between validation and commit. Migration tests
+cover every persisted crash barrier, pending/nonempty conflicts on repeated entry,
+symlink/cache safety, future schemas and old-path blockers. Real daemon tests cover
+construction/seal/outcome crashes, observer queries, incompatible-store rejection,
+owner promotion, and ordered shutdown/bootstrap cleanup.
+
+Primary suites are tests/graph/manifest-continuation.test.ts,
+tests/graph/build-manifest-store.test.ts,
+tests/graph/manifest-publication-validation.test.ts,
+tests/graph/store-v4-migration.test.ts,
+tests/runtime/manifest-worker-protocol.test.ts,
+tests/runtime/manifest-refresh-integration.test.ts,
+tests/runtime/graph-build-watch-coverage.test.ts,
+tests/workspace/manifest-capture.test.ts,
+tests/workspace/watcher-generation.test.ts, tests/runtime/operations.test.ts,
+tests/mcp/daemon-entrypoint-integration.test.ts,
+tests/mcp/daemon-bootstrap-cleanup.test.ts, tests/mcp/daemon-launch.test.ts and
+tests/mcp/switchable-async-graph-store.test.ts. Failed local profiling generations
+retain bounded manifest/controller diagnostics in failure-evidence.json, allowing
+scenario failures to preserve their underlying validation reason.
+
+### Final Validation and Characterization
+
+Final command results and frozen worker characterization are recorded below after
+execution. T005 reference-candidate optimization, T006 phase budgets, T007 five-run
+complete-generation CPU/RSS acceptance and T008 package closure remain pending.
+B013 remains owned by this spec; B014 remains its separate operational policy item.
+No T004 criterion is routed to backlog, and no live installed daemon is replaced
+or restarted as part of this source change.
+
+
+The final frozen source passed:
+
+- pnpm typecheck.
+- pnpm test --maxWorkers=2: 172 files passed; 1766 tests passed, one skipped;
+  129.72 seconds, with one existing test skipped.
+- pnpm build-runtime, pnpm build-runtime:check and pnpm validate:plugin.
+- Compiled stdio MCP smoke: tests/mcp/daemon-entrypoint-integration.test.ts,
+  non-startup configured-client refresh case; one passed (24 deselected),
+  3.52 seconds, using dist/mcp/stdio-entrypoint.mjs via
+  AGENT_WORKBENCH_TEST_INSTALLED_ENTRYPOINT. This is a local compiled artifact,
+  not an installed/public release or live daemon upgrade.
+- Independent architecture review found no blocking gaps. Operations/security
+  review accepted the final compatible-observer and method-borrow lifetime fix
+  after 122 focused tests; the added shutdown/promotion overlap test also passes
+  in the final full suite. Documentation review findings were fixed by adding
+  the source/unreleased v4 operator procedure and labelling the changelog entry.
+
+Final cold-worker reproduction uses the unchanged, fixed-timestamp T003 fixture:
+
+```bash
+pnpm debug:refresh-profile --repo .tmp/spec072-t003/worker-candidate/run-1/awb-refresh-baseline-oxmK8h --output .tmp/spec072-t004-worker-complete --runs 1 --max-files 2000
+pnpm exec tsx .tmp/t004-compare.ts .tmp/spec072-t004-worker-complete/run-1/semantic-evidence.json
+```
+
+The second command is the ignored local comparison driver, not a packaged CLI.
+Its frozen oracle derives admitted files from the pre-existing fixture manifest
+and node/edge/unresolved totals from prior semantic records, never from the
+candidate counters. The supported compareRefreshSemanticEvidence API accepts the
+explicit expected-corrections object recorded in
+.tmp/spec072-t004-expected-changes.json. Reproduction requires retaining that
+frozen fixture/evidence or recreating the same fixture revision and timestamps.
+The source fixture revision is b8bf06687190d3b09280f3b37c11e914bce0577e;
+content manifest SHA-256 is
+`d10935fcb3d0c1e8ca95e877c08644aec625f2a787b20d7395790b1d0f6eefd4`,
+admitted-source SHA-256 is
+`b09d1d3efe9f835a8203164311eda20992f18c472ec72d01902586105e47ef8d`.
+Final production runtime source SHA-256 is
+`b3c93a0cc67d0bdcde3b9b23943283a11cb4139fb1b9a7e1f199607754a12b50`.
+
+| Scanner operation | Frozen T003 four-pass generation | Final T004 four-pass generation |
+| --- | ---: | ---: |
+| Directory enumerations | 20 | 6 |
+| Directory entries considered | 1028 | 342 |
+| File identity-stat attempts | 749 | 332 |
+| Ignore/priority wildcard constructions | 120 | 31 |
+
+All T004 scanner counts occur in pass 1; each count is zero in passes 2-4.
+The sealed inventory records 139 ms construction. Pass 1's catalog phase is
+156.067 ms. Continuation composition-labelled phases are 73.538, 4.404 and
+4.568 ms; the first includes seed continuation/clone work, so these are observed
+phase costs, not pure manifest-deserialization estimates. Per-pass worker receipt
+wall times are 1259.243, 587.296, 626.018 and 427.481 ms; thread CPU is
+1088144, 515773, 593850 and 418101 microseconds. Complete-process measurement is
+3845.516 ms wall, 5209204 microseconds CPU and 530055168 bytes sampled process
+peak RSS. These are one-run characterizations on an uncontrolled OS cache and
+shared host, not comparative CPU/RSS acceptance.
+
+Seed and final validation independently check 332 files, six directories and
+12 inputs, with 18 ms and 16 ms validation wall time and observed sequences
+0-to-0. These 350 logical identity reads per receipt, watcher/metadata reads and
+capture overhead are additional to the scanner counters above. The counts do
+not establish a reduction in total stat syscalls or total generation CPU.
+max_files limits graph rows; it is not a discovery-work budget.
+
+The final graph contains 332 files, 655 nodes, 7680 edges, two unresolved
+references and three documents. All 9341 normalized semantic records match with
+exactly three independently predicted corrections: store identity 3-to-4,
+progress contract version 2 with exhausted ordinal cursor, and distinct coverage
+accounting. There are zero additional differences. Documentation, graph metadata,
+confidence, ambiguity, provenance, FTS, concerns and composition remain equal.
+
+Local evidence remains ignored under .tmp/spec072-t004-worker-complete/ and
+.tmp/t004-*-frozen.log; profiles and generated runtime databases are not committed.
+T004 durable behavior is promoted to runtime operations, graph-store design,
+runtime contracts, the agent changelog and the install/recovery runbook. No live
+installed process was changed. T005-T008 remain pending, including complete
+five-run candidate acceptance and final package/backlog closure.
+
+
+A preceding full run reported two manifest_validation_failed scenario outcomes
+(1759 tests passed, two failed, one skipped). Its temporary databases had already
+been cleaned up, so the underlying invalid_reason cannot be reconstructed.
+The scenario suite subsequently passed all five tests in isolation; four retained
+260-file cold runs also completed alongside daemon integration, and the final
+frozen full suite and final worker characterization passed. No causal repair of
+that intermittent condition is claimed. The added diagnostics preserve manifest
+invalidation reasons on recurrence. T007 owns attribution of any recurrence and
+must reject failed repetitions rather than retry, discard or count them as
+performance acceptance. This is a recorded validation risk, not evidence of an
+identified filesystem race being fixed or permission to weaken freshness checks.

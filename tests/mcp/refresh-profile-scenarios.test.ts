@@ -42,12 +42,14 @@ describe("owned production refresh profiling scenarios", () => {
     expect(result.summaries[0].repetitions).toBe(2);
   }, 30_000);
 
-  actual("fails rather than claiming an interrupted continuation when no partial boundary exists", async () => {
+  actual("exercises the mandatory seed continuation before the interrupted resume boundary", async () => {
     const output = path.join(root(), "suite");
     const result = await runRefreshScenarioSuite({ output_root: output, runs: 1, python_files: 1, scenarios: ["interrupted_resume"] });
-    expect(result).toMatchObject({ state: "failed", code: "continuation_pause_not_exercised", completed_measurements: 0 });
-    expect(result).not.toHaveProperty("summaries");
-    expect(JSON.parse(fs.readFileSync(path.join(output, "report.json"), "utf8")).state).toBe("failed");
+    expect(result).toMatchObject({ state: "complete" });
+    if (result.state !== "complete") return;
+    expect(result.measurements).toHaveLength(1);
+    expect(result.measurements[0]?.worker_invocations).toBeGreaterThan(1);
+    expect(result.measurements[0]?.observation).toMatchObject({ kind: "paused_committed_worker_continuation" });
   }, 30_000);
 
   actual("measures persisted first-read reuse, real watcher edits and committed same-session continuation", async () => {

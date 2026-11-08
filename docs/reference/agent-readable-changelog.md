@@ -3,7 +3,7 @@ title: Agent-readable changelog
 doc_type: reference
 status: draft
 owner: platform
-last_reviewed: 2026-08-05
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -25,6 +25,32 @@ Each version or dated entry should include:
 - Contract changes
 - Required agent behavior changes
 - Migration notes
+
+## 2026-11-08: Generation inventory and publication observation (source, unreleased)
+
+### Agent-Visible Changes
+
+Refresh generations reuse one sealed catalog across worker passes. Documentation
+and project shape derive from the same inventory. Both partial seed and final
+publication validate recorded identities and current watcher evidence.
+
+### Contract Changes
+
+Workspace observation defaults to enabled. Explicitly disabling it prevents
+fresh publication; missing or unhealthy observation returns a structured blocker.
+Progress counters use distinct manifest identities and counter version 2.
+
+### Required Agent Behavior Changes
+
+Treat a manifest validation failure as missing freshness evidence. Retain the
+prior publication and request a new generation after correcting the blocker.
+Do not reuse an unfinished manifest across daemon watcher sessions.
+
+### Migration Notes
+
+The current cache is `graph-v4.sqlite`. Owned migration retains verified v3
+rollback evidence, blocks the old path and creates an empty v4 cache. Stop all
+owners before recovery; do not delete a live cache or downgrade in place.
 
 ## 2026-08-05: Bounded Documentation Map Delivery
 

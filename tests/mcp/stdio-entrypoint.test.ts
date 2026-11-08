@@ -383,7 +383,7 @@ describe("stdio MCP entrypoint", () => {
         repo_root: repoRoot
       })
     );
-    expect(["cold", "refreshing", "fresh", "partial"]).toContain(parsed.data.runtime_state);
+    expect(["cold", "refreshing", "fresh", "partial", "degraded"]).toContain(parsed.data.runtime_state);
     expect(parsedScope.data.languages).toEqual(
       expect.arrayContaining(["python", "typescript", "json", "infrastructure", "yaml"])
     );
@@ -598,14 +598,15 @@ describe("stdio MCP entrypoint", () => {
       });
 
       await waitForWarmSymbolSearch(firstSession, "Runner");
+      await waitForWarmupStatus(firstSession, "complete");
 
       const graphStore = openGraphStore(graphStorePath(fixtureRoot));
       try {
         const snapshots = await graphStore.listSnapshots({ repo_root: fixtureRoot });
-        expect(snapshots).toHaveLength(1);
-        expect(snapshots[0]).toMatchObject({
-          freshness: "fresh"
-        });
+        expect(snapshots).toHaveLength(2);
+        expect(snapshots.map(snapshot => snapshot.freshness)).toEqual(["refreshing", "fresh"]);
+        const owners = graphStore.db.prepare("SELECT DISTINCT controller_generation FROM snapshots").all();
+        expect(owners).toHaveLength(1);
       } finally {
         graphStore.close();
       }
@@ -614,7 +615,7 @@ describe("stdio MCP entrypoint", () => {
       await secondSession.close();
       fs.rmSync(fixtureRoot, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 
   it("returns initial status before delayed startup warmup begins", async () => {
     const fixtureRoot = createCleanFixtureCopy({
@@ -652,8 +653,9 @@ describe("stdio MCP entrypoint", () => {
       );
       expect(status.data).toMatchObject({
         repo_root: fixtureRoot,
-        runtime_state: "cold",
-        freshness: "cold"
+        runtime_state: "degraded",
+        freshness: "stale",
+        watcher_freshness: { status: "degraded", reason: "Workspace watcher coverage has not been established from a sealed manifest." }
       });
       expect(status.data.warmup_state).toBeUndefined();
     } finally {
@@ -667,29 +669,33 @@ describe("stdio MCP entrypoint", () => {
       prefix: "agent-workbench-mcp-unpublished-query-",
       sourceRoot: path.resolve("tests/fixtures/fixture-basic-python")
     });
-    const graphStore = openGraphStore(graphStorePath(fixtureRoot));
-    await graphStore.createBuildSnapshot({
-      snapshot: {
-        id: "990",
-        repo_root: fixtureRoot,
-        workspace_root: fixtureRoot,
-        repo_identity: fixtureRoot,
-        config_identity: "default",
-        schema_version: SCHEMA_VERSION,
-        freshness: "fresh",
-        owner_state: "owner",
-        created_at: "2026-07-20T12:00:00.000Z",
-        updated_at: "2026-07-20T12:00:00.000Z"
-      },
-      controller_generation: 8,
-      invalidation_generation: 12,
-      created_at: "2026-07-20T12:00:00.000Z"
-    });
-    graphStore.close();
     const session = await createStdioSession(fixtureRoot, { startupRefreshDelayMs: 60_000 });
 
     try {
       await session.call(initializeMessage(1));
+      await session.call({ jsonrpc: "2.0", id: 21, method: "resources/read", params: { uri: "repo:///status" } });
+      // Establish the owned, ready session before injecting an unpublished
+      // building row. Creating the row before startup is intentionally treated
+      // as orphan evidence and blocks ownership reconciliation.
+      const graphStore = openGraphStore(graphStorePath(fixtureRoot));
+      await graphStore.createBuildSnapshot({
+        snapshot: {
+          id: "990",
+          repo_root: fixtureRoot,
+          workspace_root: fixtureRoot,
+          repo_identity: fixtureRoot,
+          config_identity: "default",
+          schema_version: SCHEMA_VERSION,
+          freshness: "fresh",
+          owner_state: "owner",
+          created_at: "2026-07-20T12:00:00.000Z",
+          updated_at: "2026-07-20T12:00:00.000Z"
+        },
+        controller_generation: 8,
+        invalidation_generation: 12,
+        created_at: "2026-07-20T12:00:00.000Z"
+      });
+      graphStore.close();
       const response = parseResponseEnvelope<SymbolSearchEnvelope & {
         meta: { verification_status: string; caveats?: Array<{ kind: string; message: string }> };
       }>(await session.call({
@@ -1069,7 +1075,7 @@ describe("stdio MCP entrypoint", () => {
         },
         errors: []
       });
-      expect(["cold", "refreshing", "fresh", "partial"]).toContain(statusResource.data.runtime_state);
+      expect(["cold", "refreshing", "fresh", "partial", "degraded"]).toContain(statusResource.data.runtime_state);
       expect(scopeResource).toEqual(expected.scope);
       expect(overviewResource).toEqual(expected.overview);
       expect(taskContext).toEqual(expected.context);

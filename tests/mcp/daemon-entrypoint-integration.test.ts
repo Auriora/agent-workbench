@@ -16,11 +16,14 @@ import {
 } from "../../src/mcp/daemon.js";
 import { graphStorePath, repositoryOwnershipPath } from "../../src/server.js";
 import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/graph-store.js";
-import { indexRepositoryGraph } from "../../src/application/use-cases/index-repository-graph.js";
+import { runRepositoryGraphBuildSlice } from "../../src/application/use-cases/index-repository-graph.js";
+import { GraphBuildManifestPublicationValidator } from "../../src/application/use-cases/validate-graph-build-manifest.js";
 import { discoverRepositoryComposition } from "../../src/application/use-cases/repository-composition.js";
 import { GitMetadataCommandAdapter } from "../../src/infrastructure/commands/index.js";
 import {
+  captureGraphBuildRepositoryInputs,
   FileCatalogScannerAdapter,
+  readCapturedGraphBuildPathIdentity,
   WorkspaceFileAdapter
 } from "../../src/infrastructure/filesystem/index.js";
 import {
@@ -29,6 +32,8 @@ import {
 } from "../../src/infrastructure/extraction/index.js";
 import { PythonTreeSitterExtractorAdapter } from "../../src/infrastructure/tree-sitter/index.js";
 import { SystemClockAdapter } from "../../src/infrastructure/time/index.js";
+import { GraphBuildWatchSession } from "../../src/infrastructure/runtime/graph-build-watch-session.js";
+import type { GraphBuildPathIdentity } from "../../src/ports/index.js";
 import { AGENT_WORKBENCH_RUNTIME_VERSION } from "../../src/runtime/version.js";
 import {
   initializeSession,
@@ -426,10 +431,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
 
     // This second-client status read is the stale-request admission barrier.
     const admitted = repoStatus(await laterClient.call("resources/read", { uri: "repo:///status" }));
-    expect(admitted.data).toMatchObject({
-      snapshot_id: previousSnapshotId,
-      freshness: "stale"
-    });
+    expectRefreshAdmission(admitted, previousSnapshotId);
 
     const refreshed = await waitForRefreshCompletion(laterClient, {
       previousSnapshotId,
@@ -664,7 +666,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
       expect(watcherBaseline.data).toMatchObject({ snapshot_id: "80", freshness: "fresh" });
       fs.rmSync(path.join(repoRoot, "stale-sentinel.py"));
       const admitted = repoStatus(await first.call("resources/read", { uri: "repo:///status" }));
-      expect(admitted.data).toMatchObject({ snapshot_id: "80", freshness: "stale" });
+      expectRefreshAdmission(admitted, "80");
       const marker = await waitForCrashBarrierMarker(markerPath);
       expect(marker).toMatchObject({
         barrier,
@@ -683,7 +685,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
       try {
         expect(readSnapshotPublication(atBarrier, 80)).toMatchObject({
           publication_state: "published",
-          freshness: "fresh"
+          freshness: "stale"
         });
         expect(readSnapshotPublication(atBarrier, Number(marker.snapshot_id))).toMatchObject({
           publication_state: "building",
@@ -749,14 +751,14 @@ describe("daemon-backed stdio entrypoint integration", () => {
       const successorAdmission = repoStatus(await replacement.call("resources/read", {
         uri: "repo:///status"
       }));
-      expect(successorAdmission.data).toMatchObject({ snapshot_id: "80", freshness: "stale" });
+      expectRefreshAdmission(successorAdmission, "80");
       const completed = await waitForRefreshCompletion(replacement, {
         previousSnapshotId: marker.snapshot_id,
         minimumWorkerInvocations: recovered.worker_invocations
       });
       expect(completed).toMatchObject({
         warmup_state: "complete",
-        worker_invocations: 1,
+        worker_invocations: 2,
         visible_snapshot_id: completed.target_snapshot_id
       });
       expect(completed.target_snapshot_id).not.toBe("80");
@@ -824,8 +826,10 @@ describe("daemon-backed stdio entrypoint integration", () => {
         const before = await waitForFreshRepoStatus(session);
         expect(before.data).toMatchObject({ snapshot_id: "80", freshness: "fresh" });
         fs.rmSync(path.join(repoRoot, "stale-sentinel.py"));
-        expect(repoStatus(await session.call("resources/read", { uri: "repo:///status" })).data)
-          .toMatchObject({ snapshot_id: "80", freshness: "stale" });
+        expectRefreshAdmission(
+          repoStatus(await session.call("resources/read", { uri: "repo:///status" })),
+          "80"
+        );
         const marker = await waitForCrashBarrierMarker(markerPath);
         const health = daemonRefreshHealth(await session.call("resources/read", {
           uri: "integration:///health/agent-workbench"
@@ -844,7 +848,7 @@ describe("daemon-backed stdio entrypoint integration", () => {
         try {
           expect(readSnapshotPublication(settledStore, 80)).toMatchObject({
             publication_state: "published",
-            freshness: "fresh"
+            freshness: "stale"
           });
           expect(readSnapshotPublication(settledStore, Number(marker.snapshot_id))).toMatchObject({
             publication_state: "failed"
@@ -908,8 +912,10 @@ describe("daemon-backed stdio entrypoint integration", () => {
       await initializeSession(session, 30_000);
       await waitForFreshRepoStatus(session);
       fs.rmSync(path.join(repoRoot, "stale-sentinel.py"));
-      expect(repoStatus(await session.call("resources/read", { uri: "repo:///status" })).data)
-        .toMatchObject({ snapshot_id: "80", freshness: "stale" });
+      expectRefreshAdmission(
+        repoStatus(await session.call("resources/read", { uri: "repo:///status" })),
+        "80"
+      );
       const marker = await waitForCrashBarrierMarker(markerPath);
       daemonPid = marker.daemon_pid;
       const shutdownStartedAt = Date.now();
@@ -1101,6 +1107,12 @@ function repoStatus(message: McpMessage): {
   };
 }
 
+/** Admission may synchronously advance from stale to refreshing before the read returns. */
+function expectRefreshAdmission(status: ReturnType<typeof repoStatus>, snapshotId: string): void {
+  expect(status.data.snapshot_id).toBe(snapshotId);
+  expect(["stale", "refreshing"]).toContain(status.data.freshness);
+}
+
 async function waitForFreshRepoStatus(session: EntryPointSession): Promise<ReturnType<typeof repoStatus>> {
   let lastStatus: ReturnType<typeof repoStatus> | undefined;
   for (let attempt = 0; attempt < 200; attempt += 1) {
@@ -1146,17 +1158,62 @@ async function seedPublishedBarrierSnapshot(repoRoot: string, databasePath: stri
   const store = openGraphStore(databasePath);
   const extractors = new ExtractorRegistryAdapter();
   extractors.register(new PythonTreeSitterExtractorAdapter());
+  const clock = new SystemClockAdapter();
+  const ownerId = "daemon-entrypoint-barrier-fixture";
+  const session = new GraphBuildWatchSession({
+    repo_root: repoRoot,
+    paths: ["."],
+    skipped_roots: [],
+    enabled: true,
+    debounce_ms: 25,
+    event_budget: 2_000
+  });
   try {
     const workspace = new WorkspaceFileAdapter({ repoRoot });
+    await session.start();
+    session.bindDrain(async () => {
+      const events = await session.pollEvents({ force: true });
+      if (events.length !== 0) {
+        throw new Error("Barrier fixture changed while validating its sealed inventory.");
+      }
+    }, () => ({ pending_events: 0, healthy: true }));
+
+    const capturedInputs: GraphBuildPathIdentity[] = [];
+    const capturedInputKeys = new Set<string>();
+    const captureInputs = (root: string, prefix: string): void => {
+      for (const identity of captureGraphBuildRepositoryInputs(root, prefix)) {
+        const key = JSON.stringify([identity.scope ?? "workspace", identity.root ?? root, identity.path]);
+        if (!capturedInputKeys.has(key)) {
+          capturedInputKeys.add(key);
+          capturedInputs.push(identity);
+        }
+      }
+    };
     const repositoryComposition = await discoverRepositoryComposition({
       workspace,
       git: new GitMetadataCommandAdapter(),
       repo_root: repoRoot,
-      canonicalize_repo_root: (candidate) => fs.realpathSync.native(candidate)
+      canonicalize_repo_root: (candidate) => fs.realpathSync.native(candidate),
+      before_repository_inspection: async ({ repo_root, path_prefix }) => {
+        captureInputs(repo_root, path_prefix);
+      }
     });
-    await indexRepositoryGraph({
+    const watcher = {
+      start: () => session.start(),
+      registerDirectory: (input: { path: string; repository_key?: string }) => session.registerDirectory(input),
+      observe: () => session.observe(),
+      drain: () => session.drain(),
+      close: () => session.close()
+    };
+    const validator = new GraphBuildManifestPublicationValidator({
+      store: async () => store,
+      watcher,
+      read_identity: async (expected) => readCapturedGraphBuildPathIdentity(repoRoot, expected),
+      clock,
+      on_published: ({ directories }) => session.establishCoverage({ directories })
+    });
+    const buildSlice = (snapshotId: string) => runRepositoryGraphBuildSlice({
       repo_root: repoRoot,
-      scanner: new FileCatalogScannerAdapter(),
       workspace,
       extractors,
       resource_extractor: new ResourceExtractorAdapter(),
@@ -1165,12 +1222,62 @@ async function seedPublishedBarrierSnapshot(repoRoot: string, databasePath: stri
       docs_index: store,
       documentation_concerns: store,
       snapshots: store,
-      clock: new SystemClockAdapter(),
+      build_progress: store,
+      build_seed: store,
+      build_read: store,
+      build_coverage: store,
+      build_resolution: store,
+      clock,
       schema_version: SCHEMA_VERSION,
-      snapshot_id: "80",
-      repository_composition: repositoryComposition
+      snapshot_id: snapshotId,
+      owner_id: ownerId,
+      config_identity: "default",
+      max_files: 2_000,
+      controller_generation: 0,
+      invalidation_generation: 0,
+      repository_composition: repositoryComposition,
+      manifest: {
+        store,
+        watcher,
+        create_scanner: (capture) => new FileCatalogScannerAdapter({ capture }),
+        inputs: capturedInputs
+      }
     });
+    const publish = async (snapshotId: string, kind: "seed" | "complete"): Promise<void> => {
+      const receipt = await validator.prepare({
+        repo_root: repoRoot,
+        execution_id: ownerId,
+        target_snapshot_id: snapshotId,
+        controller_generation: 0,
+        invalidation_generation: 0,
+        kind
+      });
+      validator.commit({
+        receipt,
+        transition: {
+          repo_root: repoRoot,
+          snapshot_id: snapshotId,
+          controller_generation: 0,
+          invalidation_generation: 0,
+          from: "building",
+          to: "published",
+          updated_at: clock.nowIso8601()
+        }
+      });
+    };
+
+    const seed = await buildSlice("79");
+    if (seed.outcome !== "partial" || seed.partial_kind !== "publish_seed") {
+      throw new Error("Barrier fixture did not produce a sealed seed publication.");
+    }
+    await publish("79", "seed");
+    const complete = await buildSlice("80");
+    if (complete.outcome !== "complete") {
+      throw new Error("Barrier fixture did not finish its manifest-backed completion target.");
+    }
+    await publish("80", "complete");
   } finally {
+    await session.close();
     store.close();
   }
 }
@@ -1302,6 +1409,11 @@ function readSnapshotPublication(store: TestGraphStore, snapshotId: number): {
 }
 
 function readBarrierEvidence(store: TestGraphStore, snapshotId: number): {
+  manifest_state: string | null;
+  manifest_files: boolean;
+  manifest_directories: boolean;
+  progress_phase: string | null;
+  cursor_advanced: boolean;
   catalog: boolean;
   docs: boolean;
   graph: boolean;
@@ -1311,7 +1423,29 @@ function readBarrierEvidence(store: TestGraphStore, snapshotId: number): {
   const count = (sql: string): number => (store.db.prepare(sql).get(snapshotId) as { count: number }).count;
   const freshness = (store.db.prepare("SELECT freshness FROM snapshots WHERE id = ?")
     .get(snapshotId) as { freshness: string }).freshness;
+  const progress = store.db.prepare(`
+    SELECT manifest_id, phase, ordinal_cursor
+    FROM graph_build_progress
+    WHERE snapshot_id = ?
+  `).get(snapshotId) as { manifest_id: string; phase: string; ordinal_cursor: number | null } | undefined;
+  const manifest = progress === undefined
+    ? undefined
+    : store.db.prepare("SELECT state FROM graph_build_manifests WHERE manifest_id = ?")
+      .get(progress.manifest_id) as { state: string } | undefined;
   return {
+    manifest_state: manifest?.state ?? null,
+    manifest_files: progress !== undefined && count(`
+      SELECT COUNT(*) AS count FROM graph_build_manifest_files WHERE manifest_id = (
+        SELECT manifest_id FROM graph_build_progress WHERE snapshot_id = ?
+      )
+    `) > 0,
+    manifest_directories: progress !== undefined && count(`
+      SELECT COUNT(*) AS count FROM graph_build_manifest_directories WHERE manifest_id = (
+        SELECT manifest_id FROM graph_build_progress WHERE snapshot_id = ?
+      )
+    `) > 0,
+    progress_phase: progress?.phase ?? null,
+    cursor_advanced: progress?.ordinal_cursor !== undefined && progress.ordinal_cursor !== null && progress.ordinal_cursor > 0,
     catalog: count("SELECT COUNT(*) AS count FROM files WHERE snapshot_id = ?") > 0,
     docs: count("SELECT COUNT(*) AS count FROM docs_documents WHERE snapshot_id = ?") > 0,
     graph: count(`
@@ -1330,18 +1464,38 @@ function expectedBarrierEvidence(
   barrier: CrashBarrierMarker["barrier"]
 ): ReturnType<typeof readBarrierEvidence> {
   if (barrier === "generation") {
-    return { catalog: false, docs: false, graph: false, unresolved: false, freshness: "refreshing" };
+    return {
+      manifest_state: null, manifest_files: false, manifest_directories: false,
+      progress_phase: null, cursor_advanced: false,
+      catalog: false, docs: false, graph: false, unresolved: false, freshness: "refreshing"
+    };
   }
   if (barrier === "catalog") {
-    return { catalog: true, docs: false, graph: false, unresolved: false, freshness: "refreshing" };
+    return {
+      manifest_state: "sealed", manifest_files: true, manifest_directories: true,
+      progress_phase: "extracting", cursor_advanced: false,
+      catalog: false, docs: false, graph: false, unresolved: false, freshness: "refreshing"
+    };
   }
   if (barrier === "docs") {
-    return { catalog: true, docs: true, graph: false, unresolved: false, freshness: "refreshing" };
+    return {
+      manifest_state: "sealed", manifest_files: true, manifest_directories: true,
+      progress_phase: "extracting", cursor_advanced: false,
+      catalog: false, docs: true, graph: false, unresolved: false, freshness: "refreshing"
+    };
   }
   if (barrier === "graph") {
-    return { catalog: true, docs: true, graph: true, unresolved: true, freshness: "refreshing" };
+    return {
+      manifest_state: "sealed", manifest_files: true, manifest_directories: true,
+      progress_phase: "extracting", cursor_advanced: true,
+      catalog: true, docs: true, graph: true, unresolved: true, freshness: "refreshing"
+    };
   }
-  return { catalog: true, docs: true, graph: true, unresolved: true, freshness: "fresh" };
+  return {
+    manifest_state: "sealed", manifest_files: true, manifest_directories: true,
+    progress_phase: "resolving", cursor_advanced: false,
+    catalog: true, docs: true, graph: true, unresolved: true, freshness: "refreshing"
+  };
 }
 
 function countBuildingSnapshots(store: TestGraphStore, repoRoot: string): number {

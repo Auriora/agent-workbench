@@ -172,6 +172,10 @@ export class LazyOwnershipGatedRefreshAuthority implements SnapshotRefreshContro
     prepare_controller?: (
       admission: Extract<RepositoryOwnershipAdmission, { outcome: "acquired" }>
     ) => Promise<"ready" | "ownership_ambiguous">;
+    /** Closes resources opened while the lease was held before it can be released. */
+    cleanup_before_release?: (
+      admission: Extract<RepositoryOwnershipAdmission, { outcome: "acquired" }>
+    ) => Promise<void>;
     create_controller: (
       admission: Extract<RepositoryOwnershipAdmission, { outcome: "acquired" }>
     ) => Promise<SnapshotRefreshControllerPort>;
@@ -307,9 +311,22 @@ export class LazyOwnershipGatedRefreshAuthority implements SnapshotRefreshContro
     const admission = await this.options.ownership.acquire(this.options.ownership_request);
     if (admission.outcome === "blocked") return admission;
     this.lease = admission.lease;
+    let cleanupAttempted = false;
+    const cleanupAndRelease = async (): Promise<void> => {
+      cleanupAttempted = true;
+      // A close failure deliberately retains the lease: another owner must not
+      // open a store whose former owner has not proven it is quiescent.
+      await this.options.cleanup_before_release?.(admission);
+      await this.options.ownership.release({ lease: admission.lease });
+      this.lease = undefined;
+    };
     try {
       const preparation = await this.options.prepare_controller?.(admission) ?? "ready";
       if (preparation === "ownership_ambiguous") {
+        // Preparation owns its short-lived handles and closes them before a
+        // blocked result. Preserve the shared, not-yet-started session for a
+        // later explicit admission on this authority.
+        cleanupAttempted = true;
         await this.options.ownership.release({ lease: admission.lease });
         this.lease = undefined;
         return {
@@ -326,8 +343,7 @@ export class LazyOwnershipGatedRefreshAuthority implements SnapshotRefreshContro
       });
       return this.controller;
     } catch (error) {
-      await this.options.ownership.release({ lease: admission.lease });
-      this.lease = undefined;
+      if (!cleanupAttempted) await cleanupAndRelease();
       throw error;
     }
   }

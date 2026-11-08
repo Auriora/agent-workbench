@@ -50,6 +50,8 @@ import {
   MAX_DAEMON_HANDSHAKE_BYTES,
   MAX_MCP_FRAME_BYTES
 } from "../../src/contracts/mcp-transport-contracts.js";
+import { openGraphStore, SCHEMA_VERSION } from "../../src/infrastructure/sqlite/graph-store.js";
+import { graphStorePath } from "../../src/infrastructure/sqlite/graph-store-location.js";
 
 describe("Agent Workbench daemon launcher", () => {
   it("blocks shutdown cleanup and a successor while disconnected application work remains unsettled", async () => {
@@ -1679,6 +1681,23 @@ describe("Agent Workbench daemon launcher", () => {
 
   it("starts as an observer while another runtime owns refresh without displacing it", async () => {
     const repoRoot = makeRepoRoot("agent-workbench-daemon-observer-owner-");
+    const databasePath = graphStorePath(repoRoot);
+    const seededStore = openGraphStore(databasePath);
+    await seededStore.upsertSnapshot({
+      snapshot: {
+        id: "901",
+        repo_root: repoRoot,
+        workspace_root: repoRoot,
+        repo_identity: repoRoot,
+        config_identity: "default",
+        schema_version: SCHEMA_VERSION,
+        freshness: "fresh",
+        owner_state: "owner",
+        created_at: "2026-11-08T00:00:00.000Z",
+        updated_at: "2026-11-08T00:00:00.000Z"
+      }
+    });
+    seededStore.close();
     const ownership = new FileRepositoryOwnershipAdapter(
       path.join(repoRoot, ".cache", "agent-workbench", "refresh-owner.json")
     );
@@ -1704,6 +1723,7 @@ describe("Agent Workbench daemon launcher", () => {
 
     try {
       expect(daemon.metadata.launchLifecycle?.state).toBe("ready");
+      expect(fs.existsSync(databasePath)).toBe(true);
       socket = await connectOrStartDaemon({
         repoRoot,
         debugRepoRootOverride: false,
@@ -1711,6 +1731,21 @@ describe("Agent Workbench daemon launcher", () => {
       });
       const session = createSocketSession(socket);
       await initializeSocketSession(session, 1, "observer-owner-test");
+
+      const graphQuery = await session.call({
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "symbol_search",
+          arguments: { query: "not-indexed", repo_root: repoRoot, max_results: 1 }
+        }
+      });
+      expect(graphQuery.error).toBeUndefined();
+      const graphEnvelope = JSON.parse(graphQuery.result.content[0].text) as {
+        data: { snapshot_id: string };
+      };
+      expect(graphEnvelope.data.snapshot_id).toBe("901");
 
       await sleep(25);
       const health = await session.call({
@@ -1742,6 +1777,261 @@ describe("Agent Workbench daemon launcher", () => {
       socket?.destroy();
       await daemon.close();
       await ownership.release({ lease: external.lease });
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it.each([
+    {
+      name: "an older schema marker",
+      damage(store: ReturnType<typeof openGraphStore>) {
+        store.db.prepare("DELETE FROM schema_migrations").run();
+        store.db.prepare("INSERT INTO schema_migrations (version) VALUES (?)").run(3);
+      }
+    },
+    {
+      name: "a missing required v4 table",
+      damage(store: ReturnType<typeof openGraphStore>) {
+        store.db.exec("DROP TABLE graph_build_validation_receipts");
+      }
+    }
+  ])("does not repair $name when an external owner is active and an MCP graph query is attempted", async ({ damage }) => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-observer-incompatible-");
+    const databasePath = graphStorePath(repoRoot);
+    const store = openGraphStore(databasePath);
+    damage(store);
+    store.close();
+    const before = fs.readFileSync(databasePath);
+    const ownership = new FileRepositoryOwnershipAdapter(
+      path.join(repoRoot, ".cache", "agent-workbench", "refresh-owner.json")
+    );
+    const external = await ownership.acquire({
+      repo_root: repoRoot,
+      runtime_identity: "external-runtime:4",
+      schema_version: SCHEMA_VERSION,
+      owner_id: "external-daemon",
+      owner_pid: process.pid,
+      owner_generation: 41,
+      heartbeat_at: "2026-11-08T00:00:00.000Z"
+    });
+    expect(external.outcome).toBe("acquired");
+    if (external.outcome !== "acquired") throw new Error("Expected external refresh ownership.");
+    const daemon = await startAgentWorkbenchDaemon({
+      repoRoot,
+      idleGraceMs: 3000,
+      serverOptions: { startupRefreshDelayMs: 60_000 }
+    });
+    let socket: net.Socket | undefined;
+
+    try {
+      socket = await connectOrStartDaemon({ repoRoot, debugRepoRootOverride: false, startTimeoutMs: 2000 });
+      const session = createSocketSession(socket);
+      await initializeSocketSession(session, 31, "observer-incompatible-test");
+      const response = await session.call({
+        jsonrpc: "2.0",
+        id: 32,
+        method: "tools/call",
+        params: { name: "symbol_search", arguments: { query: "anything", repo_root: repoRoot } }
+      });
+      expect(response.error).toBeUndefined();
+      const envelope = JSON.parse(response.result.content[0].text) as {
+        errors?: Array<{ code: string }>;
+      };
+      expect(envelope.errors?.[0]?.code).toBe("environment_unavailable");
+      expect(fs.readFileSync(databasePath)).toEqual(before);
+    } finally {
+      socket?.destroy();
+      await daemon.close();
+      await ownership.release({ lease: external.lease });
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps an active-owner watcher admission blocked, then promotes and indexes a later file after release", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-observer-promotion-");
+    const databasePath = graphStorePath(repoRoot);
+    const store = openGraphStore(databasePath);
+    await store.upsertSnapshot({
+      snapshot: {
+        id: "902",
+        repo_root: repoRoot,
+        workspace_root: repoRoot,
+        repo_identity: repoRoot,
+        config_identity: "default",
+        schema_version: SCHEMA_VERSION,
+        freshness: "fresh",
+        owner_state: "owner",
+        created_at: "2026-11-08T00:00:00.000Z",
+        updated_at: "2026-11-08T00:00:00.000Z"
+      }
+    });
+    store.close();
+    const ownership = new FileRepositoryOwnershipAdapter(
+      path.join(repoRoot, ".cache", "agent-workbench", "refresh-owner.json")
+    );
+    const external = await ownership.acquire({
+      repo_root: repoRoot,
+      runtime_identity: "external-runtime:4",
+      schema_version: SCHEMA_VERSION,
+      owner_id: "external-daemon",
+      owner_pid: process.pid,
+      owner_generation: 41,
+      heartbeat_at: "2026-11-08T00:00:00.000Z"
+    });
+    expect(external.outcome).toBe("acquired");
+    if (external.outcome !== "acquired") throw new Error("Expected external refresh ownership.");
+    const daemon = await startAgentWorkbenchDaemon({
+      repoRoot,
+      idleGraceMs: 3000,
+      serverOptions: { startupRefreshDelayMs: 60_000 }
+    });
+    let released = false;
+    let socket: net.Socket | undefined;
+
+    try {
+      socket = await connectOrStartDaemon({ repoRoot, debugRepoRootOverride: false, startTimeoutMs: 2000 });
+      const session = createSocketSession(socket);
+      await initializeSocketSession(session, 41, "observer-promotion-test");
+      // Establish the watcher while the foreign owner is still active.
+      await session.call({
+        jsonrpc: "2.0",
+        id: 42,
+        method: "resources/read",
+        params: { uri: "repo:///status" }
+      });
+      fs.writeFileSync(path.join(repoRoot, "blocked-while-owned.py"), "def blocked_while_owned():\n    return 1\n");
+      await sleep(100);
+      await session.call({
+        jsonrpc: "2.0",
+        id: 43,
+        method: "resources/read",
+        params: { uri: "repo:///status" }
+      });
+      expect(safeReadJson(path.join(repoRoot, ".cache", "agent-workbench", "refresh-owner.json"))).toMatchObject({
+        owner_id: "external-daemon"
+      });
+
+      await ownership.release({ lease: external.lease });
+      released = true;
+      // A later included-file event is a new admission, not a retry of the
+      // earlier foreign-owner refusal.
+      fs.writeFileSync(path.join(repoRoot, "promoted-after-release.py"), "def promoted_after_release():\n    return 2\n");
+      await sleep(100);
+      const status = await session.call({
+        jsonrpc: "2.0",
+        id: 44,
+        method: "resources/read",
+        params: { uri: "repo:///status" }
+      });
+      expect(status.error).toBeUndefined();
+      await vi.waitFor(() => {
+        expect(safeReadJson(path.join(repoRoot, ".cache", "agent-workbench", "refresh-owner.json"))).toMatchObject({
+          owner_id: expect.stringMatching(/^daemon:/)
+        });
+      });
+      await vi.waitFor(async () => {
+        const query = await session.call({
+          jsonrpc: "2.0",
+          id: 45,
+          method: "tools/call",
+          params: {
+            name: "symbol_search",
+            arguments: { query: "promoted_after_release", repo_root: repoRoot, exact: true, max_results: 5 }
+          }
+        });
+        const envelope = JSON.parse(query.result.content[0].text) as {
+          data: { symbols: Array<{ name: string }> };
+          meta: { freshness?: string };
+        };
+        expect(envelope.meta.freshness).toBe("fresh");
+        expect(envelope.data.symbols).toEqual(expect.arrayContaining([
+          expect.objectContaining({ name: "promoted_after_release" })
+        ]));
+      }, { timeout: 20_000, interval: 100 });
+    } finally {
+      socket?.destroy();
+      await daemon.close();
+      if (!released) await ownership.release({ lease: external.lease });
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  }, 30_000);
+
+  it("continues a stale-first-read MCP status request after observer promotion", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-observer-stale-request-");
+    const databasePath = graphStorePath(repoRoot);
+    const store = openGraphStore(databasePath);
+    await store.upsertSnapshot({
+      snapshot: {
+        id: "903", repo_root: repoRoot, workspace_root: repoRoot, repo_identity: repoRoot,
+        config_identity: "default", schema_version: SCHEMA_VERSION, freshness: "fresh", owner_state: "owner",
+        created_at: "2026-11-08T00:00:00.000Z", updated_at: "2026-11-08T00:00:00.000Z"
+      }
+    });
+    store.db.prepare(`
+      INSERT INTO files (snapshot_id, path, language, content_hash, size_bytes, mtime_ms)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(903, "missing-for-stale-first-read.py", "python", "missing", 1, 1);
+    store.close();
+    const ownership = new FileRepositoryOwnershipAdapter(
+      path.join(repoRoot, ".cache", "agent-workbench", "refresh-owner.json")
+    );
+    const external = await ownership.acquire({
+      repo_root: repoRoot, runtime_identity: "external-runtime:4", schema_version: SCHEMA_VERSION,
+      owner_id: "external-daemon", owner_pid: process.pid, owner_generation: 41,
+      heartbeat_at: "2026-11-08T00:00:00.000Z"
+    });
+    expect(external.outcome).toBe("acquired");
+    if (external.outcome !== "acquired") throw new Error("Expected external refresh ownership.");
+    const daemon = await startAgentWorkbenchDaemon({
+      repoRoot, idleGraceMs: 3000, serverOptions: { startupRefreshDelayMs: 60_000 }
+    });
+    let released = false;
+    let socket: net.Socket | undefined;
+
+    try {
+      await ownership.release({ lease: external.lease });
+      released = true;
+      socket = await connectOrStartDaemon({ repoRoot, debugRepoRootOverride: false, startTimeoutMs: 2000 });
+      const session = createSocketSession(socket);
+      await initializeSocketSession(session, 51, "observer-stale-request-test");
+      const status = await session.call({
+        jsonrpc: "2.0", id: 52, method: "resources/read", params: { uri: "repo:///status" }
+      });
+      expect(status.error).toBeUndefined();
+      const envelope = JSON.parse(status.result.contents[0].text) as { data: { snapshot_id?: string } };
+      // selectValidatedSnapshot read the old published snapshot, then
+      // staleFirstRead promoted; getRepoStatus continued using the facade.
+      expect(envelope.data.snapshot_id).toBe("903");
+      expect(safeReadJson(path.join(repoRoot, ".cache", "agent-workbench", "refresh-owner.json"))).toMatchObject({
+        owner_id: expect.stringMatching(/^daemon:/)
+      });
+    } finally {
+      socket?.destroy();
+      await daemon.close();
+      if (!released) await ownership.release({ lease: external.lease });
+      fs.rmSync(repoRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("blocks ambiguous ownership before opening a graph store", async () => {
+    const repoRoot = makeRepoRoot("agent-workbench-daemon-observer-ambiguous-");
+    const databasePath = graphStorePath(repoRoot);
+    const store = openGraphStore(databasePath);
+    store.close();
+    const before = fs.readFileSync(databasePath);
+    fs.writeFileSync(
+      path.join(repoRoot, ".cache", "agent-workbench", "refresh-owner.json"),
+      "not a repository ownership lease\n"
+    );
+
+    try {
+      await expect(startAgentWorkbenchDaemon({
+        repoRoot,
+        idleGraceMs: 3000,
+        serverOptions: { startupRefreshDelayMs: 60_000 }
+      })).rejects.toThrow("ownership is ambiguous");
+      expect(fs.readFileSync(databasePath)).toEqual(before);
+    } finally {
       fs.rmSync(repoRoot, { recursive: true, force: true });
     }
   });

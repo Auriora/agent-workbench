@@ -12,8 +12,7 @@ license: GPL-3.0-or-later
 # Tasks
 
 Input: [requirements](requirements.md), [design](design.md), [research](research.md),
-[traceability](traceability.md) and [verification](verification.md). All implementation
-is pending. Obtain fresh lifecycle task context and mark the selected task in
+[traceability](traceability.md) and [verification](verification.md). T001-T004 are complete; T005-T008 remain pending. Obtain fresh lifecycle task context and mark the selected task in
 progress before coding; preserve unrelated release notes and Spec 065 work.
 
 ## Task Dependency Graph
@@ -83,7 +82,7 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
   - Evidence: R2 AC1-AC3, CP-001, V003 and SC-001 pass. Immutable policy-owned ignore matchers and scan-owned priority matchers preserve 500 frozen policy outcomes and all 9,341 worker semantic records. Five-run identical-harness comparison: median scan CPU 3.338694 s to 0.514173 s (84.60% lower); constructions 1,299,336 to 62 = 2 x (27 + 4); all full scanner outputs byte-identical. Root/child wildcard invalidation covers both ignore files with exact fresh-preparation counts. Typecheck, 145 integrated tests, six strengthened matcher/golden tests, runtime build/receipt and independent source/evidence review pass. Durable owners updated; see verification.md#t003-compiled-path-matchers. No T003 deferral; T004-T008 remain pending.
 
   - Evidence mode: validation
-- [ ] T004 - Persist and reuse generation catalog and project shape
+- [x] T004 - Persist and reuse generation catalog and project shape
   - Depends on: T001.
   - Requirements: Requirement 3 AC1-AC4; Requirement 5 AC3-AC5.
   - Properties: CP-001; CP-003; CP-005.
@@ -98,8 +97,9 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
     sealed manifests; verify construction/seal crash cases and the T001-defined
     final freshness protocol, including edits not yet admitted by the watcher.
   - Validation: V004; typecheck, continuation/store/workspace/architecture suites.
-  - Evidence: Pending.
+  - Evidence: V004 and SC-002 pass: sealed inventory reused across worker isolates; documentation and shape reuse; atomic unique counters/cursors; receipt-gated seed/final publication; watcher handshake; dead-generation recovery; owned empty-v4 migration. Final typecheck, full suite (172 files; 1766 passed; one skipped), runtime build/receipt, plugin validation and compiled MCP smoke pass. Four-pass worker enumerates six directories in pass 1 and zero thereafter; all 9341 semantic records match after three independently expected corrections. Independent architecture/operations/security reviews accepted; durable owners and operator runbook updated. See verification.md#t004-sealed-inventory-and-publication for commands, metrics and limits. An earlier unattributed intermittent profiling failure remains an explicit T007 validation risk with retained diagnostics; no causal repair claimed. No T004 criterion deferred; T005-T008 and B014 remain separate.
 
+  - Evidence mode: validation
 - [ ] T005 - Reuse indexed reference candidate pools
   - Depends on: T001.
   - Requirements: Requirement 4 AC1-AC3.
@@ -138,6 +138,7 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
     intended Qt/counter corrections and all success criteria pass. If blocked, retain
     pending state and record exact missing evidence instead of partial success.
   - Validation: V007; pnpm typecheck; pnpm test; compiled isolated worker/MCP smoke.
+  - Validation risk: Attribute any recurrence of the earlier intermittent manifest_validation_failed profiling outcome using retained failure-evidence.json; reject failed repetitions without retry or discarded evidence. Final T004 frozen suite/probe pass, but no causal repair of the earlier unattributed condition is claimed.
   - Evidence: Pending.
 
 - [ ] T008 - Review, promote durable behavior and reconcile residuals

@@ -64,7 +64,7 @@ describe("filesystem workspace watcher", () => {
       recursive: true
     }).map((directory) => path.relative(repoRoot, directory).replaceAll("\\", "/") || ".");
 
-    expect(directories).toEqual(["src", "src/included"]);
+    expect(directories).toEqual(["src"]);
   });
 
   it("filters editor temporary files and symlink escapes through event policy", () => {
@@ -140,6 +140,8 @@ describe("filesystem workspace watcher", () => {
       paths: ["src"],
       enabled: true
     });
+    await watcher.registerDirectory({ watch_id: handle.id, path: "src" });
+    await watcher.registerDirectory({ watch_id: handle.id, path: "src/included" });
 
     fs.writeFileSync(path.join(repoRoot, "src", "included", "app.ts"), "export const app = true;\n");
     const events = await waitForEvents(watcher, handle.id);

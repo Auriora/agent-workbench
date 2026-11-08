@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+export * from "./graph-build-manifest.js";
+
 import type {
   CancellationToken,
   QueueHandle,
@@ -17,6 +19,7 @@ import type {
   FileIdentity,
   GraphEdge,
   GraphNode,
+  GraphNodeWriteModel,
   GraphTraversalRequest,
   GraphTraversalResult,
   ResolvedReference,
@@ -1029,6 +1032,9 @@ export type GraphBuildProgressCounters = {
 
 export type GraphBuildProgress = {
   snapshot_id: string;
+  manifest_id?: string;
+  ordinal_cursor?: number;
+  counters_version?: 2;
   source_snapshot_id?: string;
   owner_id?: string;
   completion_target_id?: string;
@@ -1118,6 +1124,7 @@ export interface GraphBuildResolutionWritePort {
     controller_generation: number;
     invalidation_generation: InvalidationGeneration;
     provenance: string;
+    deferred_anchors?: readonly GraphNodeWriteModel[];
     resolved_references: readonly (BuildResolvedReferenceWrite & { unresolved_reference_id: string })[];
   }): Promise<void>;
 }

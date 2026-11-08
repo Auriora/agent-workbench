@@ -24,13 +24,14 @@ import { getTaskContext } from "./application/use-cases/get-task-context.js";
 import { getRepoOverview } from "./application/use-cases/get-repo-overview.js";
 import { getRepoOrientation } from "./application/use-cases/get-repo-orientation.js";
 import { getRepoScope } from "./application/use-cases/get-repo-scope.js";
-import { getSnapshotRepoStatus } from "./application/use-cases/get-repo-status.js";
+import { getSnapshotMetadataRepoStatus, getSnapshotRepoStatus } from "./application/use-cases/get-repo-status.js";
 import {
   classifySnapshotCompositionFreshness,
   DEFAULT_SNAPSHOT_VALIDITY_MAX_PATHS,
   SnapshotValidityService
 } from "./application/use-cases/validate-snapshot-paths.js";
 import { discoverRepositoryComposition } from "./application/use-cases/repository-composition.js";
+import { GraphBuildManifestPublicationValidator } from "./application/use-cases/validate-graph-build-manifest.js";
 import { planVerification } from "./application/use-cases/plan-verification.js";
 import { processWorkspaceChangeQueue, type WorkspaceChangeQueueProcessResult } from "./application/use-cases/process-workspace-change-queue.js";
 import {
@@ -44,7 +45,7 @@ import {
   type WatcherFreshnessState
 } from "./application/use-cases/response-metadata.js";
 import { WorkspaceChangeQueue } from "./application/use-cases/workspace-change-queue.js";
-import { resolveWorkspaceWatcherConfig, type WorkspaceWatcherConfig, type WorkspaceWatchHandle } from "./domain/models/index.js";
+import { resolveWorkspaceWatcherConfig, type WorkspaceWatcherConfig } from "./domain/models/index.js";
 import {
   getDocsMap,
   getDocsOutline,
@@ -59,7 +60,7 @@ import { JsonSyntaxDiagnosticsProviderAdapter } from "./infrastructure/diagnosti
 import {
   FileCatalogScannerAdapter,
   FilesystemSnapshotPathValidatorAdapter,
-  FilesystemWorkspaceWatcherAdapter,
+  readCapturedGraphBuildPathIdentity,
   WorkspaceFileAdapter,
   WorkspaceSafetyAdapter
 } from "./infrastructure/filesystem/index.js";
@@ -79,10 +80,13 @@ import {
   LazyOwnershipGatedRefreshAuthority
 } from "./infrastructure/runtime/repository-ownership.js";
 import { StartupGraphRefreshExecutor } from "./infrastructure/runtime/startup-graph-refresh-executor.js";
-import { openGraphStore, SCHEMA_VERSION, type GraphStore } from "./infrastructure/sqlite/index.js";
+import { GraphBuildWatchSession } from "./infrastructure/runtime/graph-build-watch-session.js";
+import { restoreGraphBuildWatchCoverage } from "./infrastructure/runtime/restore-graph-build-watch-coverage.js";
+import { openGraphStore, SCHEMA_VERSION, type GraphStore, type GraphStoreOptions } from "./infrastructure/sqlite/index.js";
 import {
   graphStorePath,
-  retireLegacyGraphStore
+  GRAPH_STORE_FILE_NAME,
+  migrateGraphStoreToV4
 } from "./infrastructure/sqlite/graph-store-location.js";
 import {
   createRuntimeTelemetryAdapter
@@ -108,13 +112,14 @@ import type {
 import type {
   DocsRankingCursorCodecPort,
   RepositoryOwnershipLease,
+  RepositoryOwnershipAdmission,
   ReferenceCursorCodecPort,
   TelemetryRecorderPort,
   SnapshotPublicationPort,
   SnapshotRefreshAdmissionFailurePort,
   SnapshotRefreshControllerPort,
   SnapshotRefreshDiagnosticsPort,
-  WorkspaceWatcherPort,
+  GraphBuildWatchQueuePort,
   ClockPort,
   WarmupCoordinatorPort
 } from "./ports/index.js";
@@ -191,21 +196,38 @@ export function createAgentWorkbenchServer(
   const markdownParser = new MarkdownParserAdapter();
   const markdownChecker = new MarkdownStructureCheckerAdapter();
   const databasePath = graphStorePath(absoluteRepoRoot);
-  const graphStore = options.sharedRepositoryServices?.graphStore ??
+  const rawGraphStore = options.sharedRepositoryServices?.graphStore ??
     options.graphStore ?? createAsyncGraphStore(databasePath);
   const referenceCursorCodec = options.sharedRepositoryServices?.referenceCursorCodec ??
     options.referenceCursorCodec ?? createReferenceCursorCodec();
   const docsRankingCursorCodec = options.sharedRepositoryServices?.docsRankingCursorCodec ??
     options.docsRankingCursorCodec ?? createDocsRankingCursorCodec();
+  const workspaceWatcherConfig = resolveWorkspaceWatcherConfig(options.workspaceWatcher);
+  const localWatchSession = options.sharedRepositoryServices === undefined
+    ? new GraphBuildWatchSession({
+        repo_root: absoluteRepoRoot,
+        paths: options.workspaceWatcherIndexedRoots ?? ["."],
+        skipped_roots: options.workspaceWatcherSkippedRoots ?? [],
+        enabled: workspaceWatcherConfig.enabled,
+        debounce_ms: workspaceWatcherConfig.debounce_ms,
+        event_budget: workspaceWatcherConfig.event_budget
+      })
+    : undefined;
   const localRefreshAuthority = options.sharedRepositoryServices === undefined
     ? createStandaloneRefreshAuthority({
         repoRoot: absoluteRepoRoot,
-        graphStore,
+        rawGraphStore,
         databasePath,
         maxFiles: options.startupWarmupMaxFiles ?? DEFAULT_STARTUP_WARMUP_MAX_FILES,
-        clock
+        clock,
+        observation: localWatchSession!
       })
     : undefined;
+  const graphStore = options.sharedRepositoryServices?.graphStore ?? (async () => {
+    const preparation = await localRefreshAuthority!.prepare();
+    if (preparation.outcome !== "ready") throw new Error(`Graph store access is blocked by refresh authority: ${preparation.reason}`);
+    return await rawGraphStore();
+  });
   const refreshAuthority: SnapshotRefreshControllerPort =
     options.sharedRepositoryServices?.refreshController ?? localRefreshAuthority!;
   const publication = createAsyncPublicationPort(graphStore);
@@ -223,12 +245,11 @@ export function createAgentWorkbenchServer(
   const warmupView = controllerWarmupView(refreshAuthority, absoluteRepoRoot, clock);
   const ownsTelemetry = options.telemetry === undefined;
   const telemetry = options.telemetry ?? createRuntimeTelemetryAdapter();
-  const workspaceWatcherConfig = resolveWorkspaceWatcherConfig(options.workspaceWatcher);
   const localWorkspaceRefresh = options.sharedRepositoryServices === undefined
     ? createRepositoryWorkspaceRefreshService({
         repoRoot: absoluteRepoRoot,
         triggers: refreshTriggers,
-        watcher: new FilesystemWorkspaceWatcherAdapter(),
+        observation: localWatchSession!,
         clock,
         config: workspaceWatcherConfig,
         indexedRoots: options.workspaceWatcherIndexedRoots ?? ["."],
@@ -308,6 +329,20 @@ export function createAgentWorkbenchServer(
   }
 
   const currentRepoStatus = async (repo_root: string) => {
+    if (localRefreshAuthority !== undefined) {
+      const preparation = await localRefreshAuthority.prepare();
+      if (preparation.outcome !== "ready") {
+        const admission = "reused" in preparation ? preparation : preparation.reason === "owner_active"
+          ? { outcome: "blocked" as const, reused: false as const, state: "idle" as const, reason: "owner_active" as const,
+              message: "Repository refresh owner is active.", owner: preparation.owner as RepositoryOwnershipLease & { state: "active" } }
+          : { outcome: "blocked" as const, reused: false as const, state: "idle" as const, reason: "ownership_ambiguous" as const,
+              message: "Repository refresh ownership is ambiguous.", owner: preparation.owner as RepositoryOwnershipLease & { state: "ambiguous" } };
+        // No cache evidence was opened under a refused lease. Return the
+        // canonical blocked status with its admission evidence explicitly.
+        return getSnapshotMetadataRepoStatus({ repo_root, indexed_roots: ["."], skipped_roots: [], snapshot: null,
+          watcher: refreshAdmissionWatcher(admission), warmup: await warmupView.getState({ repo_root }) });
+      }
+    }
     const store = await graphStore();
     const watcher = await pollWorkspaceWatcher();
     const selected = await selectValidatedSnapshot(repo_root, store);
@@ -634,11 +669,13 @@ export function createAgentWorkbenchServer(
       try {
         await closeServer();
         if (localStartupTimer !== undefined) clearTimeout(localStartupTimer);
+        await localRefreshAuthority.shutdown();
         await localWorkspaceRefresh?.close();
-        await localRefreshAuthority.close();
-        if ("close" in graphStore && typeof graphStore.close === "function") {
-          await graphStore.close();
+        await localWatchSession?.close();
+        if ("close" in rawGraphStore && typeof rawGraphStore.close === "function") {
+          await rawGraphStore.close();
         }
+        await localRefreshAuthority.close();
       } finally {
         if (ownsTelemetry) await telemetry.shutdown();
       }
@@ -695,11 +732,30 @@ export function rankedDocsTelemetryAttributes(result: RankedDocsSearchResult): R
   };
 }
 
-export function createAsyncGraphStore(databasePath: string): AsyncGraphStore {
+/** One leased identity-transition initializer, shared by daemon and standalone startup. */
+export function prepareOwnedGraphStore(
+  databasePath: string,
+  admission: Extract<RepositoryOwnershipAdmission, { outcome: "acquired" }>
+): void {
+  if (path.basename(databasePath) !== GRAPH_STORE_FILE_NAME) return;
+  const inspect = (candidatePath: string): void => {
+    const store = openGraphStore(candidatePath);
+    try {
+      if (!store.validateSchema()) throw new Error("Graph v4 store schema validation failed.");
+      const integrity = store.db.pragma("quick_check") as Array<{ quick_check: string }>;
+      if (integrity.length !== 1 || integrity[0]?.quick_check !== "ok") throw new Error("Graph v4 integrity validation failed.");
+      const checkpoint = store.db.pragma("wal_checkpoint(TRUNCATE)") as Array<{ busy: number; log: number; checkpointed: number }>;
+      if (checkpoint.some(row => row.busy !== 0 || row.log !== row.checkpointed)) throw new Error("Graph v4 checkpoint did not converge.");
+    } finally { store.close(); }
+  };
+  migrateGraphStoreToV4({ databasePath, admission, initializeEmpty: inspect, validateV4: inspect });
+}
+
+export function createAsyncGraphStore(databasePath: string, options: GraphStoreOptions = {}): AsyncGraphStore {
   let graphStore: Promise<GraphStore> | undefined;
   let closePromise: Promise<void> | undefined;
   const load = (() => {
-    graphStore ??= Promise.resolve().then(() => openGraphStore(databasePath));
+    graphStore ??= Promise.resolve().then(() => openGraphStore(databasePath, options));
     return graphStore;
   }) as AsyncGraphStore;
   load.close = async () => {
@@ -716,7 +772,22 @@ export async function createRepositoryRefreshController(input: {
   databasePath: string;
   controllerGeneration: number;
   maxFiles: number;
+  observation: GraphBuildWatchQueuePort;
 }): Promise<SnapshotRefreshControllerPort & SnapshotRefreshDiagnosticsPort & SnapshotRefreshAdmissionFailurePort> {
+  await input.observation.start();
+  await restoreGraphBuildWatchCoverage({
+    repo_root: input.repoRoot,
+    store: input.graphStore,
+    watcher: input.observation,
+    read_identity: async (expected) => readCapturedGraphBuildPathIdentity(input.repoRoot, expected)
+  });
+  const validation = new GraphBuildManifestPublicationValidator({
+    store: input.graphStore,
+    watcher: input.observation,
+    read_identity: async (expected) => readCapturedGraphBuildPathIdentity(input.repoRoot, expected),
+    clock: new SystemClockAdapter(),
+    on_published: ({ directories }) => input.observation.establishCoverage({ directories })
+  });
   const publication = createAsyncPublicationPort(input.graphStore);
   return new SnapshotRefreshController({
     repo_root: input.repoRoot,
@@ -724,13 +795,15 @@ export async function createRepositoryRefreshController(input: {
     timeout_ms: 60_000,
     clock: new SystemClockAdapter(),
     publication,
+    validation,
     executor: new StartupGraphRefreshExecutor({
       database_path: input.databasePath,
       config_identity: "default",
       max_files: input.maxFiles,
       retain_latest_snapshots: DEFAULT_STARTUP_WARMUP_RETAIN_LATEST_SNAPSHOTS,
       retain_latest_fresh_snapshots: DEFAULT_STARTUP_WARMUP_RETAIN_LATEST_FRESH_SNAPSHOTS,
-      controller_generation: input.controllerGeneration
+      controller_generation: input.controllerGeneration,
+      observation: input.observation
     })
   });
 }
@@ -757,7 +830,7 @@ export function createAsyncPublicationPort(
 export function createRepositoryWorkspaceRefreshService(input: {
   repoRoot: string;
   triggers: RepositoryRefreshTriggerPort;
-  watcher: WorkspaceWatcherPort;
+  observation: GraphBuildWatchQueuePort;
   clock: ClockPort;
   config: WorkspaceWatcherConfig;
   indexedRoots: readonly string[];
@@ -769,42 +842,57 @@ export function createRepositoryWorkspaceRefreshService(input: {
   }) => { cancel(): void };
 }) {
   const queue = new WorkspaceChangeQueue({ clock: input.clock, config: input.config });
-  let handle: WorkspaceWatchHandle | null = null;
-  let freshness: WatcherFreshnessState | undefined;
+  let freshness: WatcherFreshnessState | undefined = input.config.enabled ? undefined : unavailableWatcherFreshness();
   let pollTail: Promise<void> = Promise.resolve();
   let closed = false;
   let scheduledPoll: { cancel(): void } | undefined;
 
-  async function poll(): Promise<WatcherFreshnessState | undefined> {
+  async function poll(options: { force?: boolean } = {}): Promise<WatcherFreshnessState | undefined> {
     const prior = pollTail;
     let release!: () => void;
     pollTail = new Promise<void>((resolve) => { release = resolve; });
     await prior;
     try {
-      if (!input.config.enabled || closed) return undefined;
-      handle ??= await input.watcher.start({
-        repo_root: input.repoRoot,
-        paths: input.indexedRoots,
-        skipped_roots: input.skippedRoots,
-        enabled: true,
-        debounce_ms: input.config.debounce_ms,
-        event_budget: input.config.event_budget
-      });
-      const events = await input.watcher.poll({
-        watch_id: handle.id,
-        max_events: input.config.event_budget
+      if (closed) return freshness;
+      if (!input.config.enabled) return freshness;
+      if (freshness?.status === "degraded" && freshness.refresh_admission === undefined) return freshness;
+      const events = await input.observation.pollEvents({
+        force: options.force,
+        max_events: options.force === true ? undefined : input.config.event_budget
       });
       for (const event of events) queue.enqueue(event);
+      const observation = input.observation.observe();
+      if (!observation.healthy) {
+        freshness = unavailableWatcherFreshness("Workspace watcher observation is unhealthy.");
+        return freshness;
+      }
+      const queued = queue.observation();
+      if (events.length === 0 && queued.pending_events === 0 && !queued.overflowed &&
+          freshness?.status === "degraded" && freshness.refresh_admission !== undefined) {
+        // An ownership refusal is not lost observation. Keep its blocker until
+        // a new explicit admission is active; do not retry it from idle polls.
+        if (!await input.triggers.hasPendingGeneration()) return freshness;
+        freshness = watcherFreshnessFromQueueResult({ status: "refreshing", repo_root: input.repoRoot,
+          events: [], bounded_rescan_required: false });
+        return freshness;
+      }
       if (
-        events.length === 0 &&
+        events.length === 0 && queued.pending_events === 0 && !queued.overflowed &&
         freshness?.status === "refreshing" &&
         await input.triggers.hasPendingGeneration()
       ) return freshness;
-      freshness = watcherFreshnessFromQueueResult(await processWorkspaceChangeQueue({
+      const nextFreshness = watcherFreshnessFromQueueResult(await processWorkspaceChangeQueue({
         repo_root: input.repoRoot,
         queue,
-        triggers: input.triggers
+        triggers: input.triggers,
+        force: options.force
       }));
+      // Rehydration failure is an evidence gap, not a failed watcher: keep
+      // draining so a newly published inventory can establish coverage.
+      if (!input.observation.coverageEstablished() && nextFreshness.status === "fresh") {
+        return coverageNotEstablishedFreshness();
+      }
+      freshness = nextFreshness;
       return freshness;
     } catch {
       freshness = {
@@ -822,6 +910,15 @@ export function createRepositoryWorkspaceRefreshService(input: {
 
   const schedulePoll = input.schedulePoll ?? scheduleRepositoryWatcherPoll;
   const pollIntervalMs = input.pollIntervalMs ?? Math.max(25, input.config.debounce_ms);
+
+  input.observation.bindDrain(
+    async () => { await poll({ force: true }); },
+    () => {
+      const observed = queue.observation();
+      return { pending_events: observed.pending_events,
+        healthy: freshness?.status !== "degraded" || freshness.refresh_admission !== undefined };
+    }
+  );
 
   function scheduleNextPoll(): void {
     if (!input.config.enabled || closed) return;
@@ -843,10 +940,6 @@ export function createRepositoryWorkspaceRefreshService(input: {
       scheduledPoll?.cancel();
       scheduledPoll = undefined;
       await pollTail;
-      if (handle !== null) {
-        await input.watcher.stop({ watch_id: handle.id });
-        handle = null;
-      }
     }
   };
 }
@@ -862,10 +955,11 @@ function scheduleRepositoryWatcherPoll(input: {
 
 function createStandaloneRefreshAuthority(input: {
   repoRoot: string;
-  graphStore: () => Promise<GraphStore>;
+  rawGraphStore: () => Promise<GraphStore>;
   databasePath: string;
   maxFiles: number;
   clock: SystemClockAdapter;
+  observation: GraphBuildWatchQueuePort;
 }): LazyOwnershipGatedRefreshAuthority {
   const ownerGeneration = input.clock.nowUnixMs();
   let recoveredSnapshotIds: readonly string[] = [];
@@ -883,14 +977,21 @@ function createStandaloneRefreshAuthority(input: {
       heartbeat_at: input.clock.nowIso8601()
     },
     prepare_controller: async (admission) => {
-      const store = await input.graphStore();
-      retireLegacyGraphStore(input.databasePath);
-      const result = await store.reconcileOrphanedBuilds({
-        repo_root: input.repoRoot,
-        current_owner: admission.lease,
-        recovered_owners: admission.recovered_owners,
-        updated_at: input.clock.nowIso8601()
-      });
+      prepareOwnedGraphStore(input.databasePath, admission);
+      // Reconciliation is lease-scoped and short-lived. Do not poison the
+      // shared lazy loader when an acquired lease is later rejected.
+      const store = openGraphStore(input.databasePath);
+      let result: Awaited<ReturnType<typeof store.reconcileOrphanedBuilds>>;
+      try {
+        result = await store.reconcileOrphanedBuilds({
+          repo_root: input.repoRoot,
+          current_owner: admission.lease,
+          recovered_owners: admission.recovered_owners,
+          updated_at: input.clock.nowIso8601()
+        });
+      } finally {
+        store.close();
+      }
       recoveredSnapshotIds = result.outcome === "reconciled" ? result.snapshot_ids : [];
       recoveryLease = result.outcome === "reconciled" ? admission.lease : undefined;
       return result.outcome === "blocked" ? "ownership_ambiguous" : "ready";
@@ -898,10 +999,11 @@ function createStandaloneRefreshAuthority(input: {
     create_controller: async () => {
       const controller = await createRepositoryRefreshController({
         repoRoot: input.repoRoot,
-        graphStore: input.graphStore,
+        graphStore: input.rawGraphStore,
         databasePath: input.databasePath,
         controllerGeneration: ownerGeneration,
-        maxFiles: input.maxFiles
+        maxFiles: input.maxFiles,
+        observation: input.observation
       });
       if (recoveredSnapshotIds[0] !== undefined) {
         await controller.recordAdmissionFailure({
@@ -915,6 +1017,12 @@ function createStandaloneRefreshAuthority(input: {
         await ownership.confirmRecovery({ lease: recoveryLease });
       }
       return controller;
+    },
+    cleanup_before_release: async () => {
+      await input.observation.close();
+      if ("close" in input.rawGraphStore && typeof input.rawGraphStore.close === "function") {
+        await input.rawGraphStore.close();
+      }
     }
   });
 }
@@ -937,7 +1045,8 @@ function watcherFreshnessFromQueueResult(
       queue_state: "failed",
       scope_status: "unknown",
       ignore_rules_status: "unknown",
-      reason: result.reason
+      reason: result.reason,
+      refresh_admission: result.refresh_admission
     };
   }
 
@@ -950,6 +1059,26 @@ function watcherFreshnessFromQueueResult(
       result.status === "stale_rescan_scheduled"
         ? "Workspace watcher scheduled bounded rescan."
         : undefined
+  };
+}
+
+function unavailableWatcherFreshness(reason = "Workspace watcher is disabled."): WatcherFreshnessState {
+  return {
+    status: "degraded",
+    queue_state: "unavailable",
+    scope_status: "unknown",
+    ignore_rules_status: "unknown",
+    reason
+  };
+}
+
+function coverageNotEstablishedFreshness(): WatcherFreshnessState {
+  return {
+    status: "degraded",
+    queue_state: "unavailable",
+    scope_status: "unknown",
+    ignore_rules_status: "unknown",
+    reason: "Workspace watcher coverage has not been established from a sealed manifest."
   };
 }
 

@@ -49,7 +49,8 @@ Closed Spec 051 and completed delivery in Specs 068/069/071 are not reopened.
 ## Durable Impact
 
 T002/T003 promote verified format admission and compiled policy ownership to
-runtime operations; controlled scan guidance is promoted to observability. T008 reconciles
+runtime operations; T004 promotes inventory, publication observation and v4 migration
+to runtime operations, graph-store design and runtime contracts; controlled scan guidance is promoted to observability. T008 reconciles
 these existing owners after delivery: runtime operations for scan
 reuse and budgets; graph-store design for manifests/counters; observability for
 worker profiling; runtime contracts for any changed progress semantics. Proposed
@@ -61,7 +62,8 @@ Current stage: T001 baseline/design checkpoint verified: reproducible actual-wor
 harness, six controlled scenarios with five repetitions, exact observations and
 independent review. T002 bounded Qt admission is implemented and verified under
 V002. T003 compiled ignore/priority matchers pass V003 and the controlled SC-001
-scan benchmark; T004-T006 remain pending. Full-generation acceptance remains T007.
+scan benchmark. T004 inventory/publication/migration passes
+V004 and SC-002; T005-T006 remain pending. Full-generation acceptance remains T007.
 User purpose is established by the explicit request to put the CPU findings into
 a fix spec and route residuals to backlog. Template authority is the skill
 fallback: docs/templates/spec-package and docs/templates/README.md are absent.

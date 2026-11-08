@@ -282,7 +282,7 @@ export const evidenceRepositoryReferenceSchema = z
   .strict();
 export type EvidenceRepositoryReference = z.infer<typeof evidenceRepositoryReferenceSchema>;
 
-export const DEFAULT_WORKSPACE_WATCHER_ENABLED = false as const;
+export const DEFAULT_WORKSPACE_WATCHER_ENABLED = true as const;
 export const DEFAULT_WORKSPACE_WATCHER_DEBOUNCE_MS = 250;
 export const DEFAULT_WORKSPACE_WATCHER_EVENT_BUDGET = 1000;
 

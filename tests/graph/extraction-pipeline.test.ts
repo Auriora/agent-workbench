@@ -31,6 +31,7 @@ import {
   RubyTreeSitterExtractorAdapter
 } from "../../src/infrastructure/tree-sitter/index.js";
 import { InMemoryRuntimeOperationsAdapter } from "../../src/infrastructure/runtime/index.js";
+import { GraphBuildWatchSession } from "../../src/infrastructure/runtime/graph-build-watch-session.js";
 
 const clock: ClockPort = {
   now: () => new Date("2026-05-31T12:00:00.000Z"),
@@ -515,6 +516,40 @@ describe("repository graph extraction pipeline", () => {
         status: "done",
         hits: [expect.objectContaining({ path: "README.md" })]
       });
+    } finally {
+      store.close();
+    }
+  });
+
+  it("keeps docs before and after a graph continuation cursor from the one full inventory", async () => {
+    const repoRoot = path.join(dir, "docs-before-after-cursor");
+    fs.mkdirSync(path.join(repoRoot, "docs"), { recursive: true });
+    fs.writeFileSync(path.join(repoRoot, "README.md"), "# Before cursor\n\nbefore-cursor-doc-needle\n");
+    fs.writeFileSync(path.join(repoRoot, "docs", "after.md"), "# After cursor\n\nafter-cursor-doc-needle\n");
+    fs.writeFileSync(path.join(repoRoot, "z.py"), "def z():\n    return 1\n");
+    const store = openGraphStore(path.join(dir, "docs-before-after-cursor.sqlite"));
+    const registry = new ExtractorRegistryAdapter();
+    registry.register(new PythonTreeSitterExtractorAdapter());
+    try {
+      await buildRepositoryGraph({
+        repo_root: repoRoot,
+        scanner: new FileCatalogScannerAdapter(),
+        workspace: new WorkspaceFileAdapter({ repoRoot }),
+        extractors: registry,
+        resource_extractor: new ResourceExtractorAdapter(),
+        graph: store,
+        catalog: store,
+        docs_index: store,
+        snapshots: store,
+        clock,
+        schema_version: SCHEMA_VERSION,
+        snapshot_id: "105",
+        after_path: "README.md",
+        max_files: 1
+      });
+      expect(store.db.prepare("SELECT path FROM docs_documents WHERE snapshot_id = ? ORDER BY path")
+        .all(105)).toEqual([{ path: "README.md" }, { path: "docs/after.md" }]);
+      await expect(store.getFile({ snapshot_id: "105", path: "README.md" })).resolves.toBeNull();
     } finally {
       store.close();
     }
@@ -2014,9 +2049,9 @@ describe("repository graph extraction pipeline", () => {
     expect(result.exit_code).toBe(0);
     expect(result.messages).toHaveLength(1);
     expect(result.messages[0]).toMatchObject({
-      type: "complete",
+      type: "partial",
       result: {
-        outcome: "complete",
+        outcome: "partial",
         execution_id: "warmup-production-worker",
         target_snapshot_id: "608",
         completed_generation: 13
@@ -2034,7 +2069,7 @@ describe("repository graph extraction pipeline", () => {
         SELECT freshness, publication_state, controller_generation, invalidation_generation
         FROM snapshots WHERE id = 608
       `).get()).toEqual({
-        freshness: "fresh",
+        freshness: "refreshing",
         publication_state: "building",
         controller_generation: 8,
         invalidation_generation: 13
@@ -2271,6 +2306,10 @@ describe("repository graph extraction pipeline", () => {
       );
     }
     const databasePath = path.join(dir, "startup-worker-partial.sqlite");
+    const continuationWatcher = new GraphBuildWatchSession({
+      repo_root: repoRoot, paths: ["."], skipped_roots: [], enabled: true, debounce_ms: 25, event_budget: 2000
+    });
+    await continuationWatcher.start();
     const first = await runStartupGraphWorker({
       repoRoot,
       databasePath,
@@ -2283,7 +2322,7 @@ describe("repository graph extraction pipeline", () => {
       vacuum: false,
       controllerGeneration: 9,
       invalidationGeneration: 11
-    });
+    }, continuationWatcher);
     expect(first.exit_code).toBe(0);
     expect(first.messages).toHaveLength(1);
     expect(first.messages[0]).toMatchObject({
@@ -2323,7 +2362,7 @@ describe("repository graph extraction pipeline", () => {
         vacuum: false,
         controllerGeneration: 9,
         invalidationGeneration: 11
-      });
+      }, continuationWatcher);
       expect(continuation.exit_code).toBe(0);
       expect(continuation.messages).toHaveLength(1);
       finalMessage = continuation.messages[0];
@@ -2347,6 +2386,7 @@ describe("repository graph extraction pipeline", () => {
         completed_generation: 11
       }
     });
+    await continuationWatcher.close();
   }, 30_000);
 
   it("uses one resolved snapshot id for standalone failure cleanup when the clock advances", async () => {
@@ -2610,14 +2650,24 @@ type StartupGraphWorkerRun = {
   messages: readonly StartupGraphWorkerMessage[];
 };
 
-function runStartupGraphWorker(workerData: Record<string, unknown>): Promise<StartupGraphWorkerRun> {
-  return new Promise((resolve, reject) => {
+async function runStartupGraphWorker(
+  workerData: Record<string, unknown>,
+  sharedWatcher?: GraphBuildWatchSession
+): Promise<StartupGraphWorkerRun> {
+  const repoRoot = workerData.repoRoot;
+  if (typeof repoRoot !== "string") throw new TypeError("Raw worker fixture requires repoRoot.");
+  const watcher = sharedWatcher ?? new GraphBuildWatchSession({
+    repo_root: repoRoot, paths: ["."], skipped_roots: [], enabled: true, debounce_ms: 25, event_budget: 2000
+  });
+  const watcherObservation = await watcher.start();
+  return await new Promise((resolve, reject) => {
     const timeoutMs = 30_000;
     const worker = new Worker(
       new URL("../../src/infrastructure/workers/startup-graph-warmup-worker-entrypoint.mjs", import.meta.url),
       {
         workerData: {
           ...workerData,
+          watcherObservation,
           timeoutMs,
           deadlineAt: new Date(Date.now() + timeoutMs).toISOString()
         }
@@ -2625,6 +2675,12 @@ function runStartupGraphWorker(workerData: Record<string, unknown>): Promise<Sta
     );
     const messages: StartupGraphWorkerMessage[] = [];
     const onMessage = (message: unknown): void => {
+      if (typeof message === "object" && message !== null && (message as { type?: unknown }).type === "graph_build_observation_request") {
+        const request = message as { operation: "observe" | "register_directory"; path?: string; repository_key?: string };
+        void (request.operation === "observe" ? Promise.resolve(watcher.observe()) : watcher.registerDirectory({ path: request.path!, repository_key: request.repository_key }))
+          .then(result => worker.postMessage({ ...message as object, type: "graph_build_observation_ack", accepted: true, result }), reject);
+        return;
+      }
       if (typeof message === "object" && message !== null && (message as { type?: unknown }).type === "progress") {
         return;
       }
@@ -2637,6 +2693,7 @@ function runStartupGraphWorker(workerData: Record<string, unknown>): Promise<Sta
     worker.on("message", onMessage);
     worker.once("error", reject);
     worker.once("exit", (code) => {
+      if (sharedWatcher === undefined) void watcher.close();
       if (code !== 0 && messages.length === 0) {
         reject(new Error(`Startup graph worker exited with code ${code}.`));
         return;

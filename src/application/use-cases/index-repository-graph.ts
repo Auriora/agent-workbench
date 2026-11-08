@@ -28,6 +28,7 @@ import type {
   ExtractorRegistryPort,
   FileCatalogPort,
   FileCatalogScanPort,
+  FileCatalogScanResult,
   GraphBuildCoveragePort,
   GraphBuildProgress,
   GraphBuildProgressPort,
@@ -40,6 +41,15 @@ import type {
   SnapshotPort,
   WorkspaceFilePort
 } from "../../ports/index.js";
+import type {
+  GraphBuildCatalogCapturePort,
+  GraphBuildManifest,
+  GraphBuildManifestFence,
+  GraphBuildManifestPort,
+  GraphBuildPathIdentity,
+  GraphBuildWatchPort
+} from "../../ports/graph-build-manifest.js";
+import { graphBuildManifestDigestMaterial } from "../../ports/graph-build-manifest.js";
 import type {
   CachePort,
   WarmupCoordinatorPort
@@ -150,7 +160,7 @@ export type RepositoryGraphBuildSliceResult = {
   coverage: readonly IndexCoverage[];
 };
 
-export type RepositoryGraphBuildSliceInput = BuildRepositoryGraphInput & {
+export type RepositoryGraphBuildSliceInput = Omit<BuildRepositoryGraphInput, "scanner"> & {
   snapshot_id: string;
   owner_id: string;
   controller_generation: number;
@@ -160,6 +170,17 @@ export type RepositoryGraphBuildSliceInput = BuildRepositoryGraphInput & {
   build_read: GraphBuildReadPort;
   build_coverage: GraphBuildCoveragePort;
   build_resolution: GraphBuildResolutionWritePort;
+  /**
+   * The durable inventory is mandatory for sliced builds.  It deliberately
+   * owns scanner construction: a continuation must never be able to select a
+   * non-capturing scanner and fall back to a fresh repository walk.
+   */
+  manifest: {
+    store: GraphBuildManifestPort;
+    watcher: Pick<GraphBuildWatchPort, "start" | "registerDirectory">;
+    create_scanner: (capture: GraphBuildCatalogCapturePort) => FileCatalogScanPort;
+    inputs: readonly GraphBuildPathIdentity[];
+  };
 };
 
 /** Build complete isolated evidence without selecting the target snapshot. */
@@ -202,21 +223,27 @@ export async function buildRepositoryGraph(
     ...DEFAULT_GRAPH_PRIORITY_PATHS
   ].map(normalizePriorityPath));
   input.observe_build_phase?.("catalog");
-  const scanned = await scanFileCatalog(input.scanner, {
+  const inventory = await scanFileCatalog(input.scanner, {
     repo_root: input.repo_root,
     indexed_roots: ["."],
     skipped_roots: [],
-    max_files: input.max_files ?? 2000,
-    after_path: input.after_path,
+    // A standalone build has one canonical discovery pass. Graph budgeting is
+    // a view over this inventory, never a second docs/shape traversal.
+    max_files: Number.MAX_SAFE_INTEGER,
     priority_paths: requestedPriorityPaths,
     priority_path_patterns: RAILS_ROUTE_PRIORITY_PATTERNS,
     repository_composition: input.repository_composition
+  });
+  const scanned = boundedGraphCatalogFromInventory({
+    scan: inventory,
+    max_files: input.max_files ?? 2000,
+    after_path: input.after_path
   });
   input.report_build_progress?.("catalog", scanned.files.length);
 
   const railsShape = detectRailsProjectShape({
     files: mergeRailsShapeFiles({
-      scannedFiles: scanned.files,
+      scannedFiles: inventory.files,
       probeFiles: input.rails_shape_files
     }),
     scan_truncated: scanned.truncated
@@ -325,13 +352,7 @@ export async function buildRepositoryGraph(
   if (input.docs_index !== undefined) input.observe_build_phase?.("catalog");
   const docsScan = input.docs_index === undefined
     ? undefined
-    : await scanFileCatalog(input.scanner, {
-        repo_root: input.repo_root,
-        indexed_roots: DOCS_INDEX_ROOTS,
-        skipped_roots: [],
-        max_files: input.max_files ?? 2000,
-        repository_composition: input.repository_composition
-      });
+    : docsCatalogFromInventory(inventory);
 
   input.observe_build_phase?.("docs");
   const markdownContentByPath = new Map<string, string>();
@@ -340,7 +361,7 @@ export async function buildRepositoryGraph(
   if (input.docs_index !== undefined) {
     const mergedDocsFiles = mergeDocsIndexFiles({
       graphFiles: scanned.files,
-      docsFiles: docsScan?.files ?? []
+      docsFiles: docsScan!.files
     });
     docsPartition = partitionDocumentationCorpusPaths(mergedDocsFiles.map((file) => file.path));
     const eligibleDocsPaths = new Set(docsPartition.eligible_markdown_paths);
@@ -529,63 +550,46 @@ export async function buildRepositoryGraph(
 export async function runRepositoryGraphBuildSlice(
   input: RepositoryGraphBuildSliceInput
 ): Promise<RepositoryGraphBuildSliceResult> {
-  input.observe_build_phase?.("graph_write");
-  const generationSourceHash = graphGenerationSourceHash(input);
-  let progress = await input.build_progress.getGraphBuildProgress({
-    snapshot_id: input.snapshot_id
-  });
+  const watch = await input.manifest.watcher.start();
+  if (!watch.healthy || watch.pending_events !== 0) {
+    throw new Error("Graph build watcher is unhealthy or has pending events before manifest preparation.");
+  }
+  const fence = graphBuildManifestFence(input, watch);
+  let progress = await input.build_progress.getGraphBuildProgress({ snapshot_id: input.snapshot_id });
+  let startedHere = false;
 
   if (progress === null) {
     const latest = await input.snapshots.getLatestPublished({ repo_root: input.repo_root });
     const sourceProgress = latest.status === "selected"
       ? await input.build_progress.getGraphBuildProgress({ snapshot_id: latest.snapshot.id })
       : null;
-    const sourceStatus = sourceProgress?.status ?? "active";
-    const sourceHasSameGeneration = sourceProgress !== null &&
+    const sameGenerationSource = sourceProgress !== null && sourceProgress.phase !== "complete" &&
       sourceProgress.controller_generation === input.controller_generation &&
       sourceProgress.invalidation_generation === input.invalidation_generation;
-    if (sourceProgress !== null && sourceProgress.phase !== "complete" && sourceHasSameGeneration &&
-        sourceProgress.owner_id !== input.owner_id) {
+    if (sameGenerationSource && sourceProgress.owner_id !== input.owner_id) {
       throw new Error("Published graph continuation owner does not match the requested slice.");
     }
-    if (sourceProgress !== null && sourceProgress.phase !== "complete" && sourceHasSameGeneration &&
-        sourceProgress.generation_source_hash !== generationSourceHash) {
+    if (sameGenerationSource && sourceProgress.generation_source_hash !== fence.generation_source_hash) {
       throw new Error("Published graph continuation generation source does not match the requested slice.");
     }
-    if (sourceProgress !== null && sourceProgress.phase !== "complete" && sourceHasSameGeneration &&
-        (sourceStatus === "cancelled" || sourceStatus === "stale")) {
-      throw new Error(`Published graph continuation is ${sourceStatus} and cannot be resumed.`);
+    if (sameGenerationSource && (sourceProgress.status === "cancelled" || sourceProgress.status === "stale")) {
+      throw new Error(`Published graph continuation is ${sourceProgress.status} and cannot be resumed.`);
     }
-    if (sourceProgress !== null && sourceProgress.phase !== "complete" && sourceStatus === "active" &&
-        !sourceHasSameGeneration) {
-      await input.build_progress.transitionGraphBuildProgressStatus({
-        snapshot_id: sourceProgress.snapshot_id,
-        owner_id: sourceProgress.owner_id,
-        controller_generation: sourceProgress.controller_generation,
-        invalidation_generation: sourceProgress.invalidation_generation,
-        from: "active",
-        to: "stale",
-        updated_at: input.clock.nowIso8601()
+    const seedable = canSeedPublishedManifest({ input, sourceProgress });
+    if (latest.status === "selected" && seedable) {
+      const seededProgress = sourceProgress as GraphBuildProgress & { manifest_id: string };
+      const sourceManifest = await requireSealedManifest({
+        store: input.manifest.store,
+        manifest_id: seededProgress.manifest_id,
+        fence
       });
-    }
-    const resumesPublishedSeed = latest.status === "selected" &&
-      sourceProgress !== null &&
-      sourceProgress.phase !== "complete" &&
-      sourceProgress.status === "active" &&
-      sourceProgress.owner_id === input.owner_id &&
-      sourceProgress.scan_cursor !== undefined &&
-      sourceHasSameGeneration;
-
-    if (resumesPublishedSeed && latest.status === "selected") {
+      if (sourceManifest.watcher_epoch !== watch.epoch) {
+        await invalidateManifest({ input, manifest_id: sourceManifest.manifest_id, reason: "watcher_epoch_mismatch" });
+        throw new Error("Published graph continuation watcher epoch does not match the requested slice.");
+      }
       const now = input.clock.nowIso8601();
       await input.snapshots.createBuildSnapshot({
-        snapshot: {
-          ...latest.snapshot,
-          id: input.snapshot_id,
-          freshness: "refreshing",
-          created_at: now,
-          updated_at: now
-        },
+        snapshot: { ...latest.snapshot, id: input.snapshot_id, freshness: "refreshing", created_at: now, updated_at: now },
         controller_generation: input.controller_generation,
         invalidation_generation: input.invalidation_generation,
         created_at: now
@@ -598,160 +602,491 @@ export async function runRepositoryGraphBuildSlice(
         invalidation_generation: input.invalidation_generation,
         updated_at: now
       });
-      progress = await input.build_progress.getGraphBuildProgress({
-        snapshot_id: input.snapshot_id
-      });
-      if (progress === null) {
-        throw new Error("Seeded graph completion target has no durable progress record.");
-      }
+      progress = await input.build_progress.getGraphBuildProgress({ snapshot_id: input.snapshot_id });
+      if (progress === null) throw new Error("Seeded graph completion target has no durable progress record.");
     } else {
-      const result = await buildRepositoryGraph({
-        ...input,
-        mark_fresh: true
-      });
-      input.observe_build_phase?.("graph_write");
-      const graphCoverage = requireGraphCoverage(result.coverage);
-      const partial = graphCoverage.state === "partial";
-      const cursor = partial ? graphCoverage.continuation_cursor : undefined;
-      if (partial && cursor === undefined) {
-        throw new Error("Partial graph seed did not provide a continuation cursor.");
+      try {
+        progress = await prepareGraphBuildManifest({ input, fence });
+      } catch (error) {
+        try {
+          await invalidateManifest({ input, manifest_id: graphBuildManifestId(input, fence), reason: "inventory_preparation_failed" });
+        } catch {
+          // The original preparation failure is the actionable error. A
+          // missing row means failure preceded durable manifest admission.
+        }
+        throw error;
       }
-      await input.build_progress.upsertGraphBuildProgress({
-        progress: buildProgressFromResult({
-          input,
-          result,
-          phase: partial ? "extracting" : "complete",
-          scan_cursor: cursor
-        })
-      });
-      return partial
-        ? {
-            outcome: "partial",
-            snapshot_id: result.snapshot_id,
-            continuation_cursor: cursor,
-            partial_kind: "publish_seed",
-            coverage: result.coverage
-          }
-        : {
-            outcome: "complete",
-            snapshot_id: result.snapshot_id,
-            coverage: result.coverage
-          };
+      startedHere = true;
     }
   }
 
-  if (progress.controller_generation !== input.controller_generation ||
-      progress.invalidation_generation !== input.invalidation_generation) {
-    throw new Error("Graph build progress generation does not match the requested slice.");
+  const manifestId = progress.manifest_id;
+  if (manifestId === undefined || progress.counters_version !== 2) {
+    throw new Error("Graph build progress is not bound to a sealed inventory manifest.");
   }
-  if (progress.generation_source_hash !== generationSourceHash) {
-    throw new Error("Graph build progress generation source does not match the requested slice.");
+  let manifest: GraphBuildManifest;
+  try {
+    manifest = await requireSealedManifest({ store: input.manifest.store, manifest_id: manifestId, fence });
+  } catch (error) {
+    await invalidateManifest({ input, manifest_id: manifestId, reason: "sealed_manifest_fence_mismatch" });
+    throw error;
   }
-  if (progress.owner_id !== input.owner_id) {
-    throw new Error("Graph build progress owner does not match the requested slice.");
-  }
-  if (progress.completion_target_id !== undefined && progress.completion_target_id !== input.snapshot_id) {
-    throw new Error("Graph build progress is already linked to another completion target.");
-  }
-  if (progress.status === "cancelled" || progress.status === "stale") {
-    throw new Error(`Graph build progress is ${progress.status} and cannot be resumed.`);
-  }
+  assertProgressMatchesManifest({ input, progress, manifest });
   if (progress.phase === "complete" || progress.status === "completed") {
-    return {
-      outcome: "complete",
-      snapshot_id: input.snapshot_id,
-      coverage: [completeGraphCoverage(progress)]
-    };
+    return { outcome: "complete", snapshot_id: input.snapshot_id, coverage: [completeGraphCoverage(progress)] };
   }
-  if (progress.phase === "resolving") {
-    return await resolveAccumulatedBuildReferencesSlice(input, progress);
-  }
-  if (progress.scan_cursor === undefined) {
-    throw new Error("Incomplete graph build progress has no continuation cursor.");
-  }
+  if (progress.phase === "resolving") return resolveAccumulatedBuildReferencesSlice(input, progress);
 
-  input.observe_build_phase?.("catalog");
-  const railsShapeFiles = (await scanFileCatalog(input.scanner, {
-    repo_root: input.repo_root,
-    indexed_roots: ["."],
-    skipped_roots: [],
-    max_files: Math.max(input.max_files ?? 2000, RAILS_SHAPE_PROBE_MIN_FILES),
-    priority_paths: ["Gemfile", "config/application.rb", "config/routes.rb"],
-    priority_path_patterns: RAILS_ROUTE_PRIORITY_PATTERNS,
-    repository_composition: input.repository_composition
-  })).files;
-  const result = await buildRepositoryGraph({
-    ...input,
-    docs_index: undefined,
-    documentation_concerns: undefined,
-    append_to_existing_build: true,
-    mark_fresh: false,
-    after_path: progress.scan_cursor,
-    rails_shape_files: railsShapeFiles
-  });
-  input.observe_build_phase?.("graph_write");
-  const graphCoverage = requireGraphCoverage(result.coverage);
-  const counters = addBuildCounters(progress, result);
-  const partial = graphCoverage.state === "partial";
-  const cursor = partial ? graphCoverage.continuation_cursor : undefined;
-  if (partial && cursor === undefined) {
-    throw new Error("Partial graph completion slice did not provide a continuation cursor.");
-  }
-
-  if (partial) {
-    const nextProgress: GraphBuildProgress = {
-      ...progress,
-      phase: "extracting",
-      scan_cursor: cursor,
-      max_files: input.max_files ?? 2000,
-      counters,
-      updated_at: input.clock.nowIso8601()
-    };
-    const coverage = partialGraphCoverage(nextProgress, {
-      scan_truncated: graphCoverage.scan_truncated,
-      extraction_truncated: graphCoverage.extraction_truncated
-    });
-    await input.build_coverage.upsertGraphBuildCoverage({
-      snapshot_id: input.snapshot_id,
-      controller_generation: input.controller_generation,
-      invalidation_generation: input.invalidation_generation,
-      coverage
-    });
-    await input.build_progress.upsertGraphBuildProgress({ progress: nextProgress });
-    return {
-      outcome: "partial",
-      snapshot_id: input.snapshot_id,
-      continuation_cursor: cursor,
-      partial_kind: "continue_build",
-      coverage: [coverage]
-    };
-  }
-
-  const resolvingProgress: GraphBuildProgress = {
-    ...progress,
-    phase: "resolving",
-    scan_cursor: "resolve:0",
-    counters,
-    updated_at: input.clock.nowIso8601()
+  const result = await extractManifestSlice({ input, fence, manifest, progress });
+  return {
+    ...result,
+    partial_kind: result.outcome === "partial" ? (startedHere ? "publish_seed" : "continue_build") : undefined
   };
-  await input.build_progress.upsertGraphBuildProgress({ progress: resolvingProgress });
-  const coverage = partialGraphCoverage(resolvingProgress, {
-    scan_truncated: false,
-    extraction_truncated: false
-  });
-  await input.build_coverage.upsertGraphBuildCoverage({
-    snapshot_id: input.snapshot_id,
+}
+
+function graphBuildManifestFence(
+  input: RepositoryGraphBuildSliceInput,
+  watch: { epoch: string; sequence: number }
+): GraphBuildManifestFence {
+  return {
+    repo_root: input.repo_root,
+    config_identity: input.config_identity ?? "default",
+    owner_id: input.owner_id,
     controller_generation: input.controller_generation,
     invalidation_generation: input.invalidation_generation,
-    coverage
-  });
-  return {
-    outcome: "partial",
-    snapshot_id: input.snapshot_id,
-    continuation_cursor: resolvingProgress.scan_cursor,
-    partial_kind: "continue_build",
-    coverage: [coverage]
+    generation_source_hash: graphGenerationSourceHash(input),
+    watcher_epoch: watch.epoch,
+    watcher_sequence: watch.sequence,
+    policy_version: "compiled-path-policy-v1",
+    ordering_version: "graph-priority-v1",
+    composition_fingerprint: input.repository_composition?.composition_fingerprint ?? ""
   };
+}
+
+function canSeedPublishedManifest(input: {
+  input: RepositoryGraphBuildSliceInput;
+  sourceProgress: GraphBuildProgress | null;
+}): input is { input: RepositoryGraphBuildSliceInput; sourceProgress: GraphBuildProgress & { manifest_id: string } } {
+  const progress = input.sourceProgress;
+  return progress !== null &&
+    progress.phase !== "complete" &&
+    progress.status === "active" &&
+    progress.owner_id === input.input.owner_id &&
+    progress.controller_generation === input.input.controller_generation &&
+    progress.invalidation_generation === input.input.invalidation_generation &&
+    progress.generation_source_hash === graphGenerationSourceHash(input.input) &&
+    progress.manifest_id !== undefined &&
+    progress.counters_version === 2 &&
+    (progress.phase === "resolving" || progress.ordinal_cursor !== undefined);
+}
+
+async function prepareGraphBuildManifest(input: {
+  input: RepositoryGraphBuildSliceInput;
+  fence: GraphBuildManifestFence;
+}): Promise<GraphBuildProgress> {
+  const { input: build, fence } = input;
+  const startedAt = build.clock.nowIso8601();
+  const startedMs = build.clock.nowUnixMs();
+  const manifestId = graphBuildManifestId(build, fence);
+  const existingSnapshot = await build.snapshots.getSnapshot({ repo_root: build.repo_root });
+  if (existingSnapshot !== null && existingSnapshot.config_identity !== fence.config_identity) {
+    throw new Error("Existing snapshot config identity does not match the requested graph index config identity.");
+  }
+  if (existingSnapshot !== null && existingSnapshot.schema_version > build.schema_version) {
+    throw new Error("Existing snapshot schema version does not match the requested graph index schema version.");
+  }
+  await build.snapshots.createBuildSnapshot({
+    snapshot: buildSnapshot({
+      snapshot_id: build.snapshot_id,
+      repo_root: build.repo_root,
+      config_identity: fence.config_identity,
+      schema_version: build.schema_version,
+      freshness: "refreshing",
+      repository_composition: build.repository_composition,
+      now: startedAt
+    }),
+    controller_generation: build.controller_generation,
+    invalidation_generation: build.invalidation_generation,
+    created_at: startedAt
+  });
+  await build.manifest.store.beginGraphBuildManifest({ manifest_id: manifestId, fence, started_at: startedAt });
+
+  const capturedFiles = new Map<string, { repository_key: string; entry: FileCatalogEntry; identity: GraphBuildPathIdentity }>();
+  const capturedDirectories: import("../../ports/graph-build-manifest.js").GraphBuildDirectoryObservation[] = [];
+  const capture: GraphBuildCatalogCapturePort = {
+    beforeDirectory: async ({ path, repository_key, identity }) => {
+      const observation = await build.manifest.watcher.registerDirectory({ path, repository_key });
+      if (!observation.healthy || observation.pending_events !== 0 || observation.epoch !== fence.watcher_epoch) {
+        throw new Error(`Graph build watcher cannot fence directory inventory: ${path}`);
+      }
+      return observation;
+    },
+    directory: async (directory) => {
+      if (directory.watcher_epoch !== fence.watcher_epoch || !directory.registered) {
+        throw new Error(`Graph build directory observation is outside the manifest watcher epoch: ${directory.identity.path}`);
+      }
+      capturedDirectories.push(directory);
+      await build.manifest.store.appendGraphBuildManifestObservation({ manifest_id: manifestId, fence, directory });
+    },
+    file: async (file) => {
+      if (capturedFiles.has(file.entry.path)) throw new Error(`Duplicate graph build manifest file observation: ${file.entry.path}`);
+      capturedFiles.set(file.entry.path, file);
+      await build.manifest.store.appendGraphBuildManifestObservation({ manifest_id: manifestId, fence, file });
+    }
+  };
+
+  build.observe_build_phase?.("catalog");
+  const scanned = await scanFileCatalog(build.manifest.create_scanner(capture), {
+    repo_root: build.repo_root,
+    indexed_roots: ["."],
+    skipped_roots: [],
+    max_files: Number.MAX_SAFE_INTEGER,
+    priority_paths: dedupePaths([...(build.priority_paths ?? []), ...DEFAULT_GRAPH_PRIORITY_PATHS].map(normalizePriorityPath)),
+    priority_path_patterns: RAILS_ROUTE_PRIORITY_PATTERNS,
+    repository_composition: build.repository_composition
+  });
+  build.report_build_progress?.("catalog", scanned.files.length);
+  const postScanWatch = await build.manifest.watcher.start();
+  if (!postScanWatch.healthy || postScanWatch.pending_events !== 0 ||
+      postScanWatch.epoch !== fence.watcher_epoch || postScanWatch.sequence !== fence.watcher_sequence) {
+    await invalidateManifest({ input: build, manifest_id: manifestId, reason: "watcher_changed_during_inventory" });
+    throw new Error("Graph build watcher changed while the inventory was being prepared.");
+  }
+
+  const shape = detectRailsProjectShape({ files: scanned.files, scan_truncated: scanned.truncated });
+  const priorityPaths = resolveExtractionPriorityPaths({
+    userPriorityPaths: dedupePaths([...(build.priority_paths ?? []), ...DEFAULT_GRAPH_PRIORITY_PATHS].map(normalizePriorityPath)),
+    railsShape: shape
+  });
+  const ordered = prioritizeExtractionOrder({ files: scanned.files, priorityPaths });
+  const docsPartition = partitionDocumentationCorpusPaths(
+    scanned.files.filter((file) => file.file_identity.language === "markdown").map((file) => file.path)
+  );
+  const docsEligible = new Set(docsPartition.eligible_markdown_paths);
+  const files = ordered.map((entry, ordinal) => {
+    const observed = capturedFiles.get(entry.path);
+    if (observed === undefined) throw new Error(`Graph build manifest is missing a captured identity for ${entry.path}.`);
+    return { ordinal, repository_key: observed.repository_key, entry, identity: observed.identity,
+      docs_eligible: docsEligible.has(entry.path), outcome: "pending" as const };
+  });
+  if (capturedFiles.size !== files.length) throw new Error("Graph build manifest captured files differ from the catalog inventory.");
+  const progress: GraphBuildProgress = {
+    snapshot_id: build.snapshot_id,
+    manifest_id: manifestId,
+    ordinal_cursor: 0,
+    counters_version: 2,
+    owner_id: build.owner_id,
+    phase: "extracting",
+    status: "active",
+    max_files: build.max_files ?? 2000,
+    generation_source_hash: fence.generation_source_hash,
+    counters: emptyManifestCounters(files.length),
+    controller_generation: build.controller_generation,
+    invalidation_generation: build.invalidation_generation,
+    updated_at: build.clock.nowIso8601()
+  };
+  const unsealed: Omit<GraphBuildManifest, "digest"> = {
+    ...fence,
+    manifest_id: manifestId,
+    state: "sealed",
+    started_at: startedAt,
+    sealed_at: progress.updated_at,
+    files,
+    directories: capturedDirectories,
+    inputs: build.manifest.inputs,
+    graph_catalog: catalogMetadata(scanned),
+    docs_catalog: catalogMetadata(docsCatalogFromInventory(scanned)),
+    shape,
+    preparation_wall_ms: Math.max(0, build.clock.nowUnixMs() - startedMs)
+  };
+  const manifest: GraphBuildManifest = {
+    ...unsealed,
+    digest: createHash("sha256").update(graphBuildManifestDigestMaterial(unsealed as GraphBuildManifest)).digest("hex")
+  };
+  await build.manifest.store.sealGraphBuildManifest({ manifest, progress });
+  await persistDocsFromManifestInventory({ build, scanned, docsPartition });
+  return progress;
+}
+
+function graphBuildManifestId(input: RepositoryGraphBuildSliceInput, fence: GraphBuildManifestFence): string {
+  return createHash("sha256").update(JSON.stringify({
+    snapshot_id: input.snapshot_id,
+    repo_root: fence.repo_root,
+    owner_id: fence.owner_id,
+    controller_generation: fence.controller_generation,
+    invalidation_generation: fence.invalidation_generation,
+    generation_source_hash: fence.generation_source_hash
+  })).digest("hex");
+}
+
+async function requireSealedManifest(input: {
+  store: GraphBuildManifestPort;
+  manifest_id: string;
+  fence: GraphBuildManifestFence;
+}): Promise<GraphBuildManifest> {
+  const manifest = await input.store.getGraphBuildManifest({ manifest_id: input.manifest_id, fence: input.fence });
+  if (manifest === null || manifest.state !== "sealed") {
+    throw new Error("Graph build manifest is missing or not sealed.");
+  }
+  return manifest;
+}
+
+async function invalidateManifest(input: {
+  input: RepositoryGraphBuildSliceInput;
+  manifest_id: string;
+  reason: string;
+}): Promise<void> {
+  await input.input.manifest.store.invalidateGraphBuildManifest({
+    manifest_id: input.manifest_id,
+    owner_id: input.input.owner_id,
+    reason: input.reason,
+    updated_at: input.input.clock.nowIso8601()
+  });
+}
+
+function assertProgressMatchesManifest(input: {
+  input: RepositoryGraphBuildSliceInput;
+  progress: GraphBuildProgress;
+  manifest: GraphBuildManifest;
+}): void {
+  const { input: build, progress, manifest } = input;
+  if (progress.controller_generation !== build.controller_generation ||
+      progress.invalidation_generation !== build.invalidation_generation ||
+      progress.owner_id !== build.owner_id ||
+      progress.generation_source_hash !== manifest.generation_source_hash ||
+      manifest.generation_source_hash !== graphGenerationSourceHash(build) ||
+      progress.completion_target_id !== undefined && progress.completion_target_id !== build.snapshot_id ||
+      progress.status === "cancelled" || progress.status === "stale") {
+    throw new Error("Graph build progress does not match its sealed manifest fence.");
+  }
+}
+
+async function extractManifestSlice(input: {
+  input: RepositoryGraphBuildSliceInput;
+  fence: GraphBuildManifestFence;
+  manifest: GraphBuildManifest;
+  progress: GraphBuildProgress;
+}): Promise<Omit<RepositoryGraphBuildSliceResult, "partial_kind">> {
+  const { input: build, fence, manifest } = input;
+  const cursor = input.progress.ordinal_cursor;
+  if (cursor === undefined) throw new Error("Incomplete graph build progress has no manifest ordinal cursor.");
+  const rowLimit = build.max_files ?? 2000;
+  const extractionLimit = build.max_extraction_files ?? Number.MAX_SAFE_INTEGER;
+  if (!Number.isSafeInteger(rowLimit) || rowLimit <= 0) throw new TypeError("max_files must be a positive safe integer.");
+  if (!Number.isSafeInteger(extractionLimit) || extractionLimit <= 0) {
+    throw new TypeError("max_extraction_files must be a positive safe integer.");
+  }
+  const limit = Math.min(rowLimit, extractionLimit);
+  const selected = manifest.files.filter((file) => file.ordinal >= cursor && file.outcome === "pending").slice(0, limit);
+  const pending = new Map<number, { file: GraphBuildManifest["files"][number]; outcome: "unsupported" | "extracted" | "resource"; entry: FileCatalogEntry; batch?: ExtractionBatch }>();
+  const batches: Array<{ ordinal: number; batch: ExtractionBatch; resource: boolean }> = [];
+  let processedFiles = 0;
+  build.observe_build_phase?.("extraction");
+  for (const [index, file] of selected.entries()) {
+    if (index > 0 && build.should_yield_extraction?.() === true) break;
+    await yieldToEventLoop(index);
+    const extractor = resolveExtractor({ file: file.entry, registry: build.extractors, resourceExtractor: build.resource_extractor });
+    const unsupported = extractor === null || file.entry.file_identity.size_bytes > MAX_TEXT_EXTRACTION_BYTES ||
+      isDocumentationIndexPath(file.entry.path) && file.entry.file_identity.size_bytes > MAX_DOCS_INDEX_BYTES;
+    if (unsupported) {
+      pending.set(file.ordinal, {
+        file,
+        outcome: "unsupported",
+        entry: {
+          ...file.entry,
+          indexed: false,
+          skipped_reason: extractor === null ? "unsupported" : "file_too_large_for_text_extraction",
+          file_identity: file.entry.file_identity
+        }
+      });
+      processedFiles += 1;
+      continue;
+    }
+    const now = build.clock.nowIso8601();
+    const batch = applyRailsDiscoveryShape({
+      batch: await extractor.extract({ snapshot_id: build.snapshot_id, path: file.entry.path,
+        language: file.entry.file_identity.language, content: await build.workspace.readText({ path: file.entry.path }) }),
+      shape: manifest.shape
+    });
+    batches.push({ ordinal: file.ordinal, resource: extractor === build.resource_extractor, batch: {
+      ...batch, file_identity: { ...file.entry.file_identity, indexed_at: now }, extracted_at: now
+    } });
+    processedFiles += 1;
+  }
+  if (processedFiles > 0) build.report_build_progress?.("extraction", processedFiles);
+  const augmented = augmentTemplateHandlerRouting({ batches: batches.map(({ batch }) => batch), files: manifest.files.map(({ entry }) => entry) });
+  const resolved = resolveReferences(augmented.batches);
+  const ordinalByPath = new Map(batches.map(({ ordinal, batch }) => [batch.source_path, ordinal]));
+  const ordinalByNodeId = new Map(augmented.batches.flatMap((batch) =>
+    batch.nodes.map((node) => [node.id, ordinalByPath.get(batch.source_path)] as const)
+  ));
+  const deferredReferenceIds = new Map<string, Set<string>>();
+  const deferredEdges = new Map<string, GraphEdgeWriteModel>();
+  const supplementalEdges = new Map<string, GraphEdgeWriteModel[]>();
+  for (const edgeGroup of [...resolved.edges, ...augmented.edges]) {
+    const sourceOrdinal = ordinalByPath.get(edgeGroup.file_path);
+    const admittedEdges = edgeGroup.edges.filter((edge) => {
+      const targetOrdinal = edge.target_node_id === undefined ? undefined : ordinalByNodeId.get(edge.target_node_id);
+      if (sourceOrdinal === undefined || targetOrdinal === undefined || targetOrdinal <= sourceOrdinal) return true;
+      if (edge.id.endsWith(":resolved")) {
+        const ids = deferredReferenceIds.get(edgeGroup.file_path) ?? new Set<string>();
+        const referenceId = edge.id.slice(0, -":resolved".length);
+        ids.add(referenceId);
+        deferredEdges.set(referenceId, edge);
+        deferredReferenceIds.set(edgeGroup.file_path, ids);
+      }
+      return false;
+    });
+    supplementalEdges.set(edgeGroup.file_path, [
+      ...(supplementalEdges.get(edgeGroup.file_path) ?? []),
+      ...admittedEdges
+    ]);
+  }
+  const originalUnresolvedByPath = new Map(augmented.batches.map((batch) => [
+    batch.source_path, new Map(batch.unresolved_references.map((reference) => [reference.id, reference]))
+  ]));
+  const resolvedByPath = new Map(resolved.batches.map((batch) => [batch.source_path, {
+    ...batch,
+    edges: [...batch.edges, ...(supplementalEdges.get(batch.source_path) ?? [])],
+    unresolved_references: [...batch.unresolved_references, ...[...(deferredReferenceIds.get(batch.source_path) ?? [])]
+      .map((id): UnresolvedReferenceWriteModel | undefined => {
+        const reference = originalUnresolvedByPath.get(batch.source_path)?.get(id);
+        const edge = deferredEdges.get(id);
+        return reference === undefined || edge === undefined ? undefined : {
+          ...reference,
+          candidate_metadata: { ...reference.candidate_metadata, deferred_graph_edge: edge }
+        } as UnresolvedReferenceWriteModel;
+      })
+      .filter((reference): reference is UnresolvedReferenceWriteModel => reference !== undefined)]
+  }]));
+  for (const candidate of batches) {
+    const batch = resolvedByPath.get(candidate.batch.source_path);
+    if (batch === undefined) throw new Error(`Graph extraction batch was lost during in-slice resolution: ${candidate.batch.source_path}`);
+    const file = manifest.files.find((entry) => entry.ordinal === candidate.ordinal);
+    if (file === undefined) throw new Error("Graph build manifest ordinal disappeared during extraction.");
+    pending.set(candidate.ordinal, {
+      file,
+      outcome: candidate.resource ? "resource" : "extracted",
+      entry: file.entry,
+      batch
+    });
+  }
+  let latest = input.progress;
+  let committedFiles = 0;
+  build.observe_build_phase?.("graph_write");
+  for (const ordinal of [...pending.keys()].sort((left, right) => left - right)) {
+    const outcome = pending.get(ordinal)!;
+    latest = await build.manifest.store.commitGraphBuildFileOutcome({
+      manifest_id: manifest.manifest_id,
+      fence,
+      snapshot_id: build.snapshot_id,
+      ordinal,
+      outcome: outcome.outcome,
+      entry: outcome.entry,
+      batch: outcome.batch,
+      updated_at: build.clock.nowIso8601()
+    });
+    committedFiles += 1;
+    if (committedFiles === 1 || committedFiles % 25 === 0 || committedFiles === pending.size) {
+      build.report_build_progress?.("graph_write", committedFiles);
+    }
+  }
+  if (latest.ordinal_cursor !== undefined && selected.length > 0) {
+    const nextPath = manifest.files.find((file) => file.ordinal === latest.ordinal_cursor)?.entry.path;
+    const partialProgress: GraphBuildProgress = { ...latest, phase: "extracting", scan_cursor: nextPath, updated_at: build.clock.nowIso8601() };
+    const coverage = partialGraphCoverage(partialProgress, { scan_truncated: false, extraction_truncated: true });
+    await build.build_coverage.upsertGraphBuildCoverage({ snapshot_id: build.snapshot_id,
+      controller_generation: build.controller_generation, invalidation_generation: build.invalidation_generation, coverage });
+    await build.build_progress.upsertGraphBuildProgress({ progress: partialProgress });
+    return { outcome: "partial", snapshot_id: build.snapshot_id, continuation_cursor: nextPath, coverage: [coverage] };
+  }
+  const resolvingProgress: GraphBuildProgress = { ...latest, phase: "resolving", ordinal_cursor: undefined, scan_cursor: "resolve:0", updated_at: build.clock.nowIso8601() };
+  const coverage = partialGraphCoverage(resolvingProgress, { scan_truncated: false, extraction_truncated: false });
+  await build.build_coverage.upsertGraphBuildCoverage({ snapshot_id: build.snapshot_id,
+    controller_generation: build.controller_generation, invalidation_generation: build.invalidation_generation, coverage });
+  await build.build_progress.upsertGraphBuildProgress({ progress: resolvingProgress });
+  return { outcome: "partial", snapshot_id: build.snapshot_id, continuation_cursor: resolvingProgress.scan_cursor, coverage: [coverage] };
+}
+
+function emptyManifestCounters(files: number): GraphBuildProgress["counters"] {
+  return { eligible_files: files, scanned_files: files, admitted_files: 0, extracted_files: 0,
+    unsupported_files: 0, resource_backed_files: 0, nodes: 0, edges: 0, unresolved_references: 0 };
+}
+
+function catalogMetadata(scan: ReturnType<FileCatalogScanPort["scan"]> extends Promise<infer Result> ? Result : never): Omit<ReturnType<FileCatalogScanPort["scan"]> extends Promise<infer Result> ? Result : never, "files"> {
+  const { files: _files, ...metadata } = scan;
+  return metadata;
+}
+
+/** The manifest path indexes docs once from its sealed broad inventory. */
+async function persistDocsFromManifestInventory(input: {
+  build: RepositoryGraphBuildSliceInput;
+  scanned: FileCatalogScanResult;
+  docsPartition: DocumentationCorpusDecisionPartition;
+}): Promise<void> {
+  const { build, scanned } = input;
+  if (build.docs_index === undefined) {
+    if (build.documentation_concerns !== undefined) {
+      throw new Error("Documentation concern indexing requires the snapshot docs index.");
+    }
+    return;
+  }
+  build.observe_build_phase?.("docs");
+  const docsScan = docsCatalogFromInventory(scanned);
+  const eligible = new Set(input.docsPartition.eligible_markdown_paths);
+  const files = docsScan.files.filter((file) => eligible.has(file.path)).sort(compareDocsIndexFiles);
+  const now = build.clock.nowIso8601();
+  const contentByPath = new Map<string, string>();
+  const documents: DocsIndexDocumentWrite[] = [];
+  for (const [index, file] of files.entries()) {
+    await yieldToEventLoop(index);
+    const content = file.file_identity.size_bytes > MAX_DOCS_INDEX_BYTES
+      ? await readBoundedDocsContent({ workspace: build.workspace, path: file.path })
+      : await build.workspace.readText({ path: file.path });
+    const selected = selectedMarkdownText({ content, max_bytes: MAX_DOCS_INDEX_BYTES });
+    const headings = parseMarkdownHeadings(content);
+    contentByPath.set(file.path, content);
+    documents.push({
+      path: file.path, title: headings[0]?.text ?? markdownTitleFromPath(file.path), headings,
+      selected_text: selected.text, content_hash: file.file_identity.content_hash,
+      byte_count: file.file_identity.size_bytes, indexed_at: now,
+      truncated: selected.truncated || file.file_identity.size_bytes > Buffer.byteLength(content)
+    });
+  }
+  let partition = input.docsPartition;
+  let concernIndex: Awaited<ReturnType<typeof extractDocumentationConcernIndex>> | undefined;
+  if (build.documentation_concerns !== undefined) {
+    concernIndex = await extractDocumentationConcernIndex({
+      workspace: build.workspace,
+      content_by_path: contentByPath,
+      corpus_decisions: new Map(partition.decisions.map((decision) => [decision.relativePath, decision]))
+    });
+    for (const [documentPath, documentContent] of concernIndex.document_content_by_path) {
+      if (documents.some((document) => document.path === documentPath)) continue;
+      const headings = parseMarkdownHeadings(documentContent.content);
+      const selected = selectedMarkdownText({ content: documentContent.content, max_bytes: MAX_DOCS_INDEX_BYTES });
+      documents.push({
+        path: documentPath, title: headings[0]?.text ?? markdownTitleFromPath(documentPath), headings,
+        selected_text: selected.text, content_hash: createHash("sha256").update(documentContent.content).digest("hex"),
+        byte_count: documentContent.byte_count, indexed_at: now,
+        truncated: selected.truncated || documentContent.truncated
+      });
+    }
+    documents.sort(compareDocsIndexDocuments);
+    partition = partitionDocumentationCorpusPaths([...new Set([
+      ...partition.decisions.map(({ relativePath }) => relativePath),
+      ...documents.map((document) => document.path)
+    ])]);
+  }
+  await build.docs_index.replaceSnapshotDocs({
+    snapshot_id: build.snapshot_id, repo_root: docsScan.repo_root, documents,
+    coverage: [docsIndexCoverage({ docsScan, docsPartition: partition, docsIndexedFiles: documents.length, truncated: docsScan.truncated })]
+  });
+  if (build.documentation_concerns !== undefined && concernIndex !== undefined) {
+    const { document_content_by_path: _contents, ...persisted } = concernIndex;
+    await build.documentation_concerns.replaceSnapshotDocumentationConcerns({ snapshot_id: build.snapshot_id, ...persisted });
+  }
+  build.report_build_progress?.("docs", documents.length);
 }
 
 async function resolveAccumulatedBuildReferencesSlice(
@@ -777,7 +1112,27 @@ async function resolveAccumulatedBuildReferencesSlice(
     file_path: string;
     edge: GraphEdgeWriteModel;
   }> = [];
+  const deferredAnchors: GraphNodeWriteModel[] = [];
   for (const reference of unresolved) {
+    const exactDeferredEdge = deferredGraphEdge(reference.candidate_metadata.deferred_graph_edge);
+    if (exactDeferredEdge !== undefined) {
+      resolvedReferences.push({
+        unresolved_reference_id: reference.id,
+        file_path: reference.source_file_path,
+        edge: exactDeferredEdge
+      });
+      continue;
+    }
+    const lambdaDeferred = deferredLambdaHandlerResolution({ reference, nodes, snapshot_id: input.snapshot_id });
+    if (lambdaDeferred !== undefined) {
+      deferredAnchors.push(lambdaDeferred.anchor);
+      resolvedReferences.push({
+        unresolved_reference_id: reference.id,
+        file_path: reference.source_file_path,
+        edge: lambdaDeferred.edge
+      });
+      continue;
+    }
     const resolution = resolveOneReference({ reference, allNodes: nodes, finalization: true });
     if (resolution !== undefined) {
       resolvedReferences.push({
@@ -793,15 +1148,22 @@ async function resolveAccumulatedBuildReferencesSlice(
     controller_generation: input.controller_generation,
     invalidation_generation: input.invalidation_generation,
     provenance: "graph-build-final-resolution",
+    deferred_anchors: deferredAnchors,
     resolved_references: resolvedReferences
   });
+  const authoritativeProgress = await input.build_progress.getGraphBuildProgress({
+    snapshot_id: input.snapshot_id
+  });
+  if (authoritativeProgress === null) {
+    throw new Error("Graph build progress disappeared after durable resolution.");
+  }
   input.report_build_progress?.("resolution", unresolved.length);
   input.observe_build_phase?.("finalizing");
 
   if (unresolved.length === maxResolutionReferences) {
     const cursor = `resolve:${unresolved.at(-1)!.id}`;
     const nextProgress: GraphBuildProgress = {
-      ...progress,
+      ...authoritativeProgress,
       scan_cursor: cursor,
       updated_at: input.clock.nowIso8601()
     };
@@ -826,7 +1188,7 @@ async function resolveAccumulatedBuildReferencesSlice(
   }
 
   const completeProgress: GraphBuildProgress = {
-    ...progress,
+    ...authoritativeProgress,
     phase: "complete",
     status: "completed",
     scan_cursor: undefined,
@@ -848,6 +1210,77 @@ async function resolveAccumulatedBuildReferencesSlice(
     outcome: "complete",
     snapshot_id: input.snapshot_id,
     coverage: [coverage]
+  };
+}
+
+function deferredGraphEdge(value: unknown): GraphEdgeWriteModel | undefined {
+  if (value === null || typeof value !== "object") return undefined;
+  const edge = value as Partial<GraphEdgeWriteModel>;
+  if (typeof edge.id !== "string" || typeof edge.source_node_id !== "string" ||
+      typeof edge.target_node_id !== "string" || typeof edge.kind !== "string" ||
+      typeof edge.provenance !== "string" || typeof edge.confidence !== "number" ||
+      edge.source_range === undefined || edge.metadata === undefined) return undefined;
+  return edge as GraphEdgeWriteModel;
+}
+
+function deferredLambdaHandlerResolution(input: {
+  reference: UnresolvedReference;
+  nodes: readonly GraphNode[];
+  snapshot_id: string;
+}): { anchor: GraphNodeWriteModel; edge: GraphEdgeWriteModel } | undefined {
+  const target = input.reference.candidate_metadata.deferred_handler_target;
+  if (target === null || typeof target !== "object") return undefined;
+  const typed = target as { path?: unknown; language?: unknown; file_identity?: unknown };
+  if (typeof typed.path !== "string" || typeof typed.language !== "string" ||
+      typed.file_identity === null || typeof typed.file_identity !== "object") return undefined;
+  const source = input.nodes.find((node) => node.id === input.reference.source_node_id);
+  if (source === undefined) return undefined;
+  const anchorId = `${input.snapshot_id}:${typed.path}:lambda_handler_file:${source.id}`;
+  const exportName = typeof source.metadata.handler_export_candidate === "string"
+    ? source.metadata.handler_export_candidate
+    : undefined;
+  const anchor: GraphNodeWriteModel = {
+    id: anchorId,
+    kind: "lambda_handler_file",
+    name: typed.path,
+    qualified_name: `${source.qualified_name}:file:${typed.path}`,
+    file_path: typed.path,
+    language: typed.language,
+    source_range: { start_line: 1, start_column: 0, end_line: 1, end_column: 0 },
+    signature: exportName === undefined ? String(source.name) : `${typed.path}#${exportName}`,
+    metadata: {
+      domain: "infrastructure",
+      capability_level: "resource_backed",
+      evidence_kinds: ["config", "infra_parser"],
+      provenance: "cloudformation_handler_file_resolution",
+      semantic_scope: "file_level_handler_routing",
+      handler: source.name,
+      logical_id: source.metadata.logical_id,
+      template_path: source.file_path,
+      handler_export_candidate: exportName,
+      event_sources: source.metadata.event_sources
+    }
+  };
+  return {
+    anchor,
+    edge: {
+      id: `${source.id}:routes-to:${anchorId}`,
+      source_node_id: source.id,
+      target_node_id: anchorId,
+      kind: "routes_to_handler_file",
+      source_range: input.reference.source_range,
+      provenance: "cloudformation_handler_file_resolution",
+      confidence: 0.45,
+      metadata: {
+        domain: "infrastructure",
+        capability_level: "resource_backed",
+        evidence_kinds: ["config", "infra_parser"],
+        semantic_scope: "file_level_handler_routing",
+        handler: source.name,
+        handler_file_path: typed.path,
+        handler_export_candidate: exportName
+      }
+    }
   };
 }
 
@@ -1090,6 +1523,44 @@ function mergeDocsIndexFiles(input: {
     }
   }
   return [...byPath.values()].sort(compareDocsIndexFiles);
+}
+
+/**
+ * Documentation indexing is a view over the graph inventory, not another
+ * filesystem traversal. The graph catalog has already applied the canonical
+ * repository policy, so only the docs-root projection remains here.
+ */
+function docsCatalogFromInventory(scan: FileCatalogScanResult): FileCatalogScanResult {
+  return {
+    ...scan,
+    indexed_roots: [...DOCS_INDEX_ROOTS],
+    files: scan.files.filter((file) => isDocumentationIndexPath(file.path))
+  };
+}
+
+/** Preserve legacy graph continuation semantics while using one full walk. */
+function boundedGraphCatalogFromInventory(input: {
+  scan: FileCatalogScanResult;
+  max_files: number;
+  after_path?: string;
+}): FileCatalogScanResult {
+  if (!Number.isSafeInteger(input.max_files) || input.max_files <= 0) {
+    throw new TypeError("max_files must be a positive safe integer.");
+  }
+  const afterPath = input.after_path === undefined ? undefined : normalizePriorityPath(input.after_path);
+  const cursorIndex = afterPath === undefined ? -1 : input.scan.files.findIndex((file) => file.path === afterPath);
+  if (afterPath !== undefined && cursorIndex === -1) {
+    throw new Error(`Catalog scan continuation cursor not found in traversal sequence: ${input.after_path}`);
+  }
+  const candidates = input.scan.files.slice(cursorIndex + 1);
+  const files = candidates.slice(0, input.max_files);
+  const truncated = input.scan.truncated || candidates.length > input.max_files;
+  return {
+    ...input.scan,
+    files,
+    truncated,
+    continuation_cursor: truncated ? files.at(-1)?.path ?? input.scan.continuation_cursor : undefined
+  };
 }
 
 function compareDocsIndexFiles(left: FileCatalogEntry, right: FileCatalogEntry): number {
@@ -1354,6 +1825,28 @@ function augmentTemplateHandlerRouting(input: {
       const targetBatch = batchesByPath.get(resolvedPath);
       const augmentedTargetBatch = augmented.find((candidate) => candidate.source_path === resolvedPath);
       if (targetBatch === undefined || augmentedTargetBatch === undefined) {
+        const targetFile = input.files.find((file) => file.path === resolvedPath);
+        batch.unresolved_references.push({
+          id: `${node.id}:handler-file-deferred`,
+          source_node_id: node.id,
+          source_file_path: batch.source_path,
+          reference_name: resolvedPath,
+          reference_kind: "lambda_handler_file",
+          source_range: node.source_range,
+          candidate_metadata: {
+            provenance: "cloudformation_handler_file_resolution",
+            confidence: "low",
+            handler: node.name,
+            candidates,
+            resolution: "unresolved",
+            deferred_until_target_batch: true,
+            deferred_handler_target: targetFile === undefined ? undefined : {
+              path: targetFile.path,
+              language: targetFile.file_identity.language,
+              file_identity: targetFile.file_identity
+            }
+          }
+        });
         continue;
       }
       const anchor = lambdaHandlerFileAnchor({

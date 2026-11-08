@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
+import type { SnapshotRefreshAdmission } from "../../ports/index.js";
 import type { WorkspaceFileEvent } from "../../domain/models/index.js";
 import type { WorkspaceChangeQueue } from "./workspace-change-queue.js";
 import type { RepositoryRefreshTriggerPort } from "./repository-refresh-triggers.js";
@@ -32,14 +33,16 @@ export type WorkspaceChangeQueueProcessResult =
       bounded_rescan_required: true;
       snapshot_id?: string;
       reason: string;
+      refresh_admission?: Extract<SnapshotRefreshAdmission, { outcome: "blocked" }>;
     };
 
 export async function processWorkspaceChangeQueue(input: {
   repo_root: string;
   queue: WorkspaceChangeQueue;
   triggers: RepositoryRefreshTriggerPort;
+  force?: boolean;
 }): Promise<WorkspaceChangeQueueProcessResult> {
-  const drain = input.queue.drain();
+  const drain = input.queue.drain({ force: input.force });
 
   if (drain.status === "idle" && drain.snapshot_freshness === "fresh") {
     return {
@@ -82,7 +85,8 @@ export async function processWorkspaceChangeQueue(input: {
         repo_root: input.repo_root,
         events: drain.events,
         bounded_rescan_required: true,
-        reason: admission.message
+        reason: admission.message,
+        refresh_admission: admission
       };
     }
     if (admission.target_snapshot_id === undefined) {

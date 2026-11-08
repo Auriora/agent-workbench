@@ -140,6 +140,27 @@ describe("refresh semantic evidence and frozen corrections", () => {
     expect(compareRefreshSemanticEvidence({ baseline, candidate, expectedCorrections: inventedCounter, source_manifest_sha256: "a".repeat(64) })).toMatchObject({ state: "mismatch", differences: [{ section: "manifest", kind: "invalid_manifest" }] });
   });
 
+  it("permits only the declared completed v4 progress shape and independent numeric counter oracle", () => {
+    const before = row("counters", "selected", [], { phase: "complete", status: "completed", scan_cursor: null, eligible_files: 4 });
+    const after = row("counters", "selected", [], { phase: "complete", status: "completed", scan_cursor: null, eligible_files: 2, counters_version: 2, ordinal_cursor: null });
+    const manifest: RefreshExpectedCorrections = {
+      schema_version: 1, source_manifest_sha256: "a".repeat(64), positive_qt_paths: [],
+      progress_contract: { before: "unversioned", after: 2, completed_ordinal_cursor: null },
+      unique_counters: [{ section: "counters", key: "selected", expected_values: { eligible_files: 2 } }],
+      changes: [{ reason: "progress-contract", section: "counters", key: "selected", before, after }]
+    };
+    const input = { baseline: evidence([before]), candidate: evidence([after]), expectedCorrections: manifest, source_manifest_sha256: "a".repeat(64) };
+    expect(compareRefreshSemanticEvidence(input)).toMatchObject({ state: "corrected", applied_corrections: 1, total_differences: 0 });
+    for (const [field, value] of [["ordinal_cursor", 1], ["phase", "extracting"], ["unexpected", "literal"]] as const) {
+      const invalid = cloned(input);
+      invalid.candidate.records[0].value[field] = value;
+      invalid.expectedCorrections.changes[0].after!.value[field] = value;
+      expect(compareRefreshSemanticEvidence(invalid)).toMatchObject({ state: "mismatch", differences: [{ kind: "invalid_manifest" }] });
+    }
+    const undeclared = cloned(input); delete undeclared.expectedCorrections.progress_contract;
+    expect(compareRefreshSemanticEvidence(undeclared)).toMatchObject({ state: "mismatch", differences: [{ kind: "invalid_manifest" }] });
+  });
+
   it("permits only the independently declared exact selected-store identity 3-to-4 correction", () => {
     const before = row("snapshot", "selected", [], { schema_version: 3, freshness: "fresh", config_identity: "default" });
     const after = row("snapshot", "selected", [], { schema_version: 4, freshness: "fresh", config_identity: "default" });

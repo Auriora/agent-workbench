@@ -186,8 +186,31 @@ ordinary queries. A newer invalidation generation supersedes the current target
 before either partial publication or continuation. Only a generation-matching
 `complete` result permits the final atomic publish.
 
-Production refresh passes bound source extraction separately from the catalog
-window so cross-file resolution cannot consume the whole worker deadline. The
+Workspace observation is enabled by default. Explicitly disabling it leaves
+refresh publication blocked rather than producing an unobserved fresh claim.
+Before worker admission, the canonical queue is force-drained outside controller
+mutation authority. An empty queue preserves an active refresh label; queued
+changes cannot remain hidden behind that label. Cancelling admission during the
+drain prevents a later worker spawn. Shutdown settles the shared queue before
+closing observation, storage and ownership.
+
+One generation discovers the complete inventory once, derives documentation and
+project-shape views from it, and seals the inventory with initial progress.
+Continuation workers consume ordered pending ordinals in that inventory rather
+than repeat discovery or shape probing. Root observation starts before discovery;
+each child directory is armed before enumeration. Worker registration requests
+are acknowledged by the daemon and bind the execution and watcher epoch.
+
+Seed and completion publication each validate all recorded identities without
+another directory walk and force watcher queue admission outside controller
+mutation authority. A synchronous final observation check and matching generation
+are required at the publication transaction. Disabled, missing, overflowing or
+unhealthy watcher evidence blocks freshness. Session restart invalidates inventory
+reuse. These checks provide a bounded observation, not an atomic filesystem
+snapshot or a complete history of changes.
+
+Production refresh passes bound source extraction separately from inventory
+preparation so cross-file resolution cannot consume the whole worker deadline. The
 controller automatically consumes every durable extraction continuation; the
 per-pass bound never caps total repository extraction. After extraction is
 exhausted, accumulated unresolved references advance through their own durable
@@ -758,7 +781,8 @@ indexing path.
 
 The first implementation is stale-rescan first:
 
-- watcher roots are derived from `indexed_roots`, defaulting to `.`;
+- root observation starts before discovery; child watches are registered by the
+  canonical scanner before enumeration, without a separate watcher tree walk;
 - default skipped roots, configured skipped roots, generated/vendor paths,
   hidden local-state paths, nested Git repositories, symlink escapes, root
   `.gitignore`, and root `.aiignore` are filtered before events reach indexing

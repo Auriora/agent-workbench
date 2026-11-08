@@ -6,6 +6,7 @@
 export * from "./workspace-safety.js";
 export * from "./workspace-file.js";
 export * from "./file-identity.js";
+export * from "./graph-build-path-identities.js";
 export * from "./file-catalog-scanner.js";
 export * from "./ignore-file-policy.js";
 export * from "./nested-git-repository.js";

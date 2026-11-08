@@ -169,7 +169,8 @@ export class RepositoryRefreshTriggerCoordinator implements RepositoryRefreshTri
     return await this.withMutation(async () => {
       await this.seed();
       await this.clearCoveredDirty();
-      return this.dirty !== undefined;
+      const receipt = this.options.controller.getReceipt?.();
+      return receipt?.execution_state === "planned" || receipt?.execution_state === "running";
     });
   }
 

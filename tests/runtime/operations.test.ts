@@ -16,12 +16,17 @@ import type {
   RefreshDeadlineSchedulerPort,
   RefreshExecutorCompletion,
   RefreshExecutorPort,
+  GraphBuildWatchPort,
+  GraphBuildPublicationValidationPort,
+  GraphBuildPublicationRequest,
+  GraphBuildValidationReceipt,
   SnapshotPublicationPort,
   SnapshotPublicationRecord,
   SnapshotPublicationSelection,
   SnapshotPublicationTransition,
   SnapshotRefreshAdmission
 } from "../../src/ports/index.js";
+import { GraphBuildValidationError } from "../../src/ports/index.js";
 import type { FileContentHashBinding, SnapshotState } from "../../src/domain/models/runtime.js";
 import {
   InMemoryCancellationAdapter,
@@ -59,12 +64,32 @@ class MutableClock implements ClockPort {
 
 class ProtocolWorker extends EventEmitter {
   public terminationCalls = 0;
+  private resolveFactoryReady!: () => void;
+  public readonly factoryReady = new Promise<void>((resolve) => { this.resolveFactoryReady = resolve; });
+  public created(): void { this.resolveFactoryReady(); }
   public unref(): this { return this; }
   public async terminate(): Promise<number> {
     this.terminationCalls += 1;
     queueMicrotask(() => this.emit("exit", 1));
     return 1;
   }
+}
+
+function stableBuildObservation(): GraphBuildWatchPort {
+  const observation = {
+    epoch: "test-watch-epoch",
+    sequence: 0,
+    healthy: true,
+    pending_events: 0,
+    covered_directories: ["."]
+  } as const;
+  return {
+    start: async () => observation,
+    registerDirectory: async () => observation,
+    observe: () => observation,
+    drain: async () => observation,
+    close: async () => undefined
+  };
 }
 
 function createProtocolExecutor(worker: ProtocolWorker): StartupGraphRefreshExecutor {
@@ -75,7 +100,11 @@ function createProtocolExecutor(worker: ProtocolWorker): StartupGraphRefreshExec
     retain_latest_snapshots: 1,
     retain_latest_fresh_snapshots: 1,
     controller_generation: 4,
-    worker_factory: () => worker as unknown as Worker
+    observation: stableBuildObservation(),
+    worker_factory: () => {
+      worker.created();
+      return worker as unknown as Worker;
+    }
   });
 }
 
@@ -318,6 +347,32 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
     return record;
   }
 
+  public publishValidated(transition: SnapshotPublicationTransition & { to: "published" }): SnapshotPublicationRecord & { state: "published" } {
+    this.transitions.push(transition);
+    if (this.failingState === "published") {
+      this.failingState = undefined;
+      throw new Error("publication transition failed");
+    }
+    this.buildingSnapshotIds.delete(transition.snapshot_id);
+    const record: SnapshotPublicationRecord & { state: "published" } = {
+      repo_root: transition.repo_root,
+      snapshot_id: transition.snapshot_id,
+      controller_generation: transition.controller_generation,
+      invalidation_generation: transition.invalidation_generation,
+      state: "published",
+      updated_at: transition.updated_at
+    };
+    this.latestPublished = {
+      snapshot: {
+        id: transition.snapshot_id, repo_root: transition.repo_root, workspace_root: transition.repo_root,
+        repo_identity: transition.repo_root, config_identity: "test", schema_version: SCHEMA_VERSION,
+        freshness: "fresh", owner_state: "owner", created_at: transition.updated_at, updated_at: transition.updated_at
+      },
+      publication: record
+    };
+    return record;
+  }
+
   public async getLatestPublished(): Promise<
     Exclude<SnapshotPublicationSelection, { status: "blocked" }>
   > {
@@ -403,6 +458,59 @@ class ControlledPublicationPort implements SnapshotPublicationPort {
   }
 }
 
+class ControlledPublicationValidation implements GraphBuildPublicationValidationPort {
+  private sequence = 0;
+
+  constructor(private readonly publication: ControlledPublicationPort) {}
+
+  public async prepare(request: GraphBuildPublicationRequest): Promise<GraphBuildValidationReceipt> {
+    this.sequence += 1;
+    return {
+      ...request,
+      receipt_id: `test-receipt-${this.sequence}`,
+      manifest_id: `test-manifest-${request.target_snapshot_id}`,
+      manifest_digest: "test-digest",
+      watcher_epoch: "test-watch-epoch",
+      start_sequence: 0,
+      end_sequence: 0,
+      checked_files: 0,
+      checked_directories: 0,
+      checked_inputs: 0,
+      validation_wall_ms: 0,
+      observed_at: "2026-07-20T10:00:00.000Z",
+      policy_version: "manifest-identities-v1"
+    };
+  }
+
+  public commit(input: { receipt: GraphBuildValidationReceipt; transition: SnapshotPublicationTransition & { to: "published" } }): SnapshotPublicationRecord & { state: "published" } {
+    if (
+      input.receipt.repo_root !== input.transition.repo_root || input.receipt.target_snapshot_id !== input.transition.snapshot_id ||
+      input.receipt.controller_generation !== input.transition.controller_generation || input.receipt.invalidation_generation !== input.transition.invalidation_generation
+    ) throw new Error("test validation receipt target mismatch");
+    return this.publication.publishValidated(input.transition);
+  }
+}
+
+class StorePublicationValidation implements GraphBuildPublicationValidationPort {
+  constructor(private readonly store: Pick<SnapshotPublicationPort, "transitionBuild">) {}
+
+  public async prepare(request: GraphBuildPublicationRequest): Promise<GraphBuildValidationReceipt> {
+    return {
+      ...request, receipt_id: `store-test-receipt-${request.target_snapshot_id}`, manifest_id: "store-test-manifest",
+      manifest_digest: "store-test-digest", watcher_epoch: "store-test-watch", start_sequence: 0, end_sequence: 0,
+      checked_files: 0, checked_directories: 0, checked_inputs: 0, validation_wall_ms: 0,
+      observed_at: "2026-07-20T10:00:00.000Z", policy_version: "manifest-identities-v1"
+    };
+  }
+
+  public commit(input: { receipt: GraphBuildValidationReceipt; transition: SnapshotPublicationTransition & { to: "published" } }): SnapshotPublicationRecord & { state: "published" } {
+    void this.store.transitionBuild(input.transition);
+    return { repo_root: input.transition.repo_root, snapshot_id: input.transition.snapshot_id,
+      controller_generation: input.transition.controller_generation, invalidation_generation: input.transition.invalidation_generation,
+      state: "published", updated_at: input.transition.updated_at };
+  }
+}
+
 function controlledDeferred<T>(): {
   promise: Promise<T>;
   resolve: (value: T) => void;
@@ -446,10 +554,12 @@ function createControlledController(options?: {
   executor?: ControlledRefreshExecutor;
   deadlines?: ControlledDeadlineScheduler;
   publication?: ControlledPublicationPort;
+  validation?: GraphBuildPublicationValidationPort;
 }) {
   const clock = new MutableClock("2026-07-20T10:00:00.000Z");
   const deadlines = options?.deadlines ?? new ControlledDeadlineScheduler();
   const publication = options?.publication ?? new ControlledPublicationPort();
+  const validation = options?.validation ?? new ControlledPublicationValidation(publication);
   const executor = options?.executor ?? new ControlledRefreshExecutor();
   executor.onRun = (input) => publication.markBuildStarted(input.target_snapshot_id);
   let executionSequence = 0;
@@ -460,6 +570,7 @@ function createControlledController(options?: {
     clock,
     executor,
     publication,
+    validation,
     deadline_scheduler: deadlines,
     create_execution_id: () => `exec-${++executionSequence}`
   });
@@ -478,8 +589,10 @@ describe("runtime operation adapters", () => {
       retain_latest_snapshots: 1,
       retain_latest_fresh_snapshots: 1,
       controller_generation: 4,
+      observation: stableBuildObservation(),
       worker_factory: ({ workerData }) => {
         observedWorkerData = workerData;
+        worker.created();
         return worker as unknown as Worker;
       }
     });
@@ -491,6 +604,7 @@ describe("runtime operation adapters", () => {
       deadline: { timeout_ms: 60_000, deadline_at: "2026-07-20T10:01:00.000Z" },
       on_progress: (item) => progress.push(item)
     });
+    await worker.factoryReady;
 
     expect(observedWorkerData).toMatchObject({
       deadlineAt: "2026-07-20T10:01:00.000Z",
@@ -539,6 +653,7 @@ describe("runtime operation adapters", () => {
       settled = true;
       return value;
     });
+    await worker.factoryReady;
 
     worker.emit("message", {
       type: "complete",
@@ -587,6 +702,46 @@ describe("runtime operation adapters", () => {
     expect((await completion).results).toHaveLength(2);
   });
 
+  it.each([
+    ["a drain rejection", async () => { throw new GraphBuildValidationError("watcher_unhealthy"); }],
+    ["a drain with pending events", async () => ({
+      epoch: "test-watch-epoch", sequence: 0, healthy: true, pending_events: 1, covered_directories: ["."]
+    })]
+  ])("reports manifest validation failure when preflight has %s without spawning a worker", async (_name, drain) => {
+    let factoryCalls = 0;
+    const observation = stableBuildObservation();
+    observation.drain = drain;
+    const executor = new StartupGraphRefreshExecutor({
+      database_path: "/tmp/test.sqlite", config_identity: "test", max_files: 1,
+      retain_latest_snapshots: 1, retain_latest_fresh_snapshots: 1, controller_generation: 7,
+      observation,
+      worker_factory: () => {
+        factoryCalls += 1;
+        throw new Error("preflight must not spawn a worker");
+      }
+    });
+    const publication = new ControlledPublicationPort();
+    const controller = new SnapshotRefreshController({
+      repo_root: "/repo", controller_generation: 7, timeout_ms: 30_000,
+      clock: new MutableClock("2026-07-20T10:00:00.000Z"), executor, publication,
+      validation: new ControlledPublicationValidation(publication), create_execution_id: () => "preflight-failure"
+    });
+    const terminal = observeTerminal(controller);
+    await controller.request({ repo_root: "/repo", reason: "startup", source: "test", invalidation_generation: 1 });
+    await terminal;
+    expect(factoryCalls).toBe(0);
+    expect(controller.getReceipt()).toMatchObject({
+      execution_state: "failed", target_snapshot_id: "1001",
+      last_failure: { code: "manifest_validation_failed", target_snapshot_id: undefined },
+      last_worker_progress: undefined
+    });
+    await expect(controller.getDiagnostics({ repo_root: "/repo" })).resolves.toMatchObject({
+      execution_state: "failed", target_snapshot_id: undefined, publication_state: undefined,
+      last_worker_progress: undefined,
+      last_failure: { code: "manifest_validation_failed", target_snapshot_id: undefined }
+    });
+  });
+
   it("retains a valid message alongside a later nonzero worker exit", async () => {
     const worker = new ProtocolWorker();
     const executor = createProtocolExecutor(worker);
@@ -597,6 +752,7 @@ describe("runtime operation adapters", () => {
       generation: 8,
       deadline: { timeout_ms: 1000, deadline_at: "2026-07-20T10:00:01.000Z" }
     });
+    await worker.factoryReady;
     worker.emit("message", {
       type: "complete",
       result: {
@@ -628,6 +784,7 @@ describe("runtime operation adapters", () => {
       generation: 11,
       deadline: { timeout_ms: 1000, deadline_at: "2026-07-20T10:00:01.000Z" }
     });
+    await worker.factoryReady;
 
     worker.emit("message", {
       type: "complete",
@@ -687,6 +844,7 @@ describe("runtime operation adapters", () => {
       generation: 9,
       deadline: { timeout_ms: 1000, deadline_at: "2026-07-20T10:00:01.000Z" }
     });
+    await worker.factoryReady;
     await Promise.all([
       executor.terminate({ execution_id: "exec-terminate", reason: "worker_error" }),
       executor.terminate({ execution_id: "exec-terminate", reason: "worker_error" })
@@ -706,7 +864,8 @@ describe("runtime operation adapters", () => {
         timeout_ms: timeout,
         clock,
         executor,
-        publication
+        publication,
+        validation: new ControlledPublicationValidation(publication)
       })).toThrow("timeout_ms must be a finite positive integer.");
     }
   });
@@ -1085,9 +1244,9 @@ describe("runtime operation adapters", () => {
         observed.push(`terminal:${transition.execution_state}`);
       }
     });
-    const originalTransition = publication.transitionBuild.bind(publication);
-    publication.transitionBuild = async (input) => {
-      const result = await originalTransition(input);
+    const originalPublish = publication.publishValidated.bind(publication);
+    publication.publishValidated = (input) => {
+      const result = originalPublish(input);
       observed.push(`publication:${input.to}`);
       return result;
     };
@@ -1108,7 +1267,7 @@ describe("runtime operation adapters", () => {
     ]);
   });
 
-  it("serializes a racing request behind an in-flight publication decision", async () => {
+  it("admits a racing request after synchronous publication commits", async () => {
     const { controller, executor, publication } = createControlledController();
     await controller.request({
       repo_root: "/repo",
@@ -1117,10 +1276,9 @@ describe("runtime operation adapters", () => {
       invalidation_generation: 1
     });
     await executor.waitForCalls(1);
-    const publicationBarrier = publication.deferNext("published");
     const firstTerminal = observeTerminal(controller);
     executor.complete(0);
-    await publicationBarrier.entered;
+    await firstTerminal;
 
     const racingRequest = controller.request({
       repo_root: "/repo",
@@ -1128,15 +1286,11 @@ describe("runtime operation adapters", () => {
       source: "watcher",
       invalidation_generation: 2
     });
+    await executor.waitForCalls(2);
     expect(controller.getReceipt()).toMatchObject({
       execution_state: "running",
-      started_generation: 1,
-      requested_generation: 1,
-      activity_lease: { state: "held" }
+      requested_generation: 2
     });
-
-    publicationBarrier.release();
-    await firstTerminal;
     const admission = await racingRequest;
     expect(admission).toMatchObject({
       outcome: "accepted",
@@ -1147,6 +1301,41 @@ describe("runtime operation adapters", () => {
     expect(publication.transitions).toEqual([
       expect.objectContaining({ snapshot_id: "1001", to: "published" })
     ]);
+  });
+
+  it("accepts a validation drain invalidation without deadlocking the controller", async () => {
+    const publication = new ControlledPublicationPort();
+    let controller!: SnapshotRefreshController;
+    let invalidated = false;
+    const validation: GraphBuildPublicationValidationPort = {
+      async prepare(request) {
+        if (!invalidated) {
+          invalidated = true;
+          await controller.request({ repo_root: "/repo", reason: "watcher_invalidation", source: "watcher", invalidation_generation: 2 });
+        }
+        return {
+          ...request, receipt_id: `drain-${request.target_snapshot_id}`, manifest_id: "drain-manifest", manifest_digest: "drain-digest",
+          watcher_epoch: "test-watch-epoch", start_sequence: 0, end_sequence: 0, checked_files: 0,
+          checked_directories: 0, checked_inputs: 0, validation_wall_ms: 0,
+          observed_at: "2026-07-20T10:00:00.000Z", policy_version: "manifest-identities-v1"
+        };
+      },
+      commit({ receipt, transition }) {
+        if (receipt.target_snapshot_id !== transition.snapshot_id) throw new Error("test receipt mismatch");
+        return publication.publishValidated(transition);
+      }
+    };
+    const harness = createControlledController({ publication, validation });
+    controller = harness.controller;
+    const terminal = observeTerminal(controller);
+    await controller.request({ repo_root: "/repo", reason: "startup", source: "test", invalidation_generation: 1 });
+    await harness.executor.waitForCalls(1);
+    harness.executor.complete(0);
+    await harness.executor.waitForCalls(2);
+    harness.executor.complete(1);
+    await terminal;
+    expect(controller.getReceipt()).toMatchObject({ execution_state: "complete", requested_generation: 2 });
+    expect(harness.executor.calls).toHaveLength(2);
   });
 
   it("releases a failed execution when the worker exits before creating its build snapshot", async () => {
@@ -1160,6 +1349,7 @@ describe("runtime operation adapters", () => {
       invalidation_generation: 1
     });
     await executor.waitForCalls(1);
+    executor.reportProgress(0, "composition", 1);
     const terminal = observeTerminal(controller);
     executor.fail(0);
     await terminal;
@@ -1177,7 +1367,10 @@ describe("runtime operation adapters", () => {
       execution_state: "failed",
       graph_freshness: "cold",
       activity_lease_held: false,
-      last_failure: { code: "worker_error" }
+      target_snapshot_id: undefined,
+      publication_state: undefined,
+      last_worker_progress: undefined,
+      last_failure: { code: "worker_error", target_snapshot_id: undefined }
     });
     expect(publication.transitions).toHaveLength(0);
     expect(deadlines.activeCount()).toBe(0);
@@ -1386,13 +1579,15 @@ describe("runtime operation adapters", () => {
   it("contains synchronous deadline-scheduler failure without launching the worker", async () => {
     const clock = new MutableClock("2026-07-20T10:00:00.000Z");
     const executor = new ControlledRefreshExecutor();
+    const publication = new ControlledPublicationPort();
     const controller = new SnapshotRefreshController({
       repo_root: "/repo",
       controller_generation: 1,
       timeout_ms: 30_000,
       clock,
       executor,
-      publication: new ControlledPublicationPort(),
+      publication,
+      validation: new ControlledPublicationValidation(publication),
       deadline_scheduler: {
         arm(): never {
           throw new Error("scheduler failure");
@@ -1422,13 +1617,15 @@ describe("runtime operation adapters", () => {
   it("does not count a worker when the deadline claims before invocation", async () => {
     const clock = new MutableClock("2026-07-20T10:00:00.000Z");
     const executor = new ControlledRefreshExecutor();
+    const publication = new ControlledPublicationPort();
     const controller = new SnapshotRefreshController({
       repo_root: "/repo",
       controller_generation: 1,
       timeout_ms: 30_000,
       clock,
       executor,
-      publication: new ControlledPublicationPort(),
+      publication,
+      validation: new ControlledPublicationValidation(publication),
       deadline_scheduler: new ImmediateDeadlineScheduler(),
       create_execution_id: () => "exec-deadline-before-run"
     });
@@ -1720,6 +1917,7 @@ describe("runtime operation adapters", () => {
         clock,
         executor,
         publication: store,
+        validation: new StorePublicationValidation(store),
         deadline_scheduler: deadlines,
         create_execution_id: () => "exec-real-store"
       });
