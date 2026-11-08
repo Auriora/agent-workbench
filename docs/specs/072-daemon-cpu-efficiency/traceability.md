@@ -13,14 +13,14 @@ license: GPL-3.0-or-later
 
 ## Requirement To Delivery Matrix
 
-| Requirement | Design | Tasks | Verification | State |
-| --- | --- | --- | --- | --- |
-| Requirement 1 | D001 | T001; T002; T007; T008 | V002; V007; V008 | T002/V002 and T007/V007 verified; T008 pending |
-| Requirement 2 | D002 | T001; T003; T007; T008 | V003; V007; V008 | T003/V003/SC-001 and T007/V007 verified; T008 pending |
-| Requirement 3 | D003 | T001; T004; T007; T008 | V004; V007; V008 | T004/V004/SC-002 and T007/V007 verified; T008 pending |
-| Requirement 4 | D004 | T001; T005; T007; T008 | V005; V007; V008 | T005/V005 and T007/V007 verified; T008 pending |
-| Requirement 5 | D003; D005 | T001; T004; T006; T007; T008 | V004; V006; V007; V008 | T004 inventory/progress and T006 budgets/native settlement verified |
-| Requirement 6 | D006 | T001; T007; T008 | V001; V007; V008 | T001 baseline and T007/V007 verified; T008 review/closure pending |
+| Requirement | Design | Tasks | Verification | Coverage State | Evidence | Residual Destination |
+| --- | --- | --- | --- | --- | --- | --- |
+| Requirement 1 | D001 | T001; T002; T007; T008 | V002; V007; V008 | complete | verification.md; T008 final review | none |
+| Requirement 2 | D002 | T001; T003; T007; T008 | V003; V007; V008 | complete | verification.md; T008 final review | none |
+| Requirement 3 | D003 | T001; T004; T007; T008 | V004; V007; V008 | complete | verification.md; T008 final review | none |
+| Requirement 4 | D004 | T001; T005; T007; T008 | V005; V007; V008 | complete | verification.md; T008 final review | none |
+| Requirement 5 | D003; D005 | T001; T004; T006; T007; T008 | V004; V006; V007; V008 | complete | verification.md; T008 final review | none |
+| Requirement 6 | D006 | T001; T007; T008 | V001; V007; V008 | complete | verification.md; T008 final review | none |
 
 All acceptance criteria are covered by the ranges in design.md. Every correctness
 property maps to explicit task and validation gates there and in verification.md.
@@ -29,10 +29,10 @@ property maps to explicit task and validation gates there and in verification.md
 
 [Research](research.md) maps each measured/source-inspected mechanism to an owned
 requirement/task. B013 in the [backlog](../../backlog/README.md#b013-deliver-daemon-cpu-efficiency)
-is promoted to this package; it is not done. The only deliberately deferred
+is done in source after T008 review and durable promotion. The only deliberately deferred
 operational policy is [B014](../../backlog/README.md#b014-assess-background-indexing-cpu-duty-cycle).
 
-T008 must promote durable truth and record semantic dispositions before closure.
+T008 promotes durable truth and records the semantic and release dispositions.
 T001 profiling/fixture source, exact observations and a six-scenario five-repetition
 baseline passed independent review and integrated checks. T002's format admission,
 unsupported coverage, parser routing and local characterization are verified;
@@ -44,8 +44,10 @@ T005 candidate pools pass V005 with exact fixture/worker parity and numeric-page
 transaction proof; graph-store design records the delivered lifetime and lookup
 boundaries. T006 phase budgeting and native settlement pass V006. T007 complete-generation CPU/wall/parity and reviewed RSS acceptance pass V007;
 observability design and performance-evidence.json retain the durable results.
-T008 final review/reconciliation/closure and live deployment remain pending.
-B015 owns build-tool maintenance and B016 further RSS characterization; neither
+T008 independent review/promotion is complete; lifecycle cleanup is recorded in
+the closure log/index. Live deployment and B017 release proof are not claimed.
+B015 owns build-tool maintenance, B016 further RSS characterization and B017
+actual Windows release preflight; none
 defers a T007 CPU/parity/idle-worker criterion.
 
 ## Task To Context Matrix
@@ -59,7 +61,7 @@ defers a T007 CPU/parity/idle-worker criterion.
 | T005 | Requirement 4 | R4 AC1-AC3 | `design.md#d004-candidate-indexes` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V005) | `docs/design/graph-store-design.md` | none | CP-004; CP-005 |
 | T006 | Requirement 5 | R5 AC1-AC5 | `design.md#d003-durable-catalog-manifest-and-shape`; `design.md#d005-budget-and-accounting` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V006) | `docs/design/runtime-operations-design.md`; `docs/design/graph-store-design.md`; `docs/reference/runtime-contracts.md` | `design.md#open-questions` | CP-003; CP-005 |
 | T007 | All requirements | All acceptance criteria; SC-001-SC-004 | `design.md#d001-explicit-qt-translation-admission`; `design.md#d002-compiled-rule-set`; `design.md#d003-durable-catalog-manifest-and-shape`; `design.md#d004-candidate-indexes`; `design.md#d005-budget-and-accounting`; `design.md#d006-worker-evidence` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V007) | `docs/design/observability-debugging-design.md` | `design.md#open-questions` | CP-001; CP-002; CP-003; CP-004; CP-005; CP-006 |
-| T008 | All requirements | All criteria dispositions; R6 AC4 | `design.md#validation-strategy`; `design.md#migration-and-compatibility` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V008) | `docs/design/runtime-operations-design.md`; `docs/design/graph-store-design.md`; `docs/design/observability-debugging-design.md`; `docs/reference/runtime-contracts.md` | none | CP-001; CP-002; CP-003; CP-004; CP-005; CP-006 |
+| T008 | All requirements | All criteria dispositions; R6 AC4 | `design.md#validation-strategy`; `design.md#migration-and-compatibility` | `requirements.md#durable-impact` | `verification.md#quality-gates` (V008) | `docs/design/runtime-operations-design.md`; `docs/design/graph-store-design.md`; `docs/design/observability-debugging-design.md`; `docs/reference/runtime-contracts.md`; `docs/requirements/runtime-requirements.md`; `docs/design/layered-runtime-architecture.md`; `docs/reference/agent-readable-changelog.md`; `docs/runbooks/native-dependency-setup.md`; `docs/runbooks/install-agent-workbench.md`; `docs/runbooks/codex-agent-workbench-plugin.md`; `docs/history/072-daemon-cpu-efficiency-review.md`; `docs/history/072-daemon-cpu-efficiency-performance-evidence.json`; `docs/backlog/README.md` | none | CP-001; CP-002; CP-003; CP-004; CP-005; CP-006 |
 
 ## Design To Implementation Matrix
 

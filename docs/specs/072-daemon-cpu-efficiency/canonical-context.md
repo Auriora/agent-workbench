@@ -60,6 +60,22 @@ records B013's actual disposition, and preserves B014's policy residual. Tempora
 measurements remain research/evidence with explicit limits. Any new deferral needs
 one owned destination and an explicit scope revision before closure.
 
+## Final Promotion And Package Disposition
+
+T008 retains the unchanged performance JSON and concise delivery/review evidence
+in docs/history/072-daemon-cpu-efficiency-performance-evidence.json and
+docs/history/072-daemon-cpu-efficiency-review.md. Current behavior and accepted
+requirements live in the existing design, reference, requirements and runbook
+owners; B013 is done in source. B014-B016 remain owned, and B017 explicitly
+blocks release until actual Windows preflight passes at the immutable candidate.
+This source-only disposition supersedes earlier T008 release-coordination wording
+without waiving any R1-R6/SC-001-SC-004 criterion or claiming Windows execution.
+
+The closure log and archive index identify the final verified spec commit and
+actual cleanup commit. Repository policy removes completed active scaffolding;
+Git retains this package's final verified tree. No live upgrade or publication
+is part of this closure.
+
 ## Related Artifacts
 
 [Requirements](requirements.md), [design](design.md), [tasks](tasks.md),

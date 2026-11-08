@@ -26,6 +26,36 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
+## 2026-11-08: Refresh efficiency and guarded native termination (source, unreleased)
+
+### Agent-Visible Changes
+
+Positive bounded Qt XML evidence avoids TypeScript extraction. Immutable path
+policies compile once per admitted set; generations reuse sealed inventories;
+node-set candidate indexes and same-isolate resolution pages reduce repeated
+work. Complete-generation fixture CPU/wall acceptance and its RSS tradeoff are
+recorded in the [delivery audit](../history/072-daemon-cpu-efficiency-review.md).
+
+### Contract Changes
+
+Unique totals require version-2 manifest accounting; legacy cumulative work is
+not a unique count. The hard deadline/reserve remains fixed, and real native
+parse overrun terminates the worker without publishing a timed-out fragment.
+Source startup rejects an unverified native receipt before loading the binding.
+
+### Required Agent Behavior Changes
+
+Use the canonical package lifecycle or pnpm rebuild:native for native recovery;
+retain guarded build evidence and report structured blockers. Source delivery
+is not an installed upgrade. B017 blocks release until the actual Windows
+portable gate passes; B014-B016 retain policy, dependency and memory follow-up.
+
+### Migration Notes
+
+The owned empty-v4 migration and stopped-owner rollback procedure in the native
+and installation runbooks remain authoritative. Do not repair core tree-sitter
+through a raw unguarded dependency rebuild or remove guards to bypass admission.
+
 ## 2026-11-08: Generation inventory and publication observation (source, unreleased)
 
 ### Agent-Visible Changes

@@ -3,7 +3,7 @@ title: Layered runtime architecture
 doc_type: design
 status: draft
 owner: platform
-last_reviewed: 2026-08-15
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -15,6 +15,22 @@ license: GPL-3.0-or-later
 Define the implementation architecture that every runtime feature must follow
 from the first MVP task. The goal is a small vertical slice with stable
 boundaries, not a temporary implementation that has to be untangled later.
+
+### Refresh optimization boundaries (source, unreleased)
+
+Application orchestration consumes generation-scoped sealed inventory and
+versioned progress through ports. Filesystem and SQLite infrastructure own
+capture, identity validation, atomic graph/outcome transactions and durable
+continuation settlement. The
+worker composes the canonical build slice and bounded phase allocator; successive
+resolution pages may share its isolate without adding another resolver. MCP
+adapters continue to expose the shared application/controller authority.
+
+Native source compilation, pre-import admission and worker exit confirmation
+remain infrastructure/packaging responsibilities. Checkout profiling observes
+this same path through private diagnostic channels; it does not add a public MCP
+profiling route. Detailed behavior belongs to runtime operations, graph-store
+and observability designs and runtime contracts.
 
 ## Architecture Style
 

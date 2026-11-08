@@ -21,7 +21,8 @@ passes SC-001 with 84.60% lower median CPU in the controlled two-scan benchmark.
 T004 sealed inventory/publication/migration now passes V004 and SC-002 below.
 T005 candidate indexing passes V005; T006 budget and settlement proof passes V006 below. Historical exploratory measurements remain in
 [research](research.md). T007 complete-generation CPU/wall/parity and reviewed RSS acceptance now pass
-V007 below. T008 final review/reconciliation and release acceptance remain pending.
+V007 below. T008 independent source review/reconciliation now passes below; B017 retains
+the unexecuted Windows release gate.
 
 ## Quality Gates
 
@@ -34,7 +35,7 @@ V007 below. T008 final review/reconciliation and release acceptance remain pendi
 | V005 | Requirement 4; CP-004/CP-005 | Cross-language/Ruby/lambda graph and ambiguity parity, candidate-count scaling and final-page cursor/transaction proof | passed T005; comparative V007 remains pending |
 | V006 | Requirement 5; CP-003/CP-005 | Budget/long-file overrun, settlement, cancellation/supersession/shutdown, unique versus visit counters and legacy unknown/rebuild behavior | passed T006 |
 | V007 | Requirement 6; SC-001-SC-004; CP-006 | Comparable complete-generation five-run baseline/candidate CPU, wall, RSS, phase costs, frozen permitted Qt/counter corrections, normalized unaffected-evidence parity; source and isolated compiled acceptance | passed T007; explicit RSS disposition below |
-| V008 | All requirements; CP-001-CP-006 | Independent architecture/data/operational review, durable promotion, backlog reconciliation, evidence/closure checks | pending T008 |
+| V008 | All requirements; CP-001-CP-006 | Independent architecture/data/operational review, durable promotion, backlog reconciliation, evidence/closure checks | passed T008; source closure only; B017 blocks release |
 
 Use deterministic Vitest assertions for the correctness properties. No new
 property-test library is needed. Performance timings belong in controlled harness
@@ -1011,8 +1012,10 @@ Supporting ignored evidence: .tmp/t006-full-test-final.log,
 and budget reviewers accepted the source and proof. Durable runtime, contracts
 and installation owners are updated. B015 owns the build-only dependency advisory
 chain; it does not defer a T006 acceptance criterion. Actual Windows portable
-execution remains a T008 release-preflight obligation. T007 comparative acceptance,
-T008 closure and B014 remain pending. No live installed daemon was changed.
+execution was assigned to T008 release preflight at this checkpoint. The final
+T008 closure-scope decision routes that unexecuted release gate to platform P1
+B017; source closure does not claim Windows readiness. T007/T008 evidence below
+records subsequent acceptance. No live installed daemon was changed.
 
 ## T007 Comparable Complete-Generation Acceptance
 
@@ -1158,8 +1161,10 @@ these measured results are promoted to observability/debugging design. Shared
 host/OS cache, sampled RSS, synthetic workload, unknown baseline native binary
 hash and lack of actual provider CLI execution limit interpretation. No installed
 live daemon was replaced or restarted, no CPU cap is delivered, and no FreeCAD-wide
-performance claim is made. T008 review/reconciliation/closure and actual Windows
-portable release preflight remain pending; B013 stays promoted until that gate.
+performance claim is made. At the T007 checkpoint T008 review and Windows
+release preflight were pending. T008 subsequently separates source closure from
+release approval: platform P1 B017 retains the unexecuted Windows gate and blocks
+release; B013 can become done after source review, promotion and closure checks.
 
 ### Evidence Documentation Checks
 
@@ -1172,3 +1177,46 @@ Direct filesystem checks resolve all 113 relative targets, including both JSON
 links, inside the repository with no missing target. The JSON parses and retains
 no temporary absolute paths. git diff --check passes. These are evidence-only
 changes; the runtime/package/lock fingerprint remains the tested T006 value.
+
+## T008 Independent Review, Promotion And Closure
+
+V008 passes for source-only closure. Independent read-only architecture,
+requirements/QA/lifecycle and security/operations reviews inspect source, tests,
+all 65 saved measurements, 130 receipts/1295 phase entries and 35 parity verdicts.
+Architecture is ready after independently rechecked transaction wording fixes;
+evidence/operations are ready with explicitly owned warnings. No source blocker
+remains. Exact resolution edge replacement and later durable cursor settlement
+are correctly distinguished from atomic extraction outcome/ordinal/counter writes.
+Technical context explicitly justifies pinned node-gyp for R5 native safety.
+
+All lasting requirements/design/contracts/operations are promoted to their existing
+owners. The unchanged audit JSON is preserved at
+../../history/072-daemon-cpu-efficiency-performance-evidence.json, SHA-256
+f2e3e060ccf2015b5317084e0e2526aeaeca9ca49ff5faac96be0d93cae0b1cc;
+../../history/072-daemon-cpu-efficiency-review.md retains acceptance, review and
+scope dispositions. Durable links now resolve to history. The final verified
+pre-removal commit preserves this package in Git; repository policy removes
+completed packages from active docs/specs after recording closure metadata.
+
+B013 is done in source. B014 policy, B015 moderate build-tool advisories and B016
+additional RSS characterization remain platform-owned. T008 explicitly routes
+actual Windows preflight, previously described as T008 release coordination, to
+platform release-maintainer P1 B017. It requires the Windows2022/Node22.23.1
+workflow and actual guarded portable proof at an immutable candidate SHA before
+release. No source/compiled/installed or SC criterion is waived; Linux proof
+cannot substitute for Windows and release readiness remains not ready.
+
+Executed T008 checks: two documentation files/11 Vitest tests pass; full relative
+link/metadata checks pass. Markdown audit covers all 13 changed Markdown documents
+without truncation: 209 table-readability advisories and six non-Markdown-target
+false positives (TypeScript/JSON). Direct reads and the actual filesystem-based
+documentation tests resolve those targets; the Workbench checker only indexes
+Markdown link destinations. Lifecycle lint is clean and all six requirement
+coverage states are machine-readable complete. git diff --check passes. Runtime
+fingerprint remains 293b5d1bbbbc18eb753fe9920dbea71d2f66ec7fbb6d6e9b33496221ee9029a4,
+so prior full/typecheck/build/plugin/isolated-installed proof remains current.
+Closure-check now returns ready=true with no blockers and all six requirements
+complete. The removal preview is ready; its three active-reference warnings are
+reviewed history-audit links in the backlog, not links into the retiring package.
+Final reference/archive checks follow the closure log/index operation; no cleanup
+commit is claimed before it exists.

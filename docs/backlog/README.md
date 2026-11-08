@@ -47,10 +47,11 @@ reported incident's root cause.
 | B010 | accepted | Establish verifiable non-Linux process scope for guard recovery | P2 | platform | Kernel-evidence design before macOS/Windows automatic guard cleanup |
 | B011 | accepted | Exercise real-helper mid-abort at the process boundary | P3 | platform | Additional cancellation fixture; no blocking implementation finding |
 | B012 | accepted | Reconcile global npm direct-URL dependency diagnostics | P3 | platform | Reproduce missing resolution metadata and govern supported validation/remediation |
-| B013 | promoted | Deliver daemon CPU efficiency | P1 | platform | [Spec 072](../specs/072-daemon-cpu-efficiency/requirements.md); T001-T007 verified; T008 review/closure remains |
+| B013 | done | Deliver daemon CPU efficiency | P1 | platform | [Delivery audit](../history/072-daemon-cpu-efficiency-review.md); source accepted, B017 release gate remains |
 | B014 | accepted | Assess background indexing CPU duty cycle | P2 | platform | After Spec 072 measurements; resource scheduling policy remains unimplemented |
 | B015 | accepted | Maintain guarded native build-tool dependencies | P2 | platform | Follow up node-gyp transitive audit findings without weakening native termination guards |
 | B016 | accepted | Characterize refresh profiling RSS retention | P2 | platform | Explain process allocation history and idle RSS variation beyond Spec 072 fixture acceptance |
+| B017 | accepted | Validate guarded Windows portable release payload | P1 | platform | Release gate: immutable-source Windows native build, termination, admission and portable smoke proof |
 
 ## Daemon performance follow-up
 
@@ -61,7 +62,7 @@ reported incident's root cause.
   XML entering the TypeScript parser, and overlapping progress counters. Reference
   lookup also has repeated whole-node filtering. These are measured replay and
   source mechanisms, not a live stack attribution for all historical CPU use.
-- Scope: [Spec 072](../specs/072-daemon-cpu-efficiency/requirements.md) owns all
+- Scope: [Spec 072 delivery](../history/072-daemon-cpu-efficiency-review.md) covers all
   measured fixes, generation catalog reuse, candidate indexing, budget/progress
   correctness and reproducible worker/full-generation characterization.
 - Acceptance: classification and graph parity, bounded matcher compilation,
@@ -71,10 +72,14 @@ reported incident's root cause.
 - Validation: owned Qt/TypeScript, ignore, continuation, reference and shutdown
   fixtures; five-run complete-generation CPU/wall/RSS measurements; typecheck,
   full tests and isolated compiled acceptance.
-- Owner: platform. Priority: P1. Disposition: promoted to Spec 072; its verified task records identify
-  delivered source slices. This intake entry alone proves no implementation. EB014's closed Spec 051 remains historical.
+- Owner: platform. Priority: P1. Disposition: done in source through Spec 072
+  T001-T008. The audit retains 35 semantic comparisons, all performance gates,
+  full source/isolated installed proof and independent review. B017 blocks release
+  until actual Windows execution; no live upgrade is claimed. EB014's closed
+  Spec 051 remains historical.
 - Promotion: existing runtime operations, graph-store, observability and runtime
-  contract owners; T008 reconciles any newly deferred work before closure.
+  contract owners; T008 reconciles B014 policy, B015 builder maintenance, B016
+  memory characterization and the B017 unexecuted platform release gate.
 
 ### B014: Assess background indexing CPU duty cycle
 
@@ -120,7 +125,7 @@ reported incident's root cause.
   ordinary callback error and parser termination tests.
 - Owner: platform. Priority: P2. Status: accepted, not implemented. Promotion:
   focused dependency-maintenance work and native setup/release readiness. Spec
-  072 T008 reconciles this owned residual before closing the performance package.
+  072 T008 reconciled this owned residual at source closure.
 
 ### B016: Characterize refresh profiling RSS retention
 
@@ -145,7 +150,33 @@ reported incident's root cause.
 - Owner: platform. Priority: P2. Status: accepted, not implemented. Promotion:
   observability/debugging design and focused profiling/runtime maintenance.
   This follow-up supplements the explicit SC-004 disposition; no T007 CPU,
-  parity or idle-worker criterion is deferred. T008 reconciles the residual.
+  parity or idle-worker criterion is deferred. T008 reconciled the residual.
+
+### B017: Validate guarded Windows portable release payload
+
+- Signal: Spec 072 changes mandatory core compilation, receipt validation and
+  bundled pre-import ordering. Linux source, fixtures and isolated npm checks
+  passed; actual Windows portable execution has not been performed for this
+  source. Passing Linux tests does not establish Windows release readiness.
+- Scope: release preflight beyond Spec 072's source-only closure. The earlier
+  T006/T007 notes called this a T008 release-preflight obligation; T008 explicitly
+  routes that unexecuted platform gate here without claiming it passed.
+- Acceptance: run .github/workflows/windows-portable-preflight.yml at the exact
+  immutable candidate commit on windows-2022/Node 22.23.1; retain the run URL,
+  source/build/native receipt and artifact SHA-256s. Verify canonical guarded
+  core compilation, ordinary callback error identity, actual parser termination,
+  matching selected binary, missing/corrupt receipt rejection before native load,
+  and the extracted portable consumer smoke without a consumer compiler. Resolve
+  failures at their source; do not bypass guards or select ambient builders.
+- Validation: actual Windows CI output and portable artifact, plus applicable
+  Node 22/24 npm/platform checks before release. Existing Linux builder fixtures
+  and provider-labelled MCP sessions cannot substitute for this proof.
+- Owner: platform release maintainer. Priority: P1. Status: accepted, unexecuted.
+  Block release/publication of a payload containing Spec 072 until this gate
+  passes. Source closure grants no publication, push or live-install authority.
+- Promotion: native setup/install runbooks, release preflight evidence and release
+  notes. Coordinate with the existing Windows portable workflow and Spec 063
+  delivery; this entry does not reopen its implementation scope.
 
 ## Transport reliability follow-up
 
@@ -2878,9 +2909,10 @@ Do not promote an item when:
 ## Immediate Next Specs
 
 - Spec 072/B013 now owns the newly evidenced daemon CPU fixes and worker profiling
-  from the 2026-11-08 investigation. T001-T007 are verified; T008 review and
-  closure remain. B014 owns sustained background CPU scheduling; B015 owns
-  native build-tool maintenance and B016 owns further RSS characterization.
+  from the 2026-11-08 investigation. T001-T008 source delivery is verified in
+  the [historical audit](../history/072-daemon-cpu-efficiency-review.md). B014 owns
+  sustained background CPU scheduling, B015 native build-tool maintenance, B016
+  further RSS characterization and B017 the release-blocking Windows proof.
 
 - Spec 066 transport, Spec 067/B001 lifetime evidence, Spec 068/B002 shutdown
   and Spec 069/B006 aggregate admission are verified in source. Spec 068 also

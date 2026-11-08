@@ -337,8 +337,8 @@ repetitions per scenario) records cold complete-generation median process CPU
 (41.00% lower), with exact graph parity after independently frozen Qt/schema/
 accounting corrections. Default worker passes fall four to two; discovery runs
 once per generation. Five >=60-second settled-idle windows invoke zero workers.
-The [verification record](../specs/072-daemon-cpu-efficiency/verification.md#final-t007-results)
-and [audit artifact](../specs/072-daemon-cpu-efficiency/performance-evidence.json)
+The [verification record](../history/072-daemon-cpu-efficiency-review.md#performance-and-equivalence)
+and [audit artifact](../history/072-daemon-cpu-efficiency-performance-evidence.json)
 retain all scenarios, spreads, phase costs, counters and identity limits.
 
 Memory is a recorded tradeoff: all scenario median RSS changes are below +10%,

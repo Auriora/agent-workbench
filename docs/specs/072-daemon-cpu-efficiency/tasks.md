@@ -12,7 +12,7 @@ license: GPL-3.0-or-later
 # Tasks
 
 Input: [requirements](requirements.md), [design](design.md), [research](research.md),
-[traceability](traceability.md) and [verification](verification.md). T001-T007 are complete; T008 remains pending. Obtain fresh lifecycle task context and mark the selected task in
+[traceability](traceability.md) and [verification](verification.md). T001-T008 are complete; the closure log and archive index record package cleanup. Obtain fresh lifecycle task context and mark the selected task in
 progress before coding; preserve unrelated release notes and Spec 065 work.
 
 ## Task Dependency Graph
@@ -149,7 +149,7 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
   - Evidence: V007 and SC-001 through SC-004 pass. Thirty owned and five read-only measurements complete; 35 semantic comparisons apply exactly nine frozen corrections each with zero unexpected differences; 130 V8 profiles audited. Primary median CPU falls from 7420853 to 3765711 us (49.26% lower), wall from 5061.923 to 2986.628 ms (41.00% lower). Five real >=60-second idle windows and persisted reads invoke zero workers. Discovery occurs only in the first of two passes. All scenario RSS median increases are below 10%; maximum idle increase of 13.69% and seven ordinal-paired flags receive explicit independent reviewed acceptance for this bounded fixture, with platform P2 follow-up B016. Durable performance-evidence.json retains 65 raw measurement rows, phase costs, identities, counts, parity and limitations; observability guidance is promoted. T006 frozen-source typecheck, full suite (182 files; 1816 tests passed; one skipped), build/plugin and installed MCP/native proof apply unchanged. See verification.md#t007-comparable-complete-generation-acceptance. No acceptance criterion deferred. T008 closure and Windows release preflight remain pending.
 
   - Evidence mode: validation
-- [ ] T008 - Review, promote durable behavior and reconcile residuals
+- [x] T008 - Review, promote durable behavior and reconcile residuals
   - Depends on: T007.
   - Requirements: Requirement 6 AC4; all requirement dispositions.
   - Properties: CP-001-CP-006.
@@ -162,4 +162,5 @@ T002 + T003 + T004 + T005 + T006 -> T007 -> T008
     Record closure/archival metadata only when their gates are satisfied.
   - Validation: V008; lifecycle traceability, evidence, promotion and closure checks;
     Markdown quality checks and git diff --check.
-  - Evidence: Pending.
+  - Evidence: Independent architecture, QA/evidence/lifecycle and security/operations review complete with no source blocker. Transaction wording and pinned-builder scope are corrected; unchanged audit JSON and delivery review promoted to history, with canonical requirements/design/contracts/runbooks/changelog updated. B013 done in source; B014-B016 retained; explicit scope disposition routes unexecuted Windows release proof to platform release-maintainer P1 B017, which blocks release. Documentation tests: two files, 11 passed; 13-document Markdown audit complete, with table advisories and six directly verified non-Markdown-target false positives; lifecycle lint and six complete coverage states verified; diff check and unchanged runtime/artifact hashes pass. See verification.md#t008-independent-review-promotion-and-closure and docs/history/072-daemon-cpu-efficiency-review.md. Final spec commit, closure records and cleanup are recorded through the closure workflow; no release/live upgrade claimed.
+  - Evidence mode: validation

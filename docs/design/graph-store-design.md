@@ -421,8 +421,12 @@ Bounded graph builds persist controller-owned progress in
 `graph_build_progress`. Version 2 counters describe distinct manifest identities,
 not accumulated scan visits. The row binds the snapshot to an execution owner,
 controller/invalidation generations, sealed manifest, next pending file ordinal,
-and extraction/resolution phase. Each file outcome, catalog/graph write, cursor
-advance and counter update commits in one SQLite transaction.
+and extraction/resolution phase. During extraction, each file outcome, graph
+write, ordinal advance and distinct counter update commits in one SQLite
+transaction. Final resolution atomically replaces its edges/unresolved rows,
+then settles the generation-fenced numeric cursor in a separate durable update.
+Interruption after edge replacement and before cursor settlement resumes safely
+through the same idempotent resolver; those two updates are not one transaction.
 
 A generation performs one broad discovery. The scanner registers each directory
 with the daemon watcher before its sole enumeration and records lossless file and

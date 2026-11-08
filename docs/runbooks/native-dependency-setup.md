@@ -54,6 +54,16 @@ installation.
 Re-run the package's install lifecycle or the canonical source rebuild before use.
 Do not repair core tree-sitter with an unguarded raw dependency rebuild.
 
+### Platform release acceptance
+
+Source acceptance on Linux does not establish Windows portable readiness. Before
+publishing a payload containing the guarded native changes, platform release
+maintainers must satisfy [B017](../backlog/README.md#b017-validate-guarded-windows-portable-release-payload):
+run the Windows portable workflow at the immutable candidate commit, retain the
+native/build/artifact identities, and exercise actual native termination,
+pre-import negative admission and the extracted portable consumer smoke. This
+platform gate remains unexecuted for the Spec 072 source delivery.
+
 ## Prerequisites
 
 - Node.js 22 or newer. Node 24 requires C++20 for native addon builds.

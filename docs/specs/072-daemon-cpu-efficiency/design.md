@@ -18,7 +18,8 @@ refresh pipeline. Preserve its single executor, durable completion and atomic
 publication. T001 baseline/design, T002 bounded Qt admission and T003 compiled
 matchers are verified. T003 passes the controlled SC-001 scan gate. T004 sealed inventory, publication receipts and owned v4 migration are implemented;
 V004 and SC-002 pass. T005 candidate indexing passes V005; T006 budgets/native settlement pass V006; T007 full-generation
-CPU/wall/parity and reviewed RSS acceptance pass V007. T008 remains pending.
+CPU/wall/parity and reviewed RSS acceptance pass V007. T008 independent review/promotion is complete; B017 retains the unexecuted
+Windows release gate.
 
 ## Requirement Coverage
 

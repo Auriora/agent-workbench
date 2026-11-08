@@ -3,7 +3,7 @@ title: Runtime requirements
 doc_type: requirements
 status: draft
 owner: platform
-last_reviewed: 2026-08-02
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -131,6 +131,47 @@ workflow designers.
 - Markdown quality executable tools and formatting mutation are post-MVP unless
   promoted by fixture-backed scope decision; any future formatting mutation is
   preview/apply only.
+
+### Refresh Efficiency And Evidence (Source, Unreleased)
+
+The implemented refresh path must preserve the following requirements. Durable
+runtime/graph designs and contracts own the detailed algorithms and vocabulary.
+
+- Positively recognized Qt translation XML inside a containment-checked 16,384-byte
+  prefix must avoid TypeScript extraction. Genuine TypeScript and readable
+  inconclusive prefixes retain canonical extension admission; unsupported XML
+  coverage remains explicit. No directory heuristic or parser-failure fallback.
+- Immutable admitted ignore/priority sets must compile distinct patterns once,
+  preserve matching/order/negation, and discard obsolete sets on invalidation.
+- An unchanged generation must reuse one sealed ordered inventory and project
+  shape across isolates. Before seed and final fresh publication, the sole
+  controller must consume a distinct generation/target/watcher-bound validation
+  receipt and drain admitted watcher evidence. Missing, changed or incomplete
+  evidence blocks freshness; later unobserved edits remain outside that boundary.
+- Reference candidate indexes must be scoped to the authoritative node set and
+  preserve ordering, confidence, provenance, ambiguity and unresolved evidence.
+  Resolution pages remain generation-fenced; edge/unresolved replacement is atomic,
+  and numeric cursor settlement is durable and interruption-safe.
+- The hard pass deadline and aggregate settlement reserve must remain unchanged.
+  Preparation, extraction, resolution and settlement need explicit budget treatment.
+  Native overrun must terminate the exact worker without host abort, competing
+  writer, partial timeout publication or early ownership release. Canonical
+  guarded native compilation and pre-import receipt validation are mandatory.
+- Unique coverage must derive from versioned distinct manifest outcomes. Legacy
+  cumulative work cannot be relabelled unique; unknown totals remain unknown
+  until an explicit invalidation/rebuild. Current owned v3-to-empty-v4 migration
+  retains verified v3 rollback evidence and blocks the retired path; earlier
+  v1/v2 migration requirements above describe their own historical transitions.
+- Performance proof must include complete final resolution, five comparable
+  cold/reuse/idle/edit/resume measurements, whole-generation Node CPU, wall,
+  sampled RSS, exact operation counts and independently frozen graph corrections.
+  Settled input must schedule zero workers in real 60-second windows. RSS growth
+  above 10% requires explicit review and disposition, not discarded samples.
+
+The [delivery audit](../history/072-daemon-cpu-efficiency-review.md) records source
+acceptance and its limits. B014 owns scheduling policy, B015 native build-tool
+maintenance, B016 additional RSS characterization and B017 the unexecuted Windows
+release gate. None is evidence of a live installed upgrade.
 
 ## Non-Requirements
 

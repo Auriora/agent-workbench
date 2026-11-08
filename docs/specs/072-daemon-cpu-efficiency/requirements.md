@@ -40,11 +40,11 @@ Closed Spec 051 and completed delivery in Specs 068/069/071 are not reopened.
 
 | Source | Current behavior relied on | Confidence |
 | --- | --- | --- |
-| [Runtime operations](../../design/runtime-operations-design.md) | One refresh authority; per-pass deadlines; durable extraction and resolution continuations | high |
-| [Graph store](../../design/graph-store-design.md) | Generation-fenced build progress; isolated completion target; atomic publication | high |
-| [Observability](../../design/observability-debugging-design.md) | Repo-local profiling harnesses and bounded private evidence | high |
-| [Runtime contracts](../../reference/runtime-contracts.md) | Explicit coverage, freshness and progress vocabulary | high |
-| [Layered architecture](../../design/layered-runtime-architecture.md) | Application orchestrates ports; infrastructure owns native and filesystem work | high |
+| `docs/design/runtime-operations-design.md` | One refresh authority; per-pass deadlines; durable extraction and resolution continuations | high |
+| `docs/design/graph-store-design.md` | Generation-fenced build progress; isolated completion target; atomic publication | high |
+| `docs/design/observability-debugging-design.md` | Repo-local profiling harnesses and bounded private evidence | high |
+| `docs/reference/runtime-contracts.md` | Explicit coverage, freshness and progress vocabulary | high |
+| `docs/design/layered-runtime-architecture.md` | Application orchestrates ports; infrastructure owns native and filesystem work | high |
 
 ## Durable Impact
 
@@ -56,6 +56,17 @@ reuse and budgets; graph-store design for manifests/counters; observability for
 worker profiling; runtime contracts for any changed progress semantics. Proposed
 behavior stays in this package until implemented and verified.
 
+## Closure Scope
+
+T008 closes verified source delivery and isolated Linux installed acceptance.
+Release publication and live upgrades remain non-goals. Actual Windows portable
+execution was identified during T006 as release preflight; it is not claimed by
+Linux fixtures. T008 must record that unexecuted platform gate under platform P1
+B017, with the exact Windows workflow and immutable-source acceptance, before
+source closure. A release remains blocked until that gate passes. This clarifies
+the disposition of the earlier T008 release-preflight wording; it does not waive
+R6 AC4's executed source and compiled/isolated-installed checks or SC-001-SC-004.
+
 ## Staged Readiness
 
 Current stage: T001 baseline/design checkpoint verified: reproducible actual-worker
@@ -64,7 +75,8 @@ independent review. T002 bounded Qt admission is implemented and verified under
 V002. T003 compiled ignore/priority matchers pass V003 and the controlled SC-001
 scan benchmark. T004 inventory/publication/migration passes
 V004 and SC-002; T005 candidate indexing passes V005; T006 budget/native settlement passes V006. T007 full-generation CPU/wall/parity and reviewed RSS acceptance pass V007.
-T008 final review/reconciliation remains pending.
+T008 independent review, promotion and residual reconciliation are complete;
+source closure and the unexecuted B017 release gate are recorded separately.
 User purpose is established by the explicit request to put the CPU findings into
 a fix spec and route residuals to backlog. Template authority is the skill
 fallback: docs/templates/spec-package and docs/templates/README.md are absent.
@@ -209,7 +221,10 @@ Architecture, data/publication and operational review are required before closur
 ## Technical Context
 
 TypeScript ESM, existing tree-sitter and SQLite, supported Node/platform contract.
-Keep MCP adapters thin. No extra dependency or parser is justified by this spec.
+Keep MCP adapters thin. T006 adds exactly pinned node-gyp 11.5.0 as the
+canonical source-build utility required by R5 AC2 native termination safety;
+design D005 and the native setup runbook justify this dependency. No parser
+replacement or ambient build-tool selection is introduced.
 
 ## Success Criteria
 
