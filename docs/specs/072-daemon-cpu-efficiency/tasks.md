@@ -1,0 +1,129 @@
+---
+title: Daemon CPU efficiency tasks
+doc_type: spec
+artifact_type: tasks
+status: draft
+owner: platform
+last_reviewed: 2026-11-08
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
+---
+
+# Tasks
+
+Input: [requirements](requirements.md), [design](design.md), [research](research.md),
+[traceability](traceability.md) and [verification](verification.md). All implementation
+is pending. Obtain fresh lifecycle task context and mark the selected task in
+progress before coding; preserve unrelated release notes and Spec 065 work.
+
+## Task Dependency Graph
+
+```text
+T001 -> T002; T003; T004; T005
+T004 -> T006
+T002 + T003 + T004 + T005 + T006 -> T007 -> T008
+```
+
+## Implementation
+
+- [ ] T001 - Establish reproducible worker baseline and design checkpoint
+  - Depends on: none.
+  - Requirements: Requirement 6 AC1-AC3; Requirement 3 AC2-AC3; Requirement 5 AC5.
+  - Properties: CP-003; CP-005; CP-006.
+  - Files: src/debug/; src/infrastructure/workers/; this package's design.md and verification.md.
+  - Acceptance: create isolated worker profiling harness; freeze representative
+    revision/runtime/scenarios; capture complete-generation baseline including
+    resolution, five-run metrics and graph comparison method. Record bounded
+    Qt evidence policy, exact manifest/schema/counter migration design and safety
+    review before downstream implementation. No live-source edits or live DB writes.
+  - Validation: V001; pnpm typecheck and harness fixture tests.
+  - Evidence: Pending; exploratory research is not completed baseline acceptance.
+
+- [ ] T002 - Route Qt translation XML outside the TypeScript parser
+  - Depends on: T001.
+  - Requirements: Requirement 1 AC1-AC3.
+  - Properties: CP-001; CP-002.
+  - Files: src/infrastructure/filesystem/file-identity.ts; file-catalog-scanner.ts;
+    src/infrastructure/extraction/; tests/workspace/; new owned Qt/TypeScript fixtures.
+  - Acceptance: bounded positive format classification, consistent identities and
+    coverage; Qt XML invokes no TypeScript parser and true TypeScript retains it.
+  - Validation: V002; typecheck and focused Vitest fixtures.
+  - Evidence: Pending.
+
+- [ ] T003 - Compile immutable ignore matchers once
+  - Depends on: T001.
+  - Requirements: Requirement 2 AC1-AC3; SC-001.
+  - Properties: CP-001.
+  - Files: src/domain/policies/path-policy.ts; src/infrastructure/filesystem/ignore-file-policy.ts;
+    file-catalog-scanner.ts; tests/workspace/path-policy-consistency.test.ts and file-catalog-scanner.test.ts.
+  - Acceptance: policy-scoped bounded matcher lifetime, current/child policy
+    invalidation and equivalent output; compilation and CPU targets pass.
+  - Validation: V003; typecheck, focused Vitest and controlled scan benchmark.
+  - Evidence: Pending; experimental-src is not production implementation.
+
+- [ ] T004 - Persist and reuse generation catalog and project shape
+  - Depends on: T001.
+  - Requirements: Requirement 3 AC1-AC4; Requirement 5 AC3-AC5.
+  - Properties: CP-001; CP-003; CP-005.
+  - Files: src/ports/; src/contracts/; src/application/use-cases/index-repository-graph.ts;
+    src/infrastructure/sqlite/; src/infrastructure/filesystem/; startup-graph-warmup-worker.ts;
+    tests/graph/graph-build-continuation.test.ts; tests/workspace/.
+  - Acceptance: one broad discovery per unchanged generation across worker exits;
+    correct priority/docs views, no repeated shape probe, safe invalidation and
+    restart, tested migration and truthful distinct identity counts.
+  - Validation: V004; typecheck, continuation/store/workspace/architecture suites.
+  - Evidence: Pending.
+
+- [ ] T005 - Reuse indexed reference candidate pools
+  - Depends on: T001.
+  - Requirements: Requirement 4 AC1-AC3.
+  - Properties: CP-004; CP-005.
+  - Files: src/application/use-cases/index-repository-graph.ts; relevant domain services;
+    tests/graph/graph-build-continuation.test.ts; ruby-semantic-extraction.test.ts;
+    reference-completeness.test.ts; owned cross-language/lambda fixtures.
+  - Acceptance: name/count and special-form lookup avoid repeated whole-node
+    filtering with graph/ambiguity parity and final-resolution cursor safety.
+  - Validation: V005; typecheck, focused Vitest and operation-count scaling checks.
+  - Evidence: Pending.
+
+- [ ] T006 - Verify phase budgets and unique progress accounting
+  - Depends on: T004.
+  - Requirements: Requirement 5 AC1-AC5.
+  - Properties: CP-003; CP-005.
+  - Files: src/infrastructure/workers/startup-graph-warmup-worker.ts;
+    src/infrastructure/runtime/refresh-controller.ts; src/contracts/; src/ports/;
+    src/infrastructure/sqlite/; tests/runtime/operations.test.ts; tests/graph/.
+  - Acceptance: explicit feasible phase allocation inside unchanged hard deadlines,
+    tested native-overrun failure and settlement, unique versus work counters,
+    versioned legacy handling, cancellation/supersession/shutdown safety.
+  - Validation: V006; typecheck, focused runtime/continuation/shutdown suites.
+  - Evidence: Pending.
+
+## Integration and promotion
+
+- [ ] T007 - Prove end-to-end performance and graph equivalence
+  - Depends on: T002; T003; T004; T005; T006.
+  - Requirements: Requirement 6 AC1-AC4; SC-001-SC-004.
+  - Properties: CP-001-CP-006.
+  - Files: src/debug/; tests/fixtures/; this package's verification.md.
+  - Acceptance: five-run comparable scenarios include complete final resolution,
+    cold/warm/edit/idle/resume cases, CPU/wall/RSS spread and operation counts;
+    all success criteria and full correctness evidence pass. If blocked, retain
+    pending state and record exact missing evidence instead of partial success.
+  - Validation: V007; pnpm typecheck; pnpm test; compiled isolated worker/MCP smoke.
+  - Evidence: Pending.
+
+- [ ] T008 - Review, promote durable behavior and reconcile residuals
+  - Depends on: T007.
+  - Requirements: Requirement 6 AC4; all requirement dispositions.
+  - Properties: CP-001-CP-006.
+  - Files: existing durable owners listed in requirements.md; docs/backlog/README.md;
+    this package; docs/history/spec-closure-log.md and spec-archive-index.md at closure.
+  - Acceptance: independent architecture/operational/data-boundary review;
+    resolve findings; promote actual behavior and benchmark guidance; mark B013
+    done only after proof; retain B014 separately. Any newly deferred criterion
+    requires a named owned backlog destination and explicit scope revision.
+    Record closure/archival metadata only when their gates are satisfied.
+  - Validation: V008; lifecycle traceability, evidence, promotion and closure checks;
+    Markdown quality checks and git diff --check.
+  - Evidence: Pending.

@@ -4,7 +4,7 @@ doc_type: backlog
 planning_schema: slm-planning/v1
 status: draft
 owner: platform
-last_reviewed: 2026-11-06
+last_reviewed: 2026-11-08
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -47,6 +47,50 @@ reported incident's root cause.
 | B010 | accepted | Establish verifiable non-Linux process scope for guard recovery | P2 | platform | Kernel-evidence design before macOS/Windows automatic guard cleanup |
 | B011 | accepted | Exercise real-helper mid-abort at the process boundary | P3 | platform | Additional cancellation fixture; no blocking implementation finding |
 | B012 | accepted | Reconcile global npm direct-URL dependency diagnostics | P3 | platform | Reproduce missing resolution metadata and govern supported validation/remediation |
+| B013 | promoted | Deliver daemon CPU efficiency | P1 | platform | [Spec 072](../specs/072-daemon-cpu-efficiency/requirements.md); measured fixes and profiling; implementation pending |
+| B014 | accepted | Assess background indexing CPU duty cycle | P2 | platform | After Spec 072 measurements; resource scheduling policy remains unimplemented |
+
+## Daemon performance follow-up
+
+### B013: Deliver daemon CPU efficiency
+
+- Signal: 2026-11-08 FreeCAD investigation of v0.6.12 found roughly one active
+  worker core, repeated ignore-regex compilation/catalog traversal, Qt translation
+  XML entering the TypeScript parser, and overlapping progress counters. Reference
+  lookup also has repeated whole-node filtering. These are measured replay and
+  source mechanisms, not a live stack attribution for all historical CPU use.
+- Scope: [Spec 072](../specs/072-daemon-cpu-efficiency/requirements.md) owns all
+  measured fixes, generation catalog reuse, candidate indexing, budget/progress
+  correctness and reproducible worker/full-generation characterization.
+- Acceptance: classification and graph parity, bounded matcher compilation,
+  single discovery per unchanged generation, distinct coverage/work accounting,
+  unchanged ownership/deadline safety, and spec performance targets with controlled
+  before/after evidence. Exploratory scan gains do not prove daemon-wide savings.
+- Validation: owned Qt/TypeScript, ignore, continuation, reference and shutdown
+  fixtures; five-run complete-generation CPU/wall/RSS measurements; typecheck,
+  full tests and isolated compiled acceptance.
+- Owner: platform. Priority: P1. Disposition: promoted to Spec 072; no fix is
+  implemented by this planning change. EB014's closed Spec 051 remains historical.
+- Promotion: existing runtime operations, graph-store, observability and runtime
+  contract owners; T008 reconciles any newly deferred work before closure.
+
+### B014: Assess background indexing CPU duty cycle
+
+- Signal: the live worker can occupy one CPU core while the main thread remains
+  idle. Reducing wasted work improves completion cost but does not establish an
+  acceptable sustained background CPU or foreground-latency policy.
+- Scope: use Spec 072 post-fix duty-cycle, throughput and request-latency evidence
+  to decide whether scheduling/resource controls are warranted. No throttling,
+  worker-priority change or extra mode is authorized by this backlog entry.
+- Acceptance: record a platform-owned target for sustained CPU, foreground latency
+  and completion progress; either justify current scheduling with measurements or
+  promote one explicit policy with fixture-backed cancellation/publication safety.
+- Validation: controlled indexing-plus-request workload with CPU, latency,
+  starvation, shutdown and complete-coverage measurements; distinguish active-core
+  utilisation from whole-machine usage and CPU per completed generation.
+- Owner: platform. Priority: P2. Dependency: Spec 072 T007 measurements. Status:
+  accepted, unimplemented, outside Spec 072's fix acceptance. Promotion target:
+  runtime operations and observability, then a focused spec if a change is needed.
 
 ## Transport reliability follow-up
 
@@ -2777,6 +2821,10 @@ Do not promote an item when:
 | Debug-sweep scenarios | EB067, under EB009 and registry parity. |
 
 ## Immediate Next Specs
+
+- Spec 072/B013 now owns the newly evidenced daemon CPU fixes and worker profiling
+  from the 2026-11-08 investigation. Implementation is pending; B014 owns any
+  subsequent sustained background CPU scheduling decision.
 
 - Spec 066 transport, Spec 067/B001 lifetime evidence, Spec 068/B002 shutdown
   and Spec 069/B006 aggregate admission are verified in source. Spec 068 also

@@ -1,0 +1,201 @@
+---
+title: Daemon CPU efficiency requirements
+doc_type: spec
+artifact_type: requirements
+status: draft
+owner: platform
+last_reviewed: 2026-11-08
+copyright: Copyright (C) 2026 Auriora
+license: GPL-3.0-or-later
+---
+
+# Requirements
+
+## Introduction
+
+Reduce avoidable daemon indexing CPU without weakening graph evidence, freshness,
+publication, cancellation or workspace safety. The user requested a fix spec after
+the 2026-11-08 FreeCAD investigation; [research](research.md) preserves the measured
+baseline and its limits. This is a focused EB014 follow-up, tracked as B013 in the
+[backlog](../../backlog/README.md#b013-deliver-daemon-cpu-efficiency).
+No implementation or performance acceptance is claimed by creating this package.
+
+## Goals
+
+- Classify Qt translation XML correctly, compile ignore matchers once, and avoid
+  redundant repository traversal across one unchanged build generation.
+- Index reference candidates, preserve useful bounded extraction progress, and
+  report distinct unique coverage and repeated work.
+- Prove correctness and total CPU improvement with worker-level measurements.
+
+## Non-Goals
+
+Parser replacements, blanket directory exclusions, timeout increases, runtime
+fallbacks, competing refresh writers, public profiling tools, live cache cleanup,
+release publication, or a new CPU utilisation cap. CPU duty-cycle policy is owned
+by [B014](../../backlog/README.md#b014-assess-background-indexing-cpu-duty-cycle).
+Closed Spec 051 and completed delivery in Specs 068/069/071 are not reopened.
+
+## Durable Source Baseline
+
+| Source | Current behavior relied on | Confidence |
+| --- | --- | --- |
+| [Runtime operations](../../design/runtime-operations-design.md) | One refresh authority; per-pass deadlines; durable extraction and resolution continuations | high |
+| [Graph store](../../design/graph-store-design.md) | Generation-fenced build progress; isolated completion target; atomic publication | high |
+| [Observability](../../design/observability-debugging-design.md) | Repo-local profiling harnesses and bounded private evidence | high |
+| [Runtime contracts](../../reference/runtime-contracts.md) | Explicit coverage, freshness and progress vocabulary | high |
+| [Layered architecture](../../design/layered-runtime-architecture.md) | Application orchestrates ports; infrastructure owns native and filesystem work | high |
+
+## Durable Impact
+
+T008 updates these existing owners after delivery: runtime operations for scan
+reuse and budgets; graph-store design for manifests/counters; observability for
+worker profiling; runtime contracts for any changed progress semantics. Proposed
+behavior stays in this package until implemented and verified.
+
+## Staged Readiness
+
+Current stage: requirements/design/tasks drafted; implementation not started.
+User purpose is established by the explicit request to put the CPU findings into
+a fix spec and route residuals to backlog. Template authority is the skill
+fallback: docs/templates/spec-package and docs/templates/README.md are absent.
+Requirements precede design; no design-first exception. T001 must reconcile the
+baseline, migration decision and measurement contract before other tasks start.
+Architecture, data/publication and operational review are required before closure.
+
+## Requirements
+
+### Requirement 1: Distinguish Qt translation XML from TypeScript
+
+**Priority:** must-have
+
+#### Acceptance Criteria
+
+1. WHEN a .ts file has validated Qt translation XML format evidence, THE SYSTEM
+   SHALL classify it as non-TypeScript before TypeScript extraction, retaining
+   truthful resource-backed or unsupported coverage through the existing policy.
+2. Genuine TypeScript SHALL retain the canonical tree-sitter route, including
+   source in translation-named directories and strings/comments containing XML.
+3. WHERE the extension is ambiguous, detection SHALL use bounded containment-checked
+   content evidence, not a full
+   read of every catalog file or a translation-directory heuristic. Unknown,
+   malformed, oversized and unreadable evidence SHALL have explicit tested
+   outcomes; parser failure SHALL NOT trigger an alternate parser.
+
+### Requirement 2: Compile ignore policy once per rule set
+
+**Priority:** must-have
+
+#### Acceptance Criteria
+
+1. WHEN an immutable ignore rule set is admitted, wildcard compilation SHALL
+   occur at most once per distinct pattern for that set, rather than per path.
+2. Matching SHALL preserve current ordering, negation, anchoring, directory,
+   segment, default-skip and nested-repository behavior with equivalent results.
+3. Matcher storage SHALL have a defined lifetime bound to policy identity;
+   changed root/child ignore rules SHALL never reuse an obsolete matcher set.
+
+### Requirement 3: Reuse generation-scoped catalog and shape evidence
+
+**Priority:** must-have
+
+#### Acceptance Criteria
+
+1. FOR an unchanged generation, extraction continuations SHALL consume one
+   generation-scoped ordered catalog and stored project-shape evidence without
+   repeating whole-repository discovery or a Rails probe for every slice.
+2. Add/delete/rename, content/identity, scope/config, ignore-policy and repository
+   composition changes SHALL invalidate the affected evidence through the sole
+   existing refresh authority before final publication.
+3. Resume after worker exit/restart SHALL preserve deterministic priority order,
+   exclusive cursors, admitted submodule boundaries, unique coverage and complete
+   eventual extraction. Invalid manifest evidence SHALL block/degrade explicitly.
+4. Catalog construction and reuse costs SHALL be measured separately; max_files
+   SHALL NOT be presented as a bound on discovery work when it only limits rows.
+
+### Requirement 4: Index reference candidates without changing resolution
+
+**Priority:** must-have
+
+#### Acceptance Criteria
+
+1. Extraction and final resolution SHALL build a name candidate index once per
+   node set and reuse it for lookup and candidate counts, including unresolved
+   and ambiguous references, rather than filtering every node for each name.
+2. Fixtures SHALL preserve edges, confidence, provenance, ambiguity and unresolved
+   rows across languages, including Ruby special forms and lambda file targets.
+3. Final pages SHALL retain generation fencing, durable numeric cursors and
+   atomic edge/unresolved replacement; broad special-form searches SHALL use
+   purpose-built indexes or explicitly measured bounded candidate subsets.
+
+### Requirement 5: Preserve budgets and report honest progress
+
+**Priority:** must-have
+
+#### Acceptance Criteria
+
+1. Catalog preparation, extraction, resolution and settlement SHALL have explicit
+   measured budget treatment; repeated scans SHALL NOT consume the extraction
+   allowance before each continuation. The hard pass deadline and required
+   settlement reserve SHALL NOT be extended to obtain a passing result.
+2. A single long native parse SHALL remain governed by existing hard worker
+   termination and structured failure evidence; no successful timeout fragment.
+3. Unique eligible/admitted/extracted counts SHALL not count overlapping scan
+   windows repeatedly. Repeated visits and work SHALL be separately labelled.
+4. Cancellation, shutdown and supersession SHALL retain one writer, exact worker
+   termination evidence, isolated targets and generation-safe publication.
+5. Existing stored progress SHALL have an explicit versioned migration or
+   invalidation/rebuild disposition; inflated legacy counts cannot be relabelled
+   as unique totals. Unknown unique totals SHALL remain explicitly unknown.
+
+### Requirement 6: Reproducible characterization and delivery proof
+
+**Priority:** must-have
+
+#### Acceptance Criteria
+
+1. A repo-owned debug harness SHALL profile the actual refresh worker isolate
+   using private output stores and read-only external source inputs. It SHALL
+   record runtime/build identity, parameters, cold/warm state, phase wall/CPU
+   time, RSS, paths visited, compilation counts, useful extraction and completion.
+2. Before/after runs SHALL cover cold startup, persisted reuse, unchanged idle,
+   single edit, burst edits, interrupted resume and final reference resolution.
+   Use owned fixtures for edits and a fixed read-only large-repository revision.
+3. At least five comparable runs per performance scenario SHALL report median,
+   spread, total CPU per completed generation and correctness parity. Baseline
+   and candidate SHALL use the same input, runtime and final evidence coverage.
+4. SC-001 through SC-004 SHALL pass; source and compiled/isolated-installed checks,
+   architecture review and durable promotion SHALL be recorded before closure.
+
+## Correctness Properties
+
+- CP-001: Optimisation preserves skip decisions, catalog order and workspace boundaries.
+- CP-002: Qt XML never enters TypeScript extraction; genuine TypeScript retains its parser.
+- CP-003: Cursors advance committed work once; coverage counts distinct file identities.
+- CP-004: Candidate indexes preserve graph semantics, including unresolved ambiguity.
+- CP-005: One writer and unchanged termination/publication safety survive all failures.
+- CP-006: Measurements cover the worker and a complete generation without exporting raw content.
+
+## Technical Context
+
+TypeScript ESM, existing tree-sitter and SQLite, supported Node/platform contract.
+Keep MCP adapters thin. No extra dependency or parser is justified by this spec.
+
+## Success Criteria
+
+- SC-001: Rule compilation count is bounded by distinct admitted patterns, and
+  a representative two-scan benchmark uses at least 50% less median CPU than
+  the recorded pre-change path, with identical scanner output.
+- SC-002: Qt XML causes zero TypeScript extractor invocations; an unchanged
+  generation performs at most one broad catalog discovery regardless of slices.
+- SC-003: A fixed representative large-repository full-generation benchmark
+  uses at least 30% less median CPU with no more than 10% wall-time regression,
+  identical required coverage and equivalent graph semantics. T001 freezes the
+  baseline/revision before optimisation; unavailable evidence blocks this gate.
+- SC-004: All fixture invariants pass; unchanged settled input schedules zero
+  refresh workers in a controlled 60-second window. Peak RSS is recorded and any
+  growth over 10% must be explained and dispositioned before closure.
+
+These are proposed delivery targets, not conclusions from the exploratory scan
+experiment. Failure requires root-cause work or an explicit scope revision with
+backlog routing, never silent weakening or a claim of full CPU-cap enforcement.
