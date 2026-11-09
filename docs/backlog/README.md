@@ -4,7 +4,7 @@ doc_type: backlog
 planning_schema: slm-planning/v1
 status: draft
 owner: platform
-last_reviewed: 2026-11-08
+last_reviewed: 2026-11-09
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -47,11 +47,11 @@ reported incident's root cause.
 | B010 | accepted | Establish verifiable non-Linux process scope for guard recovery | P2 | platform | Kernel-evidence design before macOS/Windows automatic guard cleanup |
 | B011 | accepted | Exercise real-helper mid-abort at the process boundary | P3 | platform | Additional cancellation fixture; no blocking implementation finding |
 | B012 | accepted | Reconcile global npm direct-URL dependency diagnostics | P3 | platform | Reproduce missing resolution metadata and govern supported validation/remediation |
-| B013 | done | Deliver daemon CPU efficiency | P1 | platform | [Delivery audit](../history/072-daemon-cpu-efficiency-review.md); source accepted, B017 release gate remains |
+| B013 | done | Deliver daemon CPU efficiency | P1 | platform | [Delivery audit](../history/072-daemon-cpu-efficiency-review.md); released and installed in v0.6.16; B017 passed |
 | B014 | accepted | Assess background indexing CPU duty cycle | P2 | platform | After Spec 072 measurements; resource scheduling policy remains unimplemented |
 | B015 | accepted | Maintain guarded native build-tool dependencies | P2 | platform | Follow up node-gyp transitive audit findings without weakening native termination guards |
 | B016 | accepted | Characterize refresh profiling RSS retention | P2 | platform | Explain process allocation history and idle RSS variation beyond Spec 072 fixture acceptance |
-| B017 | accepted | Validate guarded Windows portable release payload | P1 | platform | Release gate: immutable-source Windows native build, termination, admission and portable smoke proof |
+| B017 | done | Validate guarded Windows portable release payload | P1 | platform | Windows native safety and portable smoke passed for published v0.6.16 |
 
 ## Daemon performance follow-up
 
@@ -74,12 +74,12 @@ reported incident's root cause.
   full tests and isolated compiled acceptance.
 - Owner: platform. Priority: P1. Disposition: done in source through Spec 072
   T001-T008. The audit retains 35 semantic comparisons, all performance gates,
-  full source/isolated installed proof and independent review. B017 blocks release
-  until actual Windows execution; no live upgrade is claimed. EB014's closed
-  Spec 051 remains historical.
+  full source/isolated installed proof and independent review. Subsequent v0.6.16
+  publication, actual Windows proof and local installed-checkout acceptance are
+  recorded in the audit. B017 is done. EB014's closed Spec 051 remains historical.
 - Promotion: existing runtime operations, graph-store, observability and runtime
   contract owners; T008 reconciles B014 policy, B015 builder maintenance, B016
-  memory characterization and the B017 unexecuted platform release gate.
+  memory characterization. B017 subsequently passed during release acceptance.
 
 ### B014: Assess background indexing CPU duty cycle
 
@@ -156,8 +156,8 @@ reported incident's root cause.
 
 - Signal: Spec 072 changes mandatory core compilation, receipt validation and
   bundled pre-import ordering. Linux source, fixtures and isolated npm checks
-  passed; actual Windows portable execution has not been performed for this
-  source. Passing Linux tests does not establish Windows release readiness.
+  passed at source closure; actual Windows execution was then required before
+  publication. Linux tests alone did not establish Windows release readiness.
 - Scope: release preflight beyond Spec 072's source-only closure. The earlier
   T006/T007 notes called this a T008 release-preflight obligation; T008 explicitly
   routes that unexecuted platform gate here without claiming it passed.
@@ -171,9 +171,12 @@ reported incident's root cause.
 - Validation: actual Windows CI output and portable artifact, plus applicable
   Node 22/24 npm/platform checks before release. Existing Linux builder fixtures
   and provider-labelled MCP sessions cannot substitute for this proof.
-- Owner: platform release maintainer. Priority: P1. Status: accepted, unexecuted.
-  Block release/publication of a payload containing Spec 072 until this gate
-  passes. Source closure grants no publication, push or live-install authority.
+- Owner: platform release maintainer. Priority: P1. Status: done. Actual
+  Windows 2022/Node 22.23.1 execution passed for v0.6.16 at immutable commit
+  `f7db3c0a70053445aed9540ef7ffa0657112617f`: 18 native/build-contract tests and
+  extracted portable smoke. The [release acceptance record](../history/072-daemon-cpu-efficiency-review.md#subsequent-release-and-installed-acceptance)
+  retains CI, artifact and receipt identities, plus installed Linux acceptance.
+  Publication and installation were separately authorized by the user.
 - Promotion: native setup/install runbooks, release preflight evidence and release
   notes. Coordinate with the existing Windows portable workflow and Spec 063
   delivery; this entry does not reopen its implementation scope.
@@ -2912,7 +2915,7 @@ Do not promote an item when:
   from the 2026-11-08 investigation. T001-T008 source delivery is verified in
   the [historical audit](../history/072-daemon-cpu-efficiency-review.md). B014 owns
   sustained background CPU scheduling, B015 native build-tool maintenance, B016
-  further RSS characterization and B017 the release-blocking Windows proof.
+  further RSS characterization. B017 Windows release proof is complete for v0.6.16.
 
 - Spec 066 transport, Spec 067/B001 lifetime evidence, Spec 068/B002 shutdown
   and Spec 069/B006 aggregate admission are verified in source. Spec 068 also

@@ -3,7 +3,7 @@ title: Native dependency setup
 doc_type: runbook
 status: draft
 owner: platform
-last_reviewed: 2026-11-08
+last_reviewed: 2026-11-09
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -62,7 +62,10 @@ maintainers must satisfy [B017](../backlog/README.md#b017-validate-guarded-windo
 run the Windows portable workflow at the immutable candidate commit, retain the
 native/build/artifact identities, and exercise actual native termination,
 pre-import negative admission and the extracted portable consumer smoke. This
-platform gate remains unexecuted for the Spec 072 source delivery.
+platform gate passed for the published v0.6.16 candidate on Windows 2022/Node
+22.23.1. See the [release acceptance record](../history/072-daemon-cpu-efficiency-review.md#subsequent-release-and-installed-acceptance)
+for immutable source, native/build receipts and artifact identities. Future
+candidates must pass the gate independently.
 
 ## Prerequisites
 

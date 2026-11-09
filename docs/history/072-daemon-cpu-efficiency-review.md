@@ -3,7 +3,7 @@ title: Daemon CPU efficiency delivery audit
 doc_type: history
 status: active
 owner: platform
-last_reviewed: 2026-11-08
+last_reviewed: 2026-11-09
 copyright: Copyright (C) 2026 Auriora
 license: GPL-3.0-or-later
 ---
@@ -15,7 +15,9 @@ license: GPL-3.0-or-later
 This historical audit preserves Spec 072's source delivery, acceptance evidence,
 review dispositions and residual ownership. Current behavior is governed by the
 [documentation map](../reference/documentation-map.md) and the durable owners below.
-It is not evidence of release publication, a live upgrade or Windows execution.
+The original source-closure evidence does not establish publication, live upgrade
+or Windows execution. The separately authorized subsequent release acceptance
+below records those later checks.
 
 Evidence window: T001 baseline 84c75ef, T002-T007 delivery through c9658dd,
 and the T008 documentation/closure reconciliation. Unrelated release-note drafts,
@@ -27,9 +29,9 @@ and evidence/operations accept source closure with the owned warnings below.
 
 Source closure: complete with owned warnings. The verified final package is
 removed after promotion; closure metadata records its final and cleanup commits.
-Release readiness: not ready; B017's actual Windows portable gate is unexecuted.
-No push, publication, installed-runtime replacement or live cache cleanup is
-part of this delivery.
+At source closure, release readiness was blocked by B017's unexecuted Windows
+gate. No push, publication or installed-runtime replacement was part of that
+source delivery. Subsequent release and installed acceptance is recorded below.
 
 ## Requirement Dispositions And Durable Promotion
 
@@ -179,6 +181,9 @@ or release check is inferred from a reviewer's read-only inspection.
 
 ## Residual Ownership And Release Gate
 
+These dispositions record source-closure state. B017 subsequently passed during
+the release and installed acceptance recorded below.
+
 - B013: source delivery done after independent review, promotion and closure checks.
 - [B014](../backlog/README.md#b014-assess-background-indexing-cpu-duty-cycle):
   platform P2 scheduling/duty-cycle policy; unimplemented and outside algorithmic
@@ -231,6 +236,60 @@ findings; Spec 072 is absent from active inventory.
 
 The [closure log](spec-closure-log.md) and [archive index](spec-archive-index.md)
 record the final verified spec commit, removal action and actual cleanup commit.
-They distinguish source closure from the remaining release gate. This record
-retains the evidence needed to interpret the promoted result after active-package
+They distinguish source closure from the release gate outstanding at closure.
+This record retains the evidence needed to interpret the promoted result after active-package
 removal; it does not replace the canonical behavior owners.
+
+
+## Subsequent Release And Installed Acceptance
+
+On 2026-11-09, separately authorized release and installation completed for
+[v0.6.16](https://github.com/Auriora/agent-workbench/releases/tag/v0.6.16), from
+immutable source `f7db3c0a70053445aed9540ef7ffa0657112617f`.
+[Release CI](https://github.com/Auriora/agent-workbench/actions/runs/42579776980)
+passed all four jobs: Linux package, actual Windows portable preflight, GHCR and
+GitHub publication. B017 is done; B014, B015 and B016 remain accepted follow-ups.
+
+- Linux Node 24: typecheck, compiled runtime/contracts, 28 dev CLI tests, all
+  182 Vitest files (1,819 passed, one skipped), plugin/skills and package checks.
+- Windows 2022/Node 22.23.1: all 18 native-safety/build-contract tests passed,
+  including real parser termination, ordinary callback error identity and negative
+  admission; extracted portable MCP smoke reported runtime v0.6.16.
+- Published npm tarball SHA-256: `cb66e92fb4f3efda84552cd8993dc79a553b95dcfc20fc632c3cedb30c1a947c`.
+- Published Windows ZIP SHA-256: `e0ca56a92c4a819200c4d4ef7f351731fbf9f29e4e6cf99611638f687705b233`.
+- Windows payload SHA-256: `237ea0aca3d41fd22c087dac159b6181d2794d8fac8937ba51cf8a2b7637e665`.
+- Windows native receipt SHA-256: `64ee226f99281e4cbbcc35472fa90a29ef17505d8964e16f375ea678bb8fef65`.
+- Windows selected binding SHA-256: `873d1267262312683a8d36e4813512d94347094249064b24038d5a2316a578d1`.
+- Windows compiled-runtime receipt SHA-256: `6622fe5e7ab0ff9918b95635ad90b579244986db940159cc5e1957a2a63fce6e`.
+- GHCR `ghcr.io/auriora/agent-workbench:0.6.16` digest:
+  `sha256:e0bc5cce67f014f6ae2bfd87a50fc20214cf191d4c079f36c8f9b5dd64f7d275`.
+
+Downloaded npm and ZIP bytes matched the public GitHub asset digests before local
+installation. Known runtime owners were stopped with PID/start-time checks and
+SIGTERM before replacing the global Node 24.8.0 package. No live cache was deleted;
+the prior schema database backup was retained. The installed package and compiled
+receipt both reported v0.6.16. Installed guarded-source-build validation, a real
+parser overrun termination and ordinary callback identity preservation all passed,
+as did an isolated installed MCP launch. Codex and Claude plugin updates reported
+v0.6.16; existing client sessions require restart to load the refreshed plugin.
+
+The actual checkout then completed five refresh passes with no recorded worker
+failure. It reported a published, fresh graph with warmup complete, activity lease
+released and complete snapshot validity: 1,006 observed/checked paths, none missing
+or inaccessible. This proves this checkout's installed refresh, not a general
+production CPU/RSS bound or a provider's complete interactive workflow.
+
+v0.6.15 had already been published and installed after its release gates passed.
+Its actual-checkout validation revealed a distinct stable timestamp rounding
+failure. v0.6.16 corrects comparison between Node numeric metadata and exact
+nanosecond identity without introducing tolerance or weakening nanosecond fences.
+Regression tests accept the unchanged boundary and reject real changes; independent
+review found no blockers. A source production-worker profile of this checkout also
+completed all five passes in 17.783 seconds using an isolated database. This is
+operational correction evidence, not a replacement for the controlled Spec 072
+benchmark. It does not attribute the earlier unlogged T004 manifest failure.
+
+The earlier v0.6.13 and v0.6.14 candidate tags remain unpublished: actual Windows
+CI exposed a CRLF shebang/import issue and a test-only path normalization issue.
+Both were corrected at source before the successful v0.6.15/v0.6.16 release gates;
+no failed tag was rewritten and no release safety check was bypassed.
