@@ -132,7 +132,7 @@ workflow designers.
   promoted by fixture-backed scope decision; any future formatting mutation is
   preview/apply only.
 
-### Refresh Efficiency And Evidence (v0.6.15)
+### Refresh Efficiency And Evidence (v0.6.16)
 
 The implemented refresh path must preserve the following requirements. Durable
 runtime/graph designs and contracts own the detailed algorithms and vocabulary.

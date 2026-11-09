@@ -26,7 +26,7 @@ Each version or dated entry should include:
 - Required agent behavior changes
 - Migration notes
 
-## 2026-11-08: Refresh efficiency and guarded native termination (v0.6.15)
+## 2026-11-08: Refresh efficiency and guarded native termination (v0.6.16)
 
 ### Agent-Visible Changes
 
@@ -56,7 +56,7 @@ The owned empty-v4 migration and stopped-owner rollback procedure in the native
 and installation runbooks remain authoritative. Do not repair core tree-sitter
 through a raw unguarded dependency rebuild or remove guards to bypass admission.
 
-## 2026-11-08: Generation inventory and publication observation (v0.6.15)
+## 2026-11-08: Generation inventory and publication observation (v0.6.16)
 
 ### Agent-Visible Changes
 
