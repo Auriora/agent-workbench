@@ -31,6 +31,9 @@ import { readRootIgnoreRules } from "./ignore-file-policy.js";
 import { isNestedGitRepository } from "./nested-git-repository.js";
 
 const MAX_SKIPPED_PATHS = 100;
+const NANOSECONDS_PER_SECOND = 1_000_000_000n;
+const NANOSECONDS_PER_MILLISECOND = 1_000_000;
+const MILLISECONDS_PER_SECOND = 1_000;
 
 export type FileCatalogObservation =
   | "directory_enumerations"
@@ -875,10 +878,26 @@ function assertFileIdentityMatchesEntry(identity: GraphBuildPathIdentity, entry:
   if (identity.kind !== "file" || identity.path !== entry.path) {
     throw new Error(`Graph build manifest file identity is inconsistent with catalog entry: ${entry.path}`);
   }
-  const mtimeMs = BigInt(identity.mtime_ns) / 1_000_000n;
-  if (identity.size_bytes !== String(entry.file_identity.size_bytes) || mtimeMs !== BigInt(Math.trunc(entry.file_identity.mtime_ms))) {
+  if (
+    identity.size_bytes !== String(entry.file_identity.size_bytes)
+    || mtimeMsFromNanoseconds(identity.mtime_ns) !== entry.file_identity.mtime_ms
+  ) {
     throw new Error(`Graph build manifest file metadata changed during catalog preparation: ${entry.path}`);
   }
+}
+
+/**
+ * Match Node's numeric Stats timestamp conversion from a POSIX timespec.
+ * The manifest retains the exact nanoseconds separately; this only compares
+ * them to the public `Stats.mtimeMs` value captured for the catalog entry.
+ */
+function mtimeMsFromNanoseconds(value: string): number {
+  const timestamp = BigInt(value);
+  const seconds = timestamp >= 0n
+    ? timestamp / NANOSECONDS_PER_SECOND
+    : -((-timestamp + NANOSECONDS_PER_SECOND - 1n) / NANOSECONDS_PER_SECOND);
+  const nanoseconds = timestamp - (seconds * NANOSECONDS_PER_SECOND);
+  return (Number(seconds) * MILLISECONDS_PER_SECOND) + (Number(nanoseconds) / NANOSECONDS_PER_MILLISECOND);
 }
 
 function readManifestIdentity(repoRoot: string, relativePath: string, kind: "directory" | "file"): GraphBuildPathIdentity {
